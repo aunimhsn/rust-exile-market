@@ -1,12 +1,12 @@
 [package]
-name = "rust-project-template"
+name = "rust-exile-market"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.93"
-description = "Template for Rust applications (command-line, desktop or web)."
+description = "Price checker for Path of Exile 2 items."
 authors = ["Aunim HASSAN"]
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/aunimhsn/rust-project-template"
+repository = "https://github.com/aunimhsn/rust-exile-market"
 readme = "README.md"
 
 [dependencies]

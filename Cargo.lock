@@ -3,5 +3,5 @@
 version = 4
 
 [[package]]
-name = "rust-project-template"
+name = "rust-exile-market"
 version = "0.1.0"
