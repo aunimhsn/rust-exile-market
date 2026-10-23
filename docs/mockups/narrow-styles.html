@@ -236,7 +236,6 @@
     --control: #26262b;
     --control-line: #34343a;
     --warn: #e2b04a;
-    --glow: 255, 214, 140;
     --font-display: "Cinzel", Georgia, serif;
     --font-body: "Source Sans 3", "Segoe UI", sans-serif;
     --font-number: "Source Sans 3", "Segoe UI", sans-serif;
@@ -260,7 +259,6 @@
     --control: #1d242d;
     --control-line: #2a3440;
     --warn: #f0b85a;
-    --glow: 255, 255, 255;
     --font-display: "Manrope", "Segoe UI", sans-serif;
     --font-body: "Manrope", "Segoe UI", sans-serif;
     --font-number: "JetBrains Mono", ui-monospace, monospace;
@@ -282,7 +280,6 @@
     --control: #222622;
     --control-line: #303630;
     --warn: #f0a83c;
-    --glow: 255, 196, 110;
     --font-display: "Barlow Semi Condensed", "Arial Narrow", sans-serif;
     --font-body: "Barlow", "Segoe UI", sans-serif;
     --font-number: "Barlow", "Segoe UI", sans-serif;
@@ -370,8 +367,6 @@
     flex: 1; min-width: 0; font: var(--display-weight) var(--display-size)/1.15 var(--font-display);
     text-transform: var(--display-case); letter-spacing: .01em;
   }
-  .glow { text-shadow: 0 0 6px rgba(var(--glow), .75), 0 0 16px rgba(var(--glow), .45), 0 0 28px rgba(var(--glow), .2); }
-  .glow-note { color: var(--faint); font-size: 11px; }
   /* Trade site link: a small pill, rounded like the tags; the verb says it can be clicked. */
   .trade {
     flex: none; margin-top: 1px; padding: 4px 10px; border-radius: var(--radius);
@@ -576,7 +571,7 @@
     return `
       <div class="band b item-band">
         <div class="name-row">
-          <div class="name rarity-${it.rarity} ${it.glow ? "glow" : ""}">${it.name}</div>
+          <div class="name rarity-${it.rarity}">${it.name}</div>
           <a class="trade" title="${it.tradeTitle || "Open the search on the trade site"}">${it.tradeLabel || "Check on trade"}</a>
         </div>
         ${it.base ? `<div class="base">${it.base}</div>` : ""}
@@ -711,7 +706,7 @@
         offers({ lines: ["Identify the item to search its offers."] }), foot())],
       ["Magic item", win(topBar(), item({ rarity: "magic", name: "Glimmering Sapphire Ring of the Lynx", cls: "Rings", tags: ["ilvl 68"], req: "Requires Level 44", statsLabel: "Stats (3)" }),
         price({ lines: ["Magic items aren't priced yet.", "Use Check on trade above."] }), offers({ lines: ["Offers of magic items come with their price, in a later version."] }), foot())],
-      ["Exceptional base (normal item)", win(topBar(), item({ rarity: "normal", name: "Exceptional Chiming Staff", glow: true, cls: "Staves", tags: ["3 sockets", "ilvl 82"], summary: "Grants Skill: Level 18 Sigil of Power", req: "Requires Level 78 · 137 Int", statsLabel: "Stats (2)" }),
+      ["Exceptional base (normal item)", win(topBar(), item({ rarity: "normal", name: "Exceptional Chiming Staff", cls: "Staves", tags: ["3 sockets", "ilvl 82"], summary: "Grants Skill: Level 18 Sigil of Power", req: "Requires Level 78 · 137 Int", statsLabel: "Stats (2)" }),
         price({ lines: ["Normal items aren't priced yet.", "Use Check on trade above."] }), offers({ lines: ["Offers of normal items come with their price, in a later version."] }), foot())],
       ["French item (interface in French)", win(topBar(), item({ rarity: "unique", name: "Chasseur de têtes", base: "Ceinture lourde", cls: "Ceintures", tags: ["Corrompu", "niv. 80"], req: "Requiert niveau 50", statsLabel: "Statistiques (6)", filters: "3 filtres", tradeLabel: "Voir sur l'échange", tradeTitle: "Ouvrir la recherche sur le site d'échange" }),
         price({ values: ["12.4", "123", "8990"], offers: "23 offres", trend: "En hausse sur les 3 derniers jours (+4 %)" }, "fr"), offers({ state: "idle" }, "fr"), foot("poe2scout il y a 12 min · GGG trade il y a 2 min"))],
