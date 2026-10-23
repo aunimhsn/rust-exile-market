@@ -11,6 +11,10 @@
   data. The mock window imitates the egui dark theme.
   The orb icons come from assets/currencies/ (see assets/NOTICE.md); the item
   icons are loaded from the Grinding Gear Games CDN, as the application will.
+  Serve the repository root so that the orb icons load, even in a sandboxed
+  browser (Flatpak, Snap) that only receives this file:
+    python3 -m http.server 8765 --bind 127.0.0.1
+  then open http://127.0.0.1:8765/docs/mockups/window-layouts.html
 -->
 <style>
   :root {
