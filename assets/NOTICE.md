@@ -10,4 +10,6 @@ The images in `currencies/` are Path of Exile 2 icons, © Grinding Gear Games. T
 
 Only the icons that are always visible belong here, so that the application can show them offline. The icons of the copied items are loaded at runtime from the Grinding Gear Games CDN and cached locally: they are never added to this repository.
 
+The files in `logo/` belong to this project and are covered by its license: `exile-market.png` (the full logo) and `emblem.svg` (the emblem without the text, white so that the application can tint it).
+
 This product isn't affiliated with or endorsed by Grinding Gear Games in any way.
