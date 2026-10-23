@@ -8,6 +8,7 @@ authors = ["Aunim HASSAN"]
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/aunimhsn/rust-exile-market"
 readme = "README.md"
+publish = false
 
 [dependencies]
 

@@ -6,6 +6,10 @@ Price checker for Path of Exile 2 items, written in Rust.
 
 Early development: the expected behavior is described in [specs.md](specs.md), and the implementation steps in [roadmap.md](roadmap.md).
 
+## Disclaimer
+
+This product isn't affiliated with or endorsed by Grinding Gear Games in any way.
+
 ## Requirements
 
 - Rust 1.93 or later (stable toolchain, see `rust-toolchain.toml`)
