@@ -197,7 +197,7 @@
   .empty { flex: 1; display: grid; place-items: center; text-align: center; color: var(--egui-weak); }
   .empty .key { display: inline-block; padding: 1px 6px; border: 1px solid var(--egui-weak); border-radius: 3px; color: var(--egui-text); }
 
-  .chart svg { width: 100%; height: auto; display: block; }
+  .chart svg { width: 100%; height: auto; max-height: 280px; display: block; }
   .legend { display: flex; gap: 14px; font-size: 12px; color: var(--egui-weak); margin-top: 4px; }
   .legend span::before { content: ""; display: inline-block; width: 10px; height: 3px; margin-right: 5px; vertical-align: middle; }
   .legend .l-price::before { background: var(--egui-link); }
@@ -298,11 +298,12 @@
       price: "Price",
       unitPrice: "Unit price",
       stackOf: n => `Stack of ${n}`,
-      offers: n => `${n} ${n === 1 ? "offer" : "offers"}`,
+      offers: n => `${n.toLocaleString("en-US")} ${n === 1 ? "offer" : "offers"}`,
       reliable: "Sells",
       uncertain: n => `Only ${n} ${n === 1 ? "offer" : "offers"}: the price is uncertain`,
       openTrade: "Open on the trade site",
       history: "Price over the last 7 days",
+      historyUnit: "Unit price over the last 7 days",
       historyPrice: "Price",
       historyOffers: "Offers",
       updated: "Prices updated 12 minutes ago",
@@ -333,11 +334,12 @@
       price: "Prix",
       unitPrice: "Prix unitaire",
       stackOf: n => `Pile de ${n}`,
-      offers: n => `${n} ${n <= 1 ? "offre" : "offres"}`,
+      offers: n => `${n.toLocaleString("fr-FR")} ${n <= 1 ? "offre" : "offres"}`,
       reliable: "Se vend",
       uncertain: n => `Seulement ${n} ${n <= 1 ? "offre" : "offres"} : prix incertain`,
       openTrade: "Ouvrir sur le site d'échange",
       history: "Prix sur les 7 derniers jours",
+      historyUnit: "Prix unitaire sur les 7 derniers jours",
       historyPrice: "Prix",
       historyOffers: "Offres",
       updated: "Prix mis à jour il y a 12 minutes",
@@ -473,15 +475,21 @@
     const chaos = div * CHAOS_PER_DIV;
     const decimals = v => (v >= 100 ? 0 : v >= 10 ? 1 : 2);
     return [
-      { key: "ex", label: { en: "Exalted Orb", fr: "Orbe exalté" }, value: priceEx, text: formatNumber(priceEx, 0) },
-      { key: "div", label: { en: "Divine Orb", fr: "Orbe divin" }, value: div, text: formatNumber(div, decimals(div)) },
-      { key: "chaos", label: { en: "Chaos Orb", fr: "Orbe du chaos" }, value: chaos, text: formatNumber(chaos, decimals(chaos)) },
+      { key: "ex", label: { en: "Exalted Orb", fr: "Orbe exalté" }, plural: { en: "Exalted Orbs", fr: "Orbes exaltés" }, value: priceEx, text: formatNumber(priceEx, 0) },
+      { key: "div", label: { en: "Divine Orb", fr: "Orbe divin" }, plural: { en: "Divine Orbs", fr: "Orbes divins" }, value: div, text: formatNumber(div, decimals(div)) },
+      { key: "chaos", label: { en: "Chaos Orb", fr: "Orbe du chaos" }, plural: { en: "Chaos Orbs", fr: "Orbes du chaos" }, value: chaos, text: formatNumber(chaos, decimals(chaos)) },
     ];
   }
 
   function headlineCurrency(priceEx) {
     const [ex, div] = inCurrencies(priceEx);
     return div.value >= 1 ? div : ex;
+  }
+
+  // "1 Divine Orb", "12.4 Divine Orbs"; in French, the singular goes up to 1.99.
+  function amountName(c) {
+    const singular = state.language === "fr" ? c.value < 2 : c.value === 1;
+    return (singular ? c.label : c.plural)[state.language];
   }
 
   function currencyCell(c) {
@@ -528,7 +536,7 @@
     if (item.unidentified) {
       const rows = item.candidates.map(c => {
         const h = headlineCurrency(c.priceEx);
-        return `<li><span class="rarity-unique">${c.name[lang]}</span><span>${h.text} ${h.label[lang]}</span></li>`;
+        return `<li><span class="rarity-unique">${c.name[lang]}</span><span>${h.text} ${amountName(h)}</span></li>`;
       }).join("");
       return `<div class="card"><h3>${t.price}</h3><p>${t.identify}</p>
         <div class="item-meta">${t.possible}</div><ul class="candidates">${rows}</ul></div>`;
@@ -540,7 +548,7 @@
     const headlinePrice = item.stack ? item.priceEx * stackSize : item.priceEx;
     const head = headlineCurrency(headlinePrice);
     const headline = state.headline === "auto"
-      ? `<div class="headline"><span class="value">${head.text}</span><span class="unit">${head.label[lang]}${item.stack ? ` · ${t.stackOf(stackSize)}` : ""}</span></div>`
+      ? `<div class="headline"><span class="value">${head.text}</span><span class="unit">${amountName(head)}${item.stack ? ` · ${t.stackOf(stackSize)}` : ""}</span></div>`
       : "";
     const header = total
       ? `<tr><th></th><th>${t.unitPrice}</th><th>${t.stackOf(stackSize)}</th></tr>`
@@ -585,7 +593,7 @@
     }).join("");
     return `
       <div class="card chart full">
-        <h3>${t.history} · ${head.label[state.language]}</h3>
+        <h3>${item.stack ? t.historyUnit : t.history} · ${head.plural[state.language]}</h3>
         <svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${t.history}">
           ${ticks}${bars}
           <path d="${path}" fill="none" stroke="var(--egui-link)" stroke-width="2.5"></path>
@@ -670,7 +678,23 @@
     $("scaler").style.height = `${(state.height + 2) * scale}px`;
   }
 
+  // Optional URL parameters, e.g. ?w=1280&h=800&scenario=stack&lang=fr&settings=1
+  function readUrl() {
+    const params = new URLSearchParams(location.search);
+    const number = (key, min, max) => {
+      const value = Number(params.get(key));
+      return params.has(key) && value >= min && value <= max ? value : null;
+    };
+    state.width = number("w", 320, 1920) ?? state.width;
+    state.height = number("h", 320, 1080) ?? state.height;
+    if (params.get("scenario") in SCENARIOS) state.scenario = params.get("scenario");
+    if (params.get("lang") in STRINGS) state.language = params.get("lang");
+    if (params.get("headline") === "none") state.headline = "none";
+    state.settingsOpen = params.get("settings") === "1";
+  }
+
   function setup() {
+    readUrl();
     for (const p of PRESETS) {
       const b = document.createElement("button");
       b.type = "button";
