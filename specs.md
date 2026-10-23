@@ -30,8 +30,9 @@ rust-exile-market is a small desktop application that gives the price of a Path 
 
 For a supported item, the window shows:
 
+- the item icon, as in the game; rare and unidentified items, which have no icon of their own, show the first letter of their item class;
 - the item name, in its rarity color, and its base type for a unique item;
-- its price in **Exalted Orbs**, **Divine Orbs** and **Chaos Orbs**, so that the price is readable at any time of the league, whichever currency the economy uses at that moment;
+- its price in **Exalted Orbs**, **Divine Orbs** and **Chaos Orbs**, each with its icon, so that the price is readable at any time of the league, whichever currency the economy uses at that moment;
 - for a stack (e.g. `Stack Size: 12/20`), the unit price and the price of the whole stack;
 - the number of offers behind the price, to judge whether the item sells: with fewer than 5 offers, a warning says that the price is uncertain;
 - the age of the price data (e.g. "Prices updated 12 minutes ago");
@@ -71,7 +72,7 @@ A gear button at the top right opens the settings:
   - *English* or *Français*: the interface stays in that language, whatever the language of the items.
 - **Always on top**: keeps the window above the other windows, for players with a single screen. Off by default.
 
-The settings are saved as soon as they change.
+The settings are saved as soon as they change. The bottom of the settings shows the sentence "This product isn't affiliated with or endorsed by Grinding Gear Games in any way."
 
 ### Price data
 
@@ -85,6 +86,7 @@ The settings are saved as soon as they change.
 |---|---|---|
 | Settings | The user's configuration directory (e.g. `~/.config/rust-exile-market/` on Linux, `%APPDATA%\rust-exile-market\` on Windows) | League, language, always on top, window size and position. |
 | Price cache | The user's cache directory | The last downloaded prices, used at startup and when the network is unavailable. |
+| Icon cache | The user's cache directory | The icons of the items already shown, downloaded once each. |
 
 None of these files are in the Git repository.
 
@@ -97,4 +99,5 @@ None of these files are in the Git repository.
 | Selected league no longer exists (end of league) | The default league is selected, with the message "<league> has ended, switched to <default league>". |
 | Clipboard unreadable (e.g. a Wayland desktop that forbids it) | The message "The clipboard can't be read" with a link to the help in the README. |
 | Copied text that starts like an item but can't be read | The message "This item couldn't be read", without crashing; the next copy works normally. |
+| Item icon unavailable (no network, missing image) | The first letter of the item class stands in for the icon; the price is shown normally. |
 | Settings file unreadable | The default settings are used, and the file is rewritten at the next change. |

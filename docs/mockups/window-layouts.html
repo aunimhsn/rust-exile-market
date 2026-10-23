@@ -9,6 +9,8 @@
   Open it in a browser: resize the mock window with the controls, pick an
   item scenario and the language of the copied item. All prices are sample
   data. The mock window imitates the egui dark theme.
+  The orb icons come from assets/currencies/ (see assets/NOTICE.md); the item
+  icons are loaded from the Grinding Gear Games CDN, as the application will.
 -->
 <style>
   :root {
@@ -149,10 +151,11 @@
 
   .item { display: flex; gap: 12px; align-items: flex-start; }
   .item-icon {
-    flex: none; width: 48px; height: 48px; border-radius: 4px; display: grid; place-items: center;
-    background: #111; border: 1px solid var(--egui-border); color: var(--egui-weak); font-size: 11px;
+    flex: none; width: 56px; height: 56px; border-radius: 4px; display: grid; place-items: center;
+    background: #111; border: 1px solid var(--egui-border); color: var(--egui-weak); font-size: 22px;
   }
-  .layout-wide .item-icon { width: 72px; height: 72px; }
+  .item-icon img { max-width: 100%; max-height: 100%; object-fit: contain; }
+  .layout-wide .item-icon { width: 96px; height: 96px; }
   .item-name { font-size: 18px; font-weight: 600; line-height: 1.2; }
   .layout-wide .item-name { font-size: 22px; }
   .item-base { color: var(--egui-text); }
@@ -174,10 +177,9 @@
   .prices th:first-child, .prices td:first-child { text-align: left; }
   .prices td { text-align: right; padding: 3px 6px; border-top: 1px solid #2c2c2c; }
   .currency { display: inline-flex; align-items: center; gap: 6px; }
-  .currency i { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
-  .c-ex i { background: #d9c27a; }
-  .c-div i { background: #e8e8e8; }
-  .c-chaos i { background: #c46a3a; }
+  .orb { width: 20px; height: 20px; vertical-align: middle; }
+  .headline .orb { width: 28px; height: 28px; align-self: center; }
+  .layout-wide .headline .orb { width: 36px; height: 36px; }
 
   .offers { display: flex; align-items: center; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
   .badge { padding: 1px 8px; border-radius: 10px; font-size: 12px; }
@@ -207,6 +209,7 @@
   .settings { background: var(--egui-panel); border-left: 1px solid var(--egui-border); padding: 12px; width: 280px; overflow: auto; }
   .layout-narrow .settings { width: 100%; border-left: none; }
   .settings h2 { margin: 0 0 12px; font-size: 15px; }
+  .disclaimer { margin-top: 24px; font-size: 11px; color: var(--egui-weak); }
   .field { margin-bottom: 14px; }
   .field > span { display: block; font-size: 12px; color: var(--egui-weak); margin-bottom: 4px; }
   .combo { display: flex; justify-content: space-between; background: var(--egui-widget); border-radius: 4px; padding: 5px 8px; }
@@ -264,7 +267,8 @@
   <h2>Proposals to decide</h2>
   <ul>
     <li><strong>Headline currency</strong>: above the table of the three currencies, the price in the most readable one: Divine Orbs from 1 Divine Orb, Exalted Orbs below. Switch to <em>None</em> to compare.</li>
-    <li><strong>Item icon</strong>: the price database gives an icon for each item. The grey square shows where it would go.</li>
+    <li><strong>Icons</strong>: the orbs come from <code>assets/currencies/</code>, bundled in the executable; the item icons are loaded from the Grinding Gear Games CDN, at the address given by the price database. Rare and unidentified items have no icon: the first letter of their item class stands in.</li>
+    <li><strong>Disclaimer</strong>: at the bottom of the settings.</li>
     <li><strong>Unidentified unique</strong>: the list of the possible uniques shows the price of each one.</li>
     <li><strong>Data age and source</strong>: in a status bar at the bottom, with the name of the price database.</li>
     <li><strong>French messages</strong>: formal ("Copiez"), like the French game client.</li>
@@ -279,6 +283,8 @@
   const EX_PER_DIV = 725;
   const CHAOS_PER_DIV = 9.9;
   const LEAGUE = "Forbidden Rites";
+  const ORB_FILES = { ex: "exalted-orb", div: "divine-orb", chaos: "chaos-orb" };
+  const CDN = "https://web.poecdn.com/gen/image/";
 
   const PRESETS = [
     { label: "Narrow 420 × 560", width: 420, height: 560 },
@@ -324,6 +330,7 @@
       language: "Language",
       automatic: "Automatic (follows the game)",
       alwaysOnTop: "Always on top",
+      disclaimer: "This product isn't affiliated with or endorsed by Grinding Gear Games in any way.",
     },
     fr: {
       league: "Ligue",
@@ -360,6 +367,7 @@
       language: "Langue",
       automatic: "Automatique (suit le jeu)",
       alwaysOnTop: "Toujours au premier plan",
+      disclaimer: "Ce produit n'est ni affilié à Grinding Gear Games ni approuvé par Grinding Gear Games.",
     },
   };
 
@@ -368,6 +376,7 @@
     name: { en: "Headhunter", fr: "Chasseur de têtes" },
     base: { en: "Heavy Belt", fr: "Ceinture lourde" },
     itemClass: { en: "Belts", fr: "Ceintures" },
+    icon: CDN + "WzI1LDE0LHsiZiI6IjJESXRlbXMvQmVsdHMvVW5pcXVlcy9IZWFkaHVudGVyIiwidyI6MiwiaCI6MSwic2NhbGUiOjEsInJlYWxtIjoicG9lMiJ9XQ/24accb4eec/Headhunter.png",
     priceEx: 8990,
     offers: 23,
     history: [9800, 9650, 9400, 9300, 9150, 9020, 8990],
@@ -383,6 +392,7 @@
         name: { en: "Orb of Annulment", fr: "Orbe d'annulation" },
         itemClass: { en: "Stackable Currency", fr: "Objets monétaires empilables" },
         stack: [7, 20],
+        icon: CDN + "WzI1LDE0LHsiZiI6IjJESXRlbXMvQ3VycmVuY3kvQW5udWxsT3JiIiwic2NhbGUiOjEsInJlYWxtIjoicG9lMiJ9XQ/2daba8ccca/AnnullOrb.png",
         priceEx: 182,
         offers: 1240,
         history: [205, 198, 196, 190, 188, 185, 182],
@@ -398,6 +408,7 @@
         base: { en: "Solar Amulet", fr: "Amulette solaire" },
         itemClass: { en: "Amulets", fr: "Amulettes" },
         corrupted: true,
+        icon: CDN + "WzI1LDE0LHsiZiI6IjJESXRlbXMvQW11bGV0cy9VbmlxdWVzL0JlYWNvbk9mQXppcyIsInciOjEsImgiOjEsInNjYWxlIjoxLCJyZWFsbSI6InBvZTIifV0/2d0ad03930/BeaconOfAzis.png",
         priceEx: 1450,
         offers: 3,
         history: [1700, 1620, 1580, 1500, 1520, 1470, 1450],
@@ -412,7 +423,7 @@
         base: { en: "Stellar Amulet", fr: "Amulette stellaire" },
         itemClass: { en: "Amulets", fr: "Amulettes" },
         candidates: [
-          { name: { en: "Astramentis", fr: "Astramentis" }, priceEx: 2900 },
+          { name: { en: "Astramentis", fr: "Astramentis" }, priceEx: 2900, icon: CDN + "WzI1LDE0LHsiZiI6IjJESXRlbXMvQW11bGV0cy9VbmlxdWVzL0FzdHJhbWVudGlzIiwidyI6MSwiaCI6MSwic2NhbGUiOjEsInJlYWxtIjoicG9lMiJ9XQ/541d1c98f9/Astramentis.png" },
           { name: { en: "Fixation of Yix", fr: "Fixation d'Yix" }, priceEx: 95 },
           { name: { en: "Hinekora's Sight", fr: "Vue d'Hinekora" }, priceEx: 640 },
           { name: { en: "Strugglescream", fr: "Hurlépreuve" }, priceEx: 12 },
@@ -492,8 +503,21 @@
     return (singular ? c.label : c.plural)[state.language];
   }
 
+  function orb(c) {
+    return `<img class="orb" src="../../assets/currencies/${ORB_FILES[c.key]}.png" alt="">`;
+  }
+
   function currencyCell(c) {
-    return `<span class="currency c-${c.key}"><i></i>${c.label[state.language]}</span>`;
+    return `<span class="currency">${orb(c)}${c.label[state.language]}</span>`;
+  }
+
+  // The price database gives no icon for base types: rare and unidentified
+  // items show the first letter of their item class.
+  function itemIcon(item) {
+    const lang = state.language;
+    return item.icon
+      ? `<img src="${item.icon}" alt="">`
+      : item.itemClass[lang].charAt(0);
   }
 
   function renderItem(item, t) {
@@ -514,7 +538,7 @@
     return `
       <div class="card">
         <div class="item">
-          <div class="item-icon">icon</div>
+          <div class="item-icon">${itemIcon(item)}</div>
           <div>${title}<div class="item-meta">${meta}</div></div>
         </div>
         ${item.notPriced || item.noPrice || item.unidentified ? "" : tradeButton(t)}
@@ -536,7 +560,7 @@
     if (item.unidentified) {
       const rows = item.candidates.map(c => {
         const h = headlineCurrency(c.priceEx);
-        return `<li><span class="rarity-unique">${c.name[lang]}</span><span>${h.text} ${amountName(h)}</span></li>`;
+        return `<li><span class="rarity-unique">${c.name[lang]}</span><span title="${amountName(h)}">${h.text} ${orb(h)}</span></li>`;
       }).join("");
       return `<div class="card"><h3>${t.price}</h3><p>${t.identify}</p>
         <div class="item-meta">${t.possible}</div><ul class="candidates">${rows}</ul></div>`;
@@ -548,7 +572,7 @@
     const headlinePrice = item.stack ? item.priceEx * stackSize : item.priceEx;
     const head = headlineCurrency(headlinePrice);
     const headline = state.headline === "auto"
-      ? `<div class="headline"><span class="value">${head.text}</span><span class="unit">${amountName(head)}${item.stack ? ` · ${t.stackOf(stackSize)}` : ""}</span></div>`
+      ? `<div class="headline">${orb(head)}<span class="value">${head.text}</span><span class="unit">${amountName(head)}${item.stack ? ` · ${t.stackOf(stackSize)}` : ""}</span></div>`
       : "";
     const header = total
       ? `<tr><th></th><th>${t.unitPrice}</th><th>${t.stackOf(stackSize)}</th></tr>`
@@ -617,6 +641,7 @@
           ${radio(true, t.automatic)}${radio(false, "English")}${radio(false, "Français")}
         </div>
         <div class="field"><div class="check"><i></i>${t.alwaysOnTop}</div></div>
+        <p class="disclaimer">${t.disclaimer}</p>
       </aside>`;
   }
 

@@ -49,3 +49,5 @@ Licensed under either of
 - MIT license ([LICENSE-MIT](LICENSE-MIT))
 
 at your option.
+
+The icons in [assets/](assets/) belong to Grinding Gear Games and are not covered by this license: see [assets/NOTICE.md](assets/NOTICE.md).
