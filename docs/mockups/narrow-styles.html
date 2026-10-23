@@ -404,6 +404,7 @@
 
   .stats { margin-top: 8px; display: grid; gap: 6px; }
   .req { color: var(--weak); font-size: 12px; display: flex; justify-content: space-between; }
+  .reqline { margin-top: 6px; color: var(--weak); font-size: 12px; }
   .prop { font-size: 13px; color: var(--text); }
   .prop span { color: var(--weak); }
   .sep { height: 1px; background: var(--control-line); margin: 2px 0; }
@@ -561,7 +562,7 @@
     if (it.stats && unfolded) {
       stats = `<div class="stats-toggle open"><span class="pill">${pill(true)}</span>${filters}</div><div class="stats">${it.stats.map(row => {
         if (row === "sep") return `<div class="sep"></div>`;
-        if (row.req) return `<div class="req"><span>${row.req}</span>${row.min ? "<span>min</span>" : ""}</div>`;
+        if (row.minHeader) return `<div class="req"><span></span><span>min</span></div>`;
         if (row.prop) return `<div class="prop"><span>${row.prop[0]}:</span> ${row.prop[1]}</div>`;
         if (row.note) return `<div class="note">${row.note}</div>`;
         const check = row.check === undefined ? "<span></span>" : `<span class="check ${row.check ? "on" : ""}">${row.check ? ICON.check(11) : ""}</span>`;
@@ -581,6 +582,7 @@
         ${it.base ? `<div class="base">${it.base}</div>` : ""}
         <div class="meta"><span>${it.cls}</span>${tags}</div>
         ${it.summary ? `<div class="summary">${it.summary}</div>` : ""}
+        ${it.req ? `<div class="reqline">${it.req}</div>` : ""}
         ${stats}
       </div>`;
   }
@@ -648,9 +650,9 @@
     </div>`;
 
   // Sample items.
-  const HH = { rarity: "unique", name: "Headhunter", base: "Heavy Belt", cls: "Belts", tags: ["Corrupted", "ilvl 80"], statsLabel: "Stats (6)", filters: "3 filters" };
+  const HH = { rarity: "unique", name: "Headhunter", base: "Heavy Belt", cls: "Belts", tags: ["Corrupted", "ilvl 80"], req: "Requires Level 50", statsLabel: "Stats (6)", filters: "3 filters" };
   const HH_STATS = [
-    { req: "Requires: Level 50", min: true },
+    { minHeader: true },
     { mod: "26% increased Stun Threshold", check: false, min: 26, range: "20–30", share: .6 },
     { mod: "Has 2 Charm Slots", check: false, min: 2, range: "1–3", share: .5 },
     "sep",
@@ -664,11 +666,11 @@
   const HH_OFFERS = { count: "10 of 13 online", columns: ["Price", "Listed"], rows: [
     { v: "6", k: "ex", when: "2 h ago", sus: true }, { v: "1", k: "chaos", when: "5 d ago", sus: true }, { v: "8", k: "div", when: "3 h ago" },
     { v: "10", k: "div", when: "3 h ago" }, { v: "11", k: "div", when: "40 min ago" }, { v: "12", k: "div", when: "1 d ago" }] };
-  const BOW = { rarity: "rare", name: "Storm Bite", base: "Gemini Bow", cls: "Bows", tags: ["ilvl 81", "Q 20%", "2 sockets"], summary: "Physical DPS 245 · Elemental DPS 44", statsLabel: "Stats (9)" };
+  const BOW = { rarity: "rare", name: "Storm Bite", base: "Gemini Bow", cls: "Bows", tags: ["ilvl 81", "Q 20%", "2 sockets"], summary: "Physical DPS 245 · Elemental DPS 44", req: "Requires Level 65 · 145 Dex", statsLabel: "Stats (9)" };
   const BOW_STATS = [
     { prop: ["Quality", "+20%"] }, { prop: ["Physical Damage", "72–134"] }, { prop: ["Lightning Damage", "3–71"] },
     { prop: ["Critical Hit Chance", "5.00%"] }, { prop: ["Attacks per Second", "1.20"] }, { prop: ["Sockets", "2 (1 empty)"] },
-    { req: "Requires: Level 65, 145 Dex" }, "sep",
+    "sep",
     { mod: "+3 to Level of all Projectile Skills", range: "1–3", share: 1 },
     { mod: "152% increased Physical Damage", range: "100–169", share: .75 },
     { mod: "Adds 21 to 38 Physical Damage" },
@@ -692,10 +694,10 @@
     ["Other items", [
       ["Rare bow", win(topBar(), item(BOW), price(RARE_PRICE), offers(RARE_OFFERS), foot())],
       ["Rare bow, stats unfolded", win(topBar(), item({ ...BOW, stats: BOW_STATS }, true), foot())],
-      ["Unique bow: corrupted, quality, sockets", win(topBar(), item({ rarity: "unique", name: "Death's Harp", base: "Dualstring Bow", cls: "Bows", tags: ["Corrupted", "Q 20%", "2 sockets", "ilvl 79"], summary: "Physical DPS 198", statsLabel: "Stats (5)", filters: "2 filters" }),
+      ["Unique bow: corrupted, quality, sockets", win(topBar(), item({ rarity: "unique", name: "Death's Harp", base: "Dualstring Bow", cls: "Bows", tags: ["Corrupted", "Q 20%", "2 sockets", "ilvl 79"], summary: "Physical DPS 198", req: "Requires Level 52 · 96 Dex", statsLabel: "Stats (5)", filters: "2 filters" }),
         price({ values: ["1.8", "18", "1305"], offers: "4 offers", warning: "Only 4 offers: the price is uncertain" }),
         offers({ count: "4 of 4 online", columns: ["Price", "Listed"], rows: [{ v: "1.5", k: "div", when: "5 h ago" }, { v: "1.8", k: "div", when: "1 d ago" }, { v: "2", k: "div", when: "50 min ago" }, { v: "2.5", k: "div", when: "3 d ago" }] }), foot())],
-      ["Many tags (they wrap)", win(topBar(), item({ rarity: "unique", name: "Ironbound", base: "Runeforged Warden Bow", cls: "Bows", tags: ["Twice Corrupted", "Sanctified", "Fractured", "Mirrored", "Q 23%", "3 sockets", "ilvl 82"], summary: "Physical DPS 312", statsLabel: "Stats (6)", filters: "3 filters" }),
+      ["Many tags (they wrap)", win(topBar(), item({ rarity: "unique", name: "Ironbound", base: "Runeforged Warden Bow", cls: "Bows", tags: ["Twice Corrupted", "Sanctified", "Fractured", "Mirrored", "Q 23%", "3 sockets", "ilvl 82"], summary: "Physical DPS 312", req: "Requires Level 70 · 172 Dex", statsLabel: "Stats (6)", filters: "3 filters" }),
         price({ values: ["38", "376", "27550"], offers: "2 offers", warning: "Only 2 offers: the price is uncertain" }), offers({ state: "idle" }), foot())],
     ]],
     ["Special cases", [
@@ -704,14 +706,14 @@
         offers({ count: "8 of 48 online", columns: ["Per unit", "Stock", "Listed"], rows: [
           { v: "175", k: "ex", stock: "40", when: "12 min" }, { v: "178", k: "ex", stock: "12", when: "3 min" }, { v: "180", k: "ex", stock: "120", when: "45 min" },
           { v: "182", k: "ex", stock: "33", when: "3 h" }, { v: "185", k: "ex", stock: "60", when: "9 min" }] }), foot())],
-      ["Unidentified unique", win(topBar(), item({ rarity: "unique", name: "Stellar Amulet", cls: "Amulets", tags: ["Unidentified", "ilvl 74"], statsLabel: "Stats (1)" }),
+      ["Unidentified unique", win(topBar(), item({ rarity: "unique", name: "Stellar Amulet", cls: "Amulets", tags: ["Unidentified", "ilvl 74"], req: "Requires Level 60", statsLabel: "Stats (1)" }),
         price({ candidates: [["Astramentis", "4.0", "div"], ["Hinekora's Sight", "640", "ex"], ["Fixation of Yix", "95", "ex"], ["Strugglescream", "12", "ex"]] }),
         offers({ lines: ["Identify the item to search its offers."] }), foot())],
-      ["Magic item", win(topBar(), item({ rarity: "magic", name: "Glimmering Sapphire Ring of the Lynx", cls: "Rings", tags: ["ilvl 68"], statsLabel: "Stats (3)" }),
+      ["Magic item", win(topBar(), item({ rarity: "magic", name: "Glimmering Sapphire Ring of the Lynx", cls: "Rings", tags: ["ilvl 68"], req: "Requires Level 44", statsLabel: "Stats (3)" }),
         price({ lines: ["Magic items aren't priced yet.", "Use Check on trade above."] }), offers({ lines: ["Offers of magic items come with their price, in a later version."] }), foot())],
-      ["Exceptional base (normal item)", win(topBar(), item({ rarity: "normal", name: "Exceptional Chiming Staff", glow: true, cls: "Staves", tags: ["3 sockets", "ilvl 82"], summary: "Grants Skill: Level 18 Sigil of Power", statsLabel: "Stats (2)" }),
+      ["Exceptional base (normal item)", win(topBar(), item({ rarity: "normal", name: "Exceptional Chiming Staff", glow: true, cls: "Staves", tags: ["3 sockets", "ilvl 82"], summary: "Grants Skill: Level 18 Sigil of Power", req: "Requires Level 78 · 137 Int", statsLabel: "Stats (2)" }),
         price({ lines: ["Normal items aren't priced yet.", "Use Check on trade above."] }), offers({ lines: ["Offers of normal items come with their price, in a later version."] }), foot())],
-      ["French item (interface in French)", win(topBar(), item({ rarity: "unique", name: "Chasseur de têtes", base: "Ceinture lourde", cls: "Ceintures", tags: ["Corrompu", "niv. 80"], statsLabel: "Statistiques (6)", filters: "3 filtres", tradeLabel: "Voir sur l'échange", tradeTitle: "Ouvrir la recherche sur le site d'échange" }),
+      ["French item (interface in French)", win(topBar(), item({ rarity: "unique", name: "Chasseur de têtes", base: "Ceinture lourde", cls: "Ceintures", tags: ["Corrompu", "niv. 80"], req: "Requiert niveau 50", statsLabel: "Statistiques (6)", filters: "3 filtres", tradeLabel: "Voir sur l'échange", tradeTitle: "Ouvrir la recherche sur le site d'échange" }),
         price({ values: ["12.4", "123", "8990"], offers: "23 offres", trend: "En hausse sur les 3 derniers jours (+4 %)" }, "fr"), offers({ state: "idle" }, "fr"), foot("poe2scout il y a 12 min · GGG trade il y a 2 min"))],
     ]],
     ["Offer states", [
@@ -719,7 +721,7 @@
       ["Ready to search again", win(topBar(), item(HH), price(HH_PRICE), offers({ ...HH_OFFERS, ready: true, age: "searched 5 min ago" }), foot("poe2scout 12 min ago · GGG trade 5 min ago"))],
       ["Long wait before the next search", win(topBar(), item(HH), price(HH_PRICE), offers({ state: "wait" }), foot("poe2scout 12 min ago · GGG trade: next search in 4 min"))],
       ["No offer online", win(topBar(), item(HH), price(HH_PRICE), offers({ lines: ["No offer online with these filters.", "Uncheck a stat or lower a minimum, then search again."] }), foot())],
-      ["No price found", win(topBar(), item({ rarity: "unique", name: "Strugglescream", base: "Stellar Amulet", cls: "Amulets", tags: ["ilvl 76"], statsLabel: "Stats (5)", filters: "2 filters" }),
+      ["No price found", win(topBar(), item({ rarity: "unique", name: "Strugglescream", base: "Stellar Amulet", cls: "Amulets", tags: ["ilvl 76"], req: "Requires Level 60", statsLabel: "Stats (5)", filters: "2 filters" }),
         price({ lines: ["No price found for this item in Forbidden Rites."] }), offers({ state: "idle" }), foot())],
     ]],
     ["Errors", [
