@@ -400,6 +400,10 @@
   .stats { margin-top: 8px; display: grid; gap: 6px; }
   .req { color: var(--weak); font-size: 12px; display: flex; justify-content: space-between; }
   .reqline { margin-top: 6px; color: var(--weak); font-size: 12px; }
+  /* Stack price: the stack or the unit in large, with the "Big" tab. */
+  .v-unit, [data-big="unit"] .v-stack { display: none; }
+  [data-big="unit"] .v-unit { display: block; }
+  [data-big="unit"] .head .v-unit { display: inline; }
   .prop { font-size: 13px; color: var(--text); }
   .prop span { color: var(--weak); }
   .sep { height: 1px; background: var(--control-line); margin: 2px 0; }
@@ -510,6 +514,7 @@
   };
   const VARIANTS = {
     theme: { label: "Style", options: Object.fromEntries(Object.entries(THEMES).map(([k, v]) => [k, v.title])), fallback: "slate" },
+    big: { label: "Stack price, large", options: { stack: "Stack", unit: "Unit" }, fallback: "stack" },
     league: { label: "League", options: { softcore: "Softcore", hardcore: "Hardcore" }, fallback: "softcore" },
   };
   const params = new URLSearchParams(location.search);
@@ -585,9 +590,17 @@
   function price(p, lang = "en") {
     const label = lang === "fr" ? "Prix" : "Price";
     let body = "";
-    if (p.values) {
-      body = `<div class="prices">${[["div", p.values[0]], ["chaos", p.values[1]], ["ex", p.values[2]]].map(([k, v]) => `<div class="price">${orb(k)}${v}</div>`).join("")}</div>`;
-      if (p.stack) body += `<div class="line">${p.stack}</div>`;
+    const row = values => `<div class="prices">${[["div", values[0]], ["chaos", values[1]], ["ex", values[2]]].map(([k, v]) => `<div class="price">${orb(k)}${v}</div>`).join("")}</div>`;
+    const inline = values => `${values[0]} div · ${values[1]} c · ${values[2]} ex`;
+    let caption = "";
+    if (p.stackValues) {
+      // Stack: the "Big" tab chooses which price is large; the other one goes on a small line.
+      body = `<div class="v-stack">${row(p.stackValues)}<div class="line muted">Unit price: ${inline(p.values)}</div></div>
+        <div class="v-unit">${row(p.values)}<div class="line muted">Stack of ${p.stackSize}: ${inline(p.stackValues)}</div></div>`;
+      caption = `<span class="age v-stack">stack of ${p.stackSize}</span><span class="age v-unit">per unit</span>`;
+      if (p.trend) body += `<div class="line ${p.rising === false ? "fall" : "rise"}">${p.trend}</div>`;
+    } else if (p.values) {
+      body = row(p.values);
       if (p.trend) body += `<div class="line ${p.rising === false ? "fall" : "rise"}">${p.trend}</div>`;
       if (p.warning) body += `<div class="line warn">${p.warning}</div>`;
     }
@@ -596,7 +609,7 @@
       body = `<div class="msg">Identify the item to get its price.</div><div class="line muted">Possible uniques</div>
         <div class="candidates">${p.candidates.map(([n, v, k]) => `<div><span class="rarity-unique">${n}</span><span>${v} ${orb(k)}</span></div>`).join("")}</div>`;
     }
-    return `<div class="band a"><div class="head"><span class="label">${label}</span>${p.offers ? `<span class="right">${p.offers}</span>` : ""}</div>${body}</div>`;
+    return `<div class="band a"><div class="head"><span class="label">${label}</span>${caption}${p.offers ? `<span class="right">${p.offers}</span>` : ""}</div>${body}</div>`;
   }
 
   function offers(o, lang = "en") {
@@ -697,7 +710,7 @@
     ]],
     ["Special cases", [
       ["Currency stack", win(topBar(), item({ rarity: "currency", name: "Orb of Annulment", cls: "Stackable Currency", tags: ["Stack 7/20"], statsLabel: "Stats (1)" }),
-        price({ values: ["0.25", "2.49", "182"], offers: "1240 offers", stack: "Stack of 7: 1.76 div · 17.4 c · 1274 ex", rising: false, trend: "Falling over the last 7 days (−11%)" }),
+        price({ values: ["0.25", "2.49", "182"], stackValues: ["1.76", "17.4", "1274"], stackSize: 7, offers: "1240 offers", rising: false, trend: "Falling over the last 7 days (−11%)" }),
         offers({ count: "8 of 48 online", columns: ["Per unit", "Stock", "Listed"], rows: [
           { v: "175", k: "ex", stock: "40", when: "12 min" }, { v: "178", k: "ex", stock: "12", when: "3 min" }, { v: "180", k: "ex", stock: "120", when: "45 min" },
           { v: "182", k: "ex", stock: "33", when: "3 h" }, { v: "185", k: "ex", stock: "60", when: "9 min" }] }), foot())],
