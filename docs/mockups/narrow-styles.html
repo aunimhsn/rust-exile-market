@@ -470,6 +470,14 @@
   .again { flex: none; width: 56px; height: 48px; display: grid; place-items: center; font: 600 13px/1 var(--font-number); }
   .again.waiting { background: var(--control); color: var(--weak); }
   .again.ready { background: var(--accent); color: var(--on-accent, var(--bg-a)); }
+  /* Hover on the white action blocks: the search icon grows, the refresh icon grows and turns. */
+  .search-block, .again.ready { cursor: pointer; }
+  .search-block .ico, .again.ready .ico { transition: transform .22s cubic-bezier(.2, .8, .3, 1.2); }
+  .search-block:hover .ico { transform: scale(1.15); }
+  .again.ready:hover .ico { transform: scale(1.12) rotate(90deg); }
+  @media (prefers-reduced-motion: reduce) {
+    .search-block .ico, .again.ready .ico { transition: none; }
+  }
   .button.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent, var(--bg-a)); font-weight: 700; }
   .button.wait { color: var(--faint); }
   .spinner { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--control-line); border-top-color: var(--accent); }
