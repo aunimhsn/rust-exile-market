@@ -395,8 +395,13 @@
   .summary { margin-top: 8px; font-size: 13px; }
   .stats-toggle { margin-top: 8px; color: var(--weak); font-size: 13px; display: flex; align-items: center; gap: 7px; }
   .stats-toggle .ico { flex: none; transition: transform .15s; }
-  /* Optical alignment, in em so that it holds at any display scale: about 1.5 px at 13 px. */
-  .stats-toggle > span { position: relative; top: -0.11em; }
+  /* Optical alignment of the stats text on its chevron, tuned by eye with the "Stats offset" tab. */
+  .stats-toggle > span { position: relative; top: calc(var(--stats-offset, 0) * -1px); }
+  [data-offset="0"] { --stats-offset: 0; }
+  [data-offset="0.5"] { --stats-offset: .5; }
+  [data-offset="1"] { --stats-offset: 1; }
+  [data-offset="1.5"] { --stats-offset: 1.5; }
+  [data-offset="2"] { --stats-offset: 2; }
   .stats-toggle.open .ico { transform: rotate(90deg); }
   .ico { display: block; }
   .stats-toggle b { color: var(--accent); font-weight: 600; }
@@ -523,6 +528,7 @@
   };
   const VARIANTS = {
     theme: { label: "Style", options: Object.fromEntries(Object.entries(THEMES).map(([k, v]) => [k, v.title])), fallback: "slate" },
+    offset: { label: "Stats offset (px up)", options: { "0": "0", "0.5": "0.5", "1": "1", "1.5": "1.5", "2": "2" }, fallback: "0.5" },
     league: { label: "League", options: { softcore: "Softcore", hardcore: "Hardcore" }, fallback: "softcore" },
     header: { label: "Header", options: { emblem: "Emblem", logo: "Logo 38 px", large: "Logo 56 px", text: "Name in text" }, fallback: "emblem" },
   };
