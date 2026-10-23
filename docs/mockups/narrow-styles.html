@@ -450,9 +450,11 @@
   .search-text { flex: 1; display: grid; align-content: center; gap: 4px; padding: 12px 14px; font-size: 13px; }
   [data-button="band"] .search-block, [data-button="band"] .again.ready { background: var(--bg-a); color: var(--accent); box-shadow: inset 1px 0 0 var(--control-line); }
   /* Search again: a flat block in the bottom right corner of the offers band; the countdown, then the refresh icon. */
-  .actions.flat { margin: 10px -14px -12px 0; align-items: stretch; }
-  .actions.flat > .link { align-self: center; }
-  .again { flex: none; width: 56px; height: 40px; display: grid; place-items: center; font: 600 13px/1 var(--font-number); }
+  /* The title row of the offers band holds the action block in its top right corner. */
+  .flat-head { margin: -12px -14px 6px 0; height: 48px; align-items: center; }
+  .flat-head .right { margin-left: auto; padding-right: 12px; }
+  .flat-head .again { align-self: stretch; height: auto; }
+  .again { flex: none; width: 56px; height: 48px; display: grid; place-items: center; font: 600 13px/1 var(--font-number); }
   .again.waiting { background: var(--control); color: var(--weak); }
   .again.ready { background: var(--accent); color: var(--on-accent, var(--bg-a)); }
   /* Test: the search button on the background of the price block, in white. */
@@ -593,9 +595,8 @@
         <div class="actions" style="justify-content:flex-start;gap:10px"><span class="spinner"></span>Searching the trade site…</div></div>`;
     }
     if (o.state === "wait") {
-      return `<div class="band b"><div class="head"><span class="label">${label}</span><span class="age">searched 1 min ago</span></div>
-        <div class="warn">⏳ Trade site limit: next search in 4 min.</div>
-        <div class="actions flat"><span></span><div class="again waiting" title="Next search in 4 min">4 min</div></div></div>`;
+      return `<div class="band b"><div class="head flat-head"><span class="label">${label}</span><span class="age">searched 1 min ago</span><span class="right"></span><div class="again waiting" title="Next search in 4 min">4 min</div></div>
+        <div class="warn">Trade site limit: next search in 4 min.</div></div>`;
     }
     if (o.lines) {
       return `<div class="band b"><div class="head"><span class="label">${label}</span></div>${o.lines.map(l => `<div class="msg muted">${l}</div>`).join("")}</div>`;
@@ -607,9 +608,9 @@
     const rows = o.rows.map(r => `<div class="row-o ${r.sus ? "sus" : ""}">
         <span class="p">${r.v} ${orb(r.k)}</span>${three ? `<span>${r.stock}</span>` : ""}<span><i class="online"></i>${r.when}</span></div>`).join("");
     return `<div class="band b">
-      <div class="head"><span class="label">${label}</span><span class="age">${o.age || "searched 2 min ago"}</span><span class="right">${o.count}</span></div>
+      <div class="head flat-head"><span class="label">${label}</span><span class="age">${o.age || "searched 2 min ago"}</span><span class="right">${o.count}</span>${again}</div>
       <div class="offers ${three ? "three" : ""}"><div class="cols">${o.columns.map(c => `<span>${c}</span>`).join("")}</div>${rows}</div>
-      <div class="actions flat"><span class="link">Show the next 10</span>${again}</div></div>`;
+      <div class="actions"><span class="link">Show the next 10</span></div></div>`;
   }
 
   const empty = `<div class="empty b"><img class="big-logo" src="../../assets/logo/exile-market.png" alt="">Copy an item in the game with<div class="keys"><span class="key">Ctrl</span>+<span class="key">C</span></div>The price shows up here.</div>`;
