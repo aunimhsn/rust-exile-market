@@ -379,7 +379,7 @@
   .base { margin-top: 2px; }
   .meta { display: flex; flex-wrap: wrap; gap: 5px 6px; align-items: center; margin-top: 6px; color: var(--weak); font-size: 13px; }
   .tag { padding: 1px 7px; border-radius: var(--radius); background: var(--control); color: var(--text); font-size: 12px; }
-  .tag.corrupted { color: #fff; background: #6b1d19; }
+  .tag.corrupted { color: #fff; background: #351417; }   /* the background of the hardcore league */
   .summary { margin-top: 8px; font-size: 13px; }
   /* Stats toggle: a pill like "Check on trade", and the number of filters next to it. */
   .stats-toggle { margin-top: 10px; display: flex; align-items: center; gap: 10px; font-size: 12px; }
@@ -461,8 +461,11 @@
     background: var(--control); color: var(--text); font-size: 13px; font-weight: 600; cursor: pointer;
   }
   .more:hover { background: var(--control-line); color: var(--accent); }
+  .more .ico { transition: transform .2s ease-out; }
+  .more:hover .ico { transform: translateY(2px); }
+  @media (prefers-reduced-motion: reduce) { .more .ico { transition: none; } }
   .more > span { position: relative; top: -1px; }
-  .again { flex: none; width: 56px; height: 48px; display: grid; place-items: center; font: 600 13px/1 var(--font-number); }
+  .again { flex: none; width: 56px; height: 48px; display: grid; place-items: center; font: 600 13px/1 var(--font-body); }
   .again.waiting { background: var(--control); color: var(--weak); }
   .again.ready { background: var(--accent); color: var(--on-accent, var(--bg-a)); }
   /* Hover on the white action blocks: the search icon grows, the refresh icon grows and turns. */
