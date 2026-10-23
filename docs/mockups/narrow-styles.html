@@ -252,8 +252,6 @@
     --row-alt: #1a2028;
     --banner: #8a6a10;        /* dark yellow: warnings stand apart from the league colors */
     --banner-text: #f8edc2;
-    --banner-action: #f3e4a4;
-    --banner-action-text: #6b5208;
     --text: #e3e8ef;
     --weak: #8692a3;
     --faint: #556070;
@@ -483,14 +481,6 @@
 
   .banner { display: flex; align-items: stretch; background: var(--banner); color: var(--banner-text, var(--warn)); font-size: 12px; font-weight: 600; }
   .banner > span:first-child { flex: 1; padding: 10px 14px; align-self: center; }
-  /* Same width as the gear block above it, so that the action blocks form one column on the right. */
-  .banner-action {
-    flex: none; width: 48px; display: grid; place-items: center; cursor: pointer;
-    background: var(--banner-action, var(--control)); color: var(--banner-action-text, var(--text)); font-size: 11.5px; font-weight: 700;
-  }
-  .banner-action .help-text { display: none; }
-  [data-help="text"] .banner-action .ico { display: none; }
-  [data-help="text"] .banner-action .help-text { display: block; }
   .foot { padding: 6px 14px; color: var(--faint); font-size: 11.5px; }
   .empty { padding: 40px 14px 56px; text-align: center; color: var(--weak); }
   .keys { margin: 12px 0; display: flex; justify-content: center; gap: 6px; align-items: center; }
@@ -522,7 +512,6 @@
   };
   const VARIANTS = {
     theme: { label: "Style", options: Object.fromEntries(Object.entries(THEMES).map(([k, v]) => [k, v.title])), fallback: "slate" },
-    help: { label: "Help block", options: { icon: "? icon", text: "Help text" }, fallback: "icon" },
     league: { label: "League", options: { softcore: "Softcore", hardcore: "Hardcore" }, fallback: "softcore" },
   };
   const params = new URLSearchParams(location.search);
@@ -539,8 +528,6 @@
     refresh: size => svg(size, '<path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9"/><path d="M13.6 2.6v3.3h-3.3"/>'),
     chevron: size => svg(size, '<path d="M6 4l4 4-4 4"/>'),
     down: size => svg(size, '<path d="M4 6l4 4 4-4"/>'),
-    // The "circle-help" icon of Lucide (ISC license), on its 24 px grid.
-    help: size => `<svg class="ico" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>`,
     // The "settings" icon of Lucide (ISC license), on its 24 px grid.
     gear: size => `<svg class="ico" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>`,
   };
@@ -555,7 +542,7 @@
       <div class="gear ${settings ? "on" : ""}">${ICON.gear(17)}</div>
     </div>`;
   const foot = (value = "poe2scout 12 min ago · GGG trade 2 min ago") => `<div class="foot a">${value}</div>`;
-  const banner = (value, action) => `<div class="banner"><span>${value}</span>${action ? `<span class="banner-action" title="${action}">${ICON.help(18)}<span class="help-text">${action}</span></span>` : ""}</div>`;
+  const banner = value => `<div class="banner"><span>${value}</span></div>`;
 
   function item(it, unfolded = false) {
     const tags = (it.tags || []).map(t => `<span class="tag ${/^Corrupt|^Corrompu/.test(t) ? "corrupted" : ""}">${t}</span>`).join("");
@@ -728,7 +715,7 @@
     ["Errors", [
       ["Offline, cached prices", win(topBar(), banner("The price database can't be reached: showing the prices from 3 hours ago."), item(HH), price(HH_PRICE), offers({ state: "idle" }), foot("poe2scout 3 h ago (offline) · GGG trade 2 min ago"))],
       ["League ended", win(topBar(), banner("Rise of the Abyssal has ended, switched to Forbidden Rites."), item(HH), price(HH_PRICE), offers({ state: "idle" }), foot())],
-      ["Clipboard unreadable", win(topBar(), banner("The clipboard can't be read.", "Help"), empty, foot("poe2scout 12 min ago"))],
+      ["Clipboard unreadable", win(topBar(), banner("The clipboard can't be read."), empty, foot("poe2scout 12 min ago"))],
       ["Before the first item", win(topBar(), empty, foot("poe2scout 12 min ago"))],
       ["Item couldn't be read", win(topBar(), `<div class="band b"><div class="msg">This item couldn't be read.</div><div class="line muted">Copy it again, or copy another item.</div></div>`, foot())],
     ]],
