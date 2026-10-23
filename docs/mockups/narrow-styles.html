@@ -7,7 +7,8 @@
 <!--
   Style proposals for the narrow layout (roadmap step 0): every window of the
   wireframe docs/wireframes/window-layouts.excalidraw, in one of three styles.
-  Pick the style with ?theme=forge, ?theme=slate or ?theme=compact.
+  Switch between the styles with the tabs at the top, or open one directly
+  with ?theme=forge, ?theme=slate or ?theme=compact.
   All prices and offers are sample data. Serve the repository root so that the
   orb icons of assets/currencies/ load:
     python3 -m http.server 8765 --bind 127.0.0.1
@@ -253,11 +254,12 @@
     --text: #e3e8ef;
     --weak: #8692a3;
     --faint: #556070;
-    --accent: #5aa9ff;
+    --accent: #f2f5f9;        /* white: the colors are kept for the item rarities */
+    --on-accent: #0f1216;
     --control: #1d242d;
     --control-line: #2a3440;
     --warn: #f0b85a;
-    --glow: 170, 215, 255;
+    --glow: 255, 255, 255;
     --font-display: "Manrope", "Segoe UI", sans-serif;
     --font-body: "Manrope", "Segoe UI", sans-serif;
     --font-number: "JetBrains Mono", ui-monospace, monospace;
@@ -293,6 +295,16 @@
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--page); color: var(--page-text); font: 14px/1.4 system-ui, sans-serif; }
   .sheet { padding: 32px 40px 48px; display: grid; gap: 36px; width: max-content; }
+  .styles {
+    position: sticky; top: 0; z-index: 1; display: flex; gap: 6px; padding: 12px 40px;
+    background: rgba(8, 9, 10, .92); border-bottom: 1px solid #1d1f22; backdrop-filter: blur(6px);
+  }
+  .styles button {
+    padding: 7px 16px; border-radius: 6px; border: 1px solid #2a2d31; background: #121417; color: #aab0b6;
+    font: 600 14px/1 system-ui, sans-serif; cursor: pointer;
+  }
+  .styles button:hover { color: #fff; border-color: #444a50; }
+  .styles button[aria-pressed="true"] { background: #f2f5f9; border-color: #f2f5f9; color: #0f1216; }
   .sheet > header h1 { margin: 0; color: #e8e8e8; font: 600 28px/1.2 system-ui, sans-serif; }
   .sheet > header p { margin: 6px 0 0; max-width: 90ch; }
   .section h2 { margin: 0 0 14px; color: #c8c8c8; font: 600 16px/1.2 system-ui, sans-serif; text-transform: uppercase; letter-spacing: .08em; }
@@ -312,8 +324,8 @@
   .b { background: var(--bg-b); }
 
   .top { display: flex; align-items: center; gap: 8px; padding: 8px 10px 8px 14px; }
-  .logo { font: 700 13px/1 var(--font-display); letter-spacing: .12em; text-transform: uppercase; color: var(--accent); }
-  .logo small { display: block; font: 500 9px/1.3 var(--font-body); letter-spacing: .2em; color: var(--weak); }
+  .logo { height: 38px; display: block; }
+  .empty .big-logo { width: 150px; display: block; margin: 0 auto 18px; opacity: .9; }
   .spacer { flex: 1; }
   .select, .icon, .button, .input {
     background: var(--control); border: 1px solid var(--control-line); border-radius: var(--radius); color: var(--text);
@@ -336,7 +348,8 @@
   }
   .glow { text-shadow: 0 0 6px rgba(var(--glow), .75), 0 0 16px rgba(var(--glow), .45), 0 0 28px rgba(var(--glow), .2); }
   .glow-note { color: var(--faint); font-size: 11px; }
-  .trade { flex: none; color: var(--accent); font-size: 13px; padding-top: 3px; white-space: nowrap; }
+  .trade { flex: none; color: var(--accent); font-size: 13px; padding-top: 3px; white-space: nowrap; font-weight: 600; }
+  .trade:hover, .link:hover { text-decoration: underline; }
   .base { margin-top: 2px; }
   .meta { display: flex; flex-wrap: wrap; gap: 5px 6px; align-items: center; margin-top: 6px; color: var(--weak); font-size: 13px; }
   .tag { padding: 1px 7px; border-radius: var(--radius); background: var(--control); color: var(--text); font-size: 12px; }
@@ -347,6 +360,7 @@
 
   .rarity-unique { color: var(--rarity-unique); }
   .rarity-rare { color: var(--rarity-rare); }
+  .rarity-magic { color: var(--rarity-magic); }
   .rarity-normal { color: var(--rarity-normal); }
   .rarity-currency { color: var(--rarity-currency); }
 
@@ -358,7 +372,7 @@
   .mod { display: grid; grid-template-columns: 18px 1fr auto; gap: 2px 8px; align-items: center; color: var(--mod); font-size: 13.5px; }
   .mod.fixed { grid-template-columns: 18px 1fr; }
   .check { width: 14px; height: 14px; border-radius: 3px; border: 1px solid var(--control-line); background: var(--control); display: grid; place-items: center; font-size: 10px; color: var(--bg-a); }
-  .check.on { background: var(--accent); border-color: var(--accent); }
+  .check.on { background: var(--accent); border-color: var(--accent); color: var(--on-accent, var(--bg-a)); }
   .input { width: 46px; padding: 1px 6px; text-align: right; font-family: var(--font-number); font-size: 12.5px; }
   .roll { grid-column: 2; display: flex; align-items: center; gap: 8px; color: var(--faint); font-size: 11px; }
   .bar { width: 96px; height: 4px; border-radius: 2px; background: var(--control-line); overflow: hidden; }
@@ -393,15 +407,15 @@
   .offers .row-o.sus .p::after { content: "?"; color: var(--warn); text-decoration: none; display: inline-block; margin-left: 2px; }
   .online { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--rise); margin-right: 6px; vertical-align: middle; }
   .actions { display: flex; align-items: center; justify-content: space-between; margin-top: 10px; }
-  .link { color: var(--accent); }
+  .link { color: var(--accent); font-weight: 600; }
   .button { padding: 6px 12px; display: inline-flex; gap: 8px; align-items: center; }
-  .button.primary { background: var(--accent); border-color: var(--accent); color: var(--bg-a); font-weight: 600; }
+  .button.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent, var(--bg-a)); font-weight: 700; }
   .button.wait { color: var(--faint); }
   .spinner { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--control-line); border-top-color: var(--accent); }
 
   .banner { background: var(--banner); color: var(--warn); padding: 10px 14px; font-size: 13px; }
   .foot { padding: 6px 14px; color: var(--faint); font-size: 11.5px; }
-  .empty { padding: 90px 14px; text-align: center; color: var(--weak); }
+  .empty { padding: 40px 14px 56px; text-align: center; color: var(--weak); }
   .keys { margin: 12px 0; display: flex; justify-content: center; gap: 6px; align-items: center; }
   .key { padding: 3px 9px; border: 1px solid var(--control-line); border-bottom-width: 2px; border-radius: 4px; color: var(--text); background: var(--control); font-family: var(--font-number); }
 
@@ -415,16 +429,17 @@
 </style>
 </head>
 <body>
+<nav class="styles" id="styles" aria-label="Styles"></nav>
 <div class="sheet" id="sheet"></div>
 
 <script>
   const THEMES = {
     forge: { title: "A · Forge", text: "Close to the game: engraved capitals for the item names (Cinzel), a sober text face (Source Sans 3), gold accent, warm near-black grays." },
-    slate: { title: "B · Slate", text: "Modern and sharp: one geometric face (Manrope), numbers in a monospace face (JetBrains Mono), blue accent, cool near-black grays." },
+    slate: { title: "B · Slate", text: "Modern and sharp: one geometric face (Manrope), numbers in a monospace face (JetBrains Mono), white as the main color so that the colors stay for the item rarities, cool near-black grays." },
     compact: { title: "C · Compact", text: "Dense, made for the narrow width: condensed capitals for the names (Barlow Semi Condensed), Barlow for the text, amber accent, neutral near-black grays." },
   };
-  const theme = new URLSearchParams(location.search).get("theme") in THEMES ? new URLSearchParams(location.search).get("theme") : "forge";
-  document.documentElement.dataset.theme = theme;
+  const requested = new URLSearchParams(location.search).get("theme");
+  let theme = requested in THEMES ? requested : "slate";
 
   const ORB = { div: "divine-orb", chaos: "chaos-orb", ex: "exalted-orb" };
   const orb = key => `<img src="../../assets/currencies/${ORB[key]}.png" alt="">`;
@@ -432,7 +447,7 @@
   // Blocks.
   const topBar = (settings = false, league = "Forbidden Rites") => `
     <div class="top a">
-      <div class="logo">Exile Market<small>logo to come</small></div>
+      <img class="logo" src="../../assets/logo/exile-market.png" alt="Exile Market">
       <div class="spacer"></div>
       <div class="select">${league}</div>
       <div class="icon ${settings ? "on" : ""}">⚙</div>
@@ -517,7 +532,7 @@
       <div class="actions"><span class="link">Show the next 10</span><span class="button wait">↻ Search again · 8 s</span></div></div>`;
   }
 
-  const empty = `<div class="empty b">Copy an item in the game with<div class="keys"><span class="key">Ctrl</span>+<span class="key">C</span></div>The price shows up here.</div>`;
+  const empty = `<div class="empty b"><img class="big-logo" src="../../assets/logo/exile-market.png" alt="">Copy an item in the game with<div class="keys"><span class="key">Ctrl</span>+<span class="key">C</span></div>The price shows up here.</div>`;
 
   const settings = `<div class="band b settings">
       <h3>Settings</h3>
@@ -587,6 +602,8 @@
       ["Unidentified unique", win(topBar(), item({ rarity: "unique", name: "Stellar Amulet", cls: "Amulets", tags: ["Unidentified", "ilvl 74"], statsLabel: "Stats (1)" }),
         price({ candidates: [["Astramentis", "4.0", "div"], ["Hinekora's Sight", "640", "ex"], ["Fixation of Yix", "95", "ex"], ["Strugglescream", "12", "ex"]] }),
         offers({ lines: ["Identify the item to search its offers."] }), foot())],
+      ["Magic item", win(topBar(), item({ rarity: "magic", name: "Glimmering Sapphire Ring of the Lynx", cls: "Rings", tags: ["ilvl 68"], statsLabel: "Stats (3)" }),
+        price({ lines: ["Magic items aren't priced yet.", "Use the trade site link above."] }), offers({ lines: ["Offers of magic items come with their price, in a later version."] }), foot())],
       ["Exceptional base (normal item)", win(topBar(), item({ rarity: "normal", name: "Exceptional Chiming Staff", glow: true, cls: "Staves", tags: ["3 sockets", "ilvl 82"], summary: "Grants Skill: Level 18 Sigil of Power", statsLabel: "Stats (2)" }),
         price({ lines: ["Normal items aren't priced yet.", "Use the trade site link above."] }), offers({ lines: ["Offers of normal items come with their price, in a later version."] }), foot())],
       ["French item (interface in French)", win(topBar(), item({ rarity: "unique", name: "Chasseur de têtes", base: "Ceinture lourde", cls: "Ceintures", tags: ["Corrompu", "niv. 80"], statsLabel: "Statistiques (6)", filters: "3 filtres", tradeLabel: "Site d'échange" }),
@@ -608,10 +625,25 @@
     ]],
   ];
 
-  const t = THEMES[theme];
-  document.getElementById("sheet").innerHTML = `
-    <header><h1>Style ${t.title}</h1><p>${t.text} Narrow layout, 420 px. Sample data.</p></header>
-    ${SECTIONS.map(([title, slots]) => `<section class="section"><h2>${title}</h2><div class="row">${slots.map(([label, html]) => `<div class="slot"><span>${label}</span>${html}</div>`).join("")}</div></section>`).join("")}`;
+  // One tab per style; the address keeps the chosen one, to share it.
+  function render() {
+    document.documentElement.dataset.theme = theme;
+    const t = THEMES[theme];
+    document.getElementById("styles").innerHTML = Object.entries(THEMES)
+      .map(([key, value]) => `<button type="button" data-theme-key="${key}" aria-pressed="${key === theme}">${value.title}</button>`).join("");
+    document.getElementById("sheet").innerHTML = `
+      <header><h1>Style ${t.title}</h1><p>${t.text} Narrow layout, 420 px. Sample data.</p></header>
+      ${SECTIONS.map(([title, slots]) => `<section class="section"><h2>${title}</h2><div class="row">${slots.map(([label, html]) => `<div class="slot"><span>${label}</span>${html}</div>`).join("")}</div></section>`).join("")}`;
+  }
+
+  document.getElementById("styles").addEventListener("click", event => {
+    const key = event.target.dataset.themeKey;
+    if (!key) return;
+    theme = key;
+    history.replaceState(null, "", `?theme=${key}`);
+    render();
+  });
+  render();
 </script>
 </body>
 </html>
