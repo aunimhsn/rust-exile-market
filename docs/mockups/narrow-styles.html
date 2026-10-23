@@ -455,12 +455,12 @@
   .flat-head { margin: -12px -14px 6px 0; height: 48px; align-items: center; }
   .flat-head .right { margin-left: auto; padding-right: 12px; }
   .flat-head .again { align-self: stretch; height: auto; }
-  /* Show more offers: a flat bar glued to the bottom of the offers band, with only a chevron. */
+  /* Show more offers: only a chevron under the list; the whole width stays clickable. */
   .more {
-    margin: 10px -14px -12px; height: 32px; display: flex; align-items: center; justify-content: center; gap: 8px;
-    background: var(--control); color: var(--text); font-size: 13px; font-weight: 600; cursor: pointer;
+    margin: 6px -14px -12px; height: 32px; display: flex; align-items: center; justify-content: center; gap: 8px;
+    color: var(--weak); cursor: pointer;
   }
-  .more:hover { background: var(--control-line); color: var(--accent); }
+  .more:hover { color: var(--accent); }
   .more .ico { transition: transform .2s ease-out; }
   .more:hover .ico { transform: translateY(2px); }
   @media (prefers-reduced-motion: reduce) { .more .ico { transition: none; } }
