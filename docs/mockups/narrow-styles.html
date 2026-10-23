@@ -335,12 +335,11 @@
   [data-header="large"] .logo { height: 56px; }
   [data-header="text"] .logo { display: none; }
   [data-header="text"] .wordmark { display: block; }
-  /* Emblem (assets/logo/emblem.svg, white) next to the name; the bronze one is tinted, as egui will. */
+  /* Emblem (assets/logo/emblem.svg, white) next to the name. */
   .emblem { display: none; width: 30px; height: 30px; }
-  [data-header^="emblem"] .logo { display: none; }
-  [data-header^="emblem"] .emblem, [data-header^="emblem"] .wordmark { display: block; }
-  [data-header^="emblem"] .top { gap: 10px; }
-  [data-header="emblem-bronze"] .emblem { filter: brightness(0) saturate(100%) invert(76%) sepia(14%) saturate(560%) hue-rotate(358deg) brightness(88%); }
+  [data-header="emblem"] .logo { display: none; }
+  [data-header="emblem"] .emblem, [data-header="emblem"] .wordmark { display: block; }
+  [data-header="emblem"] .top { gap: 10px; }
   .empty .big-logo { width: 150px; display: block; margin: 0 auto 18px; opacity: .9; }
   .spacer { flex: 1; }
   .select, .icon, .button, .input {
@@ -468,7 +467,7 @@
   const VARIANTS = {
     theme: { label: "Style", options: Object.fromEntries(Object.entries(THEMES).map(([k, v]) => [k, v.title])), fallback: "slate" },
     button: { label: "Search button", options: { filled: "White", band: "Price band" }, fallback: "filled" },
-    header: { label: "Header", options: { emblem: "Emblem white", "emblem-bronze": "Emblem bronze", logo: "Logo 38 px", large: "Logo 56 px", text: "Name in text" }, fallback: "emblem" },
+    header: { label: "Header", options: { emblem: "Emblem", logo: "Logo 38 px", large: "Logo 56 px", text: "Name in text" }, fallback: "emblem" },
   };
   const params = new URLSearchParams(location.search);
   const chosen = Object.fromEntries(Object.entries(VARIANTS).map(([key, v]) => [key, params.get(key) in v.options ? params.get(key) : v.fallback]));
