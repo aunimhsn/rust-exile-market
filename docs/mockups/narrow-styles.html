@@ -400,10 +400,6 @@
   .stats { margin-top: 8px; display: grid; gap: 6px; }
   .req { color: var(--weak); font-size: 12px; display: flex; justify-content: space-between; }
   .reqline { margin-top: 6px; color: var(--weak); font-size: 12px; }
-  /* Stack price: the stack or the unit in large, with the "Big" tab. */
-  .v-unit, [data-big="unit"] .v-stack { display: none; }
-  [data-big="unit"] .v-unit { display: block; }
-  [data-big="unit"] .head .v-unit { display: inline; }
   .prop { font-size: 13px; color: var(--text); }
   .prop span { color: var(--weak); }
   .sep { height: 1px; background: var(--control-line); margin: 2px 0; }
@@ -514,7 +510,6 @@
   };
   const VARIANTS = {
     theme: { label: "Style", options: Object.fromEntries(Object.entries(THEMES).map(([k, v]) => [k, v.title])), fallback: "slate" },
-    big: { label: "Stack price, large", options: { stack: "Stack", unit: "Unit" }, fallback: "stack" },
     league: { label: "League", options: { softcore: "Softcore", hardcore: "Hardcore" }, fallback: "softcore" },
   };
   const params = new URLSearchParams(location.search);
@@ -594,10 +589,9 @@
     const inline = values => `${values[0]} div · ${values[1]} c · ${values[2]} ex`;
     let caption = "";
     if (p.stackValues) {
-      // Stack: the "Big" tab chooses which price is large; the other one goes on a small line.
-      body = `<div class="v-stack">${row(p.stackValues)}<div class="line muted">Unit price: ${inline(p.values)}</div></div>
-        <div class="v-unit">${row(p.values)}<div class="line muted">Stack of ${p.stackSize}: ${inline(p.stackValues)}</div></div>`;
-      caption = `<span class="age v-stack">stack of ${p.stackSize}</span><span class="age v-unit">per unit</span>`;
+      // Stack: the value of the copied stack in large, the unit price on a small line, to compare with the offers.
+      body = `${row(p.stackValues)}<div class="line muted">Unit price: ${inline(p.values)}</div>`;
+      caption = `<span class="age">stack of ${p.stackSize}</span>`;
       if (p.trend) body += `<div class="line ${p.rising === false ? "fall" : "rise"}">${p.trend}</div>`;
     } else if (p.values) {
       body = row(p.values);
