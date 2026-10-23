@@ -603,7 +603,9 @@
       body = `<div class="msg">Identify the item to get its price.</div><div class="line muted">Possible uniques</div>
         <div class="candidates">${p.candidates.map(([n, v, k]) => `<div><span class="rarity-unique">${n}</span><span>${v} ${orb(k)}</span></div>`).join("")}</div>`;
     }
-    return `<div class="band a"><div class="head"><span class="label">${label}</span>${caption}${p.offers ? `<span class="right">${p.offers}</span>` : ""}</div>${body}</div>`;
+    // A caption ("stack of 7") goes under the title, like the search age of the offers.
+    const title = caption ? `<span class="title-stack"><span class="label">${label}</span>${caption}</span>` : `<span class="label">${label}</span>`;
+    return `<div class="band a"><div class="head">${title}${p.offers ? `<span class="right">${p.offers}</span>` : ""}</div>${body}</div>`;
   }
 
   function offers(o, lang = "en") {
