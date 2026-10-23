@@ -1,0 +1,617 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Narrow Styles</title>
+<!--
+  Style proposals for the narrow layout (roadmap step 0): every window of the
+  wireframe docs/wireframes/window-layouts.excalidraw, in one of three styles.
+  Pick the style with ?theme=forge, ?theme=slate or ?theme=compact.
+  All prices and offers are sample data. Serve the repository root so that the
+  orb icons of assets/currencies/ load:
+    python3 -m http.server 8765 --bind 127.0.0.1
+  then open http://127.0.0.1:8765/docs/mockups/narrow-styles.html?theme=forge
+  The fonts come from Google Fonts here; the application will embed them (all
+  under the SIL Open Font License).
+-->
+<!-- Latin font files of Google Fonts, preloaded so that the page (and its
+     screenshots) only finishes loading once the fonts are there. -->
+<link rel="preload" href="https://fonts.gstatic.com/s/barlow/v13/7cHpv4kjgoGqM7E_DMs5.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="https://fonts.gstatic.com/s/barlow/v13/7cHqv4kjgoGqM7E30-8s51os.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="https://fonts.gstatic.com/s/barlow/v13/7cHqv4kjgoGqM7E3_-gs51os.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="https://fonts.gstatic.com/s/barlow/v13/7cHqv4kjgoGqM7E3t-4s51os.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="https://fonts.gstatic.com/s/barlowsemicondensed/v16/wlpigxjLBV1hqnzfr-F8sEYMB0Yybp0mudRfi6m_B2sl.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="https://fonts.gstatic.com/s/barlowsemicondensed/v16/wlpigxjLBV1hqnzfr-F8sEYMB0Yybp0mudRfp66_B2sl.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="https://fonts.gstatic.com/s/barlowsemicondensed/v16/wlpigxjLBV1hqnzfr-F8sEYMB0Yybp0mudRfw6-_B2sl.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="https://fonts.gstatic.com/s/cinzel/v26/8vIJ7ww63mVu7gt79mT7.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="https://fonts.gstatic.com/s/jetbrainsmono/v24/tDbv2o-flEEny0FZhsfKu5WU4zr3E_BX0PnT8RD8yKwBNntkaToggR7BYRbKPxDcwg.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="https://fonts.gstatic.com/s/manrope/v20/xn7gYHE41ni1AdIRggexSg.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="https://fonts.gstatic.com/s/sourcesans3/v20/nwpStKy2OAdR1K-IwhWudF-R3w8aZQ.woff2" as="font" type="font/woff2" crossorigin>
+<style>
+@font-face {
+  font-family: 'Barlow';
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+  src: url(https://fonts.gstatic.com/s/barlow/v13/7cHpv4kjgoGqM7E_DMs5.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Barlow';
+  font-style: normal;
+  font-weight: 500;
+  font-display: block;
+  src: url(https://fonts.gstatic.com/s/barlow/v13/7cHqv4kjgoGqM7E3_-gs51os.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Barlow';
+  font-style: normal;
+  font-weight: 600;
+  font-display: block;
+  src: url(https://fonts.gstatic.com/s/barlow/v13/7cHqv4kjgoGqM7E30-8s51os.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Barlow';
+  font-style: normal;
+  font-weight: 700;
+  font-display: block;
+  src: url(https://fonts.gstatic.com/s/barlow/v13/7cHqv4kjgoGqM7E3t-4s51os.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Barlow Semi Condensed';
+  font-style: normal;
+  font-weight: 500;
+  font-display: block;
+  src: url(https://fonts.gstatic.com/s/barlowsemicondensed/v16/wlpigxjLBV1hqnzfr-F8sEYMB0Yybp0mudRfi6m_B2sl.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Barlow Semi Condensed';
+  font-style: normal;
+  font-weight: 600;
+  font-display: block;
+  src: url(https://fonts.gstatic.com/s/barlowsemicondensed/v16/wlpigxjLBV1hqnzfr-F8sEYMB0Yybp0mudRfp66_B2sl.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Barlow Semi Condensed';
+  font-style: normal;
+  font-weight: 700;
+  font-display: block;
+  src: url(https://fonts.gstatic.com/s/barlowsemicondensed/v16/wlpigxjLBV1hqnzfr-F8sEYMB0Yybp0mudRfw6-_B2sl.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Cinzel';
+  font-style: normal;
+  font-weight: 500;
+  font-display: block;
+  src: url(https://fonts.gstatic.com/s/cinzel/v26/8vIJ7ww63mVu7gt79mT7.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Cinzel';
+  font-style: normal;
+  font-weight: 600;
+  font-display: block;
+  src: url(https://fonts.gstatic.com/s/cinzel/v26/8vIJ7ww63mVu7gt79mT7.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Cinzel';
+  font-style: normal;
+  font-weight: 700;
+  font-display: block;
+  src: url(https://fonts.gstatic.com/s/cinzel/v26/8vIJ7ww63mVu7gt79mT7.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+  src: url(https://fonts.gstatic.com/s/jetbrainsmono/v24/tDbv2o-flEEny0FZhsfKu5WU4zr3E_BX0PnT8RD8yKwBNntkaToggR7BYRbKPxDcwg.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: block;
+  src: url(https://fonts.gstatic.com/s/jetbrainsmono/v24/tDbv2o-flEEny0FZhsfKu5WU4zr3E_BX0PnT8RD8yKwBNntkaToggR7BYRbKPxDcwg.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 600;
+  font-display: block;
+  src: url(https://fonts.gstatic.com/s/jetbrainsmono/v24/tDbv2o-flEEny0FZhsfKu5WU4zr3E_BX0PnT8RD8yKwBNntkaToggR7BYRbKPxDcwg.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Manrope';
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+  src: url(https://fonts.gstatic.com/s/manrope/v20/xn7gYHE41ni1AdIRggexSg.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Manrope';
+  font-style: normal;
+  font-weight: 500;
+  font-display: block;
+  src: url(https://fonts.gstatic.com/s/manrope/v20/xn7gYHE41ni1AdIRggexSg.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Manrope';
+  font-style: normal;
+  font-weight: 600;
+  font-display: block;
+  src: url(https://fonts.gstatic.com/s/manrope/v20/xn7gYHE41ni1AdIRggexSg.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Manrope';
+  font-style: normal;
+  font-weight: 700;
+  font-display: block;
+  src: url(https://fonts.gstatic.com/s/manrope/v20/xn7gYHE41ni1AdIRggexSg.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Manrope';
+  font-style: normal;
+  font-weight: 800;
+  font-display: block;
+  src: url(https://fonts.gstatic.com/s/manrope/v20/xn7gYHE41ni1AdIRggexSg.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Source Sans 3';
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+  src: url(https://fonts.gstatic.com/s/sourcesans3/v20/nwpStKy2OAdR1K-IwhWudF-R3w8aZQ.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Source Sans 3';
+  font-style: normal;
+  font-weight: 500;
+  font-display: block;
+  src: url(https://fonts.gstatic.com/s/sourcesans3/v20/nwpStKy2OAdR1K-IwhWudF-R3w8aZQ.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Source Sans 3';
+  font-style: normal;
+  font-weight: 600;
+  font-display: block;
+  src: url(https://fonts.gstatic.com/s/sourcesans3/v20/nwpStKy2OAdR1K-IwhWudF-R3w8aZQ.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Source Sans 3';
+  font-style: normal;
+  font-weight: 700;
+  font-display: block;
+  src: url(https://fonts.gstatic.com/s/sourcesans3/v20/nwpStKy2OAdR1K-IwhWudF-R3w8aZQ.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+</style>
+<style>
+  /* Each theme only sets tokens; the components below use them all. */
+  :root {
+    --page: #08090a;
+    --page-text: #9aa0a6;
+
+    /* Path of Exile 2 colors, the same in every theme. */
+    --rarity-normal: #d0d0d0;
+    --rarity-magic: #8888ff;
+    --rarity-rare: #ffff77;
+    --rarity-unique: #c26a2c;
+    --rarity-currency: #b4a787;
+    --mod: #8f8fff;
+    --corrupted: #e0423a;
+    --rise: #5fcf80;
+    --fall: #e66a5c;
+  }
+  [data-theme="forge"] {
+    --bg-a: #121214;          /* header, price, status bar */
+    --bg-b: #19191c;          /* item, offers, settings */
+    --row-alt: #1f1f23;
+    --banner: #2b2414;
+    --text: #e6e2d8;
+    --weak: #8e8a80;
+    --faint: #5d5a54;
+    --accent: #c9a25e;
+    --control: #26262b;
+    --control-line: #34343a;
+    --warn: #e2b04a;
+    --glow: 255, 214, 140;
+    --font-display: "Cinzel", Georgia, serif;
+    --font-body: "Source Sans 3", "Segoe UI", sans-serif;
+    --font-number: "Source Sans 3", "Segoe UI", sans-serif;
+    --display-weight: 600;
+    --display-case: none;
+    --display-size: 21px;
+    --body-size: 14px;
+    --radius: 3px;
+  }
+  [data-theme="slate"] {
+    --bg-a: #0f1216;
+    --bg-b: #151a20;
+    --row-alt: #1a2028;
+    --banner: #13263b;
+    --text: #e3e8ef;
+    --weak: #8692a3;
+    --faint: #556070;
+    --accent: #5aa9ff;
+    --control: #1d242d;
+    --control-line: #2a3440;
+    --warn: #f0b85a;
+    --glow: 170, 215, 255;
+    --font-display: "Manrope", "Segoe UI", sans-serif;
+    --font-body: "Manrope", "Segoe UI", sans-serif;
+    --font-number: "JetBrains Mono", ui-monospace, monospace;
+    --display-weight: 800;
+    --display-case: none;
+    --display-size: 20px;
+    --body-size: 13.5px;
+    --radius: 6px;
+  }
+  [data-theme="compact"] {
+    --bg-a: #101211;
+    --bg-b: #171a18;
+    --row-alt: #1c201d;
+    --banner: #2e2511;
+    --text: #e4e6e2;
+    --weak: #8b918b;
+    --faint: #5a605a;
+    --accent: #f0a83c;
+    --control: #222622;
+    --control-line: #303630;
+    --warn: #f0a83c;
+    --glow: 255, 196, 110;
+    --font-display: "Barlow Semi Condensed", "Arial Narrow", sans-serif;
+    --font-body: "Barlow", "Segoe UI", sans-serif;
+    --font-number: "Barlow", "Segoe UI", sans-serif;
+    --display-weight: 700;
+    --display-case: uppercase;
+    --display-size: 22px;
+    --body-size: 14px;
+    --radius: 2px;
+  }
+
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--page); color: var(--page-text); font: 14px/1.4 system-ui, sans-serif; }
+  .sheet { padding: 32px 40px 48px; display: grid; gap: 36px; width: max-content; }
+  .sheet > header h1 { margin: 0; color: #e8e8e8; font: 600 28px/1.2 system-ui, sans-serif; }
+  .sheet > header p { margin: 6px 0 0; max-width: 90ch; }
+  .section h2 { margin: 0 0 14px; color: #c8c8c8; font: 600 16px/1.2 system-ui, sans-serif; text-transform: uppercase; letter-spacing: .08em; }
+  .row { display: flex; gap: 40px; align-items: flex-start; }
+  .slot { display: grid; gap: 8px; width: 420px; }
+  .slot > span { font-size: 13px; }
+
+  /* Window. */
+  .win {
+    width: 420px; overflow: hidden; border-radius: 8px; box-shadow: 0 12px 40px rgba(0, 0, 0, .55);
+    background: var(--bg-b); color: var(--text);
+    font: 400 var(--body-size)/1.4 var(--font-body);
+    font-variant-numeric: tabular-nums;
+  }
+  .band { padding: 12px 14px; }
+  .a { background: var(--bg-a); }
+  .b { background: var(--bg-b); }
+
+  .top { display: flex; align-items: center; gap: 8px; padding: 8px 10px 8px 14px; }
+  .logo { font: 700 13px/1 var(--font-display); letter-spacing: .12em; text-transform: uppercase; color: var(--accent); }
+  .logo small { display: block; font: 500 9px/1.3 var(--font-body); letter-spacing: .2em; color: var(--weak); }
+  .spacer { flex: 1; }
+  .select, .icon, .button, .input {
+    background: var(--control); border: 1px solid var(--control-line); border-radius: var(--radius); color: var(--text);
+    font: inherit;
+  }
+  .select { display: flex; align-items: center; gap: 10px; padding: 5px 10px; }
+  .select::after { content: "▾"; color: var(--weak); font-size: 11px; }
+  .icon { width: 30px; height: 30px; display: grid; place-items: center; font-size: 15px; color: var(--weak); }
+  .icon.on { color: var(--accent); border-color: var(--accent); }
+
+  .label { font: 600 11px/1 var(--font-body); letter-spacing: .1em; text-transform: uppercase; color: var(--weak); }
+  .head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 8px; }
+  .head .right { margin-left: auto; color: var(--weak); font-size: 12px; }
+  .head .age { color: var(--faint); font-size: 12px; }
+
+  .name-row { display: flex; align-items: flex-start; gap: 12px; }
+  .name {
+    flex: 1; min-width: 0; font: var(--display-weight) var(--display-size)/1.15 var(--font-display);
+    text-transform: var(--display-case); letter-spacing: .01em;
+  }
+  .glow { text-shadow: 0 0 6px rgba(var(--glow), .75), 0 0 16px rgba(var(--glow), .45), 0 0 28px rgba(var(--glow), .2); }
+  .glow-note { color: var(--faint); font-size: 11px; }
+  .trade { flex: none; color: var(--accent); font-size: 13px; padding-top: 3px; white-space: nowrap; }
+  .base { margin-top: 2px; }
+  .meta { display: flex; flex-wrap: wrap; gap: 5px 6px; align-items: center; margin-top: 6px; color: var(--weak); font-size: 13px; }
+  .tag { padding: 1px 7px; border-radius: var(--radius); background: var(--control); color: var(--text); font-size: 12px; }
+  .tag.corrupted { color: #fff; background: #6b1d19; }
+  .summary { margin-top: 8px; font-size: 13px; }
+  .stats-toggle { margin-top: 8px; color: var(--weak); font-size: 13px; }
+  .stats-toggle b { color: var(--accent); font-weight: 600; }
+
+  .rarity-unique { color: var(--rarity-unique); }
+  .rarity-rare { color: var(--rarity-rare); }
+  .rarity-normal { color: var(--rarity-normal); }
+  .rarity-currency { color: var(--rarity-currency); }
+
+  .stats { margin-top: 8px; display: grid; gap: 6px; }
+  .req { color: var(--weak); font-size: 12px; display: flex; justify-content: space-between; }
+  .prop { font-size: 13px; color: var(--text); }
+  .prop span { color: var(--weak); }
+  .sep { height: 1px; background: var(--control-line); margin: 2px 0; }
+  .mod { display: grid; grid-template-columns: 18px 1fr auto; gap: 2px 8px; align-items: center; color: var(--mod); font-size: 13.5px; }
+  .mod.fixed { grid-template-columns: 18px 1fr; }
+  .check { width: 14px; height: 14px; border-radius: 3px; border: 1px solid var(--control-line); background: var(--control); display: grid; place-items: center; font-size: 10px; color: var(--bg-a); }
+  .check.on { background: var(--accent); border-color: var(--accent); }
+  .input { width: 46px; padding: 1px 6px; text-align: right; font-family: var(--font-number); font-size: 12.5px; }
+  .roll { grid-column: 2; display: flex; align-items: center; gap: 8px; color: var(--faint); font-size: 11px; }
+  .bar { width: 96px; height: 4px; border-radius: 2px; background: var(--control-line); overflow: hidden; }
+  .bar i { display: block; height: 100%; background: var(--accent); }
+  .note { color: var(--faint); font-size: 12px; }
+
+  .prices { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .price { display: flex; align-items: center; gap: 7px; font: 600 19px/1 var(--font-number); }
+  .price img { width: 24px; height: 24px; }
+  .line { margin-top: 9px; font-size: 13px; }
+  .rise { color: var(--rise); }
+  .fall { color: var(--fall); }
+  .warn { color: var(--warn); }
+  .msg { font-size: 14px; }
+  .msg + .msg { margin-top: 2px; }
+  .muted { color: var(--weak); }
+  .candidates { margin: 6px -14px 0; }
+  .candidates div { display: flex; justify-content: space-between; align-items: center; padding: 4px 14px; }
+  .candidates div:nth-child(odd) { background: rgba(255, 255, 255, .03); }
+  .candidates span:last-child { display: flex; align-items: center; gap: 6px; font-family: var(--font-number); }
+  .candidates img { width: 18px; height: 18px; }
+
+  .offers { margin: 0 -14px; }
+  .offers .cols, .offers .row-o { display: grid; grid-template-columns: 1fr auto; gap: 12px; padding: 5px 14px; align-items: center; }
+  .offers.three .cols, .offers.three .row-o { grid-template-columns: 1fr 60px 90px; }
+  .offers .cols { color: var(--faint); font-size: 11px; text-transform: uppercase; letter-spacing: .08em; padding-bottom: 4px; }
+  .offers .cols span:not(:first-child), .offers .row-o span:not(:first-child) { text-align: right; }
+  .offers .row-o:nth-child(even) { background: var(--row-alt); }
+  .offers .row-o .p { display: flex; align-items: center; gap: 6px; font-family: var(--font-number); font-weight: 600; }
+  .offers .row-o img { width: 18px; height: 18px; }
+  .offers .row-o.sus .p { color: var(--faint); text-decoration: line-through; }
+  .offers .row-o.sus .p::after { content: "?"; color: var(--warn); text-decoration: none; display: inline-block; margin-left: 2px; }
+  .online { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--rise); margin-right: 6px; vertical-align: middle; }
+  .actions { display: flex; align-items: center; justify-content: space-between; margin-top: 10px; }
+  .link { color: var(--accent); }
+  .button { padding: 6px 12px; display: inline-flex; gap: 8px; align-items: center; }
+  .button.primary { background: var(--accent); border-color: var(--accent); color: var(--bg-a); font-weight: 600; }
+  .button.wait { color: var(--faint); }
+  .spinner { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--control-line); border-top-color: var(--accent); }
+
+  .banner { background: var(--banner); color: var(--warn); padding: 10px 14px; font-size: 13px; }
+  .foot { padding: 6px 14px; color: var(--faint); font-size: 11.5px; }
+  .empty { padding: 90px 14px; text-align: center; color: var(--weak); }
+  .keys { margin: 12px 0; display: flex; justify-content: center; gap: 6px; align-items: center; }
+  .key { padding: 3px 9px; border: 1px solid var(--control-line); border-bottom-width: 2px; border-radius: 4px; color: var(--text); background: var(--control); font-family: var(--font-number); }
+
+  .settings h3 { margin: 0; font: var(--display-weight) 18px/1.2 var(--font-display); text-transform: var(--display-case); }
+  .field { margin-top: 16px; display: grid; gap: 6px; }
+  .radio { display: flex; gap: 8px; align-items: center; }
+  .radio i { width: 13px; height: 13px; border-radius: 50%; border: 2px solid var(--faint); }
+  .radio.on i { border-color: var(--accent); background: radial-gradient(var(--accent) 35%, transparent 45%); }
+  .toggle { display: flex; gap: 8px; align-items: center; }
+  .disclaimer { margin-top: 22px; color: var(--faint); font-size: 11.5px; }
+</style>
+</head>
+<body>
+<div class="sheet" id="sheet"></div>
+
+<script>
+  const THEMES = {
+    forge: { title: "A · Forge", text: "Close to the game: engraved capitals for the item names (Cinzel), a sober text face (Source Sans 3), gold accent, warm near-black grays." },
+    slate: { title: "B · Slate", text: "Modern and sharp: one geometric face (Manrope), numbers in a monospace face (JetBrains Mono), blue accent, cool near-black grays." },
+    compact: { title: "C · Compact", text: "Dense, made for the narrow width: condensed capitals for the names (Barlow Semi Condensed), Barlow for the text, amber accent, neutral near-black grays." },
+  };
+  const theme = new URLSearchParams(location.search).get("theme") in THEMES ? new URLSearchParams(location.search).get("theme") : "forge";
+  document.documentElement.dataset.theme = theme;
+
+  const ORB = { div: "divine-orb", chaos: "chaos-orb", ex: "exalted-orb" };
+  const orb = key => `<img src="../../assets/currencies/${ORB[key]}.png" alt="">`;
+
+  // Blocks.
+  const topBar = (settings = false, league = "Forbidden Rites") => `
+    <div class="top a">
+      <div class="logo">Exile Market<small>logo to come</small></div>
+      <div class="spacer"></div>
+      <div class="select">${league}</div>
+      <div class="icon ${settings ? "on" : ""}">⚙</div>
+    </div>`;
+  const foot = (value = "poe2scout 12 min ago · GGG trade 2 min ago") => `<div class="foot a">${value}</div>`;
+  const banner = value => `<div class="banner">⚠ ${value}</div>`;
+
+  function item(it, unfolded = false) {
+    const tags = (it.tags || []).map(t => `<span class="tag ${/^Corrupt|^Corrompu/.test(t) ? "corrupted" : ""}">${t}</span>`).join("");
+    const filters = it.filters ? ` · <b>${it.filters}</b>` : "";
+    let stats = "";
+    if (it.stats && unfolded) {
+      stats = `<div class="stats-toggle">▾ ${it.statsLabel}${filters}</div><div class="stats">${it.stats.map(row => {
+        if (row === "sep") return `<div class="sep"></div>`;
+        if (row.req) return `<div class="req"><span>${row.req}</span>${row.min ? "<span>min</span>" : ""}</div>`;
+        if (row.prop) return `<div class="prop"><span>${row.prop[0]}:</span> ${row.prop[1]}</div>`;
+        if (row.note) return `<div class="note">${row.note}</div>`;
+        const check = row.check === undefined ? "<span></span>" : `<span class="check ${row.check ? "on" : ""}">${row.check ? "✓" : ""}</span>`;
+        const input = row.min !== undefined ? `<span class="input">${row.min}</span>` : "";
+        const roll = row.range ? `<div class="roll"><span class="bar"><i style="width:${row.share * 100}%"></i></span>${row.range}</div>` : "";
+        return `<div class="mod ${input ? "" : "fixed"}">${check}<span>${row.mod}</span>${input}${roll}</div>`;
+      }).join("")}</div>`;
+    } else if (it.statsLabel) {
+      stats = `<div class="stats-toggle">▸ ${it.statsLabel}${filters}</div>`;
+    }
+    return `
+      <div class="band b">
+        <div class="name-row">
+          <div class="name rarity-${it.rarity} ${it.glow ? "glow" : ""}">${it.name}</div>
+          <div class="trade">${it.tradeLabel || "Trade site"} ↗</div>
+        </div>
+        ${it.base ? `<div class="base">${it.base}</div>` : ""}
+        <div class="meta"><span>${it.cls}</span>${tags}</div>
+        ${it.summary ? `<div class="summary">${it.summary}</div>` : ""}
+        ${stats}
+      </div>`;
+  }
+
+  function price(p, lang = "en") {
+    const label = lang === "fr" ? "Prix" : "Price";
+    let body = "";
+    if (p.values) {
+      body = `<div class="prices">${[["div", p.values[0]], ["chaos", p.values[1]], ["ex", p.values[2]]].map(([k, v]) => `<div class="price">${orb(k)}${v}</div>`).join("")}</div>`;
+      if (p.stack) body += `<div class="line">${p.stack}</div>`;
+      if (p.trend) body += `<div class="line ${p.trend.startsWith("▲") ? "rise" : "fall"}">${p.trend}</div>`;
+      if (p.warning) body += `<div class="line warn">⚠ ${p.warning}</div>`;
+    }
+    if (p.lines) body = p.lines.map((l, i) => `<div class="msg ${i ? "muted" : ""}">${l}</div>`).join("");
+    if (p.candidates) {
+      body = `<div class="msg">Identify the item to get its price.</div><div class="line muted">Possible uniques</div>
+        <div class="candidates">${p.candidates.map(([n, v, k]) => `<div><span class="rarity-unique">${n}</span><span>${v} ${orb(k)}</span></div>`).join("")}</div>`;
+    }
+    return `<div class="band a"><div class="head"><span class="label">${label}</span>${p.offers ? `<span class="right">${p.offers}</span>` : ""}</div>${body}</div>`;
+  }
+
+  function offers(o, lang = "en") {
+    const fr = lang === "fr";
+    const label = fr ? "Offres" : "Offers";
+    if (o.state === "idle") {
+      return `<div class="band b"><div class="head"><span class="label">${label}</span></div>
+        <span class="button primary">⌕ ${fr ? "Chercher les offres" : "Search the offers"}</span>
+        <div class="line muted">${fr ? "Une recherche par clic, dans les limites du site d'échange." : "One search per click, within the limits of the trade site."}</div></div>`;
+    }
+    if (o.state === "loading") {
+      return `<div class="band b"><div class="head"><span class="label">${label}</span></div>
+        <div class="actions" style="justify-content:flex-start;gap:10px"><span class="spinner"></span>Searching the trade site…</div></div>`;
+    }
+    if (o.state === "wait") {
+      return `<div class="band b"><div class="head"><span class="label">${label}</span><span class="age">searched 1 min ago</span></div>
+        <div class="warn">⏳ Trade site limit: next search in 4 min.</div>
+        <div class="actions"><span></span><span class="button wait">↻ Search again · 4 min</span></div></div>`;
+    }
+    if (o.lines) {
+      return `<div class="band b"><div class="head"><span class="label">${label}</span></div>${o.lines.map(l => `<div class="msg muted">${l}</div>`).join("")}</div>`;
+    }
+    const three = o.columns.length === 3;
+    const rows = o.rows.map(r => `<div class="row-o ${r.sus ? "sus" : ""}">
+        <span class="p">${r.v} ${orb(r.k)}</span>${three ? `<span>${r.stock}</span>` : ""}<span><i class="online"></i>${r.when}</span></div>`).join("");
+    return `<div class="band b">
+      <div class="head"><span class="label">${label}</span><span class="age">${o.age || "searched 2 min ago"}</span><span class="right">${o.count}</span></div>
+      <div class="offers ${three ? "three" : ""}"><div class="cols">${o.columns.map(c => `<span>${c}</span>`).join("")}</div>${rows}</div>
+      <div class="actions"><span class="link">Show the next 10</span><span class="button wait">↻ Search again · 8 s</span></div></div>`;
+  }
+
+  const empty = `<div class="empty b">Copy an item in the game with<div class="keys"><span class="key">Ctrl</span>+<span class="key">C</span></div>The price shows up here.</div>`;
+
+  const settings = `<div class="band b settings">
+      <h3>Settings</h3>
+      <div class="field"><span class="label">Language</span>
+        <div class="radio on"><i></i>Automatic (follows the game)</div><div class="radio"><i></i>English</div><div class="radio"><i></i>Français</div></div>
+      <div class="field"><div class="toggle"><span class="check"></span>Always on top</div></div>
+      <div class="disclaimer">This product isn't affiliated with or endorsed by Grinding Gear Games in any way.</div>
+    </div>`;
+
+  // Sample items.
+  const HH = { rarity: "unique", name: "Headhunter", base: "Heavy Belt", cls: "Belts", tags: ["Corrupted", "ilvl 80"], statsLabel: "Stats (6)", filters: "3 filters" };
+  const HH_STATS = [
+    { req: "Requires: Level 50", min: true },
+    { mod: "26% increased Stun Threshold", check: false, min: 26, range: "20–30", share: .6 },
+    { mod: "Has 2 Charm Slots", check: false, min: 2, range: "1–3", share: .5 },
+    "sep",
+    { mod: "+55 to maximum Life", check: true, min: 55, range: "40–60", share: .75 },
+    { mod: "+34 to Strength", check: true, min: 34, range: "20–40", share: .7 },
+    { mod: "+22 to Dexterity", check: true, min: 22, range: "20–40", share: .1 },
+    { mod: "When you kill a Rare monster, you gain its Modifiers for 60 seconds" },
+    { note: "Corrupted offers only, like this item." },
+  ];
+  const HH_PRICE = { values: ["12.4", "123", "8,990"], offers: "23 offers", trend: "▲ Rising over the last 3 days (+4%)" };
+  const HH_OFFERS = { count: "10 of 13 online", columns: ["Price", "Listed"], rows: [
+    { v: "6", k: "ex", when: "2 h ago", sus: true }, { v: "1", k: "chaos", when: "5 d ago", sus: true }, { v: "8", k: "div", when: "3 h ago" },
+    { v: "10", k: "div", when: "3 h ago" }, { v: "11", k: "div", when: "40 min ago" }, { v: "12", k: "div", when: "1 d ago" }] };
+  const BOW = { rarity: "rare", name: "Storm Bite", base: "Gemini Bow", cls: "Bows", tags: ["ilvl 81", "Q 20%", "2 sockets"], summary: "Physical DPS 245 · Elemental DPS 44", statsLabel: "Stats (9)" };
+  const BOW_STATS = [
+    { prop: ["Quality", "+20%"] }, { prop: ["Physical Damage", "72–134"] }, { prop: ["Lightning Damage", "3–71"] },
+    { prop: ["Critical Hit Chance", "5.00%"] }, { prop: ["Attacks per Second", "1.20"] }, { prop: ["Sockets", "2 (1 empty)"] },
+    { req: "Requires: Level 65, 145 Dex" }, "sep",
+    { mod: "+3 to Level of all Projectile Skills", range: "1–3", share: 1 },
+    { mod: "152% increased Physical Damage", range: "100–169", share: .75 },
+    { mod: "Adds 21 to 38 Physical Damage" },
+    { mod: "14% increased Attack Speed", range: "8–16", share: .75 },
+    { mod: "+312 to Accuracy Rating", range: "200–400", share: .56 },
+    { mod: "Adds 3 to 71 Lightning Damage" },
+    { note: "Ranges from the advanced copy (Ctrl+Alt+C). Stat filters for rare items come with their price, in a later version." },
+  ];
+  const RARE_PRICE = { lines: ["Rare items aren't priced yet.", "Use the trade site link above."] };
+  const RARE_OFFERS = { lines: ["Offers of rare items come with their price, in a later version."] };
+
+  const win = (...parts) => `<div class="win">${parts.join("")}</div>`;
+
+  const SECTIONS = [
+    ["Main", [
+      ["Main", win(topBar(), item(HH), price(HH_PRICE), offers(HH_OFFERS), foot())],
+      ["Stats unfolded (filters)", win(topBar(), item({ ...HH, stats: HH_STATS }, true), foot())],
+      ["Before the first search", win(topBar(), item(HH), price(HH_PRICE), offers({ state: "idle" }), foot())],
+      ["Settings open", win(topBar(true), settings, foot())],
+    ]],
+    ["Other items", [
+      ["Rare bow", win(topBar(), item(BOW), price(RARE_PRICE), offers(RARE_OFFERS), foot())],
+      ["Rare bow, stats unfolded", win(topBar(), item({ ...BOW, stats: BOW_STATS }, true), foot())],
+      ["Unique bow: corrupted, quality, sockets", win(topBar(), item({ rarity: "unique", name: "Death's Harp", base: "Dualstring Bow", cls: "Bows", tags: ["Corrupted", "Q 20%", "2 sockets", "ilvl 79"], summary: "Physical DPS 198", statsLabel: "Stats (5)", filters: "2 filters" }),
+        price({ values: ["1.8", "18", "1,305"], offers: "4 offers", warning: "Only 4 offers: the price is uncertain" }),
+        offers({ count: "4 of 4 online", columns: ["Price", "Listed"], rows: [{ v: "1.5", k: "div", when: "5 h ago" }, { v: "1.8", k: "div", when: "1 d ago" }, { v: "2", k: "div", when: "50 min ago" }, { v: "2.5", k: "div", when: "3 d ago" }] }), foot())],
+      ["Many tags (they wrap)", win(topBar(), item({ rarity: "unique", name: "Ironbound", base: "Runeforged Warden Bow", cls: "Bows", tags: ["Twice Corrupted", "Sanctified", "Fractured", "Mirrored", "Q 23%", "3 sockets", "ilvl 82"], summary: "Physical DPS 312", statsLabel: "Stats (6)", filters: "3 filters" }),
+        price({ values: ["38", "376", "27,550"], offers: "2 offers", warning: "Only 2 offers: the price is uncertain" }), offers({ state: "idle" }), foot())],
+    ]],
+    ["Special cases", [
+      ["Currency stack", win(topBar(), item({ rarity: "currency", name: "Orb of Annulment", cls: "Stackable Currency", tags: ["Stack 7/20"], statsLabel: "Stats (1)" }),
+        price({ values: ["0.25", "2.49", "182"], offers: "1,240 offers", stack: "Stack of 7: 1.76 div · 17.4 c · 1,274 ex", trend: "▼ Falling over the last 7 days (−11%)" }),
+        offers({ count: "8 of 48 online", columns: ["Per unit", "Stock", "Listed"], rows: [
+          { v: "175", k: "ex", stock: "40", when: "12 min" }, { v: "178", k: "ex", stock: "12", when: "3 min" }, { v: "180", k: "ex", stock: "120", when: "45 min" },
+          { v: "182", k: "ex", stock: "33", when: "3 h" }, { v: "185", k: "ex", stock: "60", when: "9 min" }] }), foot())],
+      ["Unidentified unique", win(topBar(), item({ rarity: "unique", name: "Stellar Amulet", cls: "Amulets", tags: ["Unidentified", "ilvl 74"], statsLabel: "Stats (1)" }),
+        price({ candidates: [["Astramentis", "4.0", "div"], ["Hinekora's Sight", "640", "ex"], ["Fixation of Yix", "95", "ex"], ["Strugglescream", "12", "ex"]] }),
+        offers({ lines: ["Identify the item to search its offers."] }), foot())],
+      ["Exceptional base (normal item)", win(topBar(), item({ rarity: "normal", name: "Exceptional Chiming Staff", glow: true, cls: "Staves", tags: ["3 sockets", "ilvl 82"], summary: "Grants Skill: Level 18 Sigil of Power", statsLabel: "Stats (2)" }),
+        price({ lines: ["Normal items aren't priced yet.", "Use the trade site link above."] }), offers({ lines: ["Offers of normal items come with their price, in a later version."] }), foot())],
+      ["French item (interface in French)", win(topBar(), item({ rarity: "unique", name: "Chasseur de têtes", base: "Ceinture lourde", cls: "Ceintures", tags: ["Corrompu", "niv. 80"], statsLabel: "Statistiques (6)", filters: "3 filtres", tradeLabel: "Site d'échange" }),
+        price({ values: ["12,4", "123", "8 990"], offers: "23 offres", trend: "▲ En hausse sur les 3 derniers jours (+4 %)" }, "fr"), offers({ state: "idle" }, "fr"), foot("poe2scout il y a 12 min · GGG trade il y a 2 min"))],
+    ]],
+    ["Offer states", [
+      ["Searching the offers", win(topBar(), item(HH), price(HH_PRICE), offers({ state: "loading" }), foot())],
+      ["Long wait before the next search", win(topBar(), item(HH), price(HH_PRICE), offers({ state: "wait" }), foot("poe2scout 12 min ago · GGG trade: next search in 4 min"))],
+      ["No offer online", win(topBar(), item(HH), price(HH_PRICE), offers({ lines: ["No offer online with these filters.", "Uncheck a stat or lower a minimum, then search again."] }), foot())],
+      ["No price found", win(topBar(), item({ rarity: "unique", name: "Strugglescream", base: "Stellar Amulet", cls: "Amulets", tags: ["ilvl 76"], statsLabel: "Stats (5)", filters: "2 filters" }),
+        price({ lines: ["No price found for this item in Forbidden Rites."] }), offers({ state: "idle" }), foot())],
+    ]],
+    ["Errors", [
+      ["Offline, cached prices", win(topBar(), banner("The price database can't be reached: showing the prices from 3 hours ago."), item(HH), price(HH_PRICE), offers({ state: "idle" }), foot("poe2scout 3 h ago (offline) · GGG trade 2 min ago"))],
+      ["League ended", win(topBar(), banner("Rise of the Abyssal has ended, switched to Forbidden Rites."), item(HH), price(HH_PRICE), offers({ state: "idle" }), foot())],
+      ["Clipboard unreadable", win(topBar(), banner("The clipboard can't be read. <u>See the help ↗</u>"), empty, foot("poe2scout 12 min ago"))],
+      ["Before the first item", win(topBar(), empty, foot("poe2scout 12 min ago"))],
+      ["Item couldn't be read", win(topBar(), `<div class="band b"><div class="msg">This item couldn't be read.</div><div class="line muted">Copy it again, or copy another item.</div></div>`, foot())],
+    ]],
+  ];
+
+  const t = THEMES[theme];
+  document.getElementById("sheet").innerHTML = `
+    <header><h1>Style ${t.title}</h1><p>${t.text} Narrow layout, 420 px. Sample data.</p></header>
+    ${SECTIONS.map(([title, slots]) => `<section class="section"><h2>${title}</h2><div class="row">${slots.map(([label, html]) => `<div class="slot"><span>${label}</span>${html}</div>`).join("")}</div></section>`).join("")}`;
+</script>
+</body>
+</html>
