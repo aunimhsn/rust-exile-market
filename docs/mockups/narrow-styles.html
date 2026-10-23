@@ -591,7 +591,8 @@
     if (p.stackValues) {
       // Stack: the value of the copied stack in large, the unit price on a small line, to compare with the offers.
       body = `${row(p.stackValues)}<div class="line muted">Unit price: ${inline(p.values)}</div>`;
-      caption = `<span class="age">stack of ${p.stackSize}</span>`;
+      // Currency exchange items always have plenty of offers: the stack size replaces their count.
+      caption = `Stack of ${p.stackSize}`;
       if (p.trend) body += `<div class="line ${p.rising === false ? "fall" : "rise"}">${p.trend}</div>`;
     } else if (p.values) {
       body = row(p.values);
@@ -603,9 +604,8 @@
       body = `<div class="msg">Identify the item to get its price.</div><div class="line muted">Possible uniques</div>
         <div class="candidates">${p.candidates.map(([n, v, k]) => `<div><span class="rarity-unique">${n}</span><span>${v} ${orb(k)}</span></div>`).join("")}</div>`;
     }
-    // A caption ("stack of 7") goes under the title, like the search age of the offers.
-    const title = caption ? `<span class="title-stack"><span class="label">${label}</span>${caption}</span>` : `<span class="label">${label}</span>`;
-    return `<div class="band a"><div class="head">${title}${p.offers ? `<span class="right">${p.offers}</span>` : ""}</div>${body}</div>`;
+    const right = caption || p.offers;
+    return `<div class="band a"><div class="head"><span class="label">${label}</span>${right ? `<span class="right">${right}</span>` : ""}</div>${body}</div>`;
   }
 
   function offers(o, lang = "en") {
@@ -706,7 +706,7 @@
     ]],
     ["Special cases", [
       ["Currency stack", win(topBar(), item({ rarity: "currency", name: "Orb of Annulment", cls: "Stackable Currency", tags: ["Stack 7/20"], statsLabel: "Stats (1)" }),
-        price({ values: ["0.25", "2.49", "182"], stackValues: ["1.76", "17.4", "1274"], stackSize: 7, offers: "1240 offers", rising: false, trend: "Falling over the last 7 days (−11%)" }),
+        price({ values: ["0.25", "2.49", "182"], stackValues: ["1.76", "17.4", "1274"], stackSize: 7, rising: false, trend: "Falling over the last 7 days (−11%)" }),
         offers({ count: "8 of 48 online", columns: ["Per unit", "Stock", "Listed"], rows: [
           { v: "175", k: "ex", stock: "40", when: "12 min" }, { v: "178", k: "ex", stock: "12", when: "3 min" }, { v: "180", k: "ex", stock: "120", when: "45 min" },
           { v: "182", k: "ex", stock: "33", when: "3 h" }, { v: "185", k: "ex", stock: "60", when: "9 min" }] }), foot())],
