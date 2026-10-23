@@ -30,6 +30,7 @@ poe2scout limits its API to 60 requests per minute per IP address, in a sliding 
 
 ## Steps
 
+- [ ] **0. Mock-ups**: interactive HTML mock-up in `docs/mockups/` of the narrow, medium and wide layouts and of the settings panel, for each kind of item (currency stack, unique, rare not priced yet, errors); the chosen layouts and colors are written in specs.md.
 - [ ] **1. Application window**: empty resizable egui window with the header (league placeholder, gear button), X11 backend on Linux, no console window on Windows, Linux release target moved to glibc.
 - [ ] **2. Clipboard watching**: detect the copied Path of Exile 2 item texts and show them raw in the window; verify on Bazzite KDE with the game, and on Windows.
 - [ ] **3. Item parser**: read the item class, rarity, name, base type, stack size and modifiers, in English and in French, with tests on real copied items.
@@ -39,4 +40,4 @@ poe2scout limits its API to 60 requests per minute per IP address, in a sliding 
 - [ ] **7. French item names**: French to English dictionary from the trade site data, used to find the price of a French item.
 - [ ] **8. Price display**: price in the three currencies, stack, offers and uncertainty warning, data age, special cases, trade site link.
 - [ ] **9. Responsive layout and price history**: narrow, medium and wide layouts, 7-day history chart in the wide layout.
-- [ ] **10. First release**: executable name (without the `rust-` prefix), README usage and Wayland help, version 0.1.0.
+- [ ] **10. First release**: executable name (without the `rust-` prefix), application icon, README usage and Wayland help, version 0.1.0.
