@@ -61,7 +61,7 @@ Guardrails:
 
 ## Steps
 
-- [ ] **0. Mock-ups**: editable Excalidraw wireframes in `docs/wireframes/` for the layout, then an interactive HTML mock-up in `docs/mockups/` of the narrow, medium and wide layouts and of the settings panel, for each kind of item (currency stack, unique, rare not priced yet, errors), with the item stats and the trade site offers; the chosen layouts and colors are written in specs.md.
+- [ ] **0. Mock-ups**: narrow layout first (mobile first): editable Excalidraw wireframe in `docs/wireframes/`, then an interactive HTML mock-up in `docs/mockups/` of the narrow layout and of the settings panel, for each kind of item (currency stack, unique, rare not priced yet, errors), with the item stats and the trade site offers; then the style guide (colors, sizes, typography) in specs.md. Each block (item, price, offers, history) stays independent, so that the wider layouts only rearrange them.
 - [ ] **1. Application window**: empty resizable egui window with the header (league placeholder, gear button), X11 backend on Linux, no console window on Windows, Linux release target moved to glibc.
 - [ ] **2. Clipboard watching**: detect the copied Path of Exile 2 item texts and show them raw in the window; verify on Bazzite KDE with the game, and on Windows.
 - [ ] **3. Item parser**: read the item class, rarity, name, base type, stack size and modifiers, in English and in French, with tests on real copied items.
@@ -73,5 +73,5 @@ Guardrails:
 - [ ] **9. Item stats**: requirements, description, implicit and explicit modifiers, Corrupted, roll bars from the advanced copy.
 - [ ] **10. Trade site client**: search, fetch and currency exchange, limits read from the headers, waiting time before the next search, following the [Trade site usage](#trade-site-usage) rules.
 - [ ] **11. Offers display**: **Search the offers** button and its waiting time, offers of unique items with their rolls, bulk offers of currency items, suspicious offers, next 10, searching and long wait states.
-- [ ] **12. Responsive layout and price history**: narrow, medium and wide layouts, 7-day history chart in the wide layout.
+- [ ] **12. Responsive layout and price history**: wireframes then mock-up of the medium and wide layouts with the style guide, then these layouts in the application, with the rolls of each offer and the 7-day history chart in the wide layout.
 - [ ] **13. First release**: executable name (without the `rust-` prefix), application icon, README usage, Wayland help and services called, version 0.1.0.
