@@ -376,8 +376,26 @@
   }
   .glow { text-shadow: 0 0 6px rgba(var(--glow), .75), 0 0 16px rgba(var(--glow), .45), 0 0 28px rgba(var(--glow), .2); }
   .glow-note { color: var(--faint); font-size: 11px; }
-  .trade { flex: none; color: var(--accent); font-size: 13px; padding-top: 3px; white-space: nowrap; font-weight: 600; }
-  .trade:hover, .link:hover { text-decoration: underline; }
+  .trade { flex: none; display: inline-flex; align-items: center; gap: 6px; color: var(--accent); font-size: 13px; padding-top: 3px; white-space: nowrap; font-weight: 600; text-decoration: none; cursor: pointer; }
+  .trade .ico, .trade-short { display: none; }
+  .trade:hover .trade-label, .link:hover { text-decoration: underline; }
+  /* Block: a flat block in the top right corner of the item band, like the header controls. */
+  .item-band { position: relative; }
+  [data-trade="block"] .item-band .name-row { padding-right: 40px; }
+  [data-trade="block"] .trade {
+    position: absolute; top: 0; right: 0; width: 44px; height: 44px; padding: 0; justify-content: center;
+    background: var(--control); color: var(--text);
+  }
+  [data-trade="block"] .trade .ico { display: block; }
+  [data-trade="block"] .trade-label, [data-trade="block"] .trade-arrow { display: none; }
+  /* Pill: a small label, rounded like the tags. */
+  [data-trade="pill"] .trade { padding: 3px 9px; margin-top: 1px; border-radius: var(--radius); background: var(--control); color: var(--text); font-size: 12px; }
+  [data-trade="pill"] .trade .ico, [data-trade="pill"] .trade-short { display: block; }
+  [data-trade="pill"] .trade .ico { width: 13px; height: 13px; }
+  [data-trade="pill"] .trade-label, [data-trade="pill"] .trade-arrow { display: none; }
+  /* Quiet: weak text that turns white on hover. */
+  [data-trade="quiet"] .trade { color: var(--weak); font-weight: 500; font-size: 12.5px; }
+  [data-trade="quiet"] .trade:hover { color: var(--accent); }
   .base { margin-top: 2px; }
   .meta { display: flex; flex-wrap: wrap; gap: 5px 6px; align-items: center; margin-top: 6px; color: var(--weak); font-size: 13px; }
   .tag { padding: 1px 7px; border-radius: var(--radius); background: var(--control); color: var(--text); font-size: 12px; }
@@ -448,7 +466,6 @@
     background: var(--accent); color: var(--on-accent, var(--bg-a));
   }
   .search-text { flex: 1; display: grid; align-content: center; gap: 4px; padding: 12px 14px; font-size: 13px; }
-  [data-button="band"] .search-block, [data-button="band"] .again.ready { background: var(--bg-a); color: var(--accent); box-shadow: inset 1px 0 0 var(--control-line); }
   /* Search again: a flat block in the bottom right corner of the offers band; the countdown, then the refresh icon. */
   /* The title row of the offers band holds the action block in its top right corner. */
   .flat-head { margin: -12px -14px 6px 0; height: 48px; align-items: center; }
@@ -457,8 +474,6 @@
   .again { flex: none; width: 56px; height: 48px; display: grid; place-items: center; font: 600 13px/1 var(--font-number); }
   .again.waiting { background: var(--control); color: var(--weak); }
   .again.ready { background: var(--accent); color: var(--on-accent, var(--bg-a)); }
-  /* Test: the search button on the background of the price block, in white. */
-  [data-button="band"] .button.primary { background: var(--bg-a); border-color: var(--control-line); color: var(--accent); }
   .button.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent, var(--bg-a)); font-weight: 700; }
   .button.wait { color: var(--faint); }
   .spinner { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--control-line); border-top-color: var(--accent); }
@@ -495,7 +510,7 @@
   };
   const VARIANTS = {
     theme: { label: "Style", options: Object.fromEntries(Object.entries(THEMES).map(([k, v]) => [k, v.title])), fallback: "slate" },
-    button: { label: "Search block", options: { filled: "White", band: "Price band" }, fallback: "filled" },
+    trade: { label: "Trade link", options: { text: "Text", block: "Block", pill: "Pill", quiet: "Quiet" }, fallback: "text" },
     league: { label: "League", options: { softcore: "Softcore", hardcore: "Hardcore" }, fallback: "softcore" },
     header: { label: "Header", options: { emblem: "Emblem", logo: "Logo 38 px", large: "Logo 56 px", text: "Name in text" }, fallback: "emblem" },
   };
@@ -513,6 +528,8 @@
     refresh: size => svg(size, '<path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9"/><path d="M13.6 2.6v3.3h-3.3"/>'),
     chevron: size => svg(size, '<path d="M6 4l4 4-4 4"/>'),
     down: size => svg(size, '<path d="M4 6l4 4 4-4"/>'),
+    // The "external-link" icon of Lucide (ISC license), on its 24 px grid.
+    external: size => `<svg class="ico" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>`,
     // The "settings" icon of Lucide (ISC license), on its 24 px grid.
     gear: size => `<svg class="ico" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>`,
   };
@@ -549,10 +566,10 @@
       stats = `<div class="stats-toggle">${ICON.chevron(12)}<span>${it.statsLabel}${filters}</span></div>`;
     }
     return `
-      <div class="band b">
+      <div class="band b item-band">
         <div class="name-row">
           <div class="name rarity-${it.rarity} ${it.glow ? "glow" : ""}">${it.name}</div>
-          <div class="trade">${it.tradeLabel || "Trade site"} ↗</div>
+          <a class="trade" title="${it.tradeLabel || "Trade site"}">${ICON.external(15)}<span class="trade-label">${it.tradeLabel || "Trade site"}</span><span class="trade-short">${it.tradeShort || "Trade"}</span><span class="trade-arrow">↗</span></a>
         </div>
         ${it.base ? `<div class="base">${it.base}</div>` : ""}
         <div class="meta"><span>${it.cls}</span>${tags}</div>
@@ -687,7 +704,7 @@
         price({ lines: ["Magic items aren't priced yet.", "Use the trade site link above."] }), offers({ lines: ["Offers of magic items come with their price, in a later version."] }), foot())],
       ["Exceptional base (normal item)", win(topBar(), item({ rarity: "normal", name: "Exceptional Chiming Staff", glow: true, cls: "Staves", tags: ["3 sockets", "ilvl 82"], summary: "Grants Skill: Level 18 Sigil of Power", statsLabel: "Stats (2)" }),
         price({ lines: ["Normal items aren't priced yet.", "Use the trade site link above."] }), offers({ lines: ["Offers of normal items come with their price, in a later version."] }), foot())],
-      ["French item (interface in French)", win(topBar(), item({ rarity: "unique", name: "Chasseur de têtes", base: "Ceinture lourde", cls: "Ceintures", tags: ["Corrompu", "niv. 80"], statsLabel: "Statistiques (6)", filters: "3 filtres", tradeLabel: "Site d'échange" }),
+      ["French item (interface in French)", win(topBar(), item({ rarity: "unique", name: "Chasseur de têtes", base: "Ceinture lourde", cls: "Ceintures", tags: ["Corrompu", "niv. 80"], statsLabel: "Statistiques (6)", filters: "3 filtres", tradeLabel: "Site d'échange", tradeShort: "Échange" }),
         price({ values: ["12.4", "123", "8990"], offers: "23 offres", trend: "En hausse sur les 3 derniers jours (+4 %)" }, "fr"), offers({ state: "idle" }, "fr"), foot("poe2scout il y a 12 min · GGG trade il y a 2 min"))],
     ]],
     ["Offer states", [
