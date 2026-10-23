@@ -1,3 +1,5 @@
 /target
 /outputs/*
 !/outputs/.gitkeep
+/inputs/*
+!/inputs/.gitkeep
