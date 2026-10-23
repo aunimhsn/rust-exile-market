@@ -1,0 +1,703 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Window Layouts</title>
+<!--
+  Interactive mock-up of the rust-exile-market window (roadmap step 0).
+  Open it in a browser: resize the mock window with the controls, pick an
+  item scenario and the language of the copied item. All prices are sample
+  data. The mock window imitates the egui dark theme.
+-->
+<style>
+  :root {
+    /* Page around the mock window. */
+    --page-bg: #101114;
+    --page-text: #c9ccd3;
+    --page-muted: #80858f;
+    --page-panel: #191b20;
+    --page-border: #2a2d34;
+    --page-accent: #6ea8fe;
+
+    /* egui dark theme. */
+    --egui-window: #1b1b1b;
+    --egui-panel: #202020;
+    --egui-widget: #3c3c3c;
+    --egui-widget-hover: #464646;
+    --egui-border: #3c3c3c;
+    --egui-text: #dcdcdc;
+    --egui-weak: #8c8c8c;
+    --egui-link: #5aaaff;
+    --egui-warn-bg: #3d3416;
+    --egui-warn: #ffd166;
+    --egui-error-bg: #3f1d1d;
+    --egui-error: #ff6b6b;
+    --egui-info-bg: #1d2b3f;
+    --egui-info: #8ab4f8;
+
+    /* Path of Exile 2 rarity colors. */
+    --rarity-normal: #c8c8c8;
+    --rarity-magic: #8888ff;
+    --rarity-rare: #ffff77;
+    --rarity-unique: #af6025;
+    --rarity-currency: #aa9e82;
+    --rarity-gem: #1ba29b;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--page-bg);
+    color: var(--page-text);
+    font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+
+  /* Controls of the mock-up. */
+  .controls {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px 20px;
+    align-items: end;
+    padding: 12px 16px;
+    background: var(--page-panel);
+    border-bottom: 1px solid var(--page-border);
+  }
+  .controls label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--page-muted); }
+  .controls select, .controls input[type="number"] {
+    background: var(--page-bg); color: var(--page-text);
+    border: 1px solid var(--page-border); border-radius: 6px; padding: 5px 8px; font: inherit;
+  }
+  .controls input[type="range"] { width: 200px; accent-color: var(--page-accent); }
+  .presets { display: flex; gap: 6px; flex-wrap: wrap; }
+  .presets button, .segmented button {
+    background: var(--page-bg); color: var(--page-text);
+    border: 1px solid var(--page-border); border-radius: 6px; padding: 5px 10px; font: inherit; cursor: pointer;
+  }
+  .presets button:hover, .segmented button:hover { border-color: var(--page-accent); }
+  .segmented { display: flex; }
+  .segmented button { border-radius: 0; }
+  .segmented button:first-child { border-radius: 6px 0 0 6px; }
+  .segmented button:last-child { border-radius: 0 6px 6px 0; }
+  .segmented button[aria-pressed="true"] { background: var(--page-accent); color: #0b1220; border-color: var(--page-accent); }
+  .readout { font-size: 12px; color: var(--page-muted); }
+  .readout strong { color: var(--page-text); }
+
+  .stage { padding: 16px; }
+  .scaler { transform-origin: top left; }
+
+  /* Mock window. */
+  .os-frame {
+    border: 1px solid #000;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, .5);
+    background: var(--egui-window);
+  }
+  .os-title {
+    height: 30px; display: flex; align-items: center; justify-content: space-between;
+    padding: 0 10px; background: #2b2b2b; color: #bbb; font-size: 12px;
+  }
+  .os-buttons { display: flex; gap: 8px; }
+  .os-buttons span { width: 12px; height: 12px; border-radius: 50%; background: #555; }
+
+  .win {
+    display: flex; flex-direction: column; height: calc(100% - 30px);
+    color: var(--egui-text); font: 14px/1.4 "Ubuntu", "Segoe UI", system-ui, sans-serif;
+  }
+  .win-header {
+    display: flex; align-items: center; gap: 10px;
+    padding: 6px 10px; background: var(--egui-panel); border-bottom: 1px solid var(--egui-border);
+  }
+  .league { display: flex; align-items: center; gap: 6px; color: var(--egui-weak); font-size: 13px; }
+  .league strong { color: var(--egui-text); font-weight: 600; }
+  .spacer { flex: 1; }
+  .icon-button {
+    width: 28px; height: 28px; display: grid; place-items: center;
+    background: var(--egui-widget); border: none; border-radius: 4px; color: var(--egui-text);
+    font-size: 16px; cursor: pointer;
+  }
+  .icon-button:hover { background: var(--egui-widget-hover); }
+  .icon-button[aria-pressed="true"] { outline: 1px solid var(--egui-link); }
+
+  .win-body { flex: 1; display: flex; min-height: 0; }
+  .win-main { flex: 1; overflow: auto; padding: 12px; display: flex; flex-direction: column; gap: 12px; }
+  .win-footer {
+    display: flex; gap: 10px; justify-content: space-between; flex-wrap: wrap;
+    padding: 4px 10px; background: var(--egui-panel); border-top: 1px solid var(--egui-border);
+    color: var(--egui-weak); font-size: 12px;
+  }
+
+  .banner { padding: 8px 10px; border-radius: 4px; font-size: 13px; }
+  .banner.warn { background: var(--egui-warn-bg); color: var(--egui-warn); }
+  .banner.error { background: var(--egui-error-bg); color: var(--egui-error); }
+  .banner.info { background: var(--egui-info-bg); color: var(--egui-info); }
+  .banner a { color: inherit; }
+
+  .content { display: grid; gap: 12px; }
+  .layout-narrow .content { grid-template-columns: 1fr; }
+  .layout-medium .content, .layout-wide .content { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; }
+  .layout-wide .content { grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); }
+  .content .full { grid-column: 1 / -1; }
+
+  .card { background: var(--egui-panel); border: 1px solid var(--egui-border); border-radius: 6px; padding: 12px; }
+  .card h3 { margin: 0 0 8px; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--egui-weak); }
+
+  .item { display: flex; gap: 12px; align-items: flex-start; }
+  .item-icon {
+    flex: none; width: 48px; height: 48px; border-radius: 4px; display: grid; place-items: center;
+    background: #111; border: 1px solid var(--egui-border); color: var(--egui-weak); font-size: 11px;
+  }
+  .layout-wide .item-icon { width: 72px; height: 72px; }
+  .item-name { font-size: 18px; font-weight: 600; line-height: 1.2; }
+  .layout-wide .item-name { font-size: 22px; }
+  .item-base { color: var(--egui-text); }
+  .item-meta { color: var(--egui-weak); font-size: 12px; margin-top: 4px; display: flex; gap: 6px; flex-wrap: wrap; }
+  .tag { padding: 0 6px; border-radius: 3px; background: var(--egui-widget); color: var(--egui-text); font-size: 11px; }
+  .tag.corrupted { background: #5a1e1e; color: #ff8a8a; }
+  .rarity-normal { color: var(--rarity-normal); }
+  .rarity-magic { color: var(--rarity-magic); }
+  .rarity-rare { color: var(--rarity-rare); }
+  .rarity-unique { color: var(--rarity-unique); }
+  .rarity-currency { color: var(--rarity-currency); }
+
+  .headline { display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px; }
+  .headline .value { font-size: 28px; font-weight: 700; }
+  .layout-wide .headline .value { font-size: 36px; }
+  .headline .unit { color: var(--egui-weak); }
+  .prices { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  .prices th { text-align: right; font-weight: 400; color: var(--egui-weak); font-size: 12px; padding: 2px 6px; }
+  .prices th:first-child, .prices td:first-child { text-align: left; }
+  .prices td { text-align: right; padding: 3px 6px; border-top: 1px solid #2c2c2c; }
+  .currency { display: inline-flex; align-items: center; gap: 6px; }
+  .currency i { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+  .c-ex i { background: #d9c27a; }
+  .c-div i { background: #e8e8e8; }
+  .c-chaos i { background: #c46a3a; }
+
+  .offers { display: flex; align-items: center; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+  .badge { padding: 1px 8px; border-radius: 10px; font-size: 12px; }
+  .badge.ok { background: #1f3a26; color: #7ddc8f; }
+  .badge.uncertain { background: var(--egui-warn-bg); color: var(--egui-warn); }
+
+  .button {
+    display: inline-flex; align-items: center; gap: 6px; margin-top: 12px;
+    background: var(--egui-widget); color: var(--egui-text); border: none; border-radius: 4px;
+    padding: 6px 12px; font: inherit; cursor: pointer;
+  }
+  .button:hover { background: var(--egui-widget-hover); }
+
+  .candidates { list-style: none; margin: 8px 0 0; padding: 0; }
+  .candidates li { display: flex; justify-content: space-between; gap: 8px; padding: 4px 0; border-top: 1px solid #2c2c2c; }
+
+  .empty { flex: 1; display: grid; place-items: center; text-align: center; color: var(--egui-weak); }
+  .empty .key { display: inline-block; padding: 1px 6px; border: 1px solid var(--egui-weak); border-radius: 3px; color: var(--egui-text); }
+
+  .chart svg { width: 100%; height: auto; display: block; }
+  .legend { display: flex; gap: 14px; font-size: 12px; color: var(--egui-weak); margin-top: 4px; }
+  .legend span::before { content: ""; display: inline-block; width: 10px; height: 3px; margin-right: 5px; vertical-align: middle; }
+  .legend .l-price::before { background: var(--egui-link); }
+  .legend .l-offers::before { background: #555; height: 8px; }
+
+  /* Settings: a side panel, or the whole window when it is narrow. */
+  .settings { background: var(--egui-panel); border-left: 1px solid var(--egui-border); padding: 12px; width: 280px; overflow: auto; }
+  .layout-narrow .settings { width: 100%; border-left: none; }
+  .settings h2 { margin: 0 0 12px; font-size: 15px; }
+  .field { margin-bottom: 14px; }
+  .field > span { display: block; font-size: 12px; color: var(--egui-weak); margin-bottom: 4px; }
+  .combo { display: flex; justify-content: space-between; background: var(--egui-widget); border-radius: 4px; padding: 5px 8px; }
+  .radio { display: flex; align-items: center; gap: 6px; padding: 2px 0; }
+  .radio i { width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--egui-weak); display: inline-block; }
+  .radio.on i { border-color: var(--egui-link); background: radial-gradient(var(--egui-link) 40%, transparent 45%); }
+  .check { display: flex; align-items: center; gap: 6px; }
+  .check i { width: 14px; height: 14px; border-radius: 3px; background: var(--egui-widget); display: inline-block; }
+
+  .notes { max-width: 900px; padding: 0 16px 32px; color: var(--page-muted); font-size: 13px; }
+  .notes h2 { color: var(--page-text); font-size: 15px; }
+  .notes li { margin: 4px 0; }
+</style>
+</head>
+<body>
+
+<div class="controls">
+  <div>
+    <div class="readout">Window <strong id="size-readout"></strong> · layout <strong id="layout-readout"></strong></div>
+    <div class="presets" id="presets"></div>
+  </div>
+  <label>Width <input type="range" id="width" min="320" max="1920" step="10"></label>
+  <label>Height <input type="range" id="height" min="320" max="1080" step="10"></label>
+  <label>Scenario <select id="scenario"></select></label>
+  <label>Copied item language
+    <div class="segmented" id="item-language">
+      <button type="button" data-value="en">English</button>
+      <button type="button" data-value="fr">Français</button>
+    </div>
+  </label>
+  <label>Headline currency
+    <div class="segmented" id="headline-rule">
+      <button type="button" data-value="auto">Automatic</button>
+      <button type="button" data-value="none">None</button>
+    </div>
+  </label>
+</div>
+
+<div class="stage" id="stage">
+  <div class="scaler" id="scaler">
+    <div class="os-frame" id="frame">
+      <div class="os-title"><span>rust-exile-market</span><div class="os-buttons"><span></span><span></span><span></span></div></div>
+      <div class="win" id="win"></div>
+    </div>
+  </div>
+</div>
+
+<div class="notes">
+  <h2>Breakpoints</h2>
+  <ul>
+    <li><strong>Narrow</strong>, under 500 px: one column. The settings replace the content.</li>
+    <li><strong>Medium</strong>, from 500 to 999 px: the item on the left, its prices on the right. The settings open as a side panel.</li>
+    <li><strong>Wide</strong>, from 1000 px: bigger item and headline price, plus the price history below.</li>
+  </ul>
+  <h2>Proposals to decide</h2>
+  <ul>
+    <li><strong>Headline currency</strong>: above the table of the three currencies, the price in the most readable one: Divine Orbs from 1 Divine Orb, Exalted Orbs below. Switch to <em>None</em> to compare.</li>
+    <li><strong>Item icon</strong>: the price database gives an icon for each item. The grey square shows where it would go.</li>
+    <li><strong>Unidentified unique</strong>: the list of the possible uniques shows the price of each one.</li>
+    <li><strong>Data age and source</strong>: in a status bar at the bottom, with the name of the price database.</li>
+    <li><strong>French messages</strong>: formal ("Copiez"), like the French game client.</li>
+  </ul>
+</div>
+
+<script>
+  const BREAKPOINT_MEDIUM = 500;
+  const BREAKPOINT_WIDE = 1000;
+  const UNCERTAIN_BELOW = 5;
+  // Sample rates: Exalted Orbs per Divine Orb, Chaos Orbs per Divine Orb.
+  const EX_PER_DIV = 725;
+  const CHAOS_PER_DIV = 9.9;
+  const LEAGUE = "Forbidden Rites";
+
+  const PRESETS = [
+    { label: "Narrow 420 × 560", width: 420, height: 560 },
+    { label: "Medium 760 × 560", width: 760, height: 560 },
+    { label: "Wide 1280 × 800", width: 1280, height: 800 },
+    { label: "Maximized 1920 × 1040", width: 1920, height: 1040 },
+  ];
+
+  // Interface strings, as they would be in locales/en.ftl and locales/fr.ftl.
+  const STRINGS = {
+    en: {
+      league: "League",
+      settings: "Settings",
+      close: "Close",
+      emptyTitle: "Copy an item in the game with",
+      emptyHint: "The price shows up here.",
+      price: "Price",
+      unitPrice: "Unit price",
+      stackOf: n => `Stack of ${n}`,
+      offers: n => `${n} ${n === 1 ? "offer" : "offers"}`,
+      reliable: "Sells",
+      uncertain: n => `Only ${n} ${n === 1 ? "offer" : "offers"}: the price is uncertain`,
+      openTrade: "Open on the trade site",
+      history: "Price over the last 7 days",
+      historyPrice: "Price",
+      historyOffers: "Offers",
+      updated: "Prices updated 12 minutes ago",
+      updatedCached: "Prices from 3 hours ago (offline)",
+      source: "Prices: poe2scout",
+      stack: (n, max) => `Stack Size: ${n}/${max}`,
+      corrupted: "Corrupted",
+      unidentified: "Unidentified",
+      rareNotPriced: "Rare items aren't priced yet.",
+      identify: "Identify the item to get its price.",
+      possible: "Possible uniques",
+      noPrice: league => `No price found for this item in ${league}.`,
+      offline: "The price database can't be reached: showing the prices from 3 hours ago.",
+      leagueEnded: "Rise of the Abyssal has ended, switched to Forbidden Rites.",
+      clipboard: "The clipboard can't be read.",
+      clipboardHelp: "See the help",
+      unreadable: "This item couldn't be read.",
+      language: "Language",
+      automatic: "Automatic (follows the game)",
+      alwaysOnTop: "Always on top",
+    },
+    fr: {
+      league: "Ligue",
+      settings: "Réglages",
+      close: "Fermer",
+      emptyTitle: "Copiez un objet en jeu avec",
+      emptyHint: "Son prix s'affichera ici.",
+      price: "Prix",
+      unitPrice: "Prix unitaire",
+      stackOf: n => `Pile de ${n}`,
+      offers: n => `${n} ${n <= 1 ? "offre" : "offres"}`,
+      reliable: "Se vend",
+      uncertain: n => `Seulement ${n} ${n <= 1 ? "offre" : "offres"} : prix incertain`,
+      openTrade: "Ouvrir sur le site d'échange",
+      history: "Prix sur les 7 derniers jours",
+      historyPrice: "Prix",
+      historyOffers: "Offres",
+      updated: "Prix mis à jour il y a 12 minutes",
+      updatedCached: "Prix d'il y a 3 heures (hors ligne)",
+      source: "Prix : poe2scout",
+      stack: (n, max) => `Taille de la pile : ${n}/${max}`,
+      corrupted: "Corrompu",
+      unidentified: "Non identifié",
+      rareNotPriced: "Les objets rares ne sont pas encore estimés.",
+      identify: "Identifiez l'objet pour connaître son prix.",
+      possible: "Uniques possibles",
+      noPrice: league => `Aucun prix trouvé pour cet objet dans la ligue ${league}.`,
+      offline: "La base de prix est injoignable : affichage des prix d'il y a 3 heures.",
+      leagueEnded: "La ligue Rise of the Abyssal est terminée, passage à Forbidden Rites.",
+      clipboard: "Impossible de lire le presse-papier.",
+      clipboardHelp: "Voir l'aide",
+      unreadable: "Impossible de lire cet objet.",
+      language: "Langue",
+      automatic: "Automatique (suit le jeu)",
+      alwaysOnTop: "Toujours au premier plan",
+    },
+  };
+
+  const HEADHUNTER = {
+    rarity: "unique",
+    name: { en: "Headhunter", fr: "Chasseur de têtes" },
+    base: { en: "Heavy Belt", fr: "Ceinture lourde" },
+    itemClass: { en: "Belts", fr: "Ceintures" },
+    priceEx: 8990,
+    offers: 23,
+    history: [9800, 9650, 9400, 9300, 9150, 9020, 8990],
+    historyOffers: [31, 28, 30, 26, 25, 24, 23],
+  };
+
+  const SCENARIOS = {
+    empty: { label: "Before the first item" },
+    stack: {
+      label: "Currency stack",
+      item: {
+        rarity: "currency",
+        name: { en: "Orb of Annulment", fr: "Orbe d'annulation" },
+        itemClass: { en: "Stackable Currency", fr: "Objets monétaires empilables" },
+        stack: [7, 20],
+        priceEx: 182,
+        offers: 1240,
+        history: [205, 198, 196, 190, 188, 185, 182],
+        historyOffers: [1300, 1280, 1310, 1260, 1250, 1230, 1240],
+      },
+    },
+    unique: { label: "Unique item", item: HEADHUNTER },
+    corrupted: {
+      label: "Corrupted unique, few offers",
+      item: {
+        rarity: "unique",
+        name: { en: "Beacon of Azis", fr: "Signal d'Azis" },
+        base: { en: "Solar Amulet", fr: "Amulette solaire" },
+        itemClass: { en: "Amulets", fr: "Amulettes" },
+        corrupted: true,
+        priceEx: 1450,
+        offers: 3,
+        history: [1700, 1620, 1580, 1500, 1520, 1470, 1450],
+        historyOffers: [6, 5, 5, 4, 4, 3, 3],
+      },
+    },
+    unidentified: {
+      label: "Unidentified unique",
+      item: {
+        rarity: "unique",
+        unidentified: true,
+        base: { en: "Stellar Amulet", fr: "Amulette stellaire" },
+        itemClass: { en: "Amulets", fr: "Amulettes" },
+        candidates: [
+          { name: { en: "Astramentis", fr: "Astramentis" }, priceEx: 2900 },
+          { name: { en: "Fixation of Yix", fr: "Fixation d'Yix" }, priceEx: 95 },
+          { name: { en: "Hinekora's Sight", fr: "Vue d'Hinekora" }, priceEx: 640 },
+          { name: { en: "Strugglescream", fr: "Hurlépreuve" }, priceEx: 12 },
+        ],
+      },
+    },
+    rare: {
+      label: "Rare item (not priced yet)",
+      item: {
+        rarity: "rare",
+        name: { en: "Storm Spiral", fr: "Spirale de tempête" },
+        base: { en: "Sapphire Ring", fr: "Anneau de saphir" },
+        itemClass: { en: "Rings", fr: "Anneaux" },
+        notPriced: true,
+      },
+    },
+    noPrice: {
+      label: "No price found",
+      item: {
+        rarity: "unique",
+        name: { en: "Strugglescream", fr: "Hurlépreuve" },
+        base: { en: "Stellar Amulet", fr: "Amulette stellaire" },
+        itemClass: { en: "Amulets", fr: "Amulettes" },
+        noPrice: true,
+      },
+    },
+    offline: { label: "Offline, cached prices", item: HEADHUNTER, banner: ["warn", "offline"], cached: true },
+    leagueEnded: { label: "League ended", item: HEADHUNTER, banner: ["info", "leagueEnded"] },
+    clipboard: { label: "Clipboard unreadable", banner: ["error", "clipboard"] },
+    unreadable: { label: "Item couldn't be read", banner: ["error", "unreadable"] },
+  };
+
+  const state = {
+    width: 760,
+    height: 560,
+    scenario: "unique",
+    language: "en",
+    headline: "auto",
+    settingsOpen: false,
+  };
+
+  const $ = id => document.getElementById(id);
+
+  function layoutFor(width) {
+    if (width < BREAKPOINT_MEDIUM) return "narrow";
+    if (width < BREAKPOINT_WIDE) return "medium";
+    return "wide";
+  }
+
+  function formatNumber(value, decimals) {
+    return value.toLocaleString(state.language === "fr" ? "fr-FR" : "en-US", {
+      minimumFractionDigits: decimals,
+      maximumFractionDigits: decimals,
+    });
+  }
+
+  // Exalted Orbs without decimals, Divine and Chaos Orbs with up to 2.
+  function inCurrencies(priceEx) {
+    const div = priceEx / EX_PER_DIV;
+    const chaos = div * CHAOS_PER_DIV;
+    const decimals = v => (v >= 100 ? 0 : v >= 10 ? 1 : 2);
+    return [
+      { key: "ex", label: { en: "Exalted Orb", fr: "Orbe exalté" }, value: priceEx, text: formatNumber(priceEx, 0) },
+      { key: "div", label: { en: "Divine Orb", fr: "Orbe divin" }, value: div, text: formatNumber(div, decimals(div)) },
+      { key: "chaos", label: { en: "Chaos Orb", fr: "Orbe du chaos" }, value: chaos, text: formatNumber(chaos, decimals(chaos)) },
+    ];
+  }
+
+  function headlineCurrency(priceEx) {
+    const [ex, div] = inCurrencies(priceEx);
+    return div.value >= 1 ? div : ex;
+  }
+
+  function currencyCell(c) {
+    return `<span class="currency c-${c.key}"><i></i>${c.label[state.language]}</span>`;
+  }
+
+  function renderItem(item, t) {
+    const lang = state.language;
+    const title = item.unidentified
+      ? `<div class="item-name rarity-unique">${item.base[lang]}</div>`
+      : `<div class="item-name rarity-${item.rarity}">${item.name[lang]}</div>
+         ${item.base ? `<div class="item-base">${item.base[lang]}</div>` : ""}`;
+    const tags = [
+      item.corrupted ? `<span class="tag corrupted">${t.corrupted}</span>` : "",
+      item.unidentified ? `<span class="tag">${t.unidentified}</span>` : "",
+    ].join("");
+    const meta = [
+      `<span>${item.itemClass[lang]}</span>`,
+      item.stack ? `<span>· ${t.stack(...item.stack)}</span>` : "",
+      tags,
+    ].join("");
+    return `
+      <div class="card">
+        <div class="item">
+          <div class="item-icon">icon</div>
+          <div>${title}<div class="item-meta">${meta}</div></div>
+        </div>
+        ${item.notPriced || item.noPrice || item.unidentified ? "" : tradeButton(t)}
+      </div>`;
+  }
+
+  function tradeButton(t) {
+    return `<button class="button" type="button">${t.openTrade} ↗</button>`;
+  }
+
+  function renderPrice(item, t) {
+    const lang = state.language;
+    if (item.notPriced) {
+      return `<div class="card"><h3>${t.price}</h3><p>${t.rareNotPriced}</p>${tradeButton(t)}</div>`;
+    }
+    if (item.noPrice) {
+      return `<div class="card"><h3>${t.price}</h3><p>${t.noPrice(LEAGUE)}</p>${tradeButton(t)}</div>`;
+    }
+    if (item.unidentified) {
+      const rows = item.candidates.map(c => {
+        const h = headlineCurrency(c.priceEx);
+        return `<li><span class="rarity-unique">${c.name[lang]}</span><span>${h.text} ${h.label[lang]}</span></li>`;
+      }).join("");
+      return `<div class="card"><h3>${t.price}</h3><p>${t.identify}</p>
+        <div class="item-meta">${t.possible}</div><ul class="candidates">${rows}</ul></div>`;
+    }
+
+    const stackSize = item.stack ? item.stack[0] : 1;
+    const unit = inCurrencies(item.priceEx);
+    const total = item.stack ? inCurrencies(item.priceEx * stackSize) : null;
+    const headlinePrice = item.stack ? item.priceEx * stackSize : item.priceEx;
+    const head = headlineCurrency(headlinePrice);
+    const headline = state.headline === "auto"
+      ? `<div class="headline"><span class="value">${head.text}</span><span class="unit">${head.label[lang]}${item.stack ? ` · ${t.stackOf(stackSize)}` : ""}</span></div>`
+      : "";
+    const header = total
+      ? `<tr><th></th><th>${t.unitPrice}</th><th>${t.stackOf(stackSize)}</th></tr>`
+      : "";
+    const rows = unit.map((c, i) => `<tr><td>${currencyCell(c)}</td><td>${c.text}</td>${total ? `<td>${total[i].text}</td>` : ""}</tr>`).join("");
+    const uncertain = item.offers < UNCERTAIN_BELOW;
+    const badge = uncertain
+      ? `<span class="badge uncertain">${t.uncertain(item.offers)}</span>`
+      : `<span class="badge ok">${t.reliable}</span><span>${t.offers(item.offers)}</span>`;
+    return `
+      <div class="card">
+        <h3>${t.price}</h3>
+        ${headline}
+        <table class="prices">${header}${rows}</table>
+        <div class="offers">${badge}</div>
+      </div>`;
+  }
+
+  function renderHistory(item, t) {
+    const width = 800, height = 220, pad = { left: 56, right: 48, top: 12, bottom: 28 };
+    const plotW = width - pad.left - pad.right, plotH = height - pad.top - pad.bottom;
+    const head = headlineCurrency(item.priceEx);
+    const toUnit = ex => (head.key === "div" ? ex / EX_PER_DIV : ex);
+    const values = item.history.map(toUnit);
+    const min = Math.min(...values) * 0.97, max = Math.max(...values) * 1.03;
+    const maxOffers = Math.max(...item.historyOffers);
+    const x = i => pad.left + (plotW * i) / (values.length - 1);
+    const y = v => pad.top + plotH * (1 - (v - min) / (max - min));
+    const barW = plotW / values.length * 0.5;
+    const days = state.language === "fr" ? ["J-6", "J-5", "J-4", "J-3", "J-2", "Hier", "Auj."] : ["D-6", "D-5", "D-4", "D-3", "D-2", "Yesterday", "Today"];
+    const bars = item.historyOffers.map((o, i) => {
+      const h = (plotH * 0.35 * o) / maxOffers;
+      return `<rect x="${x(i) - barW / 2}" y="${pad.top + plotH - h}" width="${barW}" height="${h}" fill="#555" opacity=".6"></rect>`;
+    }).join("");
+    const path = values.map((v, i) => `${i ? "L" : "M"}${x(i)},${y(v)}`).join(" ");
+    const dots = values.map((v, i) => `<circle cx="${x(i)}" cy="${y(v)}" r="3.5" fill="var(--egui-link)"></circle>`).join("");
+    const labels = days.map((d, i) => `<text x="${x(i)}" y="${height - 8}" fill="#8c8c8c" font-size="12" text-anchor="middle">${d}</text>`).join("");
+    const ticks = [min, (min + max) / 2, max].map(v => {
+      const decimals = head.key === "div" ? 1 : 0;
+      return `<line x1="${pad.left}" x2="${width - pad.right}" y1="${y(v)}" y2="${y(v)}" stroke="#2c2c2c"></line>
+              <text x="${pad.left - 8}" y="${y(v) + 4}" fill="#8c8c8c" font-size="12" text-anchor="end">${formatNumber(v, decimals)}</text>`;
+    }).join("");
+    return `
+      <div class="card chart full">
+        <h3>${t.history} · ${head.label[state.language]}</h3>
+        <svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${t.history}">
+          ${ticks}${bars}
+          <path d="${path}" fill="none" stroke="var(--egui-link)" stroke-width="2.5"></path>
+          ${dots}${labels}
+        </svg>
+        <div class="legend"><span class="l-price">${t.historyPrice}</span><span class="l-offers">${t.historyOffers}</span></div>
+      </div>`;
+  }
+
+  function renderSettings(t) {
+    const lang = state.language;
+    const radio = (on, label) => `<div class="radio ${on ? "on" : ""}"><i></i>${label}</div>`;
+    return `
+      <aside class="settings">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <h2>${t.settings}</h2>
+          <button class="icon-button" type="button" data-action="settings" title="${t.close}">✕</button>
+        </div>
+        <div class="field"><span>${t.league}</span><div class="combo"><span>${LEAGUE}</span><span>⏷</span></div></div>
+        <div class="field"><span>${t.language}</span>
+          ${radio(true, t.automatic)}${radio(false, "English")}${radio(false, "Français")}
+        </div>
+        <div class="field"><div class="check"><i></i>${t.alwaysOnTop}</div></div>
+      </aside>`;
+  }
+
+  function render() {
+    const layout = layoutFor(state.width);
+    const t = STRINGS[state.language];
+    const scenario = SCENARIOS[state.scenario];
+    const win = $("win");
+    win.className = `win layout-${layout}`;
+
+    let main;
+    if (!scenario.item) {
+      main = `<div class="empty"><div><p>${t.emptyTitle} <span class="key">Ctrl</span> + <span class="key">C</span></p><p>${t.emptyHint}</p></div></div>`;
+    } else {
+      const item = scenario.item;
+      const priced = !item.notPriced && !item.noPrice && !item.unidentified;
+      main = `<div class="content">
+        ${renderItem(item, t)}
+        ${renderPrice(item, t)}
+        ${layout === "wide" && priced ? renderHistory(item, t) : ""}
+      </div>`;
+    }
+    if (scenario.banner) {
+      const [kind, key] = scenario.banner;
+      const help = key === "clipboard" ? ` <a href="#">${t.clipboardHelp}</a>` : "";
+      main = `<div class="banner ${kind}">${t[key]}${help}</div>${main}`;
+    }
+
+    const settingsFull = state.settingsOpen && layout === "narrow";
+    win.innerHTML = `
+      <div class="win-header">
+        <div class="league">${t.league} <strong>${LEAGUE}</strong></div>
+        <div class="spacer"></div>
+        <button class="icon-button" type="button" data-action="settings" aria-pressed="${state.settingsOpen}" title="${t.settings}">⚙</button>
+      </div>
+      <div class="win-body">
+        ${settingsFull ? "" : `<div class="win-main">${main}</div>`}
+        ${state.settingsOpen ? renderSettings(t) : ""}
+      </div>
+      <div class="win-footer"><span>${scenario.cached ? t.updatedCached : t.updated}</span><span>${t.source}</span></div>`;
+
+    $("frame").style.width = `${state.width}px`;
+    $("frame").style.height = `${state.height}px`;
+    $("size-readout").textContent = `${state.width} × ${state.height}`;
+    $("layout-readout").textContent = layout;
+    $("width").value = state.width;
+    $("height").value = state.height;
+    $("scenario").value = state.scenario;
+    for (const b of $("item-language").children) b.setAttribute("aria-pressed", b.dataset.value === state.language);
+    for (const b of $("headline-rule").children) b.setAttribute("aria-pressed", b.dataset.value === state.headline);
+    fit();
+  }
+
+  // Scale the mock window down when it is wider than the page.
+  function fit() {
+    const available = $("stage").clientWidth - 32;
+    const scale = Math.min(1, available / (state.width + 2));
+    $("scaler").style.transform = `scale(${scale})`;
+    $("scaler").style.height = `${(state.height + 2) * scale}px`;
+  }
+
+  function setup() {
+    for (const p of PRESETS) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.textContent = p.label;
+      b.addEventListener("click", () => { state.width = p.width; state.height = p.height; render(); });
+      $("presets").append(b);
+    }
+    for (const [key, s] of Object.entries(SCENARIOS)) {
+      $("scenario").append(new Option(s.label, key));
+    }
+    $("width").addEventListener("input", e => { state.width = Number(e.target.value); render(); });
+    $("height").addEventListener("input", e => { state.height = Number(e.target.value); render(); });
+    $("scenario").addEventListener("change", e => { state.scenario = e.target.value; render(); });
+    $("item-language").addEventListener("click", e => {
+      if (e.target.dataset.value) { state.language = e.target.dataset.value; render(); }
+    });
+    $("headline-rule").addEventListener("click", e => {
+      if (e.target.dataset.value) { state.headline = e.target.dataset.value; render(); }
+    });
+    $("win").addEventListener("click", e => {
+      if (e.target.closest("[data-action=settings]")) { state.settingsOpen = !state.settingsOpen; render(); }
+    });
+    window.addEventListener("resize", fit);
+    render();
+  }
+
+  setup();
+</script>
+</body>
+</html>
