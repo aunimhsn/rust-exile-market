@@ -371,6 +371,9 @@
   .head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 8px; }
   .head .right { margin-left: auto; color: var(--weak); font-size: 12px; }
   .head .age { color: var(--faint); font-size: 12px; }
+  /* The search age goes under the OFFERS title. */
+  .title-stack { display: grid; gap: 4px; }
+  .title-stack .age { font-size: 11.5px; line-height: 1; }
 
   .name-row { display: flex; align-items: flex-start; gap: 12px; }
   .name {
@@ -622,7 +625,7 @@
         <div class="actions" style="justify-content:flex-start;gap:10px"><span class="spinner"></span>Searching the trade site…</div></div>`;
     }
     if (o.state === "wait") {
-      return `<div class="band b"><div class="head flat-head"><span class="label">${label}</span><span class="age">searched 1 min ago</span><span class="right"></span><div class="again waiting" title="Next search in 4 min">4 min</div></div>
+      return `<div class="band b"><div class="head flat-head"><span class="title-stack"><span class="label">${label}</span><span class="age">searched 1 min ago</span></span><span class="right"></span><div class="again waiting" title="Next search in 4 min">4 min</div></div>
         <div class="warn">Trade site limit: next search in 4 min.</div></div>`;
     }
     if (o.lines) {
@@ -635,7 +638,7 @@
     const rows = o.rows.map(r => `<div class="row-o ${r.sus ? "sus" : ""}">
         <span class="p">${r.v} ${orb(r.k)}</span>${three ? `<span>${r.stock}</span>` : ""}<span><i class="online"></i>${r.when}</span></div>`).join("");
     return `<div class="band b">
-      <div class="head flat-head"><span class="label">${label}</span><span class="age">${o.age || "searched 2 min ago"}</span><span class="right">${o.count}</span>${again}</div>
+      <div class="head flat-head"><span class="title-stack"><span class="label">${label}</span><span class="age">${o.age || "searched 2 min ago"}</span></span><span class="right">${o.count}</span>${again}</div>
       <div class="offers ${three ? "three" : ""}"><div class="cols">${o.columns.map(c => `<span>${c}</span>`).join("")}</div>${rows}</div>
       <div class="more">${ICON.down(13)}<span>Show the next 10</span></div></div>`;
   }
