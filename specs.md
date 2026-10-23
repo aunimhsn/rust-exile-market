@@ -6,7 +6,7 @@ rust-exile-market is a small desktop application that gives the price of a Path 
 
 - Users: Path of Exile 2 players on Windows, macOS and Linux, including Wayland desktops such as Bazzite (KDE Plasma), where the game runs through Proton.
 - Game client: English or French. The application understands the item text in both languages.
-- Volume: one item at a time, compared against the prices of a few thousand items of the selected league, and one search on the trade site per copied item.
+- Volume: one item at a time, compared against the prices of a few thousand items of the selected league, and one search on the trade site when the player asks for the offers.
 - Version 1 prices the items with a fixed name: currency and the other items traded on the currency exchange (fragments, essences, runes, soul cores, omens, uncut gems…), and unique items, and shows their offers on the trade site. Rare, magic and normal items are recognized, with their stats, but not priced yet: they come in a later version, which must not require rewriting the rest of the application.
 
 ## Design principles
@@ -60,13 +60,14 @@ When the item was copied with Ctrl+Alt+C, each modifier with a range shows a bar
 
 ### Offers
 
-When a currency or unique item is copied, the application searches the official trade site for it, in the selected league, among the sellers who are online, from the cheapest offer. It shows the first 10 offers; **Show the next 10** loads more.
+The offers block of a currency or unique item shows a **Search the offers** button. A click searches the official trade site for the item, in the selected league, among the sellers who are online, from the cheapest offer. It shows the first 10 offers; **Show the next 10** loads more. Copying an item never starts a search by itself: the player often copies many items in a row while sorting the loot.
 
 - Unique item: for each offer, the asked price with its currency icon and the listing time (e.g. "2 h ago"). When there is room (medium and wide layouts), the rolls of the variable stats of each offer too (e.g. Life, Strength, Dexterity); a roll in the top quarter of its range is shown in green.
 - Currency exchange item: for each offer, the price per unit, the stock and the listing time.
 - An offer under a quarter of the poe2scout price is struck through and marked with "?": it is usually bait or a mistake.
 - The header shows the count (e.g. "10 of 13 online") and a **Trade site** link to the same search in the browser.
-- While the search runs, "Searching the trade site…"; when the trade site limit is reached, "Trade site limit reached: new search in 8 s", and the search runs by itself when it is allowed again, for the last copied item only.
+- While the search runs, "Searching the trade site…".
+- After a search, the button becomes **Search again** and stays disabled for at least 10 seconds, longer when the limits announced by the trade site require it, with the remaining time on the button (e.g. "Search again · 8 s"). When the wait is long, a line explains it (e.g. "Trade site limit: next search in 4 min"). The wait applies to every item: copying another item doesn't reset it.
 - Rare, magic, normal and unidentified items are not searched in version 1.
 - The application never signs in to the player's account.
 
@@ -94,7 +95,6 @@ A gear button at the top right opens the settings:
 - **Language**: *Automatic* (default), *English* or *Français*.
   - *Automatic*: the interface starts in English, then follows the language of the last copied item: a French item switches it to French, an English item back to English.
   - *English* or *Français*: the interface stays in that language, whatever the language of the items.
-- **Search the offers on the trade site**: on by default. Off, the application makes no request to the trade site, and shows only the poe2scout prices.
 - **Always on top**: keeps the window above the other windows, for players with a single screen. Off by default.
 
 The settings are saved as soon as they change. The bottom of the settings shows the sentence "This product isn't affiliated with or endorsed by Grinding Gear Games in any way."
@@ -102,7 +102,7 @@ The settings are saved as soon as they change. The bottom of the settings shows 
 ### Data sources
 
 - The prices, the offer counts and the history come from a public price database of the Path of Exile 2 economy (see [roadmap.md](roadmap.md)). The application downloads the prices of the selected league at startup and when the league changes, then refreshes them every hour. A copied item is priced instantly from these local data, without a network request.
-- The offers and the item names in English and French come from the official trade site. The application makes one search per copied item, never in the background, and respects the limits announced by the trade site.
+- The offers and the item names in English and French come from the official trade site. The application searches only when the player clicks **Search the offers**, never in the background, and respects the limits announced by the trade site.
 - The application identifies itself to both, and keeps its requests to a minimum.
 
 ## Local files
@@ -126,6 +126,6 @@ None of these files are in the Git repository.
 | Clipboard unreadable (e.g. a Wayland desktop that forbids it) | The message "The clipboard can't be read" with a link to the help in the README. |
 | Copied text that starts like an item but can't be read | The message "This item couldn't be read", without crashing; the next copy works normally. |
 | Trade site unreachable | The offers block shows "The trade site can't be reached"; the price, the stats and the history are shown normally. |
-| Trade site limit reached | The offers block shows the waiting time; the search runs by itself when it is allowed again, for the last copied item only. |
+| Trade site refuses a search (HTTP 429, e.g. the same IP address also used the trade site in a browser) | The button waits for the delay given by the trade site (`Retry-After`), with the remaining time on it; the application never retries by itself. |
 | Item icon unavailable (no network, missing image) | The first letter of the item class stands in for the icon; the price is shown normally. |
 | Settings file unreadable | The default settings are used, and the file is rewritten at the next change. |

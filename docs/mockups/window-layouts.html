@@ -219,6 +219,7 @@
     padding: 6px 12px; font: inherit; cursor: pointer;
   }
   .button:hover { background: var(--egui-widget-hover); }
+  .button:disabled { color: var(--egui-weak); cursor: default; background: var(--egui-panel); border: 1px solid var(--egui-widget); }
   .link { color: var(--egui-link); cursor: pointer; font-size: 12px; text-transform: none; letter-spacing: 0; }
 
   /* Offers from the trade site. */
@@ -286,10 +287,10 @@
   </label>
   <label>Trade site offers
     <div class="segmented" id="offers-state">
-      <button type="button" data-value="results">Results</button>
+      <button type="button" data-value="idle">Not searched</button>
       <button type="button" data-value="loading">Searching</button>
-      <button type="button" data-value="limited">Rate limited</button>
-      <button type="button" data-value="disabled">Disabled</button>
+      <button type="button" data-value="results">Results</button>
+      <button type="button" data-value="limited">Long wait</button>
     </div>
   </label>
   <label>Headline currency
@@ -319,7 +320,7 @@
   <h2>Sources</h2>
   <ul>
     <li><strong>Price, offer count and history</strong>: poe2scout, refreshed every hour.</li>
-    <li><strong>Offers</strong>: the trade site, one search when an item is copied. Prices far below the poe2scout price (under a quarter of it) are struck through and marked with a question mark: they are usually bait or mistakes.</li>
+    <li><strong>Offers</strong>: the trade site, one search when the player clicks <em>Search the offers</em>. The button then stays disabled for at least 10 seconds, longer when the limits announced by the trade site require it, with the countdown on the button. Prices far below the poe2scout price (under a quarter of it) are struck through and marked with a question mark: they are usually bait or mistakes.</li>
     <li><strong>Item stats</strong>: the copied text. The roll bars need the advanced copy (Ctrl+Alt+C), which gives the range of each stat.</li>
   </ul>
   <h2>Proposals to decide</h2>
@@ -378,7 +379,6 @@
       updated: "Prices updated 12 minutes ago",
       updatedCached: "Prices from 3 hours ago (offline)",
       source: "Prices: poe2scout · Offers: trade site",
-      sourceNoTrade: "Prices: poe2scout",
       stack: (n, max) => `Stack Size: ${n}/${max}`,
       corrupted: "Corrupted",
       unidentified: "Unidentified",
@@ -395,8 +395,6 @@
       language: "Language",
       automatic: "Automatic (follows the game)",
       alwaysOnTop: "Always on top",
-      useTrade: "Search the offers on the trade site",
-      useTradeHint: "One search per copied item, within the limits of the trade site.",
       disclaimer: "This product isn't affiliated with or endorsed by Grinding Gear Games in any way.",
       offersTitle: "Offers",
       onlineCount: (shown, total) => `${shown} of ${total} online`,
@@ -407,8 +405,10 @@
       ago: minutes => minutes < 60 ? `${minutes} min ago` : minutes < 1440 ? `${Math.round(minutes / 60)} h ago` : `${Math.round(minutes / 1440)} d ago`,
       suspicious: "Far below the market price: probably bait or a mistake",
       searching: "Searching the trade site…",
-      limited: s => `Trade site limit reached: new search in ${s} s.`,
-      disabled: "Offers are turned off in the settings.",
+      searchOffers: "Search the offers",
+      searchHint: "One search per click, within the limits of the trade site.",
+      searchAgain: wait => `Search again · ${wait}`,
+      limited: wait => `Trade site limit: next search in ${wait}.`,
       noOffers: "No offer online.",
       showMore: "Show the next 10",
     },
@@ -433,7 +433,6 @@
       updated: "Prix mis à jour il y a 12 minutes",
       updatedCached: "Prix d'il y a 3 heures (hors ligne)",
       source: "Prix : poe2scout · Offres : site d'échange",
-      sourceNoTrade: "Prix : poe2scout",
       stack: (n, max) => `Taille de la pile : ${n}/${max}`,
       corrupted: "Corrompu",
       unidentified: "Non identifié",
@@ -450,8 +449,6 @@
       language: "Langue",
       automatic: "Automatique (suit le jeu)",
       alwaysOnTop: "Toujours au premier plan",
-      useTrade: "Chercher les offres sur le site d'échange",
-      useTradeHint: "Une recherche par objet copié, dans les limites du site d'échange.",
       disclaimer: "Ce produit n'est ni affilié à Grinding Gear Games ni approuvé par Grinding Gear Games.",
       offersTitle: "Offres",
       onlineCount: (shown, total) => `${shown} sur ${total} en ligne`,
@@ -462,8 +459,10 @@
       ago: minutes => minutes < 60 ? `il y a ${minutes} min` : minutes < 1440 ? `il y a ${Math.round(minutes / 60)} h` : `il y a ${Math.round(minutes / 1440)} j`,
       suspicious: "Très en dessous du prix du marché : sans doute un appât ou une erreur",
       searching: "Recherche sur le site d'échange…",
-      limited: s => `Limite du site d'échange atteinte : nouvelle recherche dans ${s} s.`,
-      disabled: "Les offres sont désactivées dans les réglages.",
+      searchOffers: "Chercher les offres",
+      searchHint: "Une recherche par clic, dans les limites du site d'échange.",
+      searchAgain: wait => `Relancer · ${wait}`,
+      limited: wait => `Limite du site d'échange : prochaine recherche dans ${wait}.`,
       noOffers: "Aucune offre en ligne.",
       showMore: "Afficher les 10 suivantes",
     },
@@ -797,21 +796,24 @@
   function renderOffers(item, t, layout) {
     const offers = item.tradeOffers || item.exchangeOffers;
     if (!offers) return "";
+    // Searches only run on a click; the button then waits for the trade site limits.
+    if (state.offersState === "idle") {
+      return `<div class="card">${offersHeader(t)}
+        <button class="button" type="button">⌕ ${t.searchOffers}</button>
+        <div class="offers-note">${t.searchHint}</div></div>`;
+    }
     if (state.offersState === "loading") {
       return `<div class="card">${offersHeader(t)}<div class="status"><span class="spinner"></span>${t.searching}</div></div>`;
     }
-    if (state.offersState === "limited") {
-      return `<div class="card">${offersHeader(t)}<div class="status warn">⏳ ${t.limited(8)}</div></div>`;
-    }
-    if (state.offersState === "disabled") {
-      return `<div class="card">${offersHeader(t)}<div class="status">${t.disabled}</div></div>`;
-    }
+    const wait = state.offersState === "limited" ? "4 min" : "8 s";
+    const again = `<button class="button" type="button" disabled>↻ ${t.searchAgain(wait)}</button>`;
+    const warning = state.offersState === "limited" ? `<div class="status warn">⏳ ${t.limited(wait)}</div>` : "";
     if (!offers.list.length) {
-      return `<div class="card">${offersHeader(t, offers.list, offers.total)}<div class="status">${t.noOffers}</div></div>`;
+      return `<div class="card">${offersHeader(t, offers.list, offers.total)}<div class="status">${t.noOffers}</div>${warning}${again}</div>`;
     }
     const table = item.exchangeOffers ? exchangeTable(offers, t) : tradeTable(item, offers, t, layout);
     const more = offers.total > offers.list.length ? `<div class="offers-note"><span class="link">${t.showMore}</span></div>` : "";
-    return `<div class="card">${offersHeader(t, offers.list, offers.total)}<div class="offers-scroll">${table}</div>${more}</div>`;
+    return `<div class="card">${offersHeader(t, offers.list, offers.total)}<div class="offers-scroll">${table}</div>${more}${warning}${again}</div>`;
   }
 
   // Unique items: one row per offer, with the rolls of the item when there is room.
@@ -889,7 +891,6 @@
 
   function renderSettings(t) {
     const radio = (on, label) => `<div class="radio ${on ? "on" : ""}"><i></i>${label}</div>`;
-    const tradeOn = state.offersState !== "disabled";
     return `
       <aside class="settings">
         <div style="display:flex;justify-content:space-between;align-items:center">
@@ -899,10 +900,6 @@
         <div class="field"><span>${t.league}</span><div class="combo"><span>${LEAGUE}</span><span>⏷</span></div></div>
         <div class="field"><span>${t.language}</span>
           ${radio(true, t.automatic)}${radio(false, "English")}${radio(false, "Français")}
-        </div>
-        <div class="field">
-          <div class="check ${tradeOn ? "on" : ""}"><i>${tradeOn ? "✓" : ""}</i>${t.useTrade}</div>
-          <p>${t.useTradeHint}</p>
         </div>
         <div class="field"><div class="check"><i></i>${t.alwaysOnTop}</div></div>
         <p class="disclaimer">${t.disclaimer}</p>
@@ -947,7 +944,7 @@
     }
 
     const settingsFull = state.settingsOpen && layout === "narrow";
-    const source = state.offersState === "disabled" ? t.sourceNoTrade : t.source;
+    const source = t.source;
     win.innerHTML = `
       <div class="win-header">
         <div class="league">${t.league} <strong>${LEAGUE}</strong></div>
@@ -992,7 +989,7 @@
     state.height = number("h", 320, 1080) ?? state.height;
     if (params.get("scenario") in SCENARIOS) state.scenario = params.get("scenario");
     if (params.get("lang") in STRINGS) state.language = params.get("lang");
-    if (["results", "loading", "limited", "disabled"].includes(params.get("offers"))) state.offersState = params.get("offers");
+    if (["idle", "loading", "results", "limited"].includes(params.get("offers"))) state.offersState = params.get("offers");
     if (params.get("headline") === "none") state.headline = "none";
     state.settingsOpen = params.get("settings") === "1";
   }

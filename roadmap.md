@@ -53,11 +53,10 @@ The trade site announces its limits per IP address in the `X-Rate-Limit-*` heade
 
 Guardrails:
 
-- One search only on a player's action: a copied item makes at most one search and one fetch; **Show the next 10** makes one more fetch. Nothing runs in the background.
-- Read the limits from the headers of every response, never from constants, and wait before reaching them; after a refusal (HTTP 429), wait for the `Retry-After` delay without retrying.
+- A search only runs when the player clicks **Search the offers**: copying an item never searches by itself (sorting the loot copies many items in a row). One click makes one search and one fetch; **Show the next 10** makes one more fetch. Nothing runs in the background.
+- After each search, the button stays disabled for at least 10 seconds, and longer until every window of the limits allows a new search. The limits are read from the headers of every response (the IP address may share them with a browser or another tool), never from constants; after a refusal (HTTP 429), the button waits for the `Retry-After` delay, and the application never retries by itself.
 - Never send a `POESESSID` session cookie: the searches work without an account.
 - Send a `User-Agent` with the application name, its version and the repository address.
-- A setting turns the trade site off; the application then uses poe2scout only.
 - The README states which services the application calls, and this risk.
 
 ## Steps
@@ -72,7 +71,7 @@ Guardrails:
 - [ ] **7. French item names**: trade site data in both languages, cached for a day, and the French to English dictionary used to find the price of a French item.
 - [ ] **8. Price display**: headline price, price in the three currencies, stack, offer count and uncertainty warning, special cases, trade site button, status bar, icons (orbs embedded from `assets/`, item icons loaded from the CDN and cached, following the [Images](#images) rules).
 - [ ] **9. Item stats**: requirements, description, implicit and explicit modifiers, Corrupted, roll bars from the advanced copy.
-- [ ] **10. Trade site client**: search, fetch and currency exchange, limits read from the headers, waiting and retry, setting to turn it off, following the [Trade site usage](#trade-site-usage) rules.
-- [ ] **11. Offers display**: offers of unique items with their rolls, bulk offers of currency items, suspicious offers, next 10, searching, rate limited and disabled states.
+- [ ] **10. Trade site client**: search, fetch and currency exchange, limits read from the headers, waiting time before the next search, following the [Trade site usage](#trade-site-usage) rules.
+- [ ] **11. Offers display**: **Search the offers** button and its waiting time, offers of unique items with their rolls, bulk offers of currency items, suspicious offers, next 10, searching and long wait states.
 - [ ] **12. Responsive layout and price history**: narrow, medium and wide layouts, 7-day history chart in the wide layout.
 - [ ] **13. First release**: executable name (without the `rust-` prefix), application icon, README usage, Wayland help and services called, version 0.1.0.
