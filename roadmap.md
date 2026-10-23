@@ -18,6 +18,16 @@ Implementation steps of the features described in [specs.md](specs.md). Each ste
 | Price history chart | [`egui_plot`](https://github.com/emilk/egui_plot) | Made for egui, no other dependency. |
 | Releases | GitHub Actions workflow triggered by version tags, portable archives (no installer) | Builds every system on its own runner and publishes the archives with `gh release`, without extra tooling. A portable executable is enough for version 1. The Linux target moves from musl to glibc in step 1: a statically linked musl executable can't load the system's graphics libraries. |
 
+## poe2scout usage
+
+poe2scout limits its API to 60 requests per minute per IP address, in a sliding window, without a queue ([source](https://github.com/poe2scout/poe2scout/blob/main/net/Poe2scout.Api/Ioc/ServiceCollectionExtensions.cs)). The limit applies to each player's machine, not to the application as a whole. A full refresh is about 20 requests (20 categories, 250 items per page), once an hour; copying an item makes no request. The application still follows these rules:
+
+- Space the requests of a refresh: one per second at most.
+- When the API refuses a request, wait and retry at the next attempt, without insisting.
+- Keep the loaded price histories in memory: copying an item again makes no new request.
+- Send a `User-Agent` with the application name, its version and the repository address.
+- Tell the poe2scout maintainers about the application, on their Discord (linked from [poe2scout.com](https://poe2scout.com)), when the repository reaches 10 stars.
+
 ## Steps
 
 - [ ] **1. Application window**: empty resizable egui window with the header (league placeholder, gear button), X11 backend on Linux, no console window on Windows, Linux release target moved to glibc.
@@ -25,7 +35,7 @@ Implementation steps of the features described in [specs.md](specs.md). Each ste
 - [ ] **3. Item parser**: read the item class, rarity, name, base type, stack size and modifiers, in English and in French, with tests on real copied items.
 - [ ] **4. Interface translations**: Fluent files in English and French, automatic language from the last copied item.
 - [ ] **5. Settings**: gear panel (language, always on top), saved in the configuration directory, window size and position restored.
-- [ ] **6. Price data**: poe2scout client, leagues and league setting, download per category, cache, hourly refresh, error handling.
+- [ ] **6. Price data**: poe2scout client, leagues and league setting, download per category, cache, hourly refresh, error handling, following the [poe2scout usage](#poe2scout-usage) rules.
 - [ ] **7. French item names**: French to English dictionary from the trade site data, used to find the price of a French item.
 - [ ] **8. Price display**: price in the three currencies, stack, offers and uncertainty warning, data age, special cases, trade site link.
 - [ ] **9. Responsive layout and price history**: narrow, medium and wide layouts, 7-day history chart in the wide layout.
