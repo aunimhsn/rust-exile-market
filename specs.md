@@ -56,13 +56,23 @@ The stats of the copied item are shown under its name, as in the game tooltip:
 - the implicit modifiers, then the explicit modifiers, in the game's modifier color;
 - "Corrupted", in red, for a corrupted item.
 
-When the item was copied with Ctrl+Alt+C, each modifier with a range shows a bar of where its value falls in the range, and the range itself (e.g. `40–60`). In the narrow layout, the stats are folded under "Stats (6)"; a click unfolds them.
+Each modifier with a range shows a bar of where its value falls in the range, and the range itself (e.g. `40–60`). The ranges of unique items come from the price database; for the other items, they come from the advanced copy (Ctrl+Alt+C). In the narrow layout, the stats are folded under "Stats (6)"; a click unfolds them.
+
+### Stat filters (unique items)
+
+The value of a unique item depends on its rolls: the offers search uses the stats of the copied item as filters, like the trade site, so that all the offers found are comparable.
+
+- In the stats of a unique item, each modifier with a range has a checkbox and a minimum value. They are checked by default, with the value of the copied item as minimum; the maximum is empty. The player can uncheck a stat or change its minimum before searching.
+- Modifiers without a range (e.g. "When you kill a Rare monster, you gain its Modifiers for 60 seconds") are always the same on every copy: they are not filters.
+- The corrupted state is a filter too: a corrupted item is compared with corrupted offers only, a clean one with clean offers only.
+- The header of the stats shows the number of active filters (e.g. "Stats (6) · 3 filters"), also when the stats are folded.
+- Changing a filter doesn't search: the player clicks **Search again**, within its waiting time.
 
 ### Offers
 
 The offers block of a currency or unique item shows a **Search the offers** button. A click searches the official trade site for the item, in the selected league, among the sellers who are online, from the cheapest offer. It shows the first 10 offers; **Show the next 10** loads more. Copying an item never starts a search by itself: the player often copies many items in a row while sorting the loot.
 
-- Unique item: for each offer, the asked price with its currency icon and the listing time (e.g. "2 h ago"). When there is room (medium and wide layouts), the rolls of the variable stats of each offer too (e.g. Life, Strength, Dexterity); a roll in the top quarter of its range is shown in green.
+- Unique item: the offers that match the [stat filters](#stat-filters-unique-items); for each offer, the asked price with its currency icon and the listing time (e.g. "2 h ago"). The filters make the offers comparable, so their stats are not shown.
 - Currency exchange item: for each offer, the price per unit, the stock and the listing time.
 - An offer under a quarter of the poe2scout price is struck through and marked with "?": it is usually bait or a mistake.
 - The header shows the count (e.g. "10 of 13 online") and a **Trade site** link to the same search in the browser.
@@ -81,7 +91,7 @@ When the window is wide enough, it also shows a chart of the item's price over t
 |---|---|
 | Narrow (under about 500 px) | One column: the item with its stats folded, the price, the offers with their price and listing time only. |
 | Medium | Two columns: the item and its stats on the left, the price and the offers on the right. |
-| Wide (about 1000 px and more, e.g. maximized on a second screen) | Three columns: the item and its stats, the price and its 7-day history, the offers with the rolls of each one. |
+| Wide (about 1000 px and more, e.g. maximized on a second screen) | Three columns: the item and its stats, the price and its 7-day history, the offers. |
 
 - The window can be resized, maximized and moved to another screen. Its size and position are restored at the next launch.
 - Before the first item, the window explains how to use the application: "Copy an item in the game with Ctrl+C".
