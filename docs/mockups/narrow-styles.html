@@ -447,8 +447,14 @@
     flex: none; width: 56px; display: grid; place-items: center;
     background: var(--accent); color: var(--on-accent, var(--bg-a));
   }
-  .search-text { display: grid; align-content: center; gap: 4px; padding: 12px 14px; font-size: 13px; }
-  [data-button="band"] .search-block { background: var(--bg-a); color: var(--accent); box-shadow: inset -1px 0 0 var(--control-line); }
+  .search-text { flex: 1; display: grid; align-content: center; gap: 4px; padding: 12px 14px; font-size: 13px; }
+  [data-button="band"] .search-block, [data-button="band"] .again.ready { background: var(--bg-a); color: var(--accent); box-shadow: inset 1px 0 0 var(--control-line); }
+  /* Search again: a flat block in the bottom right corner of the offers band; the countdown, then the refresh icon. */
+  .actions.flat { margin: 10px -14px -12px 0; align-items: stretch; }
+  .actions.flat > .link { align-self: center; }
+  .again { flex: none; width: 56px; height: 40px; display: grid; place-items: center; font: 600 13px/1 var(--font-number); }
+  .again.waiting { background: var(--control); color: var(--weak); }
+  .again.ready { background: var(--accent); color: var(--on-accent, var(--bg-a)); }
   /* Test: the search button on the background of the price block, in white. */
   [data-button="band"] .button.primary { background: var(--bg-a); border-color: var(--control-line); color: var(--accent); }
   .button.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent, var(--bg-a)); font-weight: 700; }
@@ -574,12 +580,12 @@
     const fr = lang === "fr";
     const label = fr ? "Offres" : "Offers";
     if (o.state === "idle") {
-      // Like the header: a flat block the height of the band, glued to its left edge.
+      // Like the header: a flat block the height of the band, glued to its right edge.
       const action = fr ? "Chercher les offres" : "Search the offers";
       return `<div class="b search-band">
-        <div class="search-block" title="${action}" aria-label="${action}">${ICON.search(22)}</div>
         <div class="search-text"><span class="label">${label}</span>
           <div class="muted">${fr ? "Une recherche par clic, dans les limites du site d'échange." : "One search per click, within the limits of the trade site."}</div></div>
+        <div class="search-block" title="${action}" aria-label="${action}">${ICON.search(22)}</div>
       </div>`;
     }
     if (o.state === "loading") {
@@ -589,18 +595,21 @@
     if (o.state === "wait") {
       return `<div class="band b"><div class="head"><span class="label">${label}</span><span class="age">searched 1 min ago</span></div>
         <div class="warn">⏳ Trade site limit: next search in 4 min.</div>
-        <div class="actions"><span></span><span class="button wait">${ICON.refresh(14)}Search again · 4 min</span></div></div>`;
+        <div class="actions flat"><span></span><div class="again waiting" title="Next search in 4 min">4 min</div></div></div>`;
     }
     if (o.lines) {
       return `<div class="band b"><div class="head"><span class="label">${label}</span></div>${o.lines.map(l => `<div class="msg muted">${l}</div>`).join("")}</div>`;
     }
     const three = o.columns.length === 3;
+    const again = o.ready
+      ? `<div class="again ready" title="Search again">${ICON.refresh(18)}</div>`
+      : `<div class="again waiting" title="Next search in 8 s">8 s</div>`;
     const rows = o.rows.map(r => `<div class="row-o ${r.sus ? "sus" : ""}">
         <span class="p">${r.v} ${orb(r.k)}</span>${three ? `<span>${r.stock}</span>` : ""}<span><i class="online"></i>${r.when}</span></div>`).join("");
     return `<div class="band b">
       <div class="head"><span class="label">${label}</span><span class="age">${o.age || "searched 2 min ago"}</span><span class="right">${o.count}</span></div>
       <div class="offers ${three ? "three" : ""}"><div class="cols">${o.columns.map(c => `<span>${c}</span>`).join("")}</div>${rows}</div>
-      <div class="actions"><span class="link">Show the next 10</span><span class="button wait">${ICON.refresh(14)}Search again · 8 s</span></div></div>`;
+      <div class="actions flat"><span class="link">Show the next 10</span>${again}</div></div>`;
   }
 
   const empty = `<div class="empty b"><img class="big-logo" src="../../assets/logo/exile-market.png" alt="">Copy an item in the game with<div class="keys"><span class="key">Ctrl</span>+<span class="key">C</span></div>The price shows up here.</div>`;
@@ -682,6 +691,7 @@
     ]],
     ["Offer states", [
       ["Searching the offers", win(topBar(), item(HH), price(HH_PRICE), offers({ state: "loading" }), foot())],
+      ["Ready to search again", win(topBar(), item(HH), price(HH_PRICE), offers({ ...HH_OFFERS, ready: true, age: "searched 5 min ago" }), foot("poe2scout 12 min ago · GGG trade 5 min ago"))],
       ["Long wait before the next search", win(topBar(), item(HH), price(HH_PRICE), offers({ state: "wait" }), foot("poe2scout 12 min ago · GGG trade: next search in 4 min"))],
       ["No offer online", win(topBar(), item(HH), price(HH_PRICE), offers({ lines: ["No offer online with these filters.", "Uncheck a stat or lower a minimum, then search again."] }), foot())],
       ["No price found", win(topBar(), item({ rarity: "unique", name: "Strugglescream", base: "Stellar Amulet", cls: "Amulets", tags: ["ilvl 76"], statsLabel: "Stats (5)", filters: "2 filters" }),
