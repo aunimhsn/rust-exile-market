@@ -386,13 +386,15 @@
   .tag { padding: 1px 7px; border-radius: var(--radius); background: var(--control); color: var(--text); font-size: 12px; }
   .tag.corrupted { color: #fff; background: #6b1d19; }
   .summary { margin-top: 8px; font-size: 13px; }
-  .stats-toggle { margin-top: 8px; color: var(--weak); font-size: 13px; display: flex; align-items: center; gap: 7px; }
-  .stats-toggle .ico { flex: none; transition: transform .15s; }
-  /* Optical alignment of the stats text on its chevron: 0.5 px up, chosen by eye on the owner's screen. */
-  .stats-toggle > span { position: relative; top: -0.5px; }
-  .stats-toggle.open .ico { transform: rotate(90deg); }
+  /* Stats toggle: a pill like "Check on trade", and the number of filters next to it. */
+  .stats-toggle { margin-top: 10px; display: flex; align-items: center; gap: 10px; font-size: 12px; }
+  .pill {
+    padding: 4px 10px; border-radius: var(--radius); background: var(--control); color: var(--text);
+    font-size: 12px; font-weight: 600; line-height: 1.2; white-space: nowrap; cursor: pointer;
+  }
+  .pill:hover { background: var(--control-line); color: var(--accent); }
+  .stats-toggle .filters { color: var(--accent); font-weight: 600; }
   .ico { display: block; }
-  .stats-toggle b { color: var(--accent); font-weight: 600; }
 
   .rarity-unique { color: var(--rarity-unique); }
   .rarity-rare { color: var(--rarity-rare); }
@@ -546,10 +548,17 @@
 
   function item(it, unfolded = false) {
     const tags = (it.tags || []).map(t => `<span class="tag ${/^Corrupt|^Corrompu/.test(t) ? "corrupted" : ""}">${t}</span>`).join("");
-    const filters = it.filters ? ` · <b>${it.filters}</b>` : "";
+    const filters = it.filters ? `<span class="filters">${it.filters}</span>` : "";
+    // "Show 6 stats" when folded, "Hide stats" when unfolded; French when the label is French.
+    const count = Number((it.statsLabel || "").match(/\d+/)?.[0] || 0);
+    const fr = /Statistiques/.test(it.statsLabel || "");
+    const plural = count > 1 ? "s" : "";
+    const pill = unfolded => unfolded
+      ? (fr ? "Masquer les stats" : "Hide stats")
+      : (fr ? `Afficher ${count} stat${plural}` : `Show ${count} stat${plural}`);
     let stats = "";
     if (it.stats && unfolded) {
-      stats = `<div class="stats-toggle open">${ICON.chevron(12)}<span>${it.statsLabel}${filters}</span></div><div class="stats">${it.stats.map(row => {
+      stats = `<div class="stats-toggle open"><span class="pill">${pill(true)}</span>${filters}</div><div class="stats">${it.stats.map(row => {
         if (row === "sep") return `<div class="sep"></div>`;
         if (row.req) return `<div class="req"><span>${row.req}</span>${row.min ? "<span>min</span>" : ""}</div>`;
         if (row.prop) return `<div class="prop"><span>${row.prop[0]}:</span> ${row.prop[1]}</div>`;
@@ -560,7 +569,7 @@
         return `<div class="mod ${input ? "" : "fixed"}">${check}<span>${row.mod}</span>${input}${roll}</div>`;
       }).join("")}</div>`;
     } else if (it.statsLabel) {
-      stats = `<div class="stats-toggle">${ICON.chevron(12)}<span>${it.statsLabel}${filters}</span></div>`;
+      stats = `<div class="stats-toggle"><span class="pill">${pill(false)}</span>${filters}</div>`;
     }
     return `
       <div class="band b item-band">
