@@ -442,6 +442,13 @@
   .link { color: var(--accent); font-weight: 600; }
   .button { padding: 6px 12px; display: inline-flex; gap: 8px; align-items: center; }
   .button.primary { padding: 8px 16px; }
+  .search-band { display: flex; align-items: stretch; }
+  .search-block {
+    flex: none; width: 56px; display: grid; place-items: center;
+    background: var(--accent); color: var(--on-accent, var(--bg-a));
+  }
+  .search-text { display: grid; align-content: center; gap: 4px; padding: 12px 14px; font-size: 13px; }
+  [data-button="band"] .search-block { background: var(--bg-a); color: var(--accent); box-shadow: inset -1px 0 0 var(--control-line); }
   /* Test: the search button on the background of the price block, in white. */
   [data-button="band"] .button.primary { background: var(--bg-a); border-color: var(--control-line); color: var(--accent); }
   .button.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent, var(--bg-a)); font-weight: 700; }
@@ -480,7 +487,7 @@
   };
   const VARIANTS = {
     theme: { label: "Style", options: Object.fromEntries(Object.entries(THEMES).map(([k, v]) => [k, v.title])), fallback: "slate" },
-    button: { label: "Search button", options: { filled: "White", band: "Price band" }, fallback: "filled" },
+    button: { label: "Search block", options: { filled: "White", band: "Price band" }, fallback: "filled" },
     league: { label: "League", options: { softcore: "Softcore", hardcore: "Hardcore" }, fallback: "softcore" },
     header: { label: "Header", options: { emblem: "Emblem", logo: "Logo 38 px", large: "Logo 56 px", text: "Name in text" }, fallback: "emblem" },
   };
@@ -567,9 +574,13 @@
     const fr = lang === "fr";
     const label = fr ? "Offres" : "Offers";
     if (o.state === "idle") {
-      return `<div class="band b"><div class="head"><span class="label">${label}</span></div>
-        <span class="button primary">${ICON.search(17)}${fr ? "Chercher les offres" : "Search the offers"}</span>
-        <div class="line muted">${fr ? "Une recherche par clic, dans les limites du site d'échange." : "One search per click, within the limits of the trade site."}</div></div>`;
+      // Like the header: a flat block the height of the band, glued to its left edge.
+      const action = fr ? "Chercher les offres" : "Search the offers";
+      return `<div class="b search-band">
+        <div class="search-block" title="${action}" aria-label="${action}">${ICON.search(22)}</div>
+        <div class="search-text"><span class="label">${label}</span>
+          <div class="muted">${fr ? "Une recherche par clic, dans les limites du site d'échange." : "One search per click, within the limits of the trade site."}</div></div>
+      </div>`;
     }
     if (o.state === "loading") {
       return `<div class="band b"><div class="head"><span class="label">${label}</span></div>
