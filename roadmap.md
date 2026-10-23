@@ -62,7 +62,7 @@ Guardrails:
 
 ## Steps
 
-- [ ] **0. Mock-ups**: interactive HTML mock-up in `docs/mockups/` of the narrow, medium and wide layouts and of the settings panel, for each kind of item (currency stack, unique, rare not priced yet, errors), with the item stats and the trade site offers; the chosen layouts and colors are written in specs.md.
+- [ ] **0. Mock-ups**: editable Excalidraw wireframes in `docs/wireframes/` for the layout, then an interactive HTML mock-up in `docs/mockups/` of the narrow, medium and wide layouts and of the settings panel, for each kind of item (currency stack, unique, rare not priced yet, errors), with the item stats and the trade site offers; the chosen layouts and colors are written in specs.md.
 - [ ] **1. Application window**: empty resizable egui window with the header (league placeholder, gear button), X11 backend on Linux, no console window on Windows, Linux release target moved to glibc.
 - [ ] **2. Clipboard watching**: detect the copied Path of Exile 2 item texts and show them raw in the window; verify on Bazzite KDE with the game, and on Windows.
 - [ ] **3. Item parser**: read the item class, rarity, name, base type, stack size and modifiers, in English and in French, with tests on real copied items.
