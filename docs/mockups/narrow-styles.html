@@ -7,8 +7,8 @@
 <!--
   Style proposals for the narrow layout (roadmap step 0): every window of the
   wireframe docs/wireframes/window-layouts.excalidraw, in one of three styles.
-  Switch between the styles with the tabs at the top, or open one directly
-  with ?theme=forge, ?theme=slate or ?theme=compact.
+  Switch between the styles and the variants with the tabs at the top, or open
+  them directly, e.g. ?theme=slate&button=band&header=large.
   All prices and offers are sample data. Serve the repository root so that the
   orb icons of assets/currencies/ load:
     python3 -m http.server 8765 --bind 127.0.0.1
@@ -305,6 +305,11 @@
   }
   .styles button:hover { color: #fff; border-color: #444a50; }
   .styles button[aria-pressed="true"] { background: #f2f5f9; border-color: #f2f5f9; color: #0f1216; }
+  .styles .group { display: flex; gap: 6px; align-items: center; }
+  .styles .group + .group { margin-left: 18px; padding-left: 18px; border-left: 1px solid #2a2d31; }
+  .styles .group > span { color: #6c737a; font: 500 12px/1 system-ui, sans-serif; margin-right: 4px; }
+  .file-warning { margin: 16px 40px 0; padding: 12px 16px; border-radius: 6px; background: #3a2a10; color: #f0c674; font: 14px/1.5 system-ui, sans-serif; max-width: 900px; }
+  .file-warning code { color: #fff; }
   .sheet > header h1 { margin: 0; color: #e8e8e8; font: 600 28px/1.2 system-ui, sans-serif; }
   .sheet > header p { margin: 6px 0 0; max-width: 90ch; }
   .section h2 { margin: 0 0 14px; color: #c8c8c8; font: 600 16px/1.2 system-ui, sans-serif; text-transform: uppercase; letter-spacing: .08em; }
@@ -325,6 +330,11 @@
 
   .top { display: flex; align-items: center; gap: 8px; padding: 8px 10px 8px 14px; }
   .logo { height: 38px; display: block; }
+  .wordmark { display: none; font: 800 15px/1 var(--font-display); letter-spacing: .02em; color: var(--accent); }
+  [data-header="large"] .top { padding-block: 6px; }
+  [data-header="large"] .logo { height: 56px; }
+  [data-header="text"] .logo { display: none; }
+  [data-header="text"] .wordmark { display: block; }
   .empty .big-logo { width: 150px; display: block; margin: 0 auto 18px; opacity: .9; }
   .spacer { flex: 1; }
   .select, .icon, .button, .input {
@@ -355,7 +365,10 @@
   .tag { padding: 1px 7px; border-radius: var(--radius); background: var(--control); color: var(--text); font-size: 12px; }
   .tag.corrupted { color: #fff; background: #6b1d19; }
   .summary { margin-top: 8px; font-size: 13px; }
-  .stats-toggle { margin-top: 8px; color: var(--weak); font-size: 13px; }
+  .stats-toggle { margin-top: 8px; color: var(--weak); font-size: 13px; display: flex; align-items: center; gap: 7px; }
+  .stats-toggle .ico { flex: none; transition: transform .15s; }
+  .stats-toggle.open .ico { transform: rotate(90deg); }
+  .ico { display: block; }
   .stats-toggle b { color: var(--accent); font-weight: 600; }
 
   .rarity-unique { color: var(--rarity-unique); }
@@ -409,6 +422,9 @@
   .actions { display: flex; align-items: center; justify-content: space-between; margin-top: 10px; }
   .link { color: var(--accent); font-weight: 600; }
   .button { padding: 6px 12px; display: inline-flex; gap: 8px; align-items: center; }
+  .button.primary { padding: 8px 16px; }
+  /* Test: the search button on the background of the price block, in white. */
+  [data-button="band"] .button.primary { background: var(--bg-a); border-color: var(--control-line); color: var(--accent); }
   .button.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent, var(--bg-a)); font-weight: 700; }
   .button.wait { color: var(--faint); }
   .spinner { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--control-line); border-top-color: var(--accent); }
@@ -429,7 +445,12 @@
 </style>
 </head>
 <body>
-<nav class="styles" id="styles" aria-label="Styles"></nav>
+<nav class="styles" id="styles" aria-label="Variants"></nav>
+<div class="file-warning" id="file-warning" hidden>
+  This page is open as a file: the browser can't reach <code>assets/</code>, so the orbs and the logo are missing.
+  Serve the repository root (<code>python3 -m http.server 8765 --bind 127.0.0.1</code>) and open
+  <code>http://127.0.0.1:8765/docs/mockups/narrow-styles.html</code>.
+</div>
 <div class="sheet" id="sheet"></div>
 
 <script>
@@ -438,16 +459,31 @@
     slate: { title: "B · Slate", text: "Modern and sharp: one geometric face (Manrope), numbers in a monospace face (JetBrains Mono), white as the main color so that the colors stay for the item rarities, cool near-black grays." },
     compact: { title: "C · Compact", text: "Dense, made for the narrow width: condensed capitals for the names (Barlow Semi Condensed), Barlow for the text, amber accent, neutral near-black grays." },
   };
-  const requested = new URLSearchParams(location.search).get("theme");
-  let theme = requested in THEMES ? requested : "slate";
+  const VARIANTS = {
+    theme: { label: "Style", options: Object.fromEntries(Object.entries(THEMES).map(([k, v]) => [k, v.title])), fallback: "slate" },
+    button: { label: "Search button", options: { filled: "White", band: "Price band" }, fallback: "filled" },
+    header: { label: "Header", options: { logo: "Logo 38 px", large: "Logo 56 px", text: "Name in text" }, fallback: "logo" },
+  };
+  const params = new URLSearchParams(location.search);
+  const chosen = Object.fromEntries(Object.entries(VARIANTS).map(([key, v]) => [key, params.get(key) in v.options ? params.get(key) : v.fallback]));
+  let theme = chosen.theme;
 
   const ORB = { div: "divine-orb", chaos: "chaos-orb", ex: "exalted-orb" };
   const orb = key => `<img src="../../assets/currencies/${ORB[key]}.png" alt="">`;
 
+  // Icons, drawn with the current text color.
+  const svg = (size, body) => `<svg class="ico" width="${size}" height="${size}" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${body}</svg>`;
+  const ICON = {
+    search: size => svg(size, '<circle cx="7" cy="7" r="4.6"/><path d="M10.4 10.4 14 14"/>'),
+    refresh: size => svg(size, '<path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9"/><path d="M13.6 2.6v3.3h-3.3"/>'),
+    chevron: size => svg(size, '<path d="M6 4l4 4-4 4"/>'),
+  };
+
   // Blocks.
   const topBar = (settings = false, league = "Forbidden Rites") => `
     <div class="top a">
-      <img class="logo" src="../../assets/logo/exile-market.png" alt="Exile Market">
+      <img class="logo" src="../../assets/logo/exile-market.png" alt="">
+      <span class="wordmark">Exile Market</span>
       <div class="spacer"></div>
       <div class="select">${league}</div>
       <div class="icon ${settings ? "on" : ""}">⚙</div>
@@ -460,7 +496,7 @@
     const filters = it.filters ? ` · <b>${it.filters}</b>` : "";
     let stats = "";
     if (it.stats && unfolded) {
-      stats = `<div class="stats-toggle">▾ ${it.statsLabel}${filters}</div><div class="stats">${it.stats.map(row => {
+      stats = `<div class="stats-toggle open">${ICON.chevron(12)}<span>${it.statsLabel}${filters}</span></div><div class="stats">${it.stats.map(row => {
         if (row === "sep") return `<div class="sep"></div>`;
         if (row.req) return `<div class="req"><span>${row.req}</span>${row.min ? "<span>min</span>" : ""}</div>`;
         if (row.prop) return `<div class="prop"><span>${row.prop[0]}:</span> ${row.prop[1]}</div>`;
@@ -471,7 +507,7 @@
         return `<div class="mod ${input ? "" : "fixed"}">${check}<span>${row.mod}</span>${input}${roll}</div>`;
       }).join("")}</div>`;
     } else if (it.statsLabel) {
-      stats = `<div class="stats-toggle">▸ ${it.statsLabel}${filters}</div>`;
+      stats = `<div class="stats-toggle">${ICON.chevron(12)}<span>${it.statsLabel}${filters}</span></div>`;
     }
     return `
       <div class="band b">
@@ -492,8 +528,8 @@
     if (p.values) {
       body = `<div class="prices">${[["div", p.values[0]], ["chaos", p.values[1]], ["ex", p.values[2]]].map(([k, v]) => `<div class="price">${orb(k)}${v}</div>`).join("")}</div>`;
       if (p.stack) body += `<div class="line">${p.stack}</div>`;
-      if (p.trend) body += `<div class="line ${p.trend.startsWith("▲") ? "rise" : "fall"}">${p.trend}</div>`;
-      if (p.warning) body += `<div class="line warn">⚠ ${p.warning}</div>`;
+      if (p.trend) body += `<div class="line ${p.rising === false ? "fall" : "rise"}">${p.trend}</div>`;
+      if (p.warning) body += `<div class="line warn">${p.warning}</div>`;
     }
     if (p.lines) body = p.lines.map((l, i) => `<div class="msg ${i ? "muted" : ""}">${l}</div>`).join("");
     if (p.candidates) {
@@ -508,7 +544,7 @@
     const label = fr ? "Offres" : "Offers";
     if (o.state === "idle") {
       return `<div class="band b"><div class="head"><span class="label">${label}</span></div>
-        <span class="button primary">⌕ ${fr ? "Chercher les offres" : "Search the offers"}</span>
+        <span class="button primary">${ICON.search(17)}${fr ? "Chercher les offres" : "Search the offers"}</span>
         <div class="line muted">${fr ? "Une recherche par clic, dans les limites du site d'échange." : "One search per click, within the limits of the trade site."}</div></div>`;
     }
     if (o.state === "loading") {
@@ -518,7 +554,7 @@
     if (o.state === "wait") {
       return `<div class="band b"><div class="head"><span class="label">${label}</span><span class="age">searched 1 min ago</span></div>
         <div class="warn">⏳ Trade site limit: next search in 4 min.</div>
-        <div class="actions"><span></span><span class="button wait">↻ Search again · 4 min</span></div></div>`;
+        <div class="actions"><span></span><span class="button wait">${ICON.refresh(14)}Search again · 4 min</span></div></div>`;
     }
     if (o.lines) {
       return `<div class="band b"><div class="head"><span class="label">${label}</span></div>${o.lines.map(l => `<div class="msg muted">${l}</div>`).join("")}</div>`;
@@ -529,7 +565,7 @@
     return `<div class="band b">
       <div class="head"><span class="label">${label}</span><span class="age">${o.age || "searched 2 min ago"}</span><span class="right">${o.count}</span></div>
       <div class="offers ${three ? "three" : ""}"><div class="cols">${o.columns.map(c => `<span>${c}</span>`).join("")}</div>${rows}</div>
-      <div class="actions"><span class="link">Show the next 10</span><span class="button wait">↻ Search again · 8 s</span></div></div>`;
+      <div class="actions"><span class="link">Show the next 10</span><span class="button wait">${ICON.refresh(14)}Search again · 8 s</span></div></div>`;
   }
 
   const empty = `<div class="empty b"><img class="big-logo" src="../../assets/logo/exile-market.png" alt="">Copy an item in the game with<div class="keys"><span class="key">Ctrl</span>+<span class="key">C</span></div>The price shows up here.</div>`;
@@ -555,7 +591,7 @@
     { mod: "When you kill a Rare monster, you gain its Modifiers for 60 seconds" },
     { note: "Corrupted offers only, like this item." },
   ];
-  const HH_PRICE = { values: ["12.4", "123", "8,990"], offers: "23 offers", trend: "▲ Rising over the last 3 days (+4%)" };
+  const HH_PRICE = { values: ["12.4", "123", "8990"], offers: "23 offers", trend: "Rising over the last 3 days (+4%)" };
   const HH_OFFERS = { count: "10 of 13 online", columns: ["Price", "Listed"], rows: [
     { v: "6", k: "ex", when: "2 h ago", sus: true }, { v: "1", k: "chaos", when: "5 d ago", sus: true }, { v: "8", k: "div", when: "3 h ago" },
     { v: "10", k: "div", when: "3 h ago" }, { v: "11", k: "div", when: "40 min ago" }, { v: "12", k: "div", when: "1 d ago" }] };
@@ -588,14 +624,14 @@
       ["Rare bow", win(topBar(), item(BOW), price(RARE_PRICE), offers(RARE_OFFERS), foot())],
       ["Rare bow, stats unfolded", win(topBar(), item({ ...BOW, stats: BOW_STATS }, true), foot())],
       ["Unique bow: corrupted, quality, sockets", win(topBar(), item({ rarity: "unique", name: "Death's Harp", base: "Dualstring Bow", cls: "Bows", tags: ["Corrupted", "Q 20%", "2 sockets", "ilvl 79"], summary: "Physical DPS 198", statsLabel: "Stats (5)", filters: "2 filters" }),
-        price({ values: ["1.8", "18", "1,305"], offers: "4 offers", warning: "Only 4 offers: the price is uncertain" }),
+        price({ values: ["1.8", "18", "1305"], offers: "4 offers", warning: "Only 4 offers: the price is uncertain" }),
         offers({ count: "4 of 4 online", columns: ["Price", "Listed"], rows: [{ v: "1.5", k: "div", when: "5 h ago" }, { v: "1.8", k: "div", when: "1 d ago" }, { v: "2", k: "div", when: "50 min ago" }, { v: "2.5", k: "div", when: "3 d ago" }] }), foot())],
       ["Many tags (they wrap)", win(topBar(), item({ rarity: "unique", name: "Ironbound", base: "Runeforged Warden Bow", cls: "Bows", tags: ["Twice Corrupted", "Sanctified", "Fractured", "Mirrored", "Q 23%", "3 sockets", "ilvl 82"], summary: "Physical DPS 312", statsLabel: "Stats (6)", filters: "3 filters" }),
-        price({ values: ["38", "376", "27,550"], offers: "2 offers", warning: "Only 2 offers: the price is uncertain" }), offers({ state: "idle" }), foot())],
+        price({ values: ["38", "376", "27550"], offers: "2 offers", warning: "Only 2 offers: the price is uncertain" }), offers({ state: "idle" }), foot())],
     ]],
     ["Special cases", [
       ["Currency stack", win(topBar(), item({ rarity: "currency", name: "Orb of Annulment", cls: "Stackable Currency", tags: ["Stack 7/20"], statsLabel: "Stats (1)" }),
-        price({ values: ["0.25", "2.49", "182"], offers: "1,240 offers", stack: "Stack of 7: 1.76 div · 17.4 c · 1,274 ex", trend: "▼ Falling over the last 7 days (−11%)" }),
+        price({ values: ["0.25", "2.49", "182"], offers: "1240 offers", stack: "Stack of 7: 1.76 div · 17.4 c · 1274 ex", rising: false, trend: "Falling over the last 7 days (−11%)" }),
         offers({ count: "8 of 48 online", columns: ["Per unit", "Stock", "Listed"], rows: [
           { v: "175", k: "ex", stock: "40", when: "12 min" }, { v: "178", k: "ex", stock: "12", when: "3 min" }, { v: "180", k: "ex", stock: "120", when: "45 min" },
           { v: "182", k: "ex", stock: "33", when: "3 h" }, { v: "185", k: "ex", stock: "60", when: "9 min" }] }), foot())],
@@ -607,7 +643,7 @@
       ["Exceptional base (normal item)", win(topBar(), item({ rarity: "normal", name: "Exceptional Chiming Staff", glow: true, cls: "Staves", tags: ["3 sockets", "ilvl 82"], summary: "Grants Skill: Level 18 Sigil of Power", statsLabel: "Stats (2)" }),
         price({ lines: ["Normal items aren't priced yet.", "Use the trade site link above."] }), offers({ lines: ["Offers of normal items come with their price, in a later version."] }), foot())],
       ["French item (interface in French)", win(topBar(), item({ rarity: "unique", name: "Chasseur de têtes", base: "Ceinture lourde", cls: "Ceintures", tags: ["Corrompu", "niv. 80"], statsLabel: "Statistiques (6)", filters: "3 filtres", tradeLabel: "Site d'échange" }),
-        price({ values: ["12,4", "123", "8 990"], offers: "23 offres", trend: "▲ En hausse sur les 3 derniers jours (+4 %)" }, "fr"), offers({ state: "idle" }, "fr"), foot("poe2scout il y a 12 min · GGG trade il y a 2 min"))],
+        price({ values: ["12.4", "123", "8990"], offers: "23 offres", trend: "En hausse sur les 3 derniers jours (+4 %)" }, "fr"), offers({ state: "idle" }, "fr"), foot("poe2scout il y a 12 min · GGG trade il y a 2 min"))],
     ]],
     ["Offer states", [
       ["Searching the offers", win(topBar(), item(HH), price(HH_PRICE), offers({ state: "loading" }), foot())],
@@ -625,24 +661,27 @@
     ]],
   ];
 
-  // One tab per style; the address keeps the chosen one, to share it.
+  // One group of tabs per variant; the address keeps the choices, to share them.
   function render() {
-    document.documentElement.dataset.theme = theme;
+    theme = chosen.theme;
+    for (const key of Object.keys(VARIANTS)) document.documentElement.dataset[key] = chosen[key];
     const t = THEMES[theme];
-    document.getElementById("styles").innerHTML = Object.entries(THEMES)
-      .map(([key, value]) => `<button type="button" data-theme-key="${key}" aria-pressed="${key === theme}">${value.title}</button>`).join("");
+    document.getElementById("styles").innerHTML = Object.entries(VARIANTS).map(([key, v]) =>
+      `<div class="group"><span>${v.label}</span>${Object.entries(v.options).map(([value, label]) =>
+        `<button type="button" data-variant="${key}" data-value="${value}" aria-pressed="${chosen[key] === value}">${label}</button>`).join("")}</div>`).join("");
     document.getElementById("sheet").innerHTML = `
       <header><h1>Style ${t.title}</h1><p>${t.text} Narrow layout, 420 px. Sample data.</p></header>
       ${SECTIONS.map(([title, slots]) => `<section class="section"><h2>${title}</h2><div class="row">${slots.map(([label, html]) => `<div class="slot"><span>${label}</span>${html}</div>`).join("")}</div></section>`).join("")}`;
   }
 
   document.getElementById("styles").addEventListener("click", event => {
-    const key = event.target.dataset.themeKey;
-    if (!key) return;
-    theme = key;
-    history.replaceState(null, "", `?theme=${key}`);
+    const { variant, value } = event.target.dataset;
+    if (!variant) return;
+    chosen[variant] = value;
+    history.replaceState(null, "", "?" + new URLSearchParams(chosen));
     render();
   });
+  document.getElementById("file-warning").hidden = location.protocol !== "file:";
   render();
 </script>
 </body>
