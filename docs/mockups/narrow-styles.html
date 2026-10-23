@@ -407,9 +407,9 @@
   .prop { font-size: 13px; color: var(--text); }
   .prop span { color: var(--weak); }
   .sep { height: 1px; background: var(--control-line); margin: 2px 0; }
-  .mod { display: grid; grid-template-columns: 18px 1fr auto; gap: 2px 8px; align-items: center; color: var(--mod); font-size: 13.5px; }
-  .mod.fixed { grid-template-columns: 18px 1fr; }
-  .check { width: 14px; height: 14px; border-radius: 3px; border: 1px solid var(--control-line); background: var(--control); display: grid; place-items: center; font-size: 10px; color: var(--bg-a); }
+  .mod { display: grid; grid-template-columns: 20px 1fr auto; gap: 2px 8px; align-items: center; color: var(--mod); font-size: 13.5px; }
+  .mod.fixed { grid-template-columns: 20px 1fr; }
+  .check { width: 16px; height: 16px; border-radius: 3px; border: 1.5px solid var(--weak); background: var(--control); display: grid; place-items: center; color: var(--bg-a); }
   .check.on { background: var(--accent); border-color: var(--accent); color: var(--on-accent, var(--bg-a)); }
   .input { width: 46px; padding: 1px 6px; text-align: right; font-family: var(--font-number); font-size: 12.5px; }
   .roll { grid-column: 2; display: flex; align-items: center; gap: 8px; color: var(--faint); font-size: 11px; }
@@ -530,6 +530,7 @@
     refresh: size => svg(size, '<path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9"/><path d="M13.6 2.6v3.3h-3.3"/>'),
     chevron: size => svg(size, '<path d="M6 4l4 4-4 4"/>'),
     down: size => svg(size, '<path d="M4 6l4 4 4-4"/>'),
+    check: size => `<svg class="ico" width="${size}" height="${size}" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.2 8.4l3.1 3.1 6.5-7"/></svg>`,
     // The "settings" icon of Lucide (ISC license), on its 24 px grid.
     gear: size => `<svg class="ico" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>`,
   };
@@ -563,7 +564,7 @@
         if (row.req) return `<div class="req"><span>${row.req}</span>${row.min ? "<span>min</span>" : ""}</div>`;
         if (row.prop) return `<div class="prop"><span>${row.prop[0]}:</span> ${row.prop[1]}</div>`;
         if (row.note) return `<div class="note">${row.note}</div>`;
-        const check = row.check === undefined ? "<span></span>" : `<span class="check ${row.check ? "on" : ""}">${row.check ? "✓" : ""}</span>`;
+        const check = row.check === undefined ? "<span></span>" : `<span class="check ${row.check ? "on" : ""}">${row.check ? ICON.check(12) : ""}</span>`;
         const input = row.min !== undefined ? `<span class="input">${row.min}</span>` : "";
         const roll = row.range ? `<div class="roll"><span class="bar"><i style="width:${row.share * 100}%"></i></span>${row.range}</div>` : "";
         return `<div class="mod ${input ? "" : "fixed"}">${check}<span>${row.mod}</span>${input}${roll}</div>`;
