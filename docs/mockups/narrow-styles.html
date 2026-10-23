@@ -455,16 +455,15 @@
   .flat-head { margin: -12px -14px 6px 0; height: 48px; align-items: center; }
   .flat-head .right { margin-left: auto; padding-right: 12px; }
   .flat-head .again { align-self: stretch; height: auto; }
-  /* Show the next 10: a flat bar glued to the bottom of the offers band. */
+  /* Show more offers: a flat bar glued to the bottom of the offers band, with only a chevron. */
   .more {
-    margin: 10px -14px -12px; height: 40px; display: flex; align-items: center; justify-content: center; gap: 8px;
+    margin: 10px -14px -12px; height: 32px; display: flex; align-items: center; justify-content: center; gap: 8px;
     background: var(--control); color: var(--text); font-size: 13px; font-weight: 600; cursor: pointer;
   }
   .more:hover { background: var(--control-line); color: var(--accent); }
   .more .ico { transition: transform .2s ease-out; }
   .more:hover .ico { transform: translateY(2px); }
   @media (prefers-reduced-motion: reduce) { .more .ico { transition: none; } }
-  .more > span { position: relative; top: -1px; }
   .again { flex: none; width: 56px; height: 48px; display: grid; place-items: center; font: 600 13px/1 var(--font-body); }
   .again.waiting { background: var(--control); color: var(--weak); }
   .again.ready { background: var(--accent); color: var(--on-accent, var(--bg-a)); }
@@ -643,7 +642,7 @@
     return `<div class="band b">
       <div class="head flat-head"><span class="title-stack"><span class="label">${label}</span><span class="age">${o.age || "searched 2 min ago"}</span></span><span class="right">${o.count}</span>${again}</div>
       <div class="offers ${three ? "three" : ""}"><div class="cols">${o.columns.map(c => `<span>${c}</span>`).join("")}</div>${rows}</div>
-      <div class="more">${ICON.down(13)}<span>Show the next 10</span></div></div>`;
+      <div class="more" title="${fr ? "Afficher plus d'offres" : "Show more offers"}">${ICON.down(16)}</div></div>`;
   }
 
   const empty = `<div class="empty b"><img class="big-logo" src="../../assets/logo/exile-market.png" alt="">Copy an item in the game with<div class="keys"><span class="key">Ctrl</span>+<span class="key">C</span></div>The price shows up here.</div>`;
