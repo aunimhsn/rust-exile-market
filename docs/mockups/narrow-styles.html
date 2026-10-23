@@ -250,7 +250,10 @@
     --bg-a: #0f1216;
     --bg-b: #151a20;
     --row-alt: #1a2028;
-    --banner: #13263b;
+    --banner: #f3e4a4;        /* pale yellow: warnings stand apart from the league colors */
+    --banner-text: #6b5208;
+    --banner-action: #8a6a10;
+    --banner-action-text: #f8edc2;
     --text: #e3e8ef;
     --weak: #8692a3;
     --faint: #556070;
@@ -392,7 +395,7 @@
   .summary { margin-top: 8px; font-size: 13px; }
   .stats-toggle { margin-top: 8px; color: var(--weak); font-size: 13px; display: flex; align-items: center; gap: 7px; }
   .stats-toggle .ico { flex: none; transition: transform .15s; }
-  .stats-toggle > span { position: relative; top: -1px; }
+  .stats-toggle > span { position: relative; top: -2px; }
   .stats-toggle.open .ico { transform: rotate(90deg); }
   .ico { display: block; }
   .stats-toggle b { color: var(--accent); font-weight: 600; }
@@ -482,7 +485,12 @@
   .button.wait { color: var(--faint); }
   .spinner { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--control-line); border-top-color: var(--accent); }
 
-  .banner { background: var(--banner); color: var(--warn); padding: 10px 14px; font-size: 13px; }
+  .banner { display: flex; align-items: stretch; background: var(--banner); color: var(--banner-text, var(--warn)); font-size: 13px; font-weight: 600; }
+  .banner > span:first-child { flex: 1; padding: 10px 14px; align-self: center; }
+  .banner-action {
+    flex: none; display: grid; place-items: center; padding: 0 16px; min-width: 64px; cursor: pointer;
+    background: var(--banner-action, var(--control)); color: var(--banner-action-text, var(--text)); font-weight: 700;
+  }
   .foot { padding: 6px 14px; color: var(--faint); font-size: 11.5px; }
   .empty { padding: 40px 14px 56px; text-align: center; color: var(--weak); }
   .keys { margin: 12px 0; display: flex; justify-content: center; gap: 6px; align-items: center; }
@@ -546,7 +554,7 @@
       <div class="gear ${settings ? "on" : ""}">${ICON.gear(17)}</div>
     </div>`;
   const foot = (value = "poe2scout 12 min ago · GGG trade 2 min ago") => `<div class="foot a">${value}</div>`;
-  const banner = value => `<div class="banner">⚠ ${value}</div>`;
+  const banner = (value, action) => `<div class="banner"><span>${value}</span>${action ? `<span class="banner-action">${action}</span>` : ""}</div>`;
 
   function item(it, unfolded = false) {
     const tags = (it.tags || []).map(t => `<span class="tag ${/^Corrupt|^Corrompu/.test(t) ? "corrupted" : ""}">${t}</span>`).join("");
@@ -719,7 +727,7 @@
     ["Errors", [
       ["Offline, cached prices", win(topBar(), banner("The price database can't be reached: showing the prices from 3 hours ago."), item(HH), price(HH_PRICE), offers({ state: "idle" }), foot("poe2scout 3 h ago (offline) · GGG trade 2 min ago"))],
       ["League ended", win(topBar(), banner("Rise of the Abyssal has ended, switched to Forbidden Rites."), item(HH), price(HH_PRICE), offers({ state: "idle" }), foot())],
-      ["Clipboard unreadable", win(topBar(), banner("The clipboard can't be read. <u>See the help ↗</u>"), empty, foot("poe2scout 12 min ago"))],
+      ["Clipboard unreadable", win(topBar(), banner("The clipboard can't be read.", "Help"), empty, foot("poe2scout 12 min ago"))],
       ["Before the first item", win(topBar(), empty, foot("poe2scout 12 min ago"))],
       ["Item couldn't be read", win(topBar(), `<div class="band b"><div class="msg">This item couldn't be read.</div><div class="line muted">Copy it again, or copy another item.</div></div>`, foot())],
     ]],
