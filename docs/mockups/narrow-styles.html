@@ -409,7 +409,7 @@
   .sep { height: 1px; background: var(--control-line); margin: 2px 0; }
   .mod { display: grid; grid-template-columns: 20px 1fr auto; gap: 2px 8px; align-items: center; color: var(--mod); font-size: 13.5px; }
   .mod.fixed { grid-template-columns: 20px 1fr; }
-  .check { width: 16px; height: 16px; border-radius: 3px; border: 1.5px solid var(--weak); background: var(--control); display: grid; place-items: center; color: var(--bg-a); }
+  .check { width: 15px; height: 15px; border-radius: 3px; border: 1.5px solid var(--weak); background: var(--control); display: grid; place-items: center; color: var(--bg-a); }
   .check.on { background: var(--accent); border-color: var(--accent); color: var(--on-accent, var(--bg-a)); }
   .input { width: 46px; padding: 1px 6px; text-align: right; font-family: var(--font-number); font-size: 12.5px; }
   .roll { grid-column: 2; display: flex; align-items: center; gap: 8px; color: var(--faint); font-size: 11px; }
@@ -564,7 +564,7 @@
         if (row.req) return `<div class="req"><span>${row.req}</span>${row.min ? "<span>min</span>" : ""}</div>`;
         if (row.prop) return `<div class="prop"><span>${row.prop[0]}:</span> ${row.prop[1]}</div>`;
         if (row.note) return `<div class="note">${row.note}</div>`;
-        const check = row.check === undefined ? "<span></span>" : `<span class="check ${row.check ? "on" : ""}">${row.check ? ICON.check(12) : ""}</span>`;
+        const check = row.check === undefined ? "<span></span>" : `<span class="check ${row.check ? "on" : ""}">${row.check ? ICON.check(11) : ""}</span>`;
         const input = row.min !== undefined ? `<span class="input">${row.min}</span>` : "";
         const roll = row.range ? `<div class="roll"><span class="bar"><i style="width:${row.share * 100}%"></i></span>${row.range}</div>` : "";
         return `<div class="mod ${input ? "" : "fixed"}">${check}<span>${row.mod}</span>${input}${roll}</div>`;
