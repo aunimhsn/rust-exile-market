@@ -1,0 +1,106 @@
+name: Release
+
+# A version tag (for example v0.1.0) builds the archives and publishes them as
+# a GitHub release. A pull request that changes this workflow or the
+# dependencies only builds them, to check every system before the next tag.
+on:
+  push:
+    tags: ["v*"]
+  pull_request:
+    paths: [.github/workflows/release.yml, Cargo.toml, Cargo.lock]
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  # Version in the archive names: the tag, or "test" for a pull request.
+  VERSION: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'test' }}
+
+jobs:
+  build:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          # musl links the Linux executable statically, so that it runs on
+          # any distribution.
+          - target: x86_64-unknown-linux-musl
+            os: ubuntu-latest
+          - target: x86_64-apple-darwin
+            os: macos-latest
+          - target: aarch64-apple-darwin
+            os: macos-latest
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - name: Read the executable name and the version of Cargo.toml
+        run: |
+          metadata=$(cargo metadata --no-deps --format-version 1)
+          # The first binary target: the package name, unless [[bin]] or
+          # src/bin/ gives another one.
+          name=$(echo "$metadata" | jq -r '[.packages[0].targets[] | select(.kind | index("bin")) | .name][0] // empty')
+          if [ -z "$name" ]; then
+            echo "Cargo.toml has no binary target to release"
+            exit 1
+          fi
+          echo "NAME=$name" >> "$GITHUB_ENV"
+          echo "PACKAGE_VERSION=$(echo "$metadata" | jq -r '.packages[0].version')" >> "$GITHUB_ENV"
+      - name: Check that the tag matches the version of Cargo.toml
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          if [ "$GITHUB_REF_NAME" != "v$PACKAGE_VERSION" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match version $PACKAGE_VERSION of Cargo.toml"
+            exit 1
+          fi
+      - name: Install musl
+        if: contains(matrix.target, 'musl')
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
+      - run: cargo build --release --locked --target ${{ matrix.target }}
+      - name: Package
+        run: |
+          directory="$NAME-$VERSION-${{ matrix.target }}"
+          mkdir "$directory"
+          cp README.md LICENSE-APACHE LICENSE-MIT "$directory/"
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            cp "target/${{ matrix.target }}/release/$NAME.exe" "$directory/"
+            7z a "$directory.zip" "$directory"
+            echo "ARCHIVE=$directory.zip" >> "$GITHUB_ENV"
+          else
+            cp "target/${{ matrix.target }}/release/$NAME" "$directory/"
+            tar -czf "$directory.tar.gz" "$directory"
+            echo "ARCHIVE=$directory.tar.gz" >> "$GITHUB_ENV"
+          fi
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.target }}
+          path: ${{ env.ARCHIVE }}
+          if-no-files-found: error
+
+  release:
+    name: Publish the release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Create the release
+        working-directory: dist
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          sha256sum * > SHA256SUMS.txt
+          gh release create "$GITHUB_REF_NAME" * --repo "$GITHUB_REPOSITORY" --title "$GITHUB_REF_NAME" --generate-notes

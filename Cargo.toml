@@ -1,0 +1,23 @@
+[package]
+name = "rust-project-template"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.93"
+description = "Template for Rust applications (command-line, desktop or web)."
+authors = ["Aunim HASSAN"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/aunimhsn/rust-project-template"
+readme = "README.md"
+
+[dependencies]
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true
