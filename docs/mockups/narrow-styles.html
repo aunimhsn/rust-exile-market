@@ -328,10 +328,26 @@
   .a { background: var(--bg-a); }
   .b { background: var(--bg-b); }
 
-  .top { display: flex; align-items: center; gap: 8px; padding: 8px 10px 8px 14px; }
+  .top { display: flex; align-items: stretch; gap: 8px; height: 48px; padding-left: 14px; }
+  .top > .emblem, .top > .logo, .top > .wordmark { align-self: center; }
+  /* League: the color says which trade it is (softcore or hardcore), the small label says it too. */
+  .league {
+    display: flex; align-items: center; gap: 10px; padding: 0 12px 0 14px; color: var(--text);
+    background: var(--league-bg); box-shadow: inset 3px 0 0 var(--league-line);
+  }
+  .league-text { display: grid; gap: 2px; }
+  .league-kind { font: 700 9.5px/1 var(--font-body); letter-spacing: .14em; text-transform: uppercase; color: var(--league-line); }
+  .league-kind::before { content: var(--league-kind); }
+  .league-name { font-size: 13.5px; line-height: 1.1; }
+  .league .ico { color: var(--weak); }
+  .gear { width: 48px; display: grid; place-items: center; color: var(--weak); background: var(--control); }
+  .league + .gear { margin-left: -7px; }
+  .gear.on { color: var(--on-accent, var(--bg-a)); background: var(--accent); }
+  :root, [data-league="softcore"] { --league-bg: #13263a; --league-line: #6aa7de; --league-kind: "Softcore"; }
+  [data-league="hardcore"] { --league-bg: #351417; --league-line: #e0706a; --league-kind: "Hardcore"; }
   .logo { height: 38px; display: block; }
-  .wordmark { display: none; font: 800 15px/1 var(--font-display); letter-spacing: .02em; color: var(--accent); }
-  [data-header="large"] .top { padding-block: 6px; }
+  .wordmark { display: none; font: 800 15px/1 var(--font-display); letter-spacing: .02em; color: var(--accent); position: relative; top: -1px; }
+  [data-header="large"] .top { height: 64px; }
   [data-header="large"] .logo { height: 56px; }
   [data-header="text"] .logo { display: none; }
   [data-header="text"] .wordmark { display: block; }
@@ -342,14 +358,11 @@
   [data-header="emblem"] .top { gap: 10px; }
   .empty .big-logo { width: 150px; display: block; margin: 0 auto 18px; opacity: .9; }
   .spacer { flex: 1; }
-  .select, .icon, .button, .input {
+  .button, .input {
     background: var(--control); border: 1px solid var(--control-line); border-radius: var(--radius); color: var(--text);
     font: inherit;
   }
-  .select { display: flex; align-items: center; gap: 10px; padding: 5px 10px; }
-  .select::after { content: "▾"; color: var(--weak); font-size: 11px; }
-  .icon { width: 30px; height: 30px; display: grid; place-items: center; font-size: 15px; color: var(--weak); }
-  .icon.on { color: var(--accent); border-color: var(--accent); }
+
 
   .label { font: 600 11px/1 var(--font-body); letter-spacing: .1em; text-transform: uppercase; color: var(--weak); }
   .head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 8px; }
@@ -372,6 +385,7 @@
   .summary { margin-top: 8px; font-size: 13px; }
   .stats-toggle { margin-top: 8px; color: var(--weak); font-size: 13px; display: flex; align-items: center; gap: 7px; }
   .stats-toggle .ico { flex: none; transition: transform .15s; }
+  .stats-toggle > span { position: relative; top: -1px; }
   .stats-toggle.open .ico { transform: rotate(90deg); }
   .ico { display: block; }
   .stats-toggle b { color: var(--accent); font-weight: 600; }
@@ -467,6 +481,7 @@
   const VARIANTS = {
     theme: { label: "Style", options: Object.fromEntries(Object.entries(THEMES).map(([k, v]) => [k, v.title])), fallback: "slate" },
     button: { label: "Search button", options: { filled: "White", band: "Price band" }, fallback: "filled" },
+    league: { label: "League", options: { softcore: "Softcore", hardcore: "Hardcore" }, fallback: "softcore" },
     header: { label: "Header", options: { emblem: "Emblem", logo: "Logo 38 px", large: "Logo 56 px", text: "Name in text" }, fallback: "emblem" },
   };
   const params = new URLSearchParams(location.search);
@@ -482,6 +497,9 @@
     search: size => svg(size, '<circle cx="7" cy="7" r="4.6"/><path d="M10.4 10.4 14 14"/>'),
     refresh: size => svg(size, '<path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9"/><path d="M13.6 2.6v3.3h-3.3"/>'),
     chevron: size => svg(size, '<path d="M6 4l4 4-4 4"/>'),
+    down: size => svg(size, '<path d="M4 6l4 4 4-4"/>'),
+    // The "settings" icon of Lucide (ISC license), on its 24 px grid.
+    gear: size => `<svg class="ico" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>`,
   };
 
   // Blocks.
@@ -491,8 +509,8 @@
       <img class="logo" src="../../assets/logo/exile-market.png" alt="">
       <span class="wordmark">Exile Market</span>
       <div class="spacer"></div>
-      <div class="select">${league}</div>
-      <div class="icon ${settings ? "on" : ""}">⚙</div>
+      <div class="league"><span class="league-text"><span class="league-kind"></span><span class="league-name">${league}</span></span>${ICON.down(12)}</div>
+      <div class="gear ${settings ? "on" : ""}">${ICON.gear(17)}</div>
     </div>`;
   const foot = (value = "poe2scout 12 min ago · GGG trade 2 min ago") => `<div class="foot a">${value}</div>`;
   const banner = value => `<div class="banner">⚠ ${value}</div>`;
