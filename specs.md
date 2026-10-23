@@ -1,28 +1,100 @@
 # Specifications
 
-<!--
-Describe what the application does, before writing any code.
-Write behavior, not implementation: technical choices go in roadmap.md.
-Remove or add sections as needed.
--->
-
 ## Purpose
 
-<!-- What the application is for, who uses it, and the expected volume of data. -->
+rust-exile-market is a small desktop application that gives the price of a Path of Exile 2 item as soon as the player copies it in the game with Ctrl+C.
+
+- Users: Path of Exile 2 players on Windows, macOS and Linux, including Wayland desktops such as Bazzite (KDE Plasma), where the game runs through Proton.
+- Game client: English or French. The application understands the item text in both languages.
+- Volume: one item at a time, compared against the prices of a few thousand items of the selected league.
+- Version 1 prices the items with a fixed name: currency and the other items traded on the currency exchange (fragments, essences, runes, soul cores, omens, uncut gems…), and unique items. Rare, magic and normal items are recognized but not priced yet: they come in a later version, which must not require rewriting the rest of the application.
 
 ## Design principles
 
-<!-- Look and feel, tone of the messages, use of colors. -->
+- One small window, a companion to the game: it can stay beside the game on the same screen, or be maximized on a second screen.
+- The layout adapts to the size of the window: the larger the window, the more information it shows (see [Window layout](#window-layout)).
+- Dark theme, close to the game's interface. The item name uses its rarity color, as in the game.
+- Short, factual messages. No pop-ups: errors and warnings are shown inside the window.
+- The interface is available in English and in French; English is the reference language.
 
 ## Features
 
-<!-- One subsection per feature: what the user sees, what each key or button does, the edge cases. -->
+### Item detection
+
+- The application watches the clipboard while it runs. The player does not need to give it the focus: they copy the item in the game with Ctrl+C (or Ctrl+Alt+C, the advanced copy), and the window updates.
+- Only texts that look like a Path of Exile 2 item are taken into account: they start with the item class line, in English (`Item Class:`) or in French. Any other copied text is ignored, and the window keeps showing the last item.
+- Copying the same item again shows it again, with the latest known price.
+- From the copied text, the application reads the item class, the rarity, the name, the base type, the stack size, and the modifiers. Version 1 does not use the modifiers for the price, but reads them so that rare items can be added later.
+
+### Price
+
+For a supported item, the window shows:
+
+- the item name, in its rarity color, and its base type for a unique item;
+- its price in **Exalted Orbs**, **Divine Orbs** and **Chaos Orbs**, so that the price is readable at any time of the league, whichever currency the economy uses at that moment;
+- for a stack (e.g. `Stack Size: 12/20`), the unit price and the price of the whole stack;
+- the number of offers behind the price, to judge whether the item sells: with fewer than 5 offers, a warning says that the price is uncertain;
+- the age of the price data (e.g. "Prices updated 12 minutes ago");
+- an **Open on the trade site** link, which opens the browser on the search for this item in the selected league, on the French trade site when the item was copied in French.
+
+Special cases:
+
+| Situation | Behavior |
+|---|---|
+| Rare, magic or normal item | Its name and base type are shown, with the message "Rare items aren't priced yet" (or magic, normal), and the trade site link. |
+| Unidentified unique item | If its base type has only one unique, that unique is priced. Otherwise, the message "Identify the item to get its price" is shown, with the list of the possible uniques. |
+| Supported item missing from the price data | The message "No price found for this item in <league>". |
+| Corrupted unique item | Priced like the others; the word "Corrupted" is shown next to its name. |
+
+### Price history
+
+When the window is wide enough, it also shows a chart of the item's price over the last 7 days, with the number of offers for each day. The history is loaded only when it is shown.
+
+### Window layout
+
+| Window width | Layout |
+|---|---|
+| Narrow (under about 500 px) | One column: name, prices, offers, link. |
+| Medium | Two columns: the item on the left, its prices and offers on the right. |
+| Wide (about 1000 px and more, e.g. maximized on a second screen) | The medium layout, plus the price history below. |
+
+- The window can be resized, maximized and moved to another screen. Its size and position are restored at the next launch.
+- Before the first item, the window explains how to use the application: "Copy an item in the game with Ctrl+C".
+
+### Settings
+
+A gear button at the top right opens the settings:
+
+- **League**: the list of the current leagues. By default, the current challenge league in softcore trade. The selected league is shown in the window header.
+- **Language**: *Automatic* (default), *English* or *Français*.
+  - *Automatic*: the interface starts in English, then follows the language of the last copied item: a French item switches it to French, an English item back to English.
+  - *English* or *Français*: the interface stays in that language, whatever the language of the items.
+- **Always on top**: keeps the window above the other windows, for players with a single screen. Off by default.
+
+The settings are saved as soon as they change.
+
+### Price data
+
+- The prices come from a public price database of the Path of Exile 2 economy (see [roadmap.md](roadmap.md)).
+- The application downloads the prices of the selected league at startup and when the league changes, then refreshes them every hour. A copied item is priced instantly from these local data, without a network request.
+- The application identifies itself to the price database and to the trade site, and keeps its requests to a minimum.
 
 ## Local files
 
-<!-- Files read or written by the application, where they live, and whether they are tracked by Git. -->
+| File | Location | Content |
+|---|---|---|
+| Settings | The user's configuration directory (e.g. `~/.config/rust-exile-market/` on Linux, `%APPDATA%\rust-exile-market\` on Windows) | League, language, always on top, window size and position. |
+| Price cache | The user's cache directory | The last downloaded prices, used at startup and when the network is unavailable. |
+
+None of these files are in the Git repository.
 
 ## Error handling
 
 | Situation | Behavior |
 |---|---|
+| No network or price database unreachable at startup | The cached prices are used, with their age; without a cache, the message "Prices unavailable, retrying…" and a new attempt every minute. |
+| Refresh failure | The previous prices are kept, with their age; a new attempt at the next refresh. |
+| Selected league no longer exists (end of league) | The default league is selected, with the message "<league> has ended, switched to <default league>". |
+| Clipboard unreadable (e.g. a Wayland desktop that forbids it) | The message "The clipboard can't be read" with a link to the help in the README. |
+| Copied text that starts like an item but can't be read | The message "This item couldn't be read", without crashing; the next copy works normally. |
+| Settings file unreadable | The default settings are used, and the file is rewritten at the next change. |
