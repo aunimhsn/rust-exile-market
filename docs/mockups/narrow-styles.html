@@ -331,8 +331,8 @@
   .a { background: var(--bg-a); }
   .b { background: var(--bg-b); }
 
-  .top { display: flex; align-items: stretch; gap: 8px; height: 48px; padding-left: 14px; }
-  .top > .emblem, .top > .logo, .top > .wordmark { align-self: center; }
+  .top { display: flex; align-items: stretch; gap: 10px; height: 48px; padding-left: 14px; }
+  .top > .emblem, .top > .wordmark { align-self: center; }
   /* League: the color says which trade it is (softcore or hardcore), the small label says it too. */
   .league {
     display: flex; align-items: center; gap: 10px; padding: 0 12px 0 14px; color: var(--text);
@@ -348,17 +348,9 @@
   .gear.on { color: var(--on-accent, var(--bg-a)); background: var(--accent); }
   :root, [data-league="softcore"] { --league-bg: #13263a; --league-line: #6aa7de; --league-kind: "Softcore"; }
   [data-league="hardcore"] { --league-bg: #351417; --league-line: #e0706a; --league-kind: "Hardcore"; }
-  .logo { height: 38px; display: block; }
-  .wordmark { display: none; font: 800 15px/1 var(--font-display); letter-spacing: .02em; color: var(--accent); position: relative; top: -1px; }
-  [data-header="large"] .top { height: 64px; }
-  [data-header="large"] .logo { height: 56px; }
-  [data-header="text"] .logo { display: none; }
-  [data-header="text"] .wordmark { display: block; }
-  /* Emblem (assets/logo/emblem.svg, white) next to the name. */
-  .emblem { display: none; width: 30px; height: 30px; }
-  [data-header="emblem"] .logo { display: none; }
-  [data-header="emblem"] .emblem, [data-header="emblem"] .wordmark { display: block; }
-  [data-header="emblem"] .top { gap: 10px; }
+  /* Header: the emblem (assets/logo/emblem.svg, white) next to the name. */
+  .emblem { display: block; width: 30px; height: 30px; }
+  .wordmark { display: block; font: 800 15px/1 var(--font-display); letter-spacing: .02em; color: var(--accent); position: relative; top: -1px; }
   .empty .big-logo { width: 150px; display: block; margin: 0 auto 18px; opacity: .9; }
   .spacer { flex: 1; }
   .button, .input {
@@ -527,7 +519,6 @@
   const VARIANTS = {
     theme: { label: "Style", options: Object.fromEntries(Object.entries(THEMES).map(([k, v]) => [k, v.title])), fallback: "slate" },
     league: { label: "League", options: { softcore: "Softcore", hardcore: "Hardcore" }, fallback: "softcore" },
-    header: { label: "Header", options: { emblem: "Emblem", logo: "Logo 38 px", large: "Logo 56 px", text: "Name in text" }, fallback: "emblem" },
   };
   const params = new URLSearchParams(location.search);
   const chosen = Object.fromEntries(Object.entries(VARIANTS).map(([key, v]) => [key, params.get(key) in v.options ? params.get(key) : v.fallback]));
@@ -551,7 +542,6 @@
   const topBar = (settings = false, league = "Forbidden Rites") => `
     <div class="top a">
       <img class="emblem" src="../../assets/logo/emblem.svg" alt="">
-      <img class="logo" src="../../assets/logo/exile-market.png" alt="">
       <span class="wordmark">Exile Market</span>
       <div class="spacer"></div>
       <div class="league"><span class="league-text"><span class="league-kind"></span><span class="league-name">${league}</span></span>${ICON.down(12)}</div>
