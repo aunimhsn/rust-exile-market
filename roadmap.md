@@ -26,7 +26,7 @@ poe2scout limits its API to 60 requests per minute per IP address, in a sliding 
 - When the API refuses a request, wait and retry at the next attempt, without insisting.
 - Keep the loaded price histories in memory: copying an item again makes no new request.
 - Send a `User-Agent` with the application name, its version and the repository address.
-- Tell the poe2scout maintainers about the application, on their Discord (linked from [poe2scout.com](https://poe2scout.com)), when the repository reaches 10 stars.
+- Tell the poe2scout maintainers about the application, on their Discord (linked from [poe2scout.com](https://poe2scout.com)), when the releases reach 100 downloads in total (`gh release view` gives the count of each archive).
 
 ## Steps
 
