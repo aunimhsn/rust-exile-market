@@ -131,7 +131,7 @@ impl Item {
     not(test),
     expect(
         dead_code,
-        reason = "read by the price display and the filters from step 8"
+        reason = "read by the price display and the filters from step 9"
     )
 )]
 impl Item {
@@ -159,7 +159,7 @@ impl Item {
     }
 
     /// The base type, without "Exceptional" and "Superior". For a magic item, the whole name
-    /// with its affixes: the base types are only known with the item data (step 7).
+    /// with its affixes: the base types are only known with the item data (step 8).
     #[must_use]
     pub fn base_type(&self) -> &str {
         &self.base_type

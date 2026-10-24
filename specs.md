@@ -93,6 +93,7 @@ The window has a header, then three bands (item, price, offers), then a status b
 | Narrow (version 1) | One column: item, price, offers. |
 | Medium and wide (later) | The same blocks rearranged in two or three columns, with the price history in the wide layout (see the roadmap). |
 
+- The window has no title bar of the system: the header takes its place (see the roadmap, step 6).
 - **Header** (band A): the emblem and "Exile Market"; on the right, the league block, then the gear block.
   - The league block shows the league name and a small label "SOFTCORE" or "HARDCORE", on the color of its trade (blue or red); a click opens the list of the current leagues. By default, the current challenge league in softcore trade.
   - The gear opens the [settings](#settings), and closes them.

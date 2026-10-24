@@ -65,7 +65,7 @@ impl ExileMarketApp {
             // The language of the copied items never changes the interface: it only chooses
             // the item names and the trade site.
             i18n: Translator::new(settings.language().language()),
-            // The leagues are downloaded from the price database in step 6; until then, the
+            // The leagues are downloaded from the price database in step 7; until then, the
             // current challenge league in softcore.
             session: Session::new(League::new("Forbidden Rites", LeagueMode::Softcore)),
             settings,
@@ -77,7 +77,7 @@ impl ExileMarketApp {
 
     fn act_on(&mut self, action: HeaderAction) {
         match action {
-            // The list of the leagues comes with the price data, in step 6.
+            // The list of the leagues comes with the price data, in step 7.
             HeaderAction::Leagues => {}
             HeaderAction::Settings => self.view = self.view.toggled(),
         }
