@@ -466,10 +466,8 @@
   /* Top tiers (1 to 3) in white, the others faint. */
   .tier { color: var(--faint); }
   .tier.tier-top { color: var(--accent); }
-  /* Test: the colors of the rarities for the top tiers (T3 magic blue, T2 rare yellow, T1 unique orange). */
-  [data-tiercolors="rarity"] .tier.t3 { color: var(--rarity-magic); }
-  [data-tiercolors="rarity"] .tier.t2 { color: var(--rarity-rare); }
-  [data-tiercolors="rarity"] .tier.t1 { color: var(--rarity-unique); }
+  /* Tier 1 in the orange of the uniques, so that it stands out; tiers 2 and 3 stay white. */
+  .tier.t1 { color: var(--rarity-unique); }
   .delta { font-family: var(--font-number); font-weight: 600; font-size: 12px; }
   .delta.up { color: var(--rise); }
   .delta.down { color: var(--fall); }
@@ -558,7 +556,6 @@
   };
   const VARIANTS = {
     theme: { label: "Style", options: Object.fromEntries(Object.entries(THEMES).map(([k, v]) => [k, v.title])), fallback: "slate" },
-    tiercolors: { label: "Tier colors", options: { white: "White", rarity: "Rarity" }, fallback: "white" },
     league: { label: "League", options: { softcore: "Softcore", hardcore: "Hardcore" }, fallback: "softcore" },
   };
   const params = new URLSearchParams(location.search);

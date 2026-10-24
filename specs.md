@@ -111,7 +111,7 @@ The window has a header, then three bands (item, price, offers), then a status b
   - grouped under small titles when they are filters: Item, Weapon, Pseudo, Implicit, Explicit;
   - each modifier in the game's modifier color, with a bar of where its value falls:
     - for a unique, in its fixed range, written next to the bar (`40–60`, from the price database);
-    - for a rare or magic item or a jewel, over every tier of the modifier, so that a full bar means close to the best possible; next to it, its tier and the range of that tier (`T2 135–154`, from the advanced copy). Tiers 1 to 3 are written in white bold, the others in gray. Without the advanced copy, the game gives no tier: only the value is shown;
+    - for a rare or magic item or a jewel, over every tier of the modifier, so that a full bar means close to the best possible; next to it, its tier and the range of that tier (`T2 135–154`, from the advanced copy). Tier 1 is written in the orange of the uniques, tiers 2 and 3 in white bold, the others in gray. Without the advanced copy, the game gives no tier: only the value is shown;
   - for rare and magic items and jewels, the explicit modifiers are grouped into **Prefixes** and **Suffixes** with their fill ("2 of 3 · 1 open");
   - for filters, a checkbox on the left and the minimum value on the right (see [Stat filters](#stat-filters)).
 
