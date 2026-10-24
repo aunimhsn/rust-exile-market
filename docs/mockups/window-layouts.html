@@ -1,0 +1,1031 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Window Layouts</title>
+<!--
+  Interactive mock-up of the rust-exile-market window (roadmap step 0).
+  Open it in a browser: resize the mock window with the controls, pick an
+  item scenario, the language of the copied item and the state of the trade
+  site offers. All prices and offers are sample data, close to real ones.
+  The mock window imitates the egui dark theme.
+  The orb icons come from assets/currencies/ (see assets/NOTICE.md); the item
+  icons are loaded from the Grinding Gear Games CDN, as the application will.
+  Serve the repository root so that the orb icons load, even in a sandboxed
+  browser (Flatpak, Snap) that only receives this file:
+    python3 -m http.server 8765 --bind 127.0.0.1
+  then open http://127.0.0.1:8765/docs/mockups/window-layouts.html
+-->
+<style>
+  :root {
+    /* Page around the mock window. */
+    --page-bg: #101114;
+    --page-text: #c9ccd3;
+    --page-muted: #80858f;
+    --page-panel: #191b20;
+    --page-border: #2a2d34;
+    --page-accent: #6ea8fe;
+
+    /* egui dark theme. */
+    --egui-window: #1b1b1b;
+    --egui-panel: #202020;
+    --egui-widget: #3c3c3c;
+    --egui-widget-hover: #464646;
+    --egui-border: #3c3c3c;
+    --egui-line: #2c2c2c;
+    --egui-text: #dcdcdc;
+    --egui-weak: #8c8c8c;
+    --egui-link: #5aaaff;
+    --egui-warn-bg: #3d3416;
+    --egui-warn: #ffd166;
+    --egui-error-bg: #3f1d1d;
+    --egui-error: #ff6b6b;
+    --egui-info-bg: #1d2b3f;
+    --egui-info: #8ab4f8;
+    --egui-ok-bg: #1f3a26;
+    --egui-ok: #7ddc8f;
+
+    /* Path of Exile 2 colors. */
+    --rarity-normal: #c8c8c8;
+    --rarity-magic: #8888ff;
+    --rarity-rare: #ffff77;
+    --rarity-unique: #af6025;
+    --rarity-currency: #aa9e82;
+    --mod: #8888ff;
+    --corrupted: #d20000;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--page-bg);
+    color: var(--page-text);
+    font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+
+  /* Controls of the mock-up. */
+  .controls {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px 20px;
+    align-items: end;
+    padding: 12px 16px;
+    background: var(--page-panel);
+    border-bottom: 1px solid var(--page-border);
+  }
+  .controls label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--page-muted); }
+  .controls select {
+    background: var(--page-bg); color: var(--page-text);
+    border: 1px solid var(--page-border); border-radius: 6px; padding: 5px 8px; font: inherit;
+  }
+  .controls input[type="range"] { width: 180px; accent-color: var(--page-accent); }
+  .presets { display: flex; gap: 6px; flex-wrap: wrap; }
+  .presets button, .segmented button {
+    background: var(--page-bg); color: var(--page-text);
+    border: 1px solid var(--page-border); border-radius: 6px; padding: 5px 10px; font: inherit; cursor: pointer;
+  }
+  .presets button:hover, .segmented button:hover { border-color: var(--page-accent); }
+  .segmented { display: flex; }
+  .segmented button { border-radius: 0; }
+  .segmented button:first-child { border-radius: 6px 0 0 6px; }
+  .segmented button:last-child { border-radius: 0 6px 6px 0; }
+  .segmented button[aria-pressed="true"] { background: var(--page-accent); color: #0b1220; border-color: var(--page-accent); }
+  .readout { font-size: 12px; color: var(--page-muted); }
+  .readout strong { color: var(--page-text); }
+
+  .stage { padding: 16px; }
+  .scaler { transform-origin: top left; }
+
+  /* Mock window. */
+  .os-frame {
+    border: 1px solid #000;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, .5);
+    background: var(--egui-window);
+  }
+  .os-title {
+    height: 30px; display: flex; align-items: center; justify-content: space-between;
+    padding: 0 10px; background: #2b2b2b; color: #bbb; font-size: 12px;
+  }
+  .os-buttons { display: flex; gap: 8px; }
+  .os-buttons span { width: 12px; height: 12px; border-radius: 50%; background: #555; }
+
+  .win {
+    display: flex; flex-direction: column; height: calc(100% - 30px);
+    color-scheme: dark; color: var(--egui-text); font: 14px/1.4 "Ubuntu", "Segoe UI", system-ui, sans-serif;
+  }
+  .win-header {
+    display: flex; align-items: center; gap: 10px;
+    padding: 6px 10px; background: var(--egui-panel); border-bottom: 1px solid var(--egui-border);
+  }
+  .league { display: flex; align-items: center; gap: 6px; color: var(--egui-weak); font-size: 13px; }
+  .league strong { color: var(--egui-text); font-weight: 600; }
+  .spacer { flex: 1; }
+  .icon-button {
+    width: 28px; height: 28px; display: grid; place-items: center;
+    background: var(--egui-widget); border: none; border-radius: 4px; color: var(--egui-text);
+    font-size: 16px; cursor: pointer;
+  }
+  .icon-button:hover { background: var(--egui-widget-hover); }
+  .icon-button[aria-pressed="true"] { outline: 1px solid var(--egui-link); }
+
+  .win-body { flex: 1; display: flex; min-height: 0; }
+  .win-main { flex: 1; overflow: auto; padding: 12px; display: flex; flex-direction: column; gap: 12px; }
+  .win-footer {
+    display: flex; gap: 10px; justify-content: space-between; flex-wrap: wrap;
+    padding: 4px 10px; background: var(--egui-panel); border-top: 1px solid var(--egui-border);
+    color: var(--egui-weak); font-size: 12px;
+  }
+
+  .banner { padding: 8px 10px; border-radius: 4px; font-size: 13px; }
+  .banner.warn { background: var(--egui-warn-bg); color: var(--egui-warn); }
+  .banner.error { background: var(--egui-error-bg); color: var(--egui-error); }
+  .banner.info { background: var(--egui-info-bg); color: var(--egui-info); }
+  .banner a { color: inherit; }
+
+  /* Columns: one when narrow, two when medium, three when wide. */
+  .content { display: grid; gap: 12px; align-items: start; }
+  .column { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+  .layout-narrow .content { grid-template-columns: minmax(0, 1fr); }
+  .layout-medium .content { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .layout-wide .content { grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) minmax(0, 1.2fr); }
+
+  .card { background: var(--egui-panel); border: 1px solid var(--egui-border); border-radius: 6px; padding: 12px; }
+  .card h3 {
+    display: flex; justify-content: space-between; gap: 8px; align-items: baseline;
+    margin: 0 0 8px; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--egui-weak);
+  }
+  .card h3 small { text-transform: none; letter-spacing: 0; font-weight: 400; }
+
+  .item { display: flex; gap: 12px; align-items: flex-start; }
+  .item-icon {
+    flex: none; width: 56px; height: 56px; border-radius: 4px; display: grid; place-items: center;
+    background: #111; border: 1px solid var(--egui-border); color: var(--egui-weak); font-size: 22px;
+  }
+  .item-icon img { max-width: 100%; max-height: 100%; object-fit: contain; }
+  .layout-wide .item-icon { width: 80px; height: 80px; }
+  .item-name { font-size: 18px; font-weight: 600; line-height: 1.2; }
+  .layout-wide .item-name { font-size: 20px; }
+  .item-base { color: var(--egui-text); }
+  .item-meta { color: var(--egui-weak); font-size: 12px; margin-top: 4px; display: flex; gap: 2px 10px; flex-wrap: wrap; }
+  .tag { padding: 0 6px; border-radius: 3px; background: var(--egui-widget); color: var(--egui-text); font-size: 11px; }
+  .tag.corrupted { background: #5a1e1e; color: #ff8a8a; }
+  .rarity-normal { color: var(--rarity-normal); }
+  .rarity-magic { color: var(--rarity-magic); }
+  .rarity-rare { color: var(--rarity-rare); }
+  .rarity-unique { color: var(--rarity-unique); }
+  .rarity-currency { color: var(--rarity-currency); }
+
+  /* Item stats, as in the game tooltip. */
+  .stats { margin-top: 10px; border-top: 1px solid var(--egui-line); padding-top: 8px; }
+  .stats summary { cursor: pointer; color: var(--egui-weak); font-size: 12px; }
+  .stats .requirements { color: var(--egui-weak); font-size: 12px; margin: 4px 0 6px; }
+  .mods { list-style: none; margin: 0; padding: 0; }
+  .mods + .mods { margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--egui-line); }
+  .mod { color: var(--mod); padding: 2px 0; }
+  .mod.description { color: var(--egui-text); }
+  .mod.corrupted { color: var(--corrupted); font-weight: 600; }
+  .roll { display: flex; align-items: center; gap: 6px; margin-top: 2px; font-size: 11px; color: var(--egui-weak); }
+  .roll .bar { flex: 1; max-width: 120px; height: 4px; border-radius: 2px; background: var(--egui-widget); overflow: hidden; }
+  .roll .bar i { display: block; height: 100%; background: var(--egui-link); }
+
+  .headline { display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px; }
+  .headline .value { font-size: 28px; font-weight: 700; }
+  .layout-wide .headline .value { font-size: 32px; }
+  .headline .unit { color: var(--egui-weak); }
+  .prices, .offers-table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  .prices th, .offers-table th { text-align: right; font-weight: 400; color: var(--egui-weak); font-size: 12px; padding: 2px 6px; }
+  .prices th:first-child, .prices td:first-child, .offers-table th:first-child, .offers-table td:first-child { text-align: left; }
+  .prices td, .offers-table td { text-align: right; padding: 3px 6px; border-top: 1px solid var(--egui-line); white-space: nowrap; }
+  .currency { display: inline-flex; align-items: center; gap: 6px; }
+  .orb { width: 20px; height: 20px; vertical-align: middle; }
+  .headline .orb { width: 28px; height: 28px; align-self: center; }
+  .offers-table .orb { width: 18px; height: 18px; }
+
+  .reliability { display: flex; align-items: center; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+  .badge { padding: 1px 8px; border-radius: 10px; font-size: 12px; }
+  .badge.ok { background: var(--egui-ok-bg); color: var(--egui-ok); }
+  .badge.uncertain { background: var(--egui-warn-bg); color: var(--egui-warn); }
+
+  .button {
+    display: inline-flex; align-items: center; gap: 6px; margin-top: 12px;
+    background: var(--egui-widget); color: var(--egui-text); border: none; border-radius: 4px;
+    padding: 6px 12px; font: inherit; cursor: pointer;
+  }
+  .button:hover { background: var(--egui-widget-hover); }
+  .button:disabled { color: var(--egui-weak); cursor: default; background: var(--egui-panel); border: 1px solid var(--egui-widget); }
+  .link { color: var(--egui-link); cursor: pointer; font-size: 12px; text-transform: none; letter-spacing: 0; }
+
+  /* Offers from the trade site. */
+  .offers-scroll { max-height: 340px; overflow: auto; }
+  .layout-wide .offers-scroll { max-height: none; }
+  .offers-table tr.suspicious td { color: var(--egui-weak); }
+  .offers-table tr.suspicious .amount { text-decoration: line-through; }
+  .offers-table .flag { color: var(--egui-warn); margin-left: 2px; }
+  .offers-table .online { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--egui-ok); margin-right: 6px; vertical-align: middle; }
+  .offers-table td.roll-value.high { color: var(--egui-ok); }
+  .offers-note { font-size: 12px; color: var(--egui-weak); margin-top: 8px; }
+  .status { display: flex; align-items: center; gap: 8px; padding: 8px 0; color: var(--egui-weak); }
+  .status.warn { color: var(--egui-warn); }
+  .spinner { width: 14px; height: 14px; border: 2px solid var(--egui-widget); border-top-color: var(--egui-link); border-radius: 50%; animation: spin 1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .candidates { list-style: none; margin: 8px 0 0; padding: 0; }
+  .candidates li { display: flex; justify-content: space-between; gap: 8px; padding: 4px 0; border-top: 1px solid var(--egui-line); }
+
+  .empty { flex: 1; display: grid; place-items: center; text-align: center; color: var(--egui-weak); }
+  .empty .key { display: inline-block; padding: 1px 6px; border: 1px solid var(--egui-weak); border-radius: 3px; color: var(--egui-text); }
+
+  .chart svg { width: 100%; height: auto; display: block; }
+  .legend { display: flex; gap: 14px; font-size: 12px; color: var(--egui-weak); margin-top: 4px; }
+  .legend span::before { content: ""; display: inline-block; width: 10px; height: 3px; margin-right: 5px; vertical-align: middle; }
+  .legend .l-price::before { background: var(--egui-link); }
+  .legend .l-offers::before { background: #555; height: 8px; }
+
+  /* Settings: a side panel, or the whole window when it is narrow. */
+  .settings { background: var(--egui-panel); border-left: 1px solid var(--egui-border); padding: 12px; width: 300px; overflow: auto; }
+  .layout-narrow .settings { width: 100%; border-left: none; }
+  .settings h2 { margin: 0 0 12px; font-size: 15px; }
+  .field { margin-bottom: 14px; }
+  .field > span { display: block; font-size: 12px; color: var(--egui-weak); margin-bottom: 4px; }
+  .field p { margin: 4px 0 0 20px; font-size: 12px; color: var(--egui-weak); }
+  .combo { display: flex; justify-content: space-between; background: var(--egui-widget); border-radius: 4px; padding: 5px 8px; }
+  .radio { display: flex; align-items: center; gap: 6px; padding: 2px 0; }
+  .radio i { width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--egui-weak); display: inline-block; }
+  .radio.on i { border-color: var(--egui-link); background: radial-gradient(var(--egui-link) 40%, transparent 45%); }
+  .check { display: flex; align-items: center; gap: 6px; }
+  .check i { flex: none; width: 14px; height: 14px; border-radius: 3px; background: var(--egui-widget); display: inline-grid; place-items: center; font-style: normal; font-size: 11px; }
+  .check.on i { background: var(--egui-link); color: #0b1220; }
+  .disclaimer { margin-top: 24px; font-size: 11px; color: var(--egui-weak); }
+
+  .notes { max-width: 900px; padding: 0 16px 32px; color: var(--page-muted); font-size: 13px; }
+  .notes h2 { color: var(--page-text); font-size: 15px; }
+  .notes li { margin: 4px 0; }
+</style>
+</head>
+<body>
+
+<div class="controls">
+  <div>
+    <div class="readout">Window <strong id="size-readout"></strong> · layout <strong id="layout-readout"></strong></div>
+    <div class="presets" id="presets"></div>
+  </div>
+  <label>Width <input type="range" id="width" min="320" max="1920" step="10"></label>
+  <label>Height <input type="range" id="height" min="320" max="1080" step="10"></label>
+  <label>Scenario <select id="scenario"></select></label>
+  <label>Copied item language
+    <div class="segmented" id="item-language">
+      <button type="button" data-value="en">English</button>
+      <button type="button" data-value="fr">Français</button>
+    </div>
+  </label>
+  <label>Trade site offers
+    <div class="segmented" id="offers-state">
+      <button type="button" data-value="idle">Not searched</button>
+      <button type="button" data-value="loading">Searching</button>
+      <button type="button" data-value="results">Results</button>
+      <button type="button" data-value="limited">Long wait</button>
+    </div>
+  </label>
+  <label>Headline currency
+    <div class="segmented" id="headline-rule">
+      <button type="button" data-value="auto">Automatic</button>
+      <button type="button" data-value="none">None</button>
+    </div>
+  </label>
+</div>
+
+<div class="stage" id="stage">
+  <div class="scaler" id="scaler">
+    <div class="os-frame" id="frame">
+      <div class="os-title"><span>rust-exile-market</span><div class="os-buttons"><span></span><span></span><span></span></div></div>
+      <div class="win" id="win"></div>
+    </div>
+  </div>
+</div>
+
+<div class="notes">
+  <h2>Breakpoints</h2>
+  <ul>
+    <li><strong>Narrow</strong>, under 500 px: one column; the item stats are folded, and the offers show only the price and the listing time. The settings replace the content.</li>
+    <li><strong>Medium</strong>, from 500 to 999 px: the item and its stats on the left, the price and the offers on the right. The settings open as a side panel.</li>
+    <li><strong>Wide</strong>, from 1000 px: three columns: the item and its stats, the price and its 7-day history, the offers with the rolls of each one.</li>
+  </ul>
+  <h2>Sources</h2>
+  <ul>
+    <li><strong>Price, offer count and history</strong>: poe2scout, refreshed every hour.</li>
+    <li><strong>Offers</strong>: the trade site, one search when the player clicks <em>Search the offers</em>. The button then stays disabled for at least 10 seconds, longer when the limits announced by the trade site require it, with the countdown on the button. Prices far below the poe2scout price (under a quarter of it) are struck through and marked with a question mark: they are usually bait or mistakes.</li>
+    <li><strong>Item stats</strong>: the copied text. The roll bars need the advanced copy (Ctrl+Alt+C), which gives the range of each stat.</li>
+  </ul>
+  <h2>Proposals to decide</h2>
+  <ul>
+    <li><strong>Headline currency</strong>: above the table of the three currencies, the price in the most readable one: Divine Orbs from 1 Divine Orb, Exalted Orbs below. Switch to <em>None</em> to compare.</li>
+    <li><strong>Icons</strong>: the orbs come from <code>assets/currencies/</code>, bundled in the executable; the item icons are loaded from the Grinding Gear Games CDN, at the address given by the price database. Rare and unidentified items have no icon: the first letter of their item class stands in.</li>
+    <li><strong>Unidentified unique</strong>: the list of the possible uniques shows the price of each one.</li>
+    <li><strong>Data age and source</strong>: in a status bar at the bottom.</li>
+    <li><strong>Disclaimer</strong>: at the bottom of the settings.</li>
+    <li><strong>French messages</strong>: formal ("Copiez"), like the French game client.</li>
+  </ul>
+</div>
+
+<script>
+  const BREAKPOINT_MEDIUM = 500;
+  const BREAKPOINT_WIDE = 1000;
+  const UNCERTAIN_BELOW = 5;
+  // An offer under this share of the poe2scout price is flagged as suspicious.
+  const SUSPICIOUS_BELOW = 0.25;
+  // Sample rates: Exalted Orbs per Divine Orb, Chaos Orbs per Divine Orb.
+  const EX_PER_DIV = 725;
+  const CHAOS_PER_DIV = 9.9;
+  const EX_PER_CURRENCY = { exalted: 1, divine: EX_PER_DIV, chaos: EX_PER_DIV / CHAOS_PER_DIV };
+  const LEAGUE = "Forbidden Rites";
+  const ORB_FILES = { ex: "exalted-orb", div: "divine-orb", chaos: "chaos-orb" };
+  const ORB_KEYS = { exalted: "ex", divine: "div", chaos: "chaos" };
+  const CDN = "https://web.poecdn.com/gen/image/";
+
+  const PRESETS = [
+    { label: "Narrow 420 × 640", width: 420, height: 640 },
+    { label: "Medium 820 × 640", width: 820, height: 640 },
+    { label: "Wide 1280 × 800", width: 1280, height: 800 },
+    { label: "Maximized 1920 × 1040", width: 1920, height: 1040 },
+  ];
+
+  // Interface strings, as they would be in locales/en.ftl and locales/fr.ftl.
+  const STRINGS = {
+    en: {
+      league: "League",
+      settings: "Settings",
+      close: "Close",
+      emptyTitle: "Copy an item in the game with",
+      emptyHint: "The price shows up here.",
+      price: "Price",
+      unitPrice: "Unit price",
+      stackOf: n => `Stack of ${n}`,
+      offers: n => `${n.toLocaleString("en-US")} ${n === 1 ? "offer" : "offers"}`,
+      reliable: "Sells",
+      uncertain: n => `Only ${n} ${n === 1 ? "offer" : "offers"}: the price is uncertain`,
+      openTrade: "Open on the trade site",
+      trade: "Trade site",
+      history: "Price over the last 7 days",
+      historyUnit: "Unit price over the last 7 days",
+      historyPrice: "Price",
+      historyOffers: "Offers",
+      updated: "Prices updated 12 minutes ago",
+      updatedCached: "Prices from 3 hours ago (offline)",
+      source: "Prices: poe2scout · Offers: trade site",
+      stack: (n, max) => `Stack Size: ${n}/${max}`,
+      corrupted: "Corrupted",
+      unidentified: "Unidentified",
+      stats: n => `Stats (${n})`,
+      rareNotPriced: "Rare items aren't priced yet.",
+      identify: "Identify the item to get its price.",
+      possible: "Possible uniques",
+      noPrice: league => `No price found for this item in ${league}.`,
+      offline: "The price database can't be reached: showing the prices from 3 hours ago.",
+      leagueEnded: "Rise of the Abyssal has ended, switched to Forbidden Rites.",
+      clipboard: "The clipboard can't be read.",
+      clipboardHelp: "See the help",
+      unreadable: "This item couldn't be read.",
+      language: "Language",
+      automatic: "Automatic (follows the game)",
+      alwaysOnTop: "Always on top",
+      disclaimer: "This product isn't affiliated with or endorsed by Grinding Gear Games in any way.",
+      offersTitle: "Offers",
+      onlineCount: (shown, total) => `${shown} of ${total} online`,
+      colPrice: "Price",
+      colUnit: "Per unit",
+      colStock: "Stock",
+      colListed: "Listed",
+      ago: minutes => minutes < 60 ? `${minutes} min ago` : minutes < 1440 ? `${Math.round(minutes / 60)} h ago` : `${Math.round(minutes / 1440)} d ago`,
+      suspicious: "Far below the market price: probably bait or a mistake",
+      searching: "Searching the trade site…",
+      searchOffers: "Search the offers",
+      searchHint: "One search per click, within the limits of the trade site.",
+      searchAgain: wait => `Search again · ${wait}`,
+      limited: wait => `Trade site limit: next search in ${wait}.`,
+      noOffers: "No offer online.",
+      showMore: "Show the next 10",
+    },
+    fr: {
+      league: "Ligue",
+      settings: "Réglages",
+      close: "Fermer",
+      emptyTitle: "Copiez un objet en jeu avec",
+      emptyHint: "Son prix s'affichera ici.",
+      price: "Prix",
+      unitPrice: "Prix unitaire",
+      stackOf: n => `Pile de ${n}`,
+      offers: n => `${n.toLocaleString("fr-FR")} ${n <= 1 ? "offre" : "offres"}`,
+      reliable: "Se vend",
+      uncertain: n => `Seulement ${n} ${n <= 1 ? "offre" : "offres"} : prix incertain`,
+      openTrade: "Ouvrir sur le site d'échange",
+      trade: "Site d'échange",
+      history: "Prix sur les 7 derniers jours",
+      historyUnit: "Prix unitaire sur les 7 derniers jours",
+      historyPrice: "Prix",
+      historyOffers: "Offres",
+      updated: "Prix mis à jour il y a 12 minutes",
+      updatedCached: "Prix d'il y a 3 heures (hors ligne)",
+      source: "Prix : poe2scout · Offres : site d'échange",
+      stack: (n, max) => `Taille de la pile : ${n}/${max}`,
+      corrupted: "Corrompu",
+      unidentified: "Non identifié",
+      stats: n => `Statistiques (${n})`,
+      rareNotPriced: "Les objets rares ne sont pas encore estimés.",
+      identify: "Identifiez l'objet pour connaître son prix.",
+      possible: "Uniques possibles",
+      noPrice: league => `Aucun prix trouvé pour cet objet dans la ligue ${league}.`,
+      offline: "La base de prix est injoignable : affichage des prix d'il y a 3 heures.",
+      leagueEnded: "La ligue Rise of the Abyssal est terminée, passage à Forbidden Rites.",
+      clipboard: "Impossible de lire le presse-papier.",
+      clipboardHelp: "Voir l'aide",
+      unreadable: "Impossible de lire cet objet.",
+      language: "Langue",
+      automatic: "Automatique (suit le jeu)",
+      alwaysOnTop: "Toujours au premier plan",
+      disclaimer: "Ce produit n'est ni affilié à Grinding Gear Games ni approuvé par Grinding Gear Games.",
+      offersTitle: "Offres",
+      onlineCount: (shown, total) => `${shown} sur ${total} en ligne`,
+      colPrice: "Prix",
+      colUnit: "À l'unité",
+      colStock: "Stock",
+      colListed: "Mise en vente",
+      ago: minutes => minutes < 60 ? `il y a ${minutes} min` : minutes < 1440 ? `il y a ${Math.round(minutes / 60)} h` : `il y a ${Math.round(minutes / 1440)} j`,
+      suspicious: "Très en dessous du prix du marché : sans doute un appât ou une erreur",
+      searching: "Recherche sur le site d'échange…",
+      searchOffers: "Chercher les offres",
+      searchHint: "Une recherche par clic, dans les limites du site d'échange.",
+      searchAgain: wait => `Relancer · ${wait}`,
+      limited: wait => `Limite du site d'échange : prochaine recherche dans ${wait}.`,
+      noOffers: "Aucune offre en ligne.",
+      showMore: "Afficher les 10 suivantes",
+    },
+  };
+
+  // Stats as in the copied text; roll = [value, min, max] from the advanced copy.
+  const HEADHUNTER = {
+    rarity: "unique",
+    name: { en: "Headhunter", fr: "Chasseur de têtes" },
+    base: { en: "Heavy Belt", fr: "Ceinture lourde" },
+    itemClass: { en: "Belts", fr: "Ceintures" },
+    icon: CDN + "WzI1LDE0LHsiZiI6IjJESXRlbXMvQmVsdHMvVW5pcXVlcy9IZWFkaHVudGVyIiwidyI6MiwiaCI6MSwic2NhbGUiOjEsInJlYWxtIjoicG9lMiJ9XQ/24accb4eec/Headhunter.png",
+    requirements: { en: "Requires: Level 50", fr: "Requiert : Niveau 50" },
+    implicit: [
+      { en: "26% increased Stun Threshold", fr: "26% d'Augmentation du Seuil d'Étourdissement", roll: [26, 20, 30] },
+      { en: "Has 2 Charm Slots", fr: "Possède 2 Emplacements de Charme", roll: [2, 1, 3] },
+    ],
+    explicit: [
+      { en: "+55 to maximum Life", fr: "+55 de Vie maximale", roll: [55, 40, 60] },
+      { en: "+34 to Strength", fr: "+34 de Force", roll: [34, 20, 40] },
+      { en: "+22 to Dexterity", fr: "+22 de Dextérité", roll: [22, 20, 40] },
+      { en: "When you kill a Rare monster, you gain its Modifiers for 60 seconds", fr: "Lorsque vous Tuez un Monstre Rare, vous gagnez ses Modificateurs pendant 60 secondes" },
+    ],
+    priceEx: 8990,
+    offers: 23,
+    history: [9800, 9650, 9400, 9300, 9150, 9020, 8990],
+    historyOffers: [31, 28, 30, 26, 25, 24, 23],
+    // Offers from the trade site: rolls follow rollColumns.
+    rollColumns: [
+      { en: "Life", fr: "Vie", range: [40, 60] },
+      { en: "Str", fr: "For", range: [20, 40] },
+      { en: "Dex", fr: "Dex", range: [20, 40] },
+    ],
+    tradeOffers: {
+      total: 13,
+      list: [
+        { amount: 6, currency: "exalted", minutes: 130, rolls: [52, 39, 35] },
+        { amount: 1, currency: "chaos", minutes: 7400, rolls: [57, 33, 26] },
+        { amount: 8, currency: "divine", minutes: 180, rolls: [45, 31, 28] },
+        { amount: 10, currency: "divine", minutes: 180, rolls: [48, 40, 23] },
+        { amount: 11, currency: "divine", minutes: 40, rolls: [53, 36, 30] },
+        { amount: 12, currency: "divine", minutes: 1500, rolls: [55, 34, 22] },
+        { amount: 13, currency: "divine", minutes: 2900, rolls: [50, 38, 31] },
+        { amount: 15, currency: "divine", minutes: 360, rolls: [58, 35, 37] },
+        { amount: 20, currency: "divine", minutes: 95, rolls: [49, 30, 27] },
+        { amount: 32, currency: "divine", minutes: 70, rolls: [38, 31, 34] },
+      ],
+    },
+  };
+
+  const SCENARIOS = {
+    empty: { label: "Before the first item" },
+    stack: {
+      label: "Currency stack",
+      item: {
+        rarity: "currency",
+        name: { en: "Orb of Annulment", fr: "Orbe d'annulation" },
+        itemClass: { en: "Stackable Currency", fr: "Objets monétaires empilables" },
+        stack: [7, 20],
+        icon: CDN + "WzI1LDE0LHsiZiI6IjJESXRlbXMvQ3VycmVuY3kvQW5udWxsT3JiIiwic2NhbGUiOjEsInJlYWxtIjoicG9lMiJ9XQ/2daba8ccca/AnnullOrb.png",
+        description: [{ en: "Removes a random modifier from an item", fr: "Retire un modificateur aléatoire d'un objet" }],
+        priceEx: 182,
+        offers: 1240,
+        history: [205, 198, 196, 190, 188, 185, 182],
+        historyOffers: [1300, 1280, 1310, 1260, 1250, 1230, 1240],
+        // Bulk offers of the currency exchange: price per unit in Exalted Orbs.
+        exchangeOffers: {
+          total: 48,
+          list: [
+            { unitEx: 175, stock: 40, minutes: 12 },
+            { unitEx: 178, stock: 12, minutes: 3 },
+            { unitEx: 180, stock: 120, minutes: 45 },
+            { unitEx: 181, stock: 8, minutes: 20 },
+            { unitEx: 182, stock: 33, minutes: 160 },
+            { unitEx: 185, stock: 60, minutes: 9 },
+            { unitEx: 188, stock: 15, minutes: 300 },
+            { unitEx: 190, stock: 200, minutes: 1440 },
+          ],
+        },
+      },
+    },
+    unique: { label: "Unique item", item: HEADHUNTER },
+    corrupted: {
+      label: "Corrupted unique, few offers",
+      item: {
+        rarity: "unique",
+        name: { en: "Beacon of Azis", fr: "Signal d'Azis" },
+        base: { en: "Solar Amulet", fr: "Amulette solaire" },
+        itemClass: { en: "Amulets", fr: "Amulettes" },
+        corrupted: true,
+        icon: CDN + "WzI1LDE0LHsiZiI6IjJESXRlbXMvQW11bGV0cy9VbmlxdWVzL0JlYWNvbk9mQXppcyIsInciOjEsImgiOjEsInNjYWxlIjoxLCJyZWFsbSI6InBvZTIifV0/2d0ad03930/BeaconOfAzis.png",
+        requirements: { en: "Requires: Level 30", fr: "Requiert : Niveau 30" },
+        implicit: [{ en: "+12 to Spirit", fr: "+12 d'Esprit", roll: [12, 10, 15] }],
+        explicit: [
+          { en: "+85 to maximum Mana", fr: "+85 de Mana maximal", roll: [85, 60, 100] },
+          { en: "+30 to Spirit", fr: "+30 d'Esprit" },
+          { en: "30% increased Light Radius", fr: "30% d'Augmentation du Rayonnement lumineux" },
+          { en: "Critical Hits ignore Enemy Monster Elemental Resistances", fr: "Vos Touches critiques ignorent les Résistances élémentaires des Monstres Ennemis" },
+        ],
+        priceEx: 1450,
+        offers: 3,
+        history: [1700, 1620, 1580, 1500, 1520, 1470, 1450],
+        historyOffers: [6, 5, 5, 4, 4, 3, 3],
+        rollColumns: [
+          { en: "Mana", fr: "Mana", range: [60, 100] },
+          { en: "Spirit", fr: "Esprit", range: [10, 15] },
+        ],
+        tradeOffers: {
+          total: 3,
+          list: [
+            { amount: 1.8, currency: "divine", minutes: 300, rolls: [72, 11] },
+            { amount: 2, currency: "divine", minutes: 2100, rolls: [88, 13] },
+            { amount: 2.5, currency: "divine", minutes: 50, rolls: [97, 15] },
+          ],
+        },
+      },
+    },
+    unidentified: {
+      label: "Unidentified unique",
+      item: {
+        rarity: "unique",
+        unidentified: true,
+        base: { en: "Stellar Amulet", fr: "Amulette stellaire" },
+        itemClass: { en: "Amulets", fr: "Amulettes" },
+        requirements: { en: "Requires: Level 60", fr: "Requiert : Niveau 60" },
+        implicit: [{ en: "+6 to all Attributes", fr: "+6 à tous les Attributs", roll: [6, 5, 7] }],
+        explicit: [],
+        candidates: [
+          { name: { en: "Astramentis", fr: "Astramentis" }, priceEx: 2900 },
+          { name: { en: "Fixation of Yix", fr: "Fixation d'Yix" }, priceEx: 95 },
+          { name: { en: "Hinekora's Sight", fr: "Vue d'Hinekora" }, priceEx: 640 },
+          { name: { en: "Strugglescream", fr: "Hurlépreuve" }, priceEx: 12 },
+        ],
+      },
+    },
+    rare: {
+      label: "Rare item (not priced yet)",
+      item: {
+        rarity: "rare",
+        name: { en: "Storm Spiral", fr: "Spirale de tempête" },
+        base: { en: "Sapphire Ring", fr: "Anneau de saphir" },
+        itemClass: { en: "Rings", fr: "Anneaux" },
+        requirements: { en: "Requires: Level 44", fr: "Requiert : Niveau 44" },
+        implicit: [{ en: "+22% to Cold Resistance", fr: "+22% de Résistance au Froid" }],
+        explicit: [
+          { en: "+45 to maximum Life", fr: "+45 de Vie maximale" },
+          { en: "+31% to Fire Resistance", fr: "+31% de Résistance au Feu" },
+          { en: "+12 to Dexterity", fr: "+12 de Dextérité" },
+        ],
+        notPriced: true,
+      },
+    },
+    noPrice: {
+      label: "No price found",
+      item: {
+        rarity: "unique",
+        name: { en: "Strugglescream", fr: "Hurlépreuve" },
+        base: { en: "Stellar Amulet", fr: "Amulette stellaire" },
+        itemClass: { en: "Amulets", fr: "Amulettes" },
+        noPrice: true,
+        tradeOffers: { total: 0, list: [] },
+      },
+    },
+    offline: { label: "Offline, cached prices", item: HEADHUNTER, banner: ["warn", "offline"], cached: true },
+    leagueEnded: { label: "League ended", item: HEADHUNTER, banner: ["info", "leagueEnded"] },
+    clipboard: { label: "Clipboard unreadable", banner: ["error", "clipboard"] },
+    unreadable: { label: "Item couldn't be read", banner: ["error", "unreadable"] },
+  };
+
+  const state = {
+    width: 820,
+    height: 640,
+    scenario: "unique",
+    language: "en",
+    offersState: "results",
+    headline: "auto",
+    settingsOpen: false,
+  };
+
+  const $ = id => document.getElementById(id);
+
+  function layoutFor(width) {
+    if (width < BREAKPOINT_MEDIUM) return "narrow";
+    if (width < BREAKPOINT_WIDE) return "medium";
+    return "wide";
+  }
+
+  function formatNumber(value, decimals) {
+    return value.toLocaleString(state.language === "fr" ? "fr-FR" : "en-US", {
+      minimumFractionDigits: decimals,
+      maximumFractionDigits: decimals,
+    });
+  }
+
+  // Exalted Orbs without decimals, Divine and Chaos Orbs with up to 2.
+  function inCurrencies(priceEx) {
+    const div = priceEx / EX_PER_DIV;
+    const chaos = div * CHAOS_PER_DIV;
+    const decimals = v => (v >= 100 ? 0 : v >= 10 ? 1 : 2);
+    return [
+      { key: "ex", label: { en: "Exalted Orb", fr: "Orbe exalté" }, plural: { en: "Exalted Orbs", fr: "Orbes exaltés" }, value: priceEx, text: formatNumber(priceEx, 0) },
+      { key: "div", label: { en: "Divine Orb", fr: "Orbe divin" }, plural: { en: "Divine Orbs", fr: "Orbes divins" }, value: div, text: formatNumber(div, decimals(div)) },
+      { key: "chaos", label: { en: "Chaos Orb", fr: "Orbe du chaos" }, plural: { en: "Chaos Orbs", fr: "Orbes du chaos" }, value: chaos, text: formatNumber(chaos, decimals(chaos)) },
+    ];
+  }
+
+  function headlineCurrency(priceEx) {
+    const [ex, div] = inCurrencies(priceEx);
+    return div.value >= 1 ? div : ex;
+  }
+
+  // "1 Divine Orb", "12.4 Divine Orbs"; in French, the singular goes up to 1.99.
+  function amountName(c) {
+    const singular = state.language === "fr" ? c.value < 2 : c.value === 1;
+    return (singular ? c.label : c.plural)[state.language];
+  }
+
+  function orb(key) {
+    return `<img class="orb" src="../../assets/currencies/${ORB_FILES[key]}.png" alt="">`;
+  }
+
+  function currencyCell(c) {
+    return `<span class="currency">${orb(c.key)}${c.label[state.language]}</span>`;
+  }
+
+  // The price database gives no icon for base types: rare and unidentified
+  // items show the first letter of their item class.
+  function itemIcon(item) {
+    return item.icon ? `<img src="${item.icon}" alt="">` : item.itemClass[state.language].charAt(0);
+  }
+
+  function tradeButton(t) {
+    return `<button class="button" type="button">${t.openTrade} ↗</button>`;
+  }
+
+  function renderMod(mod, extraClass = "") {
+    const lang = state.language;
+    const bar = mod.roll
+      ? (() => {
+          const [value, min, max] = mod.roll;
+          const share = max > min ? (value - min) / (max - min) : 1;
+          return `<div class="roll"><span class="bar"><i style="width:${Math.round(share * 100)}%"></i></span>${min}–${max}</div>`;
+        })()
+      : "";
+    return `<li class="mod ${extraClass}">${mod[lang]}${bar}</li>`;
+  }
+
+  function renderStats(item, t, layout) {
+    const lang = state.language;
+    const groups = [];
+    if (item.description) groups.push(`<ul class="mods">${item.description.map(m => renderMod(m, "description")).join("")}</ul>`);
+    if (item.implicit && item.implicit.length) groups.push(`<ul class="mods">${item.implicit.map(m => renderMod(m)).join("")}</ul>`);
+    if (item.explicit && item.explicit.length) groups.push(`<ul class="mods">${item.explicit.map(m => renderMod(m)).join("")}</ul>`);
+    if (item.corrupted) groups.push(`<ul class="mods"><li class="mod corrupted">${t.corrupted}</li></ul>`);
+    if (!groups.length) return "";
+    const count = (item.implicit || []).length + (item.explicit || []).length + (item.description || []).length;
+    const requirements = item.requirements ? `<div class="requirements">${item.requirements[lang]}</div>` : "";
+    const open = layout === "narrow" ? "" : "open";
+    return `<details class="stats" ${open}><summary>${t.stats(count)}</summary>${requirements}${groups.join("")}</details>`;
+  }
+
+  function renderItem(item, t, layout) {
+    const lang = state.language;
+    const title = item.unidentified
+      ? `<div class="item-name rarity-unique">${item.base[lang]}</div>`
+      : `<div class="item-name rarity-${item.rarity}">${item.name[lang]}</div>
+         ${item.base ? `<div class="item-base">${item.base[lang]}</div>` : ""}`;
+    const tags = [
+      item.corrupted ? `<span class="tag corrupted">${t.corrupted}</span>` : "",
+      item.unidentified ? `<span class="tag">${t.unidentified}</span>` : "",
+    ].join("");
+    const meta = [
+      `<span>${item.itemClass[lang]}</span>`,
+      item.stack ? `<span>${t.stack(...item.stack)}</span>` : "",
+      tags,
+    ].join("");
+    return `
+      <div class="card">
+        <div class="item">
+          <div class="item-icon">${itemIcon(item)}</div>
+          <div>${title}<div class="item-meta">${meta}</div></div>
+        </div>
+        ${renderStats(item, t, layout)}
+      </div>`;
+  }
+
+  function renderPrice(item, t) {
+    const lang = state.language;
+    if (item.notPriced) {
+      return `<div class="card"><h3>${t.price}</h3><p>${t.rareNotPriced}</p>${tradeButton(t)}</div>`;
+    }
+    if (item.noPrice) {
+      return `<div class="card"><h3>${t.price}</h3><p>${t.noPrice(LEAGUE)}</p>${tradeButton(t)}</div>`;
+    }
+    if (item.unidentified) {
+      const rows = item.candidates.map(c => {
+        const h = headlineCurrency(c.priceEx);
+        return `<li><span class="rarity-unique">${c.name[lang]}</span><span title="${amountName(h)}">${h.text} ${orb(h.key)}</span></li>`;
+      }).join("");
+      return `<div class="card"><h3>${t.price}</h3><p>${t.identify}</p>
+        <div class="item-meta">${t.possible}</div><ul class="candidates">${rows}</ul></div>`;
+    }
+
+    const stackSize = item.stack ? item.stack[0] : 1;
+    const unit = inCurrencies(item.priceEx);
+    const total = item.stack ? inCurrencies(item.priceEx * stackSize) : null;
+    const head = headlineCurrency(item.priceEx * stackSize);
+    const headline = state.headline === "auto"
+      ? `<div class="headline">${orb(head.key)}<span class="value">${head.text}</span><span class="unit">${amountName(head)}${item.stack ? ` · ${t.stackOf(stackSize)}` : ""}</span></div>`
+      : "";
+    const header = total ? `<tr><th></th><th>${t.unitPrice}</th><th>${t.stackOf(stackSize)}</th></tr>` : "";
+    const rows = unit.map((c, i) => `<tr><td>${currencyCell(c)}</td><td>${c.text}</td>${total ? `<td>${total[i].text}</td>` : ""}</tr>`).join("");
+    const badge = item.offers < UNCERTAIN_BELOW
+      ? `<span class="badge uncertain">${t.uncertain(item.offers)}</span>`
+      : `<span class="badge ok">${t.reliable}</span><span>${t.offers(item.offers)}</span>`;
+    return `
+      <div class="card">
+        <h3>${t.price}</h3>
+        ${headline}
+        <table class="prices">${header}${rows}</table>
+        <div class="reliability">${badge}</div>
+        ${tradeButton(t)}
+      </div>`;
+  }
+
+  function offersHeader(t, list, total) {
+    const count = list ? `<small>${t.onlineCount(list.length, total)}</small>` : "";
+    return `<h3><span>${t.offersTitle}</span>${count}<span class="link">${t.trade} ↗</span></h3>`;
+  }
+
+  function renderOffers(item, t, layout) {
+    const offers = item.tradeOffers || item.exchangeOffers;
+    if (!offers) return "";
+    // Searches only run on a click; the button then waits for the trade site limits.
+    if (state.offersState === "idle") {
+      return `<div class="card">${offersHeader(t)}
+        <button class="button" type="button">⌕ ${t.searchOffers}</button>
+        <div class="offers-note">${t.searchHint}</div></div>`;
+    }
+    if (state.offersState === "loading") {
+      return `<div class="card">${offersHeader(t)}<div class="status"><span class="spinner"></span>${t.searching}</div></div>`;
+    }
+    const wait = state.offersState === "limited" ? "4 min" : "8 s";
+    const again = `<button class="button" type="button" disabled>↻ ${t.searchAgain(wait)}</button>`;
+    const warning = state.offersState === "limited" ? `<div class="status warn">⏳ ${t.limited(wait)}</div>` : "";
+    if (!offers.list.length) {
+      return `<div class="card">${offersHeader(t, offers.list, offers.total)}<div class="status">${t.noOffers}</div>${warning}${again}</div>`;
+    }
+    const table = item.exchangeOffers ? exchangeTable(offers, t) : tradeTable(item, offers, t, layout);
+    const more = offers.total > offers.list.length ? `<div class="offers-note"><span class="link">${t.showMore}</span></div>` : "";
+    return `<div class="card">${offersHeader(t, offers.list, offers.total)}<div class="offers-scroll">${table}</div>${more}${warning}${again}</div>`;
+  }
+
+  // Unique items: one row per offer, with the rolls of the item when there is room.
+  function tradeTable(item, offers, t, layout) {
+    const lang = state.language;
+    const showRolls = layout !== "narrow" && item.rollColumns;
+    const rollHeaders = showRolls ? item.rollColumns.map(c => `<th>${c[lang]}</th>`).join("") : "";
+    const rows = offers.list.map(o => {
+      const suspicious = o.amount * EX_PER_CURRENCY[o.currency] < item.priceEx * SUSPICIOUS_BELOW;
+      const flag = suspicious ? `<span class="flag" title="${t.suspicious}">?</span>` : "";
+      const rolls = showRolls
+        ? o.rolls.map((r, i) => {
+            const [min, max] = item.rollColumns[i].range;
+            const high = (r - min) / (max - min) >= 0.75 ? "high" : "";
+            return `<td class="roll-value ${high}">${r}</td>`;
+          }).join("")
+        : "";
+      return `<tr class="${suspicious ? "suspicious" : ""}">
+        <td><span class="amount">${formatNumber(o.amount, o.amount % 1 ? 1 : 0)}</span> ${orb(ORB_KEYS[o.currency])}${flag}</td>
+        ${rolls}
+        <td><span class="online"></span>${t.ago(o.minutes)}</td>
+      </tr>`;
+    }).join("");
+    return `<table class="offers-table"><tr><th>${t.colPrice}</th>${rollHeaders}<th>${t.colListed}</th></tr>${rows}</table>`;
+  }
+
+  // Currency: bulk offers of the currency exchange, price per unit and stock.
+  function exchangeTable(offers, t) {
+    const rows = offers.list.map(o => {
+      const unit = headlineCurrency(o.unitEx);
+      return `<tr>
+        <td>${unit.text} ${orb(unit.key)}</td>
+        <td>${formatNumber(o.stock, 0)}</td>
+        <td><span class="online"></span>${t.ago(o.minutes)}</td>
+      </tr>`;
+    }).join("");
+    return `<table class="offers-table"><tr><th>${t.colUnit}</th><th>${t.colStock}</th><th>${t.colListed}</th></tr>${rows}</table>`;
+  }
+
+  function renderHistory(item, t) {
+    const width = 600, height = 240, pad = { left: 52, right: 16, top: 12, bottom: 28 };
+    const plotW = width - pad.left - pad.right, plotH = height - pad.top - pad.bottom;
+    const head = headlineCurrency(item.priceEx);
+    const toUnit = ex => (head.key === "div" ? ex / EX_PER_DIV : ex);
+    const values = item.history.map(toUnit);
+    const min = Math.min(...values) * 0.97, max = Math.max(...values) * 1.03;
+    const maxOffers = Math.max(...item.historyOffers);
+    const x = i => pad.left + 16 + ((plotW - 32) * i) / (values.length - 1);
+    const y = v => pad.top + plotH * (1 - (v - min) / (max - min));
+    const barW = (plotW / values.length) * 0.5;
+    const days = state.language === "fr" ? ["J-6", "J-5", "J-4", "J-3", "J-2", "Hier", "Auj."] : ["D-6", "D-5", "D-4", "D-3", "D-2", "Yest.", "Today"];
+    const bars = item.historyOffers.map((o, i) => {
+      const h = (plotH * 0.35 * o) / maxOffers;
+      return `<rect x="${x(i) - barW / 2}" y="${pad.top + plotH - h}" width="${barW}" height="${h}" fill="#555" opacity=".6"></rect>`;
+    }).join("");
+    const path = values.map((v, i) => `${i ? "L" : "M"}${x(i)},${y(v)}`).join(" ");
+    const dots = values.map((v, i) => `<circle cx="${x(i)}" cy="${y(v)}" r="3.5" fill="var(--egui-link)"></circle>`).join("");
+    const labels = days.map((d, i) => `<text x="${x(i)}" y="${height - 8}" fill="#8c8c8c" font-size="12" text-anchor="middle">${d}</text>`).join("");
+    const ticks = [min, (min + max) / 2, max].map(v => {
+      const decimals = head.key === "div" ? 1 : 0;
+      return `<line x1="${pad.left}" x2="${width - pad.right}" y1="${y(v)}" y2="${y(v)}" stroke="#2c2c2c"></line>
+              <text x="${pad.left - 8}" y="${y(v) + 4}" fill="#8c8c8c" font-size="12" text-anchor="end">${formatNumber(v, decimals)}</text>`;
+    }).join("");
+    return `
+      <div class="card chart">
+        <h3><span>${item.stack ? t.historyUnit : t.history}</span><small>${head.plural[state.language]}</small></h3>
+        <svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${t.history}">
+          ${ticks}${bars}
+          <path d="${path}" fill="none" stroke="var(--egui-link)" stroke-width="2.5"></path>
+          ${dots}${labels}
+        </svg>
+        <div class="legend"><span class="l-price">${t.historyPrice}</span><span class="l-offers">${t.historyOffers}</span></div>
+      </div>`;
+  }
+
+  function renderSettings(t) {
+    const radio = (on, label) => `<div class="radio ${on ? "on" : ""}"><i></i>${label}</div>`;
+    return `
+      <aside class="settings">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <h2>${t.settings}</h2>
+          <button class="icon-button" type="button" data-action="settings" title="${t.close}">✕</button>
+        </div>
+        <div class="field"><span>${t.league}</span><div class="combo"><span>${LEAGUE}</span><span>⏷</span></div></div>
+        <div class="field"><span>${t.language}</span>
+          ${radio(true, t.automatic)}${radio(false, "English")}${radio(false, "Français")}
+        </div>
+        <div class="field"><div class="check"><i></i>${t.alwaysOnTop}</div></div>
+        <p class="disclaimer">${t.disclaimer}</p>
+      </aside>`;
+  }
+
+  function renderContent(item, t, layout) {
+    const priced = !item.notPriced && !item.noPrice && !item.unidentified;
+    const itemCard = renderItem(item, t, layout);
+    const priceCard = renderPrice(item, t);
+    const offersCard = renderOffers(item, t, layout);
+    if (layout === "narrow") {
+      return `<div class="content"><div class="column">${itemCard}${priceCard}${offersCard}</div></div>`;
+    }
+    if (layout === "medium") {
+      return `<div class="content">
+        <div class="column">${itemCard}</div>
+        <div class="column">${priceCard}${offersCard}</div>
+      </div>`;
+    }
+    return `<div class="content">
+      <div class="column">${itemCard}</div>
+      <div class="column">${priceCard}${priced ? renderHistory(item, t) : ""}</div>
+      <div class="column">${offersCard}</div>
+    </div>`;
+  }
+
+  function render() {
+    const layout = layoutFor(state.width);
+    const t = STRINGS[state.language];
+    const scenario = SCENARIOS[state.scenario];
+    const win = $("win");
+    win.className = `win layout-${layout}`;
+
+    let main = scenario.item
+      ? renderContent(scenario.item, t, layout)
+      : `<div class="empty"><div><p>${t.emptyTitle} <span class="key">Ctrl</span> + <span class="key">C</span></p><p>${t.emptyHint}</p></div></div>`;
+    if (scenario.banner) {
+      const [kind, key] = scenario.banner;
+      const help = key === "clipboard" ? ` <a href="#">${t.clipboardHelp}</a>` : "";
+      main = `<div class="banner ${kind}">${t[key]}${help}</div>${main}`;
+    }
+
+    const settingsFull = state.settingsOpen && layout === "narrow";
+    const source = t.source;
+    win.innerHTML = `
+      <div class="win-header">
+        <div class="league">${t.league} <strong>${LEAGUE}</strong></div>
+        <div class="spacer"></div>
+        <button class="icon-button" type="button" data-action="settings" aria-pressed="${state.settingsOpen}" title="${t.settings}">⚙</button>
+      </div>
+      <div class="win-body">
+        ${settingsFull ? "" : `<div class="win-main">${main}</div>`}
+        ${state.settingsOpen ? renderSettings(t) : ""}
+      </div>
+      <div class="win-footer"><span>${scenario.cached ? t.updatedCached : t.updated}</span><span>${source}</span></div>`;
+
+    $("frame").style.width = `${state.width}px`;
+    $("frame").style.height = `${state.height}px`;
+    $("size-readout").textContent = `${state.width} × ${state.height}`;
+    $("layout-readout").textContent = layout;
+    $("width").value = state.width;
+    $("height").value = state.height;
+    $("scenario").value = state.scenario;
+    for (const b of $("item-language").children) b.setAttribute("aria-pressed", b.dataset.value === state.language);
+    for (const b of $("offers-state").children) b.setAttribute("aria-pressed", b.dataset.value === state.offersState);
+    for (const b of $("headline-rule").children) b.setAttribute("aria-pressed", b.dataset.value === state.headline);
+    fit();
+  }
+
+  // Scale the mock window down when it is wider than the page.
+  function fit() {
+    const available = $("stage").clientWidth - 32;
+    const scale = Math.min(1, available / (state.width + 2));
+    $("scaler").style.transform = `scale(${scale})`;
+    $("scaler").style.height = `${(state.height + 2) * scale}px`;
+  }
+
+  // Optional URL parameters, e.g. ?w=1280&h=800&scenario=stack&lang=fr&offers=loading&settings=1
+  function readUrl() {
+    const params = new URLSearchParams(location.search);
+    const number = (key, min, max) => {
+      const value = Number(params.get(key));
+      return params.has(key) && value >= min && value <= max ? value : null;
+    };
+    state.width = number("w", 320, 1920) ?? state.width;
+    state.height = number("h", 320, 1080) ?? state.height;
+    if (params.get("scenario") in SCENARIOS) state.scenario = params.get("scenario");
+    if (params.get("lang") in STRINGS) state.language = params.get("lang");
+    if (["idle", "loading", "results", "limited"].includes(params.get("offers"))) state.offersState = params.get("offers");
+    if (params.get("headline") === "none") state.headline = "none";
+    state.settingsOpen = params.get("settings") === "1";
+  }
+
+  function segmented(id, key) {
+    $(id).addEventListener("click", e => {
+      if (e.target.dataset.value) { state[key] = e.target.dataset.value; render(); }
+    });
+  }
+
+  function setup() {
+    readUrl();
+    for (const p of PRESETS) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.textContent = p.label;
+      b.addEventListener("click", () => { state.width = p.width; state.height = p.height; render(); });
+      $("presets").append(b);
+    }
+    for (const [key, s] of Object.entries(SCENARIOS)) {
+      $("scenario").append(new Option(s.label, key));
+    }
+    $("width").addEventListener("input", e => { state.width = Number(e.target.value); render(); });
+    $("height").addEventListener("input", e => { state.height = Number(e.target.value); render(); });
+    $("scenario").addEventListener("change", e => { state.scenario = e.target.value; render(); });
+    segmented("item-language", "language");
+    segmented("offers-state", "offersState");
+    segmented("headline-rule", "headline");
+    $("win").addEventListener("click", e => {
+      if (e.target.closest("[data-action=settings]")) { state.settingsOpen = !state.settingsOpen; render(); }
+    });
+    window.addEventListener("resize", fit);
+    render();
+  }
+
+  setup();
+</script>
+</body>
+</html>

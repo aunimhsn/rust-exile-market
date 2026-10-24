@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="12 12 76 76" fill="#ffffff">
+  <!-- Exile Market emblem: the ring and blades of the logo, without the text.
+       The blade tips barely pass the ring, so that it is as tall as wide.
+       White, so that the application can tint it to any color. -->
+  <defs>
+    <!-- One blade, pointing up. -->
+    <path id="blade" d="M50 13 L54.6 21 L50 31 L45.4 21 Z"/>
+    <path id="small-blade" d="M50 14 L53 22 L50 28 L47 22 Z"/>
+  </defs>
+  <!-- Ring. -->
+  <circle cx="50" cy="50" r="28" fill="none" stroke="#ffffff" stroke-width="5"/>
+  <circle cx="50" cy="50" r="21.5" fill="none" stroke="#ffffff" stroke-width="1.5" opacity=".55"/>
+  <!-- Blades on the axes. -->
+  <use href="#blade"/>
+  <use href="#blade" transform="rotate(90 50 50)"/>
+  <use href="#blade" transform="rotate(180 50 50)"/>
+  <use href="#blade" transform="rotate(270 50 50)"/>
+  <!-- Small blades on the diagonals. -->
+  <use href="#small-blade" transform="rotate(45 50 50)"/>
+  <use href="#small-blade" transform="rotate(135 50 50)"/>
+  <use href="#small-blade" transform="rotate(225 50 50)"/>
+  <use href="#small-blade" transform="rotate(315 50 50)"/>
+  <!-- Center stone. -->
+  <path d="M50 39 L58 50 L50 61 L42 50 Z"/>
+</svg>
