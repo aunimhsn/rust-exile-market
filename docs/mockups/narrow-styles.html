@@ -439,6 +439,23 @@
   .offers .row-o img { width: 18px; height: 18px; }
   .offers .row-o.sus .p { color: var(--faint); text-decoration: line-through; }
   .offers .row-o.sus .p::after { content: "?"; color: var(--warn); text-decoration: none; display: inline-block; margin-left: 2px; }
+  /* Offer hovered: the row lights up and the tooltip of its item opens next to it. */
+  .offers .row-o { position: relative; }
+  .offers .row-o.hovered { background: var(--control-line) !important; }
+  .offer-tooltip {
+    position: absolute; z-index: 2; right: 10px; bottom: calc(100% + 6px); width: 300px; padding: 12px 14px;
+    background: #20272f; border-radius: 4px; box-shadow: 0 10px 30px rgba(0, 0, 0, .6); text-align: left; font-size: 12.5px;
+  }
+  .tt-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  .tt-name { font-weight: 700; font-size: 14px; }
+  .tt-price { font-family: var(--font-number); font-weight: 600; }
+  .tt-meta { color: var(--weak); font-size: 12px; margin-top: 2px; }
+  .tt-mods { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--control-line); display: grid; gap: 3px; }
+  .tt-mod { display: flex; justify-content: space-between; gap: 10px; color: var(--mod); }
+  .delta { font-family: var(--font-number); font-weight: 600; font-size: 12px; }
+  .delta.up { color: var(--rise); }
+  .delta.down { color: var(--fall); }
+  .tt-foot { margin-top: 8px; color: var(--faint); font-size: 11.5px; }
   .online { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--rise); margin-right: 6px; vertical-align: middle; }
   .actions { display: flex; align-items: center; justify-content: space-between; margin-top: 10px; }
   .link { color: var(--accent); font-weight: 600; }
@@ -611,6 +628,21 @@
     return `<div class="band a"><div class="head"><span class="label">${label}</span>${right ? `<span class="right">${right}</span>` : ""}</div>${body}</div>`;
   }
 
+  function offerTooltip(t) {
+    const mods = t.mods.map(m => {
+      const diff = m.yours === undefined ? "" : m.value - m.yours;
+      const delta = diff === "" || diff === 0 ? "" : `<span class="delta ${diff > 0 ? "up" : "down"}">${diff > 0 ? "+" : "−"}${Math.abs(diff)}</span>`;
+      return `<div class="tt-mod"><span>${m.text}</span>${delta}</div>`;
+    }).join("");
+    return `<div class="offer-tooltip">
+      <div class="tt-head"><span class="rarity-unique tt-name">${t.name}</span><span class="tt-price">${t.price}</span></div>
+      <div class="tt-meta">${t.meta}</div>
+      <div class="tt-mods">${t.implicit.map(m => `<div class="tt-mod"><span>${m}</span></div>`).join("")}</div>
+      <div class="tt-mods">${mods}</div>
+      <div class="tt-foot">${t.foot}</div>
+    </div>`;
+  }
+
   function offers(o, lang = "en") {
     const fr = lang === "fr";
     const label = fr ? "Offres" : "Offers";
@@ -638,8 +670,8 @@
     const again = o.ready
       ? `<div class="again ready" title="Search again">${ICON.refresh(18)}</div>`
       : `<div class="again waiting" title="Next search in 8 s">8 s</div>`;
-    const rows = o.rows.map(r => `<div class="row-o ${r.sus ? "sus" : ""}">
-        <span class="p">${r.v} ${orb(r.k)}</span>${three ? `<span>${r.stock}</span>` : ""}<span><i class="online"></i>${r.when}</span></div>`).join("");
+    const rows = o.rows.map((r, i) => `<div class="row-o ${r.sus ? "sus" : ""} ${o.hover === i ? "hovered" : ""}">
+        <span class="p">${r.v} ${orb(r.k)}</span>${three ? `<span>${r.stock}</span>` : ""}<span><i class="online"></i>${r.when}</span>${o.hover === i ? offerTooltip(o.tooltip) : ""}</div>`).join("");
     return `<div class="band b">
       <div class="head flat-head"><span class="title-stack"><span class="label">${label}</span><span class="age">${o.age || "searched 2 min ago"}</span></span><span class="right">${o.count}</span>${again}</div>
       <div class="offers ${three ? "three" : ""}"><div class="cols">${o.columns.map(c => `<span>${c}</span>`).join("")}</div>${rows}</div>
@@ -725,6 +757,17 @@
     ]],
     ["Offer states", [
       ["Searching the offers", win(topBar(), item(HH), price(HH_PRICE), offers({ state: "loading" }), foot())],
+      ["Offer hovered", win(topBar(), item(HH), price(HH_PRICE), offers({ ...HH_OFFERS, hover: 3, tooltip: {
+        name: "Headhunter", price: "10 div", meta: "Heavy Belt · ilvl 82 · Corrupted",
+        implicit: ["25% increased Stun Threshold", "Has 2 Charm Slots"],
+        mods: [
+          { text: "+48 to maximum Life", value: 48, yours: 55 },
+          { text: "+40 to Strength", value: 40, yours: 34 },
+          { text: "+23 to Dexterity", value: 23, yours: 22 },
+          { text: "When you kill a Rare monster, you gain its Modifiers for 60 seconds" },
+        ],
+        foot: "Compared with your item · seller online · listed 3 h ago",
+      } }), foot())],
       ["Ready to search again", win(topBar(), item(HH), price(HH_PRICE), offers({ ...HH_OFFERS, ready: true, age: "searched 5 min ago" }), foot("poe2scout 12 min ago · GGG trade 5 min ago"))],
       ["Long wait before the next search", win(topBar(), item(HH), price(HH_PRICE), offers({ state: "wait" }), foot("poe2scout 12 min ago · GGG trade: next search in 4 min"))],
       ["No offer online", win(topBar(), item(HH), price(HH_PRICE), offers({ lines: ["No offer online with these filters.", "Uncheck a stat or lower a minimum, then search again."] }), foot())],
