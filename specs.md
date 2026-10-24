@@ -174,9 +174,10 @@ The offers search uses the stats of the copied item as filters, like the trade s
 
 The gear opens the settings, which replace the content of the window in the narrow layout:
 
-- **Language**: *Automatic (follows the game)* (default), *English* or *Français*.
-  - *Automatic*: the interface starts in English, then follows the language of the last copied item.
+- **Language**: *System* (default), *English* or *Français*.
+  - *System*: the language of the system, when the interface has it (one of the preferred languages of the system, in their order); English otherwise.
   - *English* or *Français*: the interface stays in that language.
+  - The language of the copied items never changes the interface, so that it never changes without the player asking: it only chooses the item names used to find the prices and the trade site to search (`fr.pathofexile.com` for a French item).
 - **Always on top**: keeps the window above the other windows, for players with a single screen, when the game is in windowed or borderless mode. Off by default.
 
 The settings are saved as soon as they change. Their bottom shows the sentence "This product isn't affiliated with or endorsed by Grinding Gear Games in any way."

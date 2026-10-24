@@ -22,6 +22,7 @@ fluent-bundle = "0.16"
 image = { version = "0.25.10", default-features = false, features = ["png"] }
 log = "0.4"
 simplelog = "0.12.2"
+sys-locale = "0.3"
 unic-langid = "0.9.6"
 
 # To choose the X11 backend of the window (see main.rs). A dependency of eframe also builds

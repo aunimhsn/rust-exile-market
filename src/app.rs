@@ -24,7 +24,9 @@ impl ExileMarketApp {
         let ctx = creation.egui_ctx.clone();
 
         Self {
-            i18n: Translator::new(Language::default()),
+            // The language of the copied items never changes the interface: it only chooses
+            // the item names and the trade site.
+            i18n: Translator::new(Language::of_system()),
             // The leagues are downloaded from the price database in step 6; until then, the
             // current challenge league in softcore.
             session: Session::new(League::new("Forbidden Rites", LeagueMode::Softcore)),
