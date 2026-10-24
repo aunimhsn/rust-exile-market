@@ -455,7 +455,19 @@
   .delta { font-family: var(--font-number); font-weight: 600; font-size: 12px; }
   .delta.up { color: var(--rise); }
   .delta.down { color: var(--fall); }
-  .tt-foot { margin-top: 8px; color: var(--faint); font-size: 11.5px; }
+  .tt-foot { margin-top: 10px; display: flex; align-items: center; justify-content: space-between; }
+  .tt-price { display: flex; align-items: center; gap: 6px; }
+  .tt-price img { width: 18px; height: 18px; }
+  .status { display: inline-flex; align-items: center; gap: 6px; color: var(--weak); font-size: 12px; }
+  .status i { width: 7px; height: 7px; border-radius: 50%; }
+  .status.s-online i { background: var(--rise); }
+  .status.s-away i { background: var(--warn); }
+  .status.s-offline i { background: var(--fall); }
+  .pill.done { background: var(--accent); color: var(--on-accent, var(--bg-a)); }
+  .tt-hint { margin-top: 6px; color: var(--weak); font-size: 11.5px; text-align: right; }
+  /* Pinned by a click on the row: it stays open, with a thin white outline. */
+  .offer-tooltip.pinned { box-shadow: 0 0 0 1px var(--accent), 0 10px 30px rgba(0, 0, 0, .6); }
+  .online.away { background: var(--warn) !important; }
   .online { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--rise); margin-right: 6px; vertical-align: middle; }
   .actions { display: flex; align-items: center; justify-content: space-between; margin-top: 10px; }
   .link { color: var(--accent); font-weight: 600; }
@@ -634,12 +646,16 @@
       const delta = diff === "" || diff === 0 ? "" : `<span class="delta ${diff > 0 ? "up" : "down"}">${diff > 0 ? "+" : "−"}${Math.abs(diff)}</span>`;
       return `<div class="tt-mod"><span>${m.text}</span>${delta}</div>`;
     }).join("");
-    return `<div class="offer-tooltip">
-      <div class="tt-head"><span class="rarity-unique tt-name">${t.name}</span><span class="tt-price">${t.price}</span></div>
+    return `<div class="offer-tooltip ${t.pinned ? "pinned" : ""}">
+      <div class="tt-head"><span class="rarity-unique tt-name">${t.name}</span><span class="tt-price">${t.price} ${orb(t.currency)}</span></div>
       <div class="tt-meta">${t.meta}</div>
       <div class="tt-mods">${t.implicit.map(m => `<div class="tt-mod"><span>${m}</span></div>`).join("")}</div>
       <div class="tt-mods">${mods}</div>
-      <div class="tt-foot">${t.foot}</div>
+      <div class="tt-foot">
+        <span class="status s-${t.status}"><i></i>${{ online: "Online", away: "Away", offline: "Offline" }[t.status]}</span>
+        ${t.status === "offline" ? "" : `<span class="pill ${t.copied ? "done" : ""}">${t.copied ? "Copied ✓" : "Copy whisper"}</span>`}
+      </div>
+      ${t.copied ? `<div class="tt-hint">Paste it in the game chat: Enter, Ctrl+V, Enter.</div>` : ""}
     </div>`;
   }
 
@@ -671,7 +687,7 @@
       ? `<div class="again ready" title="Search again">${ICON.refresh(18)}</div>`
       : `<div class="again waiting" title="Next search in 8 s">8 s</div>`;
     const rows = o.rows.map((r, i) => `<div class="row-o ${r.sus ? "sus" : ""} ${o.hover === i ? "hovered" : ""}">
-        <span class="p">${r.v} ${orb(r.k)}</span>${three ? `<span>${r.stock}</span>` : ""}<span><i class="online"></i>${r.when}</span>${o.hover === i ? offerTooltip(o.tooltip) : ""}</div>`).join("");
+        <span class="p">${r.v} ${orb(r.k)}</span>${three ? `<span>${r.stock}</span>` : ""}<span><i class="online ${r.away ? "away" : ""}"></i>${r.when}</span>${o.hover === i ? offerTooltip(o.tooltip) : ""}</div>`).join("");
     return `<div class="band b">
       <div class="head flat-head"><span class="title-stack"><span class="label">${label}</span><span class="age">${o.age || "searched 2 min ago"}</span></span><span class="right">${o.count}</span>${again}</div>
       <div class="offers ${three ? "three" : ""}"><div class="cols">${o.columns.map(c => `<span>${c}</span>`).join("")}</div>${rows}</div>
@@ -704,7 +720,7 @@
   const HH_PRICE = { values: ["12.4", "123", "8990"], offers: "23 offers", trend: "Rising over the last 3 days (+4%)" };
   const HH_OFFERS = { count: "10 of 13 online", columns: ["Price", "Listed"], rows: [
     { v: "6", k: "ex", when: "2 h ago", sus: true }, { v: "1", k: "chaos", when: "5 d ago", sus: true }, { v: "8", k: "div", when: "3 h ago" },
-    { v: "10", k: "div", when: "3 h ago" }, { v: "11", k: "div", when: "40 min ago" }, { v: "12", k: "div", when: "1 d ago" }] };
+    { v: "10", k: "div", when: "3 h ago" }, { v: "11", k: "div", when: "40 min ago", away: true }, { v: "12", k: "div", when: "1 d ago" }] };
   const BOW = { rarity: "rare", name: "Storm Bite", base: "Gemini Bow", cls: "Bows", tags: ["ilvl 81", "Q 20%", "2 sockets"], summary: "Physical DPS 245 · Elemental DPS 44", req: "Requires Level 65 · 145 Dex", statsLabel: "Stats (9)" };
   const BOW_STATS = [
     { prop: ["Quality", "+20%"] }, { prop: ["Physical Damage", "72–134"] }, { prop: ["Lightning Damage", "3–71"] },
@@ -758,7 +774,7 @@
     ["Offer states", [
       ["Searching the offers", win(topBar(), item(HH), price(HH_PRICE), offers({ state: "loading" }), foot())],
       ["Offer hovered", win(topBar(), item(HH), price(HH_PRICE), offers({ ...HH_OFFERS, hover: 3, tooltip: {
-        name: "Headhunter", price: "10 div", meta: "Heavy Belt · ilvl 82 · Corrupted",
+        name: "Headhunter", price: "10", currency: "div", meta: "Heavy Belt · ilvl 82 · Corrupted", status: "online",
         implicit: ["25% increased Stun Threshold", "Has 2 Charm Slots"],
         mods: [
           { text: "+48 to maximum Life", value: 48, yours: 55 },
@@ -766,7 +782,16 @@
           { text: "+23 to Dexterity", value: 23, yours: 22 },
           { text: "When you kill a Rare monster, you gain its Modifiers for 60 seconds" },
         ],
-        foot: "Compared with your item · seller online · listed 3 h ago",
+      } }), foot())],
+      ["Offer pinned, whisper copied", win(topBar(), item(HH), price(HH_PRICE), offers({ ...HH_OFFERS, hover: 4, tooltip: {
+        name: "Headhunter", price: "11", currency: "div", meta: "Heavy Belt · ilvl 80 · Corrupted", status: "away", pinned: true, copied: true,
+        implicit: ["28% increased Stun Threshold", "Has 2 Charm Slots"],
+        mods: [
+          { text: "+53 to maximum Life", value: 53, yours: 55 },
+          { text: "+36 to Strength", value: 36, yours: 34 },
+          { text: "+30 to Dexterity", value: 30, yours: 22 },
+          { text: "When you kill a Rare monster, you gain its Modifiers for 60 seconds" },
+        ],
       } }), foot())],
       ["Ready to search again", win(topBar(), item(HH), price(HH_PRICE), offers({ ...HH_OFFERS, ready: true, age: "searched 5 min ago" }), foot("poe2scout 12 min ago · GGG trade 5 min ago"))],
       ["Long wait before the next search", win(topBar(), item(HH), price(HH_PRICE), offers({ state: "wait" }), foot("poe2scout 12 min ago · GGG trade: next search in 4 min"))],
