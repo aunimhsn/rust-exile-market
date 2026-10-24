@@ -361,7 +361,8 @@
      told by the color. The chosen league is the one of the block above. It opens 4 px under the title bar,
      with the shadow of the bubbles, and its leagues let the item show through a little (94 % opaque). */
   .app-league .ico { transition: transform .15s ease; }
-  .app-titlebar.is-open .app-league .ico { transform: rotate(180deg); }
+  /* The chevron points right, and turns down while the list is open. */
+  .app-titlebar.is-open .app-league .ico { transform: rotate(90deg); }
   .app-league-list {
     position: absolute; z-index: 2; top: 32px; left: 38px; display: grid; grid-template-columns: 1fr 1fr;
     width: 300px; border-radius: 3px; overflow: hidden; box-shadow: 0 10px 30px rgba(0, 0, 0, .6);
@@ -644,7 +645,7 @@
     return `
     <div class="app-titlebar ${open ? "is-open" : ""}">
       <img class="app-emblem" src="../../assets/logo/emblem.svg" alt="Home" title="Home">
-      <div class="app-league" title="${kind} · Change the league"><span class="app-league-name">${league}</span>${ICON.down(12)}</div>
+      <div class="app-league" title="${kind} · Change the league"><span class="app-league-name">${league}</span>${ICON.chevron(12)}</div>
       <div class="spacer"></div>
       <div class="app-icon-button ${settings ? "is-on" : ""}" title="Settings">${ICON.gear(15)}</div>
       <div class="app-icon-button" title="Minimize">${svg(13, '<path d="M3 8h10"/>')}</div>
