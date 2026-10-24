@@ -463,12 +463,9 @@
   .tt-mod { display: flex; justify-content: space-between; gap: 10px; color: var(--mod); }
   .tt-mod.prop { color: var(--text); }   /* item properties are white, as in the game */
   .tt-tier { display: inline-block; min-width: 26px; }
-  /* Top tiers (1 to 3). Text: white and bold, the others faint. */
+  /* Top tiers (1 to 3) in white, the others faint. */
   .tier { color: var(--faint); }
   .tier.tier-top { color: var(--accent); }
-  /* Badges: T1 on white, T2 and T3 on the control color, the others plain. */
-  [data-tiers="badges"] .tier.tier-top { padding: 0 4px; border-radius: var(--radius); background: var(--control-line); font-size: 10.5px; }
-  [data-tiers="badges"] .tier.t1 { background: var(--accent); color: var(--on-accent, var(--bg-a)); }
   .delta { font-family: var(--font-number); font-weight: 600; font-size: 12px; }
   .delta.up { color: var(--rise); }
   .delta.down { color: var(--fall); }
@@ -557,7 +554,6 @@
   };
   const VARIANTS = {
     theme: { label: "Style", options: Object.fromEntries(Object.entries(THEMES).map(([k, v]) => [k, v.title])), fallback: "slate" },
-    tiers: { label: "Tier highlight", options: { badges: "Badges", text: "Text" }, fallback: "badges" },
     league: { label: "League", options: { softcore: "Softcore", hardcore: "Hardcore" }, fallback: "softcore" },
   };
   const params = new URLSearchParams(location.search);
@@ -616,7 +612,9 @@
         const check = row.check === undefined ? "<span></span>" : `<span class="check ${row.check ? "on" : ""}">${row.check ? ICON.check(11) : ""}</span>`;
         const input = row.min !== undefined ? `<span class="input">${row.min}</span>` : "";
         const range = `<span class="range">${row.tier ? `<span class="tier ${row.tier <= 3 ? "tier-top" : ""} t${row.tier}">T${row.tier}</span>` : ""}${row.range}</span>`;
-        const roll = row.range ? `<div class="roll"><span class="bar"><i style="width:${row.share * 100}%"></i></span>${range}</div>` : "";
+        // A rare modifier shows its tier and the range of that tier, without a bar: a bar would only measure the tier.
+        const bar = row.tier ? "" : `<span class="bar"><i style="width:${row.share * 100}%"></i></span>`;
+        const roll = row.range ? `<div class="roll">${bar}${range}</div>` : "";
         return `<div class="mod ${input ? "" : "fixed"}">${check}<span>${row.mod}</span>${input}${roll}</div>`;
       }).join("")}</div>`;
     } else if (it.statsLabel) {

@@ -25,6 +25,14 @@ Implementation steps of the features described in [specs.md](specs.md). Each ste
 | Price history chart | [`egui_plot`](https://github.com/emilk/egui_plot) | Made for egui, no other dependency (wide layout, step 13). |
 | Releases | GitHub Actions workflow triggered by version tags, portable archives (no installer) | Builds every system on its own runner and publishes the archives with `gh release`, without extra tooling. A portable executable is enough for version 1. The Linux target moves from musl to glibc in step 1: a statically linked musl executable can't load the system's graphics libraries. |
 
+## Path of Exile 2 1.0
+
+Path of Exile 2 leaves early access with its version 1.0 on 2026-12-11. The modifiers, their tiers and ranges, the trade site data and maybe the format of the copied text can change. After this release:
+
+- copy real items again (English and French) and rerun the parser tests;
+- check the stat ids, the pseudo stats and the filters of the trade site, and the categories of poe2scout;
+- check the tiers and ranges given by the advanced copy.
+
 ## Images
 
 The Grinding Gear Games [developer guidelines](https://www.pathofexile.com/developer/docs) forbid using their intellectual property to make money, imitating their official platforms with their logos, and presenting a tool as made or approved by them; every public tool must show the sentence "This product isn't affiliated with or endorsed by Grinding Gear Games in any way." Showing the game icons in a free tool fits these rules, like poe2db, poe.ninja and poe2scout do. The application follows these rules:
