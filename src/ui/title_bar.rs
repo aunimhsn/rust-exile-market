@@ -2,8 +2,8 @@
 //! settings, minimize and close icons on the right. Its empty space moves the window.
 
 use egui::{
-    Align, Color32, CursorIcon, Frame, Image, Layout, Painter, Panel, Pos2, Rect, Response, Role,
-    Sense, Stroke, Ui, Vec2, WidgetInfo, pos2, vec2,
+    Align, Color32, CursorIcon, Frame, Image, Layout, Painter, Panel, PointerButton, Pos2, Rect,
+    Response, Role, Sense, Stroke, Ui, Vec2, WidgetInfo, pos2, vec2,
 };
 
 use super::theme::{LeagueModeColors, color, size, text};
@@ -48,6 +48,27 @@ enum Icon {
     Close,
 }
 
+/// The icons on the right, from the right edge.
+const ICONS: [Icon; 3] = [Icon::Close, Icon::Minimize, Icon::Settings];
+
+impl Icon {
+    fn action(self) -> TitleBarAction {
+        match self {
+            Self::Settings => TitleBarAction::Settings,
+            Self::Minimize => TitleBarAction::Minimize,
+            Self::Close => TitleBarAction::Close,
+        }
+    }
+
+    fn tooltip(self) -> Message {
+        match self {
+            Self::Settings => Message::SettingsTooltip,
+            Self::Minimize => Message::MinimizeTooltip,
+            Self::Close => Message::CloseTooltip,
+        }
+    }
+}
+
 pub struct TitleBar<'a> {
     league: &'a League,
     i18n: &'a Translator,
@@ -72,14 +93,19 @@ impl<'a> TitleBar<'a> {
     }
 
     /// Draws the title bar; what the player did in it, if anything.
-    pub fn show(self, ui: &mut Ui) -> Option<TitleBarAction> {
+    pub fn show(&self, ui: &mut Ui) -> Option<TitleBarAction> {
         Panel::top("title-bar")
             .exact_size(size::TITLE_BAR_HEIGHT)
             .frame(Frame::NONE.fill(color::BAND_A))
             .show(ui, |ui| {
                 ui.spacing_mut().item_spacing = Vec2::ZERO;
-                // Under everything else: the blocks drawn over it take their own clicks.
-                let bar = ui.interact(ui.max_rect(), ui.scope_id().with("move"), Sense::drag());
+                // Under everything else. Sensing clicks too, it only starts to drag once the
+                // pointer moves, so that a press on a block or an icon above stays a click.
+                let bar = ui.interact(
+                    ui.max_rect(),
+                    ui.scope_id().with("move"),
+                    Sense::click_and_drag(),
+                );
                 let mut action = None;
                 ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
                     ui.add_space(PADDING_LEFT);
@@ -89,23 +115,23 @@ impl<'a> TitleBar<'a> {
                             .tint(color::ACCENT),
                     );
                     ui.add_space(EMBLEM_GAP);
-                    let icons_width = 3.0 * size::ICON_ZONE;
+                    #[expect(clippy::cast_precision_loss, reason = "three icons")]
+                    let icons_width = ICONS.len() as f32 * size::ICON_ZONE;
                     if self.league_block(ui, icons_width).clicked() {
                         action = Some(TitleBarAction::Leagues);
                     }
                     ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                        for (icon, clicked) in [
-                            (Icon::Close, TitleBarAction::Close),
-                            (Icon::Minimize, TitleBarAction::Minimize),
-                            (Icon::Settings, TitleBarAction::Settings),
-                        ] {
+                        for icon in ICONS {
                             if self.icon(ui, icon).clicked() {
-                                action = Some(clicked);
+                                action = Some(icon.action());
                             }
                         }
                     });
                 });
-                action.or_else(|| bar.drag_started().then_some(TitleBarAction::Move))
+                action.or_else(|| {
+                    bar.drag_started_by(PointerButton::Primary)
+                        .then_some(TitleBarAction::Move)
+                })
             })
             .inner
     }
@@ -163,6 +189,14 @@ impl<'a> TitleBar<'a> {
             LeagueMode::Hardcore => Message::LeagueModeHardcore,
         });
         let tooltip = self.i18n.league_tooltip(&mode);
+        // The mode isn't written on screen: the screen readers read it with the name.
+        response.widget_info(|| {
+            WidgetInfo::labeled(
+                Role::Button,
+                true,
+                format!("{} · {tooltip}", self.league.name()),
+            )
+        });
         response
             .on_hover_cursor(CursorIcon::PointingHand)
             .on_hover_text(if name_is_cut {
@@ -180,11 +214,7 @@ impl<'a> TitleBar<'a> {
             Sense::click(),
         );
         let on = icon == Icon::Settings && self.settings_open;
-        let tooltip = self.i18n.text(match icon {
-            Icon::Settings => Message::SettingsTooltip,
-            Icon::Minimize => Message::MinimizeTooltip,
-            Icon::Close => Message::CloseTooltip,
-        });
+        let tooltip = self.i18n.text(icon.tooltip());
         response.widget_info(|| match icon {
             Icon::Settings => WidgetInfo::selected(Role::Button, true, on, &tooltip),
             Icon::Minimize | Icon::Close => WidgetInfo::labeled(Role::Button, true, &tooltip),
@@ -231,4 +261,99 @@ fn close_mark(painter: &Painter, center: Pos2, color: Color32) {
         [center + vec2(-half, half), center + vec2(half, -half)],
         stroke,
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::language::Language;
+    use egui::{Context, Event, Modifiers, RawInput};
+
+    const WINDOW: Rect = Rect::from_min_max(pos2(0.0, 0.0), pos2(420.0, 720.0));
+    /// The middle of the Close icon, at the right edge.
+    const CLOSE: Pos2 = pos2(420.0 - size::ICON_ZONE / 2.0, size::TITLE_BAR_HEIGHT / 2.0);
+    /// The empty space of the bar, between the league block and the icons.
+    const EMPTY: Pos2 = pos2(250.0, size::TITLE_BAR_HEIGHT / 2.0);
+
+    /// Draws a window with only the title bar, one frame per call.
+    struct Window {
+        ctx: Context,
+        league: League,
+        i18n: Translator,
+    }
+
+    impl Window {
+        fn new() -> Self {
+            let ctx = Context::default();
+            crate::ui::install(&ctx);
+            let window = Self {
+                ctx,
+                league: League::new("Forbidden Rites", LeagueMode::Softcore),
+                i18n: Translator::new(Language::English),
+            };
+            // The first frame lays the bar out.
+            window.frame(vec![]);
+            window
+        }
+
+        /// One frame with `events`; what the title bar returned.
+        fn frame(&self, events: Vec<Event>) -> Option<TitleBarAction> {
+            let input = RawInput {
+                screen_rect: Some(WINDOW),
+                events,
+                ..Default::default()
+            };
+            let bar = TitleBar::new(&self.league, &self.i18n);
+            let mut action = None;
+            let mut output = self.ctx.run_ui(input, |ui| action = bar.show(ui));
+            // epaint panics when the texture changes of a frame are dropped unapplied.
+            output.textures_delta.clear();
+            action
+        }
+
+        /// What each frame returned: pointer over `at`, press, move by `moved`, release.
+        fn press_and_release(&self, at: Pos2, moved: Vec2) -> Vec<Option<TitleBarAction>> {
+            let button = |pressed| Event::PointerButton {
+                pos: at + if pressed { Vec2::ZERO } else { moved },
+                button: PointerButton::Primary,
+                pressed,
+                modifiers: Modifiers::NONE,
+            };
+            vec![
+                self.frame(vec![Event::PointerMoved(at)]),
+                self.frame(vec![button(true)]),
+                self.frame(vec![Event::PointerMoved(at + moved)]),
+                self.frame(vec![button(false)]),
+            ]
+        }
+    }
+
+    #[test]
+    fn a_click_on_close_closes_without_moving_the_window() {
+        let actions = Window::new().press_and_release(CLOSE, Vec2::ZERO);
+
+        assert_eq!(actions, [None, None, None, Some(TitleBarAction::Close)]);
+    }
+
+    #[test]
+    fn dragging_the_empty_space_moves_the_window() {
+        let actions = Window::new().press_and_release(EMPTY, vec2(30.0, 0.0));
+
+        assert!(actions.contains(&Some(TitleBarAction::Move)), "{actions:?}");
+    }
+
+    #[test]
+    fn a_click_on_the_empty_space_does_nothing() {
+        let actions = Window::new().press_and_release(EMPTY, Vec2::ZERO);
+
+        assert_eq!(actions, [None; 4]);
+    }
+
+    #[test]
+    fn a_click_on_the_league_opens_the_leagues() {
+        let league = pos2(60.0, size::TITLE_BAR_HEIGHT / 2.0);
+        let actions = Window::new().press_and_release(league, Vec2::ZERO);
+
+        assert_eq!(actions.last(), Some(&Some(TitleBarAction::Leagues)));
+    }
 }

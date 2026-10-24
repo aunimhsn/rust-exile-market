@@ -72,12 +72,10 @@ impl<'a> StatusBar<'a> {
     /// The version and the author, then the site as a link: lighter, white and underlined
     /// under the pointer.
     fn author_line(&self, ui: &mut Ui) {
-        let site = crate::AUTHOR_SITE
-            .strip_prefix("https://")
-            .unwrap_or(crate::AUTHOR_SITE);
+        let site = crate::AUTHOR_SITE_LABEL;
         let author = self
             .i18n
-            .author_line(env!("CARGO_PKG_VERSION"), crate::AUTHOR, site);
+            .author_line(crate::APP_NAME, crate::VERSION, crate::AUTHOR, site);
         // The translations end with the site (checked by the tests of `i18n`).
         let Some(before) = author.strip_suffix(site) else {
             ui.add(Label::new(faint(author)).truncate());

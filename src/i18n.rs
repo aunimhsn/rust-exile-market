@@ -144,9 +144,9 @@ impl Translator {
     /// The line of the status bar while the settings are open: the application, its version,
     /// the author, then the author's site.
     #[must_use]
-    pub fn author_line(&self, version: &str, author: &str, site: &str) -> String {
+    pub fn author_line(&self, app: &str, version: &str, author: &str, site: &str) -> String {
         let mut args = FluentArgs::new();
-        args.set("app", crate::APP_NAME);
+        args.set("app", app);
         args.set("version", version);
         args.set("author", author);
         args.set("site", site);
@@ -214,7 +214,11 @@ mod tests {
             }
             assert_ne!(translator.status_bar("A", "B"), "", "{language:?}");
             assert_ne!(translator.league_tooltip("A"), "", "{language:?}");
-            assert_ne!(translator.author_line("1", "A", "a.b"), "", "{language:?}");
+            assert_ne!(
+                translator.author_line("App", "1", "A", "a.b"),
+                "",
+                "{language:?}"
+            );
         }
     }
 
@@ -230,10 +234,11 @@ mod tests {
     fn the_author_line_ends_with_the_site_in_every_language() {
         // The status bar draws the site as a link, cut from the end of the line.
         for language in Language::ALL {
-            let line = Translator::new(language).author_line("0.1.0", "Sylent", "sylent.art");
+            let line =
+                Translator::new(language).author_line("App", "0.1.0", "Author", "author.site");
 
-            assert!(line.starts_with("Exile Market 0.1.0 · "), "{line}");
-            assert!(line.ends_with("Sylent · sylent.art"), "{line}");
+            assert!(line.starts_with("App 0.1.0 · "), "{line}");
+            assert!(line.ends_with("Author · author.site"), "{line}");
         }
     }
 }

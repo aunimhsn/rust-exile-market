@@ -14,7 +14,7 @@ use crate::ui::{
     UnreadableItem, WarningBand,
 };
 
-/// What the window shows under the header.
+/// What the window shows under the title bar.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum View {
     /// The copied item, or the empty state before the first one.

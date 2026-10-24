@@ -1,4 +1,4 @@
-//! The warning band under the header: what doesn't work, in one sentence.
+//! The warning band under the title bar: what doesn't work, in one sentence.
 
 use egui::{Frame, Label, Panel, RichText, Ui, vec2};
 
@@ -17,7 +17,7 @@ impl WarningBand {
         Self { text }
     }
 
-    /// Shown after the header, so that it sits right under it.
+    /// Shown after the title bar, so that it sits right under it.
     pub fn show(self, ui: &mut Ui) {
         Panel::top("warning-band")
             .resizable(false)

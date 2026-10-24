@@ -16,9 +16,12 @@ mod ui;
 
 /// The name of the application, in every language.
 const APP_NAME: &str = "Exile Market";
+const VERSION: &str = env!("CARGO_PKG_VERSION");
 /// The author of the application, and their site, shown while the settings are open.
 const AUTHOR: &str = "Sylent";
 const AUTHOR_SITE: &str = "https://sylent.art";
+/// The site as shown, without the scheme.
+const AUTHOR_SITE_LABEL: &str = "sylent.art";
 /// The name of the folders of the application in the user's directories (log, then settings
 /// and cache).
 const FOLDER_NAME: &str = "exile-market";
@@ -29,7 +32,7 @@ const MIN_WINDOW_SIZE: [f32; 2] = [360.0, 420.0];
 
 fn main() -> eframe::Result {
     logging::init();
-    log::info!("{APP_NAME} {} started", env!("CARGO_PKG_VERSION"));
+    log::info!("{APP_NAME} {VERSION} started");
     // Read before the window opens, which starts always on top when it is set.
     let settings_file = settings::SettingsFile::in_config_directory();
     let settings = settings_file.load();

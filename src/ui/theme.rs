@@ -15,7 +15,7 @@ pub mod color {
     pub const BAND_A: Color32 = Color32::from_rgb(0x0f, 0x12, 0x16);
     /// Item block, offers block, settings.
     pub const BAND_B: Color32 = Color32::from_rgb(0x15, 0x1a, 0x20);
-    /// Pills, inputs, the gear block.
+    /// Pills, inputs, check boxes, key caps.
     pub const CONTROL: Color32 = Color32::from_rgb(0x1d, 0x24, 0x2d);
     /// Input borders, separators, hover of the controls.
     pub const CONTROL_LINE: Color32 = Color32::from_rgb(0x2a, 0x34, 0x40);
@@ -26,7 +26,7 @@ pub mod color {
     pub const ACCENT: Color32 = Color32::from_rgb(0xf2, 0xf5, 0xf9);
     /// The icons and marks drawn on the accent.
     pub const ON_ACCENT: Color32 = BAND_A;
-    /// The warning band under the header: dark yellow, apart from the league colors.
+    /// The warning band under the title bar: dark yellow, apart from the league colors.
     pub const WARNING_BAND: Color32 = Color32::from_rgb(0x8a, 0x6a, 0x10);
     pub const WARNING_TEXT: Color32 = Color32::from_rgb(0xf8, 0xed, 0xc2);
     /// The emblem behind the empty state: white at 2.25 %, rounded to the nearest alpha.
