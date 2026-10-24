@@ -10,11 +10,11 @@ use crate::league::{League, LeagueMode};
 use crate::session::Session;
 use crate::settings::{SettingChange, Settings, SettingsFile};
 use crate::ui::{
-    self, EmptyState, Header, HeaderAction, RawItem, SettingsPanel, StatusBar, UnreadableItem,
-    WarningBand,
+    self, EmptyState, RawItem, ResizeEdges, SettingsPanel, StatusBar, TitleBar, TitleBarAction,
+    UnreadableItem, WarningBand,
 };
 
-/// What the window shows under the header.
+/// What the window shows under the title bar.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum View {
     /// The copied item, or the empty state before the first one.
@@ -75,11 +75,14 @@ impl ExileMarketApp {
         }
     }
 
-    fn act_on(&mut self, action: HeaderAction) {
+    fn act_on(&mut self, ctx: &Context, action: TitleBarAction) {
         match action {
+            TitleBarAction::Move => ctx.send_viewport_cmd(ViewportCommand::StartDrag),
             // The list of the leagues comes with the price data, in step 7.
-            HeaderAction::Leagues => {}
-            HeaderAction::Settings => self.view = self.view.toggled(),
+            TitleBarAction::Leagues => {}
+            TitleBarAction::Settings => self.view = self.view.toggled(),
+            TitleBarAction::Minimize => ctx.send_viewport_cmd(ViewportCommand::Minimized(true)),
+            TitleBarAction::Close => ctx.send_viewport_cmd(ViewportCommand::Close),
         }
     }
 
@@ -126,17 +129,24 @@ impl App for ExileMarketApp {
     }
 
     fn ui(&mut self, ui: &mut Ui, _frame: &mut Frame) {
+        let ctx = ui.ctx().clone();
+        if let Some(direction) = ResizeEdges::show(&ctx) {
+            ctx.send_viewport_cmd(ViewportCommand::BeginResize(direction));
+        }
         // The panels on the edges come first, so that the central one takes what remains.
-        let action = Header::new(self.session.league(), &self.i18n)
+        let action = TitleBar::new(self.session.league(), &self.i18n)
             .settings_open(self.view == View::Settings)
             .show(ui);
         if let Some(action) = action {
-            self.act_on(action);
+            self.act_on(&ctx, action);
         }
         if !self.session.clipboard_readable() {
             WarningBand::new(self.i18n.text(Message::ClipboardUnreadable)).show(ui);
         }
-        StatusBar::new(&self.i18n).show(ui);
+        match self.view {
+            View::Item => StatusBar::sources(&self.i18n).show(ui),
+            View::Settings => StatusBar::author(&self.i18n).show(ui),
+        }
         match self.view {
             View::Item => self.item(ui),
             View::Settings => {

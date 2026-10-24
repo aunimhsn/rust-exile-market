@@ -5,21 +5,23 @@
 
 mod empty_state;
 mod fonts;
-mod header;
 mod images;
 mod raw_item;
+mod resize_edges;
 mod settings_panel;
 mod status_bar;
 mod theme;
+mod title_bar;
 mod unreadable_item;
 mod warning_band;
 mod widgets;
 
 pub use empty_state::EmptyState;
-pub use header::{Header, HeaderAction};
 pub use raw_item::RawItem;
+pub use resize_edges::ResizeEdges;
 pub use settings_panel::SettingsPanel;
 pub use status_bar::StatusBar;
+pub use title_bar::{TitleBar, TitleBarAction};
 pub use unreadable_item::UnreadableItem;
 pub use warning_band::WarningBand;
 

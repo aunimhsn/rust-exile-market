@@ -1,14 +1,16 @@
-//! The window before the first item: the logo and how to use the application.
+//! The window before the first item: how to use the application, over the emblem as a faint
+//! watermark, which takes no height.
 
 use egui::{
-    Align2, CentralPanel, Frame, Image, Rect, RichText, Sense, Stroke, StrokeKind, Ui, pos2, vec2,
+    Align2, CentralPanel, Frame, Image, Rect, RichText, Sense, Stroke, StrokeKind, Ui, Vec2, pos2,
+    vec2,
 };
 
 use super::theme::{color, size, text};
 use super::{images, widgets};
 use crate::i18n::{Message, Translator};
 
-const LOGO_WIDTH: f32 = 150.0;
+const WATERMARK_SIZE: f32 = 190.0;
 const KEY_HEIGHT: f32 = 26.0;
 const KEY_PADDING: f32 = 9.0;
 const KEY_GAP: f32 = 8.0;
@@ -30,23 +32,24 @@ impl<'a> EmptyState<'a> {
         CentralPanel::no_frame()
             .frame(Frame::NONE.fill(color::BAND_B))
             .show(ui, |ui| {
+                Image::new(images::emblem())
+                    .tint(color::WATERMARK)
+                    .paint_at(
+                        ui,
+                        Rect::from_center_size(ui.max_rect().center(), Vec2::splat(WATERMARK_SIZE)),
+                    );
                 // Centered vertically with the height of the content at the previous frame:
                 // egui only knows the size of what it has laid out.
                 let height_id = ui.scope_id().with("content-height");
                 let height = ui.data(|data| data.get_temp::<f32>(height_id));
                 ui.add_space(((ui.available_height() - height.unwrap_or(0.0)) / 2.0).max(0.0));
-                let content =
-                    ui.vertical_centered(|ui| {
-                        ui.add(Image::new(images::logo()).fit_to_exact_size(
-                            images::LOGO_SIZE * (LOGO_WIDTH / images::LOGO_SIZE.x),
-                        ));
-                        ui.add_space(SPACE * 1.5);
-                        self.hint(ui, Message::EmptyCopy);
-                        ui.add_space(SPACE / 2.0);
-                        Self::keys(ui);
-                        ui.add_space(SPACE / 2.0);
-                        self.hint(ui, Message::EmptyPrice);
-                    });
+                let content = ui.vertical_centered(|ui| {
+                    self.hint(ui, Message::EmptyCopy);
+                    ui.add_space(SPACE / 2.0);
+                    Self::keys(ui);
+                    ui.add_space(SPACE / 2.0);
+                    self.hint(ui, Message::EmptyPrice);
+                });
                 let content_height = content.response.rect.height();
                 if height != Some(content_height) {
                     ui.data_mut(|data| data.insert_temp(height_id, content_height));

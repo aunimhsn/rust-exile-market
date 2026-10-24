@@ -11,21 +11,7 @@ use egui::{
     Stroke, StrokeKind, Ui, Vec2, WidgetInfo, pos2, vec2,
 };
 
-use super::theme::{self, color, size, text};
-
-/// A flat, square block the given size, that can be clicked: its background is one shade
-/// lighter under the pointer or with the keyboard focus. The caller draws the content inside
-/// `response.rect`.
-pub fn flat_block(ui: &mut Ui, size: Vec2, background: Color32) -> Response {
-    let (rect, response) = ui.allocate_exact_size(size, Sense::click());
-    let fill = if response.hovered() || response.has_focus() {
-        theme::hovered(background)
-    } else {
-        background
-    };
-    ui.painter().rect_filled(rect, CornerRadius::ZERO, fill);
-    response.on_hover_cursor(CursorIcon::PointingHand)
-}
+use super::theme::{color, size, text};
 
 /// The mark in front of a choice: a radio button among exclusive choices, a check box for a
 /// choice of its own.
