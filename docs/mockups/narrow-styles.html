@@ -402,6 +402,10 @@
   .reqline { margin-top: 6px; color: var(--weak); font-size: 12px; }
   .stats-group { display: flex; justify-content: space-between; margin-top: 6px; color: var(--faint); font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
   .stats-group:first-child { margin-top: 0; }
+  .stats-group em { font-style: normal; letter-spacing: 0; text-transform: none; font-weight: 600; color: var(--weak); }
+  .stats-group em.open { color: var(--accent); }
+  /* Tier of a rare modifier, before the range of that tier. */
+  .tier { color: var(--weak); font-weight: 700; margin-right: 6px; }
   .prop { font-size: 13px; color: var(--text); }
   .prop span { color: var(--weak); }
   .sep { height: 1px; background: var(--control-line); margin: 2px 0; }
@@ -457,7 +461,8 @@
   .tt-meta { color: var(--weak); font-size: 12px; margin-top: 2px; }
   .tt-mods { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--control-line); display: grid; gap: 3px; }
   .tt-mod { display: flex; justify-content: space-between; gap: 10px; color: var(--mod); }
-  .tt-mod.prop { color: var(--text); }   /* item properties are white, as in the game */
+  .tt-mod.prop { color: var(--text); }
+  .tt-tier { display: inline-block; min-width: 22px; }   /* item properties are white, as in the game */
   .delta { font-family: var(--font-number); font-weight: 600; font-size: 12px; }
   .delta.up { color: var(--rise); }
   .delta.down { color: var(--fall); }
@@ -598,12 +603,13 @@
       stats = `<div class="stats-toggle open"><span class="pill">${pill(true)}</span>${filters}</div><div class="stats">${it.stats.map(row => {
         if (row === "sep") return `<div class="sep"></div>`;
         if (row.minHeader) return `<div class="req"><span></span><span>min</span></div>`;
-        if (row.group) return `<div class="stats-group"><span>${row.group}</span>${row.min ? "<span>min</span>" : ""}</div>`;
+        if (row.group) return `<div class="stats-group"><span>${row.group}${row.fill ? ` <em>${row.fill}</em>` : ""}</span>${row.min ? "<span>min</span>" : ""}</div>`;
         if (row.prop) return `<div class="prop"><span>${row.prop[0]}:</span> ${row.prop[1]}</div>`;
         if (row.note) return `<div class="note">${row.note}</div>`;
         const check = row.check === undefined ? "<span></span>" : `<span class="check ${row.check ? "on" : ""}">${row.check ? ICON.check(11) : ""}</span>`;
         const input = row.min !== undefined ? `<span class="input">${row.min}</span>` : "";
-        const roll = row.range ? `<div class="roll"><span class="bar"><i style="width:${row.share * 100}%"></i></span>${row.range}</div>` : "";
+        const range = row.tier ? `<span class="tier">T${row.tier}</span>${row.range}` : row.range;
+        const roll = row.range ? `<div class="roll"><span class="bar"><i style="width:${row.share * 100}%"></i></span>${range}</div>` : "";
         return `<div class="mod ${input ? "" : "fixed"}">${check}<span>${row.mod}</span>${input}${roll}</div>`;
       }).join("")}</div>`;
     } else if (it.statsLabel) {
@@ -655,7 +661,8 @@
     const compare = (list, kind = "") => list.map(m => {
       const diff = m.yours === undefined ? "" : m.value - m.yours;
       const delta = diff === "" || diff === 0 ? "" : `<span class="delta ${diff > 0 ? "up" : "down"}">${diff > 0 ? "+" : "−"}${Math.abs(diff)}</span>`;
-      return `<div class="tt-mod ${kind}"><span>${m.text}</span>${delta}</div>`;
+      const tier = m.tier ? `<span class="tier tt-tier">T${m.tier}</span>` : "";
+      return `<div class="tt-mod ${kind}"><span>${tier}${m.text}</span>${delta}</div>`;
     }).join("");
     return `<div class="offer-tooltip ${t.pinned ? "pinned" : ""} ${t.below ? "below" : ""}">
       <div class="tt-head"><span class="rarity-${t.rarity || "unique"} tt-name">${t.name}</span><span class="tt-price">${t.price} ${orb(t.currency)}</span></div>
@@ -742,30 +749,32 @@
     { group: "Weapon" },
     { mod: "Physical DPS: 245", check: true, min: 220 },
     { mod: "Elemental DPS: 44", check: false, min: 40 },
-    { group: "Explicit" },
-    { mod: "+3 to Level of all Projectile Skills", check: true, min: 3, range: "1–3", share: 1 },
-    { mod: "152% increased Physical Damage", check: false, min: 137, range: "100–169", share: .75 },
-    { mod: "Adds 21 to 38 Physical Damage", check: false },
-    { mod: "14% increased Attack Speed", check: false, min: 13, range: "8–16", share: .75 },
-    { mod: "+312 to Accuracy Rating", check: true, min: 281, range: "200–400", share: .56 },
-    { mod: "Adds 3 to 71 Lightning Damage", check: false },
+    { group: "Prefixes", fill: "3 of 3" },
+    { mod: "152% increased Physical Damage", check: false, min: 137, tier: 2, range: "135–154", share: .89 },
+    { mod: "Adds 21 to 38 Physical Damage", check: false, tier: 4, range: "18–42", share: .6 },
+    { mod: "Adds 3 to 71 Lightning Damage", check: false, tier: 3, range: "2–80", share: .88 },
+    { group: "Suffixes", fill: "3 of 3" },
+    { mod: "+3 to Level of all Projectile Skills", check: true, min: 3, tier: 1, range: "3–3", share: 1 },
+    { mod: "14% increased Attack Speed", check: false, min: 13, tier: 2, range: "11–15", share: .75 },
+    { mod: "+312 to Accuracy Rating", check: true, min: 281, tier: 4, range: "296–344", share: .33 },
     { note: "The physical DPS already counts the damage and speed modifiers." },
   ];
   const BOW_RARE = { ...BOW, statsLabel: "Stats (6)", filters: "4 filters" };
   const RARE_ESTIMATE_BEFORE = { lines: ["No market price for rare items.", "Search similar offers to estimate it."] };
-  const RING = { rarity: "rare", name: "Storm Spiral", base: "Sapphire Ring", cls: "Rings", tags: ["ilvl 77"], req: "Requires Level 54", statsLabel: "Stats (6)", filters: "2 filters" };
+  const RING = { rarity: "rare", name: "Storm Spiral", base: "Sapphire Ring", cls: "Rings", tags: ["ilvl 77", "1 open prefix"], req: "Requires Level 54", statsLabel: "Stats (6)", filters: "2 filters" };
   const RING_FILTERS = [
     { group: "Pseudo", min: true },
-    { mod: "+92% total Elemental Resistance", check: true, min: 82 },
+    { mod: "+83% total Elemental Resistance", check: true, min: 74 },
     { mod: "+65 total maximum Life", check: true, min: 58 },
     { group: "Implicit" },
     { mod: "+22% to Cold Resistance", check: false, min: 19, range: "20–30", share: .2 },
-    { group: "Explicit" },
-    { mod: "+65 to maximum Life", check: false, min: 58, range: "60–69", share: .55 },
-    { mod: "+38% to Fire Resistance", check: false, min: 34, range: "36–40", share: .5 },
-    { mod: "+9% to Cold Resistance", check: false, min: 8, range: "6–10", share: .75 },
-    { mod: "+23% to Lightning Resistance", check: false, min: 20, range: "21–25", share: .5 },
-    { mod: "+12 to Dexterity", check: false, min: 10, range: "9–12", share: 1 },
+    { group: "Prefixes", fill: "2 of 3 · 1 open" },
+    { mod: "+65 to maximum Life", check: false, min: 58, tier: 5, range: "60–69", share: .55 },
+    { mod: "+21 to maximum Energy Shield", check: false, min: 18, tier: 6, range: "17–23", share: .66 },
+    { group: "Suffixes", fill: "3 of 3" },
+    { mod: "+38% to Fire Resistance", check: false, min: 34, tier: 2, range: "36–40", share: .5 },
+    { mod: "+23% to Lightning Resistance", check: false, min: 20, tier: 4, range: "21–25", share: .5 },
+    { mod: "+12 to Dexterity", check: false, min: 10, tier: 6, range: "9–12", share: 1 },
     { note: "Pseudo stats add up the same stat from all modifiers: the resistances, the life." },
   ];
   const MAGIC = { rarity: "magic", name: "Glimmering Sapphire Ring of the Lynx", cls: "Rings", tags: ["ilvl 68"], req: "Requires Level 44", statsLabel: "Stats (3)", filters: "2 filters" };
@@ -781,11 +790,12 @@
   ];
   const JEWEL = { rarity: "rare", name: "Brood Ember", base: "Ruby", cls: "Jewels", tags: ["ilvl 81"], statsLabel: "Stats (4)", filters: "4 filters" };
   const JEWEL_FILTERS = [
-    { group: "Explicit", min: true },
-    { mod: "14% increased Critical Damage Bonus", check: true, min: 12, range: "10–15", share: .8 },
-    { mod: "8% increased Attack Speed", check: true, min: 7, range: "4–8", share: 1 },
-    { mod: "12% increased Projectile Damage", check: true, min: 10, range: "8–14", share: .66 },
-    { mod: "6% increased Critical Hit Chance", check: true, min: 5, range: "4–8", share: .5 },
+    { group: "Prefixes", fill: "2 of 2", min: true },
+    { mod: "12% increased Projectile Damage", check: true, min: 10, tier: 1, range: "11–13", share: .5 },
+    { mod: "10% increased Damage with Bows", check: true, min: 9, tier: 2, range: "8–11", share: .66 },
+    { group: "Suffixes", fill: "2 of 2" },
+    { mod: "14% increased Critical Damage Bonus", check: true, min: 12, tier: 1, range: "13–15", share: .5 },
+    { mod: "8% increased Attack Speed", check: true, min: 7, tier: 1, range: "7–8", share: 1 },
   ];
 
   const win = (...parts) => `<div class="win">${parts.join("")}</div>`;
@@ -821,12 +831,12 @@
             { text: "Elemental DPS 51", value: 51, yours: 44 },
           ],
           mods: [
-            { text: "+3 to Level of all Projectile Skills", value: 3, yours: 3 },
-            { text: "148% increased Physical Damage", value: 148, yours: 152 },
-            { text: "16% increased Attack Speed", value: 16, yours: 14 },
-            { text: "+290 to Accuracy Rating", value: 290, yours: 312 },
-            { text: "Adds 5 to 82 Lightning Damage" },
-            { text: "+18% to Critical Damage Bonus" },
+            { text: "148% increased Physical Damage", value: 148, yours: 152, tier: 2 },
+            { text: "Adds 5 to 82 Lightning Damage", tier: 3 },
+            { text: "+3 to Level of all Projectile Skills", value: 3, yours: 3, tier: 1 },
+            { text: "16% increased Attack Speed", value: 16, yours: 14, tier: 1 },
+            { text: "+290 to Accuracy Rating", value: 290, yours: 312, tier: 5 },
+            { text: "+18% to Critical Damage Bonus", tier: 3 },
           ],
         }, rows: [
           { v: "300", k: "ex", when: "1 h ago", sus: true }, { v: "2", k: "div", when: "20 min ago" }, { v: "2.2", k: "div", when: "4 h ago" },
