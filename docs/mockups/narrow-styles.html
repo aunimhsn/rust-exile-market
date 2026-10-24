@@ -506,8 +506,11 @@
     color: var(--weak); cursor: pointer;
   }
   .more:hover { color: var(--accent); }
-  .more .ico { transition: transform .2s ease-out; }
-  .more:hover .ico { transform: translateY(2px); }
+  /* The double chevron is raised a little to look centered, tuned by eye with the "Chevrons up" tab. */
+  .more .ico { transition: transform .2s ease-out; transform: translateY(calc(var(--more-up, 2) * -1px)); }
+  .more:hover .ico { transform: translateY(calc((var(--more-up, 2) - 2) * -1px)); }
+  [data-moreup="0"] { --more-up: 0; } [data-moreup="1"] { --more-up: 1; } [data-moreup="2"] { --more-up: 2; }
+  [data-moreup="3"] { --more-up: 3; } [data-moreup="4"] { --more-up: 4; }
   @media (prefers-reduced-motion: reduce) { .more .ico { transition: none; } }
   .again { flex: none; width: 56px; height: 48px; display: grid; place-items: center; font: 600 13px/1 var(--font-body); }
   .again.waiting { background: var(--control); color: var(--weak); }
@@ -557,6 +560,7 @@
   };
   const VARIANTS = {
     theme: { label: "Style", options: Object.fromEntries(Object.entries(THEMES).map(([k, v]) => [k, v.title])), fallback: "slate" },
+    moreup: { label: "Chevrons up (px)", options: { "0": "0", "1": "1", "2": "2", "3": "3", "4": "4" }, fallback: "2" },
     league: { label: "League", options: { softcore: "Softcore", hardcore: "Hardcore" }, fallback: "softcore" },
   };
   const params = new URLSearchParams(location.search);
