@@ -53,6 +53,7 @@ The reference of the interface is the mock-up [docs/mockups/narrow-styles.html](
 - **JetBrains Mono** for the numbers that line up (prices, offers), weight 600.
 - Both fonts are under the SIL Open Font License and embedded in the executable.
 - Numbers: a point between the integer and the decimal parts in every language, no thousands separator (`12.4`, `950`). Exalted Orbs without decimals, Divine and Chaos Orbs with up to 2. From 1000, an amount is shortened with `K`, rounded to one decimal, without a trailing `.0` (`1.3K`, `27.6K`, `9K` for 8990); from 100 000, without decimals (`125K`); from a million, with `M` (`1.2M`). The same in every language.
+- Durations: the number glued to its unit, without a space, in every language: `8s`, `12min`, `3h`, `5d` ("poe2scout 12min ago", "il y a 3h").
 
 ### Shapes
 
@@ -65,14 +66,14 @@ The reference of the interface is the mock-up [docs/mockups/narrow-styles.html](
 
 - Icons are drawn as lines (stroke about 1.8 px), in the color of the text: search, refresh, double chevron, check mark, minimize, close; the gear is the "settings" icon of [Lucide](https://lucide.dev) (ISC license).
 - Icons are aligned on the lowercase letters next to them, by eye on the real screen (e.g. text 0.5 px up next to an icon), not on the box of the text.
-- The title bar shows the **emblem** (`assets/logo/emblem.svg`, white, 16 px) without the name; the empty window shows the full **logo** (`assets/logo/exile-market.png`).
+- The title bar shows the **emblem** (`assets/logo/emblem.svg`, white, 16 px) without the name; the empty window shows the emblem as a faint watermark behind its text, so that it takes no height. The full **logo** (`assets/logo/exile-market.png`) is kept for the README and the application icon.
 - The Exalted, Divine and Chaos Orbs come from `assets/currencies/`.
 
 ### Hover and motion
 
 - Pills and the league block: background one shade lighter on hover.
 - Icons of the title bar: in the weak text color, white on hover; the gear stays white while the settings are open.
-- Search block: the icon grows by 15 %; refresh block: the icon grows by 12 % and turns a quarter; show more: the double chevron slides down 2 px. About 0.2 s, a slight overshoot.
+- Search block: the icon grows by 15 %; refresh block: the icon grows by 12 % and turns a quarter; show more: the double chevron slides down 2 px. About 0.2s, a slight overshoot.
 - No motion when the system asks for reduced motion.
 - No specific design for the keyboard focus: the default of the toolkit is kept.
 
@@ -97,7 +98,7 @@ The window has a title bar, then three bands (item, price, offers), then a statu
 - **Title bar** (band A, 28 px), in place of the title bar of the system: the emblem, the league block, then on the right the Settings, Minimize and Close icons, without borders (each clickable on 36 px across). There is no Maximize: the narrow window doesn't need it. The empty space of the bar moves the window; the edges of the window still resize it.
   - The league block shows the league name on a background tinted with the color of its trade (blue for softcore, red for hardcore), with a 2 px line of that color on the left and a white chevron. The color is the only sign of the trade on screen; the tooltip says it: "Softcore · Change the league". A click opens the list of the current leagues, with the two permanent ones, both shown as "Standard" on the color of their mode. By default, the current challenge league in softcore trade.
   - The gear opens the [settings](#settings), and closes them.
-- **Status bar** (band A): the age of each source, e.g. "poe2scout 12 min ago · GGG trade 2 min ago"; "GGG trade: next search in 4 min" during a long wait; the version and the author while the settings are open.
+- **Status bar** (band A): the age of each source, e.g. "poe2scout 12min ago · GGG trade 2min ago"; "GGG trade: next search in 4min" during a long wait; the version and the author while the settings are open.
 - Warnings appear as a dark yellow band right under the title bar (see [Error handling](#error-handling)).
 - The window can be resized and moved to another screen. Its size and position are restored at the next launch, on a screen that is still connected.
 - Before the first item, the window shows the full logo and "Copy an item in the game with Ctrl + C. The price shows up here."
@@ -157,8 +158,8 @@ The offers search uses the stats of the copied item as filters, like the trade s
 
 - **Before the first search**: the title "OFFERS", "One search per click, within the limits of the trade site.", and a white **search block** with a magnifying glass, glued to the right edge of the band. Copying an item never starts a search by itself: the player often copies many items in a row while sorting the loot.
 - **While searching**: "Searching the trade site…".
-- **After the search**: the title, "searched 2 min ago" under it, the count on the right ("10 of 13 online"), and in the top right corner, at the place of the search block, the **waiting block**: the countdown on a dark background ("8 s"), then, once a new search is allowed, the refresh icon on white.
-  - The waiting time lasts at least 10 seconds after a search, longer when the limits announced by the trade site require it; it applies to every item. When it is long, "Trade site limit: next search in 4 min." under the title.
+- **After the search**: the title, "searched 2min ago" under it, the count on the right ("10 of 13 online"), and in the top right corner, at the place of the search block, the **waiting block**: the countdown on a dark background ("8s"), then, once a new search is allowed, the refresh icon on white.
+  - The waiting time lasts at least 10 seconds after a search, longer when the limits announced by the trade site require it; it applies to every item. When it is long, "Trade site limit: next search in 4min." under the title.
 - **The list**: the first 10 offers, from the cheapest, among the sellers online or away. Each row shows the asked price with its orb and the listing time, with a dot for the seller status: green online, yellow away. Every other row is lighter.
   - Currency exchange items: the price per unit, the stock and the listing time.
   - An offer under a quarter of the reference price (the poe2scout price, or the estimate) is struck through and marked with "?": it is usually bait or a mistake, and it isn't counted in the estimate.
