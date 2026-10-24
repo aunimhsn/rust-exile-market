@@ -95,7 +95,7 @@ The window has a title bar, then three bands (item, price, offers), then a statu
 | Medium and wide (later) | The same blocks rearranged in two or three columns, with the price history in the wide layout (see the roadmap). |
 
 - **Title bar** (band A, 28 px), in place of the title bar of the system: the emblem, the league block, then on the right the Settings, Minimize and Close icons, without borders (each clickable on 36 px across). There is no Maximize: the narrow window doesn't need it. The empty space of the bar moves the window; the edges of the window still resize it.
-  - The league block shows the league name on a background tinted with the color of its trade (blue for softcore, red for hardcore), with a 2 px line of that color on the left and a white chevron. The color is the only sign of the trade on screen; the tooltip says it: "Softcore · Change the league". A click opens the list of the current leagues, with the permanent ones (Standard in softcore, Hardcore in hardcore), shown the same way. By default, the current challenge league in softcore trade.
+  - The league block shows the league name on a background tinted with the color of its trade (blue for softcore, red for hardcore), with a 2 px line of that color on the left and a white chevron. The color is the only sign of the trade on screen; the tooltip says it: "Softcore · Change the league". A click opens the list of the current leagues, with the two permanent ones, both shown as "Standard" on the color of their mode. By default, the current challenge league in softcore trade.
   - The gear opens the [settings](#settings), and closes them.
 - **Status bar** (band A): the age of each source, e.g. "poe2scout 12 min ago · GGG trade 2 min ago"; "GGG trade: next search in 4 min" during a long wait; the version and the author while the settings are open.
 - Warnings appear as a dark yellow band right under the title bar (see [Error handling](#error-handling)).
@@ -205,9 +205,10 @@ None of these files are in the Git repository.
 
 | Situation | Behavior |
 |---|---|
-| No network or price database unreachable at startup | The cached prices are used, with the warning band "The price database can't be reached: showing the prices from 3 hours ago."; without a cache, "Prices unavailable, retrying…" and a new attempt every minute. |
+| No network or price database unreachable at startup | The cached prices are used, with the warning band "The price database can't be reached. Last updated 3h ago."; without a cache, "Prices unavailable, retrying…" and a new attempt every minute. |
 | Refresh failure | The previous prices are kept, with their age in the status bar; a new attempt at the next refresh. |
-| Selected league no longer exists (end of league) | The permanent league of the same mode is selected, where the game moves the characters: Standard for a softcore league, Hardcore for a hardcore one; with the warning band "<league> has ended, switched to <Standard or Hardcore>." |
+| Selected league no longer exists (end of league) | The permanent league of the same mode is selected, without a message: it is where the game moves the characters. Both show as "Standard", softcore or hardcore told by their color. |
+| A new challenge league has started while the player is on Standard | A bubble under the league block: "Rise of the Abyssal has started.", with a **Switch** pill that selects it and a close icon. Closed, it doesn't come back for that league (kept in the settings). |
 | Clipboard unreadable (e.g. a Wayland desktop that forbids it) | The warning band "The clipboard can't be read." The help to give (a README section or a panel in the window) is to be defined later. |
 | Copied text that starts like an item but can't be read | "This item couldn't be read. Copy it again, or copy another item.", without crashing; the next copy works normally. |
 | Trade site unreachable | The offers block shows "The trade site can't be reached"; the price and the stats are shown normally. |

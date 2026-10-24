@@ -318,7 +318,7 @@
 
   /* Window. */
   .win {
-    width: 420px; overflow: hidden; border-radius: 8px; box-shadow: 0 12px 40px rgba(0, 0, 0, .55);
+    position: relative; width: 420px; overflow: hidden; border-radius: 8px; box-shadow: 0 12px 40px rgba(0, 0, 0, .55);
     background: var(--bg-b); color: var(--text);
     font: 400 var(--body-size)/1.4 var(--font-body);
     font-variant-numeric: tabular-nums;
@@ -340,6 +340,21 @@
   }
   .app-league:hover { background: var(--league-bg-hover); }
   .app-league .ico { color: var(--text); }
+  /* A new league has started while the player is on Standard: a bubble under the league block, until the player
+     switches or closes it. */
+  .app-notice { display: flex; align-items: center; gap: 10px; font-size: 12.5px; color: var(--text); }
+  .app-notice b { font-weight: 700; }
+  .app-notice .app-notice-text { flex: 1; }
+  .app-notice .pill { background: var(--accent); color: var(--on-accent, var(--bg-a)); cursor: pointer; }
+  .app-notice .app-notice-close { display: grid; place-items: center; color: var(--weak); cursor: pointer; }
+  .app-notice .app-notice-close:hover { color: var(--text); }
+  .app-notice {
+    position: absolute; z-index: 2; top: 36px; left: 30px; width: 330px; padding: 10px 10px 10px 14px;
+    background: #20272f; border-radius: 4px; box-shadow: 0 10px 30px rgba(0, 0, 0, .6);
+  }
+  .app-notice::before {
+    content: ""; position: absolute; top: -5px; left: 36px; width: 10px; height: 10px; background: #20272f; transform: rotate(45deg);
+  }
   .app-icon-button { width: 36px; display: grid; place-items: center; color: var(--weak); cursor: pointer; }
   .app-icon-button:hover, .app-icon-button.is-on { color: var(--accent); }
   :root, [data-league="softcore"] { --league-bg: #13263a; --league-line: #6aa7de; --league-kind: "Softcore"; --league-bg-hover: #1a3350; }
@@ -597,6 +612,9 @@
   };
   const foot = (value = "poe2scout 12 min ago · GGG trade 2 min ago") => `<div class="foot a">${value}</div>`;
   const banner = value => `<div class="banner"><span>${value}</span></div>`;
+  const newLeague = league => `
+    <div class="app-notice"><span class="app-notice-text"><b>${league}</b> has started.</span>
+      <span class="pill">Switch</span><span class="app-notice-close" title="Close">${svg(12, '<path d="M4 4l8 8M12 4l-8 8"/>')}</span></div>`;
 
   function item(it, unfolded = false) {
     const tags = (it.tags || []).map(t => `<span class="tag ${/^Corrupt|^Corrompu/.test(t) ? "corrupted" : ""}">${t}</span>`).join("");
@@ -925,8 +943,9 @@
         price({ lines: ["No price found for this item in Forbidden Rites."] }), offers({ state: "idle" }), foot())],
     ]],
     ["Errors", [
-      ["Offline, cached prices", win(topBar(), banner("The price database can't be reached: showing the prices from 3 hours ago."), item(HH), price(HH_PRICE), offers({ state: "idle" }), foot("poe2scout 3 h ago (offline) · GGG trade 2 min ago"))],
-      ["League ended", win(topBar(), banner("Rise of the Abyssal has ended, switched to Forbidden Rites."), item(HH), price(HH_PRICE), offers({ state: "idle" }), foot())],
+      ["Offline, cached prices", win(topBar(), banner("The price database can't be reached. Last updated 3h ago."), item(HH), price(HH_PRICE), offers({ state: "idle" }), foot("poe2scout 3h ago (offline) · GGG trade 2 min ago"))],
+      ["League ended: back to Standard, without a message", win(topBar(false, "Standard"), item(HH), price(HH_PRICE), offers({ state: "idle" }), foot())],
+      ["New league started", win(topBar(false, "Standard"), newLeague("Rise of the Abyssal"), item(HH), price(HH_PRICE), offers({ state: "idle" }), foot())],
       ["Clipboard unreadable", win(topBar(), banner("The clipboard can't be read."), empty, foot("poe2scout 12 min ago"))],
       ["Before the first item", win(topBar(), empty, foot("poe2scout 12 min ago"))],
       ["Item couldn't be read", win(topBar(), `<div class="band b"><div class="msg">This item couldn't be read.</div><div class="line muted">Copy it again, or copy another item.</div></div>`, foot())],
