@@ -3,7 +3,7 @@
 
 use egui::{
     Align, Color32, CursorIcon, Frame, Image, Layout, Painter, Panel, PointerButton, Pos2, Rect,
-    Response, Role, Sense, Stroke, Ui, Vec2, WidgetInfo, pos2, vec2,
+    Response, Role, Sense, Stroke, StrokeKind, Ui, Vec2, WidgetInfo, pos2, vec2,
 };
 
 use super::theme::{LeagueModeColors, color, size, text};
@@ -14,6 +14,8 @@ use crate::league::{League, LeagueMode};
 const PADDING_LEFT: f32 = 12.0;
 const EMBLEM_SIZE: f32 = 16.0;
 const EMBLEM_GAP: f32 = 10.0;
+/// The ring around the emblem with the keyboard focus: the pointer never shows it.
+const EMBLEM_FOCUS_MARGIN: f32 = 3.0;
 const SETTINGS_ICON_SIZE: f32 = 15.0;
 /// The width of the minimize line and of the close cross.
 const WINDOW_MARK_SIZE: f32 = 9.0;
@@ -146,16 +148,24 @@ impl<'a> TitleBar<'a> {
         );
         let tooltip = self.i18n.text(Message::HomeTooltip);
         response.widget_info(|| WidgetInfo::labeled(Role::Button, true, &tooltip));
-        Image::new(images::emblem()).tint(color::ACCENT).paint_at(
-            ui,
-            Rect::from_min_size(
-                pos2(
-                    rect.left() + PADDING_LEFT,
-                    rect.center().y - EMBLEM_SIZE / 2.0,
-                ),
-                Vec2::splat(EMBLEM_SIZE),
+        let emblem = Rect::from_center_size(
+            pos2(
+                rect.left() + PADDING_LEFT + EMBLEM_SIZE / 2.0,
+                rect.center().y,
             ),
+            Vec2::splat(EMBLEM_SIZE),
         );
+        Image::new(images::emblem())
+            .tint(color::ACCENT)
+            .paint_at(ui, emblem);
+        if response.has_focus() {
+            ui.painter().rect_stroke(
+                emblem.expand(EMBLEM_FOCUS_MARGIN),
+                f32::from(size::RADIUS),
+                Stroke::new(1.0, color::WEAK),
+                StrokeKind::Outside,
+            );
+        }
         response
             .on_hover_cursor(CursorIcon::PointingHand)
             .on_hover_text(tooltip)
@@ -383,6 +393,32 @@ mod tests {
         let actions = Window::new().press_and_release(emblem, Vec2::ZERO);
 
         assert_eq!(actions, [None, None, None, Some(TitleBarAction::Home)]);
+    }
+
+    #[test]
+    fn a_click_between_the_emblem_and_the_league_goes_home_too() {
+        let gap = pos2(
+            PADDING_LEFT + EMBLEM_SIZE + EMBLEM_GAP / 2.0,
+            size::TITLE_BAR_HEIGHT / 2.0,
+        );
+        let actions = Window::new().press_and_release(gap, Vec2::ZERO);
+
+        assert_eq!(actions.last(), Some(&Some(TitleBarAction::Home)));
+    }
+
+    #[test]
+    fn dragging_the_emblem_moves_the_window_without_going_home() {
+        let emblem = pos2(
+            PADDING_LEFT + EMBLEM_SIZE / 2.0,
+            size::TITLE_BAR_HEIGHT / 2.0,
+        );
+        let actions = Window::new().press_and_release(emblem, vec2(30.0, 0.0));
+
+        assert!(actions.contains(&Some(TitleBarAction::Move)), "{actions:?}");
+        assert!(
+            !actions.contains(&Some(TitleBarAction::Home)),
+            "{actions:?}"
+        );
     }
 
     #[test]
