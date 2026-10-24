@@ -12,7 +12,7 @@ This product isn't affiliated with or endorsed by Grinding Gear Games in any way
 
 ## Requirements
 
-- Rust 1.93 or later (stable toolchain, see `rust-toolchain.toml`)
+- Rust 1.95 or later (stable toolchain, see `rust-toolchain.toml`)
 
 ## Build
 

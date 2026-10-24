@@ -2,7 +2,7 @@
 name = "rust-exile-market"
 version = "0.1.0"
 edition = "2024"
-rust-version = "1.93"
+rust-version = "1.95"
 description = "Price checker for Path of Exile 2 items."
 authors = ["Aunim HASSAN"]
 license = "MIT OR Apache-2.0"
@@ -11,12 +11,36 @@ readme = "README.md"
 publish = false
 
 [dependencies]
+eframe = { version = "0.37", default-features = false, features = ["accesskit", "glow", "x11"] }
+egui = { version = "0.37", default-features = false }
+egui_extras = { version = "0.37", default-features = false, features = ["svg", "image"] }
+fluent-bundle = "0.16"
+# Enables the PNG decoder of the image loader of egui_extras, which depends on the same
+# version of image (Cargo merges the features of a crate). The tests also read the logo with it.
+image = { version = "0.25.10", default-features = false, features = ["png"] }
+unic-langid = "0.9.6"
+
+# To choose the X11 backend of the window (see main.rs). A dependency of eframe also builds
+# winit with Wayland: wayland-dlopen loads its library at run time, so that building doesn't
+# need it.
+[target.'cfg(target_os = "linux")'.dependencies]
+winit = { version = "0.30", default-features = false, features = ["x11", "wayland-dlopen"] }
+
+[dev-dependencies]
+# The version used by fluent-bundle, whose resources the tests read as syntax trees: update
+# them together.
+fluent-syntax = "0.12.0"
 
 [lints.rust]
 unsafe_code = "forbid"
 
 [lints.clippy]
 pedantic = { level = "warn", priority = -1 }
+
+# The dependencies (image decoding, fonts, rendering) stay fast in debug builds;
+# only the code of the project is built without optimizations.
+[profile.dev.package."*"]
+opt-level = 2
 
 [profile.release]
 lto = true
