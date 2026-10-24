@@ -327,26 +327,24 @@
   .a { background: var(--bg-a); }
   .b { background: var(--bg-b); }
 
-  .top { display: flex; align-items: stretch; gap: 10px; height: 48px; padding-left: 14px; }
-  .top > .emblem, .top > .wordmark { align-self: center; }
-  /* League: the color says which trade it is (softcore or hardcore), the small label says it too. */
-  .league {
-    display: flex; align-items: center; gap: 10px; padding: 0 12px 0 14px; color: var(--text);
-    background: var(--league-bg); box-shadow: inset 3px 0 0 var(--league-line);
+  /* Title bar: one line in place of the system title bar and of the header. The emblem, the league (its color
+     says softcore or hardcore), then the icons: Settings, Minimize, Close, without borders. The empty space
+     moves the window. */
+  .app-titlebar { display: flex; align-items: stretch; height: 28px; padding-left: 12px; background: var(--bg-a); }
+  [data-bar="32"] .app-titlebar { height: 32px; }
+  .app-emblem { display: block; width: 16px; height: 16px; align-self: center; margin-right: 10px; }
+  /* The league block, tinted with the color of its trade (the only sign of softcore or hardcore, also in its
+     tooltip), a line of that color on the left, the chevron in white; lighter under the pointer. */
+  .app-league {
+    display: flex; align-items: center; gap: 6px; padding: 0 8px 0 10px; color: var(--text); font-size: 13px; cursor: pointer;
+    background: var(--league-bg); box-shadow: inset 2px 0 0 var(--league-line);
   }
-  .league-text { display: grid; gap: 2px; }
-  .league-kind { font: 700 9.5px/1 var(--font-body); letter-spacing: .14em; text-transform: uppercase; color: var(--league-line); }
-  .league-kind::before { content: var(--league-kind); }
-  .league-name { font-size: 13.5px; line-height: 1.1; }
-  .league .ico { color: var(--weak); }
-  .gear { width: 48px; display: grid; place-items: center; color: var(--weak); background: var(--control); }
-  .league + .gear { margin-left: -7px; }
-  .gear.on { color: var(--on-accent, var(--bg-a)); background: var(--accent); }
-  :root, [data-league="softcore"] { --league-bg: #13263a; --league-line: #6aa7de; --league-kind: "Softcore"; }
-  [data-league="hardcore"] { --league-bg: #351417; --league-line: #e0706a; --league-kind: "Hardcore"; }
-  /* Header: the emblem (assets/logo/emblem.svg, white) next to the name. */
-  .emblem { display: block; width: 30px; height: 30px; }
-  .wordmark { display: block; font: 800 15px/1 var(--font-display); letter-spacing: .02em; color: var(--accent); position: relative; top: -1px; }
+  .app-league:hover { background: var(--league-bg-hover); }
+  .app-league .ico { color: var(--text); }
+  .app-icon-button { width: 36px; display: grid; place-items: center; color: var(--weak); cursor: pointer; }
+  .app-icon-button:hover, .app-icon-button.is-on { color: var(--accent); }
+  :root, [data-league="softcore"] { --league-bg: #13263a; --league-line: #6aa7de; --league-kind: "Softcore"; --league-bg-hover: #1a3350; }
+  [data-league="hardcore"] { --league-bg: #351417; --league-line: #e0706a; --league-kind: "Hardcore"; --league-bg-hover: #4a1b20; }
   .empty .big-logo { width: 150px; display: block; margin: 0 auto 18px; opacity: .9; }
   .spacer { flex: 1; }
   .button, .input {
@@ -559,6 +557,7 @@
   const VARIANTS = {
     theme: { label: "Style", options: Object.fromEntries(Object.entries(THEMES).map(([k, v]) => [k, v.title])), fallback: "slate" },
     league: { label: "League", options: { softcore: "Softcore", hardcore: "Hardcore" }, fallback: "softcore" },
+    bar: { label: "Bar height", options: { 28: "28 px", 32: "32 px" }, fallback: "28" },
   };
   const params = new URLSearchParams(location.search);
   const chosen = Object.fromEntries(Object.entries(VARIANTS).map(([key, v]) => [key, params.get(key) in v.options ? params.get(key) : v.fallback]));
@@ -581,14 +580,18 @@
   };
 
   // Blocks.
-  const topBar = (settings = false, league = "Forbidden Rites") => `
-    <div class="top a">
-      <img class="emblem" src="../../assets/logo/emblem.svg" alt="">
-      <span class="wordmark">Exile Market</span>
+  const topBar = (settings = false, league = "Forbidden Rites") => {
+    const kind = document.documentElement.dataset.league === "hardcore" ? "Hardcore" : "Softcore";
+    return `
+    <div class="app-titlebar">
+      <img class="app-emblem" src="../../assets/logo/emblem.svg" alt="">
+      <div class="app-league" title="${kind} · Change the league"><span class="app-league-name">${league}</span>${ICON.down(12)}</div>
       <div class="spacer"></div>
-      <div class="league"><span class="league-text"><span class="league-kind"></span><span class="league-name">${league}</span></span>${ICON.down(12)}</div>
-      <div class="gear ${settings ? "on" : ""}">${ICON.gear(17)}</div>
+      <div class="app-icon-button ${settings ? "is-on" : ""}" title="Settings">${ICON.gear(15)}</div>
+      <div class="app-icon-button" title="Minimize">${svg(13, '<path d="M3 8h10"/>')}</div>
+      <div class="app-icon-button" title="Close">${svg(13, '<path d="M4 4l8 8M12 4l-8 8"/>')}</div>
     </div>`;
+  };
   const foot = (value = "poe2scout 12 min ago · GGG trade 2 min ago") => `<div class="foot a">${value}</div>`;
   const banner = value => `<div class="banner"><span>${value}</span></div>`;
 
