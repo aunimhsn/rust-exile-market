@@ -12,6 +12,10 @@ pub struct CopiedItem {
 impl CopiedItem {
     /// The item in a copied text, if the text starts with the item class line; `None` for
     /// any other text. The lines end with `\n` on every system.
+    ///
+    /// Every text copied by the player comes here, also the private ones: nothing that can
+    /// panic may run on it before it is recognized, so that a panic message, which goes to the
+    /// log, never carries a text copied outside the game.
     #[must_use]
     pub fn from_text(text: &str) -> Option<Self> {
         let text = text.trim();

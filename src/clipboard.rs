@@ -444,10 +444,14 @@ mod tests {
         }
 
         let (woken, wakes) = mpsc::channel();
+        let (handled, handled_receiver) = mpsc::channel::<()>();
         let mut watch = ClipboardWatch::spawn(
             || PanickingClipboard,
             move || {
                 let _ = woken.send(());
+                // Holds the thread in its exit guard until the events are received: the test
+                // then sees what the application sees when it is woken up at the earliest.
+                let _ = handled_receiver.recv_timeout(Duration::from_secs(5));
             },
         );
         wakes
@@ -456,6 +460,8 @@ mod tests {
 
         let mut received = Vec::new();
         watch.receive(|event| received.push(event));
+        // Before the assertion: if it fails, the join of `Drop` doesn't wait for the time-out.
+        drop(handled);
         assert_eq!(received, [ClipboardEvent::Unreadable]);
     }
 }

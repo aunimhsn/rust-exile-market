@@ -1,9 +1,10 @@
 //! The log of the application: what happened, to follow it and to find the cause of a bug.
 //!
 //! The log of the current session is `exile-market.log`, in the state directory of the
-//! application on Linux, `~/Library/Logs` on macOS, the local data directory on Windows; the
-//! log of the previous session stays next to it, as `exile-market.previous.log`. Debug builds
-//! also write to the error output. The texts copied outside the game are never logged.
+//! application on Linux, `~/Library/Logs/exile-market` on macOS, the local data directory on
+//! Windows; the log of the previous session stays next to it, as `exile-market.previous.log`.
+//! Debug builds also write to the error output. The texts copied outside the game are never
+//! logged.
 
 use std::fs::{self, File};
 use std::io;
