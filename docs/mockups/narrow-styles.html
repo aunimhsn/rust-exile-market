@@ -446,6 +446,9 @@
     position: absolute; z-index: 2; right: 10px; bottom: calc(100% + 6px); width: 300px; padding: 12px 14px;
     background: #20272f; border-radius: 4px; box-shadow: 0 10px 30px rgba(0, 0, 0, .6); text-align: left; font-size: 12.5px;
   }
+  /* No room above the row (the first offers): the tooltip opens below it. */
+  .offer-tooltip.below { bottom: auto; top: calc(100% + 6px); }
+  .tt-warn { margin-top: 8px; color: var(--warn); font-size: 12px; }
   .tt-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
   .tt-name { font-weight: 700; font-size: 14px; }
   .tt-price { font-family: var(--font-number); font-weight: 600; }
@@ -640,16 +643,17 @@
   }
 
   function offerTooltip(t) {
-    const mods = t.mods.map(m => {
+    const compare = list => list.map(m => {
       const diff = m.yours === undefined ? "" : m.value - m.yours;
       const delta = diff === "" || diff === 0 ? "" : `<span class="delta ${diff > 0 ? "up" : "down"}">${diff > 0 ? "+" : "−"}${Math.abs(diff)}</span>`;
       return `<div class="tt-mod"><span>${m.text}</span>${delta}</div>`;
     }).join("");
-    return `<div class="offer-tooltip ${t.pinned ? "pinned" : ""}">
+    return `<div class="offer-tooltip ${t.pinned ? "pinned" : ""} ${t.below ? "below" : ""}">
       <div class="tt-head"><span class="rarity-unique tt-name">${t.name}</span><span class="tt-price">${t.price} ${orb(t.currency)}</span></div>
       <div class="tt-meta">${t.meta}</div>
-      <div class="tt-mods">${t.implicit.map(m => `<div class="tt-mod"><span>${m}</span></div>`).join("")}</div>
-      <div class="tt-mods">${mods}</div>
+      ${t.suspicious ? `<div class="tt-warn">Far below the market price: probably bait or a mistake.</div>` : ""}
+      <div class="tt-mods">${compare(t.implicit)}</div>
+      <div class="tt-mods">${compare(t.mods)}</div>
       <div class="tt-foot">
         <span class="status s-${t.status}"><i></i>${{ online: "Online", away: "Away", offline: "Offline" }[t.status]}</span>
         ${t.status === "offline" ? "" : `<span class="pill ${t.copied ? "done" : ""}">${t.copied ? `Copied${ICON.check(11)}` : "Copy whisper"}</span>`}
@@ -774,7 +778,7 @@
       ["Searching the offers", win(topBar(), item(HH), price(HH_PRICE), offers({ state: "loading" }), foot())],
       ["Offer hovered", win(topBar(), item(HH), price(HH_PRICE), offers({ ...HH_OFFERS, hover: 3, tooltip: {
         name: "Headhunter", price: "10", currency: "div", meta: "Heavy Belt · ilvl 82 · Corrupted", status: "online",
-        implicit: ["25% increased Stun Threshold", "Has 2 Charm Slots"],
+        implicit: [{ text: "25% increased Stun Threshold", value: 25, yours: 26 }, { text: "Has 2 Charm Slots", value: 2, yours: 2 }],
         mods: [
           { text: "+48 to maximum Life", value: 48, yours: 55 },
           { text: "+40 to Strength", value: 40, yours: 34 },
@@ -782,9 +786,19 @@
           { text: "When you kill a Rare monster, you gain its Modifiers for 60 seconds" },
         ],
       } }), foot())],
+      ["Suspicious offer hovered (opens below)", win(topBar(), item(HH), price(HH_PRICE), offers({ ...HH_OFFERS, hover: 0, tooltip: {
+        name: "Headhunter", price: "6", currency: "ex", meta: "Heavy Belt · ilvl 78 · Corrupted", status: "online", below: true, suspicious: true,
+        implicit: [{ text: "22% increased Stun Threshold", value: 22, yours: 26 }, { text: "Has 1 Charm Slot", value: 1, yours: 2 }],
+        mods: [
+          { text: "+52 to maximum Life", value: 52, yours: 55 },
+          { text: "+39 to Strength", value: 39, yours: 34 },
+          { text: "+35 to Dexterity", value: 35, yours: 22 },
+          { text: "When you kill a Rare monster, you gain its Modifiers for 60 seconds" },
+        ],
+      } }), `<div class="b" style="height:190px"></div>`, foot())],
       ["Offer pinned, whisper copied", win(topBar(), item(HH), price(HH_PRICE), offers({ ...HH_OFFERS, hover: 4, tooltip: {
         name: "Headhunter", price: "11", currency: "div", meta: "Heavy Belt · ilvl 80 · Corrupted", status: "away", pinned: true, copied: true,
-        implicit: ["28% increased Stun Threshold", "Has 2 Charm Slots"],
+        implicit: [{ text: "28% increased Stun Threshold", value: 28, yours: 26 }, { text: "Has 2 Charm Slots", value: 2, yours: 2 }],
         mods: [
           { text: "+53 to maximum Life", value: 53, yours: 55 },
           { text: "+36 to Strength", value: 36, yours: 34 },
