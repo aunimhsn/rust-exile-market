@@ -20,3 +20,7 @@ status-trade-idle = GGG trade: no search yet
 # Followed by the keys "Ctrl + C".
 empty-copy = Copy an item in the game with
 empty-price = The price shows up here.
+
+## Warnings
+
+clipboard-unreadable = The clipboard can't be read.
