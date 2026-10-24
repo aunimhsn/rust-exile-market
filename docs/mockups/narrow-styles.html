@@ -357,8 +357,8 @@
     content: ""; position: absolute; top: -5px; left: 36px; width: 10px; height: 10px; background: #20272f; transform: rotate(45deg);
   }
   /* The list of the leagues, under the league block, flat: one line per league, softcore on the left and
-     hardcore on the right, glued together, the permanent ones after a line; the mode told by the color. The
-     chosen league is the one of the block above. */
+     hardcore on the right, glued together, a thin line between two leagues, the permanent ones last; the mode
+     told by the color. The chosen league is the one of the block above. */
   .app-league.is-open .ico { transform: rotate(180deg); }
   .app-league-list {
     position: absolute; z-index: 2; top: 28px; left: 38px; display: grid; grid-template-columns: 1fr 1fr;
@@ -629,7 +629,7 @@
     const row = (name, mode) =>
       `<div class="app-league-row is-${mode}" title="${mode === "softcore" ? "Softcore" : "Hardcore"}"><span>${name}</span></div>`;
     const pair = name => row(name, "softcore") + row(name, "hardcore");
-    return `<div class="app-league-list">${pair("Forbidden Rites")}${pair("Runes of Aldur")}<hr>${pair("Standard")}</div>`;
+    return `<div class="app-league-list">${[pair("Forbidden Rites"), pair("Runes of Aldur"), pair("Standard")].join("<hr>")}</div>`;
   };
   const topBar = (settings = false, league = "Forbidden Rites", open = false) => {
     const kind = document.documentElement.dataset.league === "hardcore" ? "Hardcore" : "Softcore";
