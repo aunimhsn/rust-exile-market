@@ -1,0 +1,133 @@
+//! The bubble of a new league, under the league block, for a player on a permanent league
+//! once a new league has started: its name, a pill to switch to it, and a cross to close it.
+
+use egui::text::{LayoutJob, TextFormat};
+use egui::{
+    Align, Area, Context, CornerRadius, CursorIcon, Frame, Id, Layout, Margin, Order, Pos2, Role,
+    Sense, Shape, Stroke, Ui, Vec2, WidgetInfo, pos2, vec2,
+};
+
+use super::theme::{self, color, size, text};
+use super::title_bar::LEAGUE_BLOCK_LEFT;
+use super::widgets;
+use crate::i18n::{Message, Translator};
+use crate::league::League;
+
+const WIDTH: f32 = 330.0;
+/// The bubble starts a little left of the league block, its arrow over the block.
+const LEFT: f32 = LEAGUE_BLOCK_LEFT - 8.0;
+const GAP_UNDER_BAR: f32 = 8.0;
+const PADDING_X: i8 = 14;
+const PADDING_Y: i8 = 10;
+const CONTENT_GAP: f32 = 10.0;
+/// The arrow toward the league block: its half width, and its distance from the left edge.
+const ARROW_HALF_WIDTH: f32 = 6.0;
+const ARROW_LEFT: f32 = 36.0;
+const CLOSE_ZONE: f32 = 18.0;
+const CLOSE_SIZE: f32 = 7.0;
+
+/// What the player did with the bubble.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BubbleAction {
+    Switch,
+    Close,
+}
+
+pub struct NewLeagueBubble<'a> {
+    league: &'a League,
+    i18n: &'a Translator,
+}
+
+impl<'a> NewLeagueBubble<'a> {
+    #[must_use]
+    pub fn new(league: &'a League, i18n: &'a Translator) -> Self {
+        Self { league, i18n }
+    }
+
+    pub fn show(&self, ctx: &Context) -> Option<BubbleAction> {
+        Area::new(Id::NULL.with("new-league-bubble"))
+            .order(Order::Foreground)
+            .fixed_pos(pos2(LEFT, size::TITLE_BAR_HEIGHT + GAP_UNDER_BAR))
+            .show(ctx, |ui| {
+                let frame = Frame::NONE
+                    .fill(color::BUBBLE)
+                    .corner_radius(CornerRadius::same(size::BUBBLE_RADIUS))
+                    .shadow(theme::floating_shadow())
+                    .inner_margin(Margin::symmetric(PADDING_X, PADDING_Y));
+                let shown = frame.show(ui, |ui| {
+                    ui.set_width(WIDTH - 2.0 * f32::from(PADDING_X));
+                    ui.spacing_mut().item_spacing = vec2(CONTENT_GAP, 0.0);
+                    ui.with_layout(Layout::left_to_right(Align::Center), |ui| self.content(ui))
+                        .inner
+                });
+                arrow(ui, shown.response.rect.min);
+                shown.inner
+            })
+            .inner
+    }
+
+    fn content(&self, ui: &mut Ui) -> Option<BubbleAction> {
+        let galley = ui.painter().layout_job(self.text());
+        ui.label(galley);
+        let mut action = None;
+        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+            let (rect, close) = ui.allocate_exact_size(Vec2::splat(CLOSE_ZONE), Sense::click());
+            let tooltip = self.i18n.text(Message::CloseTooltip);
+            close.widget_info(|| WidgetInfo::labeled(Role::Button, true, &tooltip));
+            let lit = close.hovered() || close.has_focus();
+            widgets::cross(
+                ui.painter(),
+                rect.center(),
+                CLOSE_SIZE,
+                if lit { color::TEXT } else { color::WEAK },
+            );
+            if close
+                .on_hover_cursor(CursorIcon::PointingHand)
+                .on_hover_text(tooltip)
+                .clicked()
+            {
+                action = Some(BubbleAction::Close);
+            }
+            if widgets::pill(ui, &self.i18n.text(Message::NewLeagueSwitch)).clicked() {
+                action = Some(BubbleAction::Switch);
+            }
+        });
+        action
+    }
+
+    /// "Rise of the Abyssal has started.", the name in bold.
+    fn text(&self) -> LayoutJob {
+        let name = self.league.name();
+        let sentence = self.i18n.new_league(name);
+        let regular = TextFormat::simple(text::bubble(), color::TEXT);
+        let strong = TextFormat::simple(text::bubble_strong(), color::TEXT);
+        let mut job = LayoutJob::default();
+        match sentence.split_once(name) {
+            Some((before, after)) => {
+                job.append(before, 0.0, regular.clone());
+                job.append(name, 0.0, strong);
+                job.append(after, 0.0, regular);
+            }
+            None => job.append(&sentence, 0.0, regular),
+        }
+        job
+    }
+}
+
+/// The arrow on the top edge of the bubble whose corner is `bubble_min`, toward the block.
+/// Drawn on the whole layer: it sticks out of the area of the bubble, which would clip it.
+fn arrow(ui: &Ui, bubble_min: Pos2) {
+    let tip = bubble_min + vec2(ARROW_LEFT, -ARROW_HALF_WIDTH);
+    let base = bubble_min.y;
+    ui.ctx()
+        .layer_painter(ui.layer_id())
+        .add(Shape::convex_polygon(
+            vec![
+                pos2(tip.x - ARROW_HALF_WIDTH, base),
+                tip,
+                pos2(tip.x + ARROW_HALF_WIDTH, base),
+            ],
+            color::BUBBLE,
+            Stroke::NONE,
+        ));
+}

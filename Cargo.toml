@@ -22,10 +22,12 @@ fluent-bundle = "0.16"
 image = { version = "0.25.10", default-features = false, features = ["png"] }
 log = "0.4"
 serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
 simplelog = "0.12.2"
 sys-locale = "0.3"
 toml = "1.1.8"
 unic-langid = "0.9.6"
+ureq = "3.5.0"
 
 # To choose the X11 backend of the window (see main.rs). A dependency of eframe also builds
 # winit with Wayland: wayland-dlopen loads its library at run time, so that building doesn't

@@ -8,6 +8,11 @@ league-mode-softcore = Softcore
 league-mode-hardcore = Hardcore
 # Tooltip of the league block: its mode, then what a click does.
 league-tooltip = { $mode } · Change the league
+# In place of the league, before the leagues arrive at the first launch.
+league-loading = Loading…
+# Bubble under the league block, when a new league has started: its name, then a pill.
+new-league = { $league } has started.
+new-league-switch = Switch
 # Tooltip of the emblem, which goes back to the item.
 home-tooltip = Home
 settings-tooltip = Settings

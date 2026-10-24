@@ -3,7 +3,8 @@
 
 use crate::clipboard::ClipboardEvent;
 use crate::item::{CopiedItem, Item, ParseError};
-use crate::league::League;
+use crate::league::{League, Leagues};
+use crate::market::MarketEvent;
 
 /// The last item copied in the game, and what the parser read from it.
 #[derive(Debug)]
@@ -39,20 +40,68 @@ impl ShownItem {
 
 #[derive(Debug)]
 pub struct Session {
-    league: League,
+    /// The leagues of the price database, once they arrived.
+    leagues: Option<Leagues>,
+    /// The league shown: the one of the last session until the leagues arrive.
+    league: Option<League>,
+    /// The new league offered to a player on a permanent league.
+    new_league: Option<League>,
     /// Shown until another item is copied.
     item: Option<ShownItem>,
     clipboard_readable: bool,
 }
 
+/// What changed in the leagues, for the settings to keep.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum LeagueChange {
+    /// The league shown is another one: chosen by default, or because the last one ended.
+    Shown(League),
+}
+
 impl Session {
+    /// A session showing `league`, the one of the last session, until the leagues arrive.
     #[must_use]
-    pub fn new(league: League) -> Self {
+    pub fn new(league: Option<League>) -> Self {
         Self {
+            leagues: None,
             league,
+            new_league: None,
             item: None,
             clipboard_readable: true,
         }
+    }
+
+    /// Takes in what the price database sent; `closed` are the new leagues whose bubble the
+    /// player closed.
+    pub fn apply_market(&mut self, event: MarketEvent, closed: &[String]) -> Option<LeagueChange> {
+        let MarketEvent::Leagues(leagues) = event else {
+            return None;
+        };
+        let choice = leagues.choose(self.league.as_ref());
+        if let Some(ended) = &choice.ended {
+            log::info!(
+                "{} has ended: switched to {}",
+                ended.id(),
+                choice.league.id()
+            );
+        }
+        let change = (self.league.as_ref() != Some(&choice.league))
+            .then(|| LeagueChange::Shown(choice.league.clone()));
+        self.new_league = leagues.new_league(&choice.league, closed);
+        self.league = Some(choice.league);
+        self.leagues = Some(leagues);
+        change
+    }
+
+    /// Shows `league`, chosen by the player.
+    pub fn choose_league(&mut self, league: League) {
+        self.new_league = None;
+        self.league = Some(league);
+    }
+
+    /// Closes the bubble of the new league; the league it offered.
+    pub fn close_new_league(&mut self) -> Option<League> {
+        self.new_league.take()
     }
 
     pub fn apply(&mut self, event: ClipboardEvent) {
@@ -63,9 +112,20 @@ impl Session {
         }
     }
 
+    /// The league shown; none before the leagues arrive at the first session.
     #[must_use]
-    pub fn league(&self) -> &League {
-        &self.league
+    pub fn league(&self) -> Option<&League> {
+        self.league.as_ref()
+    }
+
+    #[must_use]
+    pub fn leagues(&self) -> Option<&Leagues> {
+        self.leagues.as_ref()
+    }
+
+    #[must_use]
+    pub fn new_league(&self) -> Option<&League> {
+        self.new_league.as_ref()
     }
 
     #[must_use]
@@ -84,11 +144,15 @@ mod tests {
     use super::*;
     use crate::league::LeagueMode;
 
+    fn leagues(ids: &[&str]) -> MarketEvent {
+        MarketEvent::Leagues(Leagues::new(ids.iter().map(|&id| League::new(id))))
+    }
+
     const RING: &str = "Item Class: Rings\nRarity: Rare\nWoe Loop\nRuby Ring";
     const AMULET: &str = "Item Class: Amulets\nRarity: Magic\nJade Amulet";
 
     fn session() -> Session {
-        Session::new(League::new("Forbidden Rites", LeagueMode::Softcore))
+        Session::new(Some(League::new("Forbidden Rites")))
     }
 
     fn copy(session: &mut Session, text: &str) {
@@ -138,5 +202,79 @@ mod tests {
 
         session.apply(ClipboardEvent::Readable);
         assert!(session.clipboard_readable());
+    }
+
+    #[test]
+    fn the_first_session_shows_the_league_by_default_and_keeps_it() {
+        let mut session = Session::new(None);
+        assert_eq!(session.league(), None);
+
+        let change = session.apply_market(leagues(&["Forbidden Rites", "Runes of Aldur"]), &[]);
+
+        let league = League::new("Forbidden Rites");
+        assert_eq!(session.league(), Some(&league));
+        assert_eq!(change, Some(LeagueChange::Shown(league)));
+    }
+
+    #[test]
+    fn a_league_that_lasts_changes_nothing() {
+        let mut session = session();
+
+        assert_eq!(
+            session.apply_market(leagues(&["Forbidden Rites"]), &[]),
+            None
+        );
+        assert_eq!(session.new_league(), None);
+    }
+
+    #[test]
+    fn an_ended_league_moves_to_standard_and_offers_the_new_one() {
+        let mut session = Session::new(Some(League::new("HC Dawn of the Hunt")));
+
+        let change = session.apply_market(leagues(&["Forbidden Rites", "HC Forbidden Rites"]), &[]);
+
+        let hardcore = League::permanent(LeagueMode::Hardcore);
+        assert_eq!(change, Some(LeagueChange::Shown(hardcore.clone())));
+        assert_eq!(session.league(), Some(&hardcore));
+        assert_eq!(
+            session.new_league(),
+            Some(&League::new("HC Forbidden Rites"))
+        );
+    }
+
+    #[test]
+    fn a_closed_bubble_doesnt_come_back() {
+        let mut session = Session::new(Some(League::permanent(LeagueMode::Softcore)));
+        session.apply_market(leagues(&["Forbidden Rites"]), &[]);
+
+        assert_eq!(
+            session.close_new_league(),
+            Some(League::new("Forbidden Rites"))
+        );
+        session.apply_market(
+            leagues(&["Forbidden Rites"]),
+            &["Forbidden Rites".to_owned()],
+        );
+
+        assert_eq!(session.new_league(), None);
+    }
+
+    #[test]
+    fn choosing_a_league_closes_the_bubble() {
+        let mut session = Session::new(Some(League::permanent(LeagueMode::Softcore)));
+        session.apply_market(leagues(&["Forbidden Rites"]), &[]);
+
+        session.choose_league(League::new("Forbidden Rites"));
+
+        assert_eq!(session.new_league(), None);
+        assert_eq!(session.league(), Some(&League::new("Forbidden Rites")));
+    }
+
+    #[test]
+    fn an_unreachable_database_changes_nothing() {
+        let mut session = session();
+
+        assert_eq!(session.apply_market(MarketEvent::Unreachable, &[]), None);
+        assert_eq!(session.leagues(), None);
     }
 }

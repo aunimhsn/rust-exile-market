@@ -1,17 +1,18 @@
-//! The application: the session, the settings and the clipboard watching, and the window
-//! built from the components of [`crate::ui`].
+//! The application: the session, the settings, the clipboard watching and the price
+//! database, and the window built from the components of [`crate::ui`].
 
 use eframe::{App, CreationContext, Frame};
 use egui::{Context, Key, Ui, ViewportCommand};
 
 use crate::clipboard::{ClipboardEvent, ClipboardWatch};
 use crate::i18n::{Message, Translator};
-use crate::league::{League, LeagueMode};
-use crate::session::Session;
+use crate::league::League;
+use crate::market::MarketWatch;
+use crate::session::{LeagueChange, Session};
 use crate::settings::{SettingChange, Settings, SettingsFile};
 use crate::ui::{
-    self, EmptyState, RawItem, ResizeEdges, SettingsPanel, StatusBar, TitleBar, TitleBarAction,
-    UnreadableItem, WarningBand,
+    self, BubbleAction, EmptyState, LeagueList, LeagueListAction, NewLeagueBubble, RawItem,
+    ResizeEdges, SettingsPanel, StatusBar, TitleBar, TitleBarAction, UnreadableItem, WarningBand,
 };
 
 /// What the window shows under the title bar.
@@ -46,7 +47,10 @@ pub struct ExileMarketApp {
     settings: Settings,
     settings_file: SettingsFile,
     view: View,
+    /// The list of the leagues is open over the view.
+    leagues_open: bool,
     clipboard: ClipboardWatch,
+    market: MarketWatch,
 }
 
 impl ExileMarketApp {
@@ -59,31 +63,86 @@ impl ExileMarketApp {
         settings_file: SettingsFile,
     ) -> Self {
         ui::install(&creation.egui_ctx);
-        let ctx = creation.egui_ctx.clone();
+        let clipboard_ctx = creation.egui_ctx.clone();
+        let market_ctx = creation.egui_ctx.clone();
 
         Self {
             // The language of the copied items never changes the interface: it only chooses
             // the item names and the trade site.
             i18n: Translator::new(settings.language().language()),
-            // The leagues are downloaded from the price database in step 7; until then, the
-            // current challenge league in softcore.
-            session: Session::new(League::new("Forbidden Rites", LeagueMode::Softcore)),
+            // The league of the last session, until the leagues arrive.
+            session: Session::new(settings.league()),
             settings,
             settings_file,
             view: View::Item,
-            clipboard: ClipboardWatch::start(move || ctx.request_repaint()),
+            leagues_open: false,
+            clipboard: ClipboardWatch::start(move || clipboard_ctx.request_repaint()),
+            market: MarketWatch::start(move || market_ctx.request_repaint()),
         }
     }
 
     fn act_on(&mut self, ctx: &Context, action: TitleBarAction) {
         match action {
             TitleBarAction::Move => ctx.send_viewport_cmd(ViewportCommand::StartDrag),
-            TitleBarAction::Home => self.view = View::Item,
-            // The list of the leagues comes with the price data, in step 7.
-            TitleBarAction::Leagues => {}
-            TitleBarAction::Settings => self.view = self.view.toggled(),
+            TitleBarAction::Home => {
+                self.view = View::Item;
+                self.leagues_open = false;
+            }
+            TitleBarAction::Leagues => {
+                self.leagues_open = !self.leagues_open && self.session.leagues().is_some();
+            }
+            TitleBarAction::Settings => {
+                self.view = self.view.toggled();
+                self.leagues_open = false;
+            }
             TitleBarAction::Minimize => ctx.send_viewport_cmd(ViewportCommand::Minimized(true)),
             TitleBarAction::Close => ctx.send_viewport_cmd(ViewportCommand::Close),
+        }
+    }
+
+    /// Shows `league`, chosen by the player, and keeps it in the settings.
+    fn choose_league(&mut self, league: League) {
+        self.leagues_open = false;
+        if self.settings.set_league(&league) {
+            self.settings_file.save(&self.settings);
+        }
+        self.session.choose_league(league);
+    }
+
+    /// Closes the bubble of the new league for good.
+    fn close_new_league(&mut self) {
+        if let Some(league) = self.session.close_new_league()
+            && self.settings.close_new_league(&league)
+        {
+            self.settings_file.save(&self.settings);
+        }
+    }
+
+    /// Draws the list of the leagues and the bubble of a new league over the window.
+    fn league_overlays(&mut self, ctx: &Context, title_bar_action: Option<TitleBarAction>) {
+        if let Some(leagues) = self.session.leagues() {
+            let list = LeagueList::new(leagues.rows(), self.session.league(), &self.i18n);
+            match list.show(ctx, self.leagues_open) {
+                Some(LeagueListAction::Choose(league)) => self.choose_league(league),
+                // The click on the league block that opened the list isn't outside it.
+                Some(LeagueListAction::Close)
+                    if title_bar_action != Some(TitleBarAction::Leagues) =>
+                {
+                    self.leagues_open = false;
+                }
+                Some(LeagueListAction::Close) | None => {}
+            }
+        }
+        if self.leagues_open || self.view != View::Item {
+            return;
+        }
+        let Some(league) = self.session.new_league().cloned() else {
+            return;
+        };
+        match NewLeagueBubble::new(&league, &self.i18n).show(ctx) {
+            Some(BubbleAction::Switch) => self.choose_league(league),
+            Some(BubbleAction::Close) => self.close_new_league(),
+            None => {}
         }
     }
 
@@ -124,8 +183,25 @@ impl App for ExileMarketApp {
             self.view = self.view.after(&event);
             self.session.apply(event);
         });
-        if self.view == View::Settings && ctx.input(|input| input.key_pressed(Key::Escape)) {
-            self.view = View::Item;
+        let mut shown = None;
+        self.market.receive(|event| {
+            let closed = self.settings.closed_new_leagues();
+            if let Some(LeagueChange::Shown(league)) = self.session.apply_market(event, closed) {
+                shown = Some(league);
+            }
+        });
+        if let Some(league) = shown
+            && self.settings.set_league(&league)
+        {
+            self.settings_file.save(&self.settings);
+        }
+        // Escape closes what is on top: the list of the leagues, then the settings.
+        if ctx.input(|input| input.key_pressed(Key::Escape)) {
+            if self.leagues_open {
+                self.leagues_open = false;
+            } else if self.view == View::Settings {
+                self.view = View::Item;
+            }
         }
     }
 
@@ -137,10 +213,12 @@ impl App for ExileMarketApp {
         // The panels on the edges come first, so that the central one takes what remains.
         let action = TitleBar::new(self.session.league(), &self.i18n)
             .settings_open(self.view == View::Settings)
+            .leagues_open(self.leagues_open)
             .show(ui);
         if let Some(action) = action {
             self.act_on(&ctx, action);
         }
+        self.league_overlays(&ctx, action);
         if !self.session.clipboard_readable() {
             WarningBand::new(self.i18n.text(Message::ClipboardUnreadable)).show(ui);
         }

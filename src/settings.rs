@@ -14,6 +14,7 @@ use egui::WindowLevel;
 use serde::{Deserialize, Serialize};
 
 use crate::language::Language;
+use crate::league::League;
 use crate::logging;
 
 const FILE_NAME: &str = "settings.toml";
@@ -61,6 +62,10 @@ pub enum SettingChange {
 pub struct Settings {
     language: LanguageSetting,
     always_on_top: bool,
+    /// The id of the chosen league; none until the player or the default chooses one.
+    league: Option<String>,
+    /// The ids of the new leagues whose bubble the player closed.
+    closed_new_leagues: Vec<String>,
 }
 
 impl Settings {
@@ -72,6 +77,35 @@ impl Settings {
     #[must_use]
     pub fn always_on_top(&self) -> bool {
         self.always_on_top
+    }
+
+    /// The league chosen at the last session, if any.
+    #[must_use]
+    pub fn league(&self) -> Option<League> {
+        self.league.as_deref().map(League::new)
+    }
+
+    /// Keeps `league` as the chosen one; `false` when it already was.
+    pub fn set_league(&mut self, league: &League) -> bool {
+        if self.league.as_deref() == Some(league.id()) {
+            return false;
+        }
+        self.league = Some(league.id().to_owned());
+        true
+    }
+
+    #[must_use]
+    pub fn closed_new_leagues(&self) -> &[String] {
+        &self.closed_new_leagues
+    }
+
+    /// Remembers that the player closed the bubble of `league`; `false` when it already was.
+    pub fn close_new_league(&mut self, league: &League) -> bool {
+        if self.closed_new_leagues.iter().any(|id| id == league.id()) {
+            return false;
+        }
+        self.closed_new_leagues.push(league.id().to_owned());
+        true
     }
 
     /// The level of the window: above the other windows when it is always on top.
@@ -255,6 +289,34 @@ mod tests {
         assert!(settings.apply(SettingChange::Language(LanguageSetting::English)));
         assert!(!settings.apply(SettingChange::Language(LanguageSetting::English)));
         assert_eq!(settings.window_level(), WindowLevel::AlwaysOnTop);
+    }
+
+    #[test]
+    fn keeps_the_chosen_league_and_the_closed_bubbles() {
+        let mut settings = Settings::default();
+        let league = League::new("HC Forbidden Rites");
+
+        assert_eq!(settings.league(), None);
+        assert!(settings.set_league(&league));
+        assert!(!settings.set_league(&league));
+        assert!(settings.close_new_league(&league));
+        assert!(!settings.close_new_league(&league));
+
+        assert_eq!(settings.league(), Some(league));
+        assert_eq!(settings.closed_new_leagues(), ["HC Forbidden Rites"]);
+    }
+
+    #[test]
+    fn the_leagues_are_saved_with_the_other_settings() {
+        let directory = TestDirectory::new("leagues");
+        let file = directory.file();
+        let mut settings = changed();
+        settings.set_league(&League::new("Runes of Aldur"));
+        settings.close_new_league(&League::new("HC Runes of Aldur"));
+
+        file.save(&settings);
+
+        assert_eq!(file.load(), settings);
     }
 
     #[test]

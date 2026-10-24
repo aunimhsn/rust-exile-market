@@ -3,6 +3,7 @@
 //! The lines of text are laid out without a color: the caller gives it when drawing them
 //! (`painter.galley(position, galley, color)`), in one place.
 
+use std::f32::consts::FRAC_PI_2;
 use std::sync::Arc;
 
 use egui::text::{LayoutJob, TextFormat, TextWrapping};
@@ -167,16 +168,21 @@ fn line(
     ui.painter().layout_job(job)
 }
 
-/// A chevron pointing down, centered on `center`.
-pub fn chevron_down(painter: &Painter, center: Pos2, width: f32, color: Color32) {
+/// A chevron centered on `center`, `width` across its opening: pointing right at `turn` 0,
+/// down at 1, and turned in between, for its animation.
+pub fn chevron(painter: &Painter, center: Pos2, width: f32, turn: f32, color: Color32) {
+    let (sin, cos) = (turn * FRAC_PI_2).sin_cos();
+    let rotate = |point: Vec2| vec2(point.x * cos - point.y * sin, point.x * sin + point.y * cos);
     let half_width = width / 2.0;
-    let half_height = width / 4.0;
+    let half_depth = width / 4.0;
     painter.line(
-        vec![
-            center + vec2(-half_width, -half_height),
-            center + vec2(0.0, half_height),
-            center + vec2(half_width, -half_height),
-        ],
+        [
+            vec2(-half_depth, -half_width),
+            vec2(half_depth, 0.0),
+            vec2(-half_depth, half_width),
+        ]
+        .map(|point| center + rotate(point))
+        .to_vec(),
         Stroke::new(size::ICON_STROKE, color),
     );
 }
@@ -194,3 +200,32 @@ pub fn check_mark(painter: &Painter, center: Pos2, width: f32, color: Color32) {
         Stroke::new(size::ICON_STROKE, color),
     );
 }
+
+/// A cross `width` across, centered on `center`: the close icons.
+pub fn cross(painter: &Painter, center: Pos2, width: f32, color: Color32) {
+    let half = width / 2.0;
+    let stroke = Stroke::new(size::ICON_STROKE, color);
+    painter.line_segment(
+        [center - Vec2::splat(half), center + Vec2::splat(half)],
+        stroke,
+    );
+    painter.line_segment(
+        [center + vec2(-half, half), center + vec2(half, -half)],
+        stroke,
+    );
+}
+
+/// A pill on the accent, for the main action of a bubble.
+pub fn pill(ui: &mut Ui, label: &str) -> Response {
+    let galley = text_line(ui, label, text::pill());
+    let (rect, response) =
+        ui.allocate_exact_size(galley.size() + 2.0 * PILL_PADDING, Sense::click());
+    response.widget_info(|| WidgetInfo::labeled(Role::Button, true, label));
+    let painter = ui.painter();
+    painter.rect_filled(rect, CornerRadius::same(size::RADIUS), color::ACCENT);
+    painter.galley(rect.min + PILL_PADDING, galley, color::ON_ACCENT);
+    response.on_hover_cursor(CursorIcon::PointingHand)
+}
+
+/// The space around the text of a pill.
+const PILL_PADDING: Vec2 = vec2(10.0, 4.0);

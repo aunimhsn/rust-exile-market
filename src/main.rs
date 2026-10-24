@@ -10,6 +10,7 @@ mod item;
 mod language;
 mod league;
 mod logging;
+mod market;
 mod session;
 mod settings;
 mod ui;

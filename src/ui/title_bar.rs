@@ -6,7 +6,7 @@ use egui::{
     Response, Role, Sense, Stroke, StrokeKind, Ui, Vec2, WidgetInfo, pos2, vec2,
 };
 
-use super::theme::{LeagueModeColors, color, size, text};
+use super::theme::{LeagueModeColors, color, motion, size, text};
 use super::{images, widgets};
 use crate::i18n::{Message, Translator};
 use crate::league::{League, LeagueMode};
@@ -72,20 +72,34 @@ impl Icon {
     }
 }
 
+/// The left edge of the league block, where the list of the leagues and the bubble of a new
+/// league open.
+pub const LEAGUE_BLOCK_LEFT: f32 = PADDING_LEFT + EMBLEM_SIZE + EMBLEM_GAP;
+
 pub struct TitleBar<'a> {
-    league: &'a League,
+    /// None before the leagues arrive at the first session.
+    league: Option<&'a League>,
     i18n: &'a Translator,
     settings_open: bool,
+    leagues_open: bool,
 }
 
 impl<'a> TitleBar<'a> {
     #[must_use]
-    pub fn new(league: &'a League, i18n: &'a Translator) -> Self {
+    pub fn new(league: Option<&'a League>, i18n: &'a Translator) -> Self {
         Self {
             league,
             i18n,
             settings_open: false,
+            leagues_open: false,
         }
+    }
+
+    /// Turns the chevron of the league block down while the list of the leagues is open.
+    #[must_use]
+    pub fn leagues_open(mut self, open: bool) -> Self {
+        self.leagues_open = open;
+        self
     }
 
     /// Lights the gear up while the settings are open.
@@ -176,9 +190,12 @@ impl<'a> TitleBar<'a> {
     fn league_block(&self, ui: &mut Ui, room_on_the_right: f32) -> Response {
         use league_block::{CHEVRON_WIDTH, FRAME_WIDTH, GAP, PADDING_LEFT};
 
-        let colors = LeagueModeColors::of(self.league.mode());
+        let Some(league) = self.league else {
+            return self.loading_block(ui);
+        };
+        let colors = LeagueModeColors::of(league.mode());
         let max_name_width = (ui.available_width() - room_on_the_right - FRAME_WIDTH).max(0.0);
-        let name = widgets::truncated_line(ui, self.league.name(), text::league(), max_name_width);
+        let name = widgets::truncated_line(ui, league.name(), text::league(), max_name_width);
         let name_is_cut = name.elided;
 
         let (rect, response) = ui.allocate_exact_size(
@@ -203,36 +220,61 @@ impl<'a> TitleBar<'a> {
             name,
             color::TEXT,
         );
-        widgets::chevron_down(
+        let turn = ui.ctx().animate_bool_with_time(
+            ui.scope_id().with("chevron"),
+            self.leagues_open,
+            motion::OPEN,
+        );
+        widgets::chevron(
             painter,
             pos2(
                 name_left + name_width + GAP + CHEVRON_WIDTH / 2.0,
                 rect.center().y,
             ),
             CHEVRON_WIDTH,
+            turn,
             color::TEXT,
         );
 
-        let mode = self.i18n.text(match self.league.mode() {
+        let mode = self.i18n.text(match league.mode() {
             LeagueMode::Softcore => Message::LeagueModeSoftcore,
             LeagueMode::Hardcore => Message::LeagueModeHardcore,
         });
         let tooltip = self.i18n.league_tooltip(&mode);
         // The mode isn't written on screen: the screen readers read it with the name.
         response.widget_info(|| {
-            WidgetInfo::labeled(
-                Role::Button,
-                true,
-                format!("{} · {tooltip}", self.league.name()),
-            )
+            WidgetInfo::labeled(Role::Button, true, format!("{} · {tooltip}", league.name()))
         });
         response
             .on_hover_cursor(CursorIcon::PointingHand)
             .on_hover_text(if name_is_cut {
-                format!("{}\n{tooltip}", self.league.name())
+                format!("{}\n{tooltip}", league.name())
             } else {
                 tooltip
             })
+    }
+
+    /// The place of the league block before the leagues arrive at the first session.
+    fn loading_block(&self, ui: &mut Ui) -> Response {
+        let galley = widgets::text_line(ui, self.i18n.text(Message::LeagueLoading), text::league());
+        let (rect, response) = ui.allocate_exact_size(
+            vec2(
+                league_block::PADDING_LEFT + galley.size().x + league_block::PADDING_RIGHT,
+                size::TITLE_BAR_HEIGHT,
+            ),
+            Sense::hover(),
+        );
+        let painter = ui.painter();
+        painter.rect_filled(rect, 0.0, color::CONTROL);
+        painter.galley(
+            pos2(
+                rect.left() + league_block::PADDING_LEFT,
+                rect.center().y - galley.size().y / 2.0,
+            ),
+            galley,
+            color::WEAK,
+        );
+        response
     }
 
     /// An icon without a block, clickable on its zone across the height of the bar; white
@@ -261,7 +303,8 @@ impl<'a> TitleBar<'a> {
                 Rect::from_center_size(center, Vec2::splat(SETTINGS_ICON_SIZE)),
             ),
             Icon::Minimize => minimize_mark(ui.painter(), center, tint),
-            Icon::Close => close_mark(ui.painter(), center, tint),
+            // A little smaller than the minimize line, so that both look the same size.
+            Icon::Close => widgets::cross(ui.painter(), center, WINDOW_MARK_SIZE * 0.8, tint),
         }
         response
             .on_hover_cursor(CursorIcon::PointingHand)
@@ -275,20 +318,6 @@ fn minimize_mark(painter: &Painter, center: Pos2, color: Color32) {
     painter.line_segment(
         [center - vec2(half, 0.0), center + vec2(half, 0.0)],
         Stroke::new(size::ICON_STROKE, color),
-    );
-}
-
-/// A cross, a little smaller than the minimize line so that both look the same size.
-fn close_mark(painter: &Painter, center: Pos2, color: Color32) {
-    let half = WINDOW_MARK_SIZE * 0.4;
-    let stroke = Stroke::new(size::ICON_STROKE, color);
-    painter.line_segment(
-        [center - Vec2::splat(half), center + Vec2::splat(half)],
-        stroke,
-    );
-    painter.line_segment(
-        [center + vec2(-half, half), center + vec2(half, -half)],
-        stroke,
     );
 }
 
@@ -317,7 +346,7 @@ mod tests {
             crate::ui::install(&ctx);
             let window = Self {
                 ctx,
-                league: League::new("Forbidden Rites", LeagueMode::Softcore),
+                league: League::new("Forbidden Rites"),
                 i18n: Translator::new(Language::English),
             };
             // The first frame lays the bar out.
@@ -332,7 +361,7 @@ mod tests {
                 events,
                 ..Default::default()
             };
-            let bar = TitleBar::new(&self.league, &self.i18n);
+            let bar = TitleBar::new(Some(&self.league), &self.i18n);
             let mut action = None;
             let mut output = self.ctx.run_ui(input, |ui| action = bar.show(ui));
             // epaint panics when the texture changes of a frame are dropped unapplied.
