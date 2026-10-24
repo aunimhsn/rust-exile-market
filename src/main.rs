@@ -1,3 +1,46 @@
-fn main() {
-    println!("Hello, world!");
+//! Exile Market: the price of a Path of Exile 2 item as soon as it is copied in the game.
+
+// No console window next to the application on Windows, except in debug builds.
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
+mod app;
+mod i18n;
+mod league;
+mod ui;
+
+/// The name of the application, in every language.
+const APP_NAME: &str = "Exile Market";
+
+/// The narrow layout of version 1.
+const WINDOW_SIZE: [f32; 2] = [420.0, 720.0];
+const MIN_WINDOW_SIZE: [f32; 2] = [360.0, 420.0];
+
+fn main() -> eframe::Result {
+    eframe::run_native(
+        APP_NAME,
+        native_options(),
+        Box::new(|creation| Ok(Box::new(app::ExileMarketApp::new(creation)))),
+    )
+}
+
+fn native_options() -> eframe::NativeOptions {
+    let mut options = eframe::NativeOptions {
+        viewport: egui::ViewportBuilder::default()
+            .with_title(APP_NAME)
+            .with_app_id("rust-exile-market")
+            .with_inner_size(WINDOW_SIZE)
+            .with_min_inner_size(MIN_WINDOW_SIZE),
+        ..Default::default()
+    };
+    // On Linux, the window always goes through X11 (XWayland under Wayland), like the game run
+    // by Proton, so that the clipboard can be read without the focus: see roadmap.md (Linux
+    // display). Without it, winit would pick Wayland, which the OpenGL renderer isn't built for.
+    #[cfg(target_os = "linux")]
+    {
+        use winit::platform::x11::EventLoopBuilderExtX11;
+        options.event_loop_builder = Some(Box::new(|builder| {
+            builder.with_x11();
+        }));
+    }
+    options
 }
