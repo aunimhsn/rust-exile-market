@@ -116,7 +116,7 @@ fn log_directory() -> Option<PathBuf> {
 }
 
 /// The path with `~` for the home directory, so that the log doesn't show the account name.
-fn without_home(path: &Path) -> PathBuf {
+pub fn without_home(path: &Path) -> PathBuf {
     BaseDirs::new()
         .and_then(|directories| {
             path.strip_prefix(directories.home_dir())

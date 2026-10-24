@@ -6,7 +6,7 @@ pub enum LeagueMode {
     Softcore,
     #[cfg_attr(
         not(test),
-        expect(dead_code, reason = "the leagues are downloaded in step 6")
+        expect(dead_code, reason = "the leagues are downloaded in step 7")
     )]
     Hardcore,
 }

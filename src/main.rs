@@ -11,6 +11,7 @@ mod language;
 mod league;
 mod logging;
 mod session;
+mod settings;
 mod ui;
 
 /// The name of the application, in every language.
@@ -26,10 +27,19 @@ const MIN_WINDOW_SIZE: [f32; 2] = [360.0, 420.0];
 fn main() -> eframe::Result {
     logging::init();
     log::info!("{APP_NAME} {} started", env!("CARGO_PKG_VERSION"));
+    // Read before the window opens, which starts always on top when it is set.
+    let settings_file = settings::SettingsFile::in_config_directory();
+    let settings = settings_file.load();
     let result = eframe::run_native(
         APP_NAME,
-        native_options(),
-        Box::new(|creation| Ok(Box::new(app::ExileMarketApp::new(creation)))),
+        native_options(&settings, &settings_file),
+        Box::new(move |creation| {
+            Ok(Box::new(app::ExileMarketApp::new(
+                creation,
+                settings,
+                settings_file,
+            )))
+        }),
     );
     match &result {
         Ok(()) => log::info!("{APP_NAME} closed"),
@@ -38,13 +48,21 @@ fn main() -> eframe::Result {
     result
 }
 
-fn native_options() -> eframe::NativeOptions {
+fn native_options(
+    settings: &settings::Settings,
+    settings_file: &settings::SettingsFile,
+) -> eframe::NativeOptions {
     let mut options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_title(APP_NAME)
             .with_app_id("rust-exile-market")
             .with_inner_size(WINDOW_SIZE)
-            .with_min_inner_size(MIN_WINDOW_SIZE),
+            .with_min_inner_size(MIN_WINDOW_SIZE)
+            .with_window_level(settings.window_level()),
+        // eframe restores the size and the position of the window of the last session, on a
+        // screen that is still there.
+        persist_window: true,
+        persistence_path: settings_file.window_file(),
         ..Default::default()
     };
     // On Linux, the window always goes through X11 (XWayland under Wayland), like the game run

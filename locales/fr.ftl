@@ -29,3 +29,17 @@ item-unreadable-hint = Copiez-le de nouveau, ou copiez un autre objet.
 ## Avertissements
 
 clipboard-unreadable = Le presse-papiers ne peut pas être lu.
+
+## Réglages
+
+settings-title = Réglages
+# Libellé au-dessus des choix de la langue.
+settings-language = Langue
+# La langue du système, quand l'interface l'a.
+language-system = Système
+# Chaque langue est nommée dans sa propre langue, pour qu'un joueur trouve la sienne dans n'importe quelle langue.
+language-english = English
+language-french = Français
+settings-always-on-top = Toujours au premier plan
+# Demandée par Grinding Gear Games pour les outils de la communauté.
+disclaimer = Ce produit n'est ni affilié à Grinding Gear Games ni approuvé par ce studio, de quelque manière que ce soit.

@@ -141,7 +141,7 @@ impl<S: ClipboardSource> ClipboardWatcher<S> {
 pub struct ClipboardWatch {
     events: Receiver<ClipboardEvent>,
     /// Carries nothing: dropping it tells the thread to stop. The whispers to copy will go
-    /// through a channel like this one (step 11).
+    /// through a channel like this one (step 12).
     stop: Option<Sender<Infallible>>,
     thread: Option<JoinHandle<()>>,
     /// The thread ended without being asked to, which has been told once.
