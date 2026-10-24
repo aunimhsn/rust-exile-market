@@ -30,12 +30,19 @@ pub enum Message {
     ClipboardUnreadable,
     ItemUnreadable,
     ItemUnreadableHint,
+    SettingsTitle,
+    SettingsLanguage,
+    LanguageSystem,
+    LanguageEnglish,
+    LanguageFrench,
+    SettingsAlwaysOnTop,
+    Disclaimer,
 }
 
 impl Message {
     /// Every message, for the tests.
     #[cfg(test)]
-    const ALL: [Self; 11] = [
+    const ALL: [Self; 18] = [
         Self::LeagueModeSoftcore,
         Self::LeagueModeHardcore,
         Self::LeagueTooltip,
@@ -47,6 +54,13 @@ impl Message {
         Self::ClipboardUnreadable,
         Self::ItemUnreadable,
         Self::ItemUnreadableHint,
+        Self::SettingsTitle,
+        Self::SettingsLanguage,
+        Self::LanguageSystem,
+        Self::LanguageEnglish,
+        Self::LanguageFrench,
+        Self::SettingsAlwaysOnTop,
+        Self::Disclaimer,
     ];
 
     /// Its identifier in the `.ftl` files.
@@ -63,6 +77,13 @@ impl Message {
             Self::ClipboardUnreadable => "clipboard-unreadable",
             Self::ItemUnreadable => "item-unreadable",
             Self::ItemUnreadableHint => "item-unreadable-hint",
+            Self::SettingsTitle => "settings-title",
+            Self::SettingsLanguage => "settings-language",
+            Self::LanguageSystem => "language-system",
+            Self::LanguageEnglish => "language-english",
+            Self::LanguageFrench => "language-french",
+            Self::SettingsAlwaysOnTop => "settings-always-on-top",
+            Self::Disclaimer => "disclaimer",
         }
     }
 }

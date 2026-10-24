@@ -24,6 +24,8 @@ pub mod color {
     pub const FAINT: Color32 = Color32::from_rgb(0x55, 0x60, 0x70);
     /// The main action: white, so that the colors keep their meaning.
     pub const ACCENT: Color32 = Color32::from_rgb(0xf2, 0xf5, 0xf9);
+    /// The icons and marks drawn on the accent.
+    pub const ON_ACCENT: Color32 = BAND_A;
     /// The warning band under the header: dark yellow, apart from the league colors.
     pub const WARNING_BAND: Color32 = Color32::from_rgb(0x8a, 0x6a, 0x10);
     pub const WARNING_TEXT: Color32 = Color32::from_rgb(0xf8, 0xed, 0xc2);
@@ -63,6 +65,18 @@ pub mod text {
     #[must_use]
     pub fn raw_item() -> FontId {
         fonts::numbers(12.0)
+    }
+
+    /// The title of a panel, e.g. the settings.
+    #[must_use]
+    pub fn title() -> FontId {
+        fonts::text(18.0, Weight::ExtraBold)
+    }
+
+    /// The uppercase label above a group of choices.
+    #[must_use]
+    pub fn label() -> FontId {
+        fonts::text(11.0, Weight::SemiBold)
     }
 
     /// The name of the application, next to the emblem.

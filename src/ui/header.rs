@@ -28,18 +28,38 @@ mod league_block {
     pub const FRAME_WIDTH: f32 = PADDING_LEFT + GAP + CHEVRON_WIDTH + PADDING_RIGHT;
 }
 
+/// The block of the header the player clicked.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HeaderAction {
+    Leagues,
+    Settings,
+}
+
 pub struct Header<'a> {
     league: &'a League,
     i18n: &'a Translator,
+    settings_open: bool,
 }
 
 impl<'a> Header<'a> {
     #[must_use]
     pub fn new(league: &'a League, i18n: &'a Translator) -> Self {
-        Self { league, i18n }
+        Self {
+            league,
+            i18n,
+            settings_open: false,
+        }
     }
 
-    pub fn show(self, ui: &mut Ui) {
+    /// Lights the gear up while the settings are open.
+    #[must_use]
+    pub fn settings_open(mut self, open: bool) -> Self {
+        self.settings_open = open;
+        self
+    }
+
+    /// Draws the header; the block the player clicked, if any.
+    pub fn show(self, ui: &mut Ui) -> Option<HeaderAction> {
         Panel::top("header")
             .exact_size(size::HEADER_HEIGHT)
             .frame(Frame::NONE.fill(color::BAND_A))
@@ -49,12 +69,20 @@ impl<'a> Header<'a> {
                     ui.add_space(size::BAND_PADDING);
                     Self::brand(ui);
                     ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                        self.settings_block(ui);
+                        let settings = self.settings_block(ui).clicked();
                         ui.add_space(BLOCK_GAP);
-                        self.league_block(ui);
-                    });
-                });
-            });
+                        let leagues = self.league_block(ui).clicked();
+                        if settings {
+                            Some(HeaderAction::Settings)
+                        } else {
+                            leagues.then_some(HeaderAction::Leagues)
+                        }
+                    })
+                    .inner
+                })
+                .inner
+            })
+            .inner
     }
 
     /// The emblem and the name of the application.
@@ -133,14 +161,21 @@ impl<'a> Header<'a> {
         })
     }
 
-    /// The gear, which opens the settings.
+    /// The gear, which opens and closes the settings: on the accent while they are open.
     fn settings_block(&self, ui: &mut Ui) -> Response {
+        let background = if self.settings_open {
+            color::ACCENT
+        } else {
+            color::CONTROL
+        };
         let response = widgets::flat_block(
             ui,
             vec2(size::ACTION_BLOCK, size::HEADER_HEIGHT),
-            color::CONTROL,
+            background,
         );
-        let tint = if response.hovered() {
+        let tint = if self.settings_open {
+            color::ON_ACCENT
+        } else if response.hovered() {
             color::TEXT
         } else {
             color::WEAK

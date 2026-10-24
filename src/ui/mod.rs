@@ -8,6 +8,7 @@ mod fonts;
 mod header;
 mod images;
 mod raw_item;
+mod settings_panel;
 mod status_bar;
 mod theme;
 mod unreadable_item;
@@ -15,8 +16,9 @@ mod warning_band;
 mod widgets;
 
 pub use empty_state::EmptyState;
-pub use header::Header;
+pub use header::{Header, HeaderAction};
 pub use raw_item::RawItem;
+pub use settings_panel::SettingsPanel;
 pub use status_bar::StatusBar;
 pub use unreadable_item::UnreadableItem;
 pub use warning_band::WarningBand;

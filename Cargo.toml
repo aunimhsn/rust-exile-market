@@ -13,7 +13,7 @@ publish = false
 [dependencies]
 arboard = { version = "3.7", default-features = false }
 directories = "6.0.0"
-eframe = { version = "0.37", default-features = false, features = ["accesskit", "glow", "x11"] }
+eframe = { version = "0.37", default-features = false, features = ["accesskit", "glow", "persistence", "x11"] }
 egui = { version = "0.37", default-features = false }
 egui_extras = { version = "0.37", default-features = false, features = ["svg", "image"] }
 fluent-bundle = "0.16"
@@ -21,8 +21,10 @@ fluent-bundle = "0.16"
 # version of image (Cargo merges the features of a crate). The tests also read the logo with it.
 image = { version = "0.25.10", default-features = false, features = ["png"] }
 log = "0.4"
+serde = { version = "1.0.229", features = ["derive"] }
 simplelog = "0.12.2"
 sys-locale = "0.3"
+toml = "1.1.8"
 unic-langid = "0.9.6"
 
 # To choose the X11 backend of the window (see main.rs). A dependency of eframe also builds
