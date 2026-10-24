@@ -358,21 +358,32 @@
   }
   /* The list of the leagues, under the league block, flat: one line per league, softcore on the left and
      hardcore on the right, glued together, a thin line between two leagues, the permanent ones last; the mode
-     told by the color. The chosen league is the one of the block above. */
-  .app-league.is-open .ico { transform: rotate(180deg); }
+     told by the color. The chosen league is the one of the block above. It opens 4 px under the title bar,
+     with the shadow of the bubbles, and its leagues let the item show through a little (open decision). */
+  .app-league .ico { transition: transform .15s ease; }
+  .app-titlebar.is-open .app-league .ico { transform: rotate(180deg); }
   .app-league-list {
-    position: absolute; z-index: 2; top: 28px; left: 38px; display: grid; grid-template-columns: 1fr 1fr;
-    width: 300px;
+    position: absolute; z-index: 2; top: 32px; left: 38px; display: grid; grid-template-columns: 1fr 1fr;
+    width: 300px; box-shadow: 0 10px 30px rgba(0, 0, 0, .6);
+    opacity: 0; transform: translateY(-4px); pointer-events: none; transition: opacity .15s ease, transform .15s ease;
   }
+  .app-titlebar.is-open + .app-league-list { opacity: 1; transform: none; pointer-events: auto; }
+  @media (prefers-reduced-motion: reduce) {
+    .app-league .ico, .app-league-list { transition: none; }
+  }
+  :root { --menu-alpha: .94; }
+  [data-menu="100"] { --menu-alpha: 1; }
+  [data-menu="94"] { --menu-alpha: .94; }
+  [data-menu="88"] { --menu-alpha: .88; }
   .app-league-list .app-league-row {
     display: flex; align-items: center; justify-content: space-between; gap: 6px; height: 28px; padding: 0 8px 0 10px;
     font-size: 13px; color: var(--text); cursor: pointer; white-space: nowrap; overflow: hidden;
   }
   .app-league-row span { overflow: hidden; text-overflow: ellipsis; }
-  .app-league-row.is-softcore { background: #13263a; }
-  .app-league-row.is-softcore:hover { background: #1a3350; }
-  .app-league-row.is-hardcore { background: #351417; }
-  .app-league-row.is-hardcore:hover { background: #4a1b20; }
+  .app-league-row.is-softcore { background: rgba(19, 38, 58, var(--menu-alpha)); }
+  .app-league-row.is-softcore:hover { background: rgba(26, 51, 80, var(--menu-alpha)); }
+  .app-league-row.is-hardcore { background: rgba(53, 20, 23, var(--menu-alpha)); }
+  .app-league-row.is-hardcore:hover { background: rgba(74, 27, 32, var(--menu-alpha)); }
   .app-league-row .ico { flex: none; }
   .app-league-list hr { grid-column: 1 / -1; width: 100%; margin: 0; border: 0; border-top: 1px solid var(--control-line); }
   .app-icon-button { width: 36px; display: grid; place-items: center; color: var(--weak); cursor: pointer; }
@@ -603,6 +614,7 @@
   const VARIANTS = {
     theme: { label: "Style", options: Object.fromEntries(Object.entries(THEMES).map(([k, v]) => [k, v.title])), fallback: "slate" },
     league: { label: "League", options: { softcore: "Softcore", hardcore: "Hardcore" }, fallback: "softcore" },
+    menu: { label: "League list opacity", options: { 100: "100 %", 94: "94 %", 88: "88 %" }, fallback: "94" },
   };
   const params = new URLSearchParams(location.search);
   const chosen = Object.fromEntries(Object.entries(VARIANTS).map(([key, v]) => [key, params.get(key) in v.options ? params.get(key) : v.fallback]));
@@ -627,21 +639,21 @@
   // Blocks.
   const leagueList = () => {
     const row = (name, mode) =>
-      `<div class="app-league-row is-${mode}" title="${mode === "softcore" ? "Softcore" : "Hardcore"}"><span>${name}</span></div>`;
+      `<div class="app-league-row is-${mode}" data-mode="${mode}" title="${mode === "softcore" ? "Softcore" : "Hardcore"}"><span>${name}</span></div>`;
     const pair = name => row(name, "softcore") + row(name, "hardcore");
     return `<div class="app-league-list">${[pair("Forbidden Rites"), pair("Runes of Aldur"), pair("Standard")].join("<hr>")}</div>`;
   };
   const topBar = (settings = false, league = "Forbidden Rites", open = false) => {
     const kind = document.documentElement.dataset.league === "hardcore" ? "Hardcore" : "Softcore";
     return `
-    <div class="app-titlebar">
+    <div class="app-titlebar ${open ? "is-open" : ""}">
       <img class="app-emblem" src="../../assets/logo/emblem.svg" alt="Home" title="Home">
-      <div class="app-league ${open ? "is-open" : ""}" title="${kind} · Change the league"><span class="app-league-name">${league}</span>${ICON.down(12)}</div>
+      <div class="app-league" title="${kind} · Change the league"><span class="app-league-name">${league}</span>${ICON.down(12)}</div>
       <div class="spacer"></div>
       <div class="app-icon-button ${settings ? "is-on" : ""}" title="Settings">${ICON.gear(15)}</div>
       <div class="app-icon-button" title="Minimize">${svg(13, '<path d="M3 8h10"/>')}</div>
       <div class="app-icon-button" title="Close">${svg(13, '<path d="M4 4l8 8M12 4l-8 8"/>')}</div>
-    </div>`;
+    </div>${leagueList()}`;
   };
   const foot = (value = "poe2scout 12min ago · GGG trade 2min ago") => `<div class="foot a">${value}</div>`;
   const banner = value => `<div class="banner"><span>${value}</span></div>`;
@@ -871,7 +883,7 @@
       ["Main", win(topBar(), item(HH), price(HH_PRICE), offers(HH_OFFERS), foot())],
       ["Stats unfolded (filters)", win(topBar(), item({ ...HH, stats: HH_STATS }, true), foot())],
       ["Before the first search", win(topBar(), item(HH), price(HH_PRICE), offers({ state: "idle" }), foot())],
-      ["League list open", win(topBar(false, "Forbidden Rites", true), leagueList(), item(HH), price(HH_PRICE), offers({ state: "idle" }), foot())],
+      ["League list open", win(topBar(false, "Forbidden Rites", true), item(HH), price(HH_PRICE), offers({ state: "idle" }), foot())],
       ["Settings open", win(topBar(true), settings, foot(`<span class="app-author">Exile Market 0.1.0 · Made by Sylent · <a href="https://sylent.art" target="_blank" rel="noopener">sylent.art</a></span>`))],
     ]],
     ["Other items", [
@@ -1006,6 +1018,29 @@
     history.replaceState(null, "", "?" + new URLSearchParams(chosen));
     render();
   });
+  // The league list works: the league block opens and closes it, a league chooses it; a click elsewhere or
+  // Escape closes it.
+  const closeLeagueLists = except => document.querySelectorAll(".app-titlebar.is-open").forEach(bar => {
+    if (bar !== except) bar.classList.remove("is-open");
+  });
+  document.getElementById("sheet").addEventListener("click", event => {
+    const block = event.target.closest(".app-league");
+    const row = event.target.closest(".app-league-row");
+    if (block) {
+      const bar = block.closest(".app-titlebar");
+      closeLeagueLists(bar);
+      bar.classList.toggle("is-open");
+    } else if (row) {
+      const win = row.closest(".win");
+      win.querySelector(".app-league-name").textContent = row.textContent;
+      win.dataset.league = row.dataset.mode;
+      win.querySelector(".app-league").title = `${row.title} · Change the league`;
+      closeLeagueLists();
+    } else {
+      closeLeagueLists();
+    }
+  });
+  document.addEventListener("keydown", event => { if (event.key === "Escape") closeLeagueLists(); });
   document.getElementById("file-warning").hidden = location.protocol !== "file:";
   render();
 </script>
