@@ -104,12 +104,15 @@ The window has a header, then three bands (item, price, offers), then a status b
 
 - The item name, in its rarity color; for an exceptional base, the full name ("Exceptional Chiming Staff").
 - A **Check on trade** pill at the top right ("Voir sur l'échange" in French), which opens the browser on the search for this item in the selected league, on the French trade site when the item was copied in French.
-- The base type, then the item class followed by tags: Corrupted, Twice Corrupted, Sanctified, Fractured, Mirrored, Unidentified, quality (`Q 20%`), sockets (`2 sockets`), item level (`ilvl 81`), stack (`Stack 7/20`). The tags wrap to a new line when needed.
+- The base type, then the item class followed by tags: Corrupted, Twice Corrupted, Sanctified, Fractured, Mirrored, Unidentified, quality (`Q 20%`), sockets (`2 sockets`), item level (`ilvl 81`), stack (`Stack 7/20`), and for rare items the number of modifiers in tiers 1 to 3 (`4 top tiers`) and the open affixes (`1 open prefix`). The tags wrap to a new line when needed.
 - For a weapon, a summary line: "Physical DPS 245 · Elemental DPS 44"; for a staff, the granted skill.
 - The requirements on a small gray line, always visible: "Requires Level 65 · 145 Dex".
 - A **Show 6 stats** pill (singular for one stat; **Show filters** for an item without modifiers), and next to it the number of active filters ("3 filters"). Unfolded, the pill reads **Hide stats** and the stats appear:
   - grouped under small titles when they are filters: Item, Weapon, Pseudo, Implicit, Explicit;
-  - each modifier in the game's modifier color, with a bar of where its value falls in its range and the range itself (`40–60`), when the range is known (from the price database for uniques, from the advanced copy otherwise);
+  - each modifier in the game's modifier color, with a bar of where its value falls:
+    - for a unique, in its fixed range, written next to the bar (`40–60`, from the price database);
+    - for a rare or magic item or a jewel, over every tier of the modifier, so that a full bar means close to the best possible; next to it, its tier and the range of that tier (`T2 135–154`, from the advanced copy). Tiers 1 to 3 are written in white bold, the others in gray. Without the advanced copy, the game gives no tier: only the value is shown;
+  - for rare and magic items and jewels, the explicit modifiers are grouped into **Prefixes** and **Suffixes** with their fill ("2 of 3 · 1 open");
   - for filters, a checkbox on the left and the minimum value on the right (see [Stat filters](#stat-filters)).
 
 ### Price block

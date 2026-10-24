@@ -16,6 +16,7 @@ Implementation steps of the features described in [specs.md](specs.md). Each ste
 | Price estimation | One `trait` implementation per way of pricing, chosen by an `enum` of the item kinds: fixed-name items from the price database, the others estimated from similar offers | Each kind of item gets its price its own way, without changing the parser or the interface. |
 | Offers | Official trade site API: `/api/trade2/search` then `/api/trade2/fetch` for items, `/api/trade2/exchange` for the currency exchange (to verify in step 10) | The only source of individual offers: poe2scout only gives aggregates. The fetch returns the whole listed item (modifiers, item level, seller status, whisper message), used by the tooltip without another request. Accepted with guardrails despite the Terms of Use risk: see [Trade site usage](#trade-site-usage). |
 | Stat filters | The stats of the copied item become filters of the search, as in Exiled Exchange 2: stat ids from `/api/trade2/data/stats` (explicit, implicit and pseudo groups), matched with the modifier texts; equipment filters (`pdps`, `edps`, sockets, item level, quality) from `/api/trade2/data/filters`; ranges from poe2scout for uniques | Offers are only comparable with similar stats; the same filters price the uniques, the rare, magic and normal items and the jewels. How to search an exceptional base exactly (its name or its number of sockets) is checked in step 12. |
+| Modifier tiers | The tier and its range from the advanced copy; the range of every tier of a modifier from the Path of Exile 2 modifier tables (source chosen in step 12, e.g. an export of the game data such as poe2db or a RePoE fork), embedded and updated with the leagues | The roll bar of a rare modifier covers all its tiers, so that a full bar means close to the best possible; the advanced copy only gives the range of the current tier. |
 | Estimated price | Median of the 5 cheapest similar offers, suspicious offers excluded | A median resists the bait offers and the few overpriced ones; 5 offers are enough to be meaningful without extra requests (one fetch returns 10). |
 | Item names in French | Trade site data in both languages (`/api/trade2/data/items`, `/data/static` and `/data/stats` on `www.` and `fr.pathofexile.com`), downloaded at startup and cached for a day | The price database only knows the English names. The trade site gives the names exactly as in each game client; `/data/static` and `/data/stats` share language-independent ids between the two languages. The item lists are not in the same order in every category, so they are matched by id, or by name for the uniques. |
 | Images | Orb icons, logo and emblem bundled from `assets/` | See [Images](#images). |
@@ -31,7 +32,7 @@ Path of Exile 2 leaves early access with its version 1.0 on 2026-12-11. The modi
 
 - copy real items again (English and French) and rerun the parser tests;
 - check the stat ids, the pseudo stats and the filters of the trade site, and the categories of poe2scout;
-- check the tiers and ranges given by the advanced copy.
+- check the tiers and ranges given by the advanced copy, and update the modifier tables.
 
 ## Images
 
