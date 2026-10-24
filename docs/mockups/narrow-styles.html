@@ -400,6 +400,8 @@
   .stats { margin-top: 8px; display: grid; gap: 6px; }
   .req { color: var(--weak); font-size: 12px; display: flex; justify-content: space-between; }
   .reqline { margin-top: 6px; color: var(--weak); font-size: 12px; }
+  .stats-group { display: flex; justify-content: space-between; margin-top: 6px; color: var(--faint); font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
+  .stats-group:first-child { margin-top: 0; }
   .prop { font-size: 13px; color: var(--text); }
   .prop span { color: var(--weak); }
   .sep { height: 1px; background: var(--control-line); margin: 2px 0; }
@@ -592,6 +594,7 @@
       stats = `<div class="stats-toggle open"><span class="pill">${pill(true)}</span>${filters}</div><div class="stats">${it.stats.map(row => {
         if (row === "sep") return `<div class="sep"></div>`;
         if (row.minHeader) return `<div class="req"><span></span><span>min</span></div>`;
+        if (row.group) return `<div class="stats-group"><span>${row.group}</span>${row.min ? "<span>min</span>" : ""}</div>`;
         if (row.prop) return `<div class="prop"><span>${row.prop[0]}:</span> ${row.prop[1]}</div>`;
         if (row.note) return `<div class="note">${row.note}</div>`;
         const check = row.check === undefined ? "<span></span>" : `<span class="check ${row.check ? "on" : ""}">${row.check ? ICON.check(11) : ""}</span>`;
@@ -633,13 +636,15 @@
       if (p.trend) body += `<div class="line ${p.rising === false ? "fall" : "rise"}">${p.trend}</div>`;
       if (p.warning) body += `<div class="line warn">${p.warning}</div>`;
     }
+    if (p.note) body += `<div class="line muted">${p.note}</div>`;
     if (p.lines) body = p.lines.map((l, i) => `<div class="msg ${i ? "muted" : ""}">${l}</div>`).join("");
     if (p.candidates) {
       body = `<div class="msg">Identify the item to get its price.</div><div class="line muted">Possible uniques</div>
         <div class="candidates">${p.candidates.map(([n, v, k]) => `<div><span class="rarity-unique">${n}</span><span>${v} ${orb(k)}</span></div>`).join("")}</div>`;
     }
     const right = caption || p.offers;
-    return `<div class="band a"><div class="head"><span class="label">${label}</span>${right ? `<span class="right">${right}</span>` : ""}</div>${body}</div>`;
+    const title = p.estimate ? (lang === "fr" ? "Prix estimé" : "Estimated price") : label;
+    return `<div class="band a"><div class="head"><span class="label">${title}</span>${right ? `<span class="right">${right}</span>` : ""}</div>${body}</div>`;
   }
 
   function offerTooltip(t) {
@@ -725,20 +730,50 @@
     { v: "6", k: "ex", when: "2 h ago", sus: true }, { v: "1", k: "chaos", when: "5 d ago", sus: true }, { v: "8", k: "div", when: "3 h ago" },
     { v: "10", k: "div", when: "3 h ago" }, { v: "11", k: "div", when: "40 min ago", away: true }, { v: "12", k: "div", when: "1 d ago" }] };
   const BOW = { rarity: "rare", name: "Storm Bite", base: "Gemini Bow", cls: "Bows", tags: ["ilvl 81", "Q 20%", "2 sockets"], summary: "Physical DPS 245 · Elemental DPS 44", req: "Requires Level 65 · 145 Dex", statsLabel: "Stats (9)" };
-  const BOW_STATS = [
-    { prop: ["Quality", "+20%"] }, { prop: ["Physical Damage", "72–134"] }, { prop: ["Lightning Damage", "3–71"] },
-    { prop: ["Critical Hit Chance", "5.00%"] }, { prop: ["Attacks per Second", "1.20"] }, { prop: ["Sockets", "2 (1 empty)"] },
-    "sep",
-    { mod: "+3 to Level of all Projectile Skills", range: "1–3", share: 1 },
-    { mod: "152% increased Physical Damage", range: "100–169", share: .75 },
-    { mod: "Adds 21 to 38 Physical Damage" },
-    { mod: "14% increased Attack Speed", range: "8–16", share: .75 },
-    { mod: "+312 to Accuracy Rating", range: "200–400", share: .56 },
-    { mod: "Adds 3 to 71 Lightning Damage" },
-    { note: "Ranges from the advanced copy (Ctrl+Alt+C). Stat filters for rare items come with their price, in a later version." },
+  // Rare, magic and jewels: no market price, so the price is estimated from similar offers.
+  // Minimums are prefilled at 90 % of the copied values, to find comparable items.
+  const BOW_FILTERS = [
+    { group: "Item", min: true },
+    { mod: "Base: Gemini Bow", check: true },
+    { mod: "Item level: 81", check: false, min: 75 },
+    { group: "Weapon" },
+    { mod: "Physical DPS: 245", check: true, min: 220 },
+    { mod: "Elemental DPS: 44", check: false, min: 40 },
+    { group: "Explicit" },
+    { mod: "+3 to Level of all Projectile Skills", check: true, min: 3, range: "1–3", share: 1 },
+    { mod: "152% increased Physical Damage", check: false, min: 137, range: "100–169", share: .75 },
+    { mod: "Adds 21 to 38 Physical Damage", check: false },
+    { mod: "14% increased Attack Speed", check: false, min: 13, range: "8–16", share: .75 },
+    { mod: "+312 to Accuracy Rating", check: true, min: 281, range: "200–400", share: .56 },
+    { mod: "Adds 3 to 71 Lightning Damage", check: false },
+    { note: "The physical DPS already counts the damage and speed modifiers." },
   ];
-  const RARE_PRICE = { lines: ["Rare items aren't priced yet.", "Use Check on trade above."] };
-  const RARE_OFFERS = { lines: ["Offers of rare items come with their price, in a later version."] };
+  const BOW_RARE = { ...BOW, statsLabel: "Stats (6)", filters: "4 filters" };
+  const RARE_ESTIMATE_BEFORE = { lines: ["No market price for rare items.", "Search similar offers to estimate it."] };
+  const RING = { rarity: "rare", name: "Storm Spiral", base: "Sapphire Ring", cls: "Rings", tags: ["ilvl 77"], req: "Requires Level 54", statsLabel: "Stats (6)", filters: "2 filters" };
+  const RING_FILTERS = [
+    { group: "Pseudo", min: true },
+    { mod: "+92% total Elemental Resistance", check: true, min: 82 },
+    { mod: "+65 total maximum Life", check: true, min: 58 },
+    { group: "Implicit" },
+    { mod: "+22% to Cold Resistance", check: false, min: 19, range: "20–30", share: .2 },
+    { group: "Explicit" },
+    { mod: "+65 to maximum Life", check: false, min: 58, range: "60–69", share: .55 },
+    { mod: "+38% to Fire Resistance", check: false, min: 34, range: "36–40", share: .5 },
+    { mod: "+9% to Cold Resistance", check: false, min: 8, range: "6–10", share: .75 },
+    { mod: "+23% to Lightning Resistance", check: false, min: 20, range: "21–25", share: .5 },
+    { mod: "+12 to Dexterity", check: false, min: 10, range: "9–12", share: 1 },
+    { note: "Pseudo stats add up the same stat from all modifiers: the resistances, the life." },
+  ];
+  const MAGIC = { rarity: "magic", name: "Glimmering Sapphire Ring of the Lynx", cls: "Rings", tags: ["ilvl 68"], req: "Requires Level 44", statsLabel: "Stats (3)", filters: "2 filters" };
+  const JEWEL = { rarity: "rare", name: "Brood Ember", base: "Ruby", cls: "Jewels", tags: ["ilvl 81"], statsLabel: "Stats (4)", filters: "4 filters" };
+  const JEWEL_FILTERS = [
+    { group: "Explicit", min: true },
+    { mod: "14% increased Critical Damage Bonus", check: true, min: 12, range: "10–15", share: .8 },
+    { mod: "8% increased Attack Speed", check: true, min: 7, range: "4–8", share: 1 },
+    { mod: "12% increased Projectile Damage", check: true, min: 10, range: "8–14", share: .66 },
+    { mod: "6% increased Critical Hit Chance", check: true, min: 5, range: "4–8", share: .5 },
+  ];
 
   const win = (...parts) => `<div class="win">${parts.join("")}</div>`;
 
@@ -750,13 +785,31 @@
       ["Settings open", win(topBar(true), settings, foot())],
     ]],
     ["Other items", [
-      ["Rare bow", win(topBar(), item(BOW), price(RARE_PRICE), offers(RARE_OFFERS), foot())],
-      ["Rare bow, stats unfolded", win(topBar(), item({ ...BOW, stats: BOW_STATS }, true), foot())],
       ["Unique bow: corrupted, quality, sockets", win(topBar(), item({ rarity: "unique", name: "Death's Harp", base: "Dualstring Bow", cls: "Bows", tags: ["Corrupted", "Q 20%", "2 sockets", "ilvl 79"], summary: "Physical DPS 198", req: "Requires Level 52 · 96 Dex", statsLabel: "Stats (5)", filters: "2 filters" }),
         price({ values: ["1.8", "18", "1305"], offers: "4 offers", warning: "Only 4 offers: the price is uncertain" }),
         offers({ count: "4 of 4 online", columns: ["Price", "Listed"], rows: [{ v: "1.5", k: "div", when: "5 h ago" }, { v: "1.8", k: "div", when: "1 d ago" }, { v: "2", k: "div", when: "50 min ago" }, { v: "2.5", k: "div", when: "3 d ago" }] }), foot())],
       ["Many tags (they wrap)", win(topBar(), item({ rarity: "unique", name: "Ironbound", base: "Runeforged Warden Bow", cls: "Bows", tags: ["Twice Corrupted", "Sanctified", "Fractured", "Mirrored", "Q 23%", "3 sockets", "ilvl 82"], summary: "Physical DPS 312", req: "Requires Level 70 · 172 Dex", statsLabel: "Stats (6)", filters: "3 filters" }),
         price({ values: ["38", "376", "27550"], offers: "2 offers", warning: "Only 2 offers: the price is uncertain" }), offers({ state: "idle" }), foot())],
+    ]],
+    ["Rare, magic and jewels", [
+      ["Rare bow: before the search", win(topBar(), item(BOW_RARE), price(RARE_ESTIMATE_BEFORE), offers({ state: "idle" }), foot())],
+      ["Rare bow: filters", win(topBar(), item({ ...BOW_RARE, stats: BOW_FILTERS }, true), foot())],
+      ["Rare bow: estimated price", win(topBar(), item(BOW_RARE),
+        price({ estimate: true, values: ["2.4", "24", "1740"], offers: "18 similar", note: "Median of the 5 cheapest similar offers." }),
+        offers({ count: "10 of 18 online", columns: ["Price", "Listed"], rows: [
+          { v: "300", k: "ex", when: "1 h ago", sus: true }, { v: "2", k: "div", when: "20 min ago" }, { v: "2.2", k: "div", when: "4 h ago" },
+          { v: "2.4", k: "div", when: "1 d ago", away: true }, { v: "2.5", k: "div", when: "2 h ago" }, { v: "3", k: "div", when: "6 h ago" }] }), foot())],
+      ["Rare ring: pseudo stats", win(topBar(), item({ ...RING, stats: RING_FILTERS }, true), foot())],
+      ["Magic item: few similar offers", win(topBar(), item(MAGIC),
+        price({ estimate: true, values: ["0.1", "1", "70"], offers: "3 similar", warning: "Only 3 similar offers: the estimate is uncertain", note: "Median of the 3 similar offers." }),
+        offers({ count: "3 of 3 online", columns: ["Price", "Listed"], rows: [
+          { v: "50", k: "ex", when: "2 d ago" }, { v: "70", k: "ex", when: "5 h ago" }, { v: "1", k: "chaos", when: "1 h ago" }] }), foot())],
+      ["Rare jewel: estimated price", win(topBar(), item(JEWEL),
+        price({ estimate: true, values: ["1.2", "12", "870"], offers: "9 similar", note: "Median of the 5 cheapest similar offers." }),
+        offers({ count: "9 of 9 online", columns: ["Price", "Listed"], rows: [
+          { v: "1", k: "div", when: "3 h ago" }, { v: "1.1", k: "div", when: "40 min ago" }, { v: "1.2", k: "div", when: "1 d ago" },
+          { v: "1.5", k: "div", when: "2 h ago" }, { v: "2", k: "div", when: "5 h ago" }] }), foot())],
+      ["Rare jewel: filters", win(topBar(), item({ ...JEWEL, stats: JEWEL_FILTERS }, true), foot())],
     ]],
     ["Special cases", [
       ["Currency stack", win(topBar(), item({ rarity: "currency", name: "Orb of Annulment", cls: "Stackable Currency", tags: ["Stack 7/20"], statsLabel: "Stats (1)" }),
@@ -767,8 +820,6 @@
       ["Unidentified unique", win(topBar(), item({ rarity: "unique", name: "Stellar Amulet", cls: "Amulets", tags: ["Unidentified", "ilvl 74"], req: "Requires Level 60", statsLabel: "Stats (1)" }),
         price({ candidates: [["Astramentis", "4.0", "div"], ["Hinekora's Sight", "640", "ex"], ["Fixation of Yix", "95", "ex"], ["Strugglescream", "12", "ex"]] }),
         offers({ lines: ["Identify the item to search its offers."] }), foot())],
-      ["Magic item", win(topBar(), item({ rarity: "magic", name: "Glimmering Sapphire Ring of the Lynx", cls: "Rings", tags: ["ilvl 68"], req: "Requires Level 44", statsLabel: "Stats (3)" }),
-        price({ lines: ["Magic items aren't priced yet.", "Use Check on trade above."] }), offers({ lines: ["Offers of magic items come with their price, in a later version."] }), foot())],
       ["Exceptional base (normal item)", win(topBar(), item({ rarity: "normal", name: "Exceptional Chiming Staff", cls: "Staves", tags: ["3 sockets", "ilvl 82"], summary: "Grants Skill: Level 18 Sigil of Power", req: "Requires Level 78 · 137 Int", statsLabel: "Stats (2)" }),
         price({ lines: ["Normal items aren't priced yet.", "Use Check on trade above."] }), offers({ lines: ["Offers of normal items come with their price, in a later version."] }), foot())],
       ["French item (interface in French)", win(topBar(), item({ rarity: "unique", name: "Chasseur de têtes", base: "Ceinture lourde", cls: "Ceintures", tags: ["Corrompu", "niv. 80"], req: "Requiert niveau 50", statsLabel: "Statistiques (6)", filters: "3 filtres", tradeLabel: "Voir sur l'échange", tradeTitle: "Ouvrir la recherche sur le site d'échange" }),
