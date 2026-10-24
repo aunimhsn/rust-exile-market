@@ -651,7 +651,7 @@
     return `<div class="offer-tooltip ${t.pinned ? "pinned" : ""} ${t.below ? "below" : ""}">
       <div class="tt-head"><span class="rarity-unique tt-name">${t.name}</span><span class="tt-price">${t.price} ${orb(t.currency)}</span></div>
       <div class="tt-meta">${t.meta}</div>
-      ${t.suspicious ? `<div class="tt-warn">Far below the market price: probably bait or a mistake.</div>` : ""}
+      ${t.suspicious ? `<div class="tt-warn">Be careful: far below the market price.</div>` : ""}
       <div class="tt-mods">${compare(t.implicit)}</div>
       <div class="tt-mods">${compare(t.mods)}</div>
       <div class="tt-foot">
