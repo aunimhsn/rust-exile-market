@@ -586,9 +586,12 @@
     const count = Number((it.statsLabel || "").match(/\d+/)?.[0] || 0);
     const fr = /Statistiques/.test(it.statsLabel || "");
     const plural = count > 1 ? "s" : "";
-    const pill = unfolded => unfolded
-      ? (fr ? "Masquer les stats" : "Hide stats")
-      : (fr ? `Afficher ${count} stat${plural}` : `Show ${count} stat${plural}`);
+    // An item without modifiers (a normal item) only has filters to show.
+    const pill = unfolded => count === 0
+      ? (unfolded ? (fr ? "Masquer les filtres" : "Hide filters") : (fr ? "Afficher les filtres" : "Show filters"))
+      : unfolded
+        ? (fr ? "Masquer les stats" : "Hide stats")
+        : (fr ? `Afficher ${count} stat${plural}` : `Show ${count} stat${plural}`);
     let stats = "";
     if (it.stats && unfolded) {
       stats = `<div class="stats-toggle open"><span class="pill">${pill(true)}</span>${filters}</div><div class="stats">${it.stats.map(row => {
@@ -766,6 +769,16 @@
     { note: "Pseudo stats add up the same stat from all modifiers: the resistances, the life." },
   ];
   const MAGIC = { rarity: "magic", name: "Glimmering Sapphire Ring of the Lynx", cls: "Rings", tags: ["ilvl 68"], req: "Requires Level 44", statsLabel: "Stats (3)", filters: "2 filters" };
+  // Exceptional base: a normal item whose value is its base, its sockets and its item level.
+  const STAFF = { rarity: "normal", name: "Exceptional Chiming Staff", cls: "Staves", tags: ["3 sockets", "ilvl 82"], summary: "Grants Skill: Level 18 Sigil of Power", req: "Requires Level 78 · 137 Int", statsLabel: "Stats (0)", filters: "3 filters" };
+  const STAFF_FILTERS = [
+    { group: "Item", min: true },
+    { mod: "Base: Chiming Staff", check: true },
+    { mod: "Sockets: 3", check: true, min: 3 },
+    { mod: "Item level: 82", check: true, min: 80 },
+    { mod: "Quality: 0%", check: false, min: 0 },
+    { note: "A normal item has no modifiers: its base, sockets and item level make its value." },
+  ];
   const JEWEL = { rarity: "rare", name: "Brood Ember", base: "Ruby", cls: "Jewels", tags: ["ilvl 81"], statsLabel: "Stats (4)", filters: "4 filters" };
   const JEWEL_FILTERS = [
     { group: "Explicit", min: true },
@@ -791,7 +804,7 @@
       ["Many tags (they wrap)", win(topBar(), item({ rarity: "unique", name: "Ironbound", base: "Runeforged Warden Bow", cls: "Bows", tags: ["Twice Corrupted", "Sanctified", "Fractured", "Mirrored", "Q 23%", "3 sockets", "ilvl 82"], summary: "Physical DPS 312", req: "Requires Level 70 · 172 Dex", statsLabel: "Stats (6)", filters: "3 filters" }),
         price({ values: ["38", "376", "27550"], offers: "2 offers", warning: "Only 2 offers: the price is uncertain" }), offers({ state: "idle" }), foot())],
     ]],
-    ["Rare, magic and jewels", [
+    ["Estimated prices: rare, magic, normal, jewels", [
       ["Rare bow: before the search", win(topBar(), item(BOW_RARE), price(RARE_ESTIMATE_BEFORE), offers({ state: "idle" }), foot())],
       ["Rare bow: filters", win(topBar(), item({ ...BOW_RARE, stats: BOW_FILTERS }, true), foot())],
       ["Rare bow: estimated price", win(topBar(), item(BOW_RARE),
@@ -810,6 +823,12 @@
           { v: "1", k: "div", when: "3 h ago" }, { v: "1.1", k: "div", when: "40 min ago" }, { v: "1.2", k: "div", when: "1 d ago" },
           { v: "1.5", k: "div", when: "2 h ago" }, { v: "2", k: "div", when: "5 h ago" }] }), foot())],
       ["Rare jewel: filters", win(topBar(), item({ ...JEWEL, stats: JEWEL_FILTERS }, true), foot())],
+      ["Exceptional base: filters", win(topBar(), item({ ...STAFF, stats: STAFF_FILTERS }, true), foot())],
+      ["Exceptional base: estimated price", win(topBar(), item(STAFF),
+        price({ estimate: true, values: ["0.6", "6", "435"], offers: "11 similar", note: "Median of the 5 cheapest similar offers." }),
+        offers({ count: "10 of 11 online", columns: ["Price", "Listed"], rows: [
+          { v: "350", k: "ex", when: "2 h ago" }, { v: "0.5", k: "div", when: "1 d ago" }, { v: "0.6", k: "div", when: "30 min ago" },
+          { v: "0.7", k: "div", when: "4 h ago", away: true }, { v: "1", k: "div", when: "3 d ago" }] }), foot())],
     ]],
     ["Special cases", [
       ["Currency stack", win(topBar(), item({ rarity: "currency", name: "Orb of Annulment", cls: "Stackable Currency", tags: ["Stack 7/20"], statsLabel: "Stats (1)" }),
@@ -820,8 +839,6 @@
       ["Unidentified unique", win(topBar(), item({ rarity: "unique", name: "Stellar Amulet", cls: "Amulets", tags: ["Unidentified", "ilvl 74"], req: "Requires Level 60", statsLabel: "Stats (1)" }),
         price({ candidates: [["Astramentis", "4.0", "div"], ["Hinekora's Sight", "640", "ex"], ["Fixation of Yix", "95", "ex"], ["Strugglescream", "12", "ex"]] }),
         offers({ lines: ["Identify the item to search its offers."] }), foot())],
-      ["Exceptional base (normal item)", win(topBar(), item({ rarity: "normal", name: "Exceptional Chiming Staff", cls: "Staves", tags: ["3 sockets", "ilvl 82"], summary: "Grants Skill: Level 18 Sigil of Power", req: "Requires Level 78 · 137 Int", statsLabel: "Stats (2)" }),
-        price({ lines: ["Normal items aren't priced yet.", "Use Check on trade above."] }), offers({ lines: ["Offers of normal items come with their price, in a later version."] }), foot())],
       ["French item (interface in French)", win(topBar(), item({ rarity: "unique", name: "Chasseur de têtes", base: "Ceinture lourde", cls: "Ceintures", tags: ["Corrompu", "niv. 80"], req: "Requiert niveau 50", statsLabel: "Statistiques (6)", filters: "3 filtres", tradeLabel: "Voir sur l'échange", tradeTitle: "Ouvrir la recherche sur le site d'échange" }),
         price({ values: ["12.4", "123", "8990"], offers: "23 offres", trend: "En hausse sur les 3 derniers jours (+4 %)" }, "fr"), offers({ state: "idle" }, "fr"), foot("poe2scout il y a 12 min · GGG trade il y a 2 min"))],
     ]],
