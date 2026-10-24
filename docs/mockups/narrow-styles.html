@@ -331,7 +331,6 @@
      says softcore or hardcore), then the icons: Settings, Minimize, Close, without borders. The empty space
      moves the window. */
   .app-titlebar { display: flex; align-items: stretch; height: 28px; padding-left: 12px; background: var(--bg-a); }
-  [data-bar="32"] .app-titlebar { height: 32px; }
   .app-emblem { display: block; width: 16px; height: 16px; align-self: center; margin-right: 10px; }
   /* The league block, tinted with the color of its trade (the only sign of softcore or hardcore, also in its
      tooltip), a line of that color on the left, the chevron in white; lighter under the pointer. */
@@ -537,6 +536,11 @@
   .radio.on i { border-color: var(--accent); background: radial-gradient(var(--accent) 35%, transparent 45%); }
   .toggle { display: flex; gap: 8px; align-items: center; }
   .disclaimer { margin-top: 22px; color: var(--faint); font-size: 11.5px; }
+  /* The version and the author, in the status bar while the settings are open; the site is a link, underlined
+     under the pointer. */
+  .app-author a { color: var(--weak); text-decoration: none; }
+  .app-author a:hover { color: var(--text); text-decoration: underline; }
+
 </style>
 </head>
 <body>
@@ -557,7 +561,6 @@
   const VARIANTS = {
     theme: { label: "Style", options: Object.fromEntries(Object.entries(THEMES).map(([k, v]) => [k, v.title])), fallback: "slate" },
     league: { label: "League", options: { softcore: "Softcore", hardcore: "Hardcore" }, fallback: "softcore" },
-    bar: { label: "Bar height", options: { 28: "28 px", 32: "32 px" }, fallback: "28" },
   };
   const params = new URLSearchParams(location.search);
   const chosen = Object.fromEntries(Object.entries(VARIANTS).map(([key, v]) => [key, params.get(key) in v.options ? params.get(key) : v.fallback]));
@@ -817,7 +820,7 @@
       ["Main", win(topBar(), item(HH), price(HH_PRICE), offers(HH_OFFERS), foot())],
       ["Stats unfolded (filters)", win(topBar(), item({ ...HH, stats: HH_STATS }, true), foot())],
       ["Before the first search", win(topBar(), item(HH), price(HH_PRICE), offers({ state: "idle" }), foot())],
-      ["Settings open", win(topBar(true), settings, foot())],
+      ["Settings open", win(topBar(true), settings, foot(`<span class="app-author">Exile Market 0.1.0 · Made by Sylent · <a href="https://sylent.art" target="_blank" rel="noopener">sylent.art</a></span>`))],
     ]],
     ["Other items", [
       ["Unique bow: corrupted, quality, sockets", win(topBar(), item({ rarity: "unique", name: "Death's Harp", base: "Dualstring Bow", cls: "Bows", tags: ["Corrupted", "Q 20%", "2 sockets", "ilvl 79"], summary: "Physical DPS 198", req: "Requires Level 52 · 96 Dex", statsLabel: "Stats (5)", filters: "2 filters" }),

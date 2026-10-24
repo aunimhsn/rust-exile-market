@@ -29,7 +29,7 @@ The reference of the interface is the mock-up [docs/mockups/narrow-styles.html](
 
 | Token | Value | Use |
 |---|---|---|
-| Band A | `#0f1216` | Header, price block, status bar. |
+| Band A | `#0f1216` | Title bar, price block, status bar. |
 | Band B | `#151a20` | Item block, offers block, settings. |
 | Alternate row | `#1a2028` | Every other row of the offers. |
 | Control | `#1d242d` | Pills, inputs, gear block, waiting countdown, tooltip (`#20272f`). |
@@ -38,9 +38,9 @@ The reference of the interface is the mock-up [docs/mockups/narrow-styles.html](
 | Weak text | `#8692a3` | Labels, secondary lines. |
 | Faint text | `#556070` | Status bar, search age, roll ranges. |
 | Main action | `#f2f5f9` (white), text on it `#0f1216` | Search and refresh blocks, checked boxes, opened gear, "Copied". |
-| Softcore league | background `#13263a`, line and label `#6aa7de` | League block. |
-| Hardcore league | background `#351417`, line and label `#e0706a` | League block, background of the Corrupted tag. |
-| Warning band | background `#8a6a10`, text `#f8edc2` | Errors under the header. |
+| Softcore league | background `#13263a` (`#1a3350` on hover), line `#6aa7de` | League block. |
+| Hardcore league | background `#351417` (`#4a1b20` on hover), line `#e0706a` | League block, background of the Corrupted tag. |
+| Warning band | background `#8a6a10`, text `#f8edc2` | Errors under the title bar. |
 | Warning text | `#f0b85a` | Uncertain price, suspicious offer, away seller. |
 | Rise / fall | `#5fcf80` / `#e66a5c` | Trend, roll differences, seller online / offline. |
 | Rarities | normal `#d0d0d0`, magic `#8888ff`, rare `#ffff77`, unique `#c26a2c`, currency `#b4a787` | Item names, as in the game. |
@@ -56,21 +56,22 @@ The reference of the interface is the mock-up [docs/mockups/narrow-styles.html](
 
 ### Shapes
 
-- **Action blocks are flat and square**, the height of their band, glued to its edge: the league and the gear in the header, the search and refresh blocks in the offers band.
+- **Action blocks are flat and square**, the height of their band, glued to its edge: the league block in the title bar, the search and refresh blocks in the offers band. The icons of the title bar have no block: only the icon.
 - **Small information elements are rounded by 3 px**: tags, inputs, checkboxes (15 px, drawn check mark), pills.
 - **Secondary actions are pills** with a verb: "Check on trade", "Show 6 stats", "Copy whisper".
 - The tooltip of an offer is the only floating element: radius 4 px, shadow.
 
 ### Icons and logo
 
-- Icons are drawn as lines (stroke about 1.8 px), in the color of the text: search, refresh, double chevron, check mark; the gear is the "settings" icon of [Lucide](https://lucide.dev) (ISC license).
+- Icons are drawn as lines (stroke about 1.8 px), in the color of the text: search, refresh, double chevron, check mark, minimize, close; the gear is the "settings" icon of [Lucide](https://lucide.dev) (ISC license).
 - Icons are aligned on the lowercase letters next to them, by eye on the real screen (e.g. text 0.5 px up next to an icon), not on the box of the text.
-- The header shows the **emblem** (`assets/logo/emblem.svg`, white) next to the name "Exile Market"; the empty window shows the full **logo** (`assets/logo/exile-market.png`).
+- The title bar shows the **emblem** (`assets/logo/emblem.svg`, white, 16 px) without the name; the empty window shows the full **logo** (`assets/logo/exile-market.png`).
 - The Exalted, Divine and Chaos Orbs come from `assets/currencies/`.
 
 ### Hover and motion
 
 - Pills and the league block: background one shade lighter on hover.
+- Icons of the title bar: in the weak text color, white on hover; the gear stays white while the settings are open.
 - Search block: the icon grows by 15 %; refresh block: the icon grows by 12 % and turns a quarter; show more: the double chevron slides down 2 px. About 0.2 s, a slight overshoot.
 - No motion when the system asks for reduced motion.
 - No specific design for the keyboard focus: the default of the toolkit is kept.
@@ -86,19 +87,18 @@ The reference of the interface is the mock-up [docs/mockups/narrow-styles.html](
 
 ### Window layout
 
-The window has a header, then three bands (item, price, offers), then a status bar.
+The window has a title bar, then three bands (item, price, offers), then a status bar.
 
 | Window width | Layout |
 |---|---|
 | Narrow (version 1) | One column: item, price, offers. |
 | Medium and wide (later) | The same blocks rearranged in two or three columns, with the price history in the wide layout (see the roadmap). |
 
-- The window has no title bar of the system: the header takes its place (see the roadmap, step 6).
-- **Header** (band A): the emblem and "Exile Market"; on the right, the league block, then the gear block.
-  - The league block shows the league name and a small label "SOFTCORE" or "HARDCORE", on the color of its trade (blue or red); a click opens the list of the current leagues. By default, the current challenge league in softcore trade.
+- **Title bar** (band A, 28 px), in place of the title bar of the system: the emblem, the league block, then on the right the Settings, Minimize and Close icons, without borders (each clickable on 36 px across). There is no Maximize: the narrow window doesn't need it. The empty space of the bar moves the window; the edges of the window still resize it.
+  - The league block shows the league name on a background tinted with the color of its trade (blue for softcore, red for hardcore), with a 2 px line of that color on the left and a white chevron. The color is the only sign of the trade on screen; the tooltip says it: "Softcore · Change the league". A click opens the list of the current leagues. By default, the current challenge league in softcore trade.
   - The gear opens the [settings](#settings), and closes them.
-- **Status bar** (band A): the age of each source, e.g. "poe2scout 12 min ago · GGG trade 2 min ago"; "GGG trade: next search in 4 min" during a long wait.
-- Warnings appear as a dark yellow band right under the header (see [Error handling](#error-handling)).
+- **Status bar** (band A): the age of each source, e.g. "poe2scout 12 min ago · GGG trade 2 min ago"; "GGG trade: next search in 4 min" during a long wait; the version and the author while the settings are open.
+- Warnings appear as a dark yellow band right under the title bar (see [Error handling](#error-handling)).
 - The window can be resized and moved to another screen. Its size and position are restored at the next launch, on a screen that is still connected.
 - Before the first item, the window shows the full logo and "Copy an item in the game with Ctrl + C. The price shows up here."
 
@@ -181,7 +181,7 @@ The gear opens the settings, which replace the content of the window in the narr
   - The language of the copied items never changes the interface, so that it never changes without the player asking: it only chooses the item names used to find the prices and the trade site to search (`fr.pathofexile.com` for a French item).
 - **Always on top**: keeps the window above the other windows, for players with a single screen, when the game is in windowed or borderless mode. Off by default.
 
-The settings are saved as soon as they change. Their bottom shows the sentence "This product isn't affiliated with or endorsed by Grinding Gear Games in any way."
+The settings are saved as soon as they change. Their bottom shows the sentence "This product isn't affiliated with or endorsed by Grinding Gear Games in any way." While they are open, the status bar shows the version and the author in place of the age of the sources: "Exile Market 0.1.0 · Made by Sylent · sylent.art" ("Créé par Sylent" in French), where `sylent.art` opens the author's site in the browser.
 
 ### Data sources
 
