@@ -1,19 +1,24 @@
 # Interface texts in English, the reference language.
 # Every message must also exist in fr.ftl.
 
-## Header
+## Title bar
 
-# Label of the league block, above the league name.
+# The mode of the league, said only by the color of its block and in its tooltip.
 league-mode-softcore = Softcore
 league-mode-hardcore = Hardcore
-league-tooltip = Change the league
+# Tooltip of the league block: its mode, then what a click does.
+league-tooltip = { $mode } · Change the league
 settings-tooltip = Settings
+minimize-tooltip = Minimize
+close-tooltip = Close
 
 ## Status bar
 
 status-bar = { $prices } · { $trade }
 status-prices-waiting = poe2scout: no prices yet
 status-trade-idle = GGG trade: no search yet
+# While the settings are open: the version and the author; the site, last, is a link.
+status-author = { $app } { $version } · Made by { $author } · { $site }
 
 ## Window before the first item
 

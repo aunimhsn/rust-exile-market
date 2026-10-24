@@ -11,7 +11,7 @@ use crate::league::LeagueMode;
 pub mod color {
     use egui::Color32;
 
-    /// Header, price block, status bar.
+    /// Title bar, price block, status bar.
     pub const BAND_A: Color32 = Color32::from_rgb(0x0f, 0x12, 0x16);
     /// Item block, offers block, settings.
     pub const BAND_B: Color32 = Color32::from_rgb(0x15, 0x1a, 0x20);
@@ -29,6 +29,8 @@ pub mod color {
     /// The warning band under the header: dark yellow, apart from the league colors.
     pub const WARNING_BAND: Color32 = Color32::from_rgb(0x8a, 0x6a, 0x10);
     pub const WARNING_TEXT: Color32 = Color32::from_rgb(0xf8, 0xed, 0xc2);
+    /// The emblem behind the empty state: white at 2.25 %, rounded to the nearest alpha.
+    pub const WATERMARK: Color32 = Color32::from_rgba_premultiplied(6, 6, 6, 6);
 }
 
 /// The text styles: the typography of `specs.md`, at the sizes of the mock-up.
@@ -79,17 +81,10 @@ pub mod text {
         fonts::text(11.0, Weight::SemiBold)
     }
 
-    /// The name of the application, next to the emblem.
+    /// The league name, in the title bar.
     #[must_use]
-    pub fn brand() -> FontId {
-        fonts::text(15.0, Weight::ExtraBold)
-    }
-
-    /// The uppercase label above the league name, smaller than the other labels so that the
-    /// two lines fit in the header.
-    #[must_use]
-    pub fn league_label() -> FontId {
-        fonts::text(9.5, Weight::ExtraBold)
+    pub fn league() -> FontId {
+        fonts::text(13.0, Weight::Regular)
     }
 
     /// The extra space between the letters of the uppercase labels.
@@ -104,23 +99,26 @@ pub mod text {
 
 /// The sizes of the interface, in points.
 pub mod size {
-    pub const HEADER_HEIGHT: f32 = 48.0;
+    /// The title bar, in place of the one of the system.
+    pub const TITLE_BAR_HEIGHT: f32 = 28.0;
     pub const STATUS_BAR_HEIGHT: f32 = 28.0;
     /// Left and right padding of the bands.
     pub const BAND_PADDING: f32 = 14.0;
     /// Rounding of the small information elements; the action blocks stay square.
     pub const RADIUS: u8 = 3;
-    /// Width of a square action block (gear, search, refresh).
-    pub const ACTION_BLOCK: f32 = 48.0;
+    /// Width of the clickable zone of an icon of the title bar, drawn without a block.
+    pub const ICON_ZONE: f32 = 36.0;
     /// Width of the lines of the icons drawn with egui.
     pub const ICON_STROKE: f32 = 1.6;
 }
 
-/// The colors of a league block, which say its mode at a glance.
+/// The colors of a league block, the only sign of its mode on screen.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct LeagueModeColors {
     pub background: Color32,
-    /// The left line and the label.
+    /// The background under the pointer.
+    pub hovered: Color32,
+    /// The line on the left.
     pub line: Color32,
 }
 
@@ -130,20 +128,16 @@ impl LeagueModeColors {
         match mode {
             LeagueMode::Softcore => Self {
                 background: Color32::from_rgb(0x13, 0x26, 0x3a),
+                hovered: Color32::from_rgb(0x1a, 0x33, 0x50),
                 line: Color32::from_rgb(0x6a, 0xa7, 0xde),
             },
             LeagueMode::Hardcore => Self {
                 background: Color32::from_rgb(0x35, 0x14, 0x17),
+                hovered: Color32::from_rgb(0x4a, 0x1b, 0x20),
                 line: Color32::from_rgb(0xe0, 0x70, 0x6a),
             },
         }
     }
-}
-
-/// The background of a block under the pointer: one shade lighter.
-#[must_use]
-pub fn hovered(background: Color32) -> Color32 {
-    background.lerp_to_gamma(color::ACCENT, 0.06)
 }
 
 /// Applies the style to every egui widget: dark, flat, with the colors above.
@@ -194,10 +188,15 @@ mod tests {
     }
 
     #[test]
-    fn a_hovered_block_is_lighter() {
-        let base = color::CONTROL;
-        let lighter = hovered(base);
+    fn a_league_block_is_lighter_under_the_pointer() {
+        for mode in [LeagueMode::Softcore, LeagueMode::Hardcore] {
+            let colors = LeagueModeColors::of(mode);
+            let (base, lit) = (colors.background, colors.hovered);
 
-        assert!(lighter.r() > base.r() && lighter.g() > base.g() && lighter.b() > base.b());
+            assert!(
+                lit.r() > base.r() && lit.g() > base.g() && lit.b() > base.b(),
+                "{mode:?}"
+            );
+        }
     }
 }

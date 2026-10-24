@@ -21,8 +21,9 @@ fn messages(language: Language) -> &'static str {
 pub enum Message {
     LeagueModeSoftcore,
     LeagueModeHardcore,
-    LeagueTooltip,
     SettingsTooltip,
+    MinimizeTooltip,
+    CloseTooltip,
     StatusPricesWaiting,
     StatusTradeIdle,
     EmptyCopy,
@@ -42,11 +43,12 @@ pub enum Message {
 impl Message {
     /// Every message, for the tests.
     #[cfg(test)]
-    const ALL: [Self; 18] = [
+    const ALL: [Self; 19] = [
         Self::LeagueModeSoftcore,
         Self::LeagueModeHardcore,
-        Self::LeagueTooltip,
         Self::SettingsTooltip,
+        Self::MinimizeTooltip,
+        Self::CloseTooltip,
         Self::StatusPricesWaiting,
         Self::StatusTradeIdle,
         Self::EmptyCopy,
@@ -68,8 +70,9 @@ impl Message {
         match self {
             Self::LeagueModeSoftcore => "league-mode-softcore",
             Self::LeagueModeHardcore => "league-mode-hardcore",
-            Self::LeagueTooltip => "league-tooltip",
             Self::SettingsTooltip => "settings-tooltip",
+            Self::MinimizeTooltip => "minimize-tooltip",
+            Self::CloseTooltip => "close-tooltip",
             Self::StatusPricesWaiting => "status-prices-waiting",
             Self::StatusTradeIdle => "status-trade-idle",
             Self::EmptyCopy => "empty-copy",
@@ -90,6 +93,8 @@ impl Message {
 
 /// The identifiers of the messages with arguments, each read by its own method.
 const STATUS_BAR: &str = "status-bar";
+const LEAGUE_TOOLTIP: &str = "league-tooltip";
+const STATUS_AUTHOR: &str = "status-author";
 
 /// Gives the texts of the interface in one language.
 pub struct Translator {
@@ -126,6 +131,26 @@ impl Translator {
         args.set("prices", prices);
         args.set("trade", trade);
         self.format(STATUS_BAR, Some(&args))
+    }
+
+    /// The tooltip of the league block, with the mode of the league (`Softcore`).
+    #[must_use]
+    pub fn league_tooltip(&self, mode: &str) -> String {
+        let mut args = FluentArgs::new();
+        args.set("mode", mode);
+        self.format(LEAGUE_TOOLTIP, Some(&args))
+    }
+
+    /// The line of the status bar while the settings are open: the application, its version,
+    /// the author, then the author's site.
+    #[must_use]
+    pub fn author_line(&self, version: &str, author: &str, site: &str) -> String {
+        let mut args = FluentArgs::new();
+        args.set("app", crate::APP_NAME);
+        args.set("version", version);
+        args.set("author", author);
+        args.set("site", site);
+        self.format(STATUS_AUTHOR, Some(&args))
     }
 
     /// The text of the message `id`; the id itself when the message is missing, which the
@@ -171,7 +196,7 @@ mod tests {
         let code_ids: BTreeSet<String> = Message::ALL
             .iter()
             .map(|message| message.id())
-            .chain([STATUS_BAR])
+            .chain([STATUS_BAR, LEAGUE_TOOLTIP, STATUS_AUTHOR])
             .map(str::to_owned)
             .collect();
         for language in Language::ALL {
@@ -188,6 +213,8 @@ mod tests {
                 assert_ne!(translator.text(message), "", "{message:?} in {language:?}");
             }
             assert_ne!(translator.status_bar("A", "B"), "", "{language:?}");
+            assert_ne!(translator.league_tooltip("A"), "", "{language:?}");
+            assert_ne!(translator.author_line("1", "A", "a.b"), "", "{language:?}");
         }
     }
 
@@ -197,5 +224,16 @@ mod tests {
             Translator::new(Language::English).status_bar("A", "B"),
             "A · B"
         );
+    }
+
+    #[test]
+    fn the_author_line_ends_with_the_site_in_every_language() {
+        // The status bar draws the site as a link, cut from the end of the line.
+        for language in Language::ALL {
+            let line = Translator::new(language).author_line("0.1.0", "Sylent", "sylent.art");
+
+            assert!(line.starts_with("Exile Market 0.1.0 · "), "{line}");
+            assert!(line.ends_with("Sylent · sylent.art"), "{line}");
+        }
     }
 }

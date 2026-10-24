@@ -16,6 +16,9 @@ mod ui;
 
 /// The name of the application, in every language.
 const APP_NAME: &str = "Exile Market";
+/// The author of the application, and their site, shown while the settings are open.
+const AUTHOR: &str = "Sylent";
+const AUTHOR_SITE: &str = "https://sylent.art";
 /// The name of the folders of the application in the user's directories (log, then settings
 /// and cache).
 const FOLDER_NAME: &str = "exile-market";
@@ -58,6 +61,8 @@ fn native_options(
             .with_app_id("rust-exile-market")
             .with_inner_size(WINDOW_SIZE)
             .with_min_inner_size(MIN_WINDOW_SIZE)
+            // The title bar of the application replaces the one of the system.
+            .with_decorations(false)
             .with_window_level(settings.window_level()),
         // eframe restores the size and the position of the window of the last session, on a
         // screen that is still there.
