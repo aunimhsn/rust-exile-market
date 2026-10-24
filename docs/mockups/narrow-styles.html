@@ -405,7 +405,7 @@
   .stats-group em { font-style: normal; letter-spacing: 0; text-transform: none; font-weight: 600; color: var(--weak); }
   .stats-group em.open { color: var(--accent); }
   /* Tier of a rare modifier, before the range of that tier. */
-  .tier { color: var(--weak); font-weight: 700; margin-right: 6px; }
+  .tier { display: inline-block; font-weight: 700; margin-right: 6px; line-height: 1.4; }
   .prop { font-size: 13px; color: var(--text); }
   .prop span { color: var(--weak); }
   .sep { height: 1px; background: var(--control-line); margin: 2px 0; }
@@ -461,8 +461,14 @@
   .tt-meta { color: var(--weak); font-size: 12px; margin-top: 2px; }
   .tt-mods { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--control-line); display: grid; gap: 3px; }
   .tt-mod { display: flex; justify-content: space-between; gap: 10px; color: var(--mod); }
-  .tt-mod.prop { color: var(--text); }
-  .tt-tier { display: inline-block; min-width: 22px; }   /* item properties are white, as in the game */
+  .tt-mod.prop { color: var(--text); }   /* item properties are white, as in the game */
+  .tt-tier { display: inline-block; min-width: 26px; }
+  /* Top tiers (1 to 3). Text: white and bold, the others faint. */
+  .tier { color: var(--faint); }
+  .tier.tier-top { color: var(--accent); }
+  /* Badges: T1 on white, T2 and T3 on the control color, the others plain. */
+  [data-tiers="badges"] .tier.tier-top { padding: 0 4px; border-radius: var(--radius); background: var(--control-line); font-size: 10.5px; }
+  [data-tiers="badges"] .tier.t1 { background: var(--accent); color: var(--on-accent, var(--bg-a)); }
   .delta { font-family: var(--font-number); font-weight: 600; font-size: 12px; }
   .delta.up { color: var(--rise); }
   .delta.down { color: var(--fall); }
@@ -551,6 +557,7 @@
   };
   const VARIANTS = {
     theme: { label: "Style", options: Object.fromEntries(Object.entries(THEMES).map(([k, v]) => [k, v.title])), fallback: "slate" },
+    tiers: { label: "Tier highlight", options: { badges: "Badges", text: "Text" }, fallback: "badges" },
     league: { label: "League", options: { softcore: "Softcore", hardcore: "Hardcore" }, fallback: "softcore" },
   };
   const params = new URLSearchParams(location.search);
@@ -608,7 +615,7 @@
         if (row.note) return `<div class="note">${row.note}</div>`;
         const check = row.check === undefined ? "<span></span>" : `<span class="check ${row.check ? "on" : ""}">${row.check ? ICON.check(11) : ""}</span>`;
         const input = row.min !== undefined ? `<span class="input">${row.min}</span>` : "";
-        const range = row.tier ? `<span class="tier">T${row.tier}</span>${row.range}` : row.range;
+        const range = `<span class="range">${row.tier ? `<span class="tier ${row.tier <= 3 ? "tier-top" : ""} t${row.tier}">T${row.tier}</span>` : ""}${row.range}</span>`;
         const roll = row.range ? `<div class="roll"><span class="bar"><i style="width:${row.share * 100}%"></i></span>${range}</div>` : "";
         return `<div class="mod ${input ? "" : "fixed"}">${check}<span>${row.mod}</span>${input}${roll}</div>`;
       }).join("")}</div>`;
@@ -661,7 +668,7 @@
     const compare = (list, kind = "") => list.map(m => {
       const diff = m.yours === undefined ? "" : m.value - m.yours;
       const delta = diff === "" || diff === 0 ? "" : `<span class="delta ${diff > 0 ? "up" : "down"}">${diff > 0 ? "+" : "−"}${Math.abs(diff)}</span>`;
-      const tier = m.tier ? `<span class="tier tt-tier">T${m.tier}</span>` : "";
+      const tier = m.tier ? `<span class="tt-tier"><span class="tier ${m.tier <= 3 ? "tier-top" : ""} t${m.tier}">T${m.tier}</span></span>` : "";
       return `<div class="tt-mod ${kind}"><span>${tier}${m.text}</span>${delta}</div>`;
     }).join("");
     return `<div class="offer-tooltip ${t.pinned ? "pinned" : ""} ${t.below ? "below" : ""}">
@@ -759,9 +766,9 @@
     { mod: "+312 to Accuracy Rating", check: true, min: 281, tier: 4, range: "296–344", share: .33 },
     { note: "The physical DPS already counts the damage and speed modifiers." },
   ];
-  const BOW_RARE = { ...BOW, statsLabel: "Stats (6)", filters: "4 filters" };
+  const BOW_RARE = { ...BOW, tags: [...BOW.tags, "4 top tiers"], statsLabel: "Stats (6)", filters: "4 filters" };
   const RARE_ESTIMATE_BEFORE = { lines: ["No market price for rare items.", "Search similar offers to estimate it."] };
-  const RING = { rarity: "rare", name: "Storm Spiral", base: "Sapphire Ring", cls: "Rings", tags: ["ilvl 77", "1 open prefix"], req: "Requires Level 54", statsLabel: "Stats (6)", filters: "2 filters" };
+  const RING = { rarity: "rare", name: "Storm Spiral", base: "Sapphire Ring", cls: "Rings", tags: ["ilvl 77", "1 top tier", "1 open prefix"], req: "Requires Level 54", statsLabel: "Stats (6)", filters: "2 filters" };
   const RING_FILTERS = [
     { group: "Pseudo", min: true },
     { mod: "+83% total Elemental Resistance", check: true, min: 74 },
@@ -788,7 +795,7 @@
     { mod: "Quality: 0%", check: false, min: 0 },
     { note: "A normal item has no modifiers: its base, sockets and item level make its value." },
   ];
-  const JEWEL = { rarity: "rare", name: "Brood Ember", base: "Ruby", cls: "Jewels", tags: ["ilvl 81"], statsLabel: "Stats (4)", filters: "4 filters" };
+  const JEWEL = { rarity: "rare", name: "Brood Ember", base: "Ruby", cls: "Jewels", tags: ["ilvl 81", "4 top tiers"], statsLabel: "Stats (4)", filters: "4 filters" };
   const JEWEL_FILTERS = [
     { group: "Prefixes", fill: "2 of 2", min: true },
     { mod: "12% increased Projectile Damage", check: true, min: 10, tier: 1, range: "11–13", share: .5 },
