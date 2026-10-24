@@ -359,7 +359,7 @@
   /* The list of the leagues, under the league block, flat: one line per league, softcore on the left and
      hardcore on the right, glued together, a thin line between two leagues, the permanent ones last; the mode
      told by the color. The chosen league is the one of the block above. It opens 4 px under the title bar,
-     with the shadow of the bubbles, and its leagues let the item show through a little (open decision). */
+     with the shadow of the bubbles, and its leagues let the item show through a little (94 % opaque). */
   .app-league .ico { transition: transform .15s ease; }
   .app-titlebar.is-open .app-league .ico { transform: rotate(180deg); }
   .app-league-list {
@@ -372,9 +372,6 @@
     .app-league .ico, .app-league-list { transition: none; }
   }
   :root { --menu-alpha: .94; }
-  [data-menu="100"] { --menu-alpha: 1; }
-  [data-menu="94"] { --menu-alpha: .94; }
-  [data-menu="88"] { --menu-alpha: .88; }
   .app-league-list .app-league-row {
     display: flex; align-items: center; justify-content: space-between; gap: 6px; height: 28px; padding: 0 8px 0 10px;
     font-size: 13px; color: var(--text); cursor: pointer; white-space: nowrap; overflow: hidden;
@@ -614,7 +611,6 @@
   const VARIANTS = {
     theme: { label: "Style", options: Object.fromEntries(Object.entries(THEMES).map(([k, v]) => [k, v.title])), fallback: "slate" },
     league: { label: "League", options: { softcore: "Softcore", hardcore: "Hardcore" }, fallback: "softcore" },
-    menu: { label: "League list opacity", options: { 100: "100 %", 94: "94 %", 88: "88 %" }, fallback: "94" },
   };
   const params = new URLSearchParams(location.search);
   const chosen = Object.fromEntries(Object.entries(VARIANTS).map(([key, v]) => [key, params.get(key) in v.options ? params.get(key) : v.fallback]));
