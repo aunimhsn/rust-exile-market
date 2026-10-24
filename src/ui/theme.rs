@@ -118,8 +118,6 @@ pub struct LeagueModeColors {
     pub background: Color32,
     /// The background under the pointer.
     pub hovered: Color32,
-    /// The line on the left.
-    pub line: Color32,
 }
 
 impl LeagueModeColors {
@@ -129,12 +127,10 @@ impl LeagueModeColors {
             LeagueMode::Softcore => Self {
                 background: Color32::from_rgb(0x13, 0x26, 0x3a),
                 hovered: Color32::from_rgb(0x1a, 0x33, 0x50),
-                line: Color32::from_rgb(0x6a, 0xa7, 0xde),
             },
             LeagueMode::Hardcore => Self {
                 background: Color32::from_rgb(0x35, 0x14, 0x17),
                 hovered: Color32::from_rgb(0x4a, 0x1b, 0x20),
-                line: Color32::from_rgb(0xe0, 0x70, 0x6a),
             },
         }
     }

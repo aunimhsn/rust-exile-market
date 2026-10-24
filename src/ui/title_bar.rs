@@ -22,7 +22,6 @@ const WINDOW_MARK_SIZE: f32 = 9.0;
 
 /// The inside of the league block.
 mod league_block {
-    pub const LINE_WIDTH: f32 = 2.0;
     pub const PADDING_LEFT: f32 = 10.0;
     pub const PADDING_RIGHT: f32 = 8.0;
     pub const GAP: f32 = 6.0;
@@ -175,7 +174,7 @@ impl<'a> TitleBar<'a> {
     /// tooltip says it. A name too long for the window is cut with "…", and shown whole in
     /// the tooltip.
     fn league_block(&self, ui: &mut Ui, room_on_the_right: f32) -> Response {
-        use league_block::{CHEVRON_WIDTH, FRAME_WIDTH, GAP, LINE_WIDTH, PADDING_LEFT};
+        use league_block::{CHEVRON_WIDTH, FRAME_WIDTH, GAP, PADDING_LEFT};
 
         let colors = LeagueModeColors::of(self.league.mode());
         let max_name_width = (ui.available_width() - room_on_the_right - FRAME_WIDTH).max(0.0);
@@ -196,11 +195,6 @@ impl<'a> TitleBar<'a> {
             } else {
                 colors.background
             },
-        );
-        painter.rect_filled(
-            Rect::from_min_size(rect.min, vec2(LINE_WIDTH, rect.height())),
-            0.0,
-            colors.line,
         );
         let name_left = rect.left() + PADDING_LEFT;
         let name_width = name.size().x;

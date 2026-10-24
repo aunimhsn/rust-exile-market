@@ -334,10 +334,10 @@
   /* The emblem goes back to the item, like the logo of a site to its home page. */
   .app-emblem { display: block; width: 16px; height: 16px; align-self: center; margin-right: 10px; cursor: pointer; }
   /* The league block, tinted with the color of its trade (the only sign of softcore or hardcore, also in its
-     tooltip), a line of that color on the left, the chevron in white; lighter under the pointer. */
+     tooltip), the chevron in white; lighter under the pointer. */
   .app-league {
     display: flex; align-items: center; gap: 6px; padding: 0 8px 0 10px; color: var(--text); font-size: 13px; cursor: pointer;
-    background: var(--league-bg); box-shadow: inset 2px 0 0 var(--league-line);
+    background: var(--league-bg);
   }
   .app-league:hover { background: var(--league-bg-hover); }
   .app-league .ico { color: var(--text); }
@@ -364,7 +364,7 @@
   .app-titlebar.is-open .app-league .ico { transform: rotate(180deg); }
   .app-league-list {
     position: absolute; z-index: 2; top: 32px; left: 38px; display: grid; grid-template-columns: 1fr 1fr;
-    width: 300px; box-shadow: 0 10px 30px rgba(0, 0, 0, .6);
+    width: 300px; border-radius: 3px; overflow: hidden; box-shadow: 0 10px 30px rgba(0, 0, 0, .6);
     opacity: 0; transform: translateY(-4px); pointer-events: none; transition: opacity .15s ease, transform .15s ease;
   }
   .app-titlebar.is-open + .app-league-list { opacity: 1; transform: none; pointer-events: auto; }
@@ -388,8 +388,8 @@
   .app-league-list hr { grid-column: 1 / -1; width: 100%; margin: 0; border: 0; border-top: 1px solid var(--control-line); }
   .app-icon-button { width: 36px; display: grid; place-items: center; color: var(--weak); cursor: pointer; }
   .app-icon-button:hover, .app-icon-button.is-on { color: var(--accent); }
-  :root, [data-league="softcore"] { --league-bg: #13263a; --league-line: #6aa7de; --league-kind: "Softcore"; --league-bg-hover: #1a3350; }
-  [data-league="hardcore"] { --league-bg: #351417; --league-line: #e0706a; --league-kind: "Hardcore"; --league-bg-hover: #4a1b20; }
+  :root, [data-league="softcore"] { --league-bg: #13263a; --league-kind: "Softcore"; --league-bg-hover: #1a3350; }
+  [data-league="hardcore"] { --league-bg: #351417; --league-kind: "Hardcore"; --league-bg-hover: #4a1b20; }
   .spacer { flex: 1; }
   .button, .input {
     background: var(--control); border: 1px solid var(--control-line); border-radius: var(--radius); color: var(--text);
