@@ -52,7 +52,7 @@ The reference of the interface is the mock-up [docs/mockups/narrow-styles.html](
 - **Manrope** for all the text: item name 20 px weight 800, body 13.5 px, labels 11 px uppercase with letter spacing, small texts 11.5 to 12 px.
 - **JetBrains Mono** for the numbers that line up (prices, offers), weight 600.
 - Both fonts are under the SIL Open Font License and embedded in the executable.
-- Numbers: a point between the integer and the decimal parts in every language, no thousands separator (`12.4`, `8990`). Exalted Orbs without decimals, Divine and Chaos Orbs with up to 2.
+- Numbers: a point between the integer and the decimal parts in every language, no thousands separator (`12.4`, `950`). Exalted Orbs without decimals, Divine and Chaos Orbs with up to 2. From 1000, an amount is shortened with `K`, rounded to one decimal, without a trailing `.0` (`1.3K`, `27.6K`, `9K` for 8990); from 100 000, without decimals (`125K`); from a million, with `M` (`1.2M`). The same in every language.
 
 ### Shapes
 
