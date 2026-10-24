@@ -95,10 +95,10 @@ The window has a header, then three bands (item, price, offers), then a status b
 
 - **Header** (band A): the emblem and "Exile Market"; on the right, the league block, then the gear block.
   - The league block shows the league name and a small label "SOFTCORE" or "HARDCORE", on the color of its trade (blue or red); a click opens the list of the current leagues. By default, the current challenge league in softcore trade.
-  - The gear opens the [settings](#settings).
+  - The gear opens the [settings](#settings), and closes them.
 - **Status bar** (band A): the age of each source, e.g. "poe2scout 12 min ago · GGG trade 2 min ago"; "GGG trade: next search in 4 min" during a long wait.
 - Warnings appear as a dark yellow band right under the header (see [Error handling](#error-handling)).
-- The window can be resized and moved to another screen. Its size and position are restored at the next launch.
+- The window can be resized and moved to another screen. Its size and position are restored at the next launch, on a screen that is still connected.
 - Before the first item, the window shows the full logo and "Copy an item in the game with Ctrl + C. The price shows up here."
 
 ### Item block
@@ -172,7 +172,7 @@ The offers search uses the stats of the copied item as filters, like the trade s
 
 ### Settings
 
-The gear opens the settings, which replace the content of the window in the narrow layout:
+The gear opens the settings, which replace the content of the window in the narrow layout; the gear stays lit while they are open. A second click on the gear, or Escape, closes them.
 
 - **Language**: *System* (default), *English* or *Français*.
   - *System*: the language of the system, when the interface has it (one of the preferred languages of the system, in their order); English otherwise.
@@ -192,7 +192,8 @@ The settings are saved as soon as they change. Their bottom shows the sentence "
 
 | File | Location | Content |
 |---|---|---|
-| Settings | The user's configuration directory (e.g. `~/.config/exile-market/` on Linux, `%APPDATA%\exile-market\config\` on Windows) | League, language, always on top, window size and position. |
+| Settings | The user's configuration directory (e.g. `~/.config/exile-market/` on Linux, `%APPDATA%\exile-market\config\` on Windows) | `settings.toml`: league, language, always on top. |
+| Window | The same directory | `window.ron`: the size and position of the window. |
 | Price cache | The user's cache directory | The last downloaded prices, used at startup and when the network is unavailable. |
 | Item names cache | The user's cache directory | The item and stat names of the trade site in English and French, refreshed once a day. |
 | Log | `~/.local/state/exile-market/` on Linux, `%LOCALAPPDATA%\exile-market\data\` on Windows, `~/Library/Logs/exile-market/` on macOS | `exile-market.log`: what happened during the session (start, items copied by their class line, clipboard errors, panics), to follow the application and find the cause of a bug; the log of the previous session is kept as `exile-market.previous.log`. The texts copied outside the game are never logged. |
