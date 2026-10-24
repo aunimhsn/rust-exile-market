@@ -34,6 +34,8 @@ mod league_block {
 pub enum TitleBarAction {
     /// Started to drag its empty space, to move the window.
     Move,
+    /// Clicked the emblem, to go back to the item.
+    Home,
     Leagues,
     Settings,
     Minimize,
@@ -108,13 +110,9 @@ impl<'a> TitleBar<'a> {
                 );
                 let mut action = None;
                 ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
-                    ui.add_space(PADDING_LEFT);
-                    ui.add(
-                        Image::new(images::emblem())
-                            .fit_to_exact_size(Vec2::splat(EMBLEM_SIZE))
-                            .tint(color::ACCENT),
-                    );
-                    ui.add_space(EMBLEM_GAP);
+                    if self.emblem(ui).clicked() {
+                        action = Some(TitleBarAction::Home);
+                    }
                     #[expect(clippy::cast_precision_loss, reason = "three icons")]
                     let icons_width = ICONS.len() as f32 * size::ICON_ZONE;
                     if self.league_block(ui, icons_width).clicked() {
@@ -134,6 +132,33 @@ impl<'a> TitleBar<'a> {
                 })
             })
             .inner
+    }
+
+    /// The emblem, which goes back to the item, like the logo of a site to its home page;
+    /// clickable from the left edge to the league block, across the height of the bar.
+    fn emblem(&self, ui: &mut Ui) -> Response {
+        let (rect, response) = ui.allocate_exact_size(
+            vec2(
+                PADDING_LEFT + EMBLEM_SIZE + EMBLEM_GAP,
+                size::TITLE_BAR_HEIGHT,
+            ),
+            Sense::click(),
+        );
+        let tooltip = self.i18n.text(Message::HomeTooltip);
+        response.widget_info(|| WidgetInfo::labeled(Role::Button, true, &tooltip));
+        Image::new(images::emblem()).tint(color::ACCENT).paint_at(
+            ui,
+            Rect::from_min_size(
+                pos2(
+                    rect.left() + PADDING_LEFT,
+                    rect.center().y - EMBLEM_SIZE / 2.0,
+                ),
+                Vec2::splat(EMBLEM_SIZE),
+            ),
+        );
+        response
+            .on_hover_cursor(CursorIcon::PointingHand)
+            .on_hover_text(tooltip)
     }
 
     /// The league name on the color of its mode, the only sign of the mode on screen; its
@@ -347,6 +372,17 @@ mod tests {
         let actions = Window::new().press_and_release(EMPTY, Vec2::ZERO);
 
         assert_eq!(actions, [None; 4]);
+    }
+
+    #[test]
+    fn a_click_on_the_emblem_goes_home() {
+        let emblem = pos2(
+            PADDING_LEFT + EMBLEM_SIZE / 2.0,
+            size::TITLE_BAR_HEIGHT / 2.0,
+        );
+        let actions = Window::new().press_and_release(emblem, Vec2::ZERO);
+
+        assert_eq!(actions, [None, None, None, Some(TitleBarAction::Home)]);
     }
 
     #[test]

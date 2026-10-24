@@ -97,6 +97,7 @@ The window has a title bar, then three bands (item, price, offers), then a statu
 
 - **Title bar** (band A, 28 px), in place of the title bar of the system: the emblem, the league block, then on the right the Settings, Minimize and Close icons, without borders (each clickable on 36 px across). There is no Maximize: the narrow window doesn't need it. The empty space of the bar moves the window; the edges of the window still resize it.
   - The league block shows the league name on a background tinted with the color of its trade (blue for softcore, red for hardcore), with a 2 px line of that color on the left and a white chevron. The color is the only sign of the trade on screen; the tooltip says it: "Softcore · Change the league". A click opens the list of the current leagues, with the two permanent ones, both shown as "Standard" on the color of their mode. By default, the current challenge league in softcore trade.
+  - The emblem goes back to the item (or to the empty window before the first item) from any screen, like the logo of a site to its home page: clickable from the left edge to the league block, with the tooltip "Home".
   - The gear opens the [settings](#settings), and closes them.
 - **Status bar** (band A): the age of each source, e.g. "poe2scout 12min ago · GGG trade 2min ago"; "GGG trade: next search in 4min" during a long wait; the version and the author while the settings are open.
 - Warnings appear as a dark yellow band right under the title bar (see [Error handling](#error-handling)).

@@ -331,7 +331,8 @@
      says softcore or hardcore), then the icons: Settings, Minimize, Close, without borders. The empty space
      moves the window. */
   .app-titlebar { display: flex; align-items: stretch; height: 28px; padding-left: 12px; background: var(--bg-a); }
-  .app-emblem { display: block; width: 16px; height: 16px; align-self: center; margin-right: 10px; }
+  /* The emblem goes back to the item, like the logo of a site to its home page. */
+  .app-emblem { display: block; width: 16px; height: 16px; align-self: center; margin-right: 10px; cursor: pointer; }
   /* The league block, tinted with the color of its trade (the only sign of softcore or hardcore, also in its
      tooltip), a line of that color on the left, the chevron in white; lighter under the pointer. */
   .app-league {
@@ -609,7 +610,7 @@
     const kind = document.documentElement.dataset.league === "hardcore" ? "Hardcore" : "Softcore";
     return `
     <div class="app-titlebar">
-      <img class="app-emblem" src="../../assets/logo/emblem.svg" alt="">
+      <img class="app-emblem" src="../../assets/logo/emblem.svg" alt="Home" title="Home">
       <div class="app-league" title="${kind} · Change the league"><span class="app-league-name">${league}</span>${ICON.down(12)}</div>
       <div class="spacer"></div>
       <div class="app-icon-button ${settings ? "is-on" : ""}" title="Settings">${ICON.gear(15)}</div>

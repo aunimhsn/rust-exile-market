@@ -78,6 +78,7 @@ impl ExileMarketApp {
     fn act_on(&mut self, ctx: &Context, action: TitleBarAction) {
         match action {
             TitleBarAction::Move => ctx.send_viewport_cmd(ViewportCommand::StartDrag),
+            TitleBarAction::Home => self.view = View::Item,
             // The list of the leagues comes with the price data, in step 7.
             TitleBarAction::Leagues => {}
             TitleBarAction::Settings => self.view = self.view.toggled(),

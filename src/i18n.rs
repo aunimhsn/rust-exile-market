@@ -21,6 +21,7 @@ fn messages(language: Language) -> &'static str {
 pub enum Message {
     LeagueModeSoftcore,
     LeagueModeHardcore,
+    HomeTooltip,
     SettingsTooltip,
     MinimizeTooltip,
     CloseTooltip,
@@ -43,9 +44,10 @@ pub enum Message {
 impl Message {
     /// Every message, for the tests.
     #[cfg(test)]
-    const ALL: [Self; 19] = [
+    const ALL: [Self; 20] = [
         Self::LeagueModeSoftcore,
         Self::LeagueModeHardcore,
+        Self::HomeTooltip,
         Self::SettingsTooltip,
         Self::MinimizeTooltip,
         Self::CloseTooltip,
@@ -70,6 +72,7 @@ impl Message {
         match self {
             Self::LeagueModeSoftcore => "league-mode-softcore",
             Self::LeagueModeHardcore => "league-mode-hardcore",
+            Self::HomeTooltip => "home-tooltip",
             Self::SettingsTooltip => "settings-tooltip",
             Self::MinimizeTooltip => "minimize-tooltip",
             Self::CloseTooltip => "close-tooltip",

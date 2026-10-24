@@ -8,6 +8,8 @@ league-mode-softcore = Softcore
 league-mode-hardcore = Hardcore
 # Infobulle du bloc de la ligue : son mode, puis ce que fait un clic.
 league-tooltip = { $mode } · Changer de ligue
+# Infobulle de l'emblème, qui revient à l'objet.
+home-tooltip = Accueil
 settings-tooltip = Réglages
 minimize-tooltip = Réduire
 close-tooltip = Fermer
