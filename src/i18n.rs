@@ -50,12 +50,13 @@ pub enum Message {
     StatusTradeIdle,
     EmptyCopy,
     EmptyPrice,
+    ClipboardUnreadable,
 }
 
 impl Message {
     /// Every message, for the tests.
     #[cfg(test)]
-    const ALL: [Self; 8] = [
+    const ALL: [Self; 9] = [
         Self::LeagueModeSoftcore,
         Self::LeagueModeHardcore,
         Self::LeagueTooltip,
@@ -64,6 +65,7 @@ impl Message {
         Self::StatusTradeIdle,
         Self::EmptyCopy,
         Self::EmptyPrice,
+        Self::ClipboardUnreadable,
     ];
 
     /// Its identifier in the `.ftl` files.
@@ -77,6 +79,7 @@ impl Message {
             Self::StatusTradeIdle => "status-trade-idle",
             Self::EmptyCopy => "empty-copy",
             Self::EmptyPrice => "empty-price",
+            Self::ClipboardUnreadable => "clipboard-unreadable",
         }
     }
 }

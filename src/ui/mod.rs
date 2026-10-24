@@ -7,13 +7,17 @@ mod empty_state;
 mod fonts;
 mod header;
 mod images;
+mod raw_item;
 mod status_bar;
 mod theme;
+mod warning_band;
 mod widgets;
 
 pub use empty_state::EmptyState;
 pub use header::Header;
+pub use raw_item::RawItem;
 pub use status_bar::StatusBar;
+pub use warning_band::WarningBand;
 
 /// Sets up the image loaders, the fonts and the style, once, before the first frame.
 pub fn install(ctx: &egui::Context) {

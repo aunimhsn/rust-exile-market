@@ -4,23 +4,37 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod app;
+mod clipboard;
+mod copied_item;
 mod i18n;
 mod league;
+mod logging;
+mod session;
 mod ui;
 
 /// The name of the application, in every language.
 const APP_NAME: &str = "Exile Market";
+/// The name of the folders of the application in the user's directories (log, then settings
+/// and cache).
+const FOLDER_NAME: &str = "exile-market";
 
 /// The narrow layout of version 1.
 const WINDOW_SIZE: [f32; 2] = [420.0, 720.0];
 const MIN_WINDOW_SIZE: [f32; 2] = [360.0, 420.0];
 
 fn main() -> eframe::Result {
-    eframe::run_native(
+    logging::init();
+    log::info!("{APP_NAME} {} started", env!("CARGO_PKG_VERSION"));
+    let result = eframe::run_native(
         APP_NAME,
         native_options(),
         Box::new(|creation| Ok(Box::new(app::ExileMarketApp::new(creation)))),
-    )
+    );
+    match &result {
+        Ok(()) => log::info!("{APP_NAME} closed"),
+        Err(error) => log::error!("The window failed: {error}"),
+    }
+    result
 }
 
 fn native_options() -> eframe::NativeOptions {

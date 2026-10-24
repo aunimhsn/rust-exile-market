@@ -15,10 +15,6 @@ const JETBRAINS_MONO_SEMIBOLD: &str = "jetbrains-mono-semibold";
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Weight {
     Regular,
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "used by the prices and the pills from step 8")
-    )]
     SemiBold,
     ExtraBold,
 }
