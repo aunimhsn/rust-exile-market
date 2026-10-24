@@ -1,3 +1,11 @@
 /target
+
+# Temporary files the owner gives Claude Code for context: screenshots,
+# examples, references. Never committed; only .gitkeep is tracked.
+/inputs/*
+!/inputs/.gitkeep
+
+# Temporary files Claude Code produces for the owner: reports, code review
+# notes, previews, screenshots. Never committed; only .gitkeep is tracked.
 /outputs/*
 !/outputs/.gitkeep

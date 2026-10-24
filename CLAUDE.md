@@ -25,6 +25,14 @@
 - Each step is delivered in its own pull request, which checks the step's box in `roadmap.md`.
 - Keep `roadmap.md` consistent with `specs.md` when the specifications change.
 
+## Working folders
+
+Two folders are the exchange area between the owner and Claude Code. They are ignored by Git, except their `.gitkeep`, and hold only temporary files.
+
+- `inputs/`: what the owner gives for context: screenshots, examples, references, copied texts. Read them when the owner points to them; never commit, move or delete them unless asked.
+- `outputs/`: what Claude Code produces for the owner: reports, code review notes, previews, screenshots. Name them `<YYYY-MM-DD>-<subject>.<ext>` when they are meant to be kept for a while.
+- Anything meant to last goes elsewhere and is committed: documentation in `docs/`, images used by the application in `assets/`, test data next to the tests.
+
 ## Git workflow
 
 - Never commit or push directly to `main`.
