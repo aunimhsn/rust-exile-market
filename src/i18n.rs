@@ -5,37 +5,14 @@
 //! [`Translator`], the only place that knows the names of its arguments.
 
 use fluent_bundle::{FluentArgs, FluentBundle, FluentResource};
-use unic_langid::LanguageIdentifier;
 
-/// A language of the interface.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum Language {
-    #[default]
-    English,
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "chosen in the settings (step 5) or from the copied items (step 4)"
-        )
-    )]
-    French,
-}
+use crate::language::Language;
 
-impl Language {
-    fn identifier(self) -> LanguageIdentifier {
-        let tag = match self {
-            Self::English => "en",
-            Self::French => "fr",
-        };
-        tag.parse().expect("the language tags are valid")
-    }
-
-    fn messages(self) -> &'static str {
-        match self {
-            Self::English => include_str!("../locales/en.ftl"),
-            Self::French => include_str!("../locales/fr.ftl"),
-        }
+/// The Fluent messages of a language, embedded in the executable.
+fn messages(language: Language) -> &'static str {
+    match language {
+        Language::English => include_str!("../locales/en.ftl"),
+        Language::French => include_str!("../locales/fr.ftl"),
     }
 }
 
@@ -51,12 +28,14 @@ pub enum Message {
     EmptyCopy,
     EmptyPrice,
     ClipboardUnreadable,
+    ItemUnreadable,
+    ItemUnreadableHint,
 }
 
 impl Message {
     /// Every message, for the tests.
     #[cfg(test)]
-    const ALL: [Self; 9] = [
+    const ALL: [Self; 11] = [
         Self::LeagueModeSoftcore,
         Self::LeagueModeHardcore,
         Self::LeagueTooltip,
@@ -66,6 +45,8 @@ impl Message {
         Self::EmptyCopy,
         Self::EmptyPrice,
         Self::ClipboardUnreadable,
+        Self::ItemUnreadable,
+        Self::ItemUnreadableHint,
     ];
 
     /// Its identifier in the `.ftl` files.
@@ -80,6 +61,8 @@ impl Message {
             Self::EmptyCopy => "empty-copy",
             Self::EmptyPrice => "empty-price",
             Self::ClipboardUnreadable => "clipboard-unreadable",
+            Self::ItemUnreadable => "item-unreadable",
+            Self::ItemUnreadableHint => "item-unreadable-hint",
         }
     }
 }
@@ -98,7 +81,7 @@ impl Translator {
     /// If the embedded messages of `language` can't be parsed, which the tests rule out.
     #[must_use]
     pub fn new(language: Language) -> Self {
-        let resource = FluentResource::try_new(language.messages().to_owned())
+        let resource = FluentResource::try_new(messages(language).to_owned())
             .unwrap_or_else(|(_, errors)| panic!("invalid messages for {language:?}: {errors:?}"));
         let mut bundle = FluentBundle::new(vec![language.identifier()]);
         // Without the Unicode isolation marks around the arguments, which egui would draw as boxes.
@@ -150,11 +133,9 @@ mod tests {
     use super::*;
     use std::collections::BTreeSet;
 
-    const LANGUAGES: [Language; 2] = [Language::English, Language::French];
-
     fn file_ids(language: Language) -> BTreeSet<String> {
         let resource =
-            FluentResource::try_new(language.messages().to_owned()).expect("the messages parse");
+            FluentResource::try_new(messages(language).to_owned()).expect("the messages parse");
         resource
             .entries()
             .filter_map(|entry| match entry {
@@ -172,7 +153,7 @@ mod tests {
             .chain([STATUS_BAR])
             .map(str::to_owned)
             .collect();
-        for language in LANGUAGES {
+        for language in Language::ALL {
             assert_eq!(file_ids(language), code_ids, "messages of {language:?}");
         }
     }
@@ -180,7 +161,7 @@ mod tests {
     #[test]
     fn every_message_formats_without_errors() {
         // The errors fail the `debug_assert` of `format`.
-        for language in LANGUAGES {
+        for language in Language::ALL {
             let translator = Translator::new(language);
             for message in Message::ALL {
                 assert_ne!(translator.text(message), "", "{message:?} in {language:?}");

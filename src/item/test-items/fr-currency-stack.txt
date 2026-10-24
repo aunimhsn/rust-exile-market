@@ -1,0 +1,10 @@
+Classe d'objet: Objets monétaires empilables
+Rareté: Objet monétaire
+Orbe de transmutation
+--------
+Taille de l'ensemble: 40/40
+--------
+Améliore un objet Normal en un objet Magique avec 1 modificateur
+--------
+Effectuez un clic droit sur cet objet, puis appliquez-le avec un clic gauche sur un objet normal.
+Maj-clic pour séparer l'ensemble.

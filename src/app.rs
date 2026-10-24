@@ -5,10 +5,11 @@ use eframe::{App, CreationContext, Frame};
 use egui::{Context, Ui};
 
 use crate::clipboard::ClipboardWatch;
-use crate::i18n::{Language, Message, Translator};
+use crate::i18n::{Message, Translator};
+use crate::language::Language;
 use crate::league::{League, LeagueMode};
 use crate::session::Session;
-use crate::ui::{self, EmptyState, Header, RawItem, StatusBar, WarningBand};
+use crate::ui::{self, EmptyState, Header, RawItem, StatusBar, UnreadableItem, WarningBand};
 
 pub struct ExileMarketApp {
     i18n: Translator,
@@ -47,7 +48,10 @@ impl App for ExileMarketApp {
         }
         StatusBar::new(&self.i18n).show(ui);
         match session.item() {
-            Some(item) => RawItem::new(item).show(ui),
+            Some(shown) => match shown.parsed() {
+                Ok(_) => RawItem::new(shown.copied()).show(ui),
+                Err(_) => UnreadableItem::new(&self.i18n).show(ui),
+            },
             None => EmptyState::new(&self.i18n).show(ui),
         }
     }

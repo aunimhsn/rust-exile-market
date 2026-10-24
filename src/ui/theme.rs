@@ -41,6 +41,12 @@ pub mod text {
         fonts::text(13.5, Weight::Regular)
     }
 
+    /// A message in place of the content, e.g. an item that can't be read.
+    #[must_use]
+    pub fn message() -> FontId {
+        fonts::text(14.0, Weight::Regular)
+    }
+
     /// The small texts: the status bar.
     #[must_use]
     pub fn small() -> FontId {

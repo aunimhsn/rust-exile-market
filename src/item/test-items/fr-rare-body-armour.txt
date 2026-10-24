@@ -1,0 +1,31 @@
+Classe d'objet: Armures
+Rareté: Rare
+ Manteau du destin
+Vêtement gracieux
+--------
+Qualité: +20% (augmented)
+Bouclier d'énergie: 567 (augmented)
+--------
+Prérequis : Niveau 70, 121 Int
+--------
+Châsses: S S 
+--------
+Niveau de l'objet: 72
+--------
+36% d'Augmentation de l'Armure, de l'Évasion et du Bouclier d'énergie (rune)
+--------
+{ Modificateur Implicite — Mana }
+50(40-50)% d'Augmentation du Taux de Régénération de Mana
+--------
+{ Préfixe : « Éblouissant » (Palier : 4) — Bouclier d'énergie }
++70(61-73) de Bouclier d'énergie maximal
+{ Préfixe : « de la Marquise » (Palier : 5) }
++44(43-46) d'Esprit
+{ Artisanat Préfixe : « Impavide » (Palier : 4) — Bouclier d'énergie }
+76(68-79)% d'Augmentation du Bouclier d'énergie
+{ Suffixe : « de la Résurgence » (Palier : 3) — Vie }
+24.7(23.1-29) de Vie Régénérée par seconde
+{ Suffixe : « du Soulagement » (Palier : 4) — Physique, Altération }
+Réduit la durée des saignements vous affectant de 41(45-41) %.
+{ Profané Suffixe : « d'Amanamu » (Palier : 1) — Élémentaire, Feu, Chaos, Résistance }
++14(13-17)% aux Résistances au feu et au chaos

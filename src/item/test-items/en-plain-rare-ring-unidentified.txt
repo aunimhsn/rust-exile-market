@@ -1,0 +1,13 @@
+Item Class: Rings
+Rarity: Rare
+Ruby Ring
+--------
+Requires: Level 12
+--------
+Item Level: 70
+--------
++25% to Fire Resistance (implicit)
+--------
+Unidentified
+--------
+Twice Corrupted

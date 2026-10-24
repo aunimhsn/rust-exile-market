@@ -1,0 +1,15 @@
+Classe d'objet: Boucliers
+Rareté: Normal
+Exceptionnelle Targe de mammouth
+--------
+Chances de Blocage: 25%
+Armure: 112
+Score d'Évasion: 102
+--------
+Prérequis : Niveau 65, 50 (unmet) For, 50 Dex
+--------
+Châsses: S S 
+--------
+Niveau de l'objet: 82
+--------
+Octroie l'Aptitude: Levée de bouclier

@@ -4,7 +4,7 @@
 use egui::{CentralPanel, Frame, Label, RichText, ScrollArea, Ui, vec2};
 
 use super::theme::{color, size, text};
-use crate::copied_item::CopiedItem;
+use crate::item::CopiedItem;
 
 pub struct RawItem<'a> {
     item: &'a CopiedItem,

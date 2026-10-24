@@ -1,0 +1,30 @@
+Classe d'objet: Bâtons
+Rareté: Rare
+ Mât sulfureux
+Bâton rugissant
+--------
+Prérequis : Niveau 64, 87 Int
+--------
+Châsses: S S 
+--------
+Niveau de l'objet: 80
+--------
+30% d'Augmentation des Dégâts des Sorts (rune)
++1 au Niveau de toutes les Aptitudes de Sort (rune)
+--------
+Octroie l'Aptitude: Niveau 18 Déchaînement
+--------
+{ Préfixe : « Lié à la tempête » (Palier : 1) — Dégâts, Élémentaire, Foudre }
+Rajoute 55(55-60)% des Dégâts sous forme de Dégâts de Foudre
+{ Profané Préfixe : « d'Amanamu » (Palier : 1) — Dégâts, Chaos }
+Rajoute 41(40-50)% des Dégâts sous forme de Dégâts de Chaos
+{ Artisanat Préfixe : « de l'Incantateur » (Palier : 3) — Dégâts, Lanceur de sorts }
+176(149-188)% d'Augmentation des Dégâts des Sorts
+{ Suffixe : « du Givre » (Palier : 2) — Élémentaire, Froid, Lanceur de sorts, Gemme }
++6(5-6) au Niveau de toutes les Aptitudes de Sort de Froid
+{ Suffixe : « du Siphonnage » (Palier : 3) — Mana }
+Vous gagnez 25(21-27) de Mana par Ennemi Tué
+{ Suffixe : « de la Furie » (Palier : 3) — Lanceur de sorts, Critique }
+39(38-44)% d'Augmentation du Bonus de Dégâts Critiques des Sorts
+--------
+Corrompu

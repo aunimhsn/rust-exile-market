@@ -1,0 +1,7 @@
+Item Class: Stackable Currency
+Rarity: Currency
+Gold
+--------
+Stack Size: 12,345/100,000
+--------
+Used to pay the fees of the trade.

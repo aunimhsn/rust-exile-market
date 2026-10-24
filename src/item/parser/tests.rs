@@ -1,0 +1,538 @@
+//! The parser on real copied items (see `../test-items/README.md`).
+
+use super::*;
+use crate::item::modifier::{Range, Roll, StatLine};
+use crate::item::{Affix, ModifierOrigin};
+use crate::language::Language;
+
+macro_rules! test_item {
+    ($file:literal) => {
+        include_str!(concat!("../test-items/", $file))
+    };
+}
+
+const FR_RARE_STAFF: &str = test_item!("fr-rare-staff.txt");
+const FR_RARE_BODY_ARMOUR: &str = test_item!("fr-rare-body-armour.txt");
+const FR_UNIQUE_CROSSBOW: &str = test_item!("fr-unique-crossbow.txt");
+const FR_CURRENCY_STACK: &str = test_item!("fr-currency-stack.txt");
+const FR_NORMAL_EXCEPTIONAL_SHIELD: &str = test_item!("fr-normal-exceptional-shield.txt");
+const EN_RARE_CROSSBOW: &str = test_item!("en-rare-crossbow-all-modifiers.txt");
+const EN_RARE_BOW_FRACTURED: &str = test_item!("en-rare-bow-fractured.txt");
+const EN_RARE_WAND_UNIDENTIFIED: &str = test_item!("en-rare-wand-unidentified.txt");
+const EN_MAGIC_MACE: &str = test_item!("en-magic-mace.txt");
+const EN_UNIQUE_FOCUS: &str = test_item!("en-unique-focus.txt");
+const EN_NORMAL_HELMET: &str = test_item!("en-normal-helmet.txt");
+const EN_CURRENCY_UNCUT_GEM: &str = test_item!("en-currency-uncut-gem.txt");
+const EN_PLAIN_RARE_RING: &str = test_item!("en-plain-rare-ring.txt");
+const EN_PLAIN_RARE_RING_UNIDENTIFIED: &str = test_item!("en-plain-rare-ring-unidentified.txt");
+const EN_PLAIN_UNIQUE_JEWEL: &str = test_item!("en-plain-unique-jewel.txt");
+const EN_PLAIN_MAGIC_JEWEL_UNIDENTIFIED: &str = test_item!("en-plain-magic-jewel-unidentified.txt");
+const EN_PLAIN_CURRENCY_LARGE_STACK: &str = test_item!("en-plain-currency-large-stack.txt");
+
+const ALL: [&str; 17] = [
+    FR_RARE_STAFF,
+    FR_RARE_BODY_ARMOUR,
+    FR_UNIQUE_CROSSBOW,
+    FR_CURRENCY_STACK,
+    FR_NORMAL_EXCEPTIONAL_SHIELD,
+    EN_RARE_CROSSBOW,
+    EN_RARE_BOW_FRACTURED,
+    EN_RARE_WAND_UNIDENTIFIED,
+    EN_MAGIC_MACE,
+    EN_UNIQUE_FOCUS,
+    EN_NORMAL_HELMET,
+    EN_CURRENCY_UNCUT_GEM,
+    EN_PLAIN_RARE_RING,
+    EN_PLAIN_RARE_RING_UNIDENTIFIED,
+    EN_PLAIN_UNIQUE_JEWEL,
+    EN_PLAIN_MAGIC_JEWEL_UNIDENTIFIED,
+    EN_PLAIN_CURRENCY_LARGE_STACK,
+];
+
+const PREFIX: ModifierKind = ModifierKind::Explicit(Some(Affix::Prefix));
+const SUFFIX: ModifierKind = ModifierKind::Explicit(Some(Affix::Suffix));
+
+fn try_parse(text: &str) -> Result<Item, ParseError> {
+    parse(&CopiedItem::from_text(text).expect("an item"))
+}
+
+fn item(text: &str) -> Item {
+    let item = try_parse(text).expect("the item is read");
+    assert_eq!(item.warnings(), [], "{text}");
+    item
+}
+
+fn of_kind(item: &Item, kind: ModifierKind) -> Vec<&Modifier> {
+    item.modifiers()
+        .iter()
+        .filter(|modifier| modifier.kind == kind)
+        .collect()
+}
+
+fn explicit(item: &Item) -> Vec<&Modifier> {
+    item.modifiers()
+        .iter()
+        .filter(|modifier| matches!(modifier.kind, ModifierKind::Explicit(_)))
+        .collect()
+}
+
+fn first_line(modifier: &Modifier) -> &StatLine {
+    modifier.lines.first().expect("a line")
+}
+
+fn roll(value: f64, min: f64, max: f64) -> Roll {
+    Roll {
+        value,
+        range: Some(Range { min, max }),
+    }
+}
+
+#[test]
+fn reads_a_french_rare_staff() {
+    let item = item(FR_RARE_STAFF);
+
+    assert_eq!(item.language(), Language::French);
+    assert_eq!(item.class(), "Bâtons");
+    assert_eq!(item.rarity(), Rarity::Rare);
+    // The game writes a space before the name of the rare items.
+    assert_eq!(item.name(), Some("Mât sulfureux"));
+    assert_eq!(item.base_type(), "Bâton rugissant");
+    assert_eq!(
+        item.requirements(),
+        Requirements {
+            level: Some(64),
+            intelligence: Some(87),
+            ..Requirements::default()
+        }
+    );
+    assert_eq!(item.sockets(), Some(2));
+    assert_eq!(item.item_level(), Some(80));
+    assert_eq!(item.granted_skills(), ["Niveau 18 Déchaînement"]);
+    assert_eq!(item.states(), [ItemState::Corrupted]);
+
+    let runes = of_kind(&item, ModifierKind::Rune);
+    assert_eq!(runes.len(), 2);
+    assert_eq!(
+        first_line(runes[0]).text,
+        "30% d'Augmentation des Dégâts des Sorts"
+    );
+
+    let explicit = explicit(&item);
+    assert_eq!(
+        explicit
+            .iter()
+            .map(|modifier| (modifier.kind, modifier.tier))
+            .collect::<Vec<_>>(),
+        [
+            (PREFIX, Some(1)),
+            (PREFIX, Some(1)),
+            (PREFIX, Some(3)),
+            (SUFFIX, Some(2)),
+            (SUFFIX, Some(3)),
+            (SUFFIX, Some(3))
+        ]
+    );
+    let storm = explicit[0];
+    assert_eq!(storm.name.as_deref(), Some("Lié à la tempête"));
+    assert_eq!(storm.tags, ["Dégâts", "Élémentaire", "Foudre"]);
+    assert_eq!(first_line(storm).rolls, [roll(55.0, 55.0, 60.0)]);
+    assert_eq!(explicit[1].origin, Some(ModifierOrigin::Desecrated));
+    assert_eq!(explicit[2].origin, Some(ModifierOrigin::Crafted));
+}
+
+#[test]
+fn reads_a_french_rare_body_armour() {
+    let item = item(FR_RARE_BODY_ARMOUR);
+
+    assert_eq!(item.name(), Some("Manteau du destin"));
+    assert_eq!(item.base_type(), "Vêtement gracieux");
+    assert_eq!(item.quality(), Some(20));
+    assert!(item.properties().contains(&Property {
+        name: "Bouclier d'énergie".to_owned(),
+        value: "567".to_owned(),
+        augmented: true,
+    }));
+    assert_eq!(
+        item.requirements(),
+        Requirements {
+            level: Some(70),
+            intelligence: Some(121),
+            ..Requirements::default()
+        }
+    );
+
+    let implicit = of_kind(&item, ModifierKind::Implicit);
+    assert_eq!(implicit.len(), 1);
+    assert_eq!(implicit[0].tags, ["Mana"]);
+
+    let explicit = explicit(&item);
+    assert_eq!(explicit.len(), 6);
+    let regeneration = first_line(explicit[3]);
+    assert_eq!(regeneration.text, "24.7 de Vie Régénérée par seconde");
+    assert_eq!(regeneration.rolls, [roll(24.7, 23.1, 29.0)]);
+    // A range written from the best value: the lowest comes first.
+    assert_eq!(first_line(explicit[4]).rolls, [roll(41.0, 41.0, 45.0)]);
+}
+
+#[test]
+fn reads_a_french_unique_without_its_flavour_text() {
+    let item = item(FR_UNIQUE_CROSSBOW);
+
+    assert_eq!(item.rarity(), Rarity::Unique);
+    assert_eq!(item.name(), Some("Murmure des brumes"));
+    assert_eq!(item.base_type(), "Arbalète de fortune");
+    assert_eq!(item.item_level(), Some(78));
+    assert_eq!(item.sockets(), None);
+    assert!(item.properties().iter().any(|property| {
+        property.name == "Dégâts de froid" && property.value == "8-14 (cold)"
+    }));
+
+    let explicit = explicit(&item);
+    assert_eq!(explicit.len(), 5);
+    assert!(
+        explicit
+            .iter()
+            .all(|modifier| modifier.kind == ModifierKind::Explicit(None))
+    );
+    assert_eq!(item.modifiers().len(), 5);
+}
+
+#[test]
+fn reads_a_french_currency_stack_without_its_description() {
+    let item = item(FR_CURRENCY_STACK);
+
+    assert_eq!(item.rarity(), Rarity::Currency);
+    assert_eq!(item.name(), None);
+    assert_eq!(item.base_type(), "Orbe de transmutation");
+    assert_eq!(item.stack(), Some(Stack { size: 40, max: 40 }));
+    assert_eq!(item.modifiers(), []);
+}
+
+#[test]
+fn reads_a_french_exceptional_base() {
+    let item = item(FR_NORMAL_EXCEPTIONAL_SHIELD);
+
+    assert_eq!(item.rarity(), Rarity::Normal);
+    // "Exceptionnelle" for a feminine base.
+    assert_eq!(item.base_type(), "Targe de mammouth");
+    assert!(item.is_exceptional());
+    assert_eq!(item.sockets(), Some(2));
+    assert_eq!(
+        item.requirements(),
+        Requirements {
+            level: Some(65),
+            strength: Some(50),
+            dexterity: Some(50),
+            intelligence: None,
+        }
+    );
+    assert_eq!(item.granted_skills(), ["Levée de bouclier"]);
+}
+
+#[test]
+fn reads_an_english_item_with_every_kind_of_modifier() {
+    let item = item(EN_RARE_CROSSBOW);
+
+    assert_eq!(item.language(), Language::English);
+    assert_eq!(
+        (item.name(), item.base_type()),
+        (Some("Storm Core"), "Gemini Crossbow")
+    );
+    assert_eq!(item.quality(), Some(20));
+    assert_eq!(
+        item.requirements(),
+        Requirements {
+            level: Some(78),
+            strength: Some(89),
+            dexterity: Some(89),
+            intelligence: None,
+        }
+    );
+    assert_eq!(item.sockets(), Some(2));
+    assert_eq!(of_kind(&item, ModifierKind::Enchant).len(), 1);
+    assert_eq!(of_kind(&item, ModifierKind::Rune).len(), 2);
+    let implicit = of_kind(&item, ModifierKind::Implicit);
+    assert_eq!(first_line(implicit[0]).text, "Loads an additional bolt");
+    assert_eq!(item.granted_skills(), ["Level 18 Cackling Companions"]);
+
+    let explicit = explicit(&item);
+    assert_eq!(explicit.len(), 6);
+    assert_eq!(explicit[0].origin, Some(ModifierOrigin::Fractured));
+    assert_eq!(explicit[4].origin, Some(ModifierOrigin::Desecrated));
+    assert_eq!(
+        first_line(explicit[0]).text,
+        "Adds 10 to 273 Lightning Damage"
+    );
+    assert!(item.has_state(ItemState::Corrupted));
+    assert!(item.has_state(ItemState::Fractured));
+}
+
+#[test]
+fn reads_the_modifiers_of_several_lines_and_the_unmet_requirements() {
+    let item = item(EN_RARE_BOW_FRACTURED);
+
+    assert_eq!(item.requirements().dexterity, Some(163));
+    let explicit = explicit(&item);
+    assert_eq!(explicit.len(), 6);
+    // Without a word in the header, the marker of the line tells the origin.
+    assert_eq!(explicit[0].origin, Some(ModifierOrigin::Fractured));
+    assert_eq!(explicit[2].lines.len(), 2);
+    assert_eq!(explicit[3].tier, None);
+}
+
+#[test]
+fn reads_an_unidentified_rare_by_its_base_type() {
+    let item = item(EN_RARE_WAND_UNIDENTIFIED);
+
+    assert_eq!((item.name(), item.base_type()), (None, "Volatile Wand"));
+    assert!(item.has_state(ItemState::Unidentified));
+    assert_eq!(item.requirements().intelligence, Some(113));
+}
+
+#[test]
+fn keeps_the_whole_name_of_a_magic_item() {
+    let item = item(EN_MAGIC_MACE);
+
+    assert_eq!(item.rarity(), Rarity::Magic);
+    assert_eq!(item.base_type(), "Crackling Temple Maul of the Brute");
+    assert_eq!(
+        explicit(&item)
+            .iter()
+            .map(|modifier| modifier.kind)
+            .collect::<Vec<_>>(),
+        [PREFIX, SUFFIX]
+    );
+}
+
+#[test]
+fn reads_an_english_unique_without_its_flavour_text() {
+    let item = item(EN_UNIQUE_FOCUS);
+
+    assert_eq!(
+        (item.name(), item.base_type()),
+        (Some("The Eternal Spark"), "Crystal Focus")
+    );
+    assert_eq!(item.modifiers().len(), 5);
+}
+
+#[test]
+fn removes_exceptional_and_superior_from_the_base_type_in_any_order() {
+    for text in [
+        "Item Class: Rings\nRarity: Normal\nExceptional Ruby Ring",
+        "Item Class: Rings\nRarity: Normal\nSuperior Exceptional Ruby Ring",
+        "Item Class: Rings\nRarity: Normal\nExceptional Superior Ruby Ring",
+    ] {
+        let item = item(text);
+        assert_eq!(item.base_type(), "Ruby Ring", "{text}");
+        assert!(item.is_exceptional(), "{text}");
+    }
+
+    let helmet = item(EN_NORMAL_HELMET);
+    assert_eq!(helmet.base_type(), "Divine Crown");
+    assert!(!helmet.is_exceptional());
+    assert_eq!(helmet.quality(), Some(9));
+    assert_eq!(helmet.requirements().strength, Some(67));
+}
+
+#[test]
+fn reads_a_currency_without_stack_nor_description() {
+    let item = item(EN_CURRENCY_UNCUT_GEM);
+
+    assert_eq!(item.rarity(), Rarity::Currency);
+    assert_eq!(item.base_type(), "Uncut Skill Gem (Level 19)");
+    assert_eq!((item.stack(), item.modifiers().len()), (None, 0));
+}
+
+#[test]
+fn reads_the_modifiers_without_the_advanced_description() {
+    let item = item(EN_PLAIN_RARE_RING);
+
+    let implicit = of_kind(&item, ModifierKind::Implicit);
+    assert_eq!(
+        first_line(implicit[0]).text,
+        "+8% to all Elemental Resistances"
+    );
+    let explicit = explicit(&item);
+    assert_eq!(explicit.len(), 2);
+    assert_eq!(explicit[1].origin, Some(ModifierOrigin::Crafted));
+    assert_eq!(first_line(explicit[1]).text, "+12 to Strength");
+    assert!(item.has_state(ItemState::Corrupted));
+}
+
+#[test]
+fn reads_only_the_modifiers_of_a_plain_unique_not_its_texts() {
+    let item = item(EN_PLAIN_UNIQUE_JEWEL);
+
+    assert_eq!(
+        explicit(&item)
+            .iter()
+            .map(|modifier| first_line(modifier).text.as_str())
+            .collect::<Vec<_>>(),
+        [
+            "+12% to all Elemental Resistances",
+            "4% increased maximum Life"
+        ]
+    );
+}
+
+#[test]
+fn reads_no_explicit_modifier_on_a_plain_unidentified_item() {
+    let item = item(EN_PLAIN_RARE_RING_UNIDENTIFIED);
+
+    assert_eq!(item.modifiers().len(), 1);
+    assert_eq!(item.modifiers()[0].kind, ModifierKind::Implicit);
+    assert!(item.has_state(ItemState::Unidentified));
+    assert!(item.has_state(ItemState::TwiceCorrupted));
+}
+
+#[test]
+fn reads_no_description_as_a_modifier_on_a_plain_unidentified_item() {
+    let item = item(EN_PLAIN_MAGIC_JEWEL_UNIDENTIFIED);
+
+    assert!(item.has_state(ItemState::Unidentified));
+    assert_eq!(item.modifiers(), []);
+}
+
+#[test]
+fn removes_the_french_exceptional_word_in_each_gender() {
+    // "Exceptionnel" for a masculine base, as shown by the French trade site.
+    for (text, base_type) in [
+        (
+            "Classe d'objet: Boucliers\nRareté: Normal\nExceptionnel Écu sophistiqué",
+            "Écu sophistiqué",
+        ),
+        (
+            "Classe d'objet: Boucliers\nRareté: Normal\nExceptionnelle Targe de mammouth",
+            "Targe de mammouth",
+        ),
+    ] {
+        let item = item(text);
+        assert_eq!(item.base_type(), base_type);
+        assert!(item.is_exceptional());
+    }
+}
+
+#[test]
+fn reads_a_stack_with_thousands_separators() {
+    assert_eq!(
+        item(EN_PLAIN_CURRENCY_LARGE_STACK).stack(),
+        Some(Stack {
+            size: 12_345,
+            max: 100_000
+        })
+    );
+}
+
+#[test]
+fn keeps_the_lines_of_an_unknown_header_apart() {
+    let item = try_parse(
+        "Item Class: Rings\nRarity: Rare\nWoe Loop\nRuby Ring\n--------\nItem Level: 80\n\
+         --------\n{ Prefix Modifier \"Icy\" (Tier: 8) — Cold }\nAdds 9 to 13 Cold Damage\n\
+         { Strange Modifier }\n+10 to Strength",
+    )
+    .expect("the item is read");
+
+    assert_eq!(item.warnings(), [ParseWarning::UnknownModifierHeader]);
+    let modifiers = item.modifiers();
+    assert_eq!(modifiers.len(), 2);
+    assert_eq!((modifiers[0].tier, modifiers[0].lines.len()), (Some(8), 1));
+    assert_eq!(
+        (modifiers[1].kind, modifiers[1].tier),
+        (ModifierKind::Explicit(None), None)
+    );
+    assert_eq!(first_line(&modifiers[1]).text, "+10 to Strength");
+}
+
+#[test]
+fn keeps_the_lines_before_the_first_header_with_a_warning() {
+    let item = try_parse(
+        "Item Class: Rings\nRarity: Rare\nWoe Loop\nRuby Ring\n--------\nItem Level: 80\n\
+         --------\n+10 to Strength\n{ Suffix Modifier \"of the Brute\" (Tier: 8) }\n+8 to Strength",
+    )
+    .expect("the item is read");
+
+    assert_eq!(item.warnings(), [ParseWarning::ModifierWithoutHeader]);
+    assert_eq!(
+        item.modifiers()
+            .iter()
+            .map(|modifier| modifier.kind)
+            .collect::<Vec<_>>(),
+        [ModifierKind::Explicit(None), SUFFIX]
+    );
+}
+
+#[test]
+fn reads_an_item_without_the_parts_that_can_t_be_read() {
+    let item = try_parse(
+        "Item Class: Rings\nRarity: Rare\nWoe Loop\nRuby Ring\n--------\n\
+         Requires: Level 40, 12 Luck\n--------\nItem Level: high",
+    )
+    .expect("the item is read");
+
+    assert_eq!(item.requirements().level, Some(40));
+    assert_eq!(item.item_level(), None);
+    assert_eq!(
+        item.warnings(),
+        [
+            ParseWarning::InvalidValue(Field::Requirements),
+            ParseWarning::InvalidValue(Field::ItemLevel)
+        ]
+    );
+}
+
+#[test]
+fn tells_why_an_item_can_t_be_read() {
+    assert_eq!(
+        try_parse("Item Class: Rings\nWoe Loop").err(),
+        Some(ParseError::MissingRarity)
+    );
+    assert_eq!(
+        try_parse("Item Class: Rings\nRarity: Legendary\nWoe Loop").err(),
+        Some(ParseError::UnknownRarity)
+    );
+    assert_eq!(
+        try_parse("Item Class: Rings\nRarity: Rare").err(),
+        Some(ParseError::MissingBaseType)
+    );
+}
+
+#[test]
+fn reads_the_small_parts() {
+    assert_eq!(digits("+20%"), Some(20));
+    assert_eq!(digits("1 234"), Some(1234));
+    assert_eq!(digits("none"), None);
+    assert_eq!(digits("99999999999"), None);
+
+    let labels = Labels::of(Language::English);
+    assert_eq!(count_sockets("Sockets: S S S", labels), 3);
+    assert_eq!(count_sockets("Sockets: ", labels), 0);
+    assert_eq!(
+        read_requirements("Requires: 113 Intelligence", labels),
+        (
+            Requirements {
+                intelligence: Some(113),
+                ..Requirements::default()
+            },
+            true
+        )
+    );
+}
+
+#[test]
+fn never_panics_on_a_cut_or_changed_item() {
+    for text in ALL {
+        let chars: Vec<char> = text.chars().collect();
+        for end in 0..=chars.len() {
+            let cut: String = chars.iter().take(end).collect();
+            if let Some(copied) = CopiedItem::from_text(&cut) {
+                let _ = parse(&copied);
+            }
+        }
+        for line in text.lines().filter(|line| !line.is_empty()) {
+            let changed = text.replace(line, "{ ( « \" — : 1(2- -) }");
+            if let Some(copied) = CopiedItem::from_text(&changed) {
+                let _ = parse(&copied);
+            }
+        }
+    }
+}
