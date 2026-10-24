@@ -1,0 +1,26 @@
+Classe d'objet: Arbalètes
+Rareté: Unique
+Murmure des brumes
+Arbalète de fortune
+--------
+Dégâts Physiques: 7-12
+Dégâts de froid: 8-14 (cold)
+Chances de Touche critique: 5.00%
+Attaques par seconde: 1.60
+Temps de rechargement: 0.80
+--------
+Niveau de l'objet: 78
+--------
+{ Modificateur d'Objet unique — Dégâts, Élémentaire, Froid, Attaque }
+Ajoute 8(8-10) à 14(13-15) Dégâts de Froid
+{ Modificateur d'Objet unique — Mana }
+Vous gagnez 5 de Mana par Ennemi Tué
+{ Modificateur d'Objet unique — Élémentaire, Froid, Altération }
+36(30-50)% d'Augmentation d'Accumulation de Gel
+{ Modificateur d'Objet unique }
+Les Attaques Ricochent 2 fois supplémentaires
+{ Modificateur d'Objet unique — Élémentaire, Froid, Altération }
+30% d'Augmentation de la Durée de la Frigorification sur les Ennemis
+--------
+Des promesses murmurées tout autour d'eux dans la nuit.
+Tout ce que les voyageurs avaient à lui offrir était leur dévotion…

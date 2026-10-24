@@ -11,7 +11,7 @@ use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender, TryRecvError};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
-use crate::copied_item::CopiedItem;
+use crate::item::CopiedItem;
 
 /// Fast enough to react before the player looks at the window.
 const POLL_INTERVAL: Duration = Duration::from_millis(250);

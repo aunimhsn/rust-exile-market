@@ -21,6 +21,11 @@ status-trade-idle = GGG trade : pas encore de recherche
 empty-copy = Copiez un objet en jeu avec
 empty-price = Son prix s'affichera ici.
 
+## Objet copié illisible
+
+item-unreadable = Cet objet n'a pas pu être lu.
+item-unreadable-hint = Copiez-le de nouveau, ou copiez un autre objet.
+
 ## Avertissements
 
 clipboard-unreadable = Le presse-papiers ne peut pas être lu.

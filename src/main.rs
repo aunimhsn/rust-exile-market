@@ -5,8 +5,9 @@
 
 mod app;
 mod clipboard;
-mod copied_item;
 mod i18n;
+mod item;
+mod language;
 mod league;
 mod logging;
 mod session;

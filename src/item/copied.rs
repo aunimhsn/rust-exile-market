@@ -1,17 +1,19 @@
 //! The text of an item copied in the game, before it is parsed.
 
-/// The first line of an item copied in the game, in each language of the game client.
-const ITEM_CLASS_PREFIXES: [&str; 2] = ["Item Class: ", "Classe d'objet: "];
+use super::labels::Labels;
+use crate::language::Language;
 
 /// The text of a Path of Exile 2 item, as the game copies it with Ctrl+C or Ctrl+Alt+C.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CopiedItem {
     text: String,
+    language: Language,
 }
 
 impl CopiedItem {
-    /// The item in a copied text, if the text starts with the item class line; `None` for
-    /// any other text. The lines end with `\n` on every system.
+    /// The item in a copied text, if the text starts with the item class line, which also
+    /// tells the language of the game client; `None` for any other text. The lines end with
+    /// `\n` on every system.
     ///
     /// Every text copied by the player comes here, also the private ones: nothing that can
     /// panic may run on it before it is recognized, so that a panic message, which goes to the
@@ -19,17 +21,24 @@ impl CopiedItem {
     #[must_use]
     pub fn from_text(text: &str) -> Option<Self> {
         let text = text.trim();
-        ITEM_CLASS_PREFIXES
-            .iter()
-            .any(|prefix| text.starts_with(prefix))
-            .then(|| Self {
-                text: text.replace("\r\n", "\n"),
-            })
+        let language = Language::ALL
+            .into_iter()
+            .find(|&language| text.starts_with(Labels::of(language).item_class))?;
+        Some(Self {
+            text: text.replace("\r\n", "\n"),
+            language,
+        })
     }
 
     #[must_use]
     pub fn text(&self) -> &str {
         &self.text
+    }
+
+    /// The language of the game client that copied the item.
+    #[must_use]
+    pub fn language(&self) -> Language {
+        self.language
     }
 
     /// The item class line, which says what was copied without its details, for the log.
@@ -52,6 +61,19 @@ mod tests {
             assert_eq!(
                 CopiedItem::from_text(text).map(|item| item.text),
                 Some(text.to_owned())
+            );
+        }
+    }
+
+    #[test]
+    fn tells_the_language_of_the_game_client() {
+        for (text, language) in [
+            ("Item Class: Rings", Language::English),
+            ("Classe d'objet: Anneaux", Language::French),
+        ] {
+            assert_eq!(
+                CopiedItem::from_text(text).map(|item| item.language()),
+                Some(language)
             );
         }
     }

@@ -1,0 +1,13 @@
+Item Class: Jewels
+Rarity: Unique
+Grand Spectrum
+Emerald
+--------
+Item Level: 80
+--------
++12% to all Elemental Resistances
+4% increased maximum Life
+--------
+A rainbow of colours, a spectrum of power.
+--------
+Place into an allocated Jewel Socket on the Passive Skill Tree. Right click to remove from the Socket.

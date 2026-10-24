@@ -1,0 +1,7 @@
+# The parser of the copied items must never panic with a text in the panic message (see
+# src/item/mod.rs). These methods panic on a byte index inside a character, and their message
+# quotes the text.
+disallowed-methods = [
+    { path = "str::split_at", reason = "panics with the text in the message: use split_once or get" },
+    { path = "str::split_at_mut", reason = "panics with the text in the message: use split_once or get" },
+]
