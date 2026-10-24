@@ -218,6 +218,7 @@
     --rarity-magic: #8888ff;
     --rarity-rare: #ffff77;
     --rarity-unique: #c26a2c;
+    --tier-1: #ec9a52;
     --rarity-currency: #b4a787;
     --mod: #8f8fff;
     --corrupted: #e0423a;
@@ -466,8 +467,8 @@
   /* Top tiers (1 to 3) in white, the others faint. */
   .tier { color: var(--faint); }
   .tier.tier-top { color: var(--accent); }
-  /* Tier 1 in the orange of the uniques, so that it stands out; tiers 2 and 3 stay white. */
-  .tier.t1 { color: var(--rarity-unique); }
+  /* Tier 1 in a lighter shade of the unique orange, so that it stands out on the dark bands; tiers 2 and 3 stay white. */
+  .tier.t1 { color: var(--tier-1); }
   .delta { font-family: var(--font-number); font-weight: 600; font-size: 12px; }
   .delta.up { color: var(--rise); }
   .delta.down { color: var(--fall); }
