@@ -9,3 +9,6 @@
 # notes, previews, screenshots. Never committed; only .gitkeep is tracked.
 /outputs/*
 !/outputs/.gitkeep
+
+# Caches of the Python scripts of the skills.
+__pycache__/

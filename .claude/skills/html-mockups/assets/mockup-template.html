@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mock-up</title>
+<!--
+  Starting point of a mock-up page (html-mockups skill). Replace the sample application
+  with the frames of the approved wireframe.
+
+  - Each style only sets tokens (CSS variables) under :root[data-theme="…"]; the components
+    use nothing else, so that a style is cheap to add or tweak.
+  - VARIANTS holds one group of tabs per open decision; the address keeps the choices
+    (e.g. ?theme=slate&button=pill), to share them. Remove a group once decided.
+  - SECTIONS lists every scenario and state, each drawn as a window.
+
+  Serve the repository root, so that the page reaches assets/ even in a sandboxed browser:
+    python3 -m http.server 8765 --bind 127.0.0.1
+  then open http://127.0.0.1:8765/docs/mockups/<this file>.html
+-->
+<!-- Fonts that the application can embed (e.g. SIL Open Font License). Preload the font files
+     and use font-display: block, so that the page, and its screenshots, only finish loading
+     once the fonts are there. Copy the @font-face rules of the Latin subset from
+     https://fonts.googleapis.com/css2?family=<Font>:wght@400;600;800&display=block -->
+<!-- <link rel="preload" href="https://fonts.gstatic.com/s/…/….woff2" as="font" type="font/woff2" crossorigin> -->
+<style>
+  /* The page around the windows: neutral, so that it doesn't compete with the styles. */
+  body { margin: 0; background: #2a2d31; color: #e9ecef; font: 14px/1.4 system-ui, sans-serif; }
+  .page-tabs { position: sticky; top: 0; z-index: 10; display: flex; flex-wrap: wrap; gap: 6px 18px; padding: 10px 16px; background: #1b1d20; border-bottom: 1px solid #3a3f45; }
+  .page-tabs .group { display: flex; align-items: center; gap: 4px; }
+  .page-tabs .group > span { margin-right: 4px; color: #adb5bd; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; }
+  .page-tabs button { padding: 4px 10px; border: 1px solid #3a3f45; border-radius: 4px; background: #24272b; color: #dee2e6; font: inherit; cursor: pointer; }
+  .page-tabs button[aria-pressed="true"] { background: #e9ecef; color: #1b1d20; border-color: #e9ecef; }
+  .page-header { padding: 18px 16px 0; }
+  .page-header h1 { margin: 0 0 4px; font-size: 20px; }
+  .page-header p { margin: 0; max-width: 760px; color: #adb5bd; }
+  .page-section { padding: 8px 16px 24px; }
+  .page-section h2 { font-size: 15px; color: #adb5bd; font-weight: 600; }
+  .page-row { display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-start; }
+  .page-slot > span { display: block; margin-bottom: 6px; color: #adb5bd; font-size: 12px; }
+  .page-warning { margin: 0; padding: 10px 16px; background: #8a6a10; color: #fff; }
+
+  /* Styles: tokens only. */
+  :root[data-theme="slate"] {
+    --font-text: system-ui, sans-serif;
+    --band-a: #0f1216; --band-b: #151a20; --control: #1d242d; --line: #2a3440;
+    --text: #e3e8ef; --weak: #8692a3; --accent: #f2f5f9; --on-accent: #0f1216;
+    --radius: 3px; --padding: 14px;
+  }
+  :root[data-theme="paper"] {
+    --font-text: Georgia, serif;
+    --band-a: #f4efe6; --band-b: #fbf8f2; --control: #ebe4d6; --line: #d6ccb8;
+    --text: #2b2620; --weak: #7a6f60; --accent: #8c3b1f; --on-accent: #fbf8f2;
+    --radius: 6px; --padding: 16px;
+  }
+
+  /* Components: prefix the classes of the application (here `app-`) and of the states
+     (`is-`), so that they never collide with the classes of the page or of each other. */
+  .app-window { width: 420px; overflow: hidden; background: var(--band-b); color: var(--text); font-family: var(--font-text); box-shadow: 0 8px 30px #0006; }
+  .app-header { display: flex; align-items: center; height: 48px; padding-left: var(--padding); background: var(--band-a); font-weight: 800; }
+  .app-header .app-spacer { flex: 1; }
+  .app-block { display: grid; place-items: center; width: 48px; height: 48px; background: var(--control); color: var(--weak); }
+  .app-content { padding: var(--padding); }
+  .app-muted { color: var(--weak); }
+  .app-button { display: inline-block; margin-top: 12px; padding: 8px 14px; background: var(--accent); color: var(--on-accent); font-weight: 600; }
+  :root[data-button="pill"] .app-button { border-radius: 999px; }
+  :root[data-button="square"] .app-button { border-radius: 0; }
+  .app-row { display: flex; justify-content: space-between; padding: 8px var(--padding); }
+  .app-row:nth-child(even) { background: var(--band-a); }
+  .app-row.is-selected { outline: 1px solid var(--accent); outline-offset: -1px; }
+  .app-footer { padding: 6px var(--padding); background: var(--band-a); color: var(--weak); font-size: 12px; }
+</style>
+</head>
+<body>
+<p class="page-warning" id="file-warning" hidden>Opened as a file: serve the repository root (see the comment at the top of this page) so that the images of assets/ load.</p>
+<nav class="page-tabs" id="tabs" aria-label="Styles and variants"></nav>
+<main id="sheet"></main>
+<script>
+  const THEMES = {
+    slate: { title: "A · Slate", text: "Cool near-black grays, white as the main action color, one geometric face." },
+    paper: { title: "B · Paper", text: "Warm light background, a serif face, a rust accent." },
+  };
+  // One group of tabs per open decision; `fallback` is the choice shown by default.
+  const VARIANTS = {
+    theme: { label: "Style", options: Object.fromEntries(Object.entries(THEMES).map(([key, theme]) => [key, theme.title])), fallback: "slate" },
+    button: { label: "Button", options: { square: "Square", pill: "Pill" }, fallback: "square" },
+  };
+
+  const params = new URLSearchParams(location.search);
+  const chosen = Object.fromEntries(Object.entries(VARIANTS).map(([key, variant]) =>
+    [key, params.get(key) in variant.options ? params.get(key) : variant.fallback]));
+
+  // Components: functions that return HTML, with sample data close to real ones.
+  // Avoid global names that the browser already uses (`top`, `name`, `status`…).
+  // Icons as SVG lines in the text color: text symbols (⚙, ⌕, ✓) render small and off-center.
+  const icon = (size, body) => `<svg width="${size}" height="${size}" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">${body}</svg>`;
+  const MENU = '<path d="M3 4.5h10M3 8h10M3 11.5h10"/>';
+  const appHeader = () => `<div class="app-header">My application<span class="app-spacer"></span><span class="app-block">${icon(16, MENU)}</span></div>`;
+  const appFooter = (text = "Updated 2 min ago") => `<div class="app-footer">${text}</div>`;
+  const appRows = (rows, selected = -1) => rows.map(([label, value], index) =>
+    `<div class="app-row ${index === selected ? "is-selected" : ""}"><span>${label}</span><span class="app-muted">${value}</span></div>`).join("");
+  const appWindow = (...parts) => `<div class="app-window">${parts.join("")}</div>`;
+
+  const ROWS = [["Divine Orb", "182 ex"], ["Chaos Orb", "73 ex"], ["Exalted Orb", "1 ex"]];
+
+  // Every scenario and state: [section title, [[label, html], …]].
+  const SECTIONS = [
+    ["Main screen", [
+      ["With data", appWindow(appHeader(), appRows(ROWS), `<div class="app-content"><span class="app-button">Search</span></div>`, appFooter())],
+      ["Row selected", appWindow(appHeader(), appRows(ROWS, 1), appFooter())],
+    ]],
+    ["States", [
+      ["Empty", appWindow(appHeader(), `<div class="app-content app-muted">Nothing yet.</div>`, appFooter("Never updated"))],
+    ]],
+  ];
+
+  function render() {
+    for (const key of Object.keys(VARIANTS)) document.documentElement.dataset[key] = chosen[key];
+    document.getElementById("tabs").innerHTML = Object.entries(VARIANTS).map(([key, variant]) =>
+      `<div class="group"><span>${variant.label}</span>${Object.entries(variant.options).map(([value, label]) =>
+        `<button type="button" data-variant="${key}" data-value="${value}" aria-pressed="${chosen[key] === value}">${label}</button>`).join("")}</div>`).join("");
+    const theme = THEMES[chosen.theme];
+    document.getElementById("sheet").innerHTML = `
+      <header class="page-header"><h1>Style ${theme.title}</h1><p>${theme.text} Sample data.</p></header>
+      ${SECTIONS.map(([title, slots]) => `<section class="page-section"><h2>${title}</h2><div class="page-row">${
+        slots.map(([label, html]) => `<div class="page-slot"><span>${label}</span>${html}</div>`).join("")}</div></section>`).join("")}`;
+  }
+
+  document.getElementById("tabs").addEventListener("click", event => {
+    const { variant, value } = event.target.dataset;
+    if (!variant) return;
+    chosen[variant] = value;
+    history.replaceState(null, "", "?" + new URLSearchParams(chosen));
+    render();
+  });
+  document.getElementById("file-warning").hidden = location.protocol !== "file:";
+  render();
+</script>
+</body>
+</html>
