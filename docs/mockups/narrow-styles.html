@@ -318,7 +318,7 @@
 
   /* Window. */
   .win {
-    width: 420px; overflow: hidden; border-radius: 8px; box-shadow: 0 12px 40px rgba(0, 0, 0, .55);
+    position: relative; width: 420px; overflow: hidden; border-radius: 8px; box-shadow: 0 12px 40px rgba(0, 0, 0, .55);
     background: var(--bg-b); color: var(--text);
     font: 400 var(--body-size)/1.4 var(--font-body);
     font-variant-numeric: tabular-nums;
@@ -327,27 +327,38 @@
   .a { background: var(--bg-a); }
   .b { background: var(--bg-b); }
 
-  .top { display: flex; align-items: stretch; gap: 10px; height: 48px; padding-left: 14px; }
-  .top > .emblem, .top > .wordmark { align-self: center; }
-  /* League: the color says which trade it is (softcore or hardcore), the small label says it too. */
-  .league {
-    display: flex; align-items: center; gap: 10px; padding: 0 12px 0 14px; color: var(--text);
-    background: var(--league-bg); box-shadow: inset 3px 0 0 var(--league-line);
+  /* Title bar: one line in place of the system title bar and of the header. The emblem, the league (its color
+     says softcore or hardcore), then the icons: Settings, Minimize, Close, without borders. The empty space
+     moves the window. */
+  .app-titlebar { display: flex; align-items: stretch; height: 28px; padding-left: 12px; background: var(--bg-a); }
+  .app-emblem { display: block; width: 16px; height: 16px; align-self: center; margin-right: 10px; }
+  /* The league block, tinted with the color of its trade (the only sign of softcore or hardcore, also in its
+     tooltip), a line of that color on the left, the chevron in white; lighter under the pointer. */
+  .app-league {
+    display: flex; align-items: center; gap: 6px; padding: 0 8px 0 10px; color: var(--text); font-size: 13px; cursor: pointer;
+    background: var(--league-bg); box-shadow: inset 2px 0 0 var(--league-line);
   }
-  .league-text { display: grid; gap: 2px; }
-  .league-kind { font: 700 9.5px/1 var(--font-body); letter-spacing: .14em; text-transform: uppercase; color: var(--league-line); }
-  .league-kind::before { content: var(--league-kind); }
-  .league-name { font-size: 13.5px; line-height: 1.1; }
-  .league .ico { color: var(--weak); }
-  .gear { width: 48px; display: grid; place-items: center; color: var(--weak); background: var(--control); }
-  .league + .gear { margin-left: -7px; }
-  .gear.on { color: var(--on-accent, var(--bg-a)); background: var(--accent); }
-  :root, [data-league="softcore"] { --league-bg: #13263a; --league-line: #6aa7de; --league-kind: "Softcore"; }
-  [data-league="hardcore"] { --league-bg: #351417; --league-line: #e0706a; --league-kind: "Hardcore"; }
-  /* Header: the emblem (assets/logo/emblem.svg, white) next to the name. */
-  .emblem { display: block; width: 30px; height: 30px; }
-  .wordmark { display: block; font: 800 15px/1 var(--font-display); letter-spacing: .02em; color: var(--accent); position: relative; top: -1px; }
-  .empty .big-logo { width: 150px; display: block; margin: 0 auto 18px; opacity: .9; }
+  .app-league:hover { background: var(--league-bg-hover); }
+  .app-league .ico { color: var(--text); }
+  /* A new league has started while the player is on Standard: a bubble under the league block, until the player
+     switches or closes it. */
+  .app-notice { display: flex; align-items: center; gap: 10px; font-size: 12.5px; color: var(--text); }
+  .app-notice b { font-weight: 700; }
+  .app-notice .app-notice-text { flex: 1; }
+  .app-notice .pill { background: var(--accent); color: var(--on-accent, var(--bg-a)); cursor: pointer; }
+  .app-notice .app-notice-close { display: grid; place-items: center; color: var(--weak); cursor: pointer; }
+  .app-notice .app-notice-close:hover { color: var(--text); }
+  .app-notice {
+    position: absolute; z-index: 2; top: 36px; left: 30px; width: 330px; padding: 10px 10px 10px 14px;
+    background: #20272f; border-radius: 4px; box-shadow: 0 10px 30px rgba(0, 0, 0, .6);
+  }
+  .app-notice::before {
+    content: ""; position: absolute; top: -5px; left: 36px; width: 10px; height: 10px; background: #20272f; transform: rotate(45deg);
+  }
+  .app-icon-button { width: 36px; display: grid; place-items: center; color: var(--weak); cursor: pointer; }
+  .app-icon-button:hover, .app-icon-button.is-on { color: var(--accent); }
+  :root, [data-league="softcore"] { --league-bg: #13263a; --league-line: #6aa7de; --league-kind: "Softcore"; --league-bg-hover: #1a3350; }
+  [data-league="hardcore"] { --league-bg: #351417; --league-line: #e0706a; --league-kind: "Hardcore"; --league-bg-hover: #4a1b20; }
   .spacer { flex: 1; }
   .button, .input {
     background: var(--control); border: 1px solid var(--control-line); border-radius: var(--radius); color: var(--text);
@@ -528,7 +539,15 @@
   .banner { display: flex; align-items: stretch; background: var(--banner); color: var(--banner-text, var(--warn)); font-size: 12px; font-weight: 600; }
   .banner > span:first-child { flex: 1; padding: 10px 14px; align-self: center; }
   .foot { padding: 6px 14px; color: var(--faint); font-size: 11.5px; }
-  .empty { padding: 40px 14px 56px; text-align: center; color: var(--weak); }
+  /* Before the first item: the emblem as a faint watermark behind the text (2.25 % opacity), so that it takes no
+     height. */
+  .empty { position: relative; padding: 64px 14px; text-align: center; color: var(--weak); overflow: hidden; }
+  .empty::before {
+    content: ""; position: absolute; inset: 0; background: url("../../assets/logo/emblem.svg") center / 190px no-repeat;
+    opacity: .0225; pointer-events: none;
+  }
+  .empty > * { position: relative; }
+
   .keys { margin: 12px 0; display: flex; justify-content: center; gap: 6px; align-items: center; }
   .key { padding: 3px 9px; border: 1px solid var(--control-line); border-bottom-width: 2px; border-radius: 4px; color: var(--text); background: var(--control); font-family: var(--font-number); }
 
@@ -539,6 +558,11 @@
   .radio.on i { border-color: var(--accent); background: radial-gradient(var(--accent) 35%, transparent 45%); }
   .toggle { display: flex; gap: 8px; align-items: center; }
   .disclaimer { margin-top: 22px; color: var(--faint); font-size: 11.5px; }
+  /* The version and the author, in the status bar while the settings are open; the site is a link, underlined
+     under the pointer. */
+  .app-author a { color: var(--weak); text-decoration: none; }
+  .app-author a:hover { color: var(--text); text-decoration: underline; }
+
 </style>
 </head>
 <body>
@@ -581,16 +605,23 @@
   };
 
   // Blocks.
-  const topBar = (settings = false, league = "Forbidden Rites") => `
-    <div class="top a">
-      <img class="emblem" src="../../assets/logo/emblem.svg" alt="">
-      <span class="wordmark">Exile Market</span>
+  const topBar = (settings = false, league = "Forbidden Rites") => {
+    const kind = document.documentElement.dataset.league === "hardcore" ? "Hardcore" : "Softcore";
+    return `
+    <div class="app-titlebar">
+      <img class="app-emblem" src="../../assets/logo/emblem.svg" alt="">
+      <div class="app-league" title="${kind} · Change the league"><span class="app-league-name">${league}</span>${ICON.down(12)}</div>
       <div class="spacer"></div>
-      <div class="league"><span class="league-text"><span class="league-kind"></span><span class="league-name">${league}</span></span>${ICON.down(12)}</div>
-      <div class="gear ${settings ? "on" : ""}">${ICON.gear(17)}</div>
+      <div class="app-icon-button ${settings ? "is-on" : ""}" title="Settings">${ICON.gear(15)}</div>
+      <div class="app-icon-button" title="Minimize">${svg(13, '<path d="M3 8h10"/>')}</div>
+      <div class="app-icon-button" title="Close">${svg(13, '<path d="M4 4l8 8M12 4l-8 8"/>')}</div>
     </div>`;
-  const foot = (value = "poe2scout 12 min ago · GGG trade 2 min ago") => `<div class="foot a">${value}</div>`;
+  };
+  const foot = (value = "poe2scout 12min ago · GGG trade 2min ago") => `<div class="foot a">${value}</div>`;
   const banner = value => `<div class="banner"><span>${value}</span></div>`;
+  const newLeague = league => `
+    <div class="app-notice"><span class="app-notice-text"><b>${league}</b> has started.</span>
+      <span class="pill">Switch</span><span class="app-notice-close" title="Close">${svg(12, '<path d="M4 4l8 8M12 4l-8 8"/>')}</span></div>`;
 
   function item(it, unfolded = false) {
     const tags = (it.tags || []).map(t => `<span class="tag ${/^Corrupt|^Corrompu/.test(t) ? "corrupted" : ""}">${t}</span>`).join("");
@@ -703,8 +734,8 @@
         <div class="actions" style="justify-content:flex-start;gap:10px"><span class="spinner"></span>Searching the trade site…</div></div>`;
     }
     if (o.state === "wait") {
-      return `<div class="band b"><div class="head flat-head"><span class="title-stack"><span class="label">${label}</span><span class="age">searched 1 min ago</span></span><span class="right"></span><div class="again waiting" title="Next search in 4 min">4 min</div></div>
-        <div class="warn">Trade site limit: next search in 4 min.</div></div>`;
+      return `<div class="band b"><div class="head flat-head"><span class="title-stack"><span class="label">${label}</span><span class="age">searched 1min ago</span></span><span class="right"></span><div class="again waiting" title="Next search in 4min">4min</div></div>
+        <div class="warn">Trade site limit: next search in 4min.</div></div>`;
     }
     if (o.lines) {
       return `<div class="band b"><div class="head"><span class="label">${label}</span></div>${o.lines.map(l => `<div class="msg muted">${l}</div>`).join("")}</div>`;
@@ -712,16 +743,16 @@
     const three = o.columns.length === 3;
     const again = o.ready
       ? `<div class="again ready" title="Search again">${ICON.refresh(18)}</div>`
-      : `<div class="again waiting" title="Next search in 8 s">8 s</div>`;
+      : `<div class="again waiting" title="Next search in 8s">8s</div>`;
     const rows = o.rows.map((r, i) => `<div class="row-o ${r.sus ? "sus" : ""} ${o.hover === i ? "hovered" : ""}">
         <span class="p">${r.v} ${orb(r.k)}</span>${three ? `<span>${r.stock}</span>` : ""}<span><i class="online ${r.away ? "away" : ""}"></i>${r.when}</span>${o.hover === i ? offerTooltip(o.tooltip) : ""}</div>`).join("");
     return `<div class="band b">
-      <div class="head flat-head"><span class="title-stack"><span class="label">${label}</span><span class="age">${o.age || "searched 2 min ago"}</span></span><span class="right">${o.count}</span>${again}</div>
+      <div class="head flat-head"><span class="title-stack"><span class="label">${label}</span><span class="age">${o.age || "searched 2min ago"}</span></span><span class="right">${o.count}</span>${again}</div>
       <div class="offers ${three ? "three" : ""}"><div class="cols">${o.columns.map(c => `<span>${c}</span>`).join("")}</div>${rows}</div>
       <div class="more" title="${fr ? "Afficher plus d'offres" : "Show more offers"}">${ICON.downDouble(16)}</div></div>`;
   }
 
-  const empty = `<div class="empty b"><img class="big-logo" src="../../assets/logo/exile-market.png" alt="">Copy an item in the game with<div class="keys"><span class="key">Ctrl</span>+<span class="key">C</span></div>The price shows up here.</div>`;
+  const empty = `<div class="empty b"><span>Copy an item in the game with</span><div class="keys"><span class="key">Ctrl</span>+<span class="key">C</span></div><span>The price shows up here.</span></div>`;
 
   const settings = `<div class="band b settings">
       <h3>Settings</h3>
@@ -744,10 +775,10 @@
     { mod: "When you kill a Rare monster, you gain its Modifiers for 60 seconds" },
     { note: "Corrupted offers only, like this item." },
   ];
-  const HH_PRICE = { values: ["12.4", "123", "8990"], offers: "23 offers", trend: "Rising over the last 3 days (+4%)" };
+  const HH_PRICE = { values: ["12.4", "123", "9K"], offers: "23 offers", trend: "Rising over the last 3 days (+4%)" };
   const HH_OFFERS = { count: "10 of 13 online", columns: ["Price", "Listed"], rows: [
-    { v: "6", k: "ex", when: "2 h ago", sus: true }, { v: "1", k: "chaos", when: "5 d ago", sus: true }, { v: "8", k: "div", when: "3 h ago" },
-    { v: "10", k: "div", when: "3 h ago" }, { v: "11", k: "div", when: "40 min ago", away: true }, { v: "12", k: "div", when: "1 d ago" }] };
+    { v: "6", k: "ex", when: "2h ago", sus: true }, { v: "1", k: "chaos", when: "5d ago", sus: true }, { v: "8", k: "div", when: "3h ago" },
+    { v: "10", k: "div", when: "3h ago" }, { v: "11", k: "div", when: "40min ago", away: true }, { v: "12", k: "div", when: "1d ago" }] };
   const BOW = { rarity: "rare", name: "Storm Bite", base: "Gemini Bow", cls: "Bows", tags: ["ilvl 81", "Q 20%", "2 sockets"], summary: "Physical DPS 245 · Elemental DPS 44", req: "Requires Level 65 · 145 Dex", statsLabel: "Stats (9)" };
   // Rare, magic and jewels: no market price, so the price is estimated from similar offers.
   // Minimums are prefilled at 90 % of the copied values, to find comparable items.
@@ -814,25 +845,25 @@
       ["Main", win(topBar(), item(HH), price(HH_PRICE), offers(HH_OFFERS), foot())],
       ["Stats unfolded (filters)", win(topBar(), item({ ...HH, stats: HH_STATS }, true), foot())],
       ["Before the first search", win(topBar(), item(HH), price(HH_PRICE), offers({ state: "idle" }), foot())],
-      ["Settings open", win(topBar(true), settings, foot())],
+      ["Settings open", win(topBar(true), settings, foot(`<span class="app-author">Exile Market 0.1.0 · Made by Sylent · <a href="https://sylent.art" target="_blank" rel="noopener">sylent.art</a></span>`))],
     ]],
     ["Other items", [
       ["Unique bow: corrupted, quality, sockets", win(topBar(), item({ rarity: "unique", name: "Death's Harp", base: "Dualstring Bow", cls: "Bows", tags: ["Corrupted", "Q 20%", "2 sockets", "ilvl 79"], summary: "Physical DPS 198", req: "Requires Level 52 · 96 Dex", statsLabel: "Stats (5)", filters: "2 filters" }),
-        price({ values: ["1.8", "18", "1305"], offers: "4 offers", warning: "Only 4 offers: the price is uncertain" }),
-        offers({ count: "4 of 4 online", columns: ["Price", "Listed"], rows: [{ v: "1.5", k: "div", when: "5 h ago" }, { v: "1.8", k: "div", when: "1 d ago" }, { v: "2", k: "div", when: "50 min ago" }, { v: "2.5", k: "div", when: "3 d ago" }] }), foot())],
+        price({ values: ["1.8", "18", "1.3K"], offers: "4 offers", warning: "Only 4 offers: the price is uncertain" }),
+        offers({ count: "4 of 4 online", columns: ["Price", "Listed"], rows: [{ v: "1.5", k: "div", when: "5h ago" }, { v: "1.8", k: "div", when: "1d ago" }, { v: "2", k: "div", when: "50min ago" }, { v: "2.5", k: "div", when: "3d ago" }] }), foot())],
       ["Many tags (they wrap)", win(topBar(), item({ rarity: "unique", name: "Ironbound", base: "Runeforged Warden Bow", cls: "Bows", tags: ["Twice Corrupted", "Sanctified", "Fractured", "Mirrored", "Q 23%", "3 sockets", "ilvl 82"], summary: "Physical DPS 312", req: "Requires Level 70 · 172 Dex", statsLabel: "Stats (6)", filters: "3 filters" }),
-        price({ values: ["38", "376", "27550"], offers: "2 offers", warning: "Only 2 offers: the price is uncertain" }), offers({ state: "idle" }), foot())],
+        price({ values: ["38", "376", "27.6K"], offers: "2 offers", warning: "Only 2 offers: the price is uncertain" }), offers({ state: "idle" }), foot())],
     ]],
     ["Estimated prices: rare, magic, normal, jewels", [
       ["Rare bow: before the search", win(topBar(), item(BOW_RARE), price(RARE_ESTIMATE_BEFORE), offers({ state: "idle" }), foot())],
       ["Rare bow: filters", win(topBar(), item({ ...BOW_RARE, stats: BOW_FILTERS }, true), foot())],
       ["Rare bow: estimated price", win(topBar(), item(BOW_RARE),
-        price({ estimate: true, values: ["2.4", "24", "1740"], offers: "18 similar", note: "Median of the 5 cheapest similar offers." }),
+        price({ estimate: true, values: ["2.4", "24", "1.7K"], offers: "18 similar", note: "Median of the 5 cheapest similar offers." }),
         offers({ count: "10 of 18 online", columns: ["Price", "Listed"], rows: [
-          { v: "300", k: "ex", when: "1 h ago", sus: true }, { v: "2", k: "div", when: "20 min ago" }, { v: "2.2", k: "div", when: "4 h ago" },
-          { v: "2.4", k: "div", when: "1 d ago", away: true }, { v: "2.5", k: "div", when: "2 h ago" }, { v: "3", k: "div", when: "6 h ago" }] }), foot())],
+          { v: "300", k: "ex", when: "1h ago", sus: true }, { v: "2", k: "div", when: "20min ago" }, { v: "2.2", k: "div", when: "4h ago" },
+          { v: "2.4", k: "div", when: "1d ago", away: true }, { v: "2.5", k: "div", when: "2h ago" }, { v: "3", k: "div", when: "6h ago" }] }), foot())],
       ["Rare bow: offer hovered", win(topBar(), item(BOW_RARE),
-        price({ estimate: true, values: ["2.4", "24", "1740"], offers: "18 similar", note: "Median of the 5 cheapest similar offers." }),
+        price({ estimate: true, values: ["2.4", "24", "1.7K"], offers: "18 similar", note: "Median of the 5 cheapest similar offers." }),
         offers({ count: "10 of 18 online", columns: ["Price", "Listed"], hover: 2, tooltip: {
           rarity: "rare", name: "Doom Song", price: "2.2", currency: "div", meta: "Gemini Bow · ilvl 80 · Q 20% · 2 sockets", status: "online",
           props: [
@@ -848,37 +879,37 @@
             { text: "+18% to Critical Damage Bonus", tier: 3 },
           ],
         }, rows: [
-          { v: "300", k: "ex", when: "1 h ago", sus: true }, { v: "2", k: "div", when: "20 min ago" }, { v: "2.2", k: "div", when: "4 h ago" },
-          { v: "2.4", k: "div", when: "1 d ago", away: true }, { v: "2.5", k: "div", when: "2 h ago" }, { v: "3", k: "div", when: "6 h ago" }] }), foot())],
+          { v: "300", k: "ex", when: "1h ago", sus: true }, { v: "2", k: "div", when: "20min ago" }, { v: "2.2", k: "div", when: "4h ago" },
+          { v: "2.4", k: "div", when: "1d ago", away: true }, { v: "2.5", k: "div", when: "2h ago" }, { v: "3", k: "div", when: "6h ago" }] }), foot())],
       ["Rare ring: pseudo stats", win(topBar(), item({ ...RING, stats: RING_FILTERS }, true), foot())],
       ["Magic item: few similar offers", win(topBar(), item(MAGIC),
         price({ estimate: true, values: ["0.1", "1", "70"], offers: "3 similar", warning: "Only 3 similar offers: the estimate is uncertain", note: "Median of the 3 similar offers." }),
         offers({ count: "3 of 3 online", columns: ["Price", "Listed"], rows: [
-          { v: "50", k: "ex", when: "2 d ago" }, { v: "70", k: "ex", when: "5 h ago" }, { v: "1", k: "chaos", when: "1 h ago" }] }), foot())],
+          { v: "50", k: "ex", when: "2d ago" }, { v: "70", k: "ex", when: "5h ago" }, { v: "1", k: "chaos", when: "1h ago" }] }), foot())],
       ["Rare jewel: estimated price", win(topBar(), item(JEWEL),
         price({ estimate: true, values: ["1.2", "12", "870"], offers: "9 similar", note: "Median of the 5 cheapest similar offers." }),
         offers({ count: "9 of 9 online", columns: ["Price", "Listed"], rows: [
-          { v: "1", k: "div", when: "3 h ago" }, { v: "1.1", k: "div", when: "40 min ago" }, { v: "1.2", k: "div", when: "1 d ago" },
-          { v: "1.5", k: "div", when: "2 h ago" }, { v: "2", k: "div", when: "5 h ago" }] }), foot())],
+          { v: "1", k: "div", when: "3h ago" }, { v: "1.1", k: "div", when: "40min ago" }, { v: "1.2", k: "div", when: "1d ago" },
+          { v: "1.5", k: "div", when: "2h ago" }, { v: "2", k: "div", when: "5h ago" }] }), foot())],
       ["Rare jewel: filters", win(topBar(), item({ ...JEWEL, stats: JEWEL_FILTERS }, true), foot())],
       ["Exceptional base: filters", win(topBar(), item({ ...STAFF, stats: STAFF_FILTERS }, true), foot())],
       ["Exceptional base: estimated price", win(topBar(), item(STAFF),
         price({ estimate: true, values: ["0.6", "6", "435"], offers: "11 similar", note: "Median of the 5 cheapest similar offers." }),
         offers({ count: "10 of 11 online", columns: ["Price", "Listed"], rows: [
-          { v: "350", k: "ex", when: "2 h ago" }, { v: "0.5", k: "div", when: "1 d ago" }, { v: "0.6", k: "div", when: "30 min ago" },
-          { v: "0.7", k: "div", when: "4 h ago", away: true }, { v: "1", k: "div", when: "3 d ago" }] }), foot())],
+          { v: "350", k: "ex", when: "2h ago" }, { v: "0.5", k: "div", when: "1d ago" }, { v: "0.6", k: "div", when: "30min ago" },
+          { v: "0.7", k: "div", when: "4h ago", away: true }, { v: "1", k: "div", when: "3d ago" }] }), foot())],
     ]],
     ["Special cases", [
       ["Currency stack", win(topBar(), item({ rarity: "currency", name: "Orb of Annulment", cls: "Stackable Currency", tags: ["Stack 7/20"], statsLabel: "Stats (1)" }),
-        price({ values: ["0.25", "2.49", "182"], stackValues: ["1.76", "17.4", "1274"], stackSize: 7, rising: false, trend: "Falling over the last 7 days (−11%)" }),
+        price({ values: ["0.25", "2.49", "182"], stackValues: ["1.76", "17.4", "1.3K"], stackSize: 7, rising: false, trend: "Falling over the last 7 days (−11%)" }),
         offers({ count: "8 of 48 online", columns: ["Per unit", "Stock", "Listed"], rows: [
-          { v: "175", k: "ex", stock: "40", when: "12 min" }, { v: "178", k: "ex", stock: "12", when: "3 min" }, { v: "180", k: "ex", stock: "120", when: "45 min" },
-          { v: "182", k: "ex", stock: "33", when: "3 h" }, { v: "185", k: "ex", stock: "60", when: "9 min" }] }), foot())],
+          { v: "175", k: "ex", stock: "40", when: "12min" }, { v: "178", k: "ex", stock: "12", when: "3min" }, { v: "180", k: "ex", stock: "120", when: "45min" },
+          { v: "182", k: "ex", stock: "33", when: "3h" }, { v: "185", k: "ex", stock: "60", when: "9min" }] }), foot())],
       ["Unidentified unique", win(topBar(), item({ rarity: "unique", name: "Stellar Amulet", cls: "Amulets", tags: ["Unidentified", "ilvl 74"], req: "Requires Level 60", statsLabel: "Stats (1)" }),
         price({ candidates: [["Astramentis", "4.0", "div"], ["Hinekora's Sight", "640", "ex"], ["Fixation of Yix", "95", "ex"], ["Strugglescream", "12", "ex"]] }),
         offers({ lines: ["Identify the item to search its offers."] }), foot())],
       ["French item (interface in French)", win(topBar(), item({ rarity: "unique", name: "Chasseur de têtes", base: "Ceinture lourde", cls: "Ceintures", tags: ["Corrompu", "niv. 80"], req: "Requiert niveau 50", statsLabel: "Statistiques (6)", filters: "3 filtres", tradeLabel: "Voir sur l'échange", tradeTitle: "Ouvrir la recherche sur le site d'échange" }),
-        price({ values: ["12.4", "123", "8990"], offers: "23 offres", trend: "En hausse sur les 3 derniers jours (+4 %)" }, "fr"), offers({ state: "idle" }, "fr"), foot("poe2scout il y a 12 min · GGG trade il y a 2 min"))],
+        price({ values: ["12.4", "123", "9K"], offers: "23 offres", trend: "En hausse sur les 3 derniers jours (+4 %)" }, "fr"), offers({ state: "idle" }, "fr"), foot("poe2scout il y a 12min · GGG trade il y a 2min"))],
     ]],
     ["Offer states", [
       ["Searching the offers", win(topBar(), item(HH), price(HH_PRICE), offers({ state: "loading" }), foot())],
@@ -912,17 +943,18 @@
           { text: "When you kill a Rare monster, you gain its Modifiers for 60 seconds" },
         ],
       } }), foot())],
-      ["Ready to search again", win(topBar(), item(HH), price(HH_PRICE), offers({ ...HH_OFFERS, ready: true, age: "searched 5 min ago" }), foot("poe2scout 12 min ago · GGG trade 5 min ago"))],
-      ["Long wait before the next search", win(topBar(), item(HH), price(HH_PRICE), offers({ state: "wait" }), foot("poe2scout 12 min ago · GGG trade: next search in 4 min"))],
+      ["Ready to search again", win(topBar(), item(HH), price(HH_PRICE), offers({ ...HH_OFFERS, ready: true, age: "searched 5min ago" }), foot("poe2scout 12min ago · GGG trade 5min ago"))],
+      ["Long wait before the next search", win(topBar(), item(HH), price(HH_PRICE), offers({ state: "wait" }), foot("poe2scout 12min ago · GGG trade: next search in 4min"))],
       ["No offer online", win(topBar(), item(HH), price(HH_PRICE), offers({ lines: ["No offer online with these filters.", "Uncheck a stat or lower a minimum, then search again."] }), foot())],
       ["No price found", win(topBar(), item({ rarity: "unique", name: "Strugglescream", base: "Stellar Amulet", cls: "Amulets", tags: ["ilvl 76"], req: "Requires Level 60", statsLabel: "Stats (5)", filters: "2 filters" }),
         price({ lines: ["No price found for this item in Forbidden Rites."] }), offers({ state: "idle" }), foot())],
     ]],
     ["Errors", [
-      ["Offline, cached prices", win(topBar(), banner("The price database can't be reached: showing the prices from 3 hours ago."), item(HH), price(HH_PRICE), offers({ state: "idle" }), foot("poe2scout 3 h ago (offline) · GGG trade 2 min ago"))],
-      ["League ended", win(topBar(), banner("Rise of the Abyssal has ended, switched to Forbidden Rites."), item(HH), price(HH_PRICE), offers({ state: "idle" }), foot())],
-      ["Clipboard unreadable", win(topBar(), banner("The clipboard can't be read."), empty, foot("poe2scout 12 min ago"))],
-      ["Before the first item", win(topBar(), empty, foot("poe2scout 12 min ago"))],
+      ["Offline, cached prices", win(topBar(), banner("The price database can't be reached. Last updated 3h ago."), item(HH), price(HH_PRICE), offers({ state: "idle" }), foot("poe2scout 3h ago (offline) · GGG trade 2min ago"))],
+      ["League ended: back to Standard, without a message", win(topBar(false, "Standard"), item(HH), price(HH_PRICE), offers({ state: "idle" }), foot())],
+      ["New league started", win(topBar(false, "Standard"), newLeague("Rise of the Abyssal"), item(HH), price(HH_PRICE), offers({ state: "idle" }), foot())],
+      ["Clipboard unreadable", win(topBar(), banner("The clipboard can't be read."), empty, foot("poe2scout 12min ago"))],
+      ["Before the first item", win(topBar(), empty, foot("poe2scout 12min ago"))],
       ["Item couldn't be read", win(topBar(), `<div class="band b"><div class="msg">This item couldn't be read.</div><div class="line muted">Copy it again, or copy another item.</div></div>`, foot())],
     ]],
   ];
