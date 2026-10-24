@@ -1,7 +1,10 @@
 //! The header: the emblem and the name on the left; the league and the settings, as flat
 //! blocks glued to the right edge.
 
-use egui::{Align, Frame, Image, Layout, Panel, Rect, Response, Sense, Ui, Vec2, pos2, vec2};
+use egui::{
+    Align, Frame, Image, Layout, Panel, Rect, Response, Role, Sense, Ui, Vec2, WidgetInfo, pos2,
+    vec2,
+};
 
 use super::theme::{LeagueModeColors, color, size, text};
 use super::{images, widgets};
@@ -173,9 +176,12 @@ impl<'a> Header<'a> {
             vec2(size::ACTION_BLOCK, size::HEADER_HEIGHT),
             background,
         );
-        let tint = if self.settings_open {
+        let tooltip = self.i18n.text(Message::SettingsTooltip);
+        let open = self.settings_open;
+        response.widget_info(|| WidgetInfo::selected(Role::Button, true, open, &tooltip));
+        let tint = if open {
             color::ON_ACCENT
-        } else if response.hovered() {
+        } else if response.hovered() || response.has_focus() {
             color::TEXT
         } else {
             color::WEAK
@@ -185,6 +191,6 @@ impl<'a> Header<'a> {
             Rect::from_center_size(response.rect.center(), Vec2::splat(SETTINGS_ICON_SIZE)),
         );
 
-        response.on_hover_text(self.i18n.text(Message::SettingsTooltip))
+        response.on_hover_text(tooltip)
     }
 }

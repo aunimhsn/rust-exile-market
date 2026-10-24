@@ -172,7 +172,7 @@ The offers search uses the stats of the copied item as filters, like the trade s
 
 ### Settings
 
-The gear opens the settings, which replace the content of the window in the narrow layout; the gear stays lit while they are open. A second click on the gear, or Escape, closes them.
+The gear opens the settings, which replace the content of the window in the narrow layout; the gear stays lit while they are open. A second click on the gear, or Escape, closes them. An item copied in the game closes them too, so that its price shows up.
 
 - **Language**: *System* (default), *English* or *Français*.
   - *System*: the language of the system, when the interface has it (one of the preferred languages of the system, in their order); English otherwise.

@@ -14,10 +14,11 @@ use egui::{
 use super::theme::{self, color, size, text};
 
 /// A flat, square block the given size, that can be clicked: its background is one shade
-/// lighter under the pointer. The caller draws the content inside `response.rect`.
+/// lighter under the pointer or with the keyboard focus. The caller draws the content inside
+/// `response.rect`.
 pub fn flat_block(ui: &mut Ui, size: Vec2, background: Color32) -> Response {
     let (rect, response) = ui.allocate_exact_size(size, Sense::click());
-    let fill = if response.hovered() {
+    let fill = if response.hovered() || response.has_focus() {
         theme::hovered(background)
     } else {
         background
@@ -42,7 +43,7 @@ mod choice {
     pub const RADIO_RADIUS: f32 = 5.5;
     pub const RADIO_STROKE: f32 = 2.0;
     pub const RADIO_DOT_RADIUS: f32 = 2.5;
-    pub const CHECK_SIZE: f32 = 15.0;
+    pub const CHECK_SIZE: f32 = MARK_SIZE;
     pub const CHECK_STROKE: f32 = 1.5;
     pub const CHECK_MARK_WIDTH: f32 = 9.0;
 }
@@ -116,7 +117,7 @@ pub fn choice(ui: &mut Ui, mark: Mark, label: &str) -> Response {
     mark.paint(
         painter,
         pos2(rect.left() + MARK_SIZE / 2.0, rect.center().y),
-        response.hovered(),
+        response.hovered() || response.has_focus(),
     );
     let text_top = rect.center().y - galley.size().y / 2.0;
     painter.galley(

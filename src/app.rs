@@ -4,7 +4,7 @@
 use eframe::{App, CreationContext, Frame};
 use egui::{Context, Key, Ui, ViewportCommand};
 
-use crate::clipboard::ClipboardWatch;
+use crate::clipboard::{ClipboardEvent, ClipboardWatch};
 use crate::i18n::{Message, Translator};
 use crate::league::{League, LeagueMode};
 use crate::session::Session;
@@ -20,6 +20,24 @@ enum View {
     /// The copied item, or the empty state before the first one.
     Item,
     Settings,
+}
+
+impl View {
+    /// The view after a click on the gear: it opens the settings, and closes them.
+    fn toggled(self) -> Self {
+        match self {
+            Self::Item => Self::Settings,
+            Self::Settings => Self::Item,
+        }
+    }
+
+    /// The view after `event`: a copied item closes the settings, so that the player sees it.
+    fn after(self, event: &ClipboardEvent) -> Self {
+        match event {
+            ClipboardEvent::Copied(_) => Self::Item,
+            ClipboardEvent::Unreadable | ClipboardEvent::Readable => self,
+        }
+    }
 }
 
 pub struct ExileMarketApp {
@@ -61,12 +79,7 @@ impl ExileMarketApp {
         match action {
             // The list of the leagues comes with the price data, in step 6.
             HeaderAction::Leagues => {}
-            HeaderAction::Settings => {
-                self.view = match self.view {
-                    View::Item => View::Settings,
-                    View::Settings => View::Item,
-                };
-            }
+            HeaderAction::Settings => self.view = self.view.toggled(),
         }
     }
 
@@ -103,7 +116,10 @@ impl App for ExileMarketApp {
     /// Takes in what happened since the last frame; `ui` draws the session, and takes in the
     /// clicks of the components it draws.
     fn logic(&mut self, ctx: &Context, _frame: &mut Frame) {
-        self.clipboard.receive(|event| self.session.apply(event));
+        self.clipboard.receive(|event| {
+            self.view = self.view.after(&event);
+            self.session.apply(event);
+        });
         if self.view == View::Settings && ctx.input(|input| input.key_pressed(Key::Escape)) {
             self.view = View::Item;
         }
@@ -135,5 +151,35 @@ impl App for ExileMarketApp {
     /// starts again at each launch.
     fn persist_egui_memory(&self) -> bool {
         false
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::item::CopiedItem;
+
+    #[test]
+    fn the_gear_opens_the_settings_then_closes_them() {
+        assert_eq!(View::Item.toggled(), View::Settings);
+        assert_eq!(View::Settings.toggled(), View::Item);
+    }
+
+    #[test]
+    fn a_copied_item_closes_the_settings() {
+        let copied = ClipboardEvent::Copied(
+            CopiedItem::from_text("Item Class: Rings\nRarity: Rare\nWoe Loop\nRuby Ring").unwrap(),
+        );
+
+        assert_eq!(View::Settings.after(&copied), View::Item);
+        assert_eq!(View::Item.after(&copied), View::Item);
+    }
+
+    #[test]
+    fn the_state_of_the_clipboard_keeps_the_view() {
+        for event in [ClipboardEvent::Unreadable, ClipboardEvent::Readable] {
+            assert_eq!(View::Settings.after(&event), View::Settings);
+            assert_eq!(View::Item.after(&event), View::Item);
+        }
     }
 }

@@ -32,7 +32,7 @@ fn main() -> eframe::Result {
     let settings = settings_file.load();
     let result = eframe::run_native(
         APP_NAME,
-        native_options(&settings),
+        native_options(&settings, &settings_file),
         Box::new(move |creation| {
             Ok(Box::new(app::ExileMarketApp::new(
                 creation,
@@ -48,7 +48,10 @@ fn main() -> eframe::Result {
     result
 }
 
-fn native_options(settings: &settings::Settings) -> eframe::NativeOptions {
+fn native_options(
+    settings: &settings::Settings,
+    settings_file: &settings::SettingsFile,
+) -> eframe::NativeOptions {
     let mut options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_title(APP_NAME)
@@ -59,7 +62,7 @@ fn native_options(settings: &settings::Settings) -> eframe::NativeOptions {
         // eframe restores the size and the position of the window of the last session, on a
         // screen that is still there.
         persist_window: true,
-        persistence_path: settings::window_file(),
+        persistence_path: settings_file.window_file(),
         ..Default::default()
     };
     // On Linux, the window always goes through X11 (XWayland under Wayland), like the game run

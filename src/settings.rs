@@ -5,7 +5,7 @@
 //! next to it.
 
 use std::fs;
-use std::io;
+use std::io::{self, Write};
 use std::mem;
 use std::path::{Path, PathBuf};
 
@@ -14,10 +14,11 @@ use egui::WindowLevel;
 use serde::{Deserialize, Serialize};
 
 use crate::language::Language;
+use crate::logging;
 
 const FILE_NAME: &str = "settings.toml";
-/// The new settings are written to this file first, then renamed, so that a crash while
-/// writing never leaves half a file.
+/// The new settings are written to this file and synced to the disk first, then renamed, so
+/// that a crash while writing never leaves half a file.
 const NEW_FILE_NAME: &str = "settings.toml.new";
 const WINDOW_FILE_NAME: &str = "window.ron";
 
@@ -111,6 +112,15 @@ impl SettingsFile {
         }
     }
 
+    /// The file where eframe keeps the size and the position of the window, next to the
+    /// settings.
+    #[must_use]
+    pub fn window_file(&self) -> Option<PathBuf> {
+        self.directory
+            .as_ref()
+            .map(|directory| directory.join(WINDOW_FILE_NAME))
+    }
+
     /// The settings of the file, or the default ones when it is missing or can't be read:
     /// the next change then writes it again.
     #[must_use]
@@ -119,7 +129,9 @@ impl SettingsFile {
             log::warn!("No configuration directory: the settings won't be saved");
             return Settings::default();
         };
-        match read(&directory.join(FILE_NAME)) {
+        let path = directory.join(FILE_NAME);
+        log::info!("Settings file: {}", logging::without_home(&path).display());
+        match read(&path) {
             Ok(Some(settings)) => {
                 log::info!("Settings: {settings:?}");
                 settings
@@ -130,7 +142,8 @@ impl SettingsFile {
             }
             Err(error) => {
                 log::warn!(
-                    "The settings file can't be read, the default settings are used: {error}"
+                    "{} can't be read, the default settings are used: {error}",
+                    logging::without_home(&path).display()
                 );
                 Settings::default()
             }
@@ -145,15 +158,12 @@ impl SettingsFile {
         };
         match write(directory, settings) {
             Ok(()) => log::info!("Settings saved: {settings:?}"),
-            Err(error) => log::warn!("The settings couldn't be saved: {error}"),
+            Err(error) => log::warn!(
+                "The settings couldn't be saved in {}: {error}",
+                logging::without_home(directory).display()
+            ),
         }
     }
-}
-
-/// The file where eframe keeps the size and the position of the window.
-#[must_use]
-pub fn window_file() -> Option<PathBuf> {
-    config_directory().map(|directory| directory.join(WINDOW_FILE_NAME))
 }
 
 fn config_directory() -> Option<PathBuf> {
@@ -177,7 +187,13 @@ fn write(directory: &Path, settings: &Settings) -> io::Result<()> {
     let text = toml::to_string(settings).map_err(io::Error::other)?;
     fs::create_dir_all(directory)?;
     let new_path = directory.join(NEW_FILE_NAME);
-    fs::write(&new_path, text)?;
+    {
+        let mut file = fs::File::create(&new_path)?;
+        file.write_all(text.as_bytes())?;
+        // On the disk before the rename makes it the settings file; closed at the end of
+        // the block, before the rename.
+        file.sync_all()?;
+    }
     fs::rename(new_path, directory.join(FILE_NAME))
 }
 
@@ -250,8 +266,10 @@ mod tests {
     #[test]
     fn the_file_is_readable_toml() {
         let text = toml::to_string(&changed()).unwrap();
+        let table: toml::Table = toml::from_str(&text).unwrap();
 
-        assert_eq!(text, "language = \"french\"\nalways_on_top = true\n");
+        assert_eq!(table["language"].as_str(), Some("french"));
+        assert_eq!(table["always_on_top"].as_bool(), Some(true));
     }
 
     #[test]
