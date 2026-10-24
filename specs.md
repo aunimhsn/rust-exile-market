@@ -80,8 +80,8 @@ The reference of the interface is the mock-up [docs/mockups/narrow-styles.html](
 ### Item detection
 
 - The application watches the clipboard while it runs. The player does not need to give it the focus: they copy the item in the game with Ctrl+C (or Ctrl+Alt+C, the advanced copy), and the window updates.
-- Only texts that look like a Path of Exile 2 item are taken into account: they start with the item class line, in English (`Item Class:`) or in French. Any other copied text is ignored, including the text the application copies itself (a whisper), and the window keeps showing the last item.
-- Copying the same item again shows it again, with the latest known price.
+- Only texts that look like a Path of Exile 2 item are taken into account: they start with the item class line, in English (`Item Class: `) or in French (`Classe d'objet: `). Any other copied text is ignored, including the text the application copies itself (a whisper), and the window keeps showing the last item.
+- Copying the same item again after another text shows it again, with the latest known price. Two copies of the same item in a row leave the same text in the clipboard: the window doesn't change, and already shows that item.
 - From the copied text, the application reads the item class, the rarity, the name, the base type (without the "Exceptional" prefix of an exceptional base), the stack size, the item level, the quality, the sockets, the requirements, the granted skill, the corrupted and other states, and the modifiers, with their ranges when the item was copied with Ctrl+Alt+C.
 
 ### Window layout
@@ -191,9 +191,10 @@ The settings are saved as soon as they change. Their bottom shows the sentence "
 
 | File | Location | Content |
 |---|---|---|
-| Settings | The user's configuration directory (e.g. `~/.config/rust-exile-market/` on Linux, `%APPDATA%\rust-exile-market\` on Windows) | League, language, always on top, window size and position. |
+| Settings | The user's configuration directory (e.g. `~/.config/exile-market/` on Linux, `%APPDATA%\exile-market\config\` on Windows) | League, language, always on top, window size and position. |
 | Price cache | The user's cache directory | The last downloaded prices, used at startup and when the network is unavailable. |
 | Item names cache | The user's cache directory | The item and stat names of the trade site in English and French, refreshed once a day. |
+| Log | `~/.local/state/exile-market/` on Linux, `%LOCALAPPDATA%\exile-market\data\` on Windows, `~/Library/Logs/exile-market/` on macOS | `exile-market.log`: what happened during the session (start, items copied by their class line, clipboard errors, panics), to follow the application and find the cause of a bug; the log of the previous session is kept as `exile-market.previous.log`. The texts copied outside the game are never logged. |
 
 None of these files are in the Git repository.
 
