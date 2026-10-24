@@ -448,7 +448,7 @@
   .offers .row-o.sus .p::after { content: "?"; color: var(--warn); text-decoration: none; display: inline-block; margin-left: 2px; }
   /* Offer hovered: the row lights up and the tooltip of its item opens next to it. */
   .offers .row-o { position: relative; }
-  .offers .row-o.hovered { background: var(--control-line) !important; }
+  .offers .row-o.hovered, .offers .row-o:hover { background: var(--control-line) !important; cursor: pointer; }
   .offer-tooltip {
     position: absolute; z-index: 2; right: 10px; bottom: calc(100% + 6px); width: 300px; padding: 12px 14px;
     background: #20272f; border-radius: 4px; box-shadow: 0 10px 30px rgba(0, 0, 0, .6); text-align: left; font-size: 12.5px;
