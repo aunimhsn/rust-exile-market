@@ -62,10 +62,10 @@ pub enum SettingChange {
 pub struct Settings {
     language: LanguageSetting,
     always_on_top: bool,
-    /// The id of the chosen league; none until the player or the default chooses one.
-    league: Option<String>,
-    /// The ids of the new leagues whose bubble the player closed.
-    closed_new_leagues: Vec<String>,
+    /// The chosen league; none until the player or the default chooses one.
+    league: Option<League>,
+    /// The new leagues whose bubble the player closed, or answered by choosing a league.
+    closed_new_leagues: Vec<League>,
 }
 
 impl Settings {
@@ -82,29 +82,29 @@ impl Settings {
     /// The league chosen at the last session, if any.
     #[must_use]
     pub fn league(&self) -> Option<League> {
-        self.league.as_deref().map(League::new)
+        self.league.clone()
     }
 
     /// Keeps `league` as the chosen one; `false` when it already was.
     pub fn set_league(&mut self, league: &League) -> bool {
-        if self.league.as_deref() == Some(league.id()) {
+        if self.league.as_ref() == Some(league) {
             return false;
         }
-        self.league = Some(league.id().to_owned());
+        self.league = Some(league.clone());
         true
     }
 
     #[must_use]
-    pub fn closed_new_leagues(&self) -> &[String] {
+    pub fn closed_new_leagues(&self) -> &[League] {
         &self.closed_new_leagues
     }
 
     /// Remembers that the player closed the bubble of `league`; `false` when it already was.
     pub fn close_new_league(&mut self, league: &League) -> bool {
-        if self.closed_new_leagues.iter().any(|id| id == league.id()) {
+        if self.closed_new_leagues.contains(league) {
             return false;
         }
-        self.closed_new_leagues.push(league.id().to_owned());
+        self.closed_new_leagues.push(league.clone());
         true
     }
 
@@ -302,8 +302,8 @@ mod tests {
         assert!(settings.close_new_league(&league));
         assert!(!settings.close_new_league(&league));
 
-        assert_eq!(settings.league(), Some(league));
-        assert_eq!(settings.closed_new_leagues(), ["HC Forbidden Rites"]);
+        assert_eq!(settings.league(), Some(league.clone()));
+        assert_eq!(settings.closed_new_leagues(), [league]);
     }
 
     #[test]

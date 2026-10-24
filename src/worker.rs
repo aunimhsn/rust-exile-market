@@ -2,8 +2,8 @@
 //! price database.
 //!
 //! The interface takes in the events without waiting, and only redraws when one arrives: the
-//! thread wakes it up after each one, and when it ends. Dropping the worker stops the thread
-//! and waits for it.
+//! thread wakes it up after each one, and when it ends. Dropping the worker stops the thread,
+//! and waits for it when it has something to close.
 
 use std::convert::Infallible;
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender, TryRecvError};
@@ -34,9 +34,21 @@ impl<E> Outbox<E> {
     }
 }
 
+/// What dropping a worker does with its thread, once told to stop.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OnDrop {
+    /// Waits for it: it has something to close (the clipboard).
+    Join,
+    /// Lets it end by itself: it may be blocked in a network request it can't leave, and
+    /// the application doesn't wait for it to close its window.
+    Detach,
+}
+
 /// A named thread, for as long as this value lives.
+#[must_use = "dropping the worker stops its thread"]
 pub struct Worker<E> {
     name: &'static str,
+    on_drop: OnDrop,
     events: Receiver<E>,
     /// Carries nothing: dropping it tells the thread to stop.
     stop: Option<Sender<Infallible>>,
@@ -54,6 +66,7 @@ impl<E: Send + 'static> Worker<E> {
     /// If the system can't start a thread.
     pub fn spawn(
         name: &'static str,
+        on_drop: OnDrop,
         wake: impl Fn() + Send + 'static,
         body: impl FnOnce(&Outbox<E>, &dyn Fn()) + Send + 'static,
     ) -> Self {
@@ -74,6 +87,7 @@ impl<E: Send + 'static> Worker<E> {
             .unwrap_or_else(|error| panic!("the {name} thread starts: {error}"));
         Self {
             name,
+            on_drop,
             events,
             stop: Some(stop),
             thread: Some(thread),
@@ -103,15 +117,21 @@ impl<E: Send + 'static> Worker<E> {
 }
 
 impl<E> Drop for Worker<E> {
-    /// Stops the thread and waits for it.
+    /// Stops the thread, and waits for it unless it is detached.
     fn drop(&mut self) {
         drop(self.stop.take());
-        if let Some(thread) = self.thread.take()
-            && thread.join().is_err()
-        {
-            log::error!("The {} thread panicked", self.name);
+        let Some(thread) = self.thread.take() else {
+            return;
+        };
+        match self.on_drop {
+            OnDrop::Join => {
+                if thread.join().is_err() {
+                    log::error!("The {} thread panicked", self.name);
+                }
+                log::info!("The {} thread ended", self.name);
+            }
+            OnDrop::Detach => log::info!("The {} thread was told to stop", self.name),
         }
-        log::info!("The {} thread ended", self.name);
     }
 }
 
@@ -136,6 +156,7 @@ mod tests {
         }
         Worker {
             name: "test",
+            on_drop: OnDrop::Join,
             events: receiver,
             stop: None,
             thread: None,
@@ -160,6 +181,7 @@ mod tests {
         let (stopped, stopped_receiver) = mpsc::channel();
         let worker = Worker::<()>::spawn(
             "test",
+            OnDrop::Join,
             || {},
             move |outbox, _| {
                 while outbox.wait(Duration::from_millis(10)) {}
@@ -173,10 +195,30 @@ mod tests {
     }
 
     #[test]
+    fn a_detached_thread_isnt_waited_for() {
+        let (release, released) = mpsc::channel::<()>();
+        let worker = Worker::<()>::spawn(
+            "test",
+            OnDrop::Detach,
+            || {},
+            move |_, _| {
+                // Blocked as in a request that doesn't answer.
+                let _ = released.recv();
+            },
+        );
+
+        drop(worker);
+
+        // The drop returned while the thread is still blocked.
+        drop(release);
+    }
+
+    #[test]
     fn the_application_is_woken_up_when_the_thread_ends() {
         let (woken, wakes) = mpsc::channel();
         let mut worker = Worker::<()>::spawn(
             "test",
+            OnDrop::Join,
             move || {
                 let _ = woken.send(());
             },

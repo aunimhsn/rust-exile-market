@@ -67,8 +67,15 @@ impl<'a> NewLeagueBubble<'a> {
     }
 
     fn content(&self, ui: &mut Ui) -> Option<BubbleAction> {
-        let galley = ui.painter().layout_job(self.text());
-        ui.label(galley);
+        // A long league name wraps, so that the pill and the cross stay in the bubble.
+        let switch = self.i18n.text(Message::NewLeagueSwitch);
+        let text_width = ui.available_width()
+            - widgets::pill_size(ui, &switch).x
+            - CLOSE_ZONE
+            - 2.0 * CONTENT_GAP;
+        let mut job = self.text();
+        job.wrap.max_width = text_width.max(0.0);
+        ui.label(ui.painter().layout_job(job));
         let mut action = None;
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
             let (rect, close) = ui.allocate_exact_size(Vec2::splat(CLOSE_ZONE), Sense::click());
@@ -88,7 +95,7 @@ impl<'a> NewLeagueBubble<'a> {
             {
                 action = Some(BubbleAction::Close);
             }
-            if widgets::pill(ui, &self.i18n.text(Message::NewLeagueSwitch)).clicked() {
+            if widgets::pill(ui, &switch).clicked() {
                 action = Some(BubbleAction::Switch);
             }
         });

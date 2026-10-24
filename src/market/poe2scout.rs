@@ -14,6 +14,8 @@ use crate::league::League;
 const BASE_URL: &str = "https://api.poe2scout.com/poe2";
 /// A request that hangs is given up, and tried again later.
 const TIMEOUT: Duration = Duration::from_secs(30);
+/// A server that doesn't answer is given up sooner.
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// Why the price database couldn't be read.
 #[derive(Debug)]
@@ -22,6 +24,9 @@ pub enum FetchError {
     Http(ureq::Error),
     /// An answer that isn't the expected JSON: the API changed.
     Json(serde_json::Error),
+    /// No current league in the answer: the database is wrong for a moment, and the league of
+    /// the player must not be changed for that.
+    NoCurrentLeague,
 }
 
 impl fmt::Display for FetchError {
@@ -29,6 +34,17 @@ impl fmt::Display for FetchError {
         match self {
             Self::Http(error) => write!(formatter, "request failed: {error}"),
             Self::Json(error) => write!(formatter, "unexpected answer: {error}"),
+            Self::NoCurrentLeague => formatter.write_str("no current league in the answer"),
+        }
+    }
+}
+
+impl std::error::Error for FetchError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Http(error) => Some(error),
+            Self::Json(error) => Some(error),
+            Self::NoCurrentLeague => None,
         }
     }
 }
@@ -63,6 +79,7 @@ impl Poe2Scout {
     pub fn new() -> Self {
         let config = ureq::Agent::config_builder()
             .timeout_global(Some(TIMEOUT))
+            .timeout_connect(Some(CONNECT_TIMEOUT))
             .user_agent(format!(
                 "{}/{} (+{})",
                 crate::FOLDER_NAME,
@@ -84,8 +101,11 @@ impl Poe2Scout {
 
 impl PriceDatabase for Poe2Scout {
     fn leagues(&mut self) -> Result<Vec<League>, FetchError> {
-        let leagues: Vec<ApiLeague> = self.get("/Leagues")?;
-        Ok(current_leagues(leagues))
+        let leagues = current_leagues(self.get("/Leagues")?);
+        if leagues.is_empty() {
+            return Err(FetchError::NoCurrentLeague);
+        }
+        Ok(leagues)
     }
 }
 

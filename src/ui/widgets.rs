@@ -215,6 +215,12 @@ pub fn cross(painter: &Painter, center: Pos2, width: f32, color: Color32) {
     );
 }
 
+/// The size of the pill of `label`, to make room for it.
+#[must_use]
+pub fn pill_size(ui: &Ui, label: &str) -> Vec2 {
+    text_line(ui, label, text::pill()).size() + 2.0 * PILL_PADDING
+}
+
 /// A pill on the accent, for the main action of a bubble.
 pub fn pill(ui: &mut Ui, label: &str) -> Response {
     let galley = text_line(ui, label, text::pill());

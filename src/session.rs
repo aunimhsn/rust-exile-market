@@ -73,7 +73,7 @@ impl Session {
 
     /// Takes in what the price database sent; `closed` are the new leagues whose bubble the
     /// player closed.
-    pub fn apply_market(&mut self, event: MarketEvent, closed: &[String]) -> Option<LeagueChange> {
+    pub fn apply_market(&mut self, event: MarketEvent, closed: &[League]) -> Option<LeagueChange> {
         let MarketEvent::Leagues(leagues) = event else {
             return None;
         };
@@ -253,7 +253,7 @@ mod tests {
         );
         session.apply_market(
             leagues(&["Forbidden Rites"]),
-            &["Forbidden Rites".to_owned()],
+            &[League::new("Forbidden Rites")],
         );
 
         assert_eq!(session.new_league(), None);

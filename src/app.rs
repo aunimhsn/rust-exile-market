@@ -100,10 +100,15 @@ impl ExileMarketApp {
         }
     }
 
-    /// Shows `league`, chosen by the player, and keeps it in the settings.
+    /// Shows `league`, chosen by the player, and keeps it in the settings. Choosing answers
+    /// the bubble of a new league too: it doesn't come back for that league.
     fn choose_league(&mut self, league: League) {
         self.leagues_open = false;
-        if self.settings.set_league(&league) {
+        let mut changed = self.settings.set_league(&league);
+        if let Some(offered) = self.session.close_new_league() {
+            changed |= self.settings.close_new_league(&offered);
+        }
+        if changed {
             self.settings_file.save(&self.settings);
         }
         self.session.choose_league(league);
@@ -133,7 +138,8 @@ impl ExileMarketApp {
                 Some(LeagueListAction::Close) | None => {}
             }
         }
-        if self.leagues_open || self.view != View::Item {
+        // Once the list is gone: the bubble would show through it while it fades out.
+        if LeagueList::visibility(ctx, self.leagues_open) > 0.0 || self.view != View::Item {
             return;
         }
         let Some(league) = self.session.new_league().cloned() else {

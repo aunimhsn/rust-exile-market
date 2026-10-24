@@ -9,7 +9,7 @@ use std::hash::{BuildHasher, RandomState};
 use std::time::Duration;
 
 use crate::item::CopiedItem;
-use crate::worker::{Outbox, Worker};
+use crate::worker::{OnDrop, Outbox, Worker};
 
 /// Fast enough to react before the player looks at the window.
 const POLL_INTERVAL: Duration = Duration::from_millis(250);
@@ -157,7 +157,7 @@ impl ClipboardWatch {
         open: impl FnOnce() -> S + Send + 'static,
         wake: impl Fn() + Send + 'static,
     ) -> Self {
-        let worker = Worker::spawn("clipboard", wake, move |outbox, wake| {
+        let worker = Worker::spawn("clipboard", OnDrop::Join, wake, move |outbox, wake| {
             watch(ClipboardWatcher::new(open()), outbox, wake);
         });
         log::info!("Clipboard watching started");

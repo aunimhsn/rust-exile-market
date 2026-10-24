@@ -11,7 +11,7 @@ pub use poe2scout::FetchError;
 use poe2scout::Poe2Scout;
 
 use crate::league::{League, Leagues};
-use crate::worker::{Outbox, Worker};
+use crate::worker::{OnDrop, Outbox, Worker};
 
 const REFRESH_INTERVAL: Duration = Duration::from_hours(1);
 const RETRY_INTERVAL: Duration = Duration::from_mins(1);
@@ -50,7 +50,7 @@ impl MarketWatch {
         open: impl FnOnce() -> D + Send + 'static,
         wake: impl Fn() + Send + 'static,
     ) -> Self {
-        let worker = Worker::spawn("market", wake, move |outbox, wake| {
+        let worker = Worker::spawn("market", OnDrop::Detach, wake, move |outbox, wake| {
             watch(&mut open(), outbox, wake);
         });
         Self { worker }
@@ -67,9 +67,14 @@ impl MarketWatch {
 
 /// Reads the database until the application stops the thread or stops listening.
 fn watch(database: &mut impl PriceDatabase, outbox: &Outbox<MarketEvent>, wake: &dyn Fn()) {
+    let mut failing = false;
     loop {
         let (event, next) = match database.leagues() {
             Ok(leagues) => {
+                if failing {
+                    log::info!("The price database can be reached again");
+                }
+                failing = false;
                 log::info!("Leagues: {leagues:?}");
                 (
                     MarketEvent::Leagues(Leagues::new(leagues)),
@@ -77,7 +82,13 @@ fn watch(database: &mut impl PriceDatabase, outbox: &Outbox<MarketEvent>, wake: 
                 )
             }
             Err(error) => {
-                log::warn!("The price database can't be reached: {error}");
+                // Once, then quietly: offline for a night would fill the log.
+                if failing {
+                    log::debug!("The price database still can't be reached: {error}");
+                } else {
+                    log::warn!("The price database can't be reached: {error}");
+                }
+                failing = true;
                 (MarketEvent::Unreachable, RETRY_INTERVAL)
             }
         };
@@ -101,9 +112,9 @@ mod tests {
 
     impl PriceDatabase for FakeDatabase {
         fn leagues(&mut self) -> Result<Vec<League>, FetchError> {
-            self.0.clone().ok_or_else(|| {
-                FetchError::Json(serde_json::from_str::<()>("not json").expect_err("invalid"))
-            })
+            self.0
+                .clone()
+                .ok_or(FetchError::Http(ureq::Error::StatusCode(503)))
         }
     }
 

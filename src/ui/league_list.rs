@@ -31,23 +31,32 @@ pub enum LeagueListAction {
 }
 
 pub struct LeagueList<'a> {
-    rows: Vec<LeagueRow>,
+    rows: &'a [LeagueRow],
     chosen: Option<&'a League>,
     i18n: &'a Translator,
 }
 
 impl<'a> LeagueList<'a> {
     #[must_use]
-    pub fn new(rows: Vec<LeagueRow>, chosen: Option<&'a League>, i18n: &'a Translator) -> Self {
+    pub fn new(rows: &'a [LeagueRow], chosen: Option<&'a League>, i18n: &'a Translator) -> Self {
         Self { rows, chosen, i18n }
+    }
+
+    /// How much of the list shows, from 0 (closed) to 1 (open), as it moves toward `open`.
+    pub fn visibility(ctx: &Context, open: bool) -> f32 {
+        ctx.animate_bool_with_time(Id::NULL.with("league-list"), open, motion::OPEN)
     }
 
     /// Draws the list while it is `open`, and while it closes; what the player did with it.
     pub fn show(&self, ctx: &Context, open: bool) -> Option<LeagueListAction> {
-        let shown = ctx.animate_bool_with_time(Id::NULL.with("league-list"), open, motion::OPEN);
+        let shown = Self::visibility(ctx, open);
         if shown == 0.0 {
             return None;
         }
+        // The keyboard starts on the chosen league, when the list opens.
+        let opened_id = Id::NULL.with("league-list-opened");
+        let just_opened = open && !ctx.data(|data| data.get_temp(opened_id).unwrap_or(false));
+        ctx.data_mut(|data| data.insert_temp(opened_id, open));
         let top = size::TITLE_BAR_HEIGHT + GAP_UNDER_BAR * shown;
         #[expect(clippy::cast_precision_loss, reason = "a few leagues")]
         let list_size = vec2(2.0 * CELL.x, self.rows.len() as f32 * CELL.y);
@@ -71,7 +80,11 @@ impl<'a> LeagueList<'a> {
                             CELL,
                         );
                         let corners = corners(index == 0, index + 1 == self.rows.len(), column);
-                        if self.cell(ui, cell, corners, league).clicked() {
+                        let response = self.cell(ui, cell, corners, league);
+                        if just_opened && self.chosen == Some(league) {
+                            response.request_focus();
+                        }
+                        if response.clicked() {
                             action = Some(LeagueListAction::Choose(league.clone()));
                         }
                     }
@@ -146,6 +159,118 @@ fn corners(first_row: bool, last_row: bool, column: usize) -> CornerRadius {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::language::Language;
+    use crate::league::Leagues;
+    use egui::{Event, Modifiers, PointerButton, Pos2, RawInput};
+
+    /// Draws the list alone, one frame per call, with a clock that goes past the animations.
+    struct Window {
+        ctx: Context,
+        leagues: Leagues,
+        chosen: League,
+        i18n: Translator,
+        time: std::cell::Cell<f64>,
+    }
+
+    impl Window {
+        fn new() -> Self {
+            let ctx = Context::default();
+            crate::ui::install(&ctx);
+            Self {
+                ctx,
+                leagues: Leagues::new(
+                    ["Forbidden Rites", "HC Forbidden Rites", "Runes of Aldur"].map(League::new),
+                ),
+                chosen: League::new("Forbidden Rites"),
+                i18n: Translator::new(Language::English),
+                time: std::cell::Cell::new(0.0),
+            }
+        }
+
+        fn frame(&self, open: bool, events: Vec<Event>) -> Option<LeagueListAction> {
+            // Past the animation of a frame, and short of the longest click.
+            self.time.set(self.time.get() + 0.2);
+            let input = RawInput {
+                screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(420.0, 720.0))),
+                time: Some(self.time.get()),
+                events,
+                ..Default::default()
+            };
+            let list = LeagueList::new(self.leagues.rows(), Some(&self.chosen), &self.i18n);
+            let mut action = None;
+            let mut output = self
+                .ctx
+                .run_ui(input, |ui| action = list.show(ui.ctx(), open));
+            // epaint panics when the texture changes of a frame are dropped unapplied.
+            output.textures_delta.clear();
+            action
+        }
+
+        /// The actions of a click at `at`, the list `open`, after it finished moving.
+        fn click(&self, open: bool, at: Pos2) -> Vec<Option<LeagueListAction>> {
+            self.frame(open, vec![]);
+            self.frame(open, vec![]);
+            let button = |pressed| Event::PointerButton {
+                pos: at,
+                button: PointerButton::Primary,
+                pressed,
+                modifiers: Modifiers::NONE,
+            };
+            vec![
+                self.frame(open, vec![Event::PointerMoved(at)]),
+                self.frame(open, vec![button(true)]),
+                self.frame(open, vec![button(false)]),
+            ]
+        }
+    }
+
+    /// The middle of a cell of the list: `row` from the top, `column` 0 softcore, 1 hardcore.
+    fn cell(row: f32, column: f32) -> Pos2 {
+        pos2(
+            LEAGUE_BLOCK_LEFT + (column + 0.5) * CELL.x,
+            size::TITLE_BAR_HEIGHT + GAP_UNDER_BAR + (row + 0.5) * CELL.y,
+        )
+    }
+
+    #[test]
+    fn a_click_on_a_league_chooses_it() {
+        let actions = Window::new().click(true, cell(0.0, 1.0));
+
+        assert_eq!(
+            actions.last(),
+            Some(&Some(LeagueListAction::Choose(League::new(
+                "HC Forbidden Rites"
+            ))))
+        );
+    }
+
+    #[test]
+    fn a_click_outside_closes_the_list() {
+        let actions = Window::new().click(true, pos2(200.0, 600.0));
+
+        assert_eq!(actions.last(), Some(&Some(LeagueListAction::Close)));
+    }
+
+    #[test]
+    fn a_closed_list_takes_no_click() {
+        let actions = Window::new().click(false, cell(0.0, 0.0));
+
+        assert_eq!(actions, [None, None, None]);
+    }
+
+    #[test]
+    fn a_league_without_hardcore_trade_leaves_its_half_empty() {
+        // Runes of Aldur has no hardcore trade here: its right half takes no click, and the
+        // click falls outside the leagues.
+        let actions = Window::new().click(true, cell(1.0, 1.0));
+
+        assert_ne!(
+            actions.last(),
+            Some(&Some(LeagueListAction::Choose(League::new(
+                "Runes of Aldur"
+            ))))
+        );
+    }
 
     #[test]
     fn only_the_corners_of_the_list_are_rounded() {

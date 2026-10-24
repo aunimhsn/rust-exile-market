@@ -256,7 +256,8 @@ impl<'a> TitleBar<'a> {
 
     /// The place of the league block before the leagues arrive at the first session.
     fn loading_block(&self, ui: &mut Ui) -> Response {
-        let galley = widgets::text_line(ui, self.i18n.text(Message::LeagueLoading), text::league());
+        let loading = self.i18n.text(Message::LeagueLoading);
+        let galley = widgets::text_line(ui, loading.as_str(), text::league());
         let (rect, response) = ui.allocate_exact_size(
             vec2(
                 league_block::PADDING_LEFT + galley.size().x + league_block::PADDING_RIGHT,
@@ -264,6 +265,7 @@ impl<'a> TitleBar<'a> {
             ),
             Sense::hover(),
         );
+        response.widget_info(|| WidgetInfo::labeled(Role::Label, true, &loading));
         let painter = ui.painter();
         painter.rect_filled(rect, 0.0, color::CONTROL);
         painter.galley(

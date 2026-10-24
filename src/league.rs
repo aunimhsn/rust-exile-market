@@ -1,6 +1,8 @@
 //! Path of Exile 2 leagues: the current ones, given by the price database, and the two
 //! permanent ones, where the game moves the characters at the end of a league.
 
+use serde::{Deserialize, Serialize};
+
 /// The mode of a league: softcore and hardcore leagues have separate economies.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LeagueMode {
@@ -15,8 +17,9 @@ const STANDARD: &str = "Standard";
 const HARDCORE: &str = "Hardcore";
 
 /// A league of Path of Exile 2, known by its id on the trade site and the price database,
-/// e.g. "HC Forbidden Rites".
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// e.g. "HC Forbidden Rites"; saved in the settings as this id.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(transparent)]
 pub struct League {
     id: String,
 }
@@ -87,6 +90,8 @@ pub struct Choice {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Leagues {
     current: Vec<League>,
+    /// The lines of the list, computed once.
+    rows: Vec<LeagueRow>,
 }
 
 impl Leagues {
@@ -94,42 +99,19 @@ impl Leagues {
     /// added whatever it says.
     #[must_use]
     pub fn new(current: impl IntoIterator<Item = League>) -> Self {
-        Self {
-            current: current
-                .into_iter()
-                .filter(|league| !league.is_permanent())
-                .collect(),
-        }
+        let current: Vec<League> = current
+            .into_iter()
+            .filter(|league| !league.is_permanent())
+            .collect();
+        let rows = rows(&current);
+        Self { current, rows }
     }
 
     /// The lines of the list: the current leagues by name, in their order, then the
     /// permanent ones.
     #[must_use]
-    pub fn rows(&self) -> Vec<LeagueRow> {
-        let mut rows: Vec<LeagueRow> = Vec::new();
-        for league in &self.current {
-            let index = rows
-                .iter()
-                .position(|row| row_name(row) == league.name())
-                .unwrap_or_else(|| {
-                    rows.push(LeagueRow {
-                        softcore: None,
-                        hardcore: None,
-                    });
-                    rows.len() - 1
-                });
-            let row = &mut rows[index];
-            let slot = match league.mode() {
-                LeagueMode::Softcore => &mut row.softcore,
-                LeagueMode::Hardcore => &mut row.hardcore,
-            };
-            slot.get_or_insert_with(|| league.clone());
-        }
-        rows.push(LeagueRow {
-            softcore: Some(League::permanent(LeagueMode::Softcore)),
-            hardcore: Some(League::permanent(LeagueMode::Hardcore)),
-        });
-        rows
+    pub fn rows(&self) -> &[LeagueRow] {
+        &self.rows
     }
 
     #[must_use]
@@ -167,13 +149,13 @@ impl Leagues {
     /// The new league to offer a player on a permanent league: the first current league of
     /// its mode that the player didn't close the bubble of.
     #[must_use]
-    pub fn new_league(&self, chosen: &League, closed: &[String]) -> Option<League> {
+    pub fn new_league(&self, chosen: &League, closed: &[League]) -> Option<League> {
         if !chosen.is_permanent() {
             return None;
         }
         self.current
             .iter()
-            .find(|league| league.mode() == chosen.mode() && !closed.contains(&league.id))
+            .find(|league| league.mode() == chosen.mode() && !closed.contains(league))
             .cloned()
     }
 
@@ -183,6 +165,34 @@ impl Leagues {
             .find(|league| league.mode() == mode)
             .cloned()
     }
+}
+
+/// The lines of the list of the `current` leagues.
+fn rows(current: &[League]) -> Vec<LeagueRow> {
+    let mut rows: Vec<LeagueRow> = Vec::new();
+    for league in current {
+        let index = rows
+            .iter()
+            .position(|row| row_name(row) == league.name())
+            .unwrap_or_else(|| {
+                rows.push(LeagueRow {
+                    softcore: None,
+                    hardcore: None,
+                });
+                rows.len() - 1
+            });
+        let row = &mut rows[index];
+        let slot = match league.mode() {
+            LeagueMode::Softcore => &mut row.softcore,
+            LeagueMode::Hardcore => &mut row.hardcore,
+        };
+        slot.get_or_insert_with(|| league.clone());
+    }
+    rows.push(LeagueRow {
+        softcore: Some(League::permanent(LeagueMode::Softcore)),
+        hardcore: Some(League::permanent(LeagueMode::Hardcore)),
+    });
+    rows
 }
 
 fn row_name(row: &LeagueRow) -> &str {
@@ -230,7 +240,8 @@ mod tests {
 
     #[test]
     fn the_list_pairs_each_league_with_its_hardcore_trade_then_the_permanent_ones() {
-        let rows = leagues().rows();
+        let leagues = leagues();
+        let rows = leagues.rows();
         let names: Vec<(Option<&str>, Option<&str>)> = rows
             .iter()
             .map(|row| {
@@ -253,7 +264,8 @@ mod tests {
 
     #[test]
     fn a_league_without_hardcore_trade_has_half_a_line() {
-        let rows = Leagues::new([League::new("Event")]).rows();
+        let leagues = Leagues::new([League::new("Event")]);
+        let rows = leagues.rows();
 
         assert_eq!(rows[0].softcore, Some(League::new("Event")));
         assert_eq!(rows[0].hardcore, None);
@@ -261,7 +273,8 @@ mod tests {
 
     #[test]
     fn the_permanent_leagues_given_by_the_database_are_not_listed_twice() {
-        let rows = Leagues::new(["Standard", "Hardcore", "Event"].map(League::new)).rows();
+        let leagues = Leagues::new(["Standard", "Hardcore", "Event"].map(League::new));
+        let rows = leagues.rows();
 
         assert_eq!(rows.len(), 2);
     }
@@ -313,7 +326,7 @@ mod tests {
         );
         // Closed for that league: the next one of the mode, if any.
         assert_eq!(
-            leagues().new_league(&hardcore, &["HC Forbidden Rites".to_owned()]),
+            leagues().new_league(&hardcore, &[League::new("HC Forbidden Rites")]),
             Some(League::new("HC Runes of Aldur"))
         );
         assert_eq!(
