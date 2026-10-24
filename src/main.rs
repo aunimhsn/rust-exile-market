@@ -13,6 +13,7 @@ mod logging;
 mod session;
 mod settings;
 mod ui;
+mod worker;
 
 /// The name of the application, in every language.
 const APP_NAME: &str = "Exile Market";
