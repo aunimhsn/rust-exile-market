@@ -66,7 +66,7 @@ The reference of the interface is the mock-up [docs/mockups/narrow-styles.html](
 
 - Icons are drawn as lines (stroke about 1.8 px), in the color of the text: search, refresh, double chevron, check mark, minimize, close; the gear is the "settings" icon of [Lucide](https://lucide.dev) (ISC license).
 - Icons are aligned on the lowercase letters next to them, by eye on the real screen (e.g. text 0.5 px up next to an icon), not on the box of the text.
-- The title bar shows the **emblem** (`assets/logo/emblem.svg`, white, 16 px) without the name; the empty window shows the emblem as a faint watermark behind its text (190 px, 3 % opacity), so that it takes no height. The full **logo** (`assets/logo/exile-market.png`) is kept for the README and the application icon.
+- The title bar shows the **emblem** (`assets/logo/emblem.svg`, white, 16 px) without the name; the empty window shows the emblem as a faint watermark behind its text (190 px, 2.25 % opacity), so that it takes no height. The full **logo** (`assets/logo/exile-market.png`) is kept for the README and the application icon.
 - The Exalted, Divine and Chaos Orbs come from `assets/currencies/`.
 
 ### Hover and motion

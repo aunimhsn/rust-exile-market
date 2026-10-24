@@ -539,12 +539,12 @@
   .banner { display: flex; align-items: stretch; background: var(--banner); color: var(--banner-text, var(--warn)); font-size: 12px; font-weight: 600; }
   .banner > span:first-child { flex: 1; padding: 10px 14px; align-self: center; }
   .foot { padding: 6px 14px; color: var(--faint); font-size: 11.5px; }
-  /* Before the first item: the emblem as a faint watermark behind the text (3 % opacity), so that it takes no
+  /* Before the first item: the emblem as a faint watermark behind the text (2.25 % opacity), so that it takes no
      height. */
   .empty { position: relative; padding: 64px 14px; text-align: center; color: var(--weak); overflow: hidden; }
   .empty::before {
     content: ""; position: absolute; inset: 0; background: url("../../assets/logo/emblem.svg") center / 190px no-repeat;
-    opacity: .03; pointer-events: none;
+    opacity: .0225; pointer-events: none;
   }
   .empty > * { position: relative; }
 
