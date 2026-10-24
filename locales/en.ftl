@@ -8,6 +8,8 @@ league-mode-softcore = Softcore
 league-mode-hardcore = Hardcore
 # Tooltip of the league block: its mode, then what a click does.
 league-tooltip = { $mode } · Change the league
+# Tooltip of the emblem, which goes back to the item.
+home-tooltip = Home
 settings-tooltip = Settings
 minimize-tooltip = Minimize
 close-tooltip = Close
