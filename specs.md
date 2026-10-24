@@ -45,7 +45,7 @@ The reference of the interface is the mock-up [docs/mockups/narrow-styles.html](
 | Rise / fall | `#5fcf80` / `#e66a5c` | Trend, roll differences, seller online / offline. |
 | Rarities | normal `#d0d0d0`, magic `#8888ff`, rare `#ffff77`, unique `#c26a2c`, currency `#b4a787` | Item names, as in the game. |
 | Modifiers | `#8f8fff` | Implicit and explicit modifiers, as in the game. |
-| Tier 1 | `#ec9a52` | Tier of a modifier at its best tier: a lighter shade of the unique orange. |
+| Tier 1 | `#ff8c1a` | Tier of a modifier at its best tier: a vivid orange that stands out. |
 
 ### Typography
 
@@ -112,7 +112,7 @@ The window has a header, then three bands (item, price, offers), then a status b
   - grouped under small titles when they are filters: Item, Weapon, Pseudo, Implicit, Explicit;
   - each modifier in the game's modifier color, with a bar of where its value falls:
     - for a unique, in its fixed range, written next to the bar (`40–60`, from the price database);
-    - for a rare or magic item or a jewel, over every tier of the modifier, so that a full bar means close to the best possible; next to it, its tier and the range of that tier (`T2 135–154`, from the advanced copy). Tier 1 is written in a light orange, tiers 2 and 3 in white bold, the others in gray. Without the advanced copy, the game gives no tier: only the value is shown;
+    - for a rare or magic item or a jewel, over every tier of the modifier, so that a full bar means close to the best possible; next to it, its tier and the range of that tier (`T2 135–154`, from the advanced copy). Tier 1 is written in a vivid orange, tiers 2 and 3 in white bold, the others in gray. Without the advanced copy, the game gives no tier: only the value is shown;
   - for rare and magic items and jewels, the explicit modifiers are grouped into **Prefixes** and **Suffixes** with their fill ("2 of 3 · 1 open");
   - for filters, a checkbox on the left and the minimum value on the right (see [Stat filters](#stat-filters)).
 

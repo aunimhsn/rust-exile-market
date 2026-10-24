@@ -467,11 +467,8 @@
   /* Top tiers (1 to 3) in white, the others faint. */
   .tier { color: var(--faint); }
   .tier.tier-top { color: var(--accent); }
-  /* Tier 1 in a lighter shade of the unique orange, so that it stands out on the dark bands; tiers 2 and 3 stay white. */
+  /* Tier 1 in a vivid orange, so that it stands out on the dark bands; tiers 2 and 3 stay white. */
   .tier.t1 { color: var(--tier-1); }
-  /* Test: three saturated oranges for tier 1. */
-  [data-t1="neon"] { --tier-1: #ff7a00; }
-  [data-t1="amber"] { --tier-1: #ffa31a; }
   .delta { font-family: var(--font-number); font-weight: 600; font-size: 12px; }
   .delta.up { color: var(--rise); }
   .delta.down { color: var(--fall); }
@@ -560,7 +557,6 @@
   };
   const VARIANTS = {
     theme: { label: "Style", options: Object.fromEntries(Object.entries(THEMES).map(([k, v]) => [k, v.title])), fallback: "slate" },
-    t1: { label: "T1 orange", options: { vivid: "Vivid", neon: "Neon", amber: "Amber" }, fallback: "vivid" },
     league: { label: "League", options: { softcore: "Softcore", hardcore: "Hardcore" }, fallback: "softcore" },
   };
   const params = new URLSearchParams(location.search);
