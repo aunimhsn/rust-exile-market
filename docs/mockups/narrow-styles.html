@@ -357,8 +357,8 @@
     content: ""; position: absolute; top: -5px; left: 36px; width: 10px; height: 10px; background: #20272f; transform: rotate(45deg);
   }
   /* The list of the leagues, under the league block, flat: one line per league, softcore on the left and
-     hardcore on the right, glued together, a thin line of its color between two leagues, the permanent ones last; the mode
-     told by the color. The chosen league is the one of the block above. It opens 4 px under the title bar,
+     hardcore on the right, glued together, the permanent ones last; the mode told by the color. The chosen
+     league keeps the lighter background of the hover. It opens 4 px under the title bar,
      with the shadow of the bubbles, and its leagues let the item show through a little (94 % opaque). */
   .app-league .ico { transition: transform .15s ease; }
   /* The chevron points right, and turns down while the list is open. */
@@ -383,9 +383,9 @@
   .app-league-row.is-hardcore { background: rgba(53, 20, 23, var(--menu-alpha)); }
   .app-league-row.is-hardcore:hover { background: rgba(74, 27, 32, var(--menu-alpha)); }
   .app-league-row .ico { flex: none; }
-  /* Between two leagues, a line in the color of the mode: blue in the softcore column, red in the hardcore one. */
-  .app-league-row.is-softcore:not(.is-first) { box-shadow: inset 0 1px 0 #2f5580; }
-  .app-league-row.is-hardcore:not(.is-first) { box-shadow: inset 0 1px 0 #77303a; }
+  /* The chosen league keeps the background of the hover. */
+  .app-league-row.is-softcore.is-chosen { background: rgba(26, 51, 80, var(--menu-alpha)); }
+  .app-league-row.is-hardcore.is-chosen { background: rgba(74, 27, 32, var(--menu-alpha)); }
   .app-icon-button { width: 36px; display: grid; place-items: center; color: var(--weak); cursor: pointer; }
   .app-icon-button:hover, .app-icon-button.is-on { color: var(--accent); }
   :root, [data-league="softcore"] { --league-bg: #13263a; --league-kind: "Softcore"; --league-bg-hover: #1a3350; }
@@ -637,9 +637,9 @@
 
   // Blocks.
   const leagueList = () => {
-    const row = (name, mode, first) =>
-      `<div class="app-league-row is-${mode} ${first ? "is-first" : ""}" data-mode="${mode}" title="${mode === "softcore" ? "Softcore" : "Hardcore"}"><span>${name}</span></div>`;
-    const pair = (name, index) => row(name, "softcore", index === 0) + row(name, "hardcore", index === 0);
+    const row = (name, mode, chosen) =>
+      `<div class="app-league-row is-${mode} ${chosen ? "is-chosen" : ""}" data-mode="${mode}" title="${mode === "softcore" ? "Softcore" : "Hardcore"}"><span>${name}</span></div>`;
+    const pair = (name, index) => row(name, "softcore", index === 0) + row(name, "hardcore", false);
     return `<div class="app-league-list">${["Forbidden Rites", "Runes of Aldur", "Standard"].map(pair).join("")}</div>`;
   };
   const topBar = (settings = false, league = "Forbidden Rites", open = false) => {
@@ -1033,6 +1033,8 @@
       const win = row.closest(".win");
       win.querySelector(".app-league-name").textContent = row.textContent;
       win.dataset.league = row.dataset.mode;
+      win.querySelectorAll(".app-league-row.is-chosen").forEach(other => other.classList.remove("is-chosen"));
+      row.classList.add("is-chosen");
       win.querySelector(".app-league").title = `${row.title} · Change the league`;
       closeLeagueLists();
     } else {
