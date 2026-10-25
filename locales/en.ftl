@@ -22,7 +22,13 @@ close-tooltip = Close
 ## Status bar
 
 status-bar = { $prices } · { $trade }
-status-prices-waiting = poe2scout: no prices yet
+# No price of the league, and the price database can't be reached.
+status-prices-unavailable = poe2scout: no prices yet
+# During the first download of the prices of a league.
+status-prices-downloading = poe2scout: downloading prices…
+# The age of the prices, e.g. "12min ago".
+status-prices = poe2scout { $age }
+status-prices-offline = poe2scout { $age } (offline)
 status-trade-idle = GGG trade: no search yet
 # While the settings are open: the version and the author; the site, last, is a link.
 status-author = { $app } { $version } · Made by { $author } · { $site }
@@ -38,9 +44,35 @@ empty-price = The price shows up here.
 item-unreadable = This item couldn't be read.
 item-unreadable-hint = Copy it again, or copy another item.
 
+## Download of the prices
+
+# In place of the invitation to copy an item, while no price of the league is known.
+download-title = Downloading the prices of { $league }
+# Under the bar, one drawn at random per download.
+download-quote-1 = Counting the Exalted Orbs one by one…
+download-quote-2 = Haggling with the merchants of Wraeclast…
+download-quote-3 = Polishing the Divine Orbs…
+download-quote-4 = Checking that no one sells a Mirror for 1 Chaos…
+download-quote-5 = Ignoring the "still available?" whispers…
+download-quote-6 = Sorting the stash tabs. Again…
+download-quote-7 = Converting Chaos into Exalted, the math checks out…
+download-quote-8 = Looking for the seller who went AFK in their hideout…
+download-quote-9 = One request per second: poe2scout deserves respect…
+download-quote-10 = Spotting the bait offers…
+
+## Ages, rounded down to their largest unit
+
+age-now = just now
+age-minutes = { $minutes }min ago
+age-hours = { $hours }h ago
+age-days = { $days }d ago
+
 ## Warnings
 
 clipboard-unreadable = The clipboard can't be read.
+# The age of the prices, e.g. "3h ago".
+prices-unreachable = The price database can't be reached. Last updated { $age }.
+prices-unavailable = Prices unavailable, retrying…
 
 ## Settings
 

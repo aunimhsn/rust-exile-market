@@ -10,7 +10,7 @@ use std::fs::{self, File};
 use std::io;
 use std::path::{Path, PathBuf};
 
-use directories::{BaseDirs, ProjectDirs};
+use directories::BaseDirs;
 use log::LevelFilter;
 use simplelog::{CombinedLogger, ConfigBuilder, SharedLogger, WriteLogger};
 
@@ -106,7 +106,7 @@ fn log_directory() -> Option<PathBuf> {
         let home = BaseDirs::new()?.home_dir().to_path_buf();
         return Some(home.join("Library/Logs").join(crate::FOLDER_NAME));
     }
-    let directories = ProjectDirs::from("", "", crate::FOLDER_NAME)?;
+    let directories = crate::files::project_directories()?;
     Some(
         directories
             .state_dir()

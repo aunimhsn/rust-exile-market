@@ -2,8 +2,9 @@
 //! price database.
 //!
 //! The interface takes in the events without waiting, and only redraws when one arrives: the
-//! thread wakes it up after each one, and when it ends. Dropping the worker stops the thread,
-//! and waits for it when it has something to close.
+//! thread wakes it up after each one, and when it ends. The interface can also give the thread
+//! orders, which end its wait. Dropping the worker stops the thread, and waits for it when it
+//! has something to close.
 
 use std::convert::Infallible;
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender, TryRecvError};
@@ -11,25 +12,59 @@ use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
 /// What the thread gets: where to send its events, and how to wait while listening for the
-/// order to stop.
-pub struct Outbox<E> {
+/// orders of the application, `C`; a thread without orders has `Infallible` ones.
+pub struct Outbox<E, C = Infallible> {
     events: Sender<E>,
-    stop: Receiver<Infallible>,
+    /// Closed when the application asks the thread to stop.
+    orders: Receiver<C>,
 }
 
-impl<E> Outbox<E> {
+/// What ended a wait of the thread.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Waited<C> {
+    /// The whole duration passed.
+    Elapsed,
+    Order(C),
+    /// The application asked the thread to stop.
+    Stop,
+}
+
+impl<E, C> Outbox<E, C> {
     /// Sends an event; `false` when the application no longer listens.
     #[must_use]
     pub fn send(&self, event: E) -> bool {
         self.events.send(event).is_ok()
     }
 
+    /// Waits `duration`, or less when the application gives an order or asks the thread to
+    /// stop.
+    #[must_use]
+    pub fn wait_for_order(&self, duration: Duration) -> Waited<C> {
+        match self.orders.recv_timeout(duration) {
+            Ok(order) => Waited::Order(order),
+            Err(RecvTimeoutError::Timeout) => Waited::Elapsed,
+            Err(RecvTimeoutError::Disconnected) => Waited::Stop,
+        }
+    }
+
+    /// What the application asked since the last wait, without waiting: the oldest order, or
+    /// the stop once every order was taken.
+    #[must_use]
+    pub fn pending_order(&self) -> Option<Waited<C>> {
+        match self.wait_for_order(Duration::ZERO) {
+            Waited::Elapsed => None,
+            waited => Some(waited),
+        }
+    }
+}
+
+impl<E> Outbox<E> {
     /// Waits `duration`; `false` when the application asked the thread to stop meanwhile.
     #[must_use]
     pub fn wait(&self, duration: Duration) -> bool {
-        match self.stop.recv_timeout(duration) {
-            Err(RecvTimeoutError::Timeout) => true,
-            Err(RecvTimeoutError::Disconnected) => false,
+        match self.wait_for_order(duration) {
+            Waited::Elapsed => true,
+            Waited::Stop => false,
         }
     }
 }
@@ -44,20 +79,20 @@ pub enum OnDrop {
     Detach,
 }
 
-/// A named thread, for as long as this value lives.
+/// A named thread, for as long as this value lives, which takes orders of type `C`.
 #[must_use = "dropping the worker stops its thread"]
-pub struct Worker<E> {
+pub struct Worker<E, C = Infallible> {
     name: &'static str,
     on_drop: OnDrop,
     events: Receiver<E>,
-    /// Carries nothing: dropping it tells the thread to stop.
-    stop: Option<Sender<Infallible>>,
+    /// Dropping it tells the thread to stop.
+    orders: Option<Sender<C>>,
     thread: Option<JoinHandle<()>>,
     /// The thread ended without being asked to, which has been told once.
     lost: bool,
 }
 
-impl<E: Send + 'static> Worker<E> {
+impl<E: Send + 'static, C: Send + 'static> Worker<E, C> {
     /// Runs `body` on a thread named `name`. `body` gets the `wake` function, to call after
     /// sending events; it is also called when the thread ends, even by a panic.
     ///
@@ -68,10 +103,10 @@ impl<E: Send + 'static> Worker<E> {
         name: &'static str,
         on_drop: OnDrop,
         wake: impl Fn() + Send + 'static,
-        body: impl FnOnce(&Outbox<E>, &dyn Fn()) + Send + 'static,
+        body: impl FnOnce(&Outbox<E, C>, &dyn Fn()) + Send + 'static,
     ) -> Self {
         let (events_sender, events) = mpsc::channel();
-        let (stop, stop_receiver) = mpsc::channel();
+        let (orders, orders_receiver) = mpsc::channel();
         let thread = thread::Builder::new()
             .name(name.to_owned())
             .spawn(move || {
@@ -80,7 +115,7 @@ impl<E: Send + 'static> Worker<E> {
                 // application, once woken up, sees that the thread is gone.
                 let outbox = Outbox {
                     events: events_sender,
-                    stop: stop_receiver,
+                    orders: orders_receiver,
                 };
                 body(&outbox, &wake.0);
             })
@@ -89,9 +124,17 @@ impl<E: Send + 'static> Worker<E> {
             name,
             on_drop,
             events,
-            stop: Some(stop),
+            orders: Some(orders),
             thread: Some(thread),
             lost: false,
+        }
+    }
+
+    /// Gives `order` to the thread, which takes it at its next wait; a thread that ended
+    /// ignores it.
+    pub fn order(&self, order: C) {
+        if let Some(orders) = &self.orders {
+            let _ = orders.send(order);
         }
     }
 
@@ -116,10 +159,10 @@ impl<E: Send + 'static> Worker<E> {
     }
 }
 
-impl<E> Drop for Worker<E> {
+impl<E, C> Drop for Worker<E, C> {
     /// Stops the thread, and waits for it unless it is detached.
     fn drop(&mut self) {
-        drop(self.stop.take());
+        drop(self.orders.take());
         let Some(thread) = self.thread.take() else {
             return;
         };
@@ -158,7 +201,7 @@ mod tests {
             name: "test",
             on_drop: OnDrop::Join,
             events: receiver,
-            stop: None,
+            orders: None,
             thread: None,
             lost: false,
         }
@@ -192,6 +235,33 @@ mod tests {
         drop(worker);
 
         assert_eq!(stopped_receiver.try_recv(), Ok(()));
+    }
+
+    #[test]
+    fn an_order_ends_the_wait_of_the_thread() {
+        let (woken, wakes) = mpsc::channel();
+        let mut worker = Worker::<&str, &str>::spawn(
+            "test",
+            OnDrop::Join,
+            move || {
+                let _ = woken.send(());
+            },
+            |outbox, wake| {
+                if let Waited::Order(order) = outbox.wait_for_order(Duration::from_secs(60)) {
+                    let _ = outbox.send(order);
+                    wake();
+                }
+            },
+        );
+
+        worker.order("refresh");
+
+        wakes
+            .recv_timeout(Duration::from_secs(5))
+            .expect("woken up");
+        let mut received = Vec::new();
+        worker.receive(|event| received.push(event));
+        assert_eq!(received, ["refresh"]);
     }
 
     #[test]

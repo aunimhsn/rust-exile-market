@@ -5,12 +5,14 @@
 
 mod app;
 mod clipboard;
+mod files;
 mod i18n;
 mod item;
 mod language;
 mod league;
 mod logging;
 mod market;
+mod prices;
 mod session;
 mod settings;
 mod ui;

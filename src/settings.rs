@@ -5,22 +5,19 @@
 //! next to it.
 
 use std::fs;
-use std::io::{self, Write};
+use std::io;
 use std::mem;
 use std::path::{Path, PathBuf};
 
-use directories::ProjectDirs;
 use egui::WindowLevel;
 use serde::{Deserialize, Serialize};
 
+use crate::files;
 use crate::language::Language;
 use crate::league::League;
 use crate::logging;
 
 const FILE_NAME: &str = "settings.toml";
-/// The new settings are written to this file and synced to the disk first, then renamed, so
-/// that a crash while writing never leaves half a file.
-const NEW_FILE_NAME: &str = "settings.toml.new";
 const WINDOW_FILE_NAME: &str = "window.ron";
 
 /// The language chosen for the interface.
@@ -201,8 +198,7 @@ impl SettingsFile {
 }
 
 fn config_directory() -> Option<PathBuf> {
-    ProjectDirs::from("", "", crate::FOLDER_NAME)
-        .map(|directories| directories.config_dir().to_path_buf())
+    files::project_directories().map(|directories| directories.config_dir().to_path_buf())
 }
 
 /// The settings of the file at `path`; `None` when there is no file.
@@ -219,33 +215,15 @@ fn read(path: &Path) -> io::Result<Option<Settings>> {
 
 fn write(directory: &Path, settings: &Settings) -> io::Result<()> {
     let text = toml::to_string(settings).map_err(io::Error::other)?;
-    fs::create_dir_all(directory)?;
-    let new_path = directory.join(NEW_FILE_NAME);
-    {
-        let mut file = fs::File::create(&new_path)?;
-        file.write_all(text.as_bytes())?;
-        // On the disk before the rename makes it the settings file; closed at the end of
-        // the block, before the rename.
-        file.sync_all()?;
-    }
-    fs::rename(new_path, directory.join(FILE_NAME))
+    files::write_atomically(directory, FILE_NAME, text.as_bytes())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    /// A folder of its own for one test, removed when it ends.
-    struct TestDirectory(PathBuf);
+    use crate::files::TestDirectory;
 
     impl TestDirectory {
-        fn new(name: &str) -> Self {
-            let path = std::env::temp_dir()
-                .join(format!("exile-market-test-{}-{name}", std::process::id()));
-            let _ = fs::remove_dir_all(&path);
-            Self(path)
-        }
-
         fn file(&self) -> SettingsFile {
             SettingsFile {
                 directory: Some(self.0.clone()),
@@ -255,12 +233,6 @@ mod tests {
         fn write(&self, text: &str) {
             fs::create_dir_all(&self.0).unwrap();
             fs::write(self.0.join(FILE_NAME), text).unwrap();
-        }
-    }
-
-    impl Drop for TestDirectory {
-        fn drop(&mut self) {
-            let _ = fs::remove_dir_all(&self.0);
         }
     }
 
@@ -342,7 +314,6 @@ mod tests {
         file.save(&changed());
 
         assert_eq!(file.load(), changed());
-        assert!(!directory.0.join(NEW_FILE_NAME).exists());
     }
 
     #[test]

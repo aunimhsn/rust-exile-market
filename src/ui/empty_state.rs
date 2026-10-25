@@ -1,12 +1,14 @@
-//! The window before the first item: how to use the application, over the emblem as a faint
-//! watermark, which takes no height.
+//! The window before the first item, over the emblem as a faint watermark, which takes no
+//! height: how to use the application, or, while no price of the league is known, the
+//! download of the prices.
 
+use egui::text::{LayoutJob, TextFormat};
 use egui::{
     Align2, CentralPanel, Frame, Image, Rect, RichText, Sense, Stroke, StrokeKind, Ui, Vec2, pos2,
     vec2,
 };
 
-use super::theme::{color, size, text};
+use super::theme::{color, motion, size, text};
 use super::{images, widgets};
 use crate::i18n::{Message, Translator};
 
@@ -17,15 +19,41 @@ const KEY_GAP: f32 = 8.0;
 const SPACE: f32 = 14.0;
 /// The keys to press in the game.
 const KEYS: [&str; 2] = ["Ctrl", "C"];
+const BAR_SIZE: Vec2 = vec2(220.0, 4.0);
+/// The space between the lines of the download.
+const DOWNLOAD_GAP: f32 = 10.0;
+
+/// The download of the prices of a league.
+#[derive(Debug, Clone, Copy)]
+pub struct Download<'a> {
+    /// The name of the league.
+    pub league: &'a str,
+    /// The share downloaded, from 0 to 1.
+    pub progress: f32,
+    /// The sentence under the bar, drawn at random.
+    pub quote: usize,
+}
 
 pub struct EmptyState<'a> {
     i18n: &'a Translator,
+    download: Option<Download<'a>>,
 }
 
 impl<'a> EmptyState<'a> {
     #[must_use]
     pub fn new(i18n: &'a Translator) -> Self {
-        Self { i18n }
+        Self {
+            i18n,
+            download: None,
+        }
+    }
+
+    /// Shows the download of the prices in place of the invitation to copy an item, which
+    /// would be wrong while no price is known.
+    #[must_use]
+    pub fn downloading(mut self, download: Download<'a>) -> Self {
+        self.download = Some(download);
+        self
     }
 
     pub fn show(self, ui: &mut Ui) {
@@ -44,11 +72,15 @@ impl<'a> EmptyState<'a> {
                 let height = ui.data(|data| data.get_temp::<f32>(height_id));
                 ui.add_space(((ui.available_height() - height.unwrap_or(0.0)) / 2.0).max(0.0));
                 let content = ui.vertical_centered(|ui| {
-                    self.hint(ui, Message::EmptyCopy);
-                    ui.add_space(SPACE / 2.0);
-                    Self::keys(ui);
-                    ui.add_space(SPACE / 2.0);
-                    self.hint(ui, Message::EmptyPrice);
+                    if let Some(download) = self.download {
+                        self.download(ui, download);
+                    } else {
+                        self.hint(ui, Message::EmptyCopy);
+                        ui.add_space(SPACE / 2.0);
+                        Self::keys(ui);
+                        ui.add_space(SPACE / 2.0);
+                        self.hint(ui, Message::EmptyPrice);
+                    }
                 });
                 let content_height = content.response.rect.height();
                 if height != Some(content_height) {
@@ -65,6 +97,49 @@ impl<'a> EmptyState<'a> {
             RichText::new(self.i18n.text(message))
                 .font(text::body())
                 .color(color::WEAK),
+        );
+    }
+
+    /// The league whose prices are downloaded, in the color of the text, the bar, then a
+    /// sentence.
+    fn download(&self, ui: &mut Ui, download: Download<'_>) {
+        let title = self.i18n.download_title(download.league);
+        let mut job = LayoutJob::default();
+        let mut append = |part: &str, tint| {
+            job.append(part, 0.0, TextFormat::simple(text::body(), tint));
+        };
+        match title.split_once(download.league) {
+            Some((before, after)) => {
+                append(before, color::WEAK);
+                append(download.league, color::TEXT);
+                append(after, color::WEAK);
+            }
+            None => append(&title, color::WEAK),
+        }
+        ui.label(job);
+        ui.add_space(DOWNLOAD_GAP);
+
+        let (rect, _) = ui.allocate_exact_size(BAR_SIZE, Sense::hover());
+        // From one step to the next without a jump: a step is a request, every second.
+        let progress = ui.ctx().animate_value_with_time(
+            ui.scope_id().with("download-progress"),
+            download.progress.clamp(0.0, 1.0),
+            motion::PROGRESS,
+        );
+        let radius = BAR_SIZE.y / 2.0;
+        let painter = ui.painter();
+        painter.rect_filled(rect, radius, color::CONTROL);
+        painter.rect_filled(
+            Rect::from_min_size(rect.min, vec2(rect.width() * progress, rect.height())),
+            radius,
+            color::TEXT,
+        );
+        ui.add_space(DOWNLOAD_GAP);
+
+        ui.label(
+            RichText::new(self.i18n.download_quote(download.quote))
+                .font(text::small())
+                .color(color::FAINT),
         );
     }
 

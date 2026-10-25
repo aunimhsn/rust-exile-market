@@ -1,18 +1,22 @@
 //! The application: the session, the settings, the clipboard watching and the price
 //! database, and the window built from the components of [`crate::ui`].
 
+use std::hash::{BuildHasher, RandomState};
+use std::time::{Duration, SystemTime};
+
 use eframe::{App, CreationContext, Frame};
 use egui::{Context, Key, Ui, ViewportCommand};
 
 use crate::clipboard::{ClipboardEvent, ClipboardWatch};
-use crate::i18n::{Message, Translator};
+use crate::i18n::{DOWNLOAD_QUOTE_COUNT, Message, Translator};
 use crate::league::League;
 use crate::market::MarketWatch;
-use crate::session::{LeagueChange, Session};
+use crate::session::{LeagueChange, PricesState, Session};
 use crate::settings::{SettingChange, Settings, SettingsFile};
 use crate::ui::{
-    self, BubbleAction, EmptyState, LeagueList, LeagueListAction, NewLeagueBubble, RawItem,
-    ResizeEdges, SettingsPanel, StatusBar, TitleBar, TitleBarAction, UnreadableItem, WarningBand,
+    self, BubbleAction, Download, EmptyState, LeagueList, LeagueListAction, NewLeagueBubble,
+    RawItem, ResizeEdges, SettingsPanel, StatusBar, TitleBar, TitleBarAction, UnreadableItem,
+    WarningBand,
 };
 
 /// What the window shows under the title bar.
@@ -51,6 +55,8 @@ pub struct ExileMarketApp {
     leagues_open: bool,
     clipboard: ClipboardWatch,
     market: MarketWatch,
+    /// The sentence shown during the download of the prices, drawn at its start.
+    download_quote: Option<usize>,
 }
 
 impl ExileMarketApp {
@@ -65,6 +71,8 @@ impl ExileMarketApp {
         ui::install(&creation.egui_ctx);
         let clipboard_ctx = creation.egui_ctx.clone();
         let market_ctx = creation.egui_ctx.clone();
+        // The prices of the league of the last session, until the leagues arrive.
+        let market = MarketWatch::start(settings.league(), move || market_ctx.request_repaint());
 
         Self {
             // The language of the copied items never changes the interface: it only chooses
@@ -77,7 +85,8 @@ impl ExileMarketApp {
             view: View::Item,
             leagues_open: false,
             clipboard: ClipboardWatch::start(move || clipboard_ctx.request_repaint()),
-            market: MarketWatch::start(move || market_ctx.request_repaint()),
+            market,
+            download_quote: None,
         }
     }
 
@@ -112,6 +121,7 @@ impl ExileMarketApp {
             self.settings_file.save(&self.settings);
         }
         self.session.choose_league(league);
+        self.market.price(self.session.league());
     }
 
     /// Closes the bubble of the new league for good.
@@ -170,13 +180,43 @@ impl ExileMarketApp {
         ctx.request_repaint();
     }
 
-    fn item(&self, ui: &mut Ui) {
-        match self.session.item() {
-            Some(shown) => match shown.parsed() {
-                Ok(_) => RawItem::new(shown.copied()).show(ui),
-                Err(_) => UnreadableItem::new(&self.i18n).show(ui),
-            },
-            None => EmptyState::new(&self.i18n).show(ui),
+    /// The warnings of the band under the title bar, given the state of the prices.
+    fn warnings(&self, prices: PricesState) -> Vec<String> {
+        let mut warnings = Vec::new();
+        if !self.session.clipboard_readable() {
+            warnings.push(self.i18n.text(Message::ClipboardUnreadable));
+        }
+        match prices {
+            PricesState::Unavailable => warnings.push(self.i18n.text(Message::PricesUnavailable)),
+            PricesState::Known { age, offline: true } => {
+                warnings.push(self.i18n.prices_unreachable(&self.i18n.age(age)));
+            }
+            PricesState::Downloading { .. } | PricesState::Known { offline: false, .. } => {}
+        }
+        warnings
+    }
+
+    fn item(&self, ui: &mut Ui, prices: PricesState) {
+        let Some(shown) = self.session.item() else {
+            let empty = EmptyState::new(&self.i18n);
+            if let (PricesState::Downloading { progress }, Some(league), Some(quote)) =
+                (prices, self.session.league(), self.download_quote)
+            {
+                empty
+                    .downloading(Download {
+                        league: league.name(),
+                        progress,
+                        quote,
+                    })
+                    .show(ui);
+            } else {
+                empty.show(ui);
+            }
+            return;
+        };
+        match shown.parsed() {
+            Ok(_) => RawItem::new(shown.copied()).show(ui),
+            Err(_) => UnreadableItem::new(&self.i18n).show(ui),
         }
     }
 }
@@ -201,6 +241,8 @@ impl App for ExileMarketApp {
         {
             self.settings_file.save(&self.settings);
         }
+        // The league shown at the first launch, or after the end of a league.
+        self.market.price(self.session.league());
         // Escape closes what is on top: the list of the leagues, then the settings.
         if ctx.input(|input| input.key_pressed(Key::Escape)) {
             if self.leagues_open {
@@ -218,6 +260,7 @@ impl App for ExileMarketApp {
         }
         // The panels on the edges come first, so that the central one takes what remains.
         let action = TitleBar::new(self.session.league(), &self.i18n)
+            .leagues_known(self.session.leagues().is_some())
             .settings_open(self.view == View::Settings)
             .leagues_open(self.leagues_open)
             .show(ui);
@@ -225,15 +268,23 @@ impl App for ExileMarketApp {
             self.act_on(&ctx, action);
         }
         self.league_overlays(&ctx, action);
-        if !self.session.clipboard_readable() {
-            WarningBand::new(self.i18n.text(Message::ClipboardUnreadable)).show(ui);
+        let prices = self.session.prices_state(SystemTime::now());
+        if matches!(prices, PricesState::Downloading { .. }) {
+            self.download_quote.get_or_insert_with(random_quote);
+        } else {
+            self.download_quote = None;
+        }
+        WarningBand::new(self.warnings(prices)).show(ui);
+        if let PricesState::Known { age, .. } = prices {
+            // The age of the prices changes with the time, without an event.
+            ctx.request_repaint_after(Duration::from_secs(60 - age.as_secs() % 60));
         }
         match self.view {
-            View::Item => StatusBar::sources(&self.i18n).show(ui),
+            View::Item => StatusBar::sources(&self.i18n, prices).show(ui),
             View::Settings => StatusBar::author(&self.i18n).show(ui),
         }
         match self.view {
-            View::Item => self.item(ui),
+            View::Item => self.item(ui, prices),
             View::Settings => {
                 if let Some(change) = SettingsPanel::new(&self.settings, &self.i18n).show(ui) {
                     self.change_setting(ui.ctx(), change);
@@ -247,6 +298,13 @@ impl App for ExileMarketApp {
     fn persist_egui_memory(&self) -> bool {
         false
     }
+}
+
+/// A sentence of the download of the prices, drawn at random.
+fn random_quote() -> usize {
+    // The hasher is seeded at random for each value: enough to draw a sentence.
+    let [byte, ..] = RandomState::new().hash_one(()).to_le_bytes();
+    usize::from(byte) % DOWNLOAD_QUOTE_COUNT
 }
 
 #[cfg(test)]

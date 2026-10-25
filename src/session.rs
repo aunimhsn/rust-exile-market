@@ -1,10 +1,13 @@
 //! What the window shows, built from what happened: the state of the application, without
 //! the interface.
 
+use std::time::{Duration, SystemTime};
+
 use crate::clipboard::ClipboardEvent;
 use crate::item::{CopiedItem, Item, ParseError};
 use crate::league::{League, Leagues};
-use crate::market::MarketEvent;
+use crate::market::{MarketEvent, Source};
+use crate::prices::PriceList;
 
 /// The last item copied in the game, and what the parser read from it.
 #[derive(Debug)]
@@ -46,9 +49,36 @@ pub struct Session {
     league: Option<League>,
     /// The new league offered to a player on a permanent league.
     new_league: Option<League>,
+    /// The prices of the league shown, from the cache or the price database.
+    prices: Option<LeaguePrices>,
+    /// The last request for the leagues succeeded.
+    leagues_reachable: bool,
+    /// The last download of the prices of the league shown succeeded, or none failed yet.
+    prices_reachable: bool,
     /// Shown until another item is copied.
     item: Option<ShownItem>,
     clipboard_readable: bool,
+}
+
+/// The prices of a league, complete or still downloading.
+#[derive(Debug)]
+struct LeaguePrices {
+    list: PriceList,
+    /// The share downloaded, from 0 to 1, while a part of the prices is known; `None` once
+    /// they are complete.
+    downloading: Option<f32>,
+}
+
+/// The state of the prices of the league shown.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum PricesState {
+    /// Not complete yet: `progress` of them are downloaded (from 0 to 1), or the league isn't
+    /// known yet.
+    Downloading { progress: f32 },
+    /// Not complete, and the price database can't be reached.
+    Unavailable,
+    /// Given by the price database `age` ago; `offline` while it can't be reached.
+    Known { age: Duration, offline: bool },
 }
 
 /// What changed in the leagues, for the settings to keep.
@@ -66,6 +96,9 @@ impl Session {
             leagues: None,
             league,
             new_league: None,
+            prices: None,
+            leagues_reachable: true,
+            prices_reachable: true,
             item: None,
             clipboard_readable: true,
         }
@@ -74,9 +107,31 @@ impl Session {
     /// Takes in what the price database sent; `closed` are the new leagues whose bubble the
     /// player closed.
     pub fn apply_market(&mut self, event: MarketEvent, closed: &[League]) -> Option<LeagueChange> {
-        let MarketEvent::Leagues(leagues) = event else {
-            return None;
-        };
+        match event {
+            MarketEvent::Leagues(leagues) => {
+                self.leagues_reachable = true;
+                return self.apply_leagues(leagues, closed);
+            }
+            MarketEvent::CachedPrices(prices) => self.keep_prices(prices, None),
+            MarketEvent::PartialPrices { prices, progress } => {
+                if self.shows(&prices) {
+                    self.prices_reachable = true;
+                }
+                self.keep_prices(prices, Some(progress));
+            }
+            MarketEvent::Prices(prices) => {
+                if self.shows(&prices) {
+                    self.prices_reachable = true;
+                }
+                self.keep_prices(prices, None);
+            }
+            MarketEvent::Unreachable(Source::Leagues) => self.leagues_reachable = false,
+            MarketEvent::Unreachable(Source::Prices) => self.prices_reachable = false,
+        }
+        None
+    }
+
+    fn apply_leagues(&mut self, leagues: Leagues, closed: &[League]) -> Option<LeagueChange> {
         let choice = leagues.choose(self.league.as_ref());
         if let Some(ended) = &choice.ended {
             log::info!(
@@ -93,9 +148,26 @@ impl Session {
         change
     }
 
-    /// Shows `league`, chosen by the player.
+    /// `prices` are those of the league shown.
+    fn shows(&self, prices: &PriceList) -> bool {
+        self.league.as_ref() == Some(&prices.league)
+    }
+
+    /// Keeps `prices` if they are those of the league shown, `downloading` while they are
+    /// partial: the prices of a league left meanwhile are dropped.
+    fn keep_prices(&mut self, list: PriceList, downloading: Option<f32>) {
+        if self.shows(&list) {
+            self.prices = Some(LeaguePrices { list, downloading });
+        }
+    }
+
+    /// Shows `league`, chosen by the player. A failed download of the previous league says
+    /// nothing of this one.
     pub fn choose_league(&mut self, league: League) {
         self.new_league = None;
+        if self.league.as_ref() != Some(&league) {
+            self.prices_reachable = true;
+        }
         self.league = Some(league);
     }
 
@@ -123,6 +195,32 @@ impl Session {
         self.leagues.as_ref()
     }
 
+    /// The prices of the league shown, complete or still downloading.
+    fn league_prices(&self) -> Option<&LeaguePrices> {
+        self.prices
+            .as_ref()
+            .filter(|prices| self.shows(&prices.list))
+    }
+
+    /// The state of the prices of the league shown, at `now`.
+    #[must_use]
+    pub fn prices_state(&self, now: SystemTime) -> PricesState {
+        let offline = !(self.leagues_reachable && self.prices_reachable);
+        match self.league_prices() {
+            Some(LeaguePrices {
+                list,
+                downloading: None,
+            }) => PricesState::Known {
+                age: list.age(now),
+                offline,
+            },
+            _ if offline => PricesState::Unavailable,
+            prices => PricesState::Downloading {
+                progress: prices.and_then(|prices| prices.downloading).unwrap_or(0.0),
+            },
+        }
+    }
+
     #[must_use]
     pub fn new_league(&self) -> Option<&League> {
         self.new_league.as_ref()
@@ -143,6 +241,7 @@ impl Session {
 mod tests {
     use super::*;
     use crate::league::LeagueMode;
+    use crate::prices::Rates;
 
     fn leagues(ids: &[&str]) -> MarketEvent {
         MarketEvent::Leagues(Leagues::new(ids.iter().map(|&id| League::new(id))))
@@ -270,11 +369,137 @@ mod tests {
         assert_eq!(session.league(), Some(&League::new("Forbidden Rites")));
     }
 
+    fn prices(league: &str, updated: SystemTime) -> PriceList {
+        PriceList {
+            league: League::new(league),
+            updated,
+            rates: Rates {
+                chaos: 75.0,
+                divine: 750.0,
+            },
+            uniques: Vec::new(),
+            currencies: Vec::new(),
+        }
+    }
+
+    /// A time of 2026-10-25.
+    fn now() -> SystemTime {
+        SystemTime::UNIX_EPOCH + Duration::from_secs(1_793_000_000)
+    }
+
+    fn ago(minutes: u64) -> SystemTime {
+        now() - Duration::from_mins(minutes)
+    }
+
+    #[test]
+    fn the_prices_are_downloading_until_they_arrive() {
+        let mut session = session();
+        assert_eq!(
+            session.prices_state(now()),
+            PricesState::Downloading { progress: 0.0 }
+        );
+
+        session.apply_market(MarketEvent::Unreachable(Source::Prices), &[]);
+        assert_eq!(session.prices_state(now()), PricesState::Unavailable);
+
+        session.apply_market(MarketEvent::Prices(prices("Forbidden Rites", ago(2))), &[]);
+        assert_eq!(
+            session.prices_state(now()),
+            PricesState::Known {
+                age: Duration::from_mins(2),
+                offline: false
+            }
+        );
+    }
+
+    #[test]
+    fn cached_prices_are_offline_while_the_database_cant_be_reached() {
+        let mut session = session();
+
+        session.apply_market(MarketEvent::Unreachable(Source::Leagues), &[]);
+        session.apply_market(
+            MarketEvent::CachedPrices(prices("Forbidden Rites", ago(180))),
+            &[],
+        );
+
+        assert_eq!(
+            session.prices_state(now()),
+            PricesState::Known {
+                age: Duration::from_hours(3),
+                offline: true
+            }
+        );
+    }
+
+    #[test]
+    fn the_prices_of_another_league_are_not_shown() {
+        let mut session = session();
+        session.apply_market(MarketEvent::Prices(prices("Forbidden Rites", now())), &[]);
+
+        session.choose_league(League::new("HC Forbidden Rites"));
+        assert!(session.league_prices().is_none());
+        // Downloaded before the player left that league.
+        session.apply_market(MarketEvent::Prices(prices("Forbidden Rites", now())), &[]);
+        assert!(session.league_prices().is_none());
+
+        session.choose_league(League::new("Forbidden Rites"));
+        assert!(session.league_prices().is_some());
+    }
+
+    #[test]
+    fn partial_prices_are_shown_while_downloading() {
+        let mut session = session();
+
+        session.apply_market(
+            MarketEvent::PartialPrices {
+                prices: prices("Forbidden Rites", now()),
+                progress: 0.25,
+            },
+            &[],
+        );
+
+        assert!(session.league_prices().is_some());
+        assert_eq!(
+            session.prices_state(now()),
+            PricesState::Downloading { progress: 0.25 }
+        );
+    }
+
+    #[test]
+    fn the_leagues_read_again_dont_hide_a_failing_download() {
+        let mut session = session();
+        session.apply_market(MarketEvent::Prices(prices("Forbidden Rites", now())), &[]);
+
+        session.apply_market(MarketEvent::Unreachable(Source::Prices), &[]);
+        session.apply_market(leagues(&["Forbidden Rites"]), &[]);
+
+        assert!(matches!(
+            session.prices_state(now()),
+            PricesState::Known { offline: true, .. }
+        ));
+    }
+
+    #[test]
+    fn a_failed_download_of_the_previous_league_says_nothing_of_the_new_one() {
+        let mut session = session();
+        session.apply_market(MarketEvent::Unreachable(Source::Prices), &[]);
+
+        session.choose_league(League::new("HC Forbidden Rites"));
+
+        assert_eq!(
+            session.prices_state(now()),
+            PricesState::Downloading { progress: 0.0 }
+        );
+    }
+
     #[test]
     fn an_unreachable_database_changes_nothing() {
         let mut session = session();
 
-        assert_eq!(session.apply_market(MarketEvent::Unreachable, &[]), None);
+        assert_eq!(
+            session.apply_market(MarketEvent::Unreachable(Source::Prices), &[]),
+            None
+        );
         assert_eq!(session.leagues(), None);
     }
 }
