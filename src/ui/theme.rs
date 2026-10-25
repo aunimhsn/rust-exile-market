@@ -43,8 +43,10 @@ pub mod color {
     pub const GEM: Color32 = Color32::from_rgb(0x1b, 0xa2, 0x9b);
     /// A modifier at its best tier, and the T1 tag: a vivid orange that stands out.
     pub const TIER_1: Color32 = Color32::from_rgb(0xff, 0x8c, 0x1a);
+    /// The background of the hardcore leagues, also behind the Corrupted tag.
+    pub const HARDCORE: Color32 = Color32::from_rgb(0x35, 0x14, 0x17);
     /// The Corrupted tag: white on the background of the hardcore leagues.
-    pub const CORRUPTED_TAG: Color32 = Color32::from_rgb(0x35, 0x14, 0x17);
+    pub const CORRUPTED_TAG: Color32 = HARDCORE;
     pub const CORRUPTED_TAG_TEXT: Color32 = Color32::WHITE;
 }
 
@@ -195,7 +197,7 @@ impl LeagueModeColors {
                 hovered: Color32::from_rgb(0x1a, 0x33, 0x50),
             },
             LeagueMode::Hardcore => Self {
-                background: Color32::from_rgb(0x35, 0x14, 0x17),
+                background: color::HARDCORE,
                 hovered: Color32::from_rgb(0x4a, 0x1b, 0x20),
             },
         }

@@ -78,7 +78,7 @@ prices-unavailable = Prix indisponibles, nouvelle tentative…
 
 # Ouvre la recherche de l'objet sur le site d'échange, dans le navigateur.
 check-on-trade = Voir sur l'échange
-# Les tags après la classe de l'objet, avec les mots du client du jeu.
+# Les tags après la classe de l'objet, courts, proches des mots du client du jeu.
 tag-corrupted = Corrompu
 tag-twice-corrupted = Double corruption
 tag-sanctified = Sanctifié
@@ -98,7 +98,7 @@ tag-tier-1 = { $value } T1
 dps-physical = DPS physique { $dps }
 dps-elemental = DPS élémentaire { $dps }
 dps-chaos = DPS de chaos { $dps }
-# Le résumé d'un objet qui octroie une aptitude, par exemple « Niveau 18 Sceau de puissance ».
+# Le résumé d'un objet qui octroie des aptitudes, par exemple « Niveau 18 Sceau de puissance », jointes par « · ».
 granted-skill = Octroie l'aptitude : { $skill }
 # La ligne des prérequis, ses parties jointes par « · » : « Requiert niveau 65 · 145 Dex ».
 requires = Requiert { $parts }

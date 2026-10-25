@@ -49,6 +49,8 @@ pub fn target<'a>(
                     Language::English => prices
                         .and_then(|prices| prices.currency_named(base_type))
                         .map(|currency| currency.exchange_id.as_str()),
+                    // The prices only know the English names: a French name needs the names
+                    // of the trade site.
                     Language::French => None,
                 });
             match id {
@@ -238,5 +240,36 @@ mod tests {
             query(&url)["query"]["filters"]["type_filters"]["filters"]["rarity"]["option"],
             "nonunique"
         );
+    }
+
+    #[test]
+    fn an_english_item_of_the_exchange_is_found_in_the_prices_without_the_names() {
+        use crate::prices::{CurrencyPrice, Price, Rates};
+        let prices = PriceList {
+            league: League::new("Standard"),
+            updated: std::time::SystemTime::UNIX_EPOCH,
+            rates: Rates {
+                chaos: 75.0,
+                divine: 750.0,
+            },
+            uniques: Vec::new(),
+            currencies: vec![CurrencyPrice {
+                name: "Exalted Orb".to_owned(),
+                exchange_id: "exalted".to_owned(),
+                price: Price {
+                    exalted: 1.0,
+                    quantity: 1000,
+                    history: Vec::new(),
+                },
+            }],
+        };
+        let orb = parse("Item Class: Stackable Currency\nRarity: Currency\nExalted Orb");
+
+        let target = target(&orb, None, Some(&prices)).expect("a target");
+
+        assert_eq!(target, TradeTarget::Exchange { id: "exalted" });
+        // The Exalted Orb itself is paid in Divine Orbs.
+        let url = url(Language::English, &League::new("Standard"), &target);
+        assert_eq!(query(&url)["exchange"]["have"], json!(["divine"]));
     }
 }

@@ -8,6 +8,7 @@ use std::time::Duration;
 
 use fluent_bundle::{FluentArgs, FluentBundle, FluentResource};
 
+use crate::item::DamageKind;
 use crate::language::Language;
 
 /// The Fluent messages of a language, embedded in the executable.
@@ -137,14 +138,6 @@ pub enum NumberTag {
     ItemLevel,
     /// The prefixes and suffixes at tier 1.
     Tier1,
-}
-
-/// The kinds of DPS of the summary of a weapon.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum DpsKind {
-    Physical,
-    Elemental,
-    Chaos,
 }
 
 /// The parts of the requirements line.
@@ -310,16 +303,17 @@ impl Translator {
 
     /// A part of the summary of a weapon: its DPS of a kind, rounded.
     #[must_use]
-    pub fn dps(&self, kind: DpsKind, dps: u32) -> String {
+    pub fn dps(&self, kind: DamageKind, dps: u32) -> String {
         let id = match kind {
-            DpsKind::Physical => DPS_PHYSICAL,
-            DpsKind::Elemental => DPS_ELEMENTAL,
-            DpsKind::Chaos => DPS_CHAOS,
+            DamageKind::Physical => DPS_PHYSICAL,
+            DamageKind::Elemental => DPS_ELEMENTAL,
+            DamageKind::Chaos => DPS_CHAOS,
         };
         self.format_number(id, "dps", dps)
     }
 
-    /// The summary of an item that grants a skill, e.g. a staff.
+    /// The summary of an item that grants skills, e.g. a staff, from the skills joined by
+    /// the caller.
     #[must_use]
     pub fn granted_skill(&self, skill: &str) -> String {
         let mut args = FluentArgs::new();
@@ -495,7 +489,11 @@ mod tests {
                 }
             }
             assert!(translator.stack_tag(7, 20).contains("7/20"), "{language:?}");
-            for kind in [DpsKind::Physical, DpsKind::Elemental, DpsKind::Chaos] {
+            for kind in [
+                DamageKind::Physical,
+                DamageKind::Elemental,
+                DamageKind::Chaos,
+            ] {
                 assert!(translator.dps(kind, 245).contains("245"), "{language:?}");
             }
             assert!(translator.granted_skill("Skill").contains("Skill"));

@@ -98,7 +98,7 @@ tag-tier-1 = { $value } T1
 dps-physical = Physical DPS { $dps }
 dps-elemental = Elemental DPS { $dps }
 dps-chaos = Chaos DPS { $dps }
-# The summary of an item that grants a skill, e.g. "Level 18 Sigil of Power".
+# The summary of an item that grants skills, e.g. "Level 18 Sigil of Power", joined by " · ".
 granted-skill = Grants Skill: { $skill }
 # The requirements line, its parts joined by " · ": "Requires Level 65 · 145 Dex".
 requires = Requires { $parts }

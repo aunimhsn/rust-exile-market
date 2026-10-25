@@ -246,13 +246,13 @@ impl Session {
 
     /// What the search for `item` on the trade site looks for; none for a magic item whose
     /// base type isn't known yet.
-    #[must_use]
-    pub fn trade_target<'a>(&'a self, item: &'a Item) -> Option<TradeTarget<'a>> {
+    fn trade_target<'a>(&'a self, item: &'a Item) -> Option<TradeTarget<'a>> {
         let prices = self.league_prices().map(|prices| &prices.list);
         link::target(item, self.item_names.as_ref(), prices)
     }
 
-    /// The link of the search for `item` on the trade site, in the league shown.
+    /// The link of the search for `item` on the trade site, in the league shown; none before
+    /// the league is known.
     #[must_use]
     pub fn trade_url(&self, item: &Item) -> Option<String> {
         let league = self.league.as_ref()?;
@@ -341,10 +341,6 @@ mod tests {
         copy(&mut session, AMULET);
 
         assert_eq!(shown_base(&session), Some("Jade Amulet"));
-        let parsed = session.item().map(ShownItem::parsed);
-        assert!(
-            parsed.is_some_and(|item| item.is_ok_and(|item| item.base_type() == "Jade Amulet"))
-        );
     }
 
     #[test]

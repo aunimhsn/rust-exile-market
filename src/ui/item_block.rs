@@ -1,6 +1,6 @@
 //! The item block: the name of the copied item in its rarity color, the Check on trade pill,
-//! its base type, its class and tags, the summary of a weapon or a granted skill, and its
-//! requirements.
+//! its base type, its class and tags, the summary of a weapon or the skills it grants, and
+//! its requirements.
 
 use egui::{
     Align, CornerRadius, Frame, Label, Layout, RichText, Sense, Ui, Vec2, WidgetText, vec2,
@@ -8,8 +8,8 @@ use egui::{
 
 use super::theme::{color, size, text};
 use super::widgets;
-use crate::i18n::{DpsKind, Message, NumberTag, Requirement, Translator};
-use crate::item::{Item, ItemState, Rarity};
+use crate::i18n::{Message, NumberTag, Requirement, Translator};
+use crate::item::{DamageKind, Item, ItemState, Rarity};
 
 /// The space above and under the block.
 const PADDING_Y: f32 = 12.0;
@@ -27,6 +27,8 @@ const TAG_SPACING: Vec2 = vec2(6.0, 5.0);
 const TAG_PADDING: Vec2 = vec2(7.0, 1.0);
 /// The separator of the parts of the summary and of the requirements.
 const SEPARATOR: &str = " · ";
+/// The largest DPS shown: far over any weapon, under the largest `u32`.
+const MAX_DPS: f64 = 1e6;
 
 /// What the player did in the item block.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -41,6 +43,32 @@ enum TagStyle {
     Corrupted,
     Tier1,
 }
+
+/// The state tags, in the order of the specifications.
+const STATE_TAGS: [(ItemState, Message, TagStyle); 6] = [
+    (
+        ItemState::Corrupted,
+        Message::TagCorrupted,
+        TagStyle::Corrupted,
+    ),
+    (
+        ItemState::TwiceCorrupted,
+        Message::TagTwiceCorrupted,
+        TagStyle::Corrupted,
+    ),
+    (
+        ItemState::Sanctified,
+        Message::TagSanctified,
+        TagStyle::Plain,
+    ),
+    (ItemState::Fractured, Message::TagFractured, TagStyle::Plain),
+    (ItemState::Mirrored, Message::TagMirrored, TagStyle::Plain),
+    (
+        ItemState::Unidentified,
+        Message::TagUnidentified,
+        TagStyle::Plain,
+    ),
+];
 
 pub struct ItemBlock<'a> {
     item: &'a Item,
@@ -66,10 +94,10 @@ impl<'a> ItemBlock<'a> {
         self
     }
 
-    /// Draws the block at the top of `ui`, its whole width; what the player did in it.
+    /// Draws the block at the top of `ui`, on its band B, its whole width; what the player
+    /// did in it.
     pub fn show(self, ui: &mut Ui) -> Option<ItemBlockAction> {
         Frame::NONE
-            .fill(color::BAND_B)
             .inner_margin(vec2(size::BAND_PADDING, PADDING_Y))
             .show(ui, |ui| {
                 ui.set_width(ui.available_width());
@@ -77,13 +105,13 @@ impl<'a> ItemBlock<'a> {
                 let action = self.name_row(ui);
                 if let Some(base_type) = self.base_line() {
                     ui.add_space(BASE_GAP);
-                    ui.add(Label::new(line(base_type, color::TEXT)).wrap());
+                    ui.add(Label::new(line(base_type)).wrap());
                 }
                 ui.add_space(LINE_GAP);
                 self.class_and_tags(ui);
                 if let Some(summary) = self.summary() {
                     ui.add_space(SUMMARY_GAP);
-                    ui.add(Label::new(line(&summary, color::TEXT)).wrap());
+                    ui.add(Label::new(line(&summary)).wrap());
                 }
                 if let Some(requirements) = self.requirements() {
                     ui.add_space(LINE_GAP);
@@ -131,10 +159,10 @@ impl<'a> ItemBlock<'a> {
         .inner
     }
 
-    /// The base type under the name of a rare or unique item; the other items are named by
-    /// their base.
+    /// The base type under the name of a rare or unique item, as the game writes it, with
+    /// "Exceptional"; the other items are named by their base.
     fn base_line(&self) -> Option<&str> {
-        self.item.name().map(|_| self.item.base_type())
+        self.item.name().map(|_| self.item.written_base_type())
     }
 
     /// The class, then the tags, wrapped when needed.
@@ -156,18 +184,11 @@ impl<'a> ItemBlock<'a> {
     fn tags(&self) -> Vec<(String, TagStyle)> {
         let item = self.item;
         let i18n = self.i18n;
-        let mut tags = Vec::new();
-        for state in item.states() {
-            let (message, style) = match state {
-                ItemState::Corrupted => (Message::TagCorrupted, TagStyle::Corrupted),
-                ItemState::TwiceCorrupted => (Message::TagTwiceCorrupted, TagStyle::Corrupted),
-                ItemState::Sanctified => (Message::TagSanctified, TagStyle::Plain),
-                ItemState::Fractured => (Message::TagFractured, TagStyle::Plain),
-                ItemState::Mirrored => (Message::TagMirrored, TagStyle::Plain),
-                ItemState::Unidentified => (Message::TagUnidentified, TagStyle::Plain),
-            };
-            tags.push((i18n.text(message), style));
-        }
+        let mut tags: Vec<(String, TagStyle)> = STATE_TAGS
+            .into_iter()
+            .filter(|&(state, ..)| item.has_state(state))
+            .map(|(_, message, style)| (i18n.text(message), style))
+            .collect();
         let numbers = [
             (NumberTag::Quality, item.quality()),
             (NumberTag::Sockets, item.sockets()),
@@ -189,24 +210,22 @@ impl<'a> ItemBlock<'a> {
         tags
     }
 
-    /// The DPS of a weapon, each kind it deals, or the skill an item grants.
+    /// The DPS of a weapon, each kind it deals, or the skills an item grants.
     fn summary(&self) -> Option<String> {
         if let Some(weapon) = self.item.weapon() {
             let dps = weapon.dps();
             let parts: Vec<String> = [
-                (DpsKind::Physical, dps.physical),
-                (DpsKind::Elemental, dps.elemental),
-                (DpsKind::Chaos, dps.chaos),
+                (DamageKind::Physical, dps.physical),
+                (DamageKind::Elemental, dps.elemental),
+                (DamageKind::Chaos, dps.chaos),
             ]
             .into_iter()
             .filter_map(|(kind, value)| Some(self.i18n.dps(kind, rounded(value)?)))
             .collect();
             return (!parts.is_empty()).then(|| parts.join(SEPARATOR));
         }
-        self.item
-            .granted_skills()
-            .first()
-            .map(|skill| self.i18n.granted_skill(skill))
+        let skills = self.item.granted_skills();
+        (!skills.is_empty()).then(|| self.i18n.granted_skill(&skills.join(SEPARATOR)))
     }
 
     /// The level and the attributes the item requires.
@@ -225,11 +244,11 @@ impl<'a> ItemBlock<'a> {
     }
 }
 
-/// A line of the item block in `tint`.
-fn line(text: &str, tint: egui::Color32) -> WidgetText {
+/// A line of the item block.
+fn line(text: &str) -> WidgetText {
     RichText::new(text)
         .font(text::item_line())
-        .color(tint)
+        .color(color::TEXT)
         .into()
 }
 
@@ -259,16 +278,15 @@ fn rarity_color(rarity: Rarity) -> egui::Color32 {
     }
 }
 
-/// A DPS rounded to a whole number; none when it rounds to zero.
+/// A DPS rounded to a whole number; none when it rounds to zero, or past [`MAX_DPS`].
 fn rounded(dps: f64) -> Option<u32> {
     let rounded = dps.round();
-    // The DPS of a weapon stays far under the largest `u32`.
     #[expect(
         clippy::cast_possible_truncation,
         clippy::cast_sign_loss,
-        reason = "a positive DPS under a million"
+        reason = "a positive DPS under MAX_DPS"
     )]
-    (1.0..1e9).contains(&rounded).then_some(rounded as u32)
+    (1.0..=MAX_DPS).contains(&rounded).then_some(rounded as u32)
 }
 
 #[cfg(test)]
@@ -277,55 +295,124 @@ mod tests {
     use crate::item::CopiedItem;
     use crate::language::Language;
 
-    fn parse(text: &str) -> Item {
-        Item::parse(&CopiedItem::from_text(text).expect("an item")).expect("read")
+    /// The texts of the block of the item copied as `text`, with the interface in `language`.
+    struct Texts {
+        base_line: Option<String>,
+        tags: Vec<String>,
+        summary: Option<String>,
+        requirements: Option<String>,
     }
 
-    fn block_texts(
-        text: &str,
-        language: Language,
-    ) -> (Vec<String>, Option<String>, Option<String>) {
-        let item = parse(text);
+    fn texts(text: &str, language: Language) -> Texts {
+        let item = Item::parse(&CopiedItem::from_text(text).expect("an item")).expect("read");
         let i18n = Translator::new(language);
         let block = ItemBlock::new(&item, &i18n);
-        let tags = block.tags().into_iter().map(|(label, _)| label).collect();
-        (tags, block.summary(), block.requirements())
+        Texts {
+            base_line: block.base_line().map(str::to_owned),
+            tags: block.tags().into_iter().map(|(label, _)| label).collect(),
+            summary: block.summary(),
+            requirements: block.requirements(),
+        }
+    }
+
+    fn english(text: &str) -> Texts {
+        texts(text, Language::English)
     }
 
     #[test]
-    fn a_rare_weapon_shows_its_tags_dps_and_requirements() {
-        let (tags, summary, requirements) = block_texts(
-            include_str!("../item/test-items/en-rare-crossbow-all-modifiers.txt"),
-            Language::English,
-        );
+    fn a_rare_weapon_shows_its_tags_in_order_its_dps_and_requirements() {
+        let crossbow = english(include_str!(
+            "../item/test-items/en-rare-crossbow-all-modifiers.txt"
+        ));
 
-        assert!(tags.contains(&"Q 20%".to_owned()), "{tags:?}");
-        assert_eq!(tags.last().map(String::as_str), Some("2 T1"));
+        assert_eq!(crossbow.base_line.as_deref(), Some("Gemini Crossbow"));
         assert_eq!(
-            summary.as_deref(),
+            crossbow.tags,
+            [
+                "Corrupted",
+                "Fractured",
+                "Q 20%",
+                "2 sockets",
+                "ilvl 80",
+                "2 T1"
+            ]
+        );
+        assert_eq!(
+            crossbow.summary.as_deref(),
             Some("Physical DPS 288 · Elemental DPS 267")
         );
-        assert!(
-            requirements.is_some_and(|line| line.starts_with("Requires Level ")),
-            "a requirements line"
+        assert_eq!(
+            crossbow.requirements.as_deref(),
+            Some("Requires Level 78 · 89 Str · 89 Dex")
+        );
+    }
+
+    #[test]
+    fn a_magic_item_has_a_t1_tag_and_a_unique_never_has_one() {
+        let magic = english(
+            "Item Class: Rings\nRarity: Magic\nGlimmering Ruby Ring of the Lynx\n--------\n\
+             Item Level: 68\n--------\n\
+             { Prefix Modifier \"Glimmering\" (Tier: 1) — Life }\n+80(70-89) to maximum Life\n\
+             { Suffix Modifier \"of the Lynx\" (Tier: 4) — Attribute }\n+20(17-20) to Dexterity",
+        );
+        let unique = english(include_str!("../item/test-items/en-unique-focus.txt"));
+
+        assert_eq!(magic.tags, ["ilvl 68", "1 T1"]);
+        assert_eq!(magic.base_line, None, "named by its base");
+        assert_eq!(unique.tags, ["ilvl 81"]);
+        assert_eq!(unique.base_line.as_deref(), Some("Crystal Focus"));
+    }
+
+    #[test]
+    fn a_stack_has_its_tag_and_no_requirements() {
+        let stack = texts(
+            include_str!("../item/test-items/fr-currency-stack.txt"),
+            Language::French,
+        );
+
+        assert_eq!(stack.tags, ["Pile 40/40"]);
+        assert_eq!(stack.requirements, None);
+        assert_eq!(stack.summary, None);
+    }
+
+    #[test]
+    fn the_base_line_of_an_exceptional_rare_keeps_its_word() {
+        let staff =
+            english("Item Class: Staves\nRarity: Rare\nDoom Song\nExceptional Chiming Staff");
+
+        assert_eq!(
+            staff.base_line.as_deref(),
+            Some("Exceptional Chiming Staff")
         );
     }
 
     #[test]
     fn a_french_item_shows_its_texts_in_the_language_of_the_interface() {
-        let (tags, summary, requirements) = block_texts(
+        let staff = texts(
             include_str!("../item/test-items/fr-rare-staff.txt"),
             Language::French,
         );
 
-        assert!(tags.iter().any(|tag| tag.starts_with("niv.")), "{tags:?}");
-        assert!(summary.is_some_and(|line| line.starts_with("Octroie l'aptitude")));
-        assert_eq!(requirements.as_deref(), Some("Requiert niveau 64 · 87 Int"));
+        assert!(
+            staff.tags.iter().any(|tag| tag.starts_with("niv.")),
+            "{:?}",
+            staff.tags
+        );
+        assert!(
+            staff
+                .summary
+                .is_some_and(|line| line.starts_with("Octroie l'aptitude"))
+        );
+        assert_eq!(
+            staff.requirements.as_deref(),
+            Some("Requiert niveau 64 · 87 Int")
+        );
     }
 
     #[test]
-    fn a_dps_under_one_isnt_shown() {
+    fn a_dps_under_one_or_past_the_largest_isnt_shown() {
         assert_eq!(rounded(0.4), None);
         assert_eq!(rounded(244.6), Some(245));
+        assert_eq!(rounded(2e6), None);
     }
 }

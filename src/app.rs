@@ -222,13 +222,13 @@ impl ExileMarketApp {
             UnreadableItem::new(&self.i18n).show(ui);
             return;
         };
+        // The pill shows only when its link can be opened: the league and the search known.
+        let url = self.session.trade_url(item);
         ui::content(ui, |ui| {
             let action = ItemBlock::new(item, &self.i18n)
-                .tradable(self.session.trade_target(item).is_some())
+                .tradable(url.is_some())
                 .show(ui);
-            if action == Some(ItemBlockAction::CheckOnTrade)
-                && let Some(url) = self.session.trade_url(item)
-            {
+            if let (Some(ItemBlockAction::CheckOnTrade), Some(url)) = (action, url) {
                 ui.ctx().open_url(OpenUrl::new_tab(url));
             }
         });

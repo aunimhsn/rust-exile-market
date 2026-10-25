@@ -25,7 +25,7 @@ impl DamageKind {
 
 /// A damage range of a weapon, e.g. `74-231`.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct DamageRange {
+pub(super) struct DamageRange {
     pub kind: DamageKind,
     pub min: f64,
     pub max: f64,
@@ -49,8 +49,8 @@ pub struct Dps {
 /// The damage and the speed of a weapon.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Weapon {
-    pub damage: Vec<DamageRange>,
-    pub attacks_per_second: f64,
+    pub(super) damage: Vec<DamageRange>,
+    pub(super) attacks_per_second: f64,
 }
 
 impl Weapon {

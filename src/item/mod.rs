@@ -27,7 +27,7 @@ mod weapon;
 pub use copied::CopiedItem;
 pub use modifier::{Affix, Modifier, ModifierKind, ModifierOrigin};
 pub use parser::{ParseError, ParseWarning};
-pub use weapon::Weapon;
+pub use weapon::{DamageKind, Weapon};
 
 use crate::language::Language;
 
@@ -132,15 +132,18 @@ impl Item {
         &self.warnings
     }
 
-    /// The name the game shows: the name of a rare or unique item, the whole name of a magic
-    /// one, and the base type as written for the others ("Exceptional Chiming Staff").
+    /// The name the game shows: the name of a rare or unique item, and the name line as
+    /// written for the others, with the affixes of a magic item and the word "Exceptional"
+    /// ("Exceptional Chiming Staff").
     #[must_use]
     pub fn title(&self) -> &str {
-        match (&self.name, self.rarity) {
-            (Some(name), _) => name,
-            (None, Rarity::Magic) => &self.base_type,
-            (None, _) => &self.written_base_type,
-        }
+        self.name.as_deref().unwrap_or(&self.written_base_type)
+    }
+
+    /// The base type as the game writes it, with "Exceptional" and "Superior".
+    #[must_use]
+    pub fn written_base_type(&self) -> &str {
+        &self.written_base_type
     }
 
     /// The damage and the speed of a weapon.
