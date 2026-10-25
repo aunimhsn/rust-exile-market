@@ -14,29 +14,33 @@ enum Part<'a> {
     Range(Range),
 }
 
-/// The ranges of the rolls of the copied `line`, from the first modifier of `modifiers` it
-/// matches; none when it matches none, or a modifier without a range.
+/// The range of each number of the copied `line`, in its order (`None` for a number written
+/// in the text of the modifier, which doesn't roll), from the first of `modifiers` it
+/// matches; `None` when it matches none.
 #[must_use]
-pub fn unique_ranges(line: &str, modifiers: &[String]) -> Option<Vec<Range>> {
+pub fn unique_ranges(line: &str, modifiers: &[String]) -> Option<Vec<Option<Range>>> {
     modifiers
         .iter()
         // A modifier can hold several lines.
         .flat_map(|modifier| modifier.lines())
         .find_map(|modifier| ranges(modifier.trim(), line))
-        .filter(|ranges| !ranges.is_empty())
 }
 
-/// The ranges of `modifier` when `line` is that modifier with a number in place of each
+/// The range of each number of `line` when it is `modifier` with a number in place of each
 /// range.
-fn ranges(modifier: &str, line: &str) -> Option<Vec<Range>> {
+fn ranges(modifier: &str, line: &str) -> Option<Vec<Option<Range>>> {
     let mut rest = line;
     let mut ranges = Vec::new();
     for part in parts(modifier) {
         match part {
-            Part::Text(text) => rest = rest.strip_prefix(text)?,
+            Part::Text(text) => {
+                rest = rest.strip_prefix(text)?;
+                // The numbers of the text of the modifier are the same on every item.
+                ranges.extend((0..numbers_in(text)).map(|_| None));
+            }
             Part::Range(range) => {
                 rest = after_number(rest)?;
-                ranges.push(range);
+                ranges.push(Some(range));
             }
         }
     }
@@ -70,7 +74,8 @@ fn parts(modifier: &str) -> Vec<Part<'_>> {
 }
 
 /// The range written `min-max`, each with its sign, e.g. `15-35` or `-40--20`. The game shows
-/// a negative roll without its sign ("20% reduced"): the range is of the absolute values.
+/// a negative roll without its sign ("20% reduced"): the range is of the absolute values. A
+/// range across zero has no meaning without its sign: none.
 fn range(text: &str) -> Option<Range> {
     // The separator is the first minus sign after a digit.
     let separator = text
@@ -86,28 +91,44 @@ fn range(text: &str) -> Option<Range> {
         .map(|(index, _)| index)?;
     let first: f64 = text[..separator].parse().ok()?;
     let second: f64 = text[separator + 1..].parse().ok()?;
-    let (first, second) = (first.abs(), second.abs());
-    Some(Range {
-        min: first.min(second),
-        max: first.max(second),
-    })
+    if first.signum() * second.signum() < 0.0 {
+        return None;
+    }
+    Some(
+        Range {
+            min: first,
+            max: second,
+        }
+        .magnitude(),
+    )
 }
 
 /// `text` after the number at its start, with its sign, e.g. `-12.5% reduced`.
 fn after_number(text: &str) -> Option<&str> {
     let unsigned = text.strip_prefix(['-', '+']).unwrap_or(text);
-    let digits = unsigned
+    let length = unsigned
         .find(|character: char| !character.is_ascii_digit() && character != '.')
         .unwrap_or(unsigned.len());
-    (digits > 0).then(|| &unsigned[digits..])
+    // A number has a digit: "." alone isn't one.
+    unsigned[..length]
+        .contains(|character: char| character.is_ascii_digit())
+        .then(|| &unsigned[length..])
+}
+
+/// The number of numbers written in `text`, e.g. 1 in ` to 9 Physical Damage`.
+fn numbers_in(text: &str) -> usize {
+    text.split(|character: char| !character.is_ascii_digit() && character != '.')
+        .filter(|part| part.contains(|character: char| character.is_ascii_digit()))
+        .count()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn range(min: f64, max: f64) -> Range {
-        Range { min, max }
+    #[expect(clippy::unnecessary_wraps, reason = "a range of the result")]
+    fn range(min: f64, max: f64) -> Option<Range> {
+        Some(Range { min, max })
     }
 
     fn modifiers(lines: &[&str]) -> Vec<String> {
@@ -119,7 +140,6 @@ mod tests {
         let headhunter = modifiers(&[
             "(20-30)% increased Stun Threshold",
             "+(40-60) to maximum Life",
-            "+(20-40) to Strength",
             "When you kill a Rare monster, you gain its Modifiers for 60 seconds",
         ]);
 
@@ -127,18 +147,31 @@ mod tests {
             unique_ranges("+55 to maximum Life", &headhunter),
             Some(vec![range(40.0, 60.0)])
         );
-        assert_eq!(
-            unique_ranges("26% increased Stun Threshold", &headhunter),
-            Some(vec![range(20.0, 30.0)])
-        );
         assert_eq!(unique_ranges("+55 to maximum Mana", &headhunter), None);
-        // A modifier without a range has no roll.
+        // A modifier without a range: its number is written in its text.
         assert_eq!(
             unique_ranges(
                 "When you kill a Rare monster, you gain its Modifiers for 60 seconds",
                 &headhunter
             ),
-            None
+            Some(vec![None])
+        );
+    }
+
+    #[test]
+    fn a_fixed_number_before_a_range_keeps_its_place() {
+        let loreweave = modifiers(&[
+            "Adds (8-12) to 9 Physical Damage to Attacks",
+            "Adds 1 to (50-60) Lightning Damage",
+        ]);
+
+        assert_eq!(
+            unique_ranges("Adds 10 to 9 Physical Damage to Attacks", &loreweave),
+            Some(vec![range(8.0, 12.0), None])
+        );
+        assert_eq!(
+            unique_ranges("Adds 1 to 55 Lightning Damage", &loreweave),
+            Some(vec![None, range(50.0, 60.0)])
         );
     }
 
@@ -168,8 +201,20 @@ mod tests {
                 "Gain 3 Explosive Rhythm every 3 times you use a Grenade Skill",
                 &modifiers
             ),
-            Some(vec![range(2.0, 3.0)])
+            Some(vec![range(2.0, 3.0), None])
         );
+    }
+
+    #[test]
+    fn a_range_across_zero_and_a_lone_point_are_not_read() {
+        let modifiers = modifiers(&["(-10-10) to Maximum Power Charges"]);
+
+        assert_eq!(
+            unique_ranges("5 to Maximum Power Charges", &modifiers),
+            None
+        );
+        assert_eq!(after_number(". to"), None);
+        assert_eq!(after_number("12.5% more"), Some("% more"));
     }
 
     #[test]
@@ -179,7 +224,10 @@ mod tests {
             [
                 Part::Text("Gain (some)"),
                 Part::Text(" Rage "),
-                Part::Range(range(10.0, 20.0)),
+                Part::Range(Range {
+                    min: 10.0,
+                    max: 20.0
+                }),
                 Part::Text(" times"),
             ]
         );

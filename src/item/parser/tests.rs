@@ -2,7 +2,7 @@
 
 use super::*;
 use crate::item::modifier::{Range, Roll, StatLine};
-use crate::item::{Affix, ModifierOrigin};
+use crate::item::{Affix, Defences, ModifierOrigin};
 use crate::language::Language;
 
 macro_rules! test_item {
@@ -571,14 +571,26 @@ fn the_title_is_the_name_the_game_shows() {
 }
 
 #[test]
-fn counts_the_prefixes_and_suffixes_at_tier_1() {
-    assert_eq!(item(EN_RARE_BOW_FRACTURED).tier_1_affixes(), 1);
-    assert_eq!(item(EN_RARE_CROSSBOW).tier_1_affixes(), 2);
-    // A desecrated prefix is a prefix.
-    assert_eq!(item(FR_RARE_STAFF).tier_1_affixes(), 2);
+fn reads_the_defences_of_an_armour_piece_or_a_shield() {
     assert_eq!(
-        item(EN_PLAIN_RARE_RING).tier_1_affixes(),
-        0,
-        "no tiers in a plain copy"
+        item(EN_UNIQUE_FOCUS).defences(),
+        Defences {
+            energy_shield: Some(44),
+            ..Defences::default()
+        }
     );
+    assert_eq!(
+        item(FR_NORMAL_EXCEPTIONAL_SHIELD).defences(),
+        Defences {
+            armour: Some(112),
+            evasion: Some(102),
+            energy_shield: None,
+            block: Some(25),
+        }
+    );
+    assert_eq!(
+        item(FR_RARE_BODY_ARMOUR).defences().energy_shield,
+        Some(567)
+    );
+    assert_eq!(item(EN_RARE_CROSSBOW).defences(), Defences::default());
 }

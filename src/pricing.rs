@@ -118,7 +118,7 @@ mod tests {
     use crate::item::CopiedItem;
     use crate::item_names::tests::item_names;
     use crate::league::League;
-    use crate::prices::{Price, Rates};
+    use crate::prices::{Price, Rates, UniqueModifiers};
     use std::time::SystemTime;
 
     fn price(exalted: f64) -> Price {
@@ -134,7 +134,7 @@ mod tests {
             name: name.to_owned(),
             base_type: base_type.to_owned(),
             price: price(exalted),
-            modifiers: Vec::new(),
+            modifiers: UniqueModifiers::default(),
         }
     }
 

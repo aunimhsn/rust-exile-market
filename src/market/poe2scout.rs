@@ -11,7 +11,7 @@ use serde::de::DeserializeOwned;
 use super::{DownloadObserver, PriceDatabase};
 use crate::http::{self, HttpError, Pace};
 use crate::league::League;
-use crate::prices::{CurrencyPrice, Price, PriceList, Rates, UniquePrice};
+use crate::prices::{CurrencyPrice, Price, PriceList, Rates, UniqueModifiers, UniquePrice};
 
 const BASE_URL: &str = "https://api.poe2scout.com/poe2";
 /// The time between two requests, at least.
@@ -116,21 +116,29 @@ struct ApiUnique {
     price: ApiPrice,
 }
 
-/// The modifiers of a unique, with their ranges, e.g. `+(17-23)% to Chaos Resistance`.
+/// The modifiers of a unique, with their ranges, e.g. `+(17-23)% to Chaos Resistance`. Read
+/// leniently: a list missing, `null`, or with something else than texts loses these modifiers
+/// only, never the price of the unique.
 #[derive(Deserialize)]
 struct ApiUniqueMetadata {
     #[serde(default)]
-    implicit_mods: Vec<String>,
+    implicit_mods: Option<Vec<serde_json::Value>>,
     #[serde(default)]
-    explicit_mods: Vec<String>,
+    explicit_mods: Option<Vec<serde_json::Value>>,
 }
 
 impl ApiUniqueMetadata {
-    /// Its implicit and explicit modifiers, in this order.
-    fn modifiers(self) -> Vec<String> {
-        let mut modifiers = self.implicit_mods;
-        modifiers.extend(self.explicit_mods);
-        modifiers
+    fn modifiers(self) -> UniqueModifiers {
+        let texts = |list: Option<Vec<serde_json::Value>>| -> Vec<String> {
+            list.unwrap_or_default()
+                .into_iter()
+                .filter_map(|value| value.as_str().map(str::to_owned))
+                .collect()
+        };
+        UniqueModifiers {
+            implicit: texts(self.implicit_mods),
+            explicit: texts(self.explicit_mods),
+        }
     }
 }
 
@@ -542,9 +550,9 @@ mod tests {
     }
 
     #[test]
-    fn reads_the_modifiers_of_a_unique_implicit_first() {
+    fn reads_the_implicit_and_explicit_modifiers_of_a_unique() {
         let page: ApiPage<ApiUnique> = serde_json::from_str(UNIQUES).expect("the answer parses");
-        let modifiers: Vec<Vec<String>> = page
+        let modifiers: Vec<UniqueModifiers> = page
             .items
             .into_iter()
             .map(|item| {
@@ -555,16 +563,38 @@ mod tests {
             .collect();
 
         assert_eq!(
-            modifiers,
+            modifiers[0].implicit,
+            ["Grants (1-1) additional Skill Slot"]
+        );
+        assert_eq!(
+            modifiers[0].explicit,
             [
-                vec![
-                    "Grants (1-1) additional Skill Slot".to_owned(),
-                    "(15-25)% increased Rarity of Items found".to_owned(),
-                    "+(17-23)% to Chaos Resistance".to_owned()
-                ],
-                Vec::new()
+                "(15-25)% increased Rarity of Items found",
+                "+(17-23)% to Chaos Resistance"
             ]
         );
+        assert_eq!(modifiers[1], UniqueModifiers::default());
+    }
+
+    #[test]
+    fn modifiers_null_or_unexpected_lose_only_themselves() {
+        let page: ApiPage<ApiUnique> = serde_json::from_str(
+            r#"{"Pages": 1, "Items": [{"Name": "A", "Type": "Ruby Ring",
+                "ItemMetadata": {"implicit_mods": null, "explicit_mods": ["+(5-10) to Life", 3]},
+                "PriceLogs": [], "CurrentPrice": 1.0, "CurrentQuantity": 1}]}"#,
+        )
+        .expect("the page still parses");
+        let modifiers = page
+            .items
+            .into_iter()
+            .next()
+            .unwrap()
+            .item_metadata
+            .unwrap()
+            .modifiers();
+
+        assert_eq!(modifiers.implicit, Vec::<String>::new());
+        assert_eq!(modifiers.explicit, ["+(5-10) to Life"]);
     }
 
     #[test]

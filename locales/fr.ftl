@@ -92,12 +92,15 @@ tag-sockets = { $value ->
 }
 tag-item-level = niv. { $value }
 tag-stack = Pile { $size }/{ $max }
-# Le nombre de préfixes et suffixes au palier 1, le meilleur.
-tag-tier-1 = { $value } T1
-# Le résumé d'une arme, ses parties jointes par « · ».
-dps-physical = DPS physique { $dps }
-dps-elemental = DPS élémentaire { $dps }
-dps-chaos = DPS de chaos { $dps }
+# Les valeurs principales de la base, chacune suivie de son nombre en gras : le DPS d'une arme,
+# les défenses d'une armure ou d'un bouclier.
+dps-physical = DPS physique
+dps-elemental = DPS élémentaire
+dps-chaos = DPS de chaos
+defence-armour = Armure
+defence-evasion = Évasion
+defence-energy-shield = Bouclier d'énergie
+defence-block = Blocage
 # Le résumé d'un objet qui octroie des aptitudes, par exemple « Niveau 18 Sceau de puissance », jointes par « · ».
 granted-skill = Octroie l'aptitude : { $skill }
 # La ligne des prérequis, ses parties jointes par « · » : « Requiert niveau 65 · 145 Dex ».
@@ -116,10 +119,14 @@ show-stats = { $count ->
 }
 hide-stats = Masquer les stats
 # Les petits titres des stats.
+group-enchant = Enchantement
+group-runes = Runes
 group-implicit = Implicite
 group-prefixes = Préfixes
 group-suffixes = Suffixes
 group-explicit = Explicite
+# Les modificateurs d'un unique, sans préfixe ni suffixe.
+group-unique = Unique
 # À côté de Préfixes et Suffixes : combien l'objet en a, sur le maximum possible.
 affix-fill = { $filled } sur { $max }
 affix-fill-open = { $filled } sur { $max } · { $open ->

@@ -46,7 +46,7 @@ The reference of the interface is the mock-up [docs/mockups/narrow-styles.html](
 | Rarities | normal `#d0d0d0`, magic `#8888ff`, rare `#ffff77`, unique `#c26a2c`, currency `#b4a787`, gem `#1ba29b` | Item names, as in the game. |
 | Modifiers | `#8f8fff` | Implicit and explicit modifiers, as in the game. |
 | Attributes | strength `#e0473f`, dexterity `#3fbf4f`, intelligence `#5aa7f0` | The attributes of the requirements and the defences they raise (armour, evasion, energy shield), as in the game; a little apart from the rise and fall colors. |
-| Tier 1 | `#ff8c1a` | Tier of a modifier at its best tier, and the T1 tag of the item block: a vivid orange that stands out. |
+| Tier 1 | `#ff8c1a` | Tier of a modifier at its best tier: a vivid orange that stands out. |
 
 ### Typography
 
@@ -111,9 +111,11 @@ The window has a title bar, then three bands (item, price, offers), then a statu
 
 - The item name, in its rarity color; for an exceptional base, the full name ("Exceptional Chiming Staff").
 - A **Check on trade** pill at the top right ("Voir sur l'échange" in French), which opens the browser on the search for this item in the selected league, sellers online: a unique by its name and base type, an item of the currency exchange on its exchange page, the other items by their base type (their stats come with the filters of step 13); on the French trade site when the item was copied in French.
-- The base type of a rare or unique item, with "Exceptional" for an exceptional base, then the item class followed by tags: Corrupted, Twice Corrupted, Sanctified, Fractured, Mirrored, Unidentified, quality (`Q 20%`), sockets (`2 sockets`), item level (`ilvl 81`), stack (`Stack 7/20`). The tiers and the open affixes show in the stats only. The tags wrap to a new line when needed.
+- The base type of a rare or unique item, with "Exceptional" for an exceptional base, then the item class in gray on the same line ("Wanderer Coat · Body Armours"); the class alone for the other items, named by their base.
+- Then the facts of the item, 12 px under the base type, 6 px apart: the main values of the base, the skills it grants, the requirements, then the tags.
 - The main values of the base on one line, the most important when choosing a weapon or an armour, each label in gray and its number in white bold: for a weapon, its DPS ("Physical DPS **245**  Elemental DPS **44**  Chaos DPS **30**", each kind it deals); for an armour piece or a shield, its defences ("Armour **412**  Evasion **380**", "Energy Shield **44**", "Block **26%**"), the label of each defence in the color of the attribute it comes from: armour red, evasion green, energy shield blue. The values of the game, with the quality, the modifiers and the runes. For a staff or a shield, the skills it grants, on a line of their own.
-- The requirements on a gray line, the size of the summary, always visible: "Requires Level 65 · 145 Dex", each attribute in its color as in the game: strength red, dexterity green, intelligence blue.
+- The requirements on a gray line, the size of the summary, always visible: "Requires Level 65 · 145 Dex", each attribute in its color as in the game: strength red, dexterity green, intelligence blue; 3 px under the base values, which look farther apart otherwise.
+- The tags: Corrupted, Twice Corrupted, Sanctified, Fractured, Mirrored, Unidentified, quality (`Q 20%`), sockets (`2 sockets`), item level (`ilvl 81`), stack (`Stack 7/20`). The tiers and the open affixes show in the stats only. The tags wrap to a new line when needed.
 - A **Show 6 stats** pill, counting the modifiers (singular for one stat; **Show filters** for an item without modifiers), and next to it the number of active filters ("3 filters"). Unfolded, the pill reads **Hide stats** and the stats appear; they stay unfolded for the next items copied, until the player folds them (not kept between two launches):
   - grouped under small titles: for a rare or magic item, **Enchant**, **Runes**, **Implicit**, then the prefixes and suffixes (below), with the filter groups of step 13 on top (Item, Weapon, then **Pseudo**, the totals the trade site adds up from several modifiers, like Exiled Exchange 2); for a unique, **Enchant**, **Runes**, **Implicit** (the implicit modifiers of its base) and **Unique** (its own modifiers, no prefix nor suffix); "min", in small gray, on the right of the first title, above the minimums;
   - in each group, the stats that vary first, then those that never vary;

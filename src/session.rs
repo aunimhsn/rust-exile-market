@@ -9,7 +9,7 @@ use crate::item_names::ItemNames;
 use crate::language::Language;
 use crate::league::{League, Leagues};
 use crate::market::{MarketEvent, Source};
-use crate::prices::{PriceList, Rates};
+use crate::prices::{PriceList, Rates, UniqueModifiers};
 use crate::pricing::{self, FixedPrice, NoFixedPrice};
 use crate::trade::link::{self, TradeTarget};
 
@@ -36,6 +36,21 @@ impl ShownItem {
 
     pub fn parsed(&self) -> Result<&Item, ParseError> {
         self.parsed.as_ref().map_err(|&error| error)
+    }
+}
+
+/// The modifiers of the unique `item` in the price database, from its `fixed_price`, for the
+/// ranges of its rolls; none for an item copied in French, whose lines aren't in English.
+#[must_use]
+pub fn unique_modifiers<'a>(
+    item: &Item,
+    fixed_price: &Result<(FixedPrice<'a>, Rates), NoFixedPrice>,
+) -> Option<&'a UniqueModifiers> {
+    match fixed_price {
+        Ok((FixedPrice::Unique(unique), _)) if item.language() == Language::English => {
+            Some(&unique.modifiers)
+        }
+        _ => None,
     }
 }
 
@@ -251,19 +266,6 @@ impl Session {
         // A price comes from the prices, which have their rates.
         let rates = prices.ok_or(NoFixedPrice::PricesUnknown)?.rates;
         Ok((price, rates))
-    }
-
-    /// The modifiers of the unique `item` in the price database, with their ranges; none for
-    /// an item copied in French, whose lines aren't in English.
-    #[must_use]
-    pub fn unique_modifiers(&self, item: &Item) -> &[String] {
-        if item.language() != Language::English {
-            return &[];
-        }
-        match self.fixed_price(item) {
-            Ok((FixedPrice::Unique(unique), _)) => &unique.modifiers,
-            _ => &[],
-        }
     }
 
     /// What the search for `item` on the trade site looks for; none for a magic item whose

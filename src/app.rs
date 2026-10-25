@@ -11,7 +11,7 @@ use crate::clipboard::{ClipboardEvent, ClipboardWatch};
 use crate::i18n::{DOWNLOAD_QUOTE_COUNT, Message, Translator};
 use crate::league::League;
 use crate::market::MarketWatch;
-use crate::session::{LeagueChange, PricesState, Session};
+use crate::session::{self, LeagueChange, PricesState, Session};
 use crate::settings::{SettingChange, Settings, SettingsFile};
 use crate::trade::ItemNamesWatch;
 use crate::ui::{
@@ -227,23 +227,18 @@ impl ExileMarketApp {
         };
         // The pill shows only when its link can be opened: the league and the search known.
         let url = self.session.trade_url(item);
+        let fixed_price = self.session.fixed_price(item);
+        let unique_modifiers = session::unique_modifiers(item, &fixed_price);
         let action = ui::content(ui, |ui| {
             let action = ItemBlock::new(item, &self.i18n)
                 .tradable(url.is_some())
-                .stats(self.stats_open, self.session.unique_modifiers(item))
+                .stats(self.stats_open, unique_modifiers)
                 .show(ui);
             if let (Some(ItemBlockAction::CheckOnTrade), Some(url)) = (action, &url) {
                 ui.ctx().open_url(OpenUrl::new_tab(url));
             }
             let league = self.session.league().map(League::name);
-            PriceBlock::new(
-                item,
-                self.session.fixed_price(item),
-                prices,
-                league,
-                &self.i18n,
-            )
-            .show(ui);
+            PriceBlock::new(item, fixed_price, prices, league, &self.i18n).show(ui);
             action
         });
         if action == Some(ItemBlockAction::ToggleStats) {

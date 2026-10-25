@@ -98,6 +98,19 @@ pub struct Range {
     pub max: f64,
 }
 
+impl Range {
+    /// The range of the absolute values: the game shows a negative roll without its sign
+    /// ("20% reduced").
+    #[must_use]
+    pub fn magnitude(self) -> Self {
+        let (first, second) = (self.min.abs(), self.max.abs());
+        Self {
+            min: first.min(second),
+            max: first.max(second),
+        }
+    }
+}
+
 /// A value of a line, with the range of its tier when the item was copied with its advanced
 /// description, e.g. `10(1-16)`.
 #[derive(Debug, Clone, Copy, PartialEq)]

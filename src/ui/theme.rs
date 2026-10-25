@@ -43,7 +43,12 @@ pub mod color {
     pub const GEM: Color32 = Color32::from_rgb(0x1b, 0xa2, 0x9b);
     /// The implicit and explicit modifiers, as in the game.
     pub const MODIFIER: Color32 = Color32::from_rgb(0x8f, 0x8f, 0xff);
-    /// A modifier at its best tier, and the T1 tag: a vivid orange that stands out.
+    /// The attributes, as in the game, in the requirements and on the defences they raise
+    /// (armour, evasion, energy shield); a little apart from the rise and fall colors.
+    pub const STRENGTH: Color32 = Color32::from_rgb(0xe0, 0x47, 0x3f);
+    pub const DEXTERITY: Color32 = Color32::from_rgb(0x3f, 0xbf, 0x4f);
+    pub const INTELLIGENCE: Color32 = Color32::from_rgb(0x5a, 0xa7, 0xf0);
+    /// A modifier at its best tier: a vivid orange that stands out.
     pub const TIER_1: Color32 = Color32::from_rgb(0xff, 0x8c, 0x1a);
     /// The background of the hardcore leagues, also behind the Corrupted tag.
     pub const HARDCORE: Color32 = Color32::from_rgb(0x35, 0x14, 0x17);
@@ -134,13 +139,20 @@ pub mod text {
         fonts::text(20.0, Weight::ExtraBold)
     }
 
-    /// The lines of the item block: its base type, its class, its summary.
+    /// The lines of the item block: its base type, its class, its base values, its
+    /// requirements.
     #[must_use]
     pub fn item_line() -> FontId {
         fonts::text(13.0, Weight::Regular)
     }
 
-    /// A tag of the item block, and its requirements.
+    /// The number of a base value of the item block, which stands out.
+    #[must_use]
+    pub fn base_value() -> FontId {
+        fonts::text(13.0, Weight::ExtraBold)
+    }
+
+    /// A tag of the item block.
     #[must_use]
     pub fn tag() -> FontId {
         fonts::text(12.0, Weight::Regular)
