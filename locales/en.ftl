@@ -107,6 +107,23 @@ requirement-strength = { $value } Str
 requirement-dexterity = { $value } Dex
 requirement-intelligence = { $value } Int
 
+## Stats of the item
+
+# The pill under the item block, and once unfolded.
+show-stats = { $count ->
+    [one] Show { $count } stat
+   *[other] Show { $count } stats
+}
+hide-stats = Hide stats
+# The small titles of the stats.
+group-implicit = Implicit
+group-prefixes = Prefixes
+group-suffixes = Suffixes
+group-explicit = Explicit
+# Beside Prefixes and Suffixes: how many the item has, of the most it can have.
+affix-fill = { $filled } of { $max }
+affix-fill-open = { $filled } of { $max } · { $open } open
+
 ## Price block
 
 price-label = Price

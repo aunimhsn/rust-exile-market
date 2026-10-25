@@ -25,7 +25,7 @@ mod parser;
 mod weapon;
 
 pub use copied::CopiedItem;
-pub use modifier::{Affix, Modifier, ModifierKind, ModifierOrigin};
+pub use modifier::{Affix, Modifier, ModifierKind, ModifierOrigin, Range, StatLine};
 pub use parser::{ParseError, ParseWarning};
 pub use weapon::{DamageKind, Weapon};
 
@@ -144,6 +144,12 @@ impl Item {
     #[must_use]
     pub fn written_base_type(&self) -> &str {
         &self.written_base_type
+    }
+
+    /// A jewel, with two prefixes and two suffixes at most.
+    #[must_use]
+    pub fn is_jewel(&self) -> bool {
+        self.class == labels::Labels::of(self.language).jewels
     }
 
     /// The damage and the speed of a weapon.

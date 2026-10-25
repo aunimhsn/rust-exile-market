@@ -134,6 +134,7 @@ mod tests {
             name: name.to_owned(),
             base_type: base_type.to_owned(),
             price: price(exalted),
+            modifiers: Vec::new(),
         }
     }
 

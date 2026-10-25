@@ -11,6 +11,8 @@ use crate::language::Language;
 /// separator, as the game writes it (`"Requires: "`, `"Prérequis : "`).
 pub(super) struct Labels {
     pub item_class: &'static str,
+    /// The item class of the jewels, which have two prefixes and two suffixes at most.
+    pub jewels: &'static str,
     pub rarity: &'static str,
     pub rarities: &'static [(&'static str, Rarity)],
     pub item_level: &'static str,
@@ -82,6 +84,7 @@ const UNIQUE: ModifierKind = ModifierKind::Explicit(None);
 
 static ENGLISH: Labels = Labels {
     item_class: "Item Class: ",
+    jewels: "Jewels",
     rarity: "Rarity: ",
     rarities: &[
         ("Normal", Rarity::Normal),
@@ -133,6 +136,7 @@ static ENGLISH: Labels = Labels {
 
 static FRENCH: Labels = Labels {
     item_class: "Classe d'objet: ",
+    jewels: "Joyaux",
     rarity: "Rareté: ",
     rarities: &[
         ("Normal", Rarity::Normal),

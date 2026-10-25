@@ -85,6 +85,9 @@ pub struct UniquePrice {
     pub name: String,
     pub base_type: String,
     pub price: Price,
+    /// Its implicit and explicit modifiers with their ranges, in English, e.g.
+    /// `+(17-23)% to Chaos Resistance`: the rolls of an item copied without them.
+    pub modifiers: Vec<String>,
 }
 
 /// An item of the currency exchange: currency, fragments, essences, runes…

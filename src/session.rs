@@ -6,6 +6,7 @@ use std::time::{Duration, SystemTime};
 use crate::clipboard::ClipboardEvent;
 use crate::item::{CopiedItem, Item, ParseError, Rarity};
 use crate::item_names::ItemNames;
+use crate::language::Language;
 use crate::league::{League, Leagues};
 use crate::market::{MarketEvent, Source};
 use crate::prices::{PriceList, Rates};
@@ -250,6 +251,19 @@ impl Session {
         // A price comes from the prices, which have their rates.
         let rates = prices.ok_or(NoFixedPrice::PricesUnknown)?.rates;
         Ok((price, rates))
+    }
+
+    /// The modifiers of the unique `item` in the price database, with their ranges; none for
+    /// an item copied in French, whose lines aren't in English.
+    #[must_use]
+    pub fn unique_modifiers(&self, item: &Item) -> &[String] {
+        if item.language() != Language::English {
+            return &[];
+        }
+        match self.fixed_price(item) {
+            Ok((FixedPrice::Unique(unique), _)) => &unique.modifiers,
+            _ => &[],
+        }
     }
 
     /// What the search for `item` on the trade site looks for; none for a magic item whose

@@ -7,6 +7,7 @@ mod empty_state;
 mod fonts;
 mod images;
 mod item_block;
+mod item_stats;
 mod league_list;
 mod new_league_bubble;
 mod price_block;

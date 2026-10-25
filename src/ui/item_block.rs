@@ -7,7 +7,7 @@ use egui::{
 };
 
 use super::theme::{color, size, text};
-use super::widgets;
+use super::{item_stats, widgets};
 use crate::i18n::{Message, NumberTag, Requirement, Translator};
 use crate::item::{DamageKind, Item, ItemState, Rarity};
 
@@ -19,8 +19,10 @@ const NAME_GAP: f32 = 12.0;
 const BASE_GAP: f32 = 2.0;
 /// The space above the class and tags, and above the requirements.
 const LINE_GAP: f32 = 6.0;
-/// The space above the summary.
+/// The space above the summary, and above the stats.
 const SUMMARY_GAP: f32 = 8.0;
+/// The space above the pill of the stats.
+const STATS_PILL_GAP: f32 = 10.0;
 /// The space between the tags, across and down when they wrap.
 const TAG_SPACING: Vec2 = vec2(6.0, 5.0);
 /// The space around the text of a tag.
@@ -34,6 +36,8 @@ const MAX_DPS: f64 = 1e6;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ItemBlockAction {
     CheckOnTrade,
+    /// The pill of the stats: unfolds them, or folds them.
+    ToggleStats,
 }
 
 /// The style of a tag.
@@ -75,6 +79,10 @@ pub struct ItemBlock<'a> {
     i18n: &'a Translator,
     /// The trade site has a search for this item.
     tradable: bool,
+    /// The stats are unfolded.
+    stats_open: bool,
+    /// The modifiers of the unique in the price database, the ranges of its rolls.
+    unique_modifiers: &'a [String],
 }
 
 impl<'a> ItemBlock<'a> {
@@ -84,7 +92,18 @@ impl<'a> ItemBlock<'a> {
             item,
             i18n,
             tradable: false,
+            stats_open: false,
+            unique_modifiers: &[],
         }
+    }
+
+    /// Unfolds the stats, with the modifiers of the unique in the price database for the
+    /// ranges of an item copied without them.
+    #[must_use]
+    pub fn stats(mut self, open: bool, unique_modifiers: &'a [String]) -> Self {
+        self.stats_open = open;
+        self.unique_modifiers = unique_modifiers;
+        self
     }
 
     /// Shows the Check on trade pill: the trade site has a search for this item.
@@ -124,7 +143,7 @@ impl<'a> ItemBlock<'a> {
                         .wrap(),
                     );
                 }
-                action
+                action.or(self.stats_section(ui))
             })
             .inner
     }
@@ -157,6 +176,30 @@ impl<'a> ItemBlock<'a> {
             .inner
         })
         .inner
+    }
+
+    /// The pill of the stats, and the stats once unfolded; nothing for an item without
+    /// modifiers.
+    fn stats_section(&self, ui: &mut Ui) -> Option<ItemBlockAction> {
+        let count = item_stats::count(self.item);
+        if count == 0 {
+            return None;
+        }
+        ui.add_space(STATS_PILL_GAP);
+        let label = if self.stats_open {
+            self.i18n.text(Message::HideStats)
+        } else {
+            self.i18n.show_stats(count)
+        };
+        let action = ui
+            .horizontal(|ui| widgets::control_pill(ui, &label).clicked())
+            .inner
+            .then_some(ItemBlockAction::ToggleStats);
+        if self.stats_open {
+            ui.add_space(SUMMARY_GAP);
+            item_stats::show(ui, self.item, self.unique_modifiers, self.i18n);
+        }
+        action
     }
 
     /// The base type under the name of a rare or unique item, as the game writes it, with

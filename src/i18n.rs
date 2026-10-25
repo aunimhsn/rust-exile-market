@@ -64,12 +64,17 @@ pub enum Message {
     NoMarketPriceNormal,
     FrenchNamesDownloading,
     PricesDownloadingNoLeague,
+    HideStats,
+    GroupImplicit,
+    GroupPrefixes,
+    GroupSuffixes,
+    GroupExplicit,
 }
 
 impl Message {
     /// Every message, for the tests.
     #[cfg(test)]
-    const ALL: [Self; 41] = [
+    const ALL: [Self; 46] = [
         Self::LeagueModeSoftcore,
         Self::LeagueModeHardcore,
         Self::LeagueLoading,
@@ -111,6 +116,11 @@ impl Message {
         Self::NoMarketPriceNormal,
         Self::FrenchNamesDownloading,
         Self::PricesDownloadingNoLeague,
+        Self::HideStats,
+        Self::GroupImplicit,
+        Self::GroupPrefixes,
+        Self::GroupSuffixes,
+        Self::GroupExplicit,
     ];
 
     /// Its identifier in the `.ftl` files.
@@ -157,6 +167,11 @@ impl Message {
             Self::NoMarketPriceNormal => "no-market-price-normal",
             Self::FrenchNamesDownloading => "french-names-downloading",
             Self::PricesDownloadingNoLeague => "prices-downloading-no-league",
+            Self::HideStats => "hide-stats",
+            Self::GroupImplicit => "group-implicit",
+            Self::GroupPrefixes => "group-prefixes",
+            Self::GroupSuffixes => "group-suffixes",
+            Self::GroupExplicit => "group-explicit",
         }
     }
 }
@@ -216,6 +231,9 @@ const TREND_STABLE: &str = "trend-stable";
 const UNCERTAIN: &str = "uncertain";
 const PRICES_DOWNLOADING: &str = "prices-downloading";
 const NO_PRICE_FOUND: &str = "no-price-found";
+const SHOW_STATS: &str = "show-stats";
+const AFFIX_FILL: &str = "affix-fill";
+const AFFIX_FILL_OPEN: &str = "affix-fill-open";
 /// The sentences under the bar of the download of the prices, one drawn at random per
 /// download.
 const DOWNLOAD_QUOTES: [&str; 10] = [
@@ -317,6 +335,26 @@ impl Translator {
     pub fn download_quote(&self, index: usize) -> String {
         // The modulo keeps the index in the array.
         self.format(DOWNLOAD_QUOTES[index % DOWNLOAD_QUOTE_COUNT], None)
+    }
+
+    /// The pill that unfolds the stats of the item: "Show 6 stats".
+    #[must_use]
+    pub fn show_stats(&self, count: u32) -> String {
+        self.format_number(SHOW_STATS, "count", count)
+    }
+
+    /// The fill of the prefixes or suffixes of an item: "2 of 3 · 1 open".
+    #[must_use]
+    pub fn affix_fill(&self, filled: u32, max: u32) -> String {
+        let mut args = FluentArgs::new();
+        args.set("filled", filled);
+        args.set("max", max);
+        let open = max.saturating_sub(filled);
+        if open == 0 {
+            return self.format(AFFIX_FILL, Some(&args));
+        }
+        args.set("open", open);
+        self.format(AFFIX_FILL_OPEN, Some(&args))
     }
 
     /// The number of offers behind the price of a unique: "23 offers".
@@ -550,6 +588,9 @@ mod tests {
                 REQUIREMENT_STRENGTH,
                 REQUIREMENT_DEXTERITY,
                 REQUIREMENT_INTELLIGENCE,
+                SHOW_STATS,
+                AFFIX_FILL,
+                AFFIX_FILL_OPEN,
                 OFFERS,
                 STACK_OF,
                 UNIT_PRICE,
@@ -610,6 +651,10 @@ mod tests {
                 assert_ne!(translator.uncertain(count), "");
             }
             assert!(translator.stack_of(7).contains('7'));
+            assert!(translator.show_stats(1).contains('1'));
+            assert!(translator.show_stats(6).contains('6'));
+            assert!(translator.affix_fill(3, 3).contains('3'));
+            assert!(translator.affix_fill(2, 3).contains('1'));
             assert!(translator.unit_price("prices").contains("prices"));
             for direction in [Direction::Rise, Direction::Fall, Direction::Stable] {
                 assert!(translator.trend(direction, 4, 7).contains('7'));
@@ -665,6 +710,14 @@ mod tests {
             assert!(line.starts_with("App 0.1.0 · "), "{line}");
             assert!(line.ends_with("Author · author.site"), "{line}");
         }
+    }
+
+    #[test]
+    fn the_fill_of_the_affixes_tells_the_open_ones() {
+        let english = Translator::new(Language::English);
+
+        assert_eq!(english.affix_fill(3, 3), "3 of 3");
+        assert_eq!(english.affix_fill(2, 3), "2 of 3 · 1 open");
     }
 
     #[test]

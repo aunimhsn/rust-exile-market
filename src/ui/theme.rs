@@ -41,6 +41,8 @@ pub mod color {
     pub const UNIQUE: Color32 = Color32::from_rgb(0xc2, 0x6a, 0x2c);
     pub const CURRENCY: Color32 = Color32::from_rgb(0xb4, 0xa7, 0x87);
     pub const GEM: Color32 = Color32::from_rgb(0x1b, 0xa2, 0x9b);
+    /// The implicit and explicit modifiers, as in the game.
+    pub const MODIFIER: Color32 = Color32::from_rgb(0x8f, 0x8f, 0xff);
     /// A modifier at its best tier, and the T1 tag: a vivid orange that stands out.
     pub const TIER_1: Color32 = Color32::from_rgb(0xff, 0x8c, 0x1a);
     /// The background of the hardcore leagues, also behind the Corrupted tag.
@@ -142,6 +144,18 @@ pub mod text {
     #[must_use]
     pub fn tag() -> FontId {
         fonts::text(12.0, Weight::Regular)
+    }
+
+    /// The range of a roll, under its stat.
+    #[must_use]
+    pub fn roll() -> FontId {
+        fonts::text(11.0, Weight::Regular)
+    }
+
+    /// The tier of a modifier, before its range.
+    #[must_use]
+    pub fn tier() -> FontId {
+        fonts::text(11.0, Weight::ExtraBold)
     }
 
     /// An amount of the price block, beside its orb.

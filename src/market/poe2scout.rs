@@ -111,8 +111,27 @@ struct ApiUnique {
     name: String,
     #[serde(rename = "Type")]
     base_type: String,
+    item_metadata: Option<ApiUniqueMetadata>,
     #[serde(flatten)]
     price: ApiPrice,
+}
+
+/// The modifiers of a unique, with their ranges, e.g. `+(17-23)% to Chaos Resistance`.
+#[derive(Deserialize)]
+struct ApiUniqueMetadata {
+    #[serde(default)]
+    implicit_mods: Vec<String>,
+    #[serde(default)]
+    explicit_mods: Vec<String>,
+}
+
+impl ApiUniqueMetadata {
+    /// Its implicit and explicit modifiers, in this order.
+    fn modifiers(self) -> Vec<String> {
+        let mut modifiers = self.implicit_mods;
+        modifiers.extend(self.explicit_mods);
+        modifiers
+    }
 }
 
 /// An item of the currency exchange in the answer of `/Currencies/ByCategory`.
@@ -322,6 +341,10 @@ impl PriceDatabase for Poe2Scout {
                     price: conversion.price(item.price)?,
                     name: item.name,
                     base_type: item.base_type,
+                    modifiers: item
+                        .item_metadata
+                        .map(ApiUniqueMetadata::modifiers)
+                        .unwrap_or_default(),
                 })
             }));
             done += 1;
@@ -427,6 +450,9 @@ mod tests {
     const UNIQUES: &str = r#"{"CurrentPage": 1, "Pages": 1, "Total": 2, "Items": [
         {"UniqueItemId": 361, "Text": "Bursting Decay Unset Ring", "Name": "Bursting Decay",
          "Type": "Unset Ring", "IsChanceable": false,
+         "ItemMetadata": {"name": "Bursting Decay", "base_type": "Unset Ring",
+          "implicit_mods": ["Grants (1-1) additional Skill Slot"],
+          "explicit_mods": ["(15-25)% increased Rarity of Items found", "+(17-23)% to Chaos Resistance"]},
          "PriceLogs": [{"Price": 149.5, "Time": "2026-10-25T00:00:00Z", "Quantity": 4}, null],
          "CurrentPrice": 150.8, "CurrentQuantity": 4},
         {"UniqueItemId": 1, "Name": "Unlisted", "Type": "Ruby Ring", "PriceLogs": [],
@@ -511,6 +537,32 @@ mod tests {
                     })
                 ),
                 ("Unlisted".to_owned(), "Ruby Ring".to_owned(), None),
+            ]
+        );
+    }
+
+    #[test]
+    fn reads_the_modifiers_of_a_unique_implicit_first() {
+        let page: ApiPage<ApiUnique> = serde_json::from_str(UNIQUES).expect("the answer parses");
+        let modifiers: Vec<Vec<String>> = page
+            .items
+            .into_iter()
+            .map(|item| {
+                item.item_metadata
+                    .map(ApiUniqueMetadata::modifiers)
+                    .unwrap_or_default()
+            })
+            .collect();
+
+        assert_eq!(
+            modifiers,
+            [
+                vec![
+                    "Grants (1-1) additional Skill Slot".to_owned(),
+                    "(15-25)% increased Rarity of Items found".to_owned(),
+                    "+(17-23)% to Chaos Resistance".to_owned()
+                ],
+                Vec::new()
             ]
         );
     }

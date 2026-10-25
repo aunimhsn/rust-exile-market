@@ -107,6 +107,26 @@ requirement-strength = { $value } For
 requirement-dexterity = { $value } Dex
 requirement-intelligence = { $value } Int
 
+## Stats de l'objet
+
+# La pilule sous le bloc objet, et une fois dépliée.
+show-stats = { $count ->
+    [one] Afficher { $count } stat
+   *[other] Afficher { $count } stats
+}
+hide-stats = Masquer les stats
+# Les petits titres des stats.
+group-implicit = Implicite
+group-prefixes = Préfixes
+group-suffixes = Suffixes
+group-explicit = Explicite
+# À côté de Préfixes et Suffixes : combien l'objet en a, sur le maximum possible.
+affix-fill = { $filled } sur { $max }
+affix-fill-open = { $filled } sur { $max } · { $open ->
+    [one] { $open } libre
+   *[other] { $open } libres
+}
+
 ## Bloc prix
 
 price-label = Prix
