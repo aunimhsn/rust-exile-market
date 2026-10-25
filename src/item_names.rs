@@ -37,7 +37,9 @@ pub struct UniqueNames {
 }
 
 impl UniqueNames {
-    fn of(&self, language: Language) -> &UniqueName {
+    /// Its name and base type in `language`.
+    #[must_use]
+    pub fn of(&self, language: Language) -> &UniqueName {
         match language {
             Language::English => &self.english,
             Language::French => &self.french,
@@ -120,18 +122,20 @@ impl ItemNames {
             .map(|unique| unique.english.name.as_str())
     }
 
-    /// The English names of the uniques whose base type is `base_type` in `language`, each
-    /// once.
+    /// The uniques whose base type is `base_type` in `language`, each name once: a unique
+    /// can have a base in two versions (e.g. runemastered).
     #[must_use]
-    pub fn english_uniques_of_base(&self, language: Language, base_type: &str) -> Vec<&str> {
-        let mut names: Vec<&str> = Vec::new();
+    pub fn uniques_of_base(&self, language: Language, base_type: &str) -> Vec<&UniqueNames> {
+        let mut uniques: Vec<&UniqueNames> = Vec::new();
         for unique in &self.uniques {
-            let name = unique.english.name.as_str();
-            if unique.of(language).base_type == base_type && !names.contains(&name) {
-                names.push(name);
+            let seen = uniques
+                .iter()
+                .any(|other| other.english.name == unique.english.name);
+            if unique.of(language).base_type == base_type && !seen {
+                uniques.push(unique);
             }
         }
-        names
+        uniques
     }
 
     /// The base type of the magic item named `name` in `language`: the longest base type
@@ -243,13 +247,25 @@ pub mod tests {
     fn the_uniques_of_a_base_type_are_found_in_its_language() {
         let names = item_names();
 
+        let names_of = |language, base_type| -> Vec<(String, String)> {
+            names
+                .uniques_of_base(language, base_type)
+                .into_iter()
+                .map(|unique| (unique.english.name.clone(), unique.french.name.clone()))
+                .collect()
+        };
+        let pair = |english: &str, french: &str| (english.to_owned(), french.to_owned());
+
         assert_eq!(
-            names.english_uniques_of_base(Language::French, "Émeraude"),
-            ["Grand Spectrum", "Prism Guardian"]
+            names_of(Language::French, "Émeraude"),
+            [
+                pair("Grand Spectrum", "Grand spectre"),
+                pair("Prism Guardian", "Gardien prismatique")
+            ]
         );
         assert_eq!(
-            names.english_uniques_of_base(Language::English, "Makeshift Crossbow"),
-            ["Mist Whisper"]
+            names_of(Language::English, "Makeshift Crossbow"),
+            [pair("Mist Whisper", "Murmure des brumes")]
         );
     }
 

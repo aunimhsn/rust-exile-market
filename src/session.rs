@@ -9,7 +9,7 @@ use crate::item_names::ItemNames;
 use crate::league::{League, Leagues};
 use crate::market::{MarketEvent, Source};
 use crate::prices::PriceList;
-use crate::pricing::{self, FixedPrice};
+use crate::pricing::{self, FixedPrice, NoFixedPrice};
 
 /// The last item copied in the game, and what the parser read from it.
 #[derive(Debug)]
@@ -223,17 +223,17 @@ impl Session {
             return;
         };
         match pricing::fixed_price(item, &prices.list, names) {
-            Some(FixedPrice::Currency(currency)) => {
+            Ok(FixedPrice::Currency(currency)) => {
                 log::info!(
                     "Price of {}: {:.2} ex",
                     currency.name,
                     currency.price.exalted
                 );
             }
-            Some(FixedPrice::Unique(unique)) => {
+            Ok(FixedPrice::Unique(unique)) => {
                 log::info!("Price of {}: {:.2} ex", unique.name, unique.price.exalted);
             }
-            Some(FixedPrice::Uniques(candidates)) => {
+            Ok(FixedPrice::Uniques(candidates)) => {
                 let with_price = candidates.iter().filter(|unique| unique.price.is_some());
                 log::info!(
                     "An unidentified unique, one of {} uniques ({} priced)",
@@ -241,14 +241,11 @@ impl Session {
                     with_price.count()
                 );
             }
-            None if matches!(
-                item.rarity(),
-                Rarity::Currency | Rarity::Gem | Rarity::Unique
-            ) =>
-            {
-                log::info!("No price found for this item");
+            Err(NoFixedPrice::NotPriced) => log::info!("No price found for this item"),
+            Err(NoFixedPrice::NamesUnknown) => {
+                log::info!("No price yet: the item names of the trade site aren't known");
             }
-            None => {}
+            Err(NoFixedPrice::NotFixedName) => {}
         }
     }
 

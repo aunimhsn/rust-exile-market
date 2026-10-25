@@ -27,6 +27,19 @@ pub enum NamesError {
     /// An answer without the names of a kind, in a language: the trade site is wrong for a
     /// moment, and the names of the cache must not be replaced for that.
     Missing(&'static str, Language),
+    /// No unique of English lines up with its French name.
+    NoUniquePairs,
+}
+
+impl NamesError {
+    /// The trade site refused the request (403, 429): it must not be asked again soon.
+    #[must_use]
+    pub fn is_refusal(&self) -> bool {
+        matches!(
+            self,
+            Self::Http(HttpError::Request(ureq::Error::StatusCode(403 | 429)))
+        )
+    }
 }
 
 impl fmt::Display for NamesError {
@@ -34,6 +47,7 @@ impl fmt::Display for NamesError {
         match self {
             Self::Http(error) => error.fmt(formatter),
             Self::Missing(kind, language) => write!(formatter, "no {kind} in {language:?}"),
+            Self::NoUniquePairs => formatter.write_str("no unique lines up in both languages"),
         }
     }
 }
@@ -42,7 +56,7 @@ impl std::error::Error for NamesError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             Self::Http(error) => Some(error),
-            Self::Missing(..) => None,
+            Self::Missing(..) | Self::NoUniquePairs => None,
         }
     }
 }
@@ -115,7 +129,7 @@ impl TradeSite {
     pub fn item_names(&mut self) -> Result<ItemNames, NamesError> {
         let english = self.language_data(Language::English)?;
         let french = self.language_data(Language::French)?;
-        item_names(SystemTime::now(), english, french)
+        item_names(SystemTime::now(), &english, &french)
     }
 
     fn language_data(&mut self, language: Language) -> Result<LanguageData, HttpError> {
@@ -150,36 +164,43 @@ fn host(language: Language) -> &'static str {
 /// The names of the data of both languages; an error when a kind of names is missing.
 fn item_names(
     updated: SystemTime,
-    english: LanguageData,
-    french: LanguageData,
+    english: &LanguageData,
+    french: &LanguageData,
 ) -> Result<ItemNames, NamesError> {
+    // Each language first: an empty answer is told once, with its language.
+    let english_names = names(english)?;
+    let french_names = names(french)?;
     let uniques = unique_pairs(&english.items, &french.items);
     if uniques.is_empty() {
-        return Err(NamesError::Missing("uniques", Language::French));
+        return Err(NamesError::NoUniquePairs);
     }
-    let names = ItemNames::new(updated, names(english)?, names(french)?, uniques);
-    Ok(names)
+    Ok(ItemNames::new(
+        updated,
+        english_names,
+        french_names,
+        uniques,
+    ))
 }
 
 /// The names of one language: the items of the currency exchange, and the base types of the
 /// equipment, each once.
-fn names(data: LanguageData) -> Result<Names, NamesError> {
+fn names(data: &LanguageData) -> Result<Names, NamesError> {
     let language = data.language;
     let exchange = data
         .exchange
-        .into_iter()
-        .flat_map(|group| group.entries)
+        .iter()
+        .flat_map(|group| &group.entries)
         .filter(|entry| !entry.text.is_empty())
-        .map(|entry| (entry.text, entry.id))
+        .map(|entry| (entry.text.clone(), entry.id.clone()))
         .collect();
     let mut seen = HashSet::new();
     let base_types = data
         .items
-        .into_iter()
+        .iter()
         .filter(|category| !NOT_EQUIPMENT.contains(&category.id.as_str()))
-        .flat_map(|category| category.entries)
+        .flat_map(|category| &category.entries)
         .filter(|item| item.name.is_none())
-        .map(|item| item.base_type)
+        .map(|item| item.base_type.clone())
         .filter(|base_type| seen.insert(base_type.clone()))
         .collect();
     let names = Names {
@@ -243,7 +264,9 @@ fn unique_pairs(english: &[ApiItemCategory], french: &[ApiItemCategory]) -> Vec<
 
 /// Why two lists of uniques of a category don't line up, if they don't: another number of
 /// uniques, a variant (`legacy`) in one language only, or a base type with two translations,
-/// either way.
+/// either way. Two uniques of the same base swapped in one language can't be seen: their
+/// names would be paired wrong (checked on the real data of 2026-10-25, where every category
+/// lines up).
 fn misalignment(english: &[&ApiItem], french: &[&ApiItem]) -> Option<String> {
     if english.len() != french.len() {
         return Some(format!("{} and {} uniques", english.len(), french.len()));
@@ -344,8 +367,8 @@ mod tests {
     fn names_of_both() -> ItemNames {
         item_names(
             SystemTime::UNIX_EPOCH,
-            data(Language::English, ENGLISH_ITEMS, ENGLISH_STATIC),
-            data(Language::French, FRENCH_ITEMS, FRENCH_STATIC),
+            &data(Language::English, ENGLISH_ITEMS, ENGLISH_STATIC),
+            &data(Language::French, FRENCH_ITEMS, FRENCH_STATIC),
         )
         .expect("every kind of names")
     }
@@ -438,18 +461,72 @@ mod tests {
     }
 
     #[test]
+    fn a_base_type_paired_with_two_others_is_found_either_way() {
+        let english = [
+            item("Emerald", "Grand Spectrum", None),
+            item("Ruby", "Lioneye's Fall", None),
+        ];
+        // Each English base has one translation, but the French one has two originals.
+        let french = [
+            item("Émeraude", "Grand spectre", None),
+            item("Émeraude", "Chute d'Œil-de-lion", None),
+        ];
+
+        assert!(misalignment(&list(&english), &list(&french)).is_some());
+    }
+
+    #[test]
+    fn the_uniques_of_a_category_missing_in_french_are_left_out() {
+        let english: ApiResult<ApiItemCategory> = serde_json::from_str(ENGLISH_ITEMS).unwrap();
+        let french: ApiResult<ApiItemCategory> = serde_json::from_str(FRENCH_ITEMS).unwrap();
+        let without_weapons: Vec<ApiItemCategory> = french
+            .result
+            .into_iter()
+            .filter(|category| category.id != "weapon")
+            .collect();
+
+        let pairs = unique_pairs(&english.result, &without_weapons);
+
+        let names: Vec<&str> = pairs
+            .iter()
+            .map(|pair| pair.english.name.as_str())
+            .collect();
+        assert_eq!(names, ["Andvarius"]);
+    }
+
+    #[test]
+    fn a_refusal_of_the_trade_site_is_told_apart() {
+        let status = |code| NamesError::Http(HttpError::Request(ureq::Error::StatusCode(code)));
+
+        assert!(status(429).is_refusal());
+        assert!(status(403).is_refusal());
+        assert!(!status(503).is_refusal());
+        assert!(!NamesError::NoUniquePairs.is_refusal());
+    }
+
+    #[test]
     fn an_answer_without_a_kind_of_names_is_an_error() {
         let empty = r#"{"result": []}"#;
 
         let names = item_names(
             SystemTime::UNIX_EPOCH,
-            data(Language::English, ENGLISH_ITEMS, ENGLISH_STATIC),
-            data(Language::French, FRENCH_ITEMS, empty),
+            &data(Language::English, ENGLISH_ITEMS, ENGLISH_STATIC),
+            &data(Language::French, FRENCH_ITEMS, empty),
         );
 
         assert!(matches!(
             names,
             Err(NamesError::Missing(_, Language::French))
+        ));
+
+        let english_empty = item_names(
+            SystemTime::UNIX_EPOCH,
+            &data(Language::English, empty, ENGLISH_STATIC),
+            &data(Language::French, FRENCH_ITEMS, FRENCH_STATIC),
+        );
+        assert!(matches!(
+            english_empty,
+            Err(NamesError::Missing(_, Language::English))
         ));
     }
 

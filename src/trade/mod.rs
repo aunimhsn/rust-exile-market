@@ -3,7 +3,8 @@
 //!
 //! The thread gives the names of the cache at once, then downloads them when they are older
 //! than a day, and every day after. When the trade site can't be reached, the names of the
-//! cache stay, and it tries again every hour; every minute while no name is known.
+//! cache stay, and it tries again every hour; every minute while no name is known, unless
+//! the trade site refused the request.
 
 mod site;
 
@@ -137,7 +138,9 @@ fn watch(
                         log::warn!("The item names can't be downloaded: {error}");
                     }
                     failing = true;
-                    let retry = if known {
+                    // A refusal waits as long as a failure with names: the trade site must
+                    // not be asked again soon.
+                    let retry = if known || error.is_refusal() {
                         intervals.retry
                     } else {
                         intervals.retry_without_names
@@ -192,18 +195,19 @@ mod tests {
         retry_without_names: Duration::from_millis(20),
     };
 
-    /// A trade site that gives empty names, or fails; it counts its requests.
+    /// A trade site that gives empty names, or fails with an error status; it counts its
+    /// requests.
     #[derive(Default)]
     struct FakeSite {
-        unreachable: bool,
+        failure: Option<u16>,
         requests: Arc<AtomicUsize>,
     }
 
     impl NameSource for FakeSite {
         fn item_names(&mut self) -> Result<ItemNames, NamesError> {
             self.requests.fetch_add(1, Ordering::SeqCst);
-            if self.unreachable {
-                let error = HttpError::Request(ureq::Error::StatusCode(503));
+            if let Some(status) = self.failure {
+                let error = HttpError::Request(ureq::Error::StatusCode(status));
                 return Err(NamesError::Http(error));
             }
             Ok(names(SystemTime::now()))
@@ -279,7 +283,7 @@ mod tests {
             &names(SystemTime::now() - Duration::from_hours(48)),
         );
         let site = FakeSite {
-            unreachable: true,
+            failure: Some(503),
             ..FakeSite::default()
         };
         let requests = Arc::clone(&site.requests);
@@ -295,7 +299,7 @@ mod tests {
     fn without_names_a_failed_download_is_tried_again_sooner() {
         let directory = TestDirectory::new("item-names-none");
         let site = FakeSite {
-            unreachable: true,
+            failure: Some(503),
             ..FakeSite::default()
         };
         let requests = Arc::clone(&site.requests);
@@ -306,5 +310,18 @@ mod tests {
             assert!(start.elapsed() < Duration::from_secs(5), "tried again");
             thread::sleep(Duration::from_millis(5));
         }
+    }
+
+    #[test]
+    fn a_refusal_of_the_trade_site_isnt_tried_again_soon() {
+        let directory = TestDirectory::new("item-names-refused");
+        let site = FakeSite {
+            failure: Some(429),
+            ..FakeSite::default()
+        };
+        let requests = Arc::clone(&site.requests);
+        let _watch = start_watch(site, &directory);
+
+        assert_eq!(requests_after(&requests, Duration::from_millis(100)), 1);
     }
 }
