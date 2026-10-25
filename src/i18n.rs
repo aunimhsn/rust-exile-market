@@ -10,6 +10,7 @@ use fluent_bundle::{FluentArgs, FluentBundle, FluentResource};
 
 use crate::item::DamageKind;
 use crate::language::Language;
+use crate::prices::Direction;
 
 /// The Fluent messages of a language, embedded in the executable.
 fn messages(language: Language) -> &'static str {
@@ -53,12 +54,22 @@ pub enum Message {
     TagFractured,
     TagMirrored,
     TagUnidentified,
+    PriceLabel,
+    PossibleUniques,
+    IdentifyToPrice,
+    NoOffers,
+    SearchToEstimate,
+    NoMarketPriceRare,
+    NoMarketPriceMagic,
+    NoMarketPriceNormal,
+    FrenchNamesDownloading,
+    PricesDownloadingNoLeague,
 }
 
 impl Message {
     /// Every message, for the tests.
     #[cfg(test)]
-    const ALL: [Self; 31] = [
+    const ALL: [Self; 41] = [
         Self::LeagueModeSoftcore,
         Self::LeagueModeHardcore,
         Self::LeagueLoading,
@@ -90,6 +101,16 @@ impl Message {
         Self::TagFractured,
         Self::TagMirrored,
         Self::TagUnidentified,
+        Self::PriceLabel,
+        Self::PossibleUniques,
+        Self::IdentifyToPrice,
+        Self::NoOffers,
+        Self::SearchToEstimate,
+        Self::NoMarketPriceRare,
+        Self::NoMarketPriceMagic,
+        Self::NoMarketPriceNormal,
+        Self::FrenchNamesDownloading,
+        Self::PricesDownloadingNoLeague,
     ];
 
     /// Its identifier in the `.ftl` files.
@@ -126,6 +147,16 @@ impl Message {
             Self::TagFractured => "tag-fractured",
             Self::TagMirrored => "tag-mirrored",
             Self::TagUnidentified => "tag-unidentified",
+            Self::PriceLabel => "price-label",
+            Self::PossibleUniques => "possible-uniques",
+            Self::IdentifyToPrice => "identify-to-price",
+            Self::NoOffers => "no-offers",
+            Self::SearchToEstimate => "search-to-estimate",
+            Self::NoMarketPriceRare => "no-market-price-rare",
+            Self::NoMarketPriceMagic => "no-market-price-magic",
+            Self::NoMarketPriceNormal => "no-market-price-normal",
+            Self::FrenchNamesDownloading => "french-names-downloading",
+            Self::PricesDownloadingNoLeague => "prices-downloading-no-league",
         }
     }
 }
@@ -176,6 +207,15 @@ const REQUIREMENT_LEVEL: &str = "requirement-level";
 const REQUIREMENT_STRENGTH: &str = "requirement-strength";
 const REQUIREMENT_DEXTERITY: &str = "requirement-dexterity";
 const REQUIREMENT_INTELLIGENCE: &str = "requirement-intelligence";
+const OFFERS: &str = "offers";
+const STACK_OF: &str = "stack-of";
+const UNIT_PRICE: &str = "unit-price";
+const TREND_RISE: &str = "trend-rise";
+const TREND_FALL: &str = "trend-fall";
+const TREND_STABLE: &str = "trend-stable";
+const UNCERTAIN: &str = "uncertain";
+const PRICES_DOWNLOADING: &str = "prices-downloading";
+const NO_PRICE_FOUND: &str = "no-price-found";
 /// The sentences under the bar of the download of the prices, one drawn at random per
 /// download.
 const DOWNLOAD_QUOTES: [&str; 10] = [
@@ -279,6 +319,59 @@ impl Translator {
         self.format(DOWNLOAD_QUOTES[index % DOWNLOAD_QUOTE_COUNT], None)
     }
 
+    /// The number of offers behind the price of a unique: "23 offers".
+    #[must_use]
+    pub fn offers(&self, count: u32) -> String {
+        self.format_number(OFFERS, "count", count)
+    }
+
+    /// The size of a copied stack, on the right of the price title: "Stack of 7".
+    #[must_use]
+    pub fn stack_of(&self, size: u32) -> String {
+        self.format_number(STACK_OF, "size", size)
+    }
+
+    /// The unit price of a stack, from its amounts in the three currencies joined by the
+    /// caller.
+    #[must_use]
+    pub fn unit_price(&self, prices: &str) -> String {
+        let mut args = FluentArgs::new();
+        args.set("prices", prices);
+        self.format(UNIT_PRICE, Some(&args))
+    }
+
+    /// The trend of a price: its change in percent, rounded, over `days` days.
+    #[must_use]
+    pub fn trend(&self, direction: Direction, percent: u32, days: u32) -> String {
+        let id = match direction {
+            Direction::Rise => TREND_RISE,
+            Direction::Fall => TREND_FALL,
+            Direction::Stable => TREND_STABLE,
+        };
+        let mut args = FluentArgs::new();
+        args.set("percent", percent);
+        args.set("days", days);
+        self.format(id, Some(&args))
+    }
+
+    /// The warning of a price with few offers.
+    #[must_use]
+    pub fn uncertain(&self, count: u32) -> String {
+        self.format_number(UNCERTAIN, "count", count)
+    }
+
+    /// The price block while the prices of `league` are downloading.
+    #[must_use]
+    pub fn prices_downloading(&self, league: &str) -> String {
+        self.format_league(PRICES_DOWNLOADING, league)
+    }
+
+    /// The price block of a fixed-name item missing from the prices of `league`.
+    #[must_use]
+    pub fn no_price_found(&self, league: &str) -> String {
+        self.format_league(NO_PRICE_FOUND, league)
+    }
+
     /// A tag of the item block with a number: the quality (`Q 20%`), the sockets, the item
     /// level, the T1 affixes.
     #[must_use]
@@ -369,6 +462,12 @@ impl Translator {
         self.format(STATUS_AUTHOR, Some(&args))
     }
 
+    fn format_league(&self, id: &str, league: &str) -> String {
+        let mut args = FluentArgs::new();
+        args.set("league", league);
+        self.format(id, Some(&args))
+    }
+
     fn format_number(&self, id: &str, name: &'static str, value: u32) -> String {
         let mut args = FluentArgs::new();
         args.set(name, value);
@@ -451,6 +550,15 @@ mod tests {
                 REQUIREMENT_STRENGTH,
                 REQUIREMENT_DEXTERITY,
                 REQUIREMENT_INTELLIGENCE,
+                OFFERS,
+                STACK_OF,
+                UNIT_PRICE,
+                TREND_RISE,
+                TREND_FALL,
+                TREND_STABLE,
+                UNCERTAIN,
+                PRICES_DOWNLOADING,
+                NO_PRICE_FOUND,
             ])
             .chain(DOWNLOAD_QUOTES)
             .map(str::to_owned)
@@ -497,6 +605,17 @@ mod tests {
                 assert!(translator.dps(kind, 245).contains("245"), "{language:?}");
             }
             assert!(translator.granted_skill("Skill").contains("Skill"));
+            for count in [0, 1, 4, 23] {
+                assert!(translator.offers(count).contains(&count.to_string()));
+                assert_ne!(translator.uncertain(count), "");
+            }
+            assert!(translator.stack_of(7).contains('7'));
+            assert!(translator.unit_price("prices").contains("prices"));
+            for direction in [Direction::Rise, Direction::Fall, Direction::Stable] {
+                assert!(translator.trend(direction, 4, 7).contains('7'));
+            }
+            assert!(translator.prices_downloading("League").contains("League"));
+            assert!(translator.no_price_found("League").contains("League"));
             assert!(translator.requires("parts").contains("parts"));
             for requirement in [
                 Requirement::Level,
@@ -546,6 +665,19 @@ mod tests {
             assert!(line.starts_with("App 0.1.0 · "), "{line}");
             assert!(line.ends_with("Author · author.site"), "{line}");
         }
+    }
+
+    #[test]
+    fn no_offer_has_its_own_warning_in_every_language() {
+        // In French, the plural category "one" covers 0 too.
+        let french = Translator::new(Language::French);
+        assert!(french.uncertain(0).starts_with("Aucune offre"));
+        assert!(french.uncertain(1).starts_with("Une seule offre"));
+        assert!(
+            Translator::new(Language::English)
+                .uncertain(0)
+                .starts_with("No offer")
+        );
     }
 
     #[test]
