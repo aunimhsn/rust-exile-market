@@ -220,11 +220,8 @@ impl Translator {
     /// number.
     #[must_use]
     pub fn download_quote(&self, index: usize) -> String {
-        let id = DOWNLOAD_QUOTES
-            .get(index % DOWNLOAD_QUOTE_COUNT)
-            .copied()
-            .unwrap_or(DOWNLOAD_TITLE);
-        self.format(id, None)
+        // The modulo keeps the index in the array.
+        self.format(DOWNLOAD_QUOTES[index % DOWNLOAD_QUOTE_COUNT], None)
     }
 
     /// The tooltip of the league block, with the mode of the league (`Softcore`).
@@ -394,5 +391,9 @@ mod tests {
         assert_eq!(age(12 * 60 + 59), "12min ago");
         assert_eq!(age(3 * 3600 + 59 * 60), "3h ago");
         assert_eq!(age(2 * 86_400 + 3600), "2d ago");
+        // Glued to the unit in French too.
+        let french = Translator::new(Language::French);
+        assert_eq!(french.age(Duration::from_secs(59)), "à l'instant");
+        assert_eq!(french.age(Duration::from_mins(12)), "il y a 12min");
     }
 }

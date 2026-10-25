@@ -34,7 +34,7 @@ const INTERVALS: Intervals = Intervals {
 };
 
 /// What the price database tells the application.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub enum MarketEvent {
     Leagues(Leagues),
     /// The prices downloaded last, from the cache, until the database gives new ones.
@@ -52,14 +52,15 @@ pub enum MarketEvent {
 }
 
 /// What was read from the database.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Source {
     Leagues,
-    Prices,
+    /// The prices of this league: a failure says nothing of the other leagues.
+    Prices(League),
 }
 
 /// What a download of prices tells the thread, between two requests.
-trait Download {
+trait DownloadObserver {
     /// The application asked for something else: the download stops.
     fn interrupted(&mut self) -> bool;
 
@@ -76,7 +77,7 @@ trait PriceDatabase {
     fn prices(
         &mut self,
         league: &League,
-        download: &mut dyn Download,
+        download: &mut dyn DownloadObserver,
     ) -> Result<Option<PriceList>, FetchError>;
 }
 
@@ -160,6 +161,14 @@ struct Pricing {
     known: bool,
 }
 
+/// How a download of prices ended.
+enum Downloaded {
+    /// With the prices, or a failure.
+    Done(MarketEvent),
+    /// The application asked for something else meanwhile.
+    Interrupted(Waited<League>),
+}
+
 /// The thread: what it reads, and when.
 struct Watch<'a, D> {
     database: D,
@@ -193,33 +202,31 @@ impl<D: PriceDatabase> Watch<'_, D> {
             let mut reachable = true;
             if Instant::now() >= self.leagues_due {
                 let event = self.read_leagues();
-                reachable = event != MarketEvent::Unreachable(Source::Leagues);
+                reachable = !matches!(event, MarketEvent::Unreachable(_));
                 if !self.send(event) {
                     return;
                 }
             }
-            let prices_due = self
-                .pricing
-                .as_ref()
-                .is_some_and(|pricing| Instant::now() >= pricing.due);
-            if prices_due && !reachable {
-                // One request per minute while the database can't be reached: the prices
-                // wait for the leagues to be read again.
-                if let Some(pricing) = &mut self.pricing {
-                    pricing.due = self.leagues_due;
-                }
-            } else if prices_due {
-                match self.read_prices() {
-                    Ok(event) => {
-                        if !self.send(event) {
-                            return;
+            if let Some(pricing) = &mut self.pricing
+                && Instant::now() >= pricing.due
+            {
+                if reachable {
+                    let (league, known) = (pricing.league.clone(), pricing.known);
+                    match self.read_prices(league, known) {
+                        Downloaded::Done(event) => {
+                            if !self.send(event) {
+                                return;
+                            }
+                        }
+                        Downloaded::Interrupted(interruption) => {
+                            waited = Some(interruption);
+                            continue;
                         }
                     }
-                    // The application asked for something else during the download.
-                    Err(interruption) => {
-                        waited = Some(interruption);
-                        continue;
-                    }
+                } else {
+                    // One request per minute while the database can't be reached: the
+                    // prices wait for the leagues to be read again.
+                    pricing.due = self.leagues_due;
                 }
             }
             waited = Some(self.outbox.wait_for_order(self.until_due()));
@@ -228,17 +235,11 @@ impl<D: PriceDatabase> Watch<'_, D> {
 
     /// The last thing the application asked, when `waited` is an order: the leagues the
     /// player clicked meanwhile are skipped.
-    fn latest(&self, mut waited: Waited<League>) -> Waited<League> {
-        if !matches!(waited, Waited::Order(_)) {
-            return waited;
+    fn latest(&self, waited: Waited<League>) -> Waited<League> {
+        match waited {
+            Waited::Order(_) => self.outbox.latest_order().unwrap_or(waited),
+            Waited::Elapsed | Waited::Stop => waited,
         }
-        while let Some(next) = self.outbox.pending_order() {
-            waited = next;
-            if waited == Waited::Stop {
-                break;
-            }
-        }
-        waited
     }
 
     /// Prices `league` from now on: its prices from the cache at once, and from the database
@@ -288,15 +289,13 @@ impl<D: PriceDatabase> Watch<'_, D> {
         }
     }
 
-    /// Downloads the prices of the league priced, and keeps them in the cache; what the
-    /// application asked for when it interrupted the download.
-    fn read_prices(&mut self) -> Result<MarketEvent, Waited<League>> {
-        let Some(Pricing { league, known, .. }) = self.pricing.clone() else {
-            return Err(Waited::Elapsed);
-        };
+    /// Downloads the prices of `league`, and keeps them in the cache; with the prices given
+    /// so far when none are `known`.
+    fn read_prices(&mut self, league: League, known: bool) -> Downloaded {
         let mut download = Progress {
             outbox: self.outbox,
             wake: self.wake,
+            league: league.clone(),
             partial: !known,
             interruption: None,
         };
@@ -310,21 +309,17 @@ impl<D: PriceDatabase> Watch<'_, D> {
             }
             Ok(None) => {
                 if let Some(interruption) = download.interruption {
-                    return Err(interruption);
+                    return Downloaded::Interrupted(interruption);
                 }
                 // A download only stops when it is interrupted; tried again later, not in a
                 // loop.
-                (
-                    MarketEvent::Unreachable(Source::Prices),
-                    self.intervals.retry,
-                )
+                let failure = MarketEvent::Unreachable(Source::Prices(league.clone()));
+                (failure, self.intervals.retry)
             }
             Err(error) => {
                 self.failed(&error);
-                (
-                    MarketEvent::Unreachable(Source::Prices),
-                    self.intervals.retry,
-                )
+                let failure = MarketEvent::Unreachable(Source::Prices(league.clone()));
+                (failure, self.intervals.retry)
             }
         };
         let known = known || matches!(event, MarketEvent::Prices(_));
@@ -333,7 +328,7 @@ impl<D: PriceDatabase> Watch<'_, D> {
             due: Instant::now() + next,
             known,
         });
-        Ok(event)
+        Downloaded::Done(event)
     }
 
     fn succeeded(&mut self) {
@@ -373,19 +368,27 @@ impl<D: PriceDatabase> Watch<'_, D> {
 }
 
 /// A download of prices seen from the thread: it stops when the application asks for
-/// something else, and gives the prices downloaded so far when none of the league are known.
+/// another league, and gives the prices downloaded so far when none of the league are known.
 struct Progress<'a> {
     outbox: &'a Outbox<MarketEvent, League>,
     wake: &'a dyn Fn(),
+    /// The league downloaded.
+    league: League,
     partial: bool,
     /// What the application asked during the download.
     interruption: Option<Waited<League>>,
 }
 
-impl Download for Progress<'_> {
+impl DownloadObserver for Progress<'_> {
     fn interrupted(&mut self) -> bool {
-        if self.interruption.is_none() {
-            self.interruption = self.outbox.pending_order();
+        if self.interruption != Some(Waited::Stop)
+            && let Some(latest) = self.outbox.latest_order()
+        {
+            self.interruption = Some(latest);
+        }
+        // Back to the league downloaded after another one: the download goes on.
+        if self.interruption.as_ref() == Some(&Waited::Order(self.league.clone())) {
+            self.interruption = None;
         }
         self.interruption.is_some()
     }
@@ -457,7 +460,7 @@ mod tests {
         fn prices(
             &mut self,
             league: &League,
-            download: &mut dyn Download,
+            download: &mut dyn DownloadObserver,
         ) -> Result<Option<PriceList>, FetchError> {
             self.requests.prices.fetch_add(1, Ordering::SeqCst);
             if self.endless.as_ref() == Some(league) {
@@ -550,7 +553,10 @@ mod tests {
                 format!("partial {} {progress}", prices.league.id())
             }
             MarketEvent::Prices(prices) => format!("prices {}", prices.league.id()),
-            MarketEvent::Unreachable(source) => format!("unreachable {source:?}"),
+            MarketEvent::Unreachable(Source::Leagues) => "unreachable leagues".to_owned(),
+            MarketEvent::Unreachable(Source::Prices(league)) => {
+                format!("unreachable prices {}", league.id())
+            }
         }
     }
 
@@ -576,9 +582,9 @@ mod tests {
         assert_eq!(
             events(&mut watch, &wakes, 3),
             [
-                "unreachable Leagues",
-                "unreachable Leagues",
-                "unreachable Leagues"
+                "unreachable leagues",
+                "unreachable leagues",
+                "unreachable leagues"
             ]
         );
         assert_eq!(requests.prices.load(Ordering::SeqCst), 0);
@@ -596,7 +602,11 @@ mod tests {
 
         assert_eq!(
             events(&mut watch, &wakes, 3),
-            ["leagues", "unreachable Prices", "unreachable Prices"]
+            [
+                "leagues",
+                "unreachable prices Standard",
+                "unreachable prices Standard"
+            ]
         );
         assert_eq!(requests.leagues.load(Ordering::SeqCst), 1);
     }
@@ -697,6 +707,33 @@ mod tests {
             ["partial Forbidden Rites 0.5", "prices Forbidden Rites"]
         );
         // The endless download of Standard, then Forbidden Rites only.
+        assert_eq!(requests.prices.load(Ordering::SeqCst), 2);
+    }
+
+    #[test]
+    fn coming_back_to_the_league_downloaded_doesnt_restart_its_download() {
+        let directory = TestDirectory::new("market-back");
+        let (release, released) = mpsc::channel();
+        let database = FakeDatabase {
+            endless: Some(League::new("Standard")),
+            release: Some(released),
+            ..FakeDatabase::default()
+        };
+        let requests = Arc::clone(&database.requests);
+        let (mut watch, wakes) = watch(database, &directory, Some("Standard"));
+        assert_eq!(events(&mut watch, &wakes, 1), ["leagues"]);
+
+        watch.price(Some(&League::new("Runes of Aldur")));
+        watch.price(Some(&League::new("Standard")));
+        release.send(()).unwrap();
+
+        // Still the first download of Standard, which only an order of another league ends.
+        thread::sleep(Duration::from_millis(50));
+        watch.price(Some(&League::new("Forbidden Rites")));
+        assert_eq!(
+            events(&mut watch, &wakes, 2),
+            ["partial Forbidden Rites 0.5", "prices Forbidden Rites"]
+        );
         assert_eq!(requests.prices.load(Ordering::SeqCst), 2);
     }
 

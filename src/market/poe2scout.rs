@@ -9,7 +9,7 @@ use std::time::{Duration, Instant, SystemTime};
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
 
-use super::{Download, PriceDatabase};
+use super::{DownloadObserver, PriceDatabase};
 use crate::league::League;
 use crate::prices::{CurrencyPrice, Price, PriceList, Rates, UniquePrice};
 
@@ -28,6 +28,8 @@ const MAX_PAGES: u32 = 10;
 const EXALTED: &str = "exalted";
 const CHAOS: &str = "chaos";
 const DIVINE: &str = "divine";
+/// The id of the category of the currency, downloaded first.
+const CURRENCY_CATEGORY: &str = "currency";
 
 /// Why the price database couldn't be read.
 #[derive(Debug)]
@@ -195,18 +197,47 @@ impl Poe2Scout {
         }
     }
 
-    /// The answer of `path` with the parameters `query`, once [`PACE`] has passed since the
-    /// last request.
-    fn get<T: DeserializeOwned>(
-        &mut self,
-        path: &str,
-        query: &[(&str, &str)],
-    ) -> Result<T, FetchError> {
+    /// Waits until [`PACE`] has passed since the last request, and counts the next one from
+    /// now.
+    fn pace(&mut self) {
         if let Some(last) = self.last_request {
             thread::sleep(PACE.saturating_sub(last.elapsed()));
         }
         // Counted even when it fails: a refused request counts in the limits too.
         self.last_request = Some(Instant::now());
+    }
+
+    /// The answer of `path` with the parameters `query`, at the pace of the API.
+    fn get<T: DeserializeOwned>(
+        &mut self,
+        path: &str,
+        query: &[(&str, &str)],
+    ) -> Result<T, FetchError> {
+        self.pace();
+        self.fetch(path, query)
+    }
+
+    /// The answer of `path`, at the pace of the API; `None` when `download` is interrupted
+    /// once the pace waited, right before the request.
+    fn get_unless_interrupted<T: DeserializeOwned>(
+        &mut self,
+        path: &str,
+        query: &[(&str, &str)],
+        download: &mut dyn DownloadObserver,
+    ) -> Result<Option<T>, FetchError> {
+        self.pace();
+        if download.interrupted() {
+            return Ok(None);
+        }
+        self.fetch(path, query).map(Some)
+    }
+
+    /// The answer of `path` with the parameters `query`, at once.
+    fn fetch<T: DeserializeOwned>(
+        &self,
+        path: &str,
+        query: &[(&str, &str)],
+    ) -> Result<T, FetchError> {
         let mut response = self
             .agent
             .get(format!("{BASE_URL}{path}"))
@@ -223,23 +254,22 @@ impl Poe2Scout {
         league: &str,
         kind: Kind,
         category: &str,
-        download: &mut dyn Download,
+        download: &mut dyn DownloadObserver,
     ) -> Result<Option<Vec<T>>, FetchError> {
         let path = format!("/Leagues/{league}/{}/ByCategory", kind.path());
         let mut items = Vec::new();
         for page in 1..=MAX_PAGES {
-            if download.interrupted() {
-                return Ok(None);
-            }
             let page_text = page.to_string();
-            let answer: ApiPage<T> = self.get(
-                &path,
-                &[
-                    ("category", category),
-                    ("perPage", PER_PAGE),
-                    ("page", &page_text),
-                ],
-            )?;
+            let query = [
+                ("category", category),
+                ("perPage", PER_PAGE),
+                ("page", page_text.as_str()),
+            ];
+            let Some(answer) =
+                self.get_unless_interrupted::<ApiPage<T>>(&path, &query, download)?
+            else {
+                return Ok(None);
+            };
             items.extend(answer.items);
             if page >= answer.pages {
                 return Ok(Some(items));
@@ -264,20 +294,27 @@ impl PriceDatabase for Poe2Scout {
     fn prices(
         &mut self,
         league: &League,
-        download: &mut dyn Download,
+        download: &mut dyn DownloadObserver,
     ) -> Result<Option<PriceList>, FetchError> {
         let path = path_segment(league.id());
-        if download.interrupted() {
+        let Some(categories) = self.get_unless_interrupted::<ApiCategories>(
+            &format!("/Leagues/{path}/Items/Categories"),
+            &[],
+            download,
+        )?
+        else {
             return Ok(None);
-        }
-        let categories: ApiCategories =
-            self.get(&format!("/Leagues/{path}/Items/Categories"), &[])?;
-        if download.interrupted() {
+        };
+        let Some(currencies) = self.get_unless_interrupted::<Vec<ApiReferenceCurrency>>(
+            &format!("/Leagues/{path}/ReferenceCurrencies"),
+            &[],
+            download,
+        )?
+        else {
             return Ok(None);
-        }
-        let currencies: Vec<ApiReferenceCurrency> =
-            self.get(&format!("/Leagues/{path}/ReferenceCurrencies"), &[])?;
+        };
         let conversion = Conversion::new(&currencies)?;
+        let currency_categories = download_order(categories.currency_categories);
         let mut prices = PriceList {
             league: league.clone(),
             updated: SystemTime::now(),
@@ -286,13 +323,12 @@ impl PriceDatabase for Poe2Scout {
             currencies: Vec::new(),
         };
         // The two requests above, then one per category (most fit in one page).
-        let requests =
-            2 + categories.currency_categories.len() + categories.unique_categories.len();
+        let requests = 2 + currency_categories.len() + categories.unique_categories.len();
         let mut done = 2;
         #[expect(clippy::cast_precision_loss, reason = "a few dozen requests")]
         let share = |done: usize| done as f32 / requests as f32;
         download.progress(&prices, share(done));
-        for category in &categories.currency_categories {
+        for category in &currency_categories {
             let Some(items) =
                 self.category::<ApiCurrency>(&path, Kind::Currencies, &category.api_id, download)?
             else {
@@ -372,6 +408,14 @@ impl Conversion {
                 .collect(),
         })
     }
+}
+
+/// The currency categories in their download order: the currency first, the most copied
+/// items, then the others in the order of the API.
+fn download_order(mut categories: Vec<ApiCategory>) -> Vec<ApiCategory> {
+    // A stable sort on a `bool`: `false`, the currency, comes first.
+    categories.sort_by_key(|category| category.api_id != CURRENCY_CATEGORY);
+    categories
 }
 
 /// `text` as one segment of a path, e.g. a league name with spaces.
@@ -534,6 +578,23 @@ mod tests {
             conversion().price(mirror.price).map(|price| price.quantity),
             Some(15)
         );
+    }
+
+    #[test]
+    fn the_currency_category_is_downloaded_first() {
+        let categories: ApiCategories = serde_json::from_str(
+            r#"{"UniqueCategories": [], "CurrencyCategories": [
+                {"ApiId": "fragments"}, {"ApiId": "runes"}, {"ApiId": "currency"}, {"ApiId": "abyss"}
+            ]}"#,
+        )
+        .expect("the answer parses");
+
+        let order: Vec<String> = download_order(categories.currency_categories)
+            .into_iter()
+            .map(|category| category.api_id)
+            .collect();
+
+        assert_eq!(order, ["currency", "fragments", "runes", "abyss"]);
     }
 
     #[test]

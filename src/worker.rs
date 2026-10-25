@@ -56,6 +56,21 @@ impl<E, C> Outbox<E, C> {
             waited => Some(waited),
         }
     }
+
+    /// The last thing the application asked since the last wait, without waiting: its last
+    /// order, or the stop.
+    #[must_use]
+    pub fn latest_order(&self) -> Option<Waited<C>> {
+        let mut latest = None;
+        while let Some(waited) = self.pending_order() {
+            let stop = matches!(waited, Waited::Stop);
+            latest = Some(waited);
+            if stop {
+                break;
+            }
+        }
+        latest
+    }
 }
 
 impl<E> Outbox<E> {

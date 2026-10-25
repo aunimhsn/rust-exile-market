@@ -25,7 +25,7 @@ const DOWNLOAD_GAP: f32 = 10.0;
 
 /// The download of the prices of a league.
 #[derive(Debug, Clone, Copy)]
-pub struct Download<'a> {
+pub struct PriceDownload<'a> {
     /// The name of the league.
     pub league: &'a str,
     /// The share downloaded, from 0 to 1.
@@ -36,7 +36,7 @@ pub struct Download<'a> {
 
 pub struct EmptyState<'a> {
     i18n: &'a Translator,
-    download: Option<Download<'a>>,
+    download: Option<PriceDownload<'a>>,
 }
 
 impl<'a> EmptyState<'a> {
@@ -51,7 +51,7 @@ impl<'a> EmptyState<'a> {
     /// Shows the download of the prices in place of the invitation to copy an item, which
     /// would be wrong while no price is known.
     #[must_use]
-    pub fn downloading(mut self, download: Download<'a>) -> Self {
+    pub fn downloading(mut self, download: PriceDownload<'a>) -> Self {
         self.download = Some(download);
         self
     }
@@ -102,7 +102,7 @@ impl<'a> EmptyState<'a> {
 
     /// The league whose prices are downloaded, in the color of the text, the bar, then a
     /// sentence.
-    fn download(&self, ui: &mut Ui, download: Download<'_>) {
+    fn download(&self, ui: &mut Ui, download: PriceDownload<'_>) {
         let title = self.i18n.download_title(download.league);
         let mut job = LayoutJob::default();
         let mut append = |part: &str, tint| {
@@ -122,7 +122,8 @@ impl<'a> EmptyState<'a> {
         let (rect, _) = ui.allocate_exact_size(BAR_SIZE, Sense::hover());
         // From one step to the next without a jump: a step is a request, every second.
         let progress = ui.ctx().animate_value_with_time(
-            ui.scope_id().with("download-progress"),
+            // Per league: the bar of another league starts from zero.
+            ui.scope_id().with(("download-progress", download.league)),
             download.progress.clamp(0.0, 1.0),
             motion::PROGRESS,
         );

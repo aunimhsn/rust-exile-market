@@ -53,8 +53,8 @@ pub struct Session {
     prices: Option<LeaguePrices>,
     /// The last request for the leagues succeeded.
     leagues_reachable: bool,
-    /// The last download of the prices of the league shown succeeded, or none failed yet.
-    prices_reachable: bool,
+    /// The league whose last download of the prices failed, if any.
+    prices_failed: Option<League>,
     /// Shown until another item is copied.
     item: Option<ShownItem>,
     clipboard_readable: bool,
@@ -98,7 +98,7 @@ impl Session {
             new_league: None,
             prices: None,
             leagues_reachable: true,
-            prices_reachable: true,
+            prices_failed: None,
             item: None,
             clipboard_readable: true,
         }
@@ -114,19 +114,15 @@ impl Session {
             }
             MarketEvent::CachedPrices(prices) => self.keep_prices(prices, None),
             MarketEvent::PartialPrices { prices, progress } => {
-                if self.shows(&prices) {
-                    self.prices_reachable = true;
-                }
+                self.downloaded(&prices.league);
                 self.keep_prices(prices, Some(progress));
             }
             MarketEvent::Prices(prices) => {
-                if self.shows(&prices) {
-                    self.prices_reachable = true;
-                }
+                self.downloaded(&prices.league);
                 self.keep_prices(prices, None);
             }
             MarketEvent::Unreachable(Source::Leagues) => self.leagues_reachable = false,
-            MarketEvent::Unreachable(Source::Prices) => self.prices_reachable = false,
+            MarketEvent::Unreachable(Source::Prices(league)) => self.prices_failed = Some(league),
         }
         None
     }
@@ -148,6 +144,13 @@ impl Session {
         change
     }
 
+    /// The prices of `league` were downloaded: an earlier failure of its download is over.
+    fn downloaded(&mut self, league: &League) {
+        if self.prices_failed.as_ref() == Some(league) {
+            self.prices_failed = None;
+        }
+    }
+
     /// `prices` are those of the league shown.
     fn shows(&self, prices: &PriceList) -> bool {
         self.league.as_ref() == Some(&prices.league)
@@ -161,13 +164,9 @@ impl Session {
         }
     }
 
-    /// Shows `league`, chosen by the player. A failed download of the previous league says
-    /// nothing of this one.
+    /// Shows `league`, chosen by the player.
     pub fn choose_league(&mut self, league: League) {
         self.new_league = None;
-        if self.league.as_ref() != Some(&league) {
-            self.prices_reachable = true;
-        }
         self.league = Some(league);
     }
 
@@ -205,7 +204,9 @@ impl Session {
     /// The state of the prices of the league shown, at `now`.
     #[must_use]
     pub fn prices_state(&self, now: SystemTime) -> PricesState {
-        let offline = !(self.leagues_reachable && self.prices_reachable);
+        // A failed download of another league says nothing of this one.
+        let prices_failed = self.prices_failed.is_some() && self.prices_failed == self.league;
+        let offline = !self.leagues_reachable || prices_failed;
         match self.league_prices() {
             Some(LeaguePrices {
                 list,
@@ -399,7 +400,10 @@ mod tests {
             PricesState::Downloading { progress: 0.0 }
         );
 
-        session.apply_market(MarketEvent::Unreachable(Source::Prices), &[]);
+        session.apply_market(
+            MarketEvent::Unreachable(Source::Prices(League::new("Forbidden Rites"))),
+            &[],
+        );
         assert_eq!(session.prices_state(now()), PricesState::Unavailable);
 
         session.apply_market(MarketEvent::Prices(prices("Forbidden Rites", ago(2))), &[]);
@@ -470,7 +474,10 @@ mod tests {
         let mut session = session();
         session.apply_market(MarketEvent::Prices(prices("Forbidden Rites", now())), &[]);
 
-        session.apply_market(MarketEvent::Unreachable(Source::Prices), &[]);
+        session.apply_market(
+            MarketEvent::Unreachable(Source::Prices(League::new("Forbidden Rites"))),
+            &[],
+        );
         session.apply_market(leagues(&["Forbidden Rites"]), &[]);
 
         assert!(matches!(
@@ -482,9 +489,29 @@ mod tests {
     #[test]
     fn a_failed_download_of_the_previous_league_says_nothing_of_the_new_one() {
         let mut session = session();
-        session.apply_market(MarketEvent::Unreachable(Source::Prices), &[]);
 
         session.choose_league(League::new("HC Forbidden Rites"));
+        // Sent before the thread saw the new league.
+        session.apply_market(
+            MarketEvent::Unreachable(Source::Prices(League::new("Forbidden Rites"))),
+            &[],
+        );
+
+        assert_eq!(
+            session.prices_state(now()),
+            PricesState::Downloading { progress: 0.0 }
+        );
+    }
+
+    #[test]
+    fn a_failed_download_of_an_ended_league_says_nothing_of_standard() {
+        let mut session = Session::new(Some(League::new("Dawn of the Hunt")));
+        session.apply_market(leagues(&["Forbidden Rites"]), &[]);
+
+        session.apply_market(
+            MarketEvent::Unreachable(Source::Prices(League::new("Dawn of the Hunt"))),
+            &[],
+        );
 
         assert_eq!(
             session.prices_state(now()),
@@ -497,7 +524,10 @@ mod tests {
         let mut session = session();
 
         assert_eq!(
-            session.apply_market(MarketEvent::Unreachable(Source::Prices), &[]),
+            session.apply_market(
+                MarketEvent::Unreachable(Source::Prices(League::new("Forbidden Rites"))),
+                &[]
+            ),
             None
         );
         assert_eq!(session.leagues(), None);

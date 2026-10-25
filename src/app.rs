@@ -14,7 +14,7 @@ use crate::market::MarketWatch;
 use crate::session::{LeagueChange, PricesState, Session};
 use crate::settings::{SettingChange, Settings, SettingsFile};
 use crate::ui::{
-    self, BubbleAction, Download, EmptyState, LeagueList, LeagueListAction, NewLeagueBubble,
+    self, BubbleAction, EmptyState, LeagueList, LeagueListAction, NewLeagueBubble, PriceDownload,
     RawItem, ResizeEdges, SettingsPanel, StatusBar, TitleBar, TitleBarAction, UnreadableItem,
     WarningBand,
 };
@@ -55,8 +55,8 @@ pub struct ExileMarketApp {
     leagues_open: bool,
     clipboard: ClipboardWatch,
     market: MarketWatch,
-    /// The sentence shown during the download of the prices, drawn at its start.
-    download_quote: Option<usize>,
+    /// The sentence shown during the download of the prices of a league, drawn at its start.
+    download_quote: Option<(League, usize)>,
 }
 
 impl ExileMarketApp {
@@ -199,14 +199,14 @@ impl ExileMarketApp {
     fn item(&self, ui: &mut Ui, prices: PricesState) {
         let Some(shown) = self.session.item() else {
             let empty = EmptyState::new(&self.i18n);
-            if let (PricesState::Downloading { progress }, Some(league), Some(quote)) =
-                (prices, self.session.league(), self.download_quote)
+            if let (PricesState::Downloading { progress }, Some((league, quote))) =
+                (prices, &self.download_quote)
             {
                 empty
-                    .downloading(Download {
+                    .downloading(PriceDownload {
                         league: league.name(),
                         progress,
-                        quote,
+                        quote: *quote,
                     })
                     .show(ui);
             } else {
@@ -269,11 +269,14 @@ impl App for ExileMarketApp {
         }
         self.league_overlays(&ctx, action);
         let prices = self.session.prices_state(SystemTime::now());
-        if matches!(prices, PricesState::Downloading { .. }) {
-            self.download_quote.get_or_insert_with(random_quote);
-        } else {
-            self.download_quote = None;
-        }
+        // A sentence per download: drawn again for another league.
+        self.download_quote = match (prices, self.session.league()) {
+            (PricesState::Downloading { .. }, Some(league)) => match self.download_quote.take() {
+                Some((drawn, quote)) if drawn == *league => Some((drawn, quote)),
+                _ => Some((league.clone(), random_quote())),
+            },
+            _ => None,
+        };
         WarningBand::new(self.warnings(prices)).show(ui);
         if let PricesState::Known { age, .. } = prices {
             // The age of the prices changes with the time, without an event.
@@ -302,7 +305,7 @@ impl App for ExileMarketApp {
 
 /// A sentence of the download of the prices, drawn at random.
 fn random_quote() -> usize {
-    // The hasher is seeded at random for each value: enough to draw a sentence.
+    // Each `RandomState` has its own keys: enough to draw a sentence.
     let [byte, ..] = RandomState::new().hash_one(()).to_le_bytes();
     usize::from(byte) % DOWNLOAD_QUOTE_COUNT
 }
