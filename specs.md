@@ -20,7 +20,7 @@ The reference of the interface is the mock-up [docs/mockups/narrow-styles.html](
 - Dark interface made of full-width bands, without frames or cards.
 - White is the color of the main action; the other colors are kept for a meaning: the item rarities, the league (softcore or hardcore), the warnings, better or worse.
 - Short, factual messages. No pop-ups for errors: they are shown inside the window.
-- The interface is available in English and in French; English is the reference language. The French messages use the formal "vous", like the French game client.
+- The interface is available in English and in French; English is the reference language. The French messages use the formal "vous", like the French game client. The tiers of the modifiers keep the English word the players use, in French too: T1, T2, T3… (the French client says "palier").
 - Version 1 has the narrow layout only (see [Window layout](#window-layout)).
 
 ## Visual style
@@ -43,9 +43,9 @@ The reference of the interface is the mock-up [docs/mockups/narrow-styles.html](
 | Warning band | background `#8a6a10`, text `#f8edc2` | Errors under the title bar. |
 | Warning text | `#f0b85a` | Uncertain price, suspicious offer, away seller. |
 | Rise / fall | `#5fcf80` / `#e66a5c` | Trend, roll differences, seller online / offline. |
-| Rarities | normal `#d0d0d0`, magic `#8888ff`, rare `#ffff77`, unique `#c26a2c`, currency `#b4a787` | Item names, as in the game. |
+| Rarities | normal `#d0d0d0`, magic `#8888ff`, rare `#ffff77`, unique `#c26a2c`, currency `#b4a787`, gem `#1ba29b` | Item names, as in the game. |
 | Modifiers | `#8f8fff` | Implicit and explicit modifiers, as in the game. |
-| Tier 1 | `#ff8c1a` | Tier of a modifier at its best tier: a vivid orange that stands out. |
+| Tier 1 | `#ff8c1a` | Tier of a modifier at its best tier, and the T1 tag of the item block: a vivid orange that stands out. |
 
 ### Typography
 
@@ -108,9 +108,9 @@ The window has a title bar, then three bands (item, price, offers), then a statu
 ### Item block
 
 - The item name, in its rarity color; for an exceptional base, the full name ("Exceptional Chiming Staff").
-- A **Check on trade** pill at the top right ("Voir sur l'échange" in French), which opens the browser on the search for this item in the selected league, on the French trade site when the item was copied in French.
-- The base type, then the item class followed by tags: Corrupted, Twice Corrupted, Sanctified, Fractured, Mirrored, Unidentified, quality (`Q 20%`), sockets (`2 sockets`), item level (`ilvl 81`), stack (`Stack 7/20`), and for rare items the number of modifiers in tiers 1 to 3 (`4 top tiers`) and the open affixes (`1 open prefix`). The tags wrap to a new line when needed.
-- For a weapon, a summary line: "Physical DPS 245 · Elemental DPS 44"; for a staff, the granted skill.
+- A **Check on trade** pill at the top right ("Voir sur l'échange" in French), which opens the browser on the search for this item in the selected league, sellers online: a unique by its name and base type, an item of the currency exchange on its exchange page, the other items by their base type (their stats come with the filters of step 13); on the French trade site when the item was copied in French.
+- The base type of a rare or unique item, with "Exceptional" for an exceptional base, then the item class followed by tags: Corrupted, Twice Corrupted, Sanctified, Fractured, Mirrored, Unidentified, quality (`Q 20%`), sockets (`2 sockets`), item level (`ilvl 81`), stack (`Stack 7/20`), and for rare and magic items copied with Ctrl+Alt+C, the number of their prefixes and suffixes at tier 1 (`2 T1`), in the orange of tier 1, when they have one. The best tier keeps its meaning at every level of the game, unlike the tiers 2 and 3, which matter less as the player progresses; the open affixes are on almost every rare item, and show in the stats. The tags wrap to a new line when needed.
+- For a weapon, a summary line: "Physical DPS 245 · Elemental DPS 44 · Chaos DPS 30", each part when the weapon deals that damage; for a staff or a shield, the skills it grants.
 - The requirements on a small gray line, always visible: "Requires Level 65 · 145 Dex".
 - A **Show 6 stats** pill (singular for one stat; **Show filters** for an item without modifiers), and next to it the number of active filters ("3 filters"). Unfolded, the pill reads **Hide stats** and the stats appear:
   - grouped under small titles when they are filters: Item, Weapon, Pseudo, Implicit, Explicit;

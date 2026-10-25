@@ -5,7 +5,7 @@ use std::hash::{BuildHasher, RandomState};
 use std::time::{Duration, SystemTime};
 
 use eframe::{App, CreationContext, Frame};
-use egui::{Context, Key, Ui, ViewportCommand};
+use egui::{Context, Key, OpenUrl, Ui, ViewportCommand};
 
 use crate::clipboard::{ClipboardEvent, ClipboardWatch};
 use crate::i18n::{DOWNLOAD_QUOTE_COUNT, Message, Translator};
@@ -15,9 +15,9 @@ use crate::session::{LeagueChange, PricesState, Session};
 use crate::settings::{SettingChange, Settings, SettingsFile};
 use crate::trade::ItemNamesWatch;
 use crate::ui::{
-    self, BubbleAction, EmptyState, LeagueList, LeagueListAction, NewLeagueBubble, PriceDownload,
-    RawItem, ResizeEdges, SettingsPanel, StatusBar, TitleBar, TitleBarAction, UnreadableItem,
-    WarningBand,
+    self, BubbleAction, EmptyState, ItemBlock, ItemBlockAction, LeagueList, LeagueListAction,
+    NewLeagueBubble, PriceDownload, ResizeEdges, SettingsPanel, StatusBar, TitleBar,
+    TitleBarAction, UnreadableItem, WarningBand,
 };
 
 /// What the window shows under the title bar.
@@ -218,10 +218,20 @@ impl ExileMarketApp {
             }
             return;
         };
-        match shown.parsed() {
-            Ok(_) => RawItem::new(shown.copied()).show(ui),
-            Err(_) => UnreadableItem::new(&self.i18n).show(ui),
-        }
+        let Ok(item) = shown.parsed() else {
+            UnreadableItem::new(&self.i18n).show(ui);
+            return;
+        };
+        // The pill shows only when its link can be opened: the league and the search known.
+        let url = self.session.trade_url(item);
+        ui::content(ui, |ui| {
+            let action = ItemBlock::new(item, &self.i18n)
+                .tradable(url.is_some())
+                .show(ui);
+            if let (Some(ItemBlockAction::CheckOnTrade), Some(url)) = (action, url) {
+                ui.ctx().open_url(OpenUrl::new_tab(url));
+            }
+        });
     }
 }
 

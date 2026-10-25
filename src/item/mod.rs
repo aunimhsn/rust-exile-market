@@ -22,10 +22,12 @@ mod copied;
 mod labels;
 mod modifier;
 mod parser;
+mod weapon;
 
 pub use copied::CopiedItem;
 pub use modifier::{Affix, Modifier, ModifierKind, ModifierOrigin};
 pub use parser::{ParseError, ParseWarning};
+pub use weapon::{DamageKind, Weapon};
 
 use crate::language::Language;
 
@@ -92,6 +94,8 @@ pub struct Item {
     rarity: Rarity,
     name: Option<String>,
     base_type: String,
+    /// The base type as the game writes it, with "Exceptional" and "Superior".
+    written_base_type: String,
     exceptional: bool,
     stack: Option<Stack>,
     #[expect(
@@ -105,6 +109,8 @@ pub struct Item {
     granted_skills: Vec<String>,
     states: Vec<ItemState>,
     properties: Vec<Property>,
+    /// The damage and the speed of a weapon.
+    weapon: Option<Weapon>,
     modifiers: Vec<Modifier>,
     warnings: Vec<ParseWarning>,
 }
@@ -124,6 +130,38 @@ impl Item {
     #[must_use]
     pub fn warnings(&self) -> &[ParseWarning] {
         &self.warnings
+    }
+
+    /// The name the game shows: the name of a rare or unique item, and the name line as
+    /// written for the others, with the affixes of a magic item and the word "Exceptional"
+    /// ("Exceptional Chiming Staff").
+    #[must_use]
+    pub fn title(&self) -> &str {
+        self.name.as_deref().unwrap_or(&self.written_base_type)
+    }
+
+    /// The base type as the game writes it, with "Exceptional" and "Superior".
+    #[must_use]
+    pub fn written_base_type(&self) -> &str {
+        &self.written_base_type
+    }
+
+    /// The damage and the speed of a weapon.
+    #[must_use]
+    pub fn weapon(&self) -> Option<&Weapon> {
+        self.weapon.as_ref()
+    }
+
+    /// The number of prefixes and suffixes at tier 1, the best one; only the advanced copy
+    /// gives the tiers.
+    #[must_use]
+    pub fn tier_1_affixes(&self) -> usize {
+        self.modifiers
+            .iter()
+            .filter(|modifier| {
+                matches!(modifier.kind, ModifierKind::Explicit(Some(_))) && modifier.tier == Some(1)
+            })
+            .count()
     }
 }
 

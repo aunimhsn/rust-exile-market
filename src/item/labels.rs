@@ -24,6 +24,10 @@ pub(super) struct Labels {
     pub dexterity: &'static [&'static str],
     pub intelligence: &'static [&'static str],
     pub grants_skill: &'static str,
+    /// The names of the properties of a weapon read for its DPS; the elemental and chaos
+    /// damage are told by their markers, the same in every language.
+    pub physical_damage: &'static str,
+    pub attacks_per_second: &'static str,
     /// The note of a priced item; unknown in some languages.
     pub note: Option<&'static str>,
     /// The state lines at the end of the item; "Unidentified" may be followed by a tier.
@@ -97,6 +101,8 @@ static ENGLISH: Labels = Labels {
     dexterity: &["Dex", "Dexterity"],
     intelligence: &["Int", "Intelligence"],
     grants_skill: "Grants Skill: ",
+    physical_damage: "Physical Damage",
+    attacks_per_second: "Attacks per Second",
     note: Some("Note: "),
     states: &[
         ("Corrupted", ItemState::Corrupted),
@@ -146,6 +152,8 @@ static FRENCH: Labels = Labels {
     dexterity: &["Dex", "Dextérité"],
     intelligence: &["Int", "Intelligence"],
     grants_skill: "Octroie l'Aptitude: ",
+    physical_damage: "Dégâts Physiques",
+    attacks_per_second: "Attaques par seconde",
     note: None,
     states: &[
         ("Corrompu", ItemState::Corrupted),

@@ -2,7 +2,7 @@
 //!
 //! The rules of its use (pace, identification) are in `roadmap.md` (poe2scout usage).
 
-use std::fmt::{self, Write};
+use std::fmt;
 use std::time::{Duration, SystemTime};
 
 use serde::Deserialize;
@@ -261,7 +261,7 @@ impl PriceDatabase for Poe2Scout {
         league: &League,
         download: &mut dyn DownloadObserver,
     ) -> Result<Option<PriceList>, FetchError> {
-        let path = path_segment(league.id());
+        let path = http::encode(league.id());
         let Some(categories) = self.get_unless_interrupted::<ApiCategories>(
             &format!("/Leagues/{path}/Items/Categories"),
             &[],
@@ -381,20 +381,6 @@ fn download_order(mut categories: Vec<ApiCategory>) -> Vec<ApiCategory> {
     // A stable sort on a `bool`: `false`, the currency, comes first.
     categories.sort_by_key(|category| category.api_id != CURRENCY_CATEGORY);
     categories
-}
-
-/// `text` as one segment of a path, e.g. a league name with spaces.
-fn path_segment(text: &str) -> String {
-    let mut segment = String::with_capacity(text.len());
-    for byte in text.bytes() {
-        if byte.is_ascii_alphanumeric() || b"-._~".contains(&byte) {
-            segment.push(char::from(byte));
-        } else {
-            // Writing to a `String` never fails.
-            let _ = write!(segment, "%{byte:02X}");
-        }
-    }
-    segment
 }
 
 /// The current leagues of the answer, in its order.
@@ -560,15 +546,6 @@ mod tests {
             .collect();
 
         assert_eq!(order, ["currency", "fragments", "runes", "abyss"]);
-    }
-
-    #[test]
-    fn a_league_name_is_escaped_in_the_path() {
-        assert_eq!(path_segment("HC Forbidden Rites"), "HC%20Forbidden%20Rites");
-        assert_eq!(
-            path_segment("Rise of the Abyssal (PL1)"),
-            "Rise%20of%20the%20Abyssal%20%28PL1%29"
-        );
     }
 
     #[test]

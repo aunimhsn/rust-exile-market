@@ -8,6 +8,7 @@ use std::time::Duration;
 
 use fluent_bundle::{FluentArgs, FluentBundle, FluentResource};
 
+use crate::item::DamageKind;
 use crate::language::Language;
 
 /// The Fluent messages of a language, embedded in the executable.
@@ -45,12 +46,19 @@ pub enum Message {
     LanguageFrench,
     SettingsAlwaysOnTop,
     Disclaimer,
+    CheckOnTrade,
+    TagCorrupted,
+    TagTwiceCorrupted,
+    TagSanctified,
+    TagFractured,
+    TagMirrored,
+    TagUnidentified,
 }
 
 impl Message {
     /// Every message, for the tests.
     #[cfg(test)]
-    const ALL: [Self; 24] = [
+    const ALL: [Self; 31] = [
         Self::LeagueModeSoftcore,
         Self::LeagueModeHardcore,
         Self::LeagueLoading,
@@ -75,6 +83,13 @@ impl Message {
         Self::LanguageFrench,
         Self::SettingsAlwaysOnTop,
         Self::Disclaimer,
+        Self::CheckOnTrade,
+        Self::TagCorrupted,
+        Self::TagTwiceCorrupted,
+        Self::TagSanctified,
+        Self::TagFractured,
+        Self::TagMirrored,
+        Self::TagUnidentified,
     ];
 
     /// Its identifier in the `.ftl` files.
@@ -104,8 +119,34 @@ impl Message {
             Self::LanguageFrench => "language-french",
             Self::SettingsAlwaysOnTop => "settings-always-on-top",
             Self::Disclaimer => "disclaimer",
+            Self::CheckOnTrade => "check-on-trade",
+            Self::TagCorrupted => "tag-corrupted",
+            Self::TagTwiceCorrupted => "tag-twice-corrupted",
+            Self::TagSanctified => "tag-sanctified",
+            Self::TagFractured => "tag-fractured",
+            Self::TagMirrored => "tag-mirrored",
+            Self::TagUnidentified => "tag-unidentified",
         }
     }
+}
+
+/// The tags of the item block with a number.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NumberTag {
+    Quality,
+    Sockets,
+    ItemLevel,
+    /// The prefixes and suffixes at tier 1.
+    Tier1,
+}
+
+/// The parts of the requirements line.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Requirement {
+    Level,
+    Strength,
+    Dexterity,
+    Intelligence,
 }
 
 /// The identifiers of the messages with arguments, each read by its own method.
@@ -121,6 +162,20 @@ const AGE_MINUTES: &str = "age-minutes";
 const AGE_HOURS: &str = "age-hours";
 const AGE_DAYS: &str = "age-days";
 const DOWNLOAD_TITLE: &str = "download-title";
+const TAG_QUALITY: &str = "tag-quality";
+const TAG_SOCKETS: &str = "tag-sockets";
+const TAG_ITEM_LEVEL: &str = "tag-item-level";
+const TAG_STACK: &str = "tag-stack";
+const TAG_TIER_1: &str = "tag-tier-1";
+const DPS_PHYSICAL: &str = "dps-physical";
+const DPS_ELEMENTAL: &str = "dps-elemental";
+const DPS_CHAOS: &str = "dps-chaos";
+const GRANTED_SKILL: &str = "granted-skill";
+const REQUIRES: &str = "requires";
+const REQUIREMENT_LEVEL: &str = "requirement-level";
+const REQUIREMENT_STRENGTH: &str = "requirement-strength";
+const REQUIREMENT_DEXTERITY: &str = "requirement-dexterity";
+const REQUIREMENT_INTELLIGENCE: &str = "requirement-intelligence";
 /// The sentences under the bar of the download of the prices, one drawn at random per
 /// download.
 const DOWNLOAD_QUOTES: [&str; 10] = [
@@ -224,6 +279,68 @@ impl Translator {
         self.format(DOWNLOAD_QUOTES[index % DOWNLOAD_QUOTE_COUNT], None)
     }
 
+    /// A tag of the item block with a number: the quality (`Q 20%`), the sockets, the item
+    /// level, the T1 affixes.
+    #[must_use]
+    pub fn tag(&self, tag: NumberTag, value: u32) -> String {
+        let id = match tag {
+            NumberTag::Quality => TAG_QUALITY,
+            NumberTag::Sockets => TAG_SOCKETS,
+            NumberTag::ItemLevel => TAG_ITEM_LEVEL,
+            NumberTag::Tier1 => TAG_TIER_1,
+        };
+        self.format_number(id, "value", value)
+    }
+
+    /// The stack tag of the item block: its size and its largest size.
+    #[must_use]
+    pub fn stack_tag(&self, size: u32, max: u32) -> String {
+        let mut args = FluentArgs::new();
+        args.set("size", size);
+        args.set("max", max);
+        self.format(TAG_STACK, Some(&args))
+    }
+
+    /// A part of the summary of a weapon: its DPS of a kind, rounded.
+    #[must_use]
+    pub fn dps(&self, kind: DamageKind, dps: u32) -> String {
+        let id = match kind {
+            DamageKind::Physical => DPS_PHYSICAL,
+            DamageKind::Elemental => DPS_ELEMENTAL,
+            DamageKind::Chaos => DPS_CHAOS,
+        };
+        self.format_number(id, "dps", dps)
+    }
+
+    /// The summary of an item that grants skills, e.g. a staff, from the skills joined by
+    /// the caller.
+    #[must_use]
+    pub fn granted_skill(&self, skill: &str) -> String {
+        let mut args = FluentArgs::new();
+        args.set("skill", skill);
+        self.format(GRANTED_SKILL, Some(&args))
+    }
+
+    /// The requirements line, from its parts joined by the caller.
+    #[must_use]
+    pub fn requires(&self, parts: &str) -> String {
+        let mut args = FluentArgs::new();
+        args.set("parts", parts);
+        self.format(REQUIRES, Some(&args))
+    }
+
+    /// A part of the requirements line: the level, or an attribute.
+    #[must_use]
+    pub fn requirement(&self, requirement: Requirement, value: u32) -> String {
+        let id = match requirement {
+            Requirement::Level => REQUIREMENT_LEVEL,
+            Requirement::Strength => REQUIREMENT_STRENGTH,
+            Requirement::Dexterity => REQUIREMENT_DEXTERITY,
+            Requirement::Intelligence => REQUIREMENT_INTELLIGENCE,
+        };
+        self.format_number(id, "value", value)
+    }
+
     /// The tooltip of the league block, with the mode of the league (`Softcore`).
     #[must_use]
     pub fn league_tooltip(&self, mode: &str) -> String {
@@ -250,6 +367,12 @@ impl Translator {
         args.set("author", author);
         args.set("site", site);
         self.format(STATUS_AUTHOR, Some(&args))
+    }
+
+    fn format_number(&self, id: &str, name: &'static str, value: u32) -> String {
+        let mut args = FluentArgs::new();
+        args.set(name, value);
+        self.format(id, Some(&args))
     }
 
     fn format_age(&self, id: &str, age: &str) -> String {
@@ -314,6 +437,20 @@ mod tests {
                 AGE_HOURS,
                 AGE_DAYS,
                 DOWNLOAD_TITLE,
+                TAG_QUALITY,
+                TAG_SOCKETS,
+                TAG_ITEM_LEVEL,
+                TAG_STACK,
+                TAG_TIER_1,
+                DPS_PHYSICAL,
+                DPS_ELEMENTAL,
+                DPS_CHAOS,
+                GRANTED_SKILL,
+                REQUIRES,
+                REQUIREMENT_LEVEL,
+                REQUIREMENT_STRENGTH,
+                REQUIREMENT_DEXTERITY,
+                REQUIREMENT_INTELLIGENCE,
             ])
             .chain(DOWNLOAD_QUOTES)
             .map(str::to_owned)
@@ -339,6 +476,35 @@ mod tests {
             );
             for age in [0, 60, 3600, 86_400] {
                 assert_ne!(translator.age(Duration::from_secs(age)), "", "{language:?}");
+            }
+            for tag in [
+                NumberTag::Quality,
+                NumberTag::Sockets,
+                NumberTag::ItemLevel,
+                NumberTag::Tier1,
+            ] {
+                for value in [0, 1, 2, 20] {
+                    let text = translator.tag(tag, value);
+                    assert!(text.contains(&value.to_string()), "{text} in {language:?}");
+                }
+            }
+            assert!(translator.stack_tag(7, 20).contains("7/20"), "{language:?}");
+            for kind in [
+                DamageKind::Physical,
+                DamageKind::Elemental,
+                DamageKind::Chaos,
+            ] {
+                assert!(translator.dps(kind, 245).contains("245"), "{language:?}");
+            }
+            assert!(translator.granted_skill("Skill").contains("Skill"));
+            assert!(translator.requires("parts").contains("parts"));
+            for requirement in [
+                Requirement::Level,
+                Requirement::Strength,
+                Requirement::Dexterity,
+                Requirement::Intelligence,
+            ] {
+                assert!(translator.requirement(requirement, 65).contains("65"));
             }
             assert!(
                 translator.download_title("League").contains("League"),

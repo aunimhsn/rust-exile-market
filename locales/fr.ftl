@@ -74,6 +74,39 @@ clipboard-unreadable = Le presse-papiers ne peut pas être lu.
 prices-unreachable = La base des prix est injoignable. Dernière mise à jour { $age }.
 prices-unavailable = Prix indisponibles, nouvelle tentative…
 
+## Bloc objet
+
+# Ouvre la recherche de l'objet sur le site d'échange, dans le navigateur.
+check-on-trade = Voir sur l'échange
+# Les tags après la classe de l'objet, courts, proches des mots du client du jeu.
+tag-corrupted = Corrompu
+tag-twice-corrupted = Double corruption
+tag-sanctified = Sanctifié
+tag-fractured = Fissuré
+tag-mirrored = Reflété
+tag-unidentified = Non identifié
+tag-quality = Q { $value }%
+tag-sockets = { $value ->
+    [one] { $value } châsse
+   *[other] { $value } châsses
+}
+tag-item-level = niv. { $value }
+tag-stack = Pile { $size }/{ $max }
+# Le nombre de préfixes et suffixes au palier 1, le meilleur.
+tag-tier-1 = { $value } T1
+# Le résumé d'une arme, ses parties jointes par « · ».
+dps-physical = DPS physique { $dps }
+dps-elemental = DPS élémentaire { $dps }
+dps-chaos = DPS de chaos { $dps }
+# Le résumé d'un objet qui octroie des aptitudes, par exemple « Niveau 18 Sceau de puissance », jointes par « · ».
+granted-skill = Octroie l'aptitude : { $skill }
+# La ligne des prérequis, ses parties jointes par « · » : « Requiert niveau 65 · 145 Dex ».
+requires = Requiert { $parts }
+requirement-level = niveau { $value }
+requirement-strength = { $value } For
+requirement-dexterity = { $value } Dex
+requirement-intelligence = { $value } Int
+
 ## Réglages
 
 settings-title = Réglages
