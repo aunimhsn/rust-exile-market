@@ -126,8 +126,8 @@ The window has a title bar, then three bands (item, price, offers), then a statu
 
 - The price in **Divine Orbs**, **Chaos Orbs** and **Exalted Orbs**, side by side, each with its orb icon, so that the price is readable at any time of the league.
 - The large price is always the value of what was copied: for a stack, the value of the whole stack, with "Stack of 7" on the right of the title and the unit price on a small line ("Unit price: 0.25 div · 2.49 c · 182 ex").
-- On the right of the title, for a unique, the number of offers behind the price ("23 offers"); for a currency exchange item, which always has plenty of offers, the stack size instead.
-- The trend, the change first, in green when it rises and in red when it falls, without icon: "+4% over the last 3 days", "−11% over the last 7 days" (a real minus sign).
+- On the right of the title, for a unique, the number of offers behind the price ("23 offers"); for a currency exchange item, which always has plenty of offers, the stack size instead ("Stack of 7"; nothing for a single item, without a unit price line).
+- The trend, the change first, in green when it rises and in red when it falls, without icon: "+4% over the last 3 days", "−11% over the last 7 days" (a real minus sign). It compares the price with the oldest known price of the last 7 days: 7 days, or fewer for an item listed lately. Under 1 % of change, "Stable over the last 7 days" in gray. No trend without a past price.
 - With fewer than 5 offers, the warning "Only 4 offers: the price is uncertain".
 
 **Estimated price** (rare, magic and normal items, jewels):
@@ -139,8 +139,9 @@ The window has a title bar, then three bands (item, price, offers), then a statu
 
 | Situation | Behavior |
 |---|---|
-| Unidentified unique item | If its base type has only one unique, that unique is priced. Otherwise, "Identify the item to get its price." with the possible uniques and the price of each; its offers aren't searched. |
+| Unidentified unique item | If its base type has only one unique, that unique is priced. Otherwise, "Identify the item to get its price." with the possible uniques and the price of each, in Divine Orbs from one Divine Orb and in Exalted Orbs under it; "No offers" in gray for a unique without a price. Its offers aren't searched. |
 | Fixed-name item missing from the price data | "No price found for this item in <league>." |
+| Fixed-name item whose price isn't known yet | The reason, in one line: "The prices of <league> are downloading…" during the download of a league without a cache, "Prices unavailable, retrying…" when the price database can't be reached and no price is known, "The French item names are downloading…" for an item copied in French (or an unidentified unique) before the names of the trade site arrive. |
 
 ### Stat filters
 
