@@ -568,7 +568,7 @@
   .spinner { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--control-line); border-top-color: var(--accent); }
 
   .banner { display: flex; align-items: stretch; background: var(--banner); color: var(--banner-text, var(--warn)); font-size: 12px; font-weight: 600; }
-  .banner > span:first-child { flex: 1; padding: 10px 14px; align-self: center; }
+  .banner > span:first-child { flex: 1; padding: 10px 14px; align-self: center; display: flex; flex-direction: column; gap: 4px; }
   .foot { padding: 6px 14px; color: var(--faint); font-size: 11.5px; }
   /* Before the first item: the emblem as a faint watermark behind the text (2.25 % opacity), so that it takes no
      height. */
@@ -655,7 +655,8 @@
     </div>${leagueList()}`;
   };
   const foot = (value = "poe2scout 12min ago · GGG trade 2min ago") => `<div class="foot a">${value}</div>`;
-  const banner = value => `<div class="banner"><span>${value}</span></div>`;
+  // One line per warning, in the same band.
+  const banner = (...values) => `<div class="banner"><span>${values.map(value => `<span>${value}</span>`).join("")}</span></div>`;
   const newLeague = league => `
     <div class="app-notice"><span class="app-notice-text"><b>${league}</b> has started.</span>
       <span class="pill">Switch</span><span class="app-notice-close" title="Close">${svg(12, '<path d="M4 4l8 8M12 4l-8 8"/>')}</span></div>`;
@@ -992,6 +993,9 @@
       ["League ended: back to Standard, without a message", win(topBar(false, "Standard"), item(HH), price(HH_PRICE), offers({ state: "idle" }), foot())],
       ["New league started", win(topBar(false, "Standard"), newLeague("Rise of the Abyssal"), item(HH), price(HH_PRICE), offers({ state: "idle" }), foot())],
       ["Clipboard unreadable", win(topBar(), banner("The clipboard can't be read."), empty, foot("poe2scout 12min ago"))],
+      ["Several warnings", win(topBar(), banner("The clipboard can't be read.", "The price database can't be reached. Last updated 3h ago."), empty, foot("poe2scout 3h ago (offline)"))],
+      ["First launch, downloading the prices", win(topBar(), empty, foot("poe2scout: downloading prices…"))],
+      ["First launch offline, no prices", win(topBar(), banner("Prices unavailable, retrying…"), empty, foot("poe2scout: no prices yet"))],
       ["Before the first item", win(topBar(), empty, foot("poe2scout 12min ago"))],
       ["Item couldn't be read", win(topBar(), `<div class="band b"><div class="msg">This item couldn't be read.</div><div class="line muted">Copy it again, or copy another item.</div></div>`, foot())],
     ]],
