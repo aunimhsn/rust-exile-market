@@ -80,6 +80,8 @@ pub struct TitleBar<'a> {
     /// None before the leagues arrive at the first session.
     league: Option<&'a League>,
     i18n: &'a Translator,
+    /// The leagues arrived: a click on the league block opens their list.
+    leagues_known: bool,
     settings_open: bool,
     leagues_open: bool,
 }
@@ -90,9 +92,18 @@ impl<'a> TitleBar<'a> {
         Self {
             league,
             i18n,
+            leagues_known: false,
             settings_open: false,
             leagues_open: false,
         }
+    }
+
+    /// Makes the league block a button once the leagues arrived: before, a click on it does
+    /// nothing, so it neither lights up nor offers to change the league.
+    #[must_use]
+    pub fn leagues_known(mut self, known: bool) -> Self {
+        self.leagues_known = known;
+        self
     }
 
     /// Turns the chevron of the league block down while the list of the leagues is open.
@@ -200,9 +211,13 @@ impl<'a> TitleBar<'a> {
 
         let (rect, response) = ui.allocate_exact_size(
             vec2(FRAME_WIDTH + name.size().x, size::TITLE_BAR_HEIGHT),
-            Sense::click(),
+            if self.leagues_known {
+                Sense::click()
+            } else {
+                Sense::hover()
+            },
         );
-        let lit = response.hovered() || response.has_focus();
+        let lit = self.leagues_known && (response.hovered() || response.has_focus());
         let painter = ui.painter();
         painter.rect_filled(
             rect,
@@ -240,18 +255,25 @@ impl<'a> TitleBar<'a> {
             LeagueMode::Softcore => Message::LeagueModeSoftcore,
             LeagueMode::Hardcore => Message::LeagueModeHardcore,
         });
-        let tooltip = self.i18n.league_tooltip(&mode);
+        let (tooltip, role) = if self.leagues_known {
+            (self.i18n.league_tooltip(&mode), Role::Button)
+        } else {
+            (mode, Role::Label)
+        };
         // The mode isn't written on screen: the screen readers read it with the name.
         response.widget_info(|| {
-            WidgetInfo::labeled(Role::Button, true, format!("{} · {tooltip}", league.name()))
+            WidgetInfo::labeled(role, true, format!("{} · {tooltip}", league.name()))
         });
-        response
-            .on_hover_cursor(CursorIcon::PointingHand)
-            .on_hover_text(if name_is_cut {
-                format!("{}\n{tooltip}", league.name())
-            } else {
-                tooltip
-            })
+        let response = if self.leagues_known {
+            response.on_hover_cursor(CursorIcon::PointingHand)
+        } else {
+            response
+        };
+        response.on_hover_text(if name_is_cut {
+            format!("{}\n{tooltip}", league.name())
+        } else {
+            tooltip
+        })
     }
 
     /// The place of the league block before the leagues arrive at the first session.
@@ -340,6 +362,7 @@ mod tests {
         ctx: Context,
         league: League,
         i18n: Translator,
+        leagues_known: bool,
     }
 
     impl Window {
@@ -350,6 +373,7 @@ mod tests {
                 ctx,
                 league: League::new("Forbidden Rites"),
                 i18n: Translator::new(Language::English),
+                leagues_known: true,
             };
             // The first frame lays the bar out.
             window.frame(vec![]);
@@ -363,7 +387,8 @@ mod tests {
                 events,
                 ..Default::default()
             };
-            let bar = TitleBar::new(Some(&self.league), &self.i18n);
+            let bar =
+                TitleBar::new(Some(&self.league), &self.i18n).leagues_known(self.leagues_known);
             let mut action = None;
             let mut output = self.ctx.run_ui(input, |ui| action = bar.show(ui));
             // epaint panics when the texture changes of a frame are dropped unapplied.
@@ -452,5 +477,17 @@ mod tests {
         let actions = Window::new().press_and_release(league, Vec2::ZERO);
 
         assert_eq!(actions.last(), Some(&Some(TitleBarAction::Leagues)));
+    }
+
+    #[test]
+    fn a_click_on_the_league_does_nothing_before_the_leagues_arrive() {
+        let league = pos2(60.0, size::TITLE_BAR_HEIGHT / 2.0);
+        let window = Window {
+            leagues_known: false,
+            ..Window::new()
+        };
+        let actions = window.press_and_release(league, Vec2::ZERO);
+
+        assert!(actions.iter().all(Option::is_none), "{actions:?}");
     }
 }

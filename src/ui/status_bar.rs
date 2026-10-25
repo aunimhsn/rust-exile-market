@@ -9,11 +9,12 @@ use egui::{
 use super::theme::{color, size, text};
 use super::widgets;
 use crate::i18n::{Message, Translator};
+use crate::session::PricesState;
 
 /// What the status bar shows.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 enum Line {
-    Sources,
+    Sources(PricesState),
     Author,
 }
 
@@ -25,10 +26,10 @@ pub struct StatusBar<'a> {
 impl<'a> StatusBar<'a> {
     /// The age of each data source.
     #[must_use]
-    pub fn sources(i18n: &'a Translator) -> Self {
+    pub fn sources(i18n: &'a Translator, prices: PricesState) -> Self {
         Self {
             i18n,
-            line: Line::Sources,
+            line: Line::Sources(prices),
         }
     }
 
@@ -52,19 +53,27 @@ impl<'a> StatusBar<'a> {
                     ui.set_max_width(ui.available_width() - size::BAND_PADDING);
                     ui.add_space(size::BAND_PADDING);
                     match self.line {
-                        Line::Sources => self.sources_line(ui),
+                        Line::Sources(prices) => self.sources_line(ui, prices),
                         Line::Author => self.author_line(ui),
                     }
                 });
             });
     }
 
-    /// The age of the prices and of the last trade site search; none yet in this version.
-    fn sources_line(&self, ui: &mut Ui) {
-        let line = self.i18n.status_bar(
-            &self.i18n.text(Message::StatusPricesWaiting),
-            &self.i18n.text(Message::StatusTradeIdle),
-        );
+    /// The age of the prices and of the last trade site search; no search yet in this
+    /// version.
+    fn sources_line(&self, ui: &mut Ui, prices: PricesState) {
+        let i18n = self.i18n;
+        let prices = match prices {
+            PricesState::Downloading { .. } => i18n.text(Message::StatusPricesDownloading),
+            PricesState::Unavailable => i18n.text(Message::StatusPricesUnavailable),
+            PricesState::Known {
+                age,
+                offline: false,
+            } => i18n.status_prices(&i18n.age(age)),
+            PricesState::Known { age, offline: true } => i18n.status_prices_offline(&i18n.age(age)),
+        };
+        let line = i18n.status_bar(&prices, &i18n.text(Message::StatusTradeIdle));
         // Cut with "…" in a narrow window, and shown whole under the pointer.
         ui.add(Label::new(faint(line)).truncate());
     }

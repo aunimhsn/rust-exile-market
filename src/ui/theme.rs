@@ -138,6 +138,8 @@ pub mod size {
 pub mod motion {
     /// A list that opens or closes, and its chevron.
     pub const OPEN: f32 = 0.15;
+    /// The bar of a download, from one step to the next.
+    pub const PROGRESS: f32 = 0.3;
 }
 
 /// The shadow of what opens over the content: the bubbles, the list of the leagues.
