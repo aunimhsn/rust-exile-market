@@ -413,6 +413,7 @@ impl DownloadObserver for Progress<'_> {
 mod tests {
     use super::*;
     use crate::files::TestDirectory;
+    use crate::http::HttpError;
     use crate::prices::Rates;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::mpsc::{self, Receiver};
@@ -452,7 +453,9 @@ mod tests {
         fn leagues(&mut self) -> Result<Vec<League>, FetchError> {
             self.requests.leagues.fetch_add(1, Ordering::SeqCst);
             if self.leagues_unreachable {
-                return Err(FetchError::Http(ureq::Error::StatusCode(503)));
+                return Err(FetchError::Http(HttpError::Request(
+                    ureq::Error::StatusCode(503),
+                )));
             }
             Ok(vec![League::new("Forbidden Rites")])
         }
@@ -482,7 +485,9 @@ mod tests {
                 return Ok(None);
             }
             if self.prices_unreachable {
-                return Err(FetchError::Http(ureq::Error::StatusCode(503)));
+                return Err(FetchError::Http(HttpError::Request(
+                    ureq::Error::StatusCode(503),
+                )));
             }
             let prices = price_list(league, SystemTime::now());
             download.progress(&prices, 0.5);

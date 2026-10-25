@@ -4,10 +4,12 @@
 use std::time::{Duration, SystemTime};
 
 use crate::clipboard::ClipboardEvent;
-use crate::item::{CopiedItem, Item, ParseError};
+use crate::item::{CopiedItem, Item, ParseError, Rarity};
+use crate::item_names::ItemNames;
 use crate::league::{League, Leagues};
 use crate::market::{MarketEvent, Source};
 use crate::prices::PriceList;
+use crate::pricing::{self, FixedPrice, NoFixedPrice};
 
 /// The last item copied in the game, and what the parser read from it.
 #[derive(Debug)]
@@ -55,6 +57,8 @@ pub struct Session {
     leagues_reachable: bool,
     /// The league whose last download of the prices failed, if any.
     prices_failed: Option<League>,
+    /// The names of the items of the trade site, which find the prices of a French item.
+    item_names: Option<ItemNames>,
     /// Shown until another item is copied.
     item: Option<ShownItem>,
     clipboard_readable: bool,
@@ -99,6 +103,7 @@ impl Session {
             prices: None,
             leagues_reachable: true,
             prices_failed: None,
+            item_names: None,
             item: None,
             clipboard_readable: true,
         }
@@ -175,9 +180,20 @@ impl Session {
         self.new_league.take()
     }
 
+    /// Takes in the names of the items given by the trade site.
+    pub fn apply_item_names(&mut self, names: ItemNames) {
+        self.item_names = Some(names);
+    }
+
     pub fn apply(&mut self, event: ClipboardEvent) {
         match event {
-            ClipboardEvent::Copied(copied) => self.item = Some(ShownItem::new(copied)),
+            ClipboardEvent::Copied(copied) => {
+                let shown = ShownItem::new(copied);
+                if let Ok(item) = shown.parsed() {
+                    self.log_price(item);
+                }
+                self.item = Some(shown);
+            }
             ClipboardEvent::Unreadable => self.clipboard_readable = false,
             ClipboardEvent::Readable => self.clipboard_readable = true,
         }
@@ -192,6 +208,45 @@ impl Session {
     #[must_use]
     pub fn leagues(&self) -> Option<&Leagues> {
         self.leagues.as_ref()
+    }
+
+    /// Logs what the prices say of `item`, until the price block shows it.
+    fn log_price(&self, item: &Item) {
+        let names = self.item_names.as_ref();
+        if item.rarity() == Rarity::Magic
+            && let Some(base_type) =
+                names.and_then(|names| names.magic_base_type(item.language(), item.base_type()))
+        {
+            log::info!("Base type of the magic item: {base_type}");
+        }
+        let Some(prices) = self.league_prices() else {
+            return;
+        };
+        match pricing::fixed_price(item, &prices.list, names) {
+            Ok(FixedPrice::Currency(currency)) => {
+                log::info!(
+                    "Price of {}: {:.2} ex",
+                    currency.name,
+                    currency.price.exalted
+                );
+            }
+            Ok(FixedPrice::Unique(unique)) => {
+                log::info!("Price of {}: {:.2} ex", unique.name, unique.price.exalted);
+            }
+            Ok(FixedPrice::Uniques(candidates)) => {
+                let with_price = candidates.iter().filter(|unique| unique.price.is_some());
+                log::info!(
+                    "An unidentified unique, one of {} uniques ({} priced)",
+                    candidates.len(),
+                    with_price.count()
+                );
+            }
+            Err(NoFixedPrice::NotPriced) => log::info!("No price found for this item"),
+            Err(NoFixedPrice::NamesUnknown) => {
+                log::info!("No price yet: the item names of the trade site aren't known");
+            }
+            Err(NoFixedPrice::NotFixedName) => {}
+        }
     }
 
     /// The prices of the league shown, complete or still downloading.

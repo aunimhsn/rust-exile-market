@@ -6,15 +6,19 @@
 mod app;
 mod clipboard;
 mod files;
+mod http;
 mod i18n;
 mod item;
+mod item_names;
 mod language;
 mod league;
 mod logging;
 mod market;
 mod prices;
+mod pricing;
 mod session;
 mod settings;
+mod trade;
 mod ui;
 mod worker;
 

@@ -13,6 +13,7 @@ use crate::league::League;
 use crate::market::MarketWatch;
 use crate::session::{LeagueChange, PricesState, Session};
 use crate::settings::{SettingChange, Settings, SettingsFile};
+use crate::trade::ItemNamesWatch;
 use crate::ui::{
     self, BubbleAction, EmptyState, LeagueList, LeagueListAction, NewLeagueBubble, PriceDownload,
     RawItem, ResizeEdges, SettingsPanel, StatusBar, TitleBar, TitleBarAction, UnreadableItem,
@@ -55,6 +56,7 @@ pub struct ExileMarketApp {
     leagues_open: bool,
     clipboard: ClipboardWatch,
     market: MarketWatch,
+    item_names: ItemNamesWatch,
     /// The sentence shown during the download of the prices of a league, drawn at its start.
     download_quote: Option<(League, usize)>,
 }
@@ -71,6 +73,7 @@ impl ExileMarketApp {
         ui::install(&creation.egui_ctx);
         let clipboard_ctx = creation.egui_ctx.clone();
         let market_ctx = creation.egui_ctx.clone();
+        let names_ctx = creation.egui_ctx.clone();
         // The prices of the league of the last session, until the leagues arrive.
         let market = MarketWatch::start(settings.league(), move || market_ctx.request_repaint());
 
@@ -86,6 +89,7 @@ impl ExileMarketApp {
             leagues_open: false,
             clipboard: ClipboardWatch::start(move || clipboard_ctx.request_repaint()),
             market,
+            item_names: ItemNamesWatch::start(move || names_ctx.request_repaint()),
             download_quote: None,
         }
     }
@@ -243,6 +247,8 @@ impl App for ExileMarketApp {
         }
         // The league shown at the first launch, or after the end of a league.
         self.market.price(self.session.league());
+        self.item_names
+            .receive(|names| self.session.apply_item_names(names));
         // Escape closes what is on top: the list of the leagues, then the settings.
         if ctx.input(|input| input.key_pressed(Key::Escape)) {
             if self.leagues_open {
