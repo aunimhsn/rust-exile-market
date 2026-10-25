@@ -107,6 +107,41 @@ requirement-strength = { $value } Str
 requirement-dexterity = { $value } Dex
 requirement-intelligence = { $value } Int
 
+## Price block
+
+price-label = Price
+# On the right of the price title.
+offers = { $count ->
+    [one] { $count } offer
+   *[other] { $count } offers
+}
+stack-of = Stack of { $size }
+# Under the price of a stack: "Unit price: 0.25 div · 2.49 c · 182 ex".
+unit-price = Unit price: { $prices }
+# The change first, with a real minus sign.
+trend-rise = +{ $percent }% over the last { $days } days
+trend-fall = −{ $percent }% over the last { $days } days
+trend-stable = Stable over the last { $days } days
+uncertain = { $count ->
+    [0] No offer lately: the price is uncertain
+    [one] Only { $count } offer: the price is uncertain
+   *[other] Only { $count } offers: the price is uncertain
+}
+# An unidentified unique whose base type has several uniques.
+identify-to-price = Identify the item to get its price.
+possible-uniques = Possible uniques
+# In place of the price of a possible unique without offers.
+no-offers = No offers
+# Rare, magic and normal items, priced from the offers of similar items.
+no-market-price-rare = No market price for rare items.
+no-market-price-magic = No market price for magic items.
+no-market-price-normal = No market price for normal items.
+search-to-estimate = Search similar offers to estimate it.
+# A fixed-name item whose price isn't known yet, or missing.
+prices-downloading = The prices of { $league } are downloading…
+french-names-downloading = The French item names are downloading…
+no-price-found = No price found for this item in { $league }.
+
 ## Settings
 
 settings-title = Settings

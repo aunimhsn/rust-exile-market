@@ -107,6 +107,41 @@ requirement-strength = { $value } For
 requirement-dexterity = { $value } Dex
 requirement-intelligence = { $value } Int
 
+## Bloc prix
+
+price-label = Prix
+# À droite du titre du prix.
+offers = { $count ->
+    [one] { $count } offre
+   *[other] { $count } offres
+}
+stack-of = Pile de { $size }
+# Sous le prix d'une pile : « Prix unitaire : 0.25 div · 2.49 c · 182 ex ».
+unit-price = Prix unitaire : { $prices }
+# La variation d'abord, avec un vrai signe moins.
+trend-rise = +{ $percent }% sur les { $days } derniers jours
+trend-fall = −{ $percent }% sur les { $days } derniers jours
+trend-stable = Stable sur les { $days } derniers jours
+uncertain = { $count ->
+    [0] Aucune offre récente : le prix est incertain
+    [one] Une seule offre : le prix est incertain
+   *[other] Seulement { $count } offres : le prix est incertain
+}
+# Un unique non identifié dont la base a plusieurs uniques.
+identify-to-price = Identifiez l'objet pour obtenir son prix.
+possible-uniques = Uniques possibles
+# À la place du prix d'un unique possible sans offre.
+no-offers = Aucune offre
+# Les objets rares, magiques et normaux, pricés d'après les offres d'objets similaires.
+no-market-price-rare = Pas de prix de marché pour les objets rares.
+no-market-price-magic = Pas de prix de marché pour les objets magiques.
+no-market-price-normal = Pas de prix de marché pour les objets normaux.
+search-to-estimate = Recherchez des offres similaires pour l'estimer.
+# Un objet à nom fixe dont le prix n'est pas encore connu, ou manquant.
+prices-downloading = Les prix de { $league } sont en cours de téléchargement…
+french-names-downloading = Les noms français des objets sont en cours de téléchargement…
+no-price-found = Aucun prix trouvé pour cet objet dans { $league }.
+
 ## Réglages
 
 settings-title = Réglages

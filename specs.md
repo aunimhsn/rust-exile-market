@@ -52,7 +52,7 @@ The reference of the interface is the mock-up [docs/mockups/narrow-styles.html](
 - **Manrope** for all the text: item name 20 px weight 800, body 13.5 px, labels 11 px uppercase with letter spacing, small texts 11.5 to 12 px.
 - **JetBrains Mono** for the numbers that line up (prices, offers), weight 600.
 - Both fonts are under the SIL Open Font License and embedded in the executable.
-- Numbers: a point between the integer and the decimal parts in every language, no thousands separator (`12.4`, `950`). Exalted Orbs without decimals, Divine and Chaos Orbs with up to 2. From 1000, an amount is shortened with `K`, rounded to one decimal, without a trailing `.0` (`1.3K`, `27.6K`, `9K` for 8990); from 100 000, without decimals (`125K`); from a million, with `M` (`1.2M`). The same in every language.
+- Numbers: a point between the integer and the decimal parts in every language, no thousands separator (`12.4`, `950`). At most three significant digits and two decimals, without trailing zeros (`12.4`, `0.25`, `123`); Exalted Orbs without decimals from 10 (`17`, but `0.1` for a cheap item); under 0.01, `<0.01`. From 1000, an amount is shortened with `K`, rounded to one decimal, without a trailing `.0` (`1.3K`, `27.6K`, `9K` for 8990); from 100 000, without decimals (`125K`); from a million, with `M` (`1.2M`). The same in every language.
 - Durations: the number glued to its unit, without a space, in every language: `8s`, `12min`, `3h`, `5d` ("poe2scout 12min ago", "il y a 3h").
 
 ### Shapes

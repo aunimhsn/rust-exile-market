@@ -16,7 +16,7 @@ use crate::settings::{SettingChange, Settings, SettingsFile};
 use crate::trade::ItemNamesWatch;
 use crate::ui::{
     self, BubbleAction, EmptyState, ItemBlock, ItemBlockAction, LeagueList, LeagueListAction,
-    NewLeagueBubble, PriceDownload, ResizeEdges, SettingsPanel, StatusBar, TitleBar,
+    NewLeagueBubble, PriceBlock, PriceDownload, ResizeEdges, SettingsPanel, StatusBar, TitleBar,
     TitleBarAction, UnreadableItem, WarningBand,
 };
 
@@ -231,6 +231,16 @@ impl ExileMarketApp {
             if let (Some(ItemBlockAction::CheckOnTrade), Some(url)) = (action, url) {
                 ui.ctx().open_url(OpenUrl::new_tab(url));
             }
+            let league = self.session.league().map_or("", League::name);
+            PriceBlock::new(
+                item,
+                self.session.fixed_price(item),
+                self.session.rates(),
+                prices,
+                league,
+                &self.i18n,
+            )
+            .show(ui);
         });
     }
 }

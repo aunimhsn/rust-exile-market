@@ -6,6 +6,7 @@
 mod app;
 mod clipboard;
 mod files;
+mod format;
 mod http;
 mod i18n;
 mod item;

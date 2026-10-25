@@ -26,6 +26,42 @@ pub struct Price {
     pub history: Vec<Option<f64>>,
 }
 
+/// How a price changed lately.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Trend {
+    /// The change, e.g. `0.04` for +4 %.
+    pub change: f64,
+    /// The days it covers, today included.
+    pub days: usize,
+}
+
+impl Trend {
+    /// Under 1 % of change, the price is stable.
+    #[must_use]
+    pub fn is_stable(self) -> bool {
+        self.change.abs() < 0.01
+    }
+}
+
+impl Price {
+    /// The change from the oldest known price of the history; none without a past price.
+    #[must_use]
+    pub fn trend(&self) -> Option<Trend> {
+        let (days_ago, oldest) = self
+            .history
+            .iter()
+            .enumerate()
+            // The first price is today's.
+            .skip(1)
+            .rev()
+            .find_map(|(index, price)| price.filter(|price| *price > 0.0).map(|p| (index, p)))?;
+        Some(Trend {
+            change: self.exalted / oldest - 1.0,
+            days: days_ago + 1,
+        })
+    }
+}
+
 /// A unique item, known by its name and its base type: an unidentified unique shows only its
 /// base type.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -88,5 +124,60 @@ impl PriceList {
     #[must_use]
     pub fn unique(&self, name: &str) -> Option<&UniquePrice> {
         self.uniques.iter().find(|unique| unique.name == name)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn price(exalted: f64, history: &[Option<f64>]) -> Price {
+        Price {
+            exalted,
+            quantity: 10,
+            history: history.to_vec(),
+        }
+    }
+
+    #[test]
+    fn the_trend_compares_with_the_oldest_known_price() {
+        let week = price(
+            104.0,
+            &[
+                Some(103.0),
+                Some(101.0),
+                None,
+                Some(99.0),
+                None,
+                None,
+                Some(100.0),
+            ],
+        );
+        let recent = price(
+            90.0,
+            &[Some(91.0), Some(95.0), Some(100.0), None, None, None, None],
+        );
+
+        let trend = week.trend().expect("a trend");
+        assert!((trend.change - 0.04).abs() < 1e-9);
+        assert_eq!(trend.days, 7);
+        let trend = recent.trend().expect("a trend");
+        assert!((trend.change + 0.1).abs() < 1e-9);
+        assert_eq!(trend.days, 3);
+    }
+
+    #[test]
+    fn without_a_past_price_there_is_no_trend() {
+        assert_eq!(price(10.0, &[Some(10.0), None]).trend(), None);
+        assert_eq!(price(10.0, &[]).trend(), None);
+    }
+
+    #[test]
+    fn under_one_percent_the_price_is_stable() {
+        let trend = |change| Trend { change, days: 7 };
+
+        assert!(trend(0.009).is_stable());
+        assert!(trend(-0.009).is_stable());
+        assert!(!trend(0.01).is_stable());
     }
 }

@@ -8,7 +8,7 @@ use crate::item::{CopiedItem, Item, ParseError, Rarity};
 use crate::item_names::ItemNames;
 use crate::league::{League, Leagues};
 use crate::market::{MarketEvent, Source};
-use crate::prices::PriceList;
+use crate::prices::{PriceList, Rates};
 use crate::pricing::{self, FixedPrice, NoFixedPrice};
 use crate::trade::link::{self, TradeTarget};
 
@@ -205,7 +205,7 @@ impl Session {
         self.leagues.as_ref()
     }
 
-    /// Logs what the prices say of `item`, until the price block shows it.
+    /// Logs what the prices say of `item` when it is copied.
     fn log_price(&self, item: &Item) {
         let names = self.item_names.as_ref();
         if item.rarity() == Rarity::Magic
@@ -214,10 +214,7 @@ impl Session {
         {
             log::info!("Base type of the magic item: {base_type}");
         }
-        let Some(prices) = self.league_prices() else {
-            return;
-        };
-        match pricing::fixed_price(item, &prices.list, names) {
+        match self.fixed_price(item) {
             Ok(FixedPrice::Currency(currency)) => {
                 log::info!(
                     "Price of {}: {:.2} ex",
@@ -242,6 +239,18 @@ impl Session {
             }
             Err(NoFixedPrice::NotFixedName) => {}
         }
+    }
+
+    /// The fixed price of `item` among the prices of the league shown known so far.
+    pub fn fixed_price<'a>(&'a self, item: &'a Item) -> Result<FixedPrice<'a>, NoFixedPrice> {
+        let prices = self.league_prices().map(|prices| &prices.list);
+        pricing::fixed_price(item, prices, self.item_names.as_ref())
+    }
+
+    /// The rates of the currencies in the league shown, once its prices are known.
+    #[must_use]
+    pub fn rates(&self) -> Option<Rates> {
+        self.league_prices().map(|prices| prices.list.rates)
     }
 
     /// What the search for `item` on the trade site looks for; none for a magic item whose

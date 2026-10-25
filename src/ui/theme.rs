@@ -48,6 +48,13 @@ pub mod color {
     /// The Corrupted tag: white on the background of the hardcore leagues.
     pub const CORRUPTED_TAG: Color32 = HARDCORE;
     pub const CORRUPTED_TAG_TEXT: Color32 = Color32::WHITE;
+    /// A price that rises or falls.
+    pub const RISE: Color32 = Color32::from_rgb(0x5f, 0xcf, 0x80);
+    pub const FALL: Color32 = Color32::from_rgb(0xe6, 0x6a, 0x5c);
+    /// An uncertain price.
+    pub const WARNING: Color32 = Color32::from_rgb(0xf0, 0xb8, 0x5a);
+    /// Every other row of a list on band A: a light veil.
+    pub const ROW_VEIL: Color32 = Color32::from_rgba_premultiplied(8, 8, 8, 8);
 }
 
 /// The text styles: the typography of `specs.md`, at the sizes of the mock-up.
@@ -135,6 +142,18 @@ pub mod text {
     #[must_use]
     pub fn tag() -> FontId {
         fonts::text(12.0, Weight::Regular)
+    }
+
+    /// An amount of the price block, beside its orb.
+    #[must_use]
+    pub fn price() -> FontId {
+        fonts::numbers(19.0)
+    }
+
+    /// An amount of a list, e.g. the price of a possible unique.
+    #[must_use]
+    pub fn list_amount() -> FontId {
+        fonts::numbers(13.0)
     }
 
     /// The keys to press, drawn as key caps.

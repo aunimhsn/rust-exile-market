@@ -37,15 +37,16 @@ pub enum NoFixedPrice {
     NamesUnknown,
 }
 
-/// The price of `item` among `prices`; `names` find the items copied in French, and the
-/// uniques an unidentified item can be.
+/// The price of `item` among `prices`, none before they arrive; `names` find the items
+/// copied in French, and the uniques an unidentified item can be.
 pub fn fixed_price<'a>(
     item: &Item,
-    prices: &'a PriceList,
+    prices: Option<&'a PriceList>,
     names: Option<&'a ItemNames>,
 ) -> Result<FixedPrice<'a>, NoFixedPrice> {
     let language = item.language();
     let names = || names.ok_or(NoFixedPrice::NamesUnknown);
+    let prices = || prices.ok_or(NoFixedPrice::NotPriced);
     match item.rarity() {
         // The lineage support gems are gems of the currency exchange; the other gems aren't
         // found there.
@@ -53,10 +54,11 @@ pub fn fixed_price<'a>(
             let name = item.base_type();
             let currency = match language {
                 // The price database has the English names of the trade site.
-                Language::English => prices.currency_named(name),
-                Language::French => names()?
-                    .exchange_id(language, name)
-                    .and_then(|id| prices.currency(id)),
+                Language::English => prices()?.currency_named(name),
+                Language::French => {
+                    let id = names()?.exchange_id(language, name);
+                    id.and_then(|id| prices().ok()?.currency(id))
+                }
             };
             currency
                 .map(FixedPrice::Currency)
@@ -69,11 +71,11 @@ pub fn fixed_price<'a>(
                     Language::French => names()?.english_unique(language, name),
                 };
                 english
-                    .and_then(|english| prices.unique(english))
+                    .and_then(|english| prices().ok()?.unique(english))
                     .map(FixedPrice::Unique)
                     .ok_or(NoFixedPrice::NotPriced)
             }
-            None => unidentified(item.base_type(), language, prices, names()?),
+            None => unidentified(item.base_type(), language, prices()?, names()?),
         },
         Rarity::Normal | Rarity::Magic | Rarity::Rare => Err(NoFixedPrice::NotFixedName),
     }
@@ -170,7 +172,7 @@ mod tests {
         names: Option<&ItemNames>,
     ) -> Result<String, NoFixedPrice> {
         let item = Item::parse(&CopiedItem::from_text(text).expect("an item")).expect("read");
-        fixed_price(&item, prices, names).map(|price| match price {
+        fixed_price(&item, Some(prices), names).map(|price| match price {
             FixedPrice::Currency(currency) => currency.exchange_id.clone(),
             FixedPrice::Unique(unique) => unique.name.clone(),
             FixedPrice::Uniques(candidates) => candidates
@@ -263,6 +265,22 @@ mod tests {
 
         assert_eq!(found(lineage, None), ok("garukhans-resolve"));
         assert_eq!(found(skill, None), Err(NoFixedPrice::NotPriced));
+    }
+
+    #[test]
+    fn before_the_prices_arrive_a_fixed_name_item_isnt_priced_yet() {
+        let orb = "Item Class: Stackable Currency\nRarity: Currency\nDivine Orb";
+        let rare = "Item Class: Rings\nRarity: Rare\nWoe Loop\nRuby Ring";
+        let parse = |text| Item::parse(&CopiedItem::from_text(text).unwrap()).unwrap();
+
+        assert_eq!(
+            fixed_price(&parse(orb), None, None),
+            Err(NoFixedPrice::NotPriced)
+        );
+        assert_eq!(
+            fixed_price(&parse(rare), None, None),
+            Err(NoFixedPrice::NotFixedName)
+        );
     }
 
     #[test]
