@@ -132,13 +132,15 @@ identify-to-price = Identifiez l'objet pour obtenir son prix.
 possible-uniques = Uniques possibles
 # À la place du prix d'un unique possible sans offre.
 no-offers = Aucune offre
-# Les objets rares, magiques et normaux, pricés d'après les offres d'objets similaires.
+# Les objets rares, magiques et normaux, dont le prix s'estime d'après les offres d'objets similaires.
 no-market-price-rare = Pas de prix de marché pour les objets rares.
 no-market-price-magic = Pas de prix de marché pour les objets magiques.
 no-market-price-normal = Pas de prix de marché pour les objets normaux.
 search-to-estimate = Recherchez des offres similaires pour l'estimer.
 # Un objet à nom fixe dont le prix n'est pas encore connu, ou manquant.
 prices-downloading = Les prix de { $league } sont en cours de téléchargement…
+# Avant que la ligue soit connue, au premier lancement.
+prices-downloading-no-league = Téléchargement des prix…
 french-names-downloading = Les noms français des objets sont en cours de téléchargement…
 no-price-found = Aucun prix trouvé pour cet objet dans { $league }.
 

@@ -231,11 +231,10 @@ impl ExileMarketApp {
             if let (Some(ItemBlockAction::CheckOnTrade), Some(url)) = (action, url) {
                 ui.ctx().open_url(OpenUrl::new_tab(url));
             }
-            let league = self.session.league().map_or("", League::name);
+            let league = self.session.league().map(League::name);
             PriceBlock::new(
                 item,
                 self.session.fixed_price(item),
-                self.session.rates(),
                 prices,
                 league,
                 &self.i18n,

@@ -32,14 +32,29 @@ pub struct Trend {
     /// The change, e.g. `0.04` for +4 %.
     pub change: f64,
     /// The days it covers, today included.
-    pub days: usize,
+    pub days: u32,
 }
 
+/// Where a price goes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Direction {
+    Rise,
+    Fall,
+    /// Under 1 % of change.
+    Stable,
+}
+
+/// The days of the history the trend looks at, today included.
+const TREND_DAYS: usize = 7;
+
 impl Trend {
-    /// Under 1 % of change, the price is stable.
     #[must_use]
-    pub fn is_stable(self) -> bool {
-        self.change.abs() < 0.01
+    pub fn direction(self) -> Direction {
+        match self.change {
+            change if change.abs() < 0.01 => Direction::Stable,
+            change if change > 0.0 => Direction::Rise,
+            _ => Direction::Fall,
+        }
     }
 }
 
@@ -51,13 +66,14 @@ impl Price {
             .history
             .iter()
             .enumerate()
+            .take(TREND_DAYS)
             // The first price is today's.
             .skip(1)
             .rev()
             .find_map(|(index, price)| price.filter(|price| *price > 0.0).map(|p| (index, p)))?;
         Some(Trend {
             change: self.exalted / oldest - 1.0,
-            days: days_ago + 1,
+            days: u32::try_from(days_ago + 1).unwrap_or(u32::MAX),
         })
     }
 }
@@ -174,10 +190,22 @@ mod tests {
 
     #[test]
     fn under_one_percent_the_price_is_stable() {
-        let trend = |change| Trend { change, days: 7 };
+        let direction = |change| Trend { change, days: 7 }.direction();
 
-        assert!(trend(0.009).is_stable());
-        assert!(trend(-0.009).is_stable());
-        assert!(!trend(0.01).is_stable());
+        assert_eq!(direction(0.009), Direction::Stable);
+        assert_eq!(direction(-0.009), Direction::Stable);
+        assert_eq!(direction(0.01), Direction::Rise);
+        assert_eq!(direction(-0.2), Direction::Fall);
+    }
+
+    #[test]
+    fn the_trend_looks_at_seven_days_only() {
+        let mut history = vec![None; 9];
+        history[8] = Some(50.0);
+        history[3] = Some(100.0);
+
+        let trend = price(110.0, &history).trend().expect("a trend");
+
+        assert_eq!(trend.days, 4);
     }
 }

@@ -214,7 +214,7 @@ impl Session {
         {
             log::info!("Base type of the magic item: {base_type}");
         }
-        match self.fixed_price(item) {
+        match self.fixed_price(item).map(|(price, _)| price) {
             Ok(FixedPrice::Currency(currency)) => {
                 log::info!(
                     "Price of {}: {:.2} ex",
@@ -234,6 +234,7 @@ impl Session {
                 );
             }
             Err(NoFixedPrice::NotPriced) => log::info!("No price found for this item"),
+            Err(NoFixedPrice::PricesUnknown) => log::info!("No price yet: the prices aren't known"),
             Err(NoFixedPrice::NamesUnknown) => {
                 log::info!("No price yet: the item names of the trade site aren't known");
             }
@@ -241,16 +242,14 @@ impl Session {
         }
     }
 
-    /// The fixed price of `item` among the prices of the league shown known so far.
-    pub fn fixed_price<'a>(&'a self, item: &'a Item) -> Result<FixedPrice<'a>, NoFixedPrice> {
+    /// The fixed price of `item` among the prices of the league shown known so far, with the
+    /// rates of the currencies of these prices.
+    pub fn fixed_price(&self, item: &Item) -> Result<(FixedPrice<'_>, Rates), NoFixedPrice> {
         let prices = self.league_prices().map(|prices| &prices.list);
-        pricing::fixed_price(item, prices, self.item_names.as_ref())
-    }
-
-    /// The rates of the currencies in the league shown, once its prices are known.
-    #[must_use]
-    pub fn rates(&self) -> Option<Rates> {
-        self.league_prices().map(|prices| prices.list.rates)
+        let price = pricing::fixed_price(item, prices, self.item_names.as_ref())?;
+        // A price comes from the prices, which have their rates.
+        let rates = prices.ok_or(NoFixedPrice::PricesUnknown)?.rates;
+        Ok((price, rates))
     }
 
     /// What the search for `item` on the trade site looks for; none for a magic item whose

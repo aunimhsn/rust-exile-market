@@ -10,6 +10,7 @@ use fluent_bundle::{FluentArgs, FluentBundle, FluentResource};
 
 use crate::item::DamageKind;
 use crate::language::Language;
+use crate::prices::Direction;
 
 /// The Fluent messages of a language, embedded in the executable.
 fn messages(language: Language) -> &'static str {
@@ -62,12 +63,13 @@ pub enum Message {
     NoMarketPriceMagic,
     NoMarketPriceNormal,
     FrenchNamesDownloading,
+    PricesDownloadingNoLeague,
 }
 
 impl Message {
     /// Every message, for the tests.
     #[cfg(test)]
-    const ALL: [Self; 40] = [
+    const ALL: [Self; 41] = [
         Self::LeagueModeSoftcore,
         Self::LeagueModeHardcore,
         Self::LeagueLoading,
@@ -108,6 +110,7 @@ impl Message {
         Self::NoMarketPriceMagic,
         Self::NoMarketPriceNormal,
         Self::FrenchNamesDownloading,
+        Self::PricesDownloadingNoLeague,
     ];
 
     /// Its identifier in the `.ftl` files.
@@ -153,16 +156,9 @@ impl Message {
             Self::NoMarketPriceMagic => "no-market-price-magic",
             Self::NoMarketPriceNormal => "no-market-price-normal",
             Self::FrenchNamesDownloading => "french-names-downloading",
+            Self::PricesDownloadingNoLeague => "prices-downloading-no-league",
         }
     }
-}
-
-/// The direction of the trend of a price.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TrendDirection {
-    Rise,
-    Fall,
-    Stable,
 }
 
 /// The tags of the item block with a number.
@@ -346,11 +342,11 @@ impl Translator {
 
     /// The trend of a price: its change in percent, rounded, over `days` days.
     #[must_use]
-    pub fn trend(&self, direction: TrendDirection, percent: u32, days: u32) -> String {
+    pub fn trend(&self, direction: Direction, percent: u32, days: u32) -> String {
         let id = match direction {
-            TrendDirection::Rise => TREND_RISE,
-            TrendDirection::Fall => TREND_FALL,
-            TrendDirection::Stable => TREND_STABLE,
+            Direction::Rise => TREND_RISE,
+            Direction::Fall => TREND_FALL,
+            Direction::Stable => TREND_STABLE,
         };
         let mut args = FluentArgs::new();
         args.set("percent", percent);
@@ -615,11 +611,7 @@ mod tests {
             }
             assert!(translator.stack_of(7).contains('7'));
             assert!(translator.unit_price("prices").contains("prices"));
-            for direction in [
-                TrendDirection::Rise,
-                TrendDirection::Fall,
-                TrendDirection::Stable,
-            ] {
+            for direction in [Direction::Rise, Direction::Fall, Direction::Stable] {
                 assert!(translator.trend(direction, 4, 7).contains('7'));
             }
             assert!(translator.prices_downloading("League").contains("League"));
@@ -673,6 +665,19 @@ mod tests {
             assert!(line.starts_with("App 0.1.0 · "), "{line}");
             assert!(line.ends_with("Author · author.site"), "{line}");
         }
+    }
+
+    #[test]
+    fn no_offer_has_its_own_warning_in_every_language() {
+        // In French, the plural category "one" covers 0 too.
+        let french = Translator::new(Language::French);
+        assert!(french.uncertain(0).starts_with("Aucune offre"));
+        assert!(french.uncertain(1).starts_with("Une seule offre"));
+        assert!(
+            Translator::new(Language::English)
+                .uncertain(0)
+                .starts_with("No offer")
+        );
     }
 
     #[test]

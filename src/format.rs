@@ -14,7 +14,7 @@ pub enum Currency {
 /// little, without decimals from 10. Under 0.01, `<0.01`.
 #[must_use]
 pub fn amount(value: f64, currency: Currency) -> String {
-    if value.is_nan() || value <= 0.0 {
+    if !value.is_finite() || value <= 0.0 {
         return "0".to_owned();
     }
     if value < 0.01 {
@@ -35,7 +35,9 @@ pub fn amount(value: f64, currency: Currency) -> String {
     if thousands < 1000.0 {
         return format!("{}K", trimmed(thousands, 1));
     }
-    format!("{}M", trimmed(rounded(value / 1e6, 1), 1))
+    // One decimal under 100M, none from it.
+    let millions = rounded(value / 1e6, u8::from(value < 1e8));
+    format!("{}M", trimmed(millions, 1))
 }
 
 /// `value` rounded to `decimals` decimals.
@@ -79,6 +81,15 @@ mod tests {
         // Rounded up to the next unit.
         assert_eq!(amount(999.6, Currency::Exalted), "1K");
         assert_eq!(amount(999_960.0, Currency::Exalted), "1M");
+        assert_eq!(amount(99_960.0, Currency::Exalted), "100K");
+        assert_eq!(amount(123_456_789.0, Currency::Exalted), "123M");
+        assert_eq!(amount(12_345_678.0, Currency::Exalted), "12.3M");
+    }
+
+    #[test]
+    fn an_amount_that_isnt_a_number_is_zero() {
+        assert_eq!(amount(f64::INFINITY, Currency::Exalted), "0");
+        assert_eq!(amount(f64::NAN, Currency::Exalted), "0");
     }
 
     #[test]

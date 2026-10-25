@@ -30,7 +30,10 @@ pub struct Candidate<'a> {
 pub enum NoFixedPrice {
     /// A rare, magic or normal item: its price is estimated from similar offers.
     NotFixedName,
-    /// Missing from the prices: no offer lately, or a name the prices don't know.
+    /// The prices of the league aren't known yet.
+    PricesUnknown,
+    /// Missing from the prices: no offer lately, a name the prices don't know, or a
+    /// category not downloaded yet.
     NotPriced,
     /// The item needs the names of the trade site, which aren't known yet: an item copied in
     /// French, or an unidentified unique.
@@ -44,40 +47,40 @@ pub fn fixed_price<'a>(
     prices: Option<&'a PriceList>,
     names: Option<&'a ItemNames>,
 ) -> Result<FixedPrice<'a>, NoFixedPrice> {
-    let language = item.language();
+    let rarity = item.rarity();
+    if matches!(rarity, Rarity::Normal | Rarity::Magic | Rarity::Rare) {
+        return Err(NoFixedPrice::NotFixedName);
+    }
+    let prices = prices.ok_or(NoFixedPrice::PricesUnknown)?;
     let names = || names.ok_or(NoFixedPrice::NamesUnknown);
-    let prices = || prices.ok_or(NoFixedPrice::NotPriced);
-    match item.rarity() {
+    let language = item.language();
+    let name = item.base_type();
+    match (rarity, item.name()) {
         // The lineage support gems are gems of the currency exchange; the other gems aren't
         // found there.
-        Rarity::Currency | Rarity::Gem => {
-            let name = item.base_type();
+        (Rarity::Currency | Rarity::Gem, _) => {
             let currency = match language {
                 // The price database has the English names of the trade site.
-                Language::English => prices()?.currency_named(name),
-                Language::French => {
-                    let id = names()?.exchange_id(language, name);
-                    id.and_then(|id| prices().ok()?.currency(id))
-                }
+                Language::English => prices.currency_named(name),
+                Language::French => names()?
+                    .exchange_id(language, name)
+                    .and_then(|id| prices.currency(id)),
             };
             currency
                 .map(FixedPrice::Currency)
                 .ok_or(NoFixedPrice::NotPriced)
         }
-        Rarity::Unique => match item.name() {
-            Some(name) => {
-                let english = match language {
-                    Language::English => Some(name),
-                    Language::French => names()?.english_unique(language, name),
-                };
-                english
-                    .and_then(|english| prices().ok()?.unique(english))
-                    .map(FixedPrice::Unique)
-                    .ok_or(NoFixedPrice::NotPriced)
-            }
-            None => unidentified(item.base_type(), language, prices()?, names()?),
-        },
-        Rarity::Normal | Rarity::Magic | Rarity::Rare => Err(NoFixedPrice::NotFixedName),
+        (_, Some(unique)) => {
+            let english = match language {
+                Language::English => Some(unique),
+                Language::French => names()?.english_unique(language, unique),
+            };
+            english
+                .and_then(|english| prices.unique(english))
+                .map(FixedPrice::Unique)
+                .ok_or(NoFixedPrice::NotPriced)
+        }
+        (_, None) => unidentified(name, language, prices, names()?),
     }
 }
 
@@ -275,7 +278,7 @@ mod tests {
 
         assert_eq!(
             fixed_price(&parse(orb), None, None),
-            Err(NoFixedPrice::NotPriced)
+            Err(NoFixedPrice::PricesUnknown)
         );
         assert_eq!(
             fixed_price(&parse(rare), None, None),
