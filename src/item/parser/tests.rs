@@ -536,3 +536,49 @@ fn never_panics_on_a_cut_or_changed_item() {
         }
     }
 }
+
+/// The DPS of an item, rounded to a tenth for the comparisons.
+fn dps(text: &str) -> Option<(f64, f64, f64)> {
+    let round = |value: f64| (value * 10.0).round() / 10.0;
+    item(text).weapon().map(|weapon| {
+        let dps = weapon.dps();
+        (round(dps.physical), round(dps.elemental), round(dps.chaos))
+    })
+}
+
+#[test]
+fn reads_the_damage_and_the_speed_of_a_weapon() {
+    // 381-705 × 1.15, with the quality already in the damage.
+    assert_eq!(dps(EN_RARE_BOW_FRACTURED), Some((624.4, 0.0, 0.0)));
+    // The attacks per second augmented by a modifier.
+    assert_eq!(dps(EN_RARE_CROSSBOW), Some((288.2, 267.4, 0.0)));
+    assert_eq!(dps(EN_MAGIC_MACE), Some((64.2, 30.6, 0.0)));
+    assert_eq!(dps(FR_UNIQUE_CROSSBOW), Some((15.2, 17.6, 0.0)));
+    assert_eq!(dps(EN_NORMAL_HELMET), None, "not a weapon");
+}
+
+#[test]
+fn the_title_is_the_name_the_game_shows() {
+    assert_eq!(item(EN_RARE_BOW_FRACTURED).title(), "Miracle Siege");
+    assert_eq!(
+        item(EN_MAGIC_MACE).title(),
+        "Crackling Temple Maul of the Brute"
+    );
+    // The base type keeps its word "Exceptional" in the title only.
+    let shield = item(FR_NORMAL_EXCEPTIONAL_SHIELD);
+    assert_eq!(shield.title(), "Exceptionnelle Targe de mammouth");
+    assert_eq!(shield.base_type(), "Targe de mammouth");
+}
+
+#[test]
+fn counts_the_prefixes_and_suffixes_at_tier_1() {
+    assert_eq!(item(EN_RARE_BOW_FRACTURED).tier_1_affixes(), 1);
+    assert_eq!(item(EN_RARE_CROSSBOW).tier_1_affixes(), 2);
+    // A desecrated prefix is a prefix.
+    assert_eq!(item(FR_RARE_STAFF).tier_1_affixes(), 2);
+    assert_eq!(
+        item(EN_PLAIN_RARE_RING).tier_1_affixes(),
+        0,
+        "no tiers in a plain copy"
+    );
+}

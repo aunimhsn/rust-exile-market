@@ -10,17 +10,17 @@ use crate::league::{League, Leagues};
 use crate::market::{MarketEvent, Source};
 use crate::prices::PriceList;
 use crate::pricing::{self, FixedPrice, NoFixedPrice};
+use crate::trade::link::{self, TradeTarget};
 
-/// The last item copied in the game, and what the parser read from it.
+/// What the parser read from the last item copied in the game.
 #[derive(Debug)]
 pub struct ShownItem {
-    copied: CopiedItem,
     parsed: Result<Item, ParseError>,
 }
 
 impl ShownItem {
-    fn new(copied: CopiedItem) -> Self {
-        let parsed = Item::parse(&copied);
+    fn new(copied: &CopiedItem) -> Self {
+        let parsed = Item::parse(copied);
         match &parsed {
             Ok(item) => {
                 log::debug!("{item:#?}");
@@ -30,12 +30,7 @@ impl ShownItem {
             }
             Err(error) => log::warn!("A copied item couldn't be read: {error}"),
         }
-        Self { copied, parsed }
-    }
-
-    #[must_use]
-    pub fn copied(&self) -> &CopiedItem {
-        &self.copied
+        Self { parsed }
     }
 
     pub fn parsed(&self) -> Result<&Item, ParseError> {
@@ -188,7 +183,7 @@ impl Session {
     pub fn apply(&mut self, event: ClipboardEvent) {
         match event {
             ClipboardEvent::Copied(copied) => {
-                let shown = ShownItem::new(copied);
+                let shown = ShownItem::new(&copied);
                 if let Ok(item) = shown.parsed() {
                     self.log_price(item);
                 }
@@ -247,6 +242,22 @@ impl Session {
             }
             Err(NoFixedPrice::NotFixedName) => {}
         }
+    }
+
+    /// What the search for `item` on the trade site looks for; none for a magic item whose
+    /// base type isn't known yet.
+    #[must_use]
+    pub fn trade_target<'a>(&'a self, item: &'a Item) -> Option<TradeTarget<'a>> {
+        let prices = self.league_prices().map(|prices| &prices.list);
+        link::target(item, self.item_names.as_ref(), prices)
+    }
+
+    /// The link of the search for `item` on the trade site, in the league shown.
+    #[must_use]
+    pub fn trade_url(&self, item: &Item) -> Option<String> {
+        let league = self.league.as_ref()?;
+        let target = self.trade_target(item)?;
+        Some(link::url(item.language(), league, &target))
     }
 
     /// The prices of the league shown, complete or still downloading.
@@ -315,8 +326,10 @@ mod tests {
         session.apply(ClipboardEvent::Copied(copied));
     }
 
-    fn shown_text(session: &Session) -> Option<&str> {
-        session.item().map(|item| item.copied().text())
+    /// The base type of the item shown.
+    fn shown_base(session: &Session) -> Option<&str> {
+        let item = session.item()?.parsed().ok()?;
+        Some(item.base_type())
     }
 
     #[test]
@@ -327,7 +340,7 @@ mod tests {
         copy(&mut session, RING);
         copy(&mut session, AMULET);
 
-        assert_eq!(shown_text(&session), Some(AMULET));
+        assert_eq!(shown_base(&session), Some("Jade Amulet"));
         let parsed = session.item().map(ShownItem::parsed);
         assert!(
             parsed.is_some_and(|item| item.is_ok_and(|item| item.base_type() == "Jade Amulet"))
@@ -353,7 +366,7 @@ mod tests {
 
         session.apply(ClipboardEvent::Unreadable);
         assert!(!session.clipboard_readable());
-        assert_eq!(shown_text(&session), Some(RING));
+        assert_eq!(shown_base(&session), Some("Ruby Ring"));
 
         session.apply(ClipboardEvent::Readable);
         assert!(session.clipboard_readable());

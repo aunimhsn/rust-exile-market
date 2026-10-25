@@ -1,11 +1,13 @@
-//! The official trade site, read on its own thread: for now, the names of the items in each
-//! language, which find the price of an item copied in French.
+//! The official trade site: the links to its searches ([`link`]), and the names of the items
+//! in each language, read on their own thread, which find the price of an item copied in
+//! French.
 //!
 //! The thread gives the names of the cache at once, then downloads them when they are older
 //! than a day, and every day after. When the trade site can't be reached, the names of the
 //! cache stay, and it tries again every hour; every minute while no name is known, unless
 //! the trade site refused the request.
 
+pub mod link;
 mod site;
 
 use std::path::{Path, PathBuf};

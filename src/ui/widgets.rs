@@ -233,5 +233,24 @@ pub fn pill(ui: &mut Ui, label: &str) -> Response {
     response.on_hover_cursor(CursorIcon::PointingHand)
 }
 
+/// A pill on the color of the controls, for a secondary action: lighter, with the text of
+/// the accent, under the pointer.
+pub fn control_pill(ui: &mut Ui, label: &str) -> Response {
+    let galley = text_line(ui, label, text::pill());
+    let (rect, response) =
+        ui.allocate_exact_size(galley.size() + 2.0 * PILL_PADDING, Sense::click());
+    response.widget_info(|| WidgetInfo::labeled(Role::Button, true, label));
+    let lit = response.hovered() || response.has_focus();
+    let (fill, tint) = if lit {
+        (color::CONTROL_LINE, color::ACCENT)
+    } else {
+        (color::CONTROL, color::TEXT)
+    };
+    let painter = ui.painter();
+    painter.rect_filled(rect, CornerRadius::same(size::RADIUS), fill);
+    painter.galley(rect.min + PILL_PADDING, galley, tint);
+    response.on_hover_cursor(CursorIcon::PointingHand)
+}
+
 /// The space around the text of a pill.
 const PILL_PADDING: Vec2 = vec2(10.0, 4.0);

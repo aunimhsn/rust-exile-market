@@ -10,6 +10,7 @@ use std::fmt;
 
 use super::labels::{Labels, marker};
 use super::modifier::{Header, Marker, Modifier, ModifierKind};
+use super::weapon::{self, DamageKind, Weapon};
 use super::{CopiedItem, Item, ItemState, Property, Rarity, Requirements, Stack};
 use crate::language::Language;
 
@@ -177,6 +178,7 @@ fn read_header(lines: &[&str], language: Language, labels: &Labels) -> Result<It
         rarity,
         name: name.map(str::to_owned),
         base_type: base_type.to_owned(),
+        written_base_type: full_base_type.to_owned(),
         exceptional,
         stack: None,
         item_level: None,
@@ -186,6 +188,7 @@ fn read_header(lines: &[&str], language: Language, labels: &Labels) -> Result<It
         granted_skills: Vec::new(),
         states: Vec::new(),
         properties: Vec::new(),
+        weapon: None,
         modifiers: Vec::new(),
         warnings: Vec::new(),
     })
@@ -374,8 +377,11 @@ fn read_headed(item: &mut Item, lines: &[&str], labels: &Labels) {
     item.modifiers.extend(current);
 }
 
-/// The lines `Name: value` of the properties section, and the quality among them.
+/// The lines `Name: value` of the properties section, and the quality and the damage of a
+/// weapon among them.
 fn read_properties(item: &mut Item, lines: &[&str], labels: &Labels) {
+    let mut damage = Vec::new();
+    let mut attacks_per_second = None;
     for line in lines {
         let (line, augmented) = match line.strip_suffix(marker::AUGMENTED) {
             Some(line) => (line, true),
@@ -389,10 +395,30 @@ fn read_properties(item: &mut Item, lines: &[&str], labels: &Labels) {
             }
         }
         let (name, value) = line.split_once(':').unwrap_or((line, ""));
+        let (name, value) = (name.trim(), value.trim());
+        if name == labels.attacks_per_second {
+            attacks_per_second = value.parse::<f64>().ok();
+        } else if let Some(ranges) = weapon::damage_ranges(value) {
+            // A physical range has no marker: only the physical damage line has one.
+            let physical = ranges
+                .iter()
+                .any(|range| range.kind == DamageKind::Physical);
+            if !physical || name == labels.physical_damage {
+                damage.extend(ranges);
+            }
+        }
         item.properties.push(Property {
-            name: name.trim().to_owned(),
-            value: value.trim().to_owned(),
+            name: name.to_owned(),
+            value: value.to_owned(),
             augmented,
+        });
+    }
+    if let Some(attacks_per_second) = attacks_per_second
+        && !damage.is_empty()
+    {
+        item.weapon = Some(Weapon {
+            damage,
+            attacks_per_second,
         });
     }
 }

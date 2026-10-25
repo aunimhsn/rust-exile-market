@@ -33,6 +33,19 @@ pub mod color {
     pub const BUBBLE: Color32 = Color32::from_rgb(0x20, 0x27, 0x2f);
     /// The emblem behind the empty state: white at 2.25 %, rounded to the nearest alpha.
     pub const WATERMARK: Color32 = Color32::from_rgba_premultiplied(6, 6, 6, 6);
+
+    /// The item rarities, as in the game.
+    pub const NORMAL: Color32 = Color32::from_rgb(0xd0, 0xd0, 0xd0);
+    pub const MAGIC: Color32 = Color32::from_rgb(0x88, 0x88, 0xff);
+    pub const RARE: Color32 = Color32::from_rgb(0xff, 0xff, 0x77);
+    pub const UNIQUE: Color32 = Color32::from_rgb(0xc2, 0x6a, 0x2c);
+    pub const CURRENCY: Color32 = Color32::from_rgb(0xb4, 0xa7, 0x87);
+    pub const GEM: Color32 = Color32::from_rgb(0x1b, 0xa2, 0x9b);
+    /// A modifier at its best tier, and the T1 tag: a vivid orange that stands out.
+    pub const TIER_1: Color32 = Color32::from_rgb(0xff, 0x8c, 0x1a);
+    /// The Corrupted tag: white on the background of the hardcore leagues.
+    pub const CORRUPTED_TAG: Color32 = Color32::from_rgb(0x35, 0x14, 0x17);
+    pub const CORRUPTED_TAG_TEXT: Color32 = Color32::WHITE;
 }
 
 /// The text styles: the typography of `specs.md`, at the sizes of the mock-up.
@@ -63,12 +76,6 @@ pub mod text {
     #[must_use]
     pub fn warning() -> FontId {
         fonts::text(12.0, Weight::SemiBold)
-    }
-
-    /// The raw text of a copied item, until it is parsed.
-    #[must_use]
-    pub fn raw_item() -> FontId {
-        fonts::numbers(12.0)
     }
 
     /// The title of a panel, e.g. the settings.
@@ -109,6 +116,24 @@ pub mod text {
 
     /// The extra space between the letters of the uppercase labels.
     pub const LABEL_LETTER_SPACING: f32 = 1.3;
+
+    /// The name of an item, in its rarity color.
+    #[must_use]
+    pub fn item_name() -> FontId {
+        fonts::text(20.0, Weight::ExtraBold)
+    }
+
+    /// The lines of the item block: its base type, its class, its summary.
+    #[must_use]
+    pub fn item_line() -> FontId {
+        fonts::text(13.0, Weight::Regular)
+    }
+
+    /// A tag of the item block, and its requirements.
+    #[must_use]
+    pub fn tag() -> FontId {
+        fonts::text(12.0, Weight::Regular)
+    }
 
     /// The keys to press, drawn as key caps.
     #[must_use]

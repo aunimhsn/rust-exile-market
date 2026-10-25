@@ -1,7 +1,7 @@
 //! What the clients of the web services share: an agent that identifies the application and
 //! gives up the requests that hang, the pace of the requests, and the JSON of the answers.
 
-use std::fmt;
+use std::fmt::{self, Write};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -79,6 +79,22 @@ pub fn get_json<T: DeserializeOwned>(
     Ok(serde_json::from_str(&text)?)
 }
 
+/// `text` escaped for a segment of a path or a value of a query, e.g. a league name with
+/// spaces: everything but the letters, the digits and `-._~` is written as `%XX`.
+#[must_use]
+pub fn encode(text: &str) -> String {
+    let mut encoded = String::with_capacity(text.len());
+    for byte in text.bytes() {
+        if byte.is_ascii_alphanumeric() || b"-._~".contains(&byte) {
+            encoded.push(char::from(byte));
+        } else {
+            // Writing to a `String` never fails.
+            let _ = write!(encoded, "%{byte:02X}");
+        }
+    }
+    encoded
+}
+
 /// Spaces the requests to a service.
 #[derive(Debug)]
 pub struct Pace {
@@ -104,5 +120,20 @@ impl Pace {
         }
         // Counted even when it fails: a refused request counts in the limits too.
         self.last = Some(Instant::now());
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_text_is_escaped_for_a_url() {
+        assert_eq!(encode("HC Forbidden Rites"), "HC%20Forbidden%20Rites");
+        assert_eq!(
+            encode("Rise of the Abyssal (PL1)"),
+            "Rise%20of%20the%20Abyssal%20%28PL1%29"
+        );
+        assert_eq!(encode(r#"{"a":"é"}"#), "%7B%22a%22%3A%22%C3%A9%22%7D");
     }
 }

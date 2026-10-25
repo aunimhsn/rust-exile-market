@@ -74,6 +74,39 @@ clipboard-unreadable = The clipboard can't be read.
 prices-unreachable = The price database can't be reached. Last updated { $age }.
 prices-unavailable = Prices unavailable, retrying…
 
+## Item block
+
+# Opens the search for the item on the trade site, in the browser.
+check-on-trade = Check on trade
+# The tags after the item class.
+tag-corrupted = Corrupted
+tag-twice-corrupted = Twice Corrupted
+tag-sanctified = Sanctified
+tag-fractured = Fractured
+tag-mirrored = Mirrored
+tag-unidentified = Unidentified
+tag-quality = Q { $value }%
+tag-sockets = { $value ->
+    [one] { $value } socket
+   *[other] { $value } sockets
+}
+tag-item-level = ilvl { $value }
+tag-stack = Stack { $size }/{ $max }
+# The number of prefixes and suffixes at tier 1, the best one.
+tag-tier-1 = { $value } T1
+# The summary of a weapon, its parts joined by " · ".
+dps-physical = Physical DPS { $dps }
+dps-elemental = Elemental DPS { $dps }
+dps-chaos = Chaos DPS { $dps }
+# The summary of an item that grants a skill, e.g. "Level 18 Sigil of Power".
+granted-skill = Grants Skill: { $skill }
+# The requirements line, its parts joined by " · ": "Requires Level 65 · 145 Dex".
+requires = Requires { $parts }
+requirement-level = Level { $value }
+requirement-strength = { $value } Str
+requirement-dexterity = { $value } Dex
+requirement-intelligence = { $value } Int
+
 ## Settings
 
 settings-title = Settings
