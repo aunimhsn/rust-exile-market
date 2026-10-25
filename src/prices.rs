@@ -89,13 +89,4 @@ impl PriceList {
     pub fn unique(&self, name: &str) -> Option<&UniquePrice> {
         self.uniques.iter().find(|unique| unique.name == name)
     }
-
-    /// The uniques whose base type is `base_type` in English.
-    #[must_use]
-    pub fn uniques_of_base(&self, base_type: &str) -> Vec<&UniquePrice> {
-        self.uniques
-            .iter()
-            .filter(|unique| unique.base_type == base_type)
-            .collect()
-    }
 }

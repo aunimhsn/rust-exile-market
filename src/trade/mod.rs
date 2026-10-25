@@ -3,44 +3,46 @@
 //!
 //! The thread gives the names of the cache at once, then downloads them when they are older
 //! than a day, and every day after. When the trade site can't be reached, the names of the
-//! cache stay, and it tries again every hour.
+//! cache stay, and it tries again every hour; every minute while no name is known.
 
 mod site;
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, SystemTime};
 
 use crate::files;
-use crate::http::HttpError;
 use crate::item_names::ItemNames;
 use crate::logging;
 use crate::worker::{OnDrop, Outbox, Worker};
-use site::TradeSite;
+use site::{NamesError, TradeSite};
 
 /// The file of the names in the cache directory.
 const CACHE_FILE: &str = "item-names.json";
 /// Changed with the shape of [`ItemNames`]: a file of another version is downloaded again.
 const CACHE_VERSION: u32 = 1;
 
-/// When the thread downloads the names: every `refresh`, and `retry` after a failure.
+/// When the thread downloads the names: every `refresh`, and after a failure, `retry` while
+/// names are known, `retry_without_names` before.
 #[derive(Debug, Clone, Copy)]
 struct Intervals {
     refresh: Duration,
     retry: Duration,
+    retry_without_names: Duration,
 }
 
 const INTERVALS: Intervals = Intervals {
     refresh: Duration::from_hours(24),
     retry: Duration::from_hours(1),
+    retry_without_names: Duration::from_mins(1),
 };
 
 /// Where the thread reads the names: the trade site, or a fake one in the tests.
 trait NameSource {
-    fn item_names(&mut self) -> Result<ItemNames, HttpError>;
+    fn item_names(&mut self) -> Result<ItemNames, NamesError>;
 }
 
 impl NameSource for TradeSite {
-    fn item_names(&mut self) -> Result<ItemNames, HttpError> {
+    fn item_names(&mut self) -> Result<ItemNames, NamesError> {
         TradeSite::item_names(self)
     }
 }
@@ -58,7 +60,11 @@ impl ItemNamesWatch {
     /// If the system can't start a thread.
     #[must_use]
     pub fn start(wake: impl Fn() + Send + 'static) -> Self {
-        Self::spawn(TradeSite::new, files::cache_directory(), INTERVALS, wake)
+        let cache = files::cache_directory();
+        if cache.is_none() {
+            log::warn!("No cache directory: the item names will be downloaded at each launch");
+        }
+        Self::spawn(TradeSite::new, cache, INTERVALS, wake)
     }
 
     fn spawn<S: NameSource>(
@@ -83,16 +89,18 @@ impl ItemNamesWatch {
 /// Reads the names until the application stops the thread or stops listening.
 fn watch(
     source: &mut impl NameSource,
-    cache: Option<&std::path::Path>,
+    cache: Option<&Path>,
     intervals: Intervals,
     outbox: &Outbox<ItemNames>,
     wake: &dyn Fn(),
 ) {
     let mut due = Instant::now();
+    let mut known = false;
     if let Some(names) = cache.and_then(load) {
         let age = names.age(SystemTime::now());
         log::info!("Item names from the cache, {} h old", age.as_secs() / 3600);
         due += intervals.refresh.saturating_sub(age);
+        known = true;
         if !outbox.send(names) {
             return;
         }
@@ -103,12 +111,15 @@ fn watch(
         if Instant::now() >= due {
             match source.item_names() {
                 Ok(names) => {
-                    let (exchange, base_types, uniques) = names.counts();
+                    let counts = names.counts();
                     log::info!(
-                        "Item names: {exchange} of the currency exchange, {base_types} base \
-                         types, {uniques} uniques"
+                        "Item names: {} of the currency exchange, {} base types, {} uniques",
+                        counts.exchange,
+                        counts.base_types,
+                        counts.uniques
                     );
                     failing = false;
+                    known = true;
                     if let Some(directory) = cache {
                         save(directory, &names);
                     }
@@ -126,7 +137,12 @@ fn watch(
                         log::warn!("The item names can't be downloaded: {error}");
                     }
                     failing = true;
-                    due = Instant::now() + intervals.retry;
+                    let retry = if known {
+                        intervals.retry
+                    } else {
+                        intervals.retry_without_names
+                    };
+                    due = Instant::now() + retry;
                 }
             }
         }
@@ -137,7 +153,7 @@ fn watch(
 }
 
 /// The names of the cache in `directory`, if it has them.
-fn load(directory: &std::path::Path) -> Option<ItemNames> {
+fn load(directory: &Path) -> Option<ItemNames> {
     let path = directory.join(CACHE_FILE);
     files::read_versioned_json(&path, CACHE_VERSION).unwrap_or_else(|error| {
         log::info!(
@@ -149,7 +165,7 @@ fn load(directory: &std::path::Path) -> Option<ItemNames> {
 }
 
 /// Keeps `names` for the next launches; a failure is logged.
-fn save(directory: &std::path::Path, names: &ItemNames) {
+fn save(directory: &Path, names: &ItemNames) {
     if let Err(error) = files::write_versioned_json(directory, CACHE_FILE, CACHE_VERSION, names) {
         log::warn!(
             "The item names couldn't be saved in {}: {error}",
@@ -162,15 +178,18 @@ fn save(directory: &std::path::Path, names: &ItemNames) {
 mod tests {
     use super::*;
     use crate::files::TestDirectory;
+    use crate::http::HttpError;
     use crate::item_names::Names;
     use std::sync::Arc;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::mpsc::{self, Receiver};
     use std::thread;
 
+    /// Only the retry without names is short enough for the tests to see it.
     const FAST: Intervals = Intervals {
         refresh: Duration::from_hours(24),
-        retry: Duration::from_millis(20),
+        retry: Duration::from_hours(1),
+        retry_without_names: Duration::from_millis(20),
     };
 
     /// A trade site that gives empty names, or fails; it counts its requests.
@@ -181,10 +200,11 @@ mod tests {
     }
 
     impl NameSource for FakeSite {
-        fn item_names(&mut self) -> Result<ItemNames, HttpError> {
+        fn item_names(&mut self) -> Result<ItemNames, NamesError> {
             self.requests.fetch_add(1, Ordering::SeqCst);
             if self.unreachable {
-                return Err(HttpError::Request(ureq::Error::StatusCode(503)));
+                let error = HttpError::Request(ureq::Error::StatusCode(503));
+                return Err(NamesError::Http(error));
             }
             Ok(names(SystemTime::now()))
         }
@@ -194,7 +214,8 @@ mod tests {
         ItemNames::new(updated, Names::default(), Names::default(), Vec::new())
     }
 
-    fn watch(site: FakeSite, directory: &TestDirectory) -> (ItemNamesWatch, Receiver<()>) {
+    /// A thread reading `site`, with a cache in `directory`, and its wake-ups.
+    fn start_watch(site: FakeSite, directory: &TestDirectory) -> (ItemNamesWatch, Receiver<()>) {
         let (woken, wakes) = mpsc::channel();
         let watch = ItemNamesWatch::spawn(
             move || site,
@@ -217,13 +238,22 @@ mod tests {
         received
     }
 
+    /// The requests made by the site after `duration`.
+    fn requests_after(requests: &AtomicUsize, duration: Duration) -> usize {
+        thread::sleep(duration);
+        requests.load(Ordering::SeqCst)
+    }
+
     #[test]
-    fn downloads_the_names_and_keeps_them_in_the_cache() {
+    fn downloads_the_names_once_and_keeps_them_in_the_cache() {
         let directory = TestDirectory::new("item-names-download");
-        let (mut watch, wakes) = watch(FakeSite::default(), &directory);
+        let site = FakeSite::default();
+        let requests = Arc::clone(&site.requests);
+        let (mut watch, wakes) = start_watch(site, &directory);
 
         assert_eq!(received(&mut watch, &wakes).len(), 1);
         assert!(load(&directory.0).is_some());
+        assert_eq!(requests_after(&requests, Duration::from_millis(100)), 1);
     }
 
     #[test]
@@ -235,11 +265,10 @@ mod tests {
         );
         let site = FakeSite::default();
         let requests = Arc::clone(&site.requests);
-        let (mut watch, wakes) = watch(site, &directory);
+        let (mut watch, wakes) = start_watch(site, &directory);
 
         assert_eq!(received(&mut watch, &wakes).len(), 1);
-        thread::sleep(Duration::from_millis(100));
-        assert_eq!(requests.load(Ordering::SeqCst), 0);
+        assert_eq!(requests_after(&requests, Duration::from_millis(100)), 0);
     }
 
     #[test]
@@ -254,15 +283,28 @@ mod tests {
             ..FakeSite::default()
         };
         let requests = Arc::clone(&site.requests);
-        let (mut watch, wakes) = watch(site, &directory);
+        let (mut watch, wakes) = start_watch(site, &directory);
 
         assert_eq!(received(&mut watch, &wakes).len(), 1);
-        // Tried again, without insisting.
+        // One attempt, the next one in an hour.
+        assert_eq!(requests_after(&requests, Duration::from_millis(100)), 1);
+        assert!(load(&directory.0).is_some(), "the cache is kept");
+    }
+
+    #[test]
+    fn without_names_a_failed_download_is_tried_again_sooner() {
+        let directory = TestDirectory::new("item-names-none");
+        let site = FakeSite {
+            unreachable: true,
+            ..FakeSite::default()
+        };
+        let requests = Arc::clone(&site.requests);
+        let _watch = start_watch(site, &directory);
+
         let start = Instant::now();
-        while requests.load(Ordering::SeqCst) < 2 {
+        while requests.load(Ordering::SeqCst) < 3 {
             assert!(start.elapsed() < Duration::from_secs(5), "tried again");
             thread::sleep(Duration::from_millis(5));
         }
-        assert!(load(&directory.0).is_some(), "the cache is kept");
     }
 }

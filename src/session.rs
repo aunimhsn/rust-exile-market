@@ -233,10 +233,12 @@ impl Session {
             Some(FixedPrice::Unique(unique)) => {
                 log::info!("Price of {}: {:.2} ex", unique.name, unique.price.exalted);
             }
-            Some(FixedPrice::Uniques(uniques)) => {
+            Some(FixedPrice::Uniques(candidates)) => {
+                let with_price = candidates.iter().filter(|unique| unique.price.is_some());
                 log::info!(
-                    "An unidentified unique, one of {} priced uniques",
-                    uniques.len()
+                    "An unidentified unique, one of {} uniques ({} priced)",
+                    candidates.len(),
+                    with_price.count()
                 );
             }
             None if matches!(

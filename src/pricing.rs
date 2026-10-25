@@ -12,21 +12,32 @@ use crate::prices::{CurrencyPrice, PriceList, UniquePrice};
 pub enum FixedPrice<'a> {
     Currency(&'a CurrencyPrice),
     Unique(&'a UniquePrice),
-    /// An unidentified unique whose base type has several uniques: each of them.
-    Uniques(Vec<&'a UniquePrice>),
+    /// An unidentified unique whose base type has several uniques: each of them, priced or
+    /// not.
+    Uniques(Vec<Candidate<'a>>),
 }
 
-/// The price of `item` among `prices`; `names` find the items copied in French. `None` for
-/// an item without a fixed name, or missing from the prices, or copied in French before the
-/// names are known.
+/// A unique an unidentified item can be: its English name, and its price when the price
+/// database has one.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Candidate<'a> {
+    pub name: &'a str,
+    pub price: Option<&'a UniquePrice>,
+}
+
+/// The price of `item` among `prices`; `names` find the items copied in French, and the
+/// uniques an unidentified item can be. `None` for an item without a fixed name, or missing
+/// from the prices, or that needs the names before they are known.
 #[must_use]
 pub fn fixed_price<'a>(
     item: &Item,
     prices: &'a PriceList,
-    names: Option<&ItemNames>,
+    names: Option<&'a ItemNames>,
 ) -> Option<FixedPrice<'a>> {
     let language = item.language();
     match item.rarity() {
+        // The lineage support gems are gems of the currency exchange; the other gems aren't
+        // found there.
         Rarity::Currency | Rarity::Gem => {
             currency(item.base_type(), language, prices, names).map(FixedPrice::Currency)
         }
@@ -38,7 +49,7 @@ pub fn fixed_price<'a>(
                 };
                 prices.unique(english).map(FixedPrice::Unique)
             }
-            None => unidentified(item.base_type(), language, prices, names),
+            None => unidentified(item.base_type(), language, prices, names?),
         },
         Rarity::Normal | Rarity::Magic | Rarity::Rare => None,
     }
@@ -58,25 +69,28 @@ fn currency<'a>(
     }
 }
 
-/// The uniques an unidentified item of the base type `base_type` can be.
+/// The uniques an unidentified item of the base type `base_type` can be. They come from the
+/// names of the trade site, in both languages: the price database only has the uniques
+/// listed lately, and a base with two uniques, one of them priced, must not show the price
+/// of the other one.
 fn unidentified<'a>(
     base_type: &str,
     language: Language,
     prices: &'a PriceList,
-    names: Option<&ItemNames>,
+    names: &'a ItemNames,
 ) -> Option<FixedPrice<'a>> {
-    let mut uniques: Vec<&UniquePrice> = match language {
-        Language::English => prices.uniques_of_base(base_type),
-        Language::French => names?
-            .english_uniques_of_base(language, base_type)
-            .into_iter()
-            .filter_map(|name| prices.unique(name))
-            .collect(),
-    };
-    match uniques.len() {
-        0 => None,
-        1 => uniques.pop().map(FixedPrice::Unique),
-        _ => Some(FixedPrice::Uniques(uniques)),
+    let candidates: Vec<Candidate<'a>> = names
+        .english_uniques_of_base(language, base_type)
+        .into_iter()
+        .map(|name| Candidate {
+            name,
+            price: prices.unique(name),
+        })
+        .collect();
+    match candidates.as_slice() {
+        [] => None,
+        [only] => only.price.map(FixedPrice::Unique),
+        [_, _, ..] => Some(FixedPrice::Uniques(candidates)),
     }
 }
 
@@ -133,19 +147,26 @@ mod tests {
         }
     }
 
-    /// The fixed price of the item copied as `text`, with the names of the trade site or not.
-    fn found(text: &str, names: Option<&ItemNames>) -> Option<String> {
+    /// The fixed price of the item copied as `text` among `prices`, with the names of the
+    /// trade site or not: what it is, with "?" for a unique without a price.
+    fn found_in(prices: &PriceList, text: &str, names: Option<&ItemNames>) -> Option<String> {
         let item = Item::parse(&CopiedItem::from_text(text).expect("an item")).expect("read");
-        let prices = prices();
-        fixed_price(&item, &prices, names).map(|price| match price {
+        fixed_price(&item, prices, names).map(|price| match price {
             FixedPrice::Currency(currency) => currency.exchange_id.clone(),
             FixedPrice::Unique(unique) => unique.name.clone(),
-            FixedPrice::Uniques(uniques) => uniques
+            FixedPrice::Uniques(candidates) => candidates
                 .iter()
-                .map(|unique| unique.name.as_str())
+                .map(|candidate| match candidate.price {
+                    Some(_) => candidate.name.to_owned(),
+                    None => format!("{}?", candidate.name),
+                })
                 .collect::<Vec<_>>()
                 .join(" or "),
         })
+    }
+
+    fn found(text: &str, names: Option<&ItemNames>) -> Option<String> {
+        found_in(&prices(), text, names)
     }
 
     #[test]
@@ -180,14 +201,34 @@ mod tests {
             "Item Class: Crossbows\nRarity: Unique\nMakeshift Crossbow\n--------\nUnidentified";
 
         assert_eq!(
-            found(english, None).as_deref(),
+            found(english, Some(&names)).as_deref(),
             Some("Grand Spectrum or Prism Guardian")
         );
         assert_eq!(
             found(french, Some(&names)).as_deref(),
             Some("Grand Spectrum or Prism Guardian")
         );
-        assert_eq!(found(crossbow, None).as_deref(), Some("Mist Whisper"));
+        assert_eq!(
+            found(crossbow, Some(&names)).as_deref(),
+            Some("Mist Whisper")
+        );
+        // The price database alone doesn't know every unique of a base.
+        assert_eq!(found(english, None), None);
+    }
+
+    #[test]
+    fn an_unidentified_unique_whose_base_has_an_unpriced_unique_isnt_priced_as_the_other() {
+        let names = item_names();
+        let mut prices = prices();
+        prices
+            .uniques
+            .retain(|unique| unique.name != "Prism Guardian");
+        let emerald = "Item Class: Jewels\nRarity: Unique\nEmerald\n--------\nUnidentified";
+
+        assert_eq!(
+            found_in(&prices, emerald, Some(&names)).as_deref(),
+            Some("Grand Spectrum or Prism Guardian?")
+        );
     }
 
     #[test]

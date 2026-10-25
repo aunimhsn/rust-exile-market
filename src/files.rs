@@ -51,7 +51,7 @@ pub fn read_versioned_json<T: DeserializeOwned>(
     if found.version != version {
         log::info!(
             "{} is of version {}: ignored",
-            path.display(),
+            crate::logging::without_home(path).display(),
             found.version
         );
         return Ok(None);

@@ -45,6 +45,17 @@ impl UniqueNames {
     }
 }
 
+/// The number of names of each kind, for the log.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct NameCounts {
+    /// The items of the currency exchange, in English.
+    pub exchange: usize,
+    /// The base types of the equipment, in English.
+    pub base_types: usize,
+    /// The uniques in both languages.
+    pub uniques: usize,
+}
+
 /// The names of the items, as the trade site gave them at one time.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ItemNames {
@@ -79,12 +90,12 @@ impl ItemNames {
 
     /// The number of names of each kind, for the log.
     #[must_use]
-    pub fn counts(&self) -> (usize, usize, usize) {
-        (
-            self.english.exchange.len(),
-            self.english.base_types.len(),
-            self.uniques.len(),
-        )
+    pub fn counts(&self) -> NameCounts {
+        NameCounts {
+            exchange: self.english.exchange.len(),
+            base_types: self.english.base_types.len(),
+            uniques: self.uniques.len(),
+        }
     }
 
     fn names(&self, language: Language) -> &Names {
@@ -151,6 +162,7 @@ fn holds_words(text: &str, words: &str) -> bool {
 #[cfg(test)]
 pub mod tests {
     use super::*;
+    use crate::item::{CopiedItem, Item};
 
     fn unique(name: &str, base_type: &str) -> UniqueName {
         UniqueName {
@@ -258,5 +270,35 @@ pub mod tests {
             None,
             "a base type inside a longer word doesn't count"
         );
+    }
+
+    #[test]
+    fn the_base_type_of_a_copied_magic_item_is_found() {
+        let text = include_str!("item/test-items/en-magic-mace.txt");
+        let copied = CopiedItem::from_text(text).expect("an item");
+        let item = Item::parse(&copied).expect("read");
+
+        assert_eq!(
+            item_names().magic_base_type(item.language(), item.base_type()),
+            Some("Temple Maul")
+        );
+    }
+
+    #[test]
+    fn whole_words_are_found_at_both_ends_and_after_a_part_of_a_word() {
+        assert!(holds_words("Temple Maul", "Temple Maul"), "the whole text");
+        assert!(
+            holds_words("Temple Maul of the Brute", "Temple Maul"),
+            "at the start"
+        );
+        assert!(
+            holds_words("Crackling Temple Maul", "Temple Maul"),
+            "at the end"
+        );
+        // The first "Maul" is inside "Mauling", the second one is a word.
+        assert!(holds_words("Mauling Maul", "Maul"));
+        assert!(!holds_words("Mauling", "Maul"));
+        assert!(!holds_words("Shammaul", "Maul"));
+        assert!(!holds_words("Temple Maul", ""), "nothing isn't a base type");
     }
 }

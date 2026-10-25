@@ -159,7 +159,8 @@ impl Item {
     }
 
     /// The base type, without "Exceptional" and "Superior". For a magic item, the whole name
-    /// with its affixes: the base types are only known with the item data (step 8).
+    /// with its affixes: its base type is found among the names of the trade site
+    /// ([`crate::item_names::ItemNames::magic_base_type`]).
     #[must_use]
     pub fn base_type(&self) -> &str {
         &self.base_type
