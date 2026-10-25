@@ -220,6 +220,7 @@
     --rarity-unique: #c26a2c;
     --tier-1: #ff8c1a;
     --rarity-currency: #b4a787;
+    --rarity-gem: #1ba29b;
     --mod: #8f8fff;
     --corrupted: #e0423a;
     --rise: #5fcf80;
@@ -423,6 +424,7 @@
   .meta { display: flex; flex-wrap: wrap; gap: 5px 6px; align-items: center; margin-top: 6px; color: var(--weak); font-size: 13px; }
   .tag { padding: 1px 7px; border-radius: var(--radius); background: var(--control); color: var(--text); font-size: 12px; }
   .tag.corrupted { color: #fff; background: #351417; }   /* the background of the hardcore league */
+  .tag.t1 { color: var(--tier-1); }   /* the number of prefixes and suffixes at tier 1 */
   .summary { margin-top: 8px; font-size: 13px; }
   /* Stats toggle: a pill like "Check on trade", and the number of filters next to it. */
   .stats-toggle { margin-top: 10px; display: flex; align-items: center; gap: 10px; font-size: 12px; }
@@ -439,6 +441,7 @@
   .rarity-magic { color: var(--rarity-magic); }
   .rarity-normal { color: var(--rarity-normal); }
   .rarity-currency { color: var(--rarity-currency); }
+  .rarity-gem { color: var(--rarity-gem); }
 
   .stats { margin-top: 8px; display: grid; gap: 6px; }
   .req { color: var(--weak); font-size: 12px; display: flex; justify-content: space-between; }
@@ -668,7 +671,8 @@
       <span class="pill">Switch</span><span class="app-notice-close" title="Close">${svg(12, '<path d="M4 4l8 8M12 4l-8 8"/>')}</span></div>`;
 
   function item(it, unfolded = false) {
-    const tags = (it.tags || []).map(t => `<span class="tag ${/^Corrupt|^Corrompu/.test(t) ? "corrupted" : ""}">${t}</span>`).join("");
+    const tagClass = t => /^Corrupt|^Corrompu/.test(t) ? "corrupted" : /^\d+ T1$/.test(t) ? "t1" : "";
+    const tags = (it.tags || []).map(t => `<span class="tag ${tagClass(t)}">${t}</span>`).join("");
     const filters = it.filters ? `<span class="filters">${it.filters}</span>` : "";
     // "Show 6 stats" when folded, "Hide stats" when unfolded; French when the label is French.
     const count = Number((it.statsLabel || "").match(/\d+/)?.[0] || 0);
@@ -850,9 +854,9 @@
     { mod: "+312 to Accuracy Rating", check: true, min: 281, tier: 4, range: "296–344", share: .5 },
     { note: "The physical DPS already counts the damage and speed modifiers." },
   ];
-  const BOW_RARE = { ...BOW, tags: [...BOW.tags, "4 top tiers"], statsLabel: "Stats (6)", filters: "4 filters" };
+  const BOW_RARE = { ...BOW, tags: [...BOW.tags, "1 T1"], statsLabel: "Stats (6)", filters: "4 filters" };
   const RARE_ESTIMATE_BEFORE = { lines: ["No market price for rare items.", "Search similar offers to estimate it."] };
-  const RING = { rarity: "rare", name: "Storm Spiral", base: "Sapphire Ring", cls: "Rings", tags: ["ilvl 77", "1 top tier", "1 open prefix"], req: "Requires Level 54", statsLabel: "Stats (6)", filters: "2 filters" };
+  const RING = { rarity: "rare", name: "Storm Spiral", base: "Sapphire Ring", cls: "Rings", tags: ["ilvl 77"], req: "Requires Level 54", statsLabel: "Stats (6)", filters: "2 filters" };
   const RING_FILTERS = [
     { group: "Pseudo", min: true },
     { mod: "+83% total Elemental Resistance", check: true, min: 74 },
@@ -879,7 +883,7 @@
     { mod: "Quality: 0%", check: false, min: 0 },
     { note: "A normal item has no modifiers: its base, sockets and item level make its value." },
   ];
-  const JEWEL = { rarity: "rare", name: "Brood Ember", base: "Ruby", cls: "Jewels", tags: ["ilvl 81", "4 top tiers"], statsLabel: "Stats (4)", filters: "4 filters" };
+  const JEWEL = { rarity: "rare", name: "Brood Ember", base: "Ruby", cls: "Jewels", tags: ["ilvl 81", "3 T1"], statsLabel: "Stats (4)", filters: "4 filters" };
   const JEWEL_FILTERS = [
     { group: "Prefixes", fill: "2 of 2", min: true },
     { mod: "12% increased Projectile Damage", check: true, min: 10, tier: 1, range: "11–13", share: .9 },
