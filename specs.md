@@ -103,7 +103,7 @@ The window has a title bar, then three bands (item, price, offers), then a statu
 - Warnings appear as a dark yellow band right under the title bar (see [Error handling](#error-handling)). Several warnings at once share the band, one line each, 4 px apart.
 - The window can be resized and moved to another screen. Its size and position are restored at the next launch, on a screen that is still connected.
 - Before the first item, the window shows the full logo and "Copy an item in the game with Ctrl + C. The price shows up here."
-- While the prices of the league are downloaded and none of that league are known yet, this invitation would be wrong: it gives way to "Downloading the prices of Forbidden Rites" (the league name in the text color), a bar of 220 × 4 px that grows with each request (white on the color of the controls, corners rounded by 2 px), and a short sentence in faint text under it, "Dominate the market with an incredible tool." for now (a funny sentence drawn at random comes in the Refine step of the roadmap). An item copied meanwhile shows normally.
+- While the prices of the league are downloaded and none of that league are known yet, this invitation would be wrong: it gives way to "Downloading the prices of Forbidden Rites" (the league name in the text color), a bar of 220 × 4 px that grows with each request (white on the color of the controls, corners rounded by 2 px), and a short funny sentence on money and the market in faint text under it, drawn at random at each download among ten (like Discord), e.g. "Counting the Exalted Orbs one by one…". An item copied meanwhile shows normally.
 
 ### Item block
 

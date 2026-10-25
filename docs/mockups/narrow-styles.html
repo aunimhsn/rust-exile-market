@@ -796,12 +796,12 @@
       <div class="more" title="${fr ? "Afficher plus d'offres" : "Show more offers"}">${ICON.downDouble(16)}</div></div>`;
   }
 
-  // The download of the prices of `league`, `percent` done, in place of the invitation to copy; the
-  // sentence under the bar is a placeholder (random sentences in the Refine step).
-  const downloading = (league, percent) => `<div class="empty b"><div class="dl">
+  // The download of the prices of `league`, `percent` done, in place of the invitation to copy, with
+  // one of the sentences drawn at random at each download.
+  const downloading = (league, percent, quote) => `<div class="empty b"><div class="dl">
     <span>Downloading the prices of <span class="dl-league">${league}</span></span>
     <div class="dl-bar" style="--dl: ${percent}%"><span></span></div>
-    <span class="dl-quote">Dominate the market with an incredible tool.</span>
+    <span class="dl-quote">${quote}</span>
   </div></div>`;
   const empty = `<div class="empty b"><span>Copy an item in the game with</span><div class="keys"><span class="key">Ctrl</span>+<span class="key">C</span></div><span>The price shows up here.</span></div>`;
 
@@ -1007,8 +1007,8 @@
       ["New league started", win(topBar(false, "Standard"), newLeague("Rise of the Abyssal"), item(HH), price(HH_PRICE), offers({ state: "idle" }), foot())],
       ["Clipboard unreadable", win(topBar(), banner("The clipboard can't be read."), empty, foot("poe2scout 12min ago"))],
       ["Several warnings", win(topBar(), banner("The clipboard can't be read.", "The price database can't be reached. Last updated 3h ago."), empty, foot("poe2scout 3h ago (offline)"))],
-      ["First launch, downloading the prices", win(topBar(), downloading("Forbidden Rites", 40), foot("poe2scout: downloading prices… · GGG trade: no search yet"))],
-      ["Another league chosen, downloading its prices", win(topBar(false, "Runes of Aldur"), downloading("Runes of Aldur", 75), foot("poe2scout: downloading prices… · GGG trade: no search yet"))],
+      ["First launch, downloading the prices", win(topBar(), downloading("Forbidden Rites", 40, "Counting the Exalted Orbs one by one…"), foot("poe2scout: downloading prices… · GGG trade: no search yet"))],
+      ["Another league chosen, downloading its prices", win(topBar(false, "Runes of Aldur"), downloading("Runes of Aldur", 75, "Spotting the bait offers…"), foot("poe2scout: downloading prices… · GGG trade: no search yet"))],
       ["First launch offline, no prices", win(topBar(), banner("Prices unavailable, retrying…"), empty, foot("poe2scout: no prices yet"))],
       ["Before the first item", win(topBar(), empty, foot("poe2scout 12min ago"))],
       ["Item couldn't be read", win(topBar(), `<div class="band b"><div class="msg">This item couldn't be read.</div><div class="line muted">Copy it again, or copy another item.</div></div>`, foot())],
