@@ -334,10 +334,10 @@
   /* The emblem goes back to the item, like the logo of a site to its home page. */
   .app-emblem { display: block; width: 16px; height: 16px; align-self: center; margin-right: 10px; cursor: pointer; }
   /* The league block, tinted with the color of its trade (the only sign of softcore or hardcore, also in its
-     tooltip), a line of that color on the left, the chevron in white; lighter under the pointer. */
+     tooltip), the chevron in white; lighter under the pointer. */
   .app-league {
     display: flex; align-items: center; gap: 6px; padding: 0 8px 0 10px; color: var(--text); font-size: 13px; cursor: pointer;
-    background: var(--league-bg); box-shadow: inset 2px 0 0 var(--league-line);
+    background: var(--league-bg);
   }
   .app-league:hover { background: var(--league-bg-hover); }
   .app-league .ico { color: var(--text); }
@@ -356,10 +356,40 @@
   .app-notice::before {
     content: ""; position: absolute; top: -5px; left: 36px; width: 10px; height: 10px; background: #20272f; transform: rotate(45deg);
   }
+  /* The list of the leagues, under the league block, flat: one line per league, softcore on the left and
+     hardcore on the right, glued together, the permanent ones last; the mode told by the color. The chosen
+     league keeps the lighter background of the hover. It opens 4 px under the title bar,
+     with the shadow of the bubbles, and its leagues let the item show through a little (94 % opaque). */
+  .app-league .ico { transition: transform .15s ease; }
+  /* The chevron points right, and turns down while the list is open. */
+  .app-titlebar.is-open .app-league .ico { transform: rotate(90deg); }
+  .app-league-list {
+    position: absolute; z-index: 2; top: 32px; left: 38px; display: grid; grid-template-columns: 1fr 1fr;
+    width: 300px; border-radius: 3px; overflow: hidden; box-shadow: 0 10px 30px rgba(0, 0, 0, .6);
+    opacity: 0; transform: translateY(-4px); pointer-events: none; transition: opacity .15s ease, transform .15s ease;
+  }
+  .app-titlebar.is-open + .app-league-list { opacity: 1; transform: none; pointer-events: auto; }
+  @media (prefers-reduced-motion: reduce) {
+    .app-league .ico, .app-league-list { transition: none; }
+  }
+  :root { --menu-alpha: .94; }
+  .app-league-list .app-league-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 6px; height: 28px; padding: 0 8px 0 10px;
+    font-size: 13px; color: var(--text); cursor: pointer; white-space: nowrap; overflow: hidden;
+  }
+  .app-league-row span { overflow: hidden; text-overflow: ellipsis; }
+  .app-league-row.is-softcore { background: rgba(19, 38, 58, var(--menu-alpha)); }
+  .app-league-row.is-softcore:hover { background: rgba(26, 51, 80, var(--menu-alpha)); }
+  .app-league-row.is-hardcore { background: rgba(53, 20, 23, var(--menu-alpha)); }
+  .app-league-row.is-hardcore:hover { background: rgba(74, 27, 32, var(--menu-alpha)); }
+  .app-league-row .ico { flex: none; }
+  /* The chosen league keeps the background of the hover. */
+  .app-league-row.is-softcore.is-chosen { background: rgba(26, 51, 80, var(--menu-alpha)); }
+  .app-league-row.is-hardcore.is-chosen { background: rgba(74, 27, 32, var(--menu-alpha)); }
   .app-icon-button { width: 36px; display: grid; place-items: center; color: var(--weak); cursor: pointer; }
   .app-icon-button:hover, .app-icon-button.is-on { color: var(--accent); }
-  :root, [data-league="softcore"] { --league-bg: #13263a; --league-line: #6aa7de; --league-kind: "Softcore"; --league-bg-hover: #1a3350; }
-  [data-league="hardcore"] { --league-bg: #351417; --league-line: #e0706a; --league-kind: "Hardcore"; --league-bg-hover: #4a1b20; }
+  :root, [data-league="softcore"] { --league-bg: #13263a; --league-kind: "Softcore"; --league-bg-hover: #1a3350; }
+  [data-league="hardcore"] { --league-bg: #351417; --league-kind: "Hardcore"; --league-bg-hover: #4a1b20; }
   .spacer { flex: 1; }
   .button, .input {
     background: var(--control); border: 1px solid var(--control-line); border-radius: var(--radius); color: var(--text);
@@ -606,17 +636,23 @@
   };
 
   // Blocks.
-  const topBar = (settings = false, league = "Forbidden Rites") => {
+  const leagueList = () => {
+    const row = (name, mode, chosen) =>
+      `<div class="app-league-row is-${mode} ${chosen ? "is-chosen" : ""}" data-mode="${mode}" title="${mode === "softcore" ? "Softcore" : "Hardcore"}"><span>${name}</span></div>`;
+    const pair = (name, index) => row(name, "softcore", index === 0) + row(name, "hardcore", false);
+    return `<div class="app-league-list">${["Forbidden Rites", "Runes of Aldur", "Standard"].map(pair).join("")}</div>`;
+  };
+  const topBar = (settings = false, league = "Forbidden Rites", open = false) => {
     const kind = document.documentElement.dataset.league === "hardcore" ? "Hardcore" : "Softcore";
     return `
-    <div class="app-titlebar">
+    <div class="app-titlebar ${open ? "is-open" : ""}">
       <img class="app-emblem" src="../../assets/logo/emblem.svg" alt="Home" title="Home">
-      <div class="app-league" title="${kind} · Change the league"><span class="app-league-name">${league}</span>${ICON.down(12)}</div>
+      <div class="app-league" title="${kind} · Change the league"><span class="app-league-name">${league}</span>${ICON.chevron(12)}</div>
       <div class="spacer"></div>
       <div class="app-icon-button ${settings ? "is-on" : ""}" title="Settings">${ICON.gear(15)}</div>
       <div class="app-icon-button" title="Minimize">${svg(13, '<path d="M3 8h10"/>')}</div>
       <div class="app-icon-button" title="Close">${svg(13, '<path d="M4 4l8 8M12 4l-8 8"/>')}</div>
-    </div>`;
+    </div>${leagueList()}`;
   };
   const foot = (value = "poe2scout 12min ago · GGG trade 2min ago") => `<div class="foot a">${value}</div>`;
   const banner = value => `<div class="banner"><span>${value}</span></div>`;
@@ -776,7 +812,7 @@
     { mod: "When you kill a Rare monster, you gain its Modifiers for 60 seconds" },
     { note: "Corrupted offers only, like this item." },
   ];
-  const HH_PRICE = { values: ["12.4", "123", "9K"], offers: "23 offers", trend: "Rising over the last 3 days (+4%)" };
+  const HH_PRICE = { values: ["12.4", "123", "9K"], offers: "23 offers", trend: "+4% over the last 3 days" };
   const HH_OFFERS = { count: "10 of 13 online", columns: ["Price", "Listed"], rows: [
     { v: "6", k: "ex", when: "2h ago", sus: true }, { v: "1", k: "chaos", when: "5d ago", sus: true }, { v: "8", k: "div", when: "3h ago" },
     { v: "10", k: "div", when: "3h ago" }, { v: "11", k: "div", when: "40min ago", away: true }, { v: "12", k: "div", when: "1d ago" }] };
@@ -846,6 +882,7 @@
       ["Main", win(topBar(), item(HH), price(HH_PRICE), offers(HH_OFFERS), foot())],
       ["Stats unfolded (filters)", win(topBar(), item({ ...HH, stats: HH_STATS }, true), foot())],
       ["Before the first search", win(topBar(), item(HH), price(HH_PRICE), offers({ state: "idle" }), foot())],
+      ["League list open", win(topBar(false, "Forbidden Rites", true), item(HH), price(HH_PRICE), offers({ state: "idle" }), foot())],
       ["Settings open", win(topBar(true), settings, foot(`<span class="app-author">Exile Market 0.1.0 · Made by Sylent · <a href="https://sylent.art" target="_blank" rel="noopener">sylent.art</a></span>`))],
     ]],
     ["Other items", [
@@ -902,7 +939,7 @@
     ]],
     ["Special cases", [
       ["Currency stack", win(topBar(), item({ rarity: "currency", name: "Orb of Annulment", cls: "Stackable Currency", tags: ["Stack 7/20"], statsLabel: "Stats (1)" }),
-        price({ values: ["0.25", "2.49", "182"], stackValues: ["1.76", "17.4", "1.3K"], stackSize: 7, rising: false, trend: "Falling over the last 7 days (−11%)" }),
+        price({ values: ["0.25", "2.49", "182"], stackValues: ["1.76", "17.4", "1.3K"], stackSize: 7, rising: false, trend: "−11% over the last 7 days" }),
         offers({ count: "8 of 48 online", columns: ["Per unit", "Stock", "Listed"], rows: [
           { v: "175", k: "ex", stock: "40", when: "12min" }, { v: "178", k: "ex", stock: "12", when: "3min" }, { v: "180", k: "ex", stock: "120", when: "45min" },
           { v: "182", k: "ex", stock: "33", when: "3h" }, { v: "185", k: "ex", stock: "60", when: "9min" }] }), foot())],
@@ -910,7 +947,7 @@
         price({ candidates: [["Astramentis", "4.0", "div"], ["Hinekora's Sight", "640", "ex"], ["Fixation of Yix", "95", "ex"], ["Strugglescream", "12", "ex"]] }),
         offers({ lines: ["Identify the item to search its offers."] }), foot())],
       ["French item (interface in French)", win(topBar(), item({ rarity: "unique", name: "Chasseur de têtes", base: "Ceinture lourde", cls: "Ceintures", tags: ["Corrompu", "niv. 80"], req: "Requiert niveau 50", statsLabel: "Statistiques (6)", filters: "3 filtres", tradeLabel: "Voir sur l'échange", tradeTitle: "Ouvrir la recherche sur le site d'échange" }),
-        price({ values: ["12.4", "123", "9K"], offers: "23 offres", trend: "En hausse sur les 3 derniers jours (+4 %)" }, "fr"), offers({ state: "idle" }, "fr"), foot("poe2scout il y a 12min · GGG trade il y a 2min"))],
+        price({ values: ["12.4", "123", "9K"], offers: "23 offres", trend: "+4% sur les 3 derniers jours" }, "fr"), offers({ state: "idle" }, "fr"), foot("poe2scout il y a 12min · GGG trade il y a 2min"))],
     ]],
     ["Offer states", [
       ["Searching the offers", win(topBar(), item(HH), price(HH_PRICE), offers({ state: "loading" }), foot())],
@@ -980,6 +1017,31 @@
     history.replaceState(null, "", "?" + new URLSearchParams(chosen));
     render();
   });
+  // The league list works: the league block opens and closes it, a league chooses it; a click elsewhere or
+  // Escape closes it.
+  const closeLeagueLists = except => document.querySelectorAll(".app-titlebar.is-open").forEach(bar => {
+    if (bar !== except) bar.classList.remove("is-open");
+  });
+  document.getElementById("sheet").addEventListener("click", event => {
+    const block = event.target.closest(".app-league");
+    const row = event.target.closest(".app-league-row");
+    if (block) {
+      const bar = block.closest(".app-titlebar");
+      closeLeagueLists(bar);
+      bar.classList.toggle("is-open");
+    } else if (row) {
+      const win = row.closest(".win");
+      win.querySelector(".app-league-name").textContent = row.textContent;
+      win.dataset.league = row.dataset.mode;
+      win.querySelectorAll(".app-league-row.is-chosen").forEach(other => other.classList.remove("is-chosen"));
+      row.classList.add("is-chosen");
+      win.querySelector(".app-league").title = `${row.title} · Change the league`;
+      closeLeagueLists();
+    } else {
+      closeLeagueLists();
+    }
+  });
+  document.addEventListener("keydown", event => { if (event.key === "Escape") closeLeagueLists(); });
   document.getElementById("file-warning").hidden = location.protocol !== "file:";
   render();
 </script>

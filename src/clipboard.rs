@@ -5,13 +5,11 @@
 //! (under X11, the application that owns the clipboard has to answer) and only redraws
 //! when something happened.
 
-use std::convert::Infallible;
 use std::hash::{BuildHasher, RandomState};
-use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender, TryRecvError};
-use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
 use crate::item::CopiedItem;
+use crate::worker::{OnDrop, Outbox, Worker};
 
 /// Fast enough to react before the player looks at the window.
 const POLL_INTERVAL: Duration = Duration::from_millis(250);
@@ -139,13 +137,7 @@ impl<S: ClipboardSource> ClipboardWatcher<S> {
 
 /// The clipboard watched on its own thread, for as long as this value lives.
 pub struct ClipboardWatch {
-    events: Receiver<ClipboardEvent>,
-    /// Carries nothing: dropping it tells the thread to stop. The whispers to copy will go
-    /// through a channel like this one (step 12).
-    stop: Option<Sender<Infallible>>,
-    thread: Option<JoinHandle<()>>,
-    /// The thread ended without being asked to, which has been told once.
-    lost: bool,
+    worker: Worker<ClipboardEvent>,
 }
 
 impl ClipboardWatch {
@@ -165,86 +157,33 @@ impl ClipboardWatch {
         open: impl FnOnce() -> S + Send + 'static,
         wake: impl Fn() + Send + 'static,
     ) -> Self {
-        let (events_sender, events) = mpsc::channel();
-        let (stop, stop_receiver) = mpsc::channel();
-        let thread = thread::Builder::new()
-            .name("clipboard".to_owned())
-            .spawn(move || {
-                let wake = WakeOnExit(wake);
-                // Declared after the guard, so dropped before it, even during a panic: the
-                // application, once woken up, sees that the thread is gone.
-                let events_sender = events_sender;
-                watch(
-                    ClipboardWatcher::new(open()),
-                    &events_sender,
-                    &stop_receiver,
-                    &wake.0,
-                );
-            })
-            .expect("the clipboard thread starts");
+        let worker = Worker::spawn("clipboard", OnDrop::Join, wake, move |outbox, wake| {
+            watch(ClipboardWatcher::new(open()), outbox, wake);
+        });
         log::info!("Clipboard watching started");
-        Self {
-            events,
-            stop: Some(stop),
-            thread: Some(thread),
-            lost: false,
-        }
+        Self { worker }
     }
 
     /// Gives each event received since the last call to `handle`, without waiting. If the
     /// thread ended by itself (a panic), the clipboard counts as unreadable.
     pub fn receive(&mut self, mut handle: impl FnMut(ClipboardEvent)) {
-        loop {
-            match self.events.try_recv() {
-                Ok(event) => handle(event),
-                Err(TryRecvError::Empty) => return,
-                Err(TryRecvError::Disconnected) => {
-                    if !self.lost {
-                        self.lost = true;
-                        log::error!("The clipboard thread stopped");
-                        handle(ClipboardEvent::Unreadable);
-                    }
-                    return;
-                }
-            }
+        if self.worker.receive(&mut handle) {
+            handle(ClipboardEvent::Unreadable);
         }
-    }
-}
-
-impl Drop for ClipboardWatch {
-    /// Stops the thread and waits for it, so that the clipboard is closed properly.
-    fn drop(&mut self) {
-        drop(self.stop.take());
-        if let Some(thread) = self.thread.take()
-            && thread.join().is_err()
-        {
-            log::error!("The clipboard thread panicked");
-        }
-        log::info!("Clipboard watching stopped");
-    }
-}
-
-/// Calls the function when dropped, even during a panic.
-struct WakeOnExit<F: Fn()>(F);
-
-impl<F: Fn()> Drop for WakeOnExit<F> {
-    fn drop(&mut self) {
-        (self.0)();
     }
 }
 
 /// Reads the clipboard until the application stops the thread or stops listening.
 fn watch<S: ClipboardSource>(
     mut watcher: ClipboardWatcher<S>,
-    events: &Sender<ClipboardEvent>,
-    stop: &Receiver<Infallible>,
-    wake: &impl Fn(),
+    outbox: &Outbox<ClipboardEvent>,
+    wake: &dyn Fn(),
 ) {
     loop {
         let mut sent = false;
         let mut listened = true;
         watcher.poll(|event| {
-            listened &= events.send(event).is_ok();
+            listened &= outbox.send(event);
             sent = true;
         });
         if !listened {
@@ -253,9 +192,8 @@ fn watch<S: ClipboardSource>(
         if sent {
             wake();
         }
-        match stop.recv_timeout(POLL_INTERVAL) {
-            Err(RecvTimeoutError::Timeout) => {}
-            Err(RecvTimeoutError::Disconnected) => return,
+        if !outbox.wait(POLL_INTERVAL) {
+            return;
         }
     }
 }
@@ -384,53 +322,22 @@ mod tests {
     }
 
     #[test]
-    fn the_thread_sends_the_events_wakes_up_the_application_and_stops() {
-        use std::sync::Arc;
-        use std::sync::atomic::{AtomicUsize, Ordering};
-
-        let (events_sender, events) = mpsc::channel();
-        let (stop, stop_receiver) = mpsc::channel();
-        let wakes = Arc::new(AtomicUsize::new(0));
-        let thread = thread::spawn({
-            let wakes = Arc::clone(&wakes);
+    fn the_thread_sends_the_events_and_wakes_up_the_application() {
+        let (woken, wakes) = std::sync::mpsc::channel();
+        let mut watch = ClipboardWatch::spawn(
+            || FakeClipboard([text(RING)].into()),
             move || {
-                watch(
-                    watcher([text(RING)]),
-                    &events_sender,
-                    &stop_receiver,
-                    &|| {
-                        wakes.fetch_add(1, Ordering::SeqCst);
-                    },
-                );
-            }
-        });
-
-        assert_eq!(
-            events.recv_timeout(Duration::from_secs(5)),
-            Ok(copied(RING))
+                let _ = woken.send(());
+            },
         );
-        drop(stop);
-        thread.join().expect("the thread ends");
-        assert_eq!(wakes.load(Ordering::SeqCst), 1);
-    }
-
-    #[test]
-    fn the_events_sent_before_the_thread_ended_are_received_first() {
-        let (events_sender, events) = mpsc::channel();
-        events_sender.send(copied(RING)).expect("sent");
-        drop(events_sender);
-        let mut watch = ClipboardWatch {
-            events,
-            stop: None,
-            thread: None,
-            lost: false,
-        };
+        wakes
+            .recv_timeout(Duration::from_secs(5))
+            .expect("the application is woken up");
 
         let mut received = Vec::new();
         watch.receive(|event| received.push(event));
-        watch.receive(|event| received.push(event));
 
-        assert_eq!(received, [copied(RING), ClipboardEvent::Unreadable]);
+        assert_eq!(received, [copied(RING)]);
     }
 
     #[test]
@@ -443,8 +350,8 @@ mod tests {
             }
         }
 
-        let (woken, wakes) = mpsc::channel();
-        let (handled, handled_receiver) = mpsc::channel::<()>();
+        let (woken, wakes) = std::sync::mpsc::channel();
+        let (handled, handled_receiver) = std::sync::mpsc::channel::<()>();
         let mut watch = ClipboardWatch::spawn(
             || PanickingClipboard,
             move || {

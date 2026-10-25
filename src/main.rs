@@ -10,9 +10,11 @@ mod item;
 mod language;
 mod league;
 mod logging;
+mod market;
 mod session;
 mod settings;
 mod ui;
+mod worker;
 
 /// The name of the application, in every language.
 const APP_NAME: &str = "Exile Market";

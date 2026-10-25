@@ -38,8 +38,8 @@ The reference of the interface is the mock-up [docs/mockups/narrow-styles.html](
 | Weak text | `#8692a3` | Labels, secondary lines. |
 | Faint text | `#556070` | Status bar, search age, roll ranges. |
 | Main action | `#f2f5f9` (white), text on it `#0f1216` | Search and refresh blocks, checked boxes, opened gear, "Copied". |
-| Softcore league | background `#13263a` (`#1a3350` on hover), line `#6aa7de` | League block. |
-| Hardcore league | background `#351417` (`#4a1b20` on hover), line `#e0706a` | League block, background of the Corrupted tag. |
+| Softcore league | background `#13263a` (`#1a3350` on hover) | League block and list. |
+| Hardcore league | background `#351417` (`#4a1b20` on hover) | League block and list, background of the Corrupted tag. |
 | Warning band | background `#8a6a10`, text `#f8edc2` | Errors under the title bar. |
 | Warning text | `#f0b85a` | Uncertain price, suspicious offer, away seller. |
 | Rise / fall | `#5fcf80` / `#e66a5c` | Trend, roll differences, seller online / offline. |
@@ -96,7 +96,7 @@ The window has a title bar, then three bands (item, price, offers), then a statu
 | Medium and wide (later) | The same blocks rearranged in two or three columns, with the price history in the wide layout (see the roadmap). |
 
 - **Title bar** (band A, 28 px), in place of the title bar of the system: the emblem, the league block, then on the right the Settings, Minimize and Close icons, without borders (each clickable on 36 px across). There is no Maximize: the narrow window doesn't need it. The empty space of the bar moves the window; the edges of the window still resize it.
-  - The league block shows the league name on a background tinted with the color of its trade (blue for softcore, red for hardcore), with a 2 px line of that color on the left and a white chevron. The color is the only sign of the trade on screen; the tooltip says it: "Softcore · Change the league". A click opens the list of the current leagues, with the two permanent ones, both shown as "Standard" on the color of their mode. By default, the current challenge league in softcore trade.
+  - The league block shows the league name on a background tinted with the color of its trade (blue for softcore, red for hardcore), with a white chevron pointing right, which turns down while the list of the leagues is open. The color is the only sign of the trade on screen; the tooltip says it: "Softcore · Change the league". A hardcore league is shown without its "HC " prefix ("HC Forbidden Rites" shows as "Forbidden Rites", in red). A click opens the list of the leagues under the block: one line per league, its softcore trade on the left and its hardcore trade on the right, each on the color of its mode, glued together without a panel, 94 % opaque so that the item shows through a little, the corners of the list rounded by 3 px, with the shadow of the bubbles, 4 px under the title bar; without lines between them; the chosen league keeps the lighter background of the hover; the current leagues first, then the two permanent ones, both shown as "Standard". A name too long for its half is cut with "…" and shown whole in its tooltip. A click on a league chooses it and closes the list; a click elsewhere, Escape or the emblem closes it too. By default, the first current softcore league given by the price database.
   - The emblem goes back to the item (or to the empty window before the first item) from any screen, like the logo of a site to its home page: clickable from the left edge to the league block, with the tooltip "Home".
   - The gear opens the [settings](#settings), and closes them.
 - **Status bar** (band A): the age of each source, e.g. "poe2scout 12min ago · GGG trade 2min ago"; "GGG trade: next search in 4min" during a long wait; the version and the author while the settings are open.
@@ -126,7 +126,7 @@ The window has a title bar, then three bands (item, price, offers), then a statu
 - The price in **Divine Orbs**, **Chaos Orbs** and **Exalted Orbs**, side by side, each with its orb icon, so that the price is readable at any time of the league.
 - The large price is always the value of what was copied: for a stack, the value of the whole stack, with "Stack of 7" on the right of the title and the unit price on a small line ("Unit price: 0.25 div · 2.49 c · 182 ex").
 - On the right of the title, for a unique, the number of offers behind the price ("23 offers"); for a currency exchange item, which always has plenty of offers, the stack size instead.
-- The trend, in green or red without icon: "Rising over the last 3 days (+4%)".
+- The trend, the change first, in green when it rises and in red when it falls, without icon: "+4% over the last 3 days", "−11% over the last 7 days" (a real minus sign).
 - With fewer than 5 offers, the warning "Only 4 offers: the price is uncertain".
 
 **Estimated price** (rare, magic and normal items, jewels):

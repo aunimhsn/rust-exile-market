@@ -21,6 +21,8 @@ fn messages(language: Language) -> &'static str {
 pub enum Message {
     LeagueModeSoftcore,
     LeagueModeHardcore,
+    LeagueLoading,
+    NewLeagueSwitch,
     HomeTooltip,
     SettingsTooltip,
     MinimizeTooltip,
@@ -44,9 +46,11 @@ pub enum Message {
 impl Message {
     /// Every message, for the tests.
     #[cfg(test)]
-    const ALL: [Self; 20] = [
+    const ALL: [Self; 22] = [
         Self::LeagueModeSoftcore,
         Self::LeagueModeHardcore,
+        Self::LeagueLoading,
+        Self::NewLeagueSwitch,
         Self::HomeTooltip,
         Self::SettingsTooltip,
         Self::MinimizeTooltip,
@@ -72,6 +76,8 @@ impl Message {
         match self {
             Self::LeagueModeSoftcore => "league-mode-softcore",
             Self::LeagueModeHardcore => "league-mode-hardcore",
+            Self::LeagueLoading => "league-loading",
+            Self::NewLeagueSwitch => "new-league-switch",
             Self::HomeTooltip => "home-tooltip",
             Self::SettingsTooltip => "settings-tooltip",
             Self::MinimizeTooltip => "minimize-tooltip",
@@ -98,6 +104,7 @@ impl Message {
 const STATUS_BAR: &str = "status-bar";
 const LEAGUE_TOOLTIP: &str = "league-tooltip";
 const STATUS_AUTHOR: &str = "status-author";
+const NEW_LEAGUE: &str = "new-league";
 
 /// Gives the texts of the interface in one language.
 pub struct Translator {
@@ -142,6 +149,14 @@ impl Translator {
         let mut args = FluentArgs::new();
         args.set("mode", mode);
         self.format(LEAGUE_TOOLTIP, Some(&args))
+    }
+
+    /// The bubble of a new league, with its name.
+    #[must_use]
+    pub fn new_league(&self, league: &str) -> String {
+        let mut args = FluentArgs::new();
+        args.set("league", league);
+        self.format(NEW_LEAGUE, Some(&args))
     }
 
     /// The line of the status bar while the settings are open: the application, its version,
@@ -199,7 +214,7 @@ mod tests {
         let code_ids: BTreeSet<String> = Message::ALL
             .iter()
             .map(|message| message.id())
-            .chain([STATUS_BAR, LEAGUE_TOOLTIP, STATUS_AUTHOR])
+            .chain([STATUS_BAR, LEAGUE_TOOLTIP, STATUS_AUTHOR, NEW_LEAGUE])
             .map(str::to_owned)
             .collect();
         for language in Language::ALL {
@@ -217,6 +232,10 @@ mod tests {
             }
             assert_ne!(translator.status_bar("A", "B"), "", "{language:?}");
             assert_ne!(translator.league_tooltip("A"), "", "{language:?}");
+            assert!(
+                translator.new_league("League").contains("League"),
+                "{language:?}"
+            );
             assert_ne!(
                 translator.author_line("App", "1", "A", "a.b"),
                 "",

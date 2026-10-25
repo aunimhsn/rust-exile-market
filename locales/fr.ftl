@@ -8,6 +8,11 @@ league-mode-softcore = Softcore
 league-mode-hardcore = Hardcore
 # Infobulle du bloc de la ligue : son mode, puis ce que fait un clic.
 league-tooltip = { $mode } · Changer de ligue
+# À la place de la ligue, avant que les ligues arrivent au premier lancement.
+league-loading = Chargement…
+# Bulle sous le bloc de la ligue, quand une nouvelle ligue a commencé : son nom, puis un bouton.
+new-league = { $league } a commencé.
+new-league-switch = Y aller
 # Infobulle de l'emblème, qui ramène à l'objet.
 home-tooltip = Accueil
 settings-tooltip = Réglages

@@ -3,7 +3,7 @@
 //! No other module writes a color, a text style or a size shared by the style: they all use
 //! these tokens. The components only keep the measures of their own layout.
 
-use egui::{Color32, Context, CornerRadius, Stroke, ThemePreference, Visuals};
+use egui::{Color32, Context, CornerRadius, Shadow, Stroke, ThemePreference, Visuals};
 
 use crate::league::LeagueMode;
 
@@ -29,6 +29,8 @@ pub mod color {
     /// The warning band under the title bar: dark yellow, apart from the league colors.
     pub const WARNING_BAND: Color32 = Color32::from_rgb(0x8a, 0x6a, 0x10);
     pub const WARNING_TEXT: Color32 = Color32::from_rgb(0xf8, 0xed, 0xc2);
+    /// The bubbles that open over the content: the tooltip of an offer, a new league.
+    pub const BUBBLE: Color32 = Color32::from_rgb(0x20, 0x27, 0x2f);
     /// The emblem behind the empty state: white at 2.25 %, rounded to the nearest alpha.
     pub const WATERMARK: Color32 = Color32::from_rgba_premultiplied(6, 6, 6, 6);
 }
@@ -81,6 +83,24 @@ pub mod text {
         fonts::text(11.0, Weight::SemiBold)
     }
 
+    /// The text of a bubble.
+    #[must_use]
+    pub fn bubble() -> FontId {
+        fonts::text(12.5, Weight::Regular)
+    }
+
+    /// The name in the text of a bubble.
+    #[must_use]
+    pub fn bubble_strong() -> FontId {
+        fonts::text(12.5, Weight::ExtraBold)
+    }
+
+    /// The label of a pill.
+    #[must_use]
+    pub fn pill() -> FontId {
+        fonts::text(12.0, Weight::SemiBold)
+    }
+
     /// The league name, in the title bar.
     #[must_use]
     pub fn league() -> FontId {
@@ -108,8 +128,27 @@ pub mod size {
     pub const RADIUS: u8 = 3;
     /// Width of the clickable zone of an icon of the title bar, drawn without a block.
     pub const ICON_ZONE: f32 = 36.0;
+    /// Rounding of the bubbles that open over the content.
+    pub const BUBBLE_RADIUS: u8 = 4;
     /// Width of the lines of the icons drawn with egui.
     pub const ICON_STROKE: f32 = 1.6;
+}
+
+/// The durations of the motions, in seconds.
+pub mod motion {
+    /// A list that opens or closes, and its chevron.
+    pub const OPEN: f32 = 0.15;
+}
+
+/// The shadow of what opens over the content: the bubbles, the list of the leagues.
+#[must_use]
+pub fn floating_shadow() -> Shadow {
+    Shadow {
+        offset: [0, 10],
+        blur: 30,
+        spread: 0,
+        color: Color32::from_black_alpha(153),
+    }
 }
 
 /// The colors of a league block, the only sign of its mode on screen.
@@ -118,8 +157,6 @@ pub struct LeagueModeColors {
     pub background: Color32,
     /// The background under the pointer.
     pub hovered: Color32,
-    /// The line on the left.
-    pub line: Color32,
 }
 
 impl LeagueModeColors {
@@ -129,12 +166,10 @@ impl LeagueModeColors {
             LeagueMode::Softcore => Self {
                 background: Color32::from_rgb(0x13, 0x26, 0x3a),
                 hovered: Color32::from_rgb(0x1a, 0x33, 0x50),
-                line: Color32::from_rgb(0x6a, 0xa7, 0xde),
             },
             LeagueMode::Hardcore => Self {
                 background: Color32::from_rgb(0x35, 0x14, 0x17),
                 hovered: Color32::from_rgb(0x4a, 0x1b, 0x20),
-                line: Color32::from_rgb(0xe0, 0x70, 0x6a),
             },
         }
     }
