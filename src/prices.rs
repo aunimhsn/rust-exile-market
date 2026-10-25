@@ -67,4 +67,35 @@ impl PriceList {
     pub fn item_count(&self) -> usize {
         self.uniques.len() + self.currencies.len()
     }
+
+    /// The item of the currency exchange named `name` in English.
+    #[must_use]
+    pub fn currency_named(&self, name: &str) -> Option<&CurrencyPrice> {
+        self.currencies
+            .iter()
+            .find(|currency| currency.name == name)
+    }
+
+    /// The item of the currency exchange whose id is `exchange_id`.
+    #[must_use]
+    pub fn currency(&self, exchange_id: &str) -> Option<&CurrencyPrice> {
+        self.currencies
+            .iter()
+            .find(|currency| currency.exchange_id == exchange_id)
+    }
+
+    /// The unique named `name` in English: the price database has one per name.
+    #[must_use]
+    pub fn unique(&self, name: &str) -> Option<&UniquePrice> {
+        self.uniques.iter().find(|unique| unique.name == name)
+    }
+
+    /// The uniques whose base type is `base_type` in English.
+    #[must_use]
+    pub fn uniques_of_base(&self, base_type: &str) -> Vec<&UniquePrice> {
+        self.uniques
+            .iter()
+            .filter(|unique| unique.base_type == base_type)
+            .collect()
+    }
 }

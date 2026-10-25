@@ -1,11 +1,7 @@
 //! The last downloaded prices of each league, in the cache directory of the user: the prices
 //! show at once at startup, and while the price database can't be reached.
 
-use std::fs;
-use std::io;
-use std::path::{Path, PathBuf};
-
-use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 
 use crate::files;
 use crate::league::League;
@@ -13,20 +9,7 @@ use crate::logging;
 use crate::prices::PriceList;
 
 /// Changed with the shape of [`PriceList`]: a file of another version is downloaded again.
-const VERSION: u32 = 1;
-
-/// A file of the cache.
-#[derive(Serialize, Deserialize)]
-struct CacheFile<P> {
-    version: u32,
-    prices: P,
-}
-
-/// Only the version of a file of the cache, read before the rest.
-#[derive(Deserialize)]
-struct FileVersion {
-    version: u32,
-}
+const VERSION: u32 = 2;
 
 /// The files of the cache.
 pub struct PriceCache {
@@ -38,8 +21,7 @@ impl PriceCache {
     /// The cache in the cache directory of the user.
     #[must_use]
     pub fn in_cache_directory() -> Self {
-        let directory =
-            files::project_directories().map(|directories| directories.cache_dir().to_path_buf());
+        let directory = files::cache_directory();
         if directory.is_none() {
             log::warn!("No cache directory: the prices will be downloaded at each launch");
         }
@@ -57,7 +39,7 @@ impl PriceCache {
     #[must_use]
     pub fn load(&self, league: &League) -> Option<PriceList> {
         let path = self.directory.as_ref()?.join(file_name(league));
-        match read(&path) {
+        match files::read_versioned_json::<PriceList>(&path, VERSION) {
             Ok(Some(prices)) if prices.league == *league => Some(prices),
             Ok(_) => None,
             Err(error) => {
@@ -76,36 +58,14 @@ impl PriceCache {
         let Some(directory) = &self.directory else {
             return;
         };
-        let file = CacheFile {
-            version: VERSION,
-            prices,
-        };
-        let result = serde_json::to_vec(&file)
-            .map_err(io::Error::other)
-            .and_then(|json| files::write_atomically(directory, &file_name(&prices.league), &json));
-        if let Err(error) = result {
+        let name = file_name(&prices.league);
+        if let Err(error) = files::write_versioned_json(directory, &name, VERSION, prices) {
             log::warn!(
                 "The prices couldn't be saved in {}: {error}",
                 logging::without_home(directory).display()
             );
         }
     }
-}
-
-/// The prices of the file at `path`; `None` when there is no file, or one of another version.
-fn read(path: &Path) -> io::Result<Option<PriceList>> {
-    let json = match fs::read(path) {
-        Ok(json) => json,
-        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
-        Err(error) => return Err(error),
-    };
-    let version: FileVersion = serde_json::from_slice(&json).map_err(io::Error::other)?;
-    if version.version != VERSION {
-        log::info!("Price cache of version {}: ignored", version.version);
-        return Ok(None);
-    }
-    let file: CacheFile<PriceList> = serde_json::from_slice(&json).map_err(io::Error::other)?;
-    Ok(Some(file.prices))
 }
 
 /// The file of the prices of `league`: its id, with only letters, digits and `-` (e.g.
@@ -130,6 +90,7 @@ mod tests {
     use super::*;
     use crate::files::TestDirectory;
     use crate::prices::{CurrencyPrice, Price, Rates};
+    use std::fs;
     use std::time::{Duration, SystemTime};
 
     fn prices(league: &str) -> PriceList {

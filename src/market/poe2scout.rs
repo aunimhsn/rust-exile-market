@@ -3,21 +3,17 @@
 //! The rules of its use (pace, identification) are in `roadmap.md` (poe2scout usage).
 
 use std::fmt::{self, Write};
-use std::thread;
-use std::time::{Duration, Instant, SystemTime};
+use std::time::{Duration, SystemTime};
 
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
 
 use super::{DownloadObserver, PriceDatabase};
+use crate::http::{self, HttpError, Pace};
 use crate::league::League;
 use crate::prices::{CurrencyPrice, Price, PriceList, Rates, UniquePrice};
 
 const BASE_URL: &str = "https://api.poe2scout.com/poe2";
-/// A request that hangs is given up, and tried again later.
-const TIMEOUT: Duration = Duration::from_secs(30);
-/// A server that doesn't answer is given up sooner.
-const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 /// The time between two requests, at least.
 const PACE: Duration = Duration::from_secs(1);
 /// The most items per page the API gives: most categories fit in one page.
@@ -34,10 +30,9 @@ const CURRENCY_CATEGORY: &str = "currency";
 /// Why the price database couldn't be read.
 #[derive(Debug)]
 pub enum FetchError {
-    /// No answer, or an error status (e.g. 429 when its limits are reached).
-    Http(ureq::Error),
-    /// An answer that isn't the expected JSON: the API changed.
-    Json(serde_json::Error),
+    /// No answer, an error status (e.g. 429 when its limits are reached), or an answer that
+    /// isn't the expected JSON.
+    Http(HttpError),
     /// No current league in the answer: the database is wrong for a moment, and the league of
     /// the player must not be changed for that.
     NoCurrentLeague,
@@ -48,8 +43,7 @@ pub enum FetchError {
 impl fmt::Display for FetchError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Http(error) => write!(formatter, "request failed: {error}"),
-            Self::Json(error) => write!(formatter, "unexpected answer: {error}"),
+            Self::Http(error) => error.fmt(formatter),
             Self::NoCurrentLeague => formatter.write_str("no current league in the answer"),
             Self::MissingRate(currency) => write!(formatter, "no rate for the {currency} orb"),
         }
@@ -60,21 +54,14 @@ impl std::error::Error for FetchError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             Self::Http(error) => Some(error),
-            Self::Json(error) => Some(error),
             Self::NoCurrentLeague | Self::MissingRate(_) => None,
         }
     }
 }
 
-impl From<ureq::Error> for FetchError {
-    fn from(error: ureq::Error) -> Self {
+impl From<HttpError> for FetchError {
+    fn from(error: HttpError) -> Self {
         Self::Http(error)
-    }
-}
-
-impl From<serde_json::Error> for FetchError {
-    fn from(error: serde_json::Error) -> Self {
-        Self::Json(error)
     }
 }
 
@@ -175,36 +162,16 @@ impl Kind {
 /// requests.
 pub struct Poe2Scout {
     agent: ureq::Agent,
-    last_request: Option<Instant>,
+    pace: Pace,
 }
 
 impl Poe2Scout {
     #[must_use]
     pub fn new() -> Self {
-        let config = ureq::Agent::config_builder()
-            .timeout_global(Some(TIMEOUT))
-            .timeout_connect(Some(CONNECT_TIMEOUT))
-            .user_agent(format!(
-                "{}/{} (+{})",
-                crate::FOLDER_NAME,
-                crate::VERSION,
-                env!("CARGO_PKG_REPOSITORY")
-            ))
-            .build();
         Self {
-            agent: ureq::Agent::new_with_config(config),
-            last_request: None,
+            agent: http::agent(),
+            pace: Pace::new(PACE),
         }
-    }
-
-    /// Waits until [`PACE`] has passed since the last request, and counts the next one from
-    /// now.
-    fn pace(&mut self) {
-        if let Some(last) = self.last_request {
-            thread::sleep(PACE.saturating_sub(last.elapsed()));
-        }
-        // Counted even when it fails: a refused request counts in the limits too.
-        self.last_request = Some(Instant::now());
     }
 
     /// The answer of `path` with the parameters `query`, at the pace of the API.
@@ -213,7 +180,7 @@ impl Poe2Scout {
         path: &str,
         query: &[(&str, &str)],
     ) -> Result<T, FetchError> {
-        self.pace();
+        self.pace.wait();
         self.fetch(path, query)
     }
 
@@ -225,7 +192,7 @@ impl Poe2Scout {
         query: &[(&str, &str)],
         download: &mut dyn DownloadObserver,
     ) -> Result<Option<T>, FetchError> {
-        self.pace();
+        self.pace.wait();
         if download.interrupted() {
             return Ok(None);
         }
@@ -238,13 +205,11 @@ impl Poe2Scout {
         path: &str,
         query: &[(&str, &str)],
     ) -> Result<T, FetchError> {
-        let mut response = self
-            .agent
-            .get(format!("{BASE_URL}{path}"))
-            .query_pairs(query.iter().copied())
-            .call()?;
-        let text = response.body_mut().read_to_string()?;
-        Ok(serde_json::from_str(&text)?)
+        Ok(http::get_json(
+            &self.agent,
+            &format!("{BASE_URL}{path}"),
+            query,
+        )?)
     }
 
     /// The items of every page of a category; `None` when `download` is interrupted before a
