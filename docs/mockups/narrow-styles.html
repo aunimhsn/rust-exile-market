@@ -570,6 +570,10 @@
   .banner { display: flex; align-items: stretch; background: var(--banner); color: var(--banner-text, var(--warn)); font-size: 12px; font-weight: 600; }
   .banner > span:first-child { flex: 1; padding: 10px 14px; align-self: center; display: flex; flex-direction: column; gap: 4px; }
   .foot { padding: 6px 14px; color: var(--faint); font-size: 11.5px; }
+  /* Download of the prices: a white line of 2 px that grows on the top edge of the status bar. */
+  .foot.has-dl { position: relative; }
+  .dl-foot { position: absolute; left: 0; right: 0; top: 0; height: 2px; }
+  .dl-foot > span { display: block; height: 100%; width: var(--dl); background: var(--text); }
   /* Before the first item: the emblem as a faint watermark behind the text (2.25 % opacity), so that it takes no
      height. */
   .empty { position: relative; padding: 64px 14px; text-align: center; color: var(--weak); overflow: hidden; }
@@ -654,7 +658,10 @@
       <div class="app-icon-button" title="Close">${svg(13, '<path d="M4 4l8 8M12 4l-8 8"/>')}</div>
     </div>${leagueList()}`;
   };
-  const foot = (value = "poe2scout 12min ago · GGG trade 2min ago") => `<div class="foot a">${value}</div>`;
+  // `progress`: the share of the prices downloaded (e.g. 40), or none outside a download.
+  const foot = (value = "poe2scout 12min ago · GGG trade 2min ago", progress = null) => progress === null
+    ? `<div class="foot a">${value}</div>`
+    : `<div class="foot a has-dl"><div class="dl-foot" style="--dl: ${progress}%"><span></span></div>${value}</div>`;
   // One line per warning, in the same band.
   const banner = (...values) => `<div class="banner"><span>${values.map(value => `<span>${value}</span>`).join("")}</span></div>`;
   const newLeague = league => `
@@ -994,7 +1001,8 @@
       ["New league started", win(topBar(false, "Standard"), newLeague("Rise of the Abyssal"), item(HH), price(HH_PRICE), offers({ state: "idle" }), foot())],
       ["Clipboard unreadable", win(topBar(), banner("The clipboard can't be read."), empty, foot("poe2scout 12min ago"))],
       ["Several warnings", win(topBar(), banner("The clipboard can't be read.", "The price database can't be reached. Last updated 3h ago."), empty, foot("poe2scout 3h ago (offline)"))],
-      ["First launch, downloading the prices", win(topBar(), empty, foot("poe2scout: downloading prices…"))],
+      ["First launch, downloading the prices", win(topBar(), empty, foot("poe2scout: downloading prices… 40%", 40))],
+      ["Another league chosen, downloading its prices", win(topBar(false, "Runes of Aldur"), empty, foot("poe2scout: downloading prices… 75%", 75))],
       ["First launch offline, no prices", win(topBar(), banner("Prices unavailable, retrying…"), empty, foot("poe2scout: no prices yet"))],
       ["Before the first item", win(topBar(), empty, foot("poe2scout 12min ago"))],
       ["Item couldn't be read", win(topBar(), `<div class="band b"><div class="msg">This item couldn't be read.</div><div class="line muted">Copy it again, or copy another item.</div></div>`, foot())],
