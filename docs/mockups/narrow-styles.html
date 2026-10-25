@@ -735,7 +735,10 @@
         // on the line of the checkbox in a column kept for it, and its bar and range under the text.
         // A stat without a filter has no checkbox and starts at the left edge.
         const box = row.check === undefined ? "" : `<span class="check ${row.check ? "on" : ""}">${row.check ? ICON.check(11) : ""}</span>`;
-        const tier = row.tier ? `<span class="tier ${row.tier <= 3 ? "tier-top" : ""} t${row.tier}">T${row.tier}</span>` : "";
+        // The following lines of a hybrid modifier keep the space of its tier, so that their ranges
+        // line up under the first one.
+        const tier = row.tier ? `<span class="tier ${row.tier <= 3 ? "tier-top" : ""} t${row.tier}">T${row.tier}</span>`
+          : row.tierSpace ? `<span class="tier t${row.tierSpace}" style="visibility:hidden">T${row.tierSpace}</span>` : "";
         // No bar for the tier of a rare until the modifier tables (step 13).
         const bar = row.range && !row.noBar ? `<span class="bar"><i style="width:${row.share * 100}%"></i></span>` : "";
         const input = row.min !== undefined ? `<span class="input">${row.min}</span>` : "";
@@ -991,6 +994,16 @@
             { mod: "37% increased Projectile Damage if you've dealt a Melee Hit in the past eight seconds", check: true, min: 37, range: "30–60", share: .23 },
             { mod: "+100 to Evasion Rating" },
           ] }, true), price({ values: ["0.4", "4", "300"], offers: "12 offers", trend: "+8% over the last 7 days" }), foot())],
+      ["Rare with a hybrid modifier: the tier once, a range per line", win(topBar(),
+        item({ rarity: "rare", name: "Doom Shell", base: "Wanderer Coat", cls: "Body Armours", tags: ["ilvl 82"], props: [["Armour", "412"], ["Evasion", "380"]], req: "Requires Level 65 · 59 Str · 59 Dex", filters: "4 filters", statsLabel: "Stats (4)",
+          stats: [
+            { group: "Prefixes", fill: "2 of 3 · 1 open", min: true },
+            { mod: "+86 to maximum Life", check: true, min: 77, tier: 3, range: "85–99", share: .1, noBar: true },
+            { mod: "+20 to Evasion Rating", check: true, min: 18, tier: 5, range: "15–25", share: .5, noBar: true },
+            { mod: "+10% increased Evasion Rating", check: false, min: 9, tierSpace: 5, range: "8–12", share: .5, noBar: true },
+            { group: "Suffixes", fill: "1 of 3 · 2 open" },
+            { mod: "+41% to Cold Resistance", check: true, min: 37, tier: 1, range: "41–45", share: .1, noBar: true },
+          ] }, true), price(RARE_ESTIMATE_BEFORE), foot())],
       ["Rare with a fixed implicit", win(topBar(),
         item({ rarity: "rare", name: "Gale Shroud", base: "Wayfarer Jacket", cls: "Body Armours", tags: ["ilvl 82"], props: [["Evasion", "512"]], req: "Requires Level 70 · 152 Dex", filters: "3 filters", statsLabel: "Stats (5)",
           stats: [

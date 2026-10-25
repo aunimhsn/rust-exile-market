@@ -111,34 +111,27 @@ struct ApiUnique {
     name: String,
     #[serde(rename = "Type")]
     base_type: String,
-    item_metadata: Option<ApiUniqueMetadata>,
+    item_metadata: Option<serde_json::Value>,
     #[serde(flatten)]
     price: ApiPrice,
 }
 
-/// The modifiers of a unique, with their ranges, e.g. `+(17-23)% to Chaos Resistance`. Read
-/// leniently: a list missing, `null`, or with something else than texts loses these modifiers
-/// only, never the price of the unique.
-#[derive(Deserialize)]
-struct ApiUniqueMetadata {
-    #[serde(default)]
-    implicit_mods: Option<Vec<serde_json::Value>>,
-    #[serde(default)]
-    explicit_mods: Option<Vec<serde_json::Value>>,
-}
-
-impl ApiUniqueMetadata {
-    fn modifiers(self) -> UniqueModifiers {
-        let texts = |list: Option<Vec<serde_json::Value>>| -> Vec<String> {
-            list.unwrap_or_default()
-                .into_iter()
-                .filter_map(|value| value.as_str().map(str::to_owned))
-                .collect()
-        };
-        UniqueModifiers {
-            implicit: texts(self.implicit_mods),
-            explicit: texts(self.explicit_mods),
-        }
+/// The modifiers of a unique in its `ItemMetadata`, with their ranges, e.g. `+(17-23)% to
+/// Chaos Resistance`. Read leniently: metadata or a list missing, `null` or of another shape,
+/// and the values that aren't texts, lose these modifiers only, never the price of the unique.
+fn unique_modifiers(metadata: Option<&serde_json::Value>) -> UniqueModifiers {
+    let texts = |key: &str| -> Vec<String> {
+        metadata
+            .and_then(|metadata| metadata.get(key))
+            .and_then(serde_json::Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter_map(|value| value.as_str().map(str::to_owned))
+            .collect()
+    };
+    UniqueModifiers {
+        implicit: texts("implicit_mods"),
+        explicit: texts("explicit_mods"),
     }
 }
 
@@ -349,10 +342,7 @@ impl PriceDatabase for Poe2Scout {
                     price: conversion.price(item.price)?,
                     name: item.name,
                     base_type: item.base_type,
-                    modifiers: item
-                        .item_metadata
-                        .map(ApiUniqueMetadata::modifiers)
-                        .unwrap_or_default(),
+                    modifiers: unique_modifiers(item.item_metadata.as_ref()),
                 })
             }));
             done += 1;
@@ -555,11 +545,7 @@ mod tests {
         let modifiers: Vec<UniqueModifiers> = page
             .items
             .into_iter()
-            .map(|item| {
-                item.item_metadata
-                    .map(ApiUniqueMetadata::modifiers)
-                    .unwrap_or_default()
-            })
+            .map(|item| unique_modifiers(item.item_metadata.as_ref()))
             .collect();
 
         assert_eq!(
@@ -584,17 +570,18 @@ mod tests {
                 "PriceLogs": [], "CurrentPrice": 1.0, "CurrentQuantity": 1}]}"#,
         )
         .expect("the page still parses");
-        let modifiers = page
-            .items
-            .into_iter()
-            .next()
-            .unwrap()
-            .item_metadata
-            .unwrap()
-            .modifiers();
+        let modifiers = unique_modifiers(page.items[0].item_metadata.as_ref());
 
         assert_eq!(modifiers.implicit, Vec::<String>::new());
         assert_eq!(modifiers.explicit, ["+(5-10) to Life"]);
+        for metadata in ["[]", r#"{"implicit_mods": "text"}"#, "null"] {
+            let metadata: serde_json::Value = serde_json::from_str(metadata).expect("json");
+            assert_eq!(
+                unique_modifiers(Some(&metadata)),
+                UniqueModifiers::default(),
+                "{metadata}"
+            );
+        }
     }
 
     #[test]

@@ -100,14 +100,17 @@ pub struct Range {
 
 impl Range {
     /// The range of the absolute values: the game shows a negative roll without its sign
-    /// ("20% reduced").
+    /// ("20% reduced"); none for a range across zero, which needs its sign.
     #[must_use]
-    pub fn magnitude(self) -> Self {
+    pub fn magnitude(self) -> Option<Self> {
+        if self.min * self.max < 0.0 {
+            return None;
+        }
         let (first, second) = (self.min.abs(), self.max.abs());
-        Self {
+        Some(Self {
             min: first.min(second),
             max: first.max(second),
-        }
+        })
     }
 }
 

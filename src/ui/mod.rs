@@ -33,15 +33,16 @@ pub use unreadable_item::UnreadableItem;
 pub use warning_band::WarningBand;
 
 /// The content under the title bar and the bands, on band B: the blocks of the copied item,
-/// which scroll together when they are taller than the window.
-pub fn content<R>(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
+/// which scroll together when they are taller than the window; back at the top when `to_top`.
+pub fn content<R>(ui: &mut egui::Ui, to_top: bool, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
     egui::CentralPanel::no_frame()
         .frame(egui::Frame::NONE.fill(theme::color::BAND_B))
         .show(ui, |ui| {
-            egui::ScrollArea::vertical()
-                .auto_shrink(false)
-                .show(ui, add)
-                .inner
+            let mut area = egui::ScrollArea::vertical().auto_shrink(false);
+            if to_top {
+                area = area.vertical_scroll_offset(0.0);
+            }
+            area.show(ui, add).inner
         })
         .inner
 }

@@ -695,6 +695,15 @@ mod tests {
     }
 
     #[test]
+    fn the_open_affixes_agree_in_number_in_french() {
+        let french = Translator::new(Language::French);
+
+        assert_eq!(french.affix_fill(2, 3), "2 sur 3 · 1 libre");
+        assert_eq!(french.affix_fill(1, 3), "1 sur 3 · 2 libres");
+        assert_eq!(french.affix_fill(3, 3), "3 sur 3");
+    }
+
+    #[test]
     fn arguments_are_inserted_without_isolation_marks() {
         assert_eq!(
             Translator::new(Language::English).status_bar("A", "B"),

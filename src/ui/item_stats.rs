@@ -66,8 +66,14 @@ enum Group {
 enum Roll {
     /// Where its value falls in its ranges, from 0 to 1, and the ranges.
     Bar { share: f32, ranges: Vec<Range> },
-    /// A prefix or a suffix: its tier, and the ranges of that tier.
-    Tier { tier: u32, ranges: Vec<Range> },
+    /// A line of a prefix or a suffix: the tier of the modifier, written on its first line
+    /// only (the following lines keep its space, so that their ranges line up), and the
+    /// ranges of that tier.
+    Tier {
+        tier: u32,
+        first: bool,
+        ranges: Vec<Range>,
+    },
 }
 
 /// A stat: a line of a modifier.
@@ -125,22 +131,25 @@ fn unique_rows<'a>(item: &'a Item, unique_modifiers: Option<&UniqueModifiers>) -
         .iter()
         .flat_map(|modifier| &modifier.lines)
         .any(|line| line.rolls.iter().any(|roll| roll.range.is_some()));
-    let source = |database: fn(&UniqueModifiers) -> &[String]| match unique_modifiers {
-        _ if copied => RangeSource::Copied,
-        Some(modifiers) => RangeSource::Database(database(modifiers)),
-        None => RangeSource::Unknown,
+    let (implicit, explicit) = if copied {
+        (RangeSource::Copied, RangeSource::Copied)
+    } else if let Some(modifiers) = unique_modifiers {
+        (
+            RangeSource::Database(&modifiers.implicit),
+            RangeSource::Database(&modifiers.explicit),
+        )
+    } else {
+        (RangeSource::Unknown, RangeSource::Unknown)
     };
-    let implicit = source(|modifiers| &modifiers.implicit);
-    let explicit = source(|modifiers| &modifiers.explicit);
     // A stat of a unique varies when it is a filter.
-    let filter = |_: &StatLine, stat: &Stat<'_>| stat.filter;
+    let varies = |_: &StatLine, stat: &Stat<'_>| stat.filter;
     let mut rows = Vec::new();
     push_group(
         &mut rows,
         Group::Enchant,
-        stats(item, is_enchant, added, filter),
+        stats(item, is_enchant, added, varies),
     );
-    push_group(&mut rows, Group::Runes, stats(item, is_rune, added, filter));
+    push_group(&mut rows, Group::Runes, stats(item, is_rune, added, varies));
     push_group(
         &mut rows,
         Group::Implicit,
@@ -148,7 +157,7 @@ fn unique_rows<'a>(item: &'a Item, unique_modifiers: Option<&UniqueModifiers>) -
             item,
             is_implicit,
             |line| unique_stat(line, implicit),
-            filter,
+            varies,
         ),
     );
     push_group(
@@ -158,7 +167,7 @@ fn unique_rows<'a>(item: &'a Item, unique_modifiers: Option<&UniqueModifiers>) -
             item,
             |kind| matches!(kind, ModifierKind::Explicit(_)),
             |line| unique_stat(line, explicit),
-            filter,
+            varies,
         ),
     );
     rows
@@ -238,7 +247,7 @@ struct AffixStats<'a> {
 }
 
 /// The explicit modifiers of `affix` (`None`: copied without their affixes), those with a
-/// line that varies first, each with its tier written once, with its first line.
+/// line that varies first, each with its tier written once, on its first line.
 fn affix_stats(item: &Item, affix: Option<Affix>) -> AffixStats<'_> {
     let mut modifiers: Vec<&Modifier> = item
         .modifiers()
@@ -252,12 +261,17 @@ fn affix_stats(item: &Item, affix: Option<Affix>) -> AffixStats<'_> {
             modifier.lines.iter().enumerate().map(|(index, line)| Stat {
                 text: &line.text,
                 filter: true,
-                roll: modifier.tier.filter(|_| index == 0).map(|tier| Roll::Tier {
-                    tier,
-                    ranges: copied_rolls(line)
+                roll: modifier.tier.and_then(|tier| {
+                    let ranges: Vec<Range> = copied_rolls(line)
                         .into_iter()
                         .map(|(_, range)| range)
-                        .collect(),
+                        .collect();
+                    let first = index == 0;
+                    (first || !ranges.is_empty()).then_some(Roll::Tier {
+                        tier,
+                        first,
+                        ranges,
+                    })
                 }),
             })
         })
@@ -324,14 +338,16 @@ fn is_implicit(kind: ModifierKind) -> bool {
 
 /// A line of a unique: a filter with its bar when it varies, at the left edge otherwise.
 fn unique_stat<'a>(line: &'a StatLine, source: RangeSource<'_>) -> Stat<'a> {
-    let roll = match source {
-        RangeSource::Copied => bar(copied_rolls(line)),
-        RangeSource::Database(modifiers) => bar(database_rolls(line, modifiers)),
+    let rolls = match source {
+        RangeSource::Copied => Some(copied_rolls(line)),
+        RangeSource::Database(modifiers) => database_rolls(line, modifiers),
         RangeSource::Unknown => None,
     };
-    let filter = match source {
-        RangeSource::Unknown => !line.rolls.is_empty(),
-        RangeSource::Copied | RangeSource::Database(_) => roll.is_some(),
+    let (filter, roll) = match rolls.map(bar) {
+        // Its ranges are known: a filter when one of them is wider than one value.
+        Some(roll) => (roll.is_some(), roll),
+        // Unknown: a line with a number may vary.
+        None => (!line.rolls.is_empty(), None),
     };
     Stat {
         text: &line.text,
@@ -344,23 +360,22 @@ fn unique_stat<'a>(line: &'a StatLine, source: RangeSource<'_>) -> Stat<'a> {
 fn copied_rolls(line: &StatLine) -> Vec<(f64, Range)> {
     line.rolls
         .iter()
-        .filter_map(|roll| Some((roll.value, roll.range?.magnitude())))
+        .filter_map(|roll| Some((roll.value, roll.range?.magnitude()?)))
         .collect()
 }
 
 /// The values of a line copied with Ctrl+C, with the ranges of the first of `modifiers` it
-/// matches.
-fn database_rolls(line: &StatLine, modifiers: &[String]) -> Vec<(f64, Range)> {
-    match rolls::unique_ranges(&line.text, modifiers) {
-        // One range or none for each number of the line.
-        Some(ranges) if ranges.len() == line.rolls.len() => line
-            .rolls
+/// matches; none when it matches none.
+fn database_rolls(line: &StatLine, modifiers: &[String]) -> Option<Vec<(f64, Range)>> {
+    let ranges = rolls::unique_ranges(&line.text, modifiers)?;
+    // One range or none for each number of the line.
+    (ranges.len() == line.rolls.len()).then(|| {
+        line.rolls
             .iter()
             .zip(ranges)
             .filter_map(|(roll, range)| Some((roll.value, range?)))
-            .collect(),
-        _ => Vec::new(),
-    }
+            .collect()
+    })
 }
 
 /// The bar of `rolls`, those whose range is wider than one value: the average of where each
@@ -522,17 +537,22 @@ fn roll_line(ui: &mut Ui, roll: &Roll) {
                 painter.rect_filled(fill, radius, color::ACCENT);
                 range_label(ui, ranges);
             }
-            Roll::Tier { tier, ranges } => {
+            Roll::Tier {
+                tier,
+                first,
+                ranges,
+            } => {
                 let tint = match tier {
                     1 => color::TIER_1,
                     2 | 3 => color::ACCENT,
                     _ => color::FAINT,
                 };
-                ui.label(
-                    RichText::new(format!("T{tier}"))
-                        .font(text::tier())
-                        .color(tint),
-                );
+                let galley = widgets::text_line(ui, format!("T{tier}"), text::tier());
+                let (rect, _) = ui.allocate_exact_size(galley.size(), Sense::hover());
+                // The following lines of the modifier keep its space only.
+                if *first {
+                    ui.painter().galley(rect.min, galley, tint);
+                }
                 if !ranges.is_empty() {
                     range_label(ui, ranges);
                 }
@@ -566,7 +586,8 @@ mod tests {
     }
 
     /// The rows as texts: a title (`Prefixes 2/3`), or a stat, `□ ` first for a filter, with
-    /// its roll (`□ +55 to maximum Life [40–60 0.75]`, `□ +3 to Level [T1 3–3]`).
+    /// its roll (`□ +55 to maximum Life [40–60 0.75]`, `□ +3 to Level [T1 3–3]`, `[8–12]` on the
+    /// following line of a modifier).
     fn texts(item: &Item, unique_modifiers: Option<&UniqueModifiers>) -> Vec<String> {
         rows(item, unique_modifiers)
             .into_iter()
@@ -581,8 +602,13 @@ mod tests {
                         Some(Roll::Bar { share, ranges }) => {
                             format!(" [{} {share:.2}]", ranges_text(&ranges))
                         }
-                        Some(Roll::Tier { tier, ranges }) => {
-                            format!(" [T{tier} {}]", ranges_text(&ranges))
+                        Some(Roll::Tier {
+                            tier,
+                            first: true,
+                            ranges,
+                        }) => format!(" [T{tier} {}]", ranges_text(&ranges)),
+                        Some(Roll::Tier { ranges, .. }) => {
+                            format!(" [{}]", ranges_text(&ranges))
                         }
                     };
                     format!("{check}{text}{roll}")
@@ -615,6 +641,45 @@ mod tests {
                 "Unique",
                 // The stats that vary first.
                 "□ +55 to maximum Life [40–60 0.75]",
+                "When you kill a Rare monster, you gain its Modifiers for 60 seconds",
+            ]
+        );
+    }
+
+    #[test]
+    fn a_line_missing_from_the_price_database_may_vary_like_an_unknown_one() {
+        let headhunter = parse(
+            "Item Class: Belts\nRarity: Unique\nHeadhunter\nHeavy Belt\n--------\n\
+             Item Level: 80\n--------\n26% increased Stun Threshold (implicit)\n--------\n\
+             When you kill a Rare monster, you gain its Modifiers for 60 seconds\n\
+             +55 to maximum Life",
+        );
+        let unknown = [
+            "Implicit",
+            "□ 26% increased Stun Threshold",
+            "Unique",
+            "□ When you kill a Rare monster, you gain its Modifiers for 60 seconds",
+            "□ +55 to maximum Life",
+        ];
+        let partial = database(
+            &[],
+            &["When you kill a Rare monster, you gain its Modifiers for 60 seconds"],
+        );
+
+        // A unique without modifiers in the price database.
+        assert_eq!(
+            texts(&headhunter, Some(&UniqueModifiers::default())),
+            unknown
+        );
+        assert_eq!(texts(&headhunter, None), unknown);
+        // A line found without range never varies; a line not found may.
+        assert_eq!(
+            texts(&headhunter, Some(&partial)),
+            [
+                "Implicit",
+                "□ 26% increased Stun Threshold",
+                "Unique",
+                "□ +55 to maximum Life",
                 "When you kill a Rare monster, you gain its Modifiers for 60 seconds",
             ]
         );
@@ -670,12 +735,18 @@ mod tests {
     fn a_negative_range_of_the_advanced_copy_is_without_its_sign() {
         let ring = parse(
             "Item Class: Rings\nRarity: Unique\nCold Loop\nRuby Ring\n--------\n\
-             { Unique Modifier — Elemental, Fire, Resistance }\n-15(-20--10)% to Fire Resistance",
+             { Unique Modifier — Elemental, Fire, Resistance }\n-15(-20--10)% to Fire Resistance\n\
+             { Unique Modifier — Elemental, Cold, Resistance }\n2(-5-10)% to Cold Resistance",
         );
 
         assert_eq!(
             texts(&ring, None),
-            ["Unique", "□ -15% to Fire Resistance [10–20 0.50]"]
+            [
+                "Unique",
+                "□ -15% to Fire Resistance [10–20 0.50]",
+                // A range across zero needs its sign: no bar.
+                "2% to Cold Resistance",
+            ]
         );
     }
 
@@ -762,7 +833,7 @@ mod tests {
                 "□ +86 to maximum Life [T3 85–99]",
                 // The tier of a modifier of two lines, written once.
                 "□ +20 to Evasion Rating [T5 15–25]",
-                "□ +10% increased Evasion Rating",
+                "□ +10% increased Evasion Rating [8–12]",
             ]
         );
     }

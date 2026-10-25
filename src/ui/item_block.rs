@@ -134,12 +134,13 @@ impl BaseValue {
 }
 
 /// A fact of the item, under its base type.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 enum Fact {
-    BaseValues,
-    Skills,
-    Requirements,
-    Tags,
+    BaseValues(Vec<BaseValue>),
+    Skills(String),
+    /// Each part with its color.
+    Requirements(Vec<(String, Color32)>),
+    Tags(Vec<(String, TagStyle)>),
 }
 
 pub struct ItemBlock<'a> {
@@ -244,49 +245,47 @@ impl<'a> ItemBlock<'a> {
 
     /// The facts of the item, those it has, 6 px apart.
     fn facts(&self, ui: &mut Ui) {
-        let base_values = self.base_values();
-        let skills = self.skills();
-        let requirements = self.requirements();
-        let tags = self.tags();
-        let facts = [
-            (Fact::BaseValues, !base_values.is_empty()),
-            (Fact::Skills, skills.is_some()),
-            (Fact::Requirements, requirements.is_some()),
-            (Fact::Tags, !tags.is_empty()),
-        ];
         let mut previous = None;
-        for (fact, shown) in facts {
-            if !shown {
-                continue;
-            }
-            ui.add_space(match (previous, fact) {
+        for fact in self.fact_list() {
+            ui.add_space(match (&previous, &fact) {
                 (None, _) => FACTS_GAP,
-                (Some(Fact::BaseValues), Fact::Requirements) => VALUES_REQUIREMENTS_GAP,
+                (Some(Fact::BaseValues(_)), Fact::Requirements(_)) => VALUES_REQUIREMENTS_GAP,
                 _ => FACT_GAP,
             });
-            previous = Some(fact);
-            match fact {
-                Fact::BaseValues => self.base_values_line(ui, &base_values),
-                Fact::Skills => {
-                    if let Some(skills) = &skills {
-                        ui.add(
-                            Label::new(
-                                RichText::new(skills)
-                                    .font(text::item_line())
-                                    .color(color::TEXT),
-                            )
-                            .wrap(),
-                        );
-                    }
+            match &fact {
+                Fact::BaseValues(values) => self.base_values_line(ui, values),
+                Fact::Skills(skills) => {
+                    ui.add(
+                        Label::new(
+                            RichText::new(skills)
+                                .font(text::item_line())
+                                .color(color::TEXT),
+                        )
+                        .wrap(),
+                    );
                 }
-                Fact::Requirements => {
-                    if let Some(parts) = &requirements {
-                        ui.add(Label::new(self.requirements_line(parts)).wrap());
-                    }
+                Fact::Requirements(parts) => {
+                    ui.add(Label::new(self.requirements_line(parts)).wrap());
                 }
-                Fact::Tags => tags_line(ui, &tags),
+                Fact::Tags(tags) => tags_line(ui, tags),
             }
+            previous = Some(fact);
         }
+    }
+
+    /// The facts the item has, in their order.
+    fn fact_list(&self) -> Vec<Fact> {
+        let base_values = self.base_values();
+        let tags = self.tags();
+        [
+            (!base_values.is_empty()).then_some(Fact::BaseValues(base_values)),
+            self.skills().map(Fact::Skills),
+            self.requirements().map(Fact::Requirements),
+            (!tags.is_empty()).then_some(Fact::Tags(tags)),
+        ]
+        .into_iter()
+        .flatten()
+        .collect()
     }
 
     /// The base values, each label in gray or in the color of its attribute and its number

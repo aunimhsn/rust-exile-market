@@ -59,6 +59,8 @@ pub struct ExileMarketApp {
     item_names: ItemNamesWatch,
     /// The stats of the item are unfolded, for every item copied until the player folds them.
     stats_open: bool,
+    /// An item was copied: the content scrolls back to the top, to its name and its price.
+    scroll_to_top: bool,
     /// The sentence shown during the download of the prices of a league, drawn at its start.
     download_quote: Option<(League, usize)>,
 }
@@ -93,6 +95,7 @@ impl ExileMarketApp {
             market,
             item_names: ItemNamesWatch::start(move || names_ctx.request_repaint()),
             stats_open: false,
+            scroll_to_top: false,
             download_quote: None,
         }
     }
@@ -229,7 +232,8 @@ impl ExileMarketApp {
         let url = self.session.trade_url(item);
         let fixed_price = self.session.fixed_price(item);
         let unique_modifiers = session::unique_modifiers(item, &fixed_price);
-        let action = ui::content(ui, |ui| {
+        let to_top = std::mem::take(&mut self.scroll_to_top);
+        let action = ui::content(ui, to_top, |ui| {
             let action = ItemBlock::new(item, &self.i18n)
                 .tradable(url.is_some())
                 .stats(self.stats_open, unique_modifiers)
@@ -252,6 +256,7 @@ impl App for ExileMarketApp {
     /// clicks of the components it draws.
     fn logic(&mut self, ctx: &Context, _frame: &mut Frame) {
         self.clipboard.receive(|event| {
+            self.scroll_to_top |= matches!(event, ClipboardEvent::Copied(_));
             self.view = self.view.after(&event);
             self.session.apply(event);
         });

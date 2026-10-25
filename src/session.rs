@@ -332,7 +332,7 @@ impl Session {
 mod tests {
     use super::*;
     use crate::league::LeagueMode;
-    use crate::prices::Rates;
+    use crate::prices::{Price, Rates, UniquePrice};
 
     fn leagues(ids: &[&str]) -> MarketEvent {
         MarketEvent::Leagues(Leagues::new(ids.iter().map(|&id| League::new(id))))
@@ -478,6 +478,40 @@ mod tests {
 
     fn ago(minutes: u64) -> SystemTime {
         now() - Duration::from_mins(minutes)
+    }
+
+    #[test]
+    fn only_an_item_copied_in_english_gets_the_modifiers_of_its_unique() {
+        let unique = UniquePrice {
+            name: "The Eternal Spark".to_owned(),
+            base_type: "Crystal Focus".to_owned(),
+            price: Price {
+                exalted: 1.0,
+                quantity: 10,
+                history: Vec::new(),
+            },
+            modifiers: UniqueModifiers {
+                implicit: Vec::new(),
+                explicit: vec!["(50-70)% increased Energy Shield".to_owned()],
+            },
+        };
+        let rates = prices("Forbidden Rites", now()).rates;
+        let fixed_price = Ok((FixedPrice::Unique(&unique), rates));
+        let parse =
+            |text: &str| Item::parse(&CopiedItem::from_text(text).expect("an item")).expect("read");
+        let english = parse(include_str!("item/test-items/en-unique-focus.txt"));
+        let french = parse(include_str!("item/test-items/fr-unique-crossbow.txt"));
+
+        assert_eq!(
+            unique_modifiers(&english, &fixed_price),
+            Some(&unique.modifiers)
+        );
+        // Its lines aren't in English, like the modifiers of the price database.
+        assert_eq!(unique_modifiers(&french, &fixed_price), None);
+        assert_eq!(
+            unique_modifiers(&english, &Err(NoFixedPrice::PricesUnknown)),
+            None
+        );
     }
 
     #[test]

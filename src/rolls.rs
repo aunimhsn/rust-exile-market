@@ -73,9 +73,8 @@ fn parts(modifier: &str) -> Vec<Part<'_>> {
     parts
 }
 
-/// The range written `min-max`, each with its sign, e.g. `15-35` or `-40--20`. The game shows
-/// a negative roll without its sign ("20% reduced"): the range is of the absolute values. A
-/// range across zero has no meaning without its sign: none.
+/// The range written `min-max`, each with its sign, e.g. `15-35` or `-40--20`, of the absolute
+/// values as the game shows them ([`Range::magnitude`]).
 fn range(text: &str) -> Option<Range> {
     // The separator is the first minus sign after a digit.
     let separator = text
@@ -91,16 +90,11 @@ fn range(text: &str) -> Option<Range> {
         .map(|(index, _)| index)?;
     let first: f64 = text[..separator].parse().ok()?;
     let second: f64 = text[separator + 1..].parse().ok()?;
-    if first.signum() * second.signum() < 0.0 {
-        return None;
+    Range {
+        min: first,
+        max: second,
     }
-    Some(
-        Range {
-            min: first,
-            max: second,
-        }
-        .magnitude(),
-    )
+    .magnitude()
 }
 
 /// `text` after the number at its start, with its sign, e.g. `-12.5% reduced`.
@@ -206,7 +200,7 @@ mod tests {
     }
 
     #[test]
-    fn a_range_across_zero_and_a_lone_point_are_not_read() {
+    fn a_range_across_zero_and_a_lone_point_are_not_read_but_a_bound_at_zero_is() {
         let modifiers = modifiers(&["(-10-10) to Maximum Power Charges"]);
 
         assert_eq!(
