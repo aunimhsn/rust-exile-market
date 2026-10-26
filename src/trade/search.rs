@@ -119,7 +119,8 @@ impl OfferSearch {
         Self { worker }
     }
 
-    /// Asks `order`; its answer comes through [`Self::receive`].
+    /// Asks `order`; its answer comes through [`Self::receive`]. The orders given while the
+    /// thread is busy are answered once, by the last search among them (see [`latest`]).
     pub fn order(&self, order: Order) {
         self.worker.order(order);
     }
@@ -209,7 +210,9 @@ impl<T: Transport> Searches<T> {
                     search: search.id,
                     offers: search.offers,
                 });
-                let (offers, more) = self.fetch_next()?;
+                // The player never sees a search whose first offers can't be fetched: its next
+                // offers aren't more of the offers shown.
+                let (offers, more) = self.fetch_next().inspect_err(|_| self.remaining = None)?;
                 Ok(Outcome::Items {
                     offers,
                     total,
@@ -479,5 +482,26 @@ mod tests {
         search.order(Order::More);
 
         assert_eq!(ids(&second_offers(&answer(&mut search, &wakes))), ["k"]);
+    }
+
+    #[test]
+    fn a_search_whose_first_offers_cant_be_fetched_is_forgotten() {
+        let site = FakeSite::default();
+        site.answer(200, LimitHeaders::default(), SEARCH);
+        site.answer(503, LimitHeaders::default(), "");
+        let (mut search, wakes) = start(&site);
+        search.order(search_ring());
+        assert_eq!(answer(&mut search, &wakes).outcome, Outcome::Unreachable);
+
+        search.order(Order::More);
+
+        assert_eq!(
+            answer(&mut search, &wakes).outcome,
+            Outcome::More {
+                offers: Vec::new(),
+                more: false
+            }
+        );
+        assert_eq!(site.requests().len(), 2, "a search and its fetch");
     }
 }

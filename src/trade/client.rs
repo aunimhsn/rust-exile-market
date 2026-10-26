@@ -10,7 +10,7 @@ use std::time::{Duration, Instant};
 
 use serde::de::DeserializeOwned;
 
-use super::limits::{LimitHeaders, Limits, Policy, RuleHeaders};
+use super::limits::{Hit, LimitHeaders, Limits, Policy, RuleHeaders};
 use super::offers::{ApiExchange, ApiFetch, ApiSearch, ExchangeOffer, ItemOffer};
 use super::query::{self, ItemQuery, SearchKind};
 use crate::http::{self, HttpError};
@@ -296,16 +296,22 @@ impl<T: Transport> TradeClient<T> {
         policy: Policy,
         request: &Request,
     ) -> Result<A, TradeError> {
-        let now = Instant::now();
-        let ready = self.limits.ready_at(policy, now);
-        if ready > now {
+        let sent = Instant::now();
+        let ready = self.limits.ready_at(policy, sent);
+        if ready > sent {
             return Err(TradeError::Wait(ready));
         }
         let result = self.transport.send(request);
-        // Counted once answered: the trade site counted it before, so it leaves the windows
-        // later here, on the safe side; nothing else is sent meanwhile (`&mut self`).
+        // Counted once answered, with both times: nothing else is sent meanwhile
+        // (`&mut self`).
         let now = Instant::now();
-        self.limits.sent(policy, now);
+        self.limits.sent(
+            policy,
+            Hit {
+                sent,
+                answered: now,
+            },
+        );
         let answer = result.map_err(|error| TradeError::Http(HttpError::Request(error)))?;
         if answer.status == 429 {
             return Err(TradeError::Refused(self.limits.refused(
