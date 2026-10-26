@@ -1,0 +1,16 @@
+/* The price block. */
+.prices { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.price { display: flex; align-items: center; gap: 7px; font: 600 19px/1 var(--font-number); }
+.price img { width: 24px; height: 24px; }
+.line { margin-top: 9px; font-size: 13px; }
+.rise { color: var(--rise); }
+.fall { color: var(--fall); }
+.warn { color: var(--warn); }
+.msg { font-size: 14px; }
+.msg + .msg { margin-top: 2px; }
+.muted { color: var(--weak); }
+.candidates { margin: 6px -14px 0; }
+.candidates div { display: flex; justify-content: space-between; align-items: center; padding: 4px 14px; }
+.candidates div:nth-child(odd) { background: rgba(255, 255, 255, .03); }
+.candidates span:last-child { display: flex; align-items: center; gap: 6px; font-family: var(--font-number); }
+.candidates img { width: 18px; height: 18px; }

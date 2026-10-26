@@ -1,0 +1,84 @@
+/* The tokens of the three styles, and the colors of the game shared by all of them. */
+/* Each theme only sets tokens; the components below use them all. */
+:root {
+  --page: #08090a;
+  --page-text: #9aa0a6;
+
+  /* Path of Exile 2 colors, the same in every theme. */
+  --rarity-normal: #d0d0d0;
+  --rarity-magic: #8888ff;
+  --rarity-rare: #ffff77;
+  --rarity-unique: #c26a2c;
+  --tier-1: #ff8c1a;
+  --rarity-currency: #b4a787;
+  --rarity-gem: #1ba29b;
+  --mod: #8f8fff;
+  --corrupted: #e0423a;
+  --rise: #5fcf80;
+  --fall: #e66a5c;
+}
+[data-theme="forge"] {
+  --bg-a: #121214;          /* header, price, status bar */
+  --bg-b: #19191c;          /* item, offers, settings */
+  --row-alt: #1f1f23;
+  --banner: #2b2414;
+  --text: #e6e2d8;
+  --weak: #8e8a80;
+  --faint: #5d5a54;
+  --accent: #c9a25e;
+  --control: #26262b;
+  --control-line: #34343a;
+  --warn: #e2b04a;
+  --font-display: "Cinzel", Georgia, serif;
+  --font-body: "Source Sans 3", "Segoe UI", sans-serif;
+  --font-number: "Source Sans 3", "Segoe UI", sans-serif;
+  --display-weight: 600;
+  --display-case: none;
+  --display-size: 21px;
+  --body-size: 14px;
+  --radius: 3px;
+}
+[data-theme="slate"] {
+  --bg-a: #0f1216;
+  --bg-b: #151a20;
+  --row-alt: #1a2028;
+  --banner: #8a6a10;        /* dark yellow: warnings stand apart from the league colors */
+  --banner-text: #f8edc2;
+  --text: #e3e8ef;
+  --weak: #8692a3;
+  --faint: #556070;
+  --accent: #f2f5f9;        /* white: the colors are kept for the item rarities */
+  --on-accent: #0f1216;
+  --control: #1d242d;
+  --control-line: #2a3440;
+  --warn: #f0b85a;
+  --font-display: "Manrope", "Segoe UI", sans-serif;
+  --font-body: "Manrope", "Segoe UI", sans-serif;
+  --font-number: "JetBrains Mono", ui-monospace, monospace;
+  --display-weight: 800;
+  --display-case: none;
+  --display-size: 20px;
+  --body-size: 13.5px;
+  --radius: 3px;          /* small information elements; action blocks stay square */
+}
+[data-theme="compact"] {
+  --bg-a: #101211;
+  --bg-b: #171a18;
+  --row-alt: #1c201d;
+  --banner: #2e2511;
+  --text: #e4e6e2;
+  --weak: #8b918b;
+  --faint: #5a605a;
+  --accent: #f0a83c;
+  --control: #222622;
+  --control-line: #303630;
+  --warn: #f0a83c;
+  --font-display: "Barlow Semi Condensed", "Arial Narrow", sans-serif;
+  --font-body: "Barlow", "Segoe UI", sans-serif;
+  --font-number: "Barlow", "Segoe UI", sans-serif;
+  --display-weight: 700;
+  --display-case: uppercase;
+  --display-size: 22px;
+  --body-size: 14px;
+  --radius: 2px;
+}

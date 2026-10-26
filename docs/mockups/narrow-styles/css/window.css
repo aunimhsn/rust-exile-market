@@ -1,0 +1,76 @@
+/* The window, its bands, the title bar and the league list. */
+/* Window. */
+.win {
+  position: relative; width: 420px; overflow: hidden; border-radius: 8px; box-shadow: 0 12px 40px rgba(0, 0, 0, .55);
+  background: var(--bg-b); color: var(--text);
+  font: 400 var(--body-size)/1.4 var(--font-body);
+  font-variant-numeric: tabular-nums;
+}
+.band { padding: 12px 14px; }
+.a { background: var(--bg-a); }
+.b { background: var(--bg-b); }
+
+/* Title bar: one line in place of the system title bar and of the header. The emblem, the league (its color
+   says softcore or hardcore), then the icons: Settings, Minimize, Close, without borders. The empty space
+   moves the window. */
+.app-titlebar { display: flex; align-items: stretch; height: 28px; padding-left: 12px; background: var(--bg-a); }
+/* The emblem goes back to the item, like the logo of a site to its home page. */
+.app-emblem { display: block; width: 16px; height: 16px; align-self: center; margin-right: 10px; cursor: pointer; }
+/* The league block, tinted with the color of its trade (the only sign of softcore or hardcore, also in its
+   tooltip), the chevron in white; lighter under the pointer. */
+.app-league {
+  display: flex; align-items: center; gap: 6px; padding: 0 8px 0 10px; color: var(--text); font-size: 13px; cursor: pointer;
+  background: var(--league-bg);
+}
+.app-league:hover { background: var(--league-bg-hover); }
+.app-league .ico { color: var(--text); }
+/* A new league has started while the player is on Standard: a bubble under the league block, until the player
+   switches or closes it. */
+.app-notice { display: flex; align-items: center; gap: 10px; font-size: 12.5px; color: var(--text); }
+.app-notice b { font-weight: 700; }
+.app-notice .app-notice-text { flex: 1; }
+.app-notice .pill { background: var(--accent); color: var(--on-accent, var(--bg-a)); cursor: pointer; }
+.app-notice .app-notice-close { display: grid; place-items: center; color: var(--weak); cursor: pointer; }
+.app-notice .app-notice-close:hover { color: var(--text); }
+.app-notice {
+  position: absolute; z-index: 2; top: 36px; left: 30px; width: 330px; padding: 10px 10px 10px 14px;
+  background: #20272f; border-radius: 4px; box-shadow: 0 10px 30px rgba(0, 0, 0, .6);
+}
+.app-notice::before {
+  content: ""; position: absolute; top: -5px; left: 36px; width: 10px; height: 10px; background: #20272f; transform: rotate(45deg);
+}
+/* The list of the leagues, under the league block, flat: one line per league, softcore on the left and
+   hardcore on the right, glued together, the permanent ones last; the mode told by the color. The chosen
+   league keeps the lighter background of the hover. It opens 4 px under the title bar,
+   with the shadow of the bubbles, and its leagues let the item show through a little (94 % opaque). */
+.app-league .ico { transition: transform .15s ease; }
+/* The chevron points right, and turns down while the list is open. */
+.app-titlebar.is-open .app-league .ico { transform: rotate(90deg); }
+.app-league-list {
+  position: absolute; z-index: 2; top: 32px; left: 38px; display: grid; grid-template-columns: 1fr 1fr;
+  width: 300px; border-radius: 3px; overflow: hidden; box-shadow: 0 10px 30px rgba(0, 0, 0, .6);
+  opacity: 0; transform: translateY(-4px); pointer-events: none; transition: opacity .15s ease, transform .15s ease;
+}
+.app-titlebar.is-open + .app-league-list { opacity: 1; transform: none; pointer-events: auto; }
+@media (prefers-reduced-motion: reduce) {
+  .app-league .ico, .app-league-list { transition: none; }
+}
+:root { --menu-alpha: .94; }
+.app-league-list .app-league-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 6px; height: 28px; padding: 0 8px 0 10px;
+  font-size: 13px; color: var(--text); cursor: pointer; white-space: nowrap; overflow: hidden;
+}
+.app-league-row span { overflow: hidden; text-overflow: ellipsis; }
+.app-league-row.is-softcore { background: rgba(19, 38, 58, var(--menu-alpha)); }
+.app-league-row.is-softcore:hover { background: rgba(26, 51, 80, var(--menu-alpha)); }
+.app-league-row.is-hardcore { background: rgba(53, 20, 23, var(--menu-alpha)); }
+.app-league-row.is-hardcore:hover { background: rgba(74, 27, 32, var(--menu-alpha)); }
+.app-league-row .ico { flex: none; }
+/* The chosen league keeps the background of the hover. */
+.app-league-row.is-softcore.is-chosen { background: rgba(26, 51, 80, var(--menu-alpha)); }
+.app-league-row.is-hardcore.is-chosen { background: rgba(74, 27, 32, var(--menu-alpha)); }
+.app-icon-button { width: 36px; display: grid; place-items: center; color: var(--weak); cursor: pointer; }
+.app-icon-button:hover, .app-icon-button.is-on { color: var(--accent); }
+:root, [data-league="softcore"] { --league-bg: #13263a; --league-kind: "Softcore"; --league-bg-hover: #1a3350; }
+[data-league="hardcore"] { --league-bg: #351417; --league-kind: "Hardcore"; --league-bg-hover: #4a1b20; }
+.spacer { flex: 1; }

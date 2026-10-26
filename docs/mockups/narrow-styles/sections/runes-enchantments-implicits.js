@@ -1,0 +1,33 @@
+// Section Runes, enchantments and implicits.
+SECTIONS.push(["Runes, enchantments and implicits", [
+  ["Rare: enchantment, runes and implicit, each with its title", win(topBar(),
+    item({ rarity: "rare", name: "Storm Core", base: "Gemini Crossbow", cls: "Crossbows", tags: ["Corrupted", "Fractured", "Q 20%", "2 sockets", "ilvl 80"], props: [["Physical DPS", "288"], ["Elemental DPS", "267"]], req: "Requires Level 78 · 89 Str · 89 Dex", statsLabel: "Stats (10)", stats: [
+      { group: "Enchant" },
+      { mod: "45% increased Elemental Damage with Attacks" },
+      { group: "Runes" },
+      { mod: "18% increased Physical Damage" },
+      { mod: "Gain 30 Mana per enemy killed" },
+      { group: "Implicit" },
+      { mod: "Loads an additional bolt" },
+      { group: "Prefixes", fill: "3 of 3" },
+      { mod: "Adds 10 to 273 Lightning Damage", tier: 2, range: "1–16 · 239–300", share: .5, noBar: true },
+      { mod: "Adds 24 to 51 Physical Damage", tier: 3, range: "23–35 · 39–59", share: .4, noBar: true },
+      { mod: "109% increased Elemental Damage with Attacks", tier: 2, range: "100–119", share: .5, noBar: true },
+      { group: "Suffixes", fill: "3 of 3" },
+      { mod: "Leeches 7.59% of Physical Damage as Mana", tier: 1, range: "7–7.9", share: .6, noBar: true },
+      { mod: "Gain 21 Mana per enemy killed", tier: 3, range: "21–27", share: 0, noBar: true },
+      { mod: "18% increased Attack Speed", tier: 1, range: "17–19", share: .5, noBar: true },
+    ] }, true), price(RARE_ESTIMATE_BEFORE), foot())],
+  ["Unique with runes", win(topBar(),
+    item({ rarity: "unique", name: "Death's Harp", base: "Dualstring Bow", cls: "Bows", tags: ["Corrupted", "Q 20%", "2 sockets", "ilvl 79"], props: [["Physical DPS", "198"]], req: "Requires Level 52 · 96 Dex", statsLabel: "Stats (6)", stats: [
+      { group: "Runes" },
+      { mod: "20% increased Physical Damage" },
+      { mod: "Adds 7 to 11 Fire Damage" },
+      { group: "Implicit" },
+      { mod: "Bow Attacks fire an additional Arrow" },
+      { group: "Unique" },
+      { mod: "138% increased Physical Damage", range: "100–150", share: .76 },
+      { mod: "+18% to Critical Damage Bonus", range: "15–25", share: .3 },
+      { mod: "Your Hits can't be Evaded" },
+    ] }, true), price({ values: ["1.8", "18", "1.3K"], offers: "4 offers", warning: "Only 4 offers: the price is uncertain" }), foot())],
+]]);

@@ -1,0 +1,33 @@
+/* Warnings, status bar, downloading, empty state and settings. */
+.banner { display: flex; align-items: stretch; background: var(--banner); color: var(--banner-text, var(--warn)); font-size: 12px; font-weight: 600; }
+.banner > span:first-child { flex: 1; padding: 10px 14px; align-self: center; display: flex; flex-direction: column; gap: 4px; }
+.foot { padding: 6px 14px; color: var(--faint); font-size: 11.5px; }
+/* Download of the prices, in place of the invitation to copy an item. */
+.dl { display: grid; justify-items: center; gap: 10px; }
+.dl-bar { width: 220px; height: 4px; border-radius: 2px; background: var(--control); overflow: hidden; }
+.dl-bar > span { display: block; height: 100%; width: var(--dl); background: var(--text); }
+.dl-league { color: var(--text); }
+.dl-quote { color: var(--faint); font-size: 11.5px; }
+/* Before the first item: the emblem as a faint watermark behind the text (2.25 % opacity), so that it takes no
+   height. */
+.empty { position: relative; padding: 64px 14px; text-align: center; color: var(--weak); overflow: hidden; }
+.empty::before {
+  content: ""; position: absolute; inset: 0; background: url("../../../../assets/logo/emblem.svg") center / 190px no-repeat;
+  opacity: .0225; pointer-events: none;
+}
+.empty > * { position: relative; }
+
+.keys { margin: 12px 0; display: flex; justify-content: center; gap: 6px; align-items: center; }
+.key { padding: 3px 9px; border: 1px solid var(--control-line); border-bottom-width: 2px; border-radius: 4px; color: var(--text); background: var(--control); font-family: var(--font-number); }
+
+.settings h3 { margin: 0; font: var(--display-weight) 18px/1.2 var(--font-display); text-transform: var(--display-case); }
+.field { margin-top: 16px; display: grid; gap: 6px; }
+.radio { display: flex; gap: 8px; align-items: center; }
+.radio i { width: 13px; height: 13px; border-radius: 50%; border: 2px solid var(--faint); }
+.radio.on i { border-color: var(--accent); background: radial-gradient(var(--accent) 35%, transparent 45%); }
+.toggle { display: flex; gap: 8px; align-items: center; }
+.disclaimer { margin-top: 22px; color: var(--faint); font-size: 11.5px; }
+/* The version and the author, in the status bar while the settings are open; the site is a link, underlined
+   under the pointer. */
+.app-author a { color: var(--weak); text-decoration: none; }
+.app-author a:hover { color: var(--text); text-decoration: underline; }
