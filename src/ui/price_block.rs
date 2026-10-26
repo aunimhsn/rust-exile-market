@@ -45,6 +45,8 @@ const ENOUGH_OFFERS: u32 = 5;
 const SEPARATOR: &str = " · ";
 /// The currencies of the amounts, in their order.
 const CURRENCIES: [Currency; 3] = [Currency::Divine, Currency::Chaos, Currency::Exalted];
+/// Under this many Divine or Chaos Orbs, an amount is too small to matter and isn't shown.
+const SMALL_AMOUNT: f64 = 0.1;
 
 /// What the price block shows.
 #[derive(Debug, Clone, PartialEq)]
@@ -215,14 +217,12 @@ impl<'a> PriceBlock<'a> {
         let stack = self.stack_size();
         amounts(ui, price.exalted * f64::from(stack.unwrap_or(1)), rates);
         if stack.is_some() {
-            let unit = CURRENCIES
-                .map(|currency| {
-                    let (amount, abbreviation) = in_currency(price.exalted, currency, rates);
-                    format!("{amount} {abbreviation}")
-                })
-                .join(SEPARATOR);
             ui.add_space(LINE_GAP);
-            line(ui, &self.i18n.unit_price(&unit), color::WEAK);
+            line(
+                ui,
+                &self.i18n.unit_price(&unit_amounts(price.exalted, rates)),
+                color::WEAK,
+            );
         }
         if let Some(trend) = price.trend() {
             let direction = trend.direction();
@@ -329,36 +329,71 @@ impl<'a> PriceBlock<'a> {
     }
 }
 
-/// The amounts in the three currencies, side by side, each with its orb.
+/// The amounts in the three currencies, side by side, each with its orb. An amount too small
+/// to matter leaves its column empty, so that each currency keeps its place.
 fn amounts(ui: &mut Ui, exalted: f64, rates: Rates) {
     let width = ui.available_width() / 3.0;
     ui.horizontal(|ui| {
         for currency in CURRENCIES {
-            let (amount, _) = in_currency(exalted, currency, rates);
+            let shown = shown_amount(exalted, currency, rates);
             ui.allocate_ui_with_layout(
                 vec2(width, ORB_SIZE),
                 Layout::left_to_right(Align::Center),
                 |ui| {
                     // A third of the width each, whatever the length of the amount.
                     ui.set_min_width(width);
-                    ui.spacing_mut().item_spacing.x = ORB_GAP;
-                    ui.add(orb(currency, ORB_SIZE));
-                    ui.label(RichText::new(amount).font(text::price()).color(color::TEXT));
+                    if let Some((amount, _)) = shown {
+                        ui.spacing_mut().item_spacing.x = ORB_GAP;
+                        ui.add(orb(currency, ORB_SIZE));
+                        ui.label(RichText::new(amount).font(text::price()).color(color::TEXT));
+                    }
                 },
             );
         }
     });
 }
 
+/// The unit price of a stack on one line, e.g. `0.27 c · 20 ex`, without the amounts too
+/// small to matter.
+fn unit_amounts(exalted: f64, rates: Rates) -> String {
+    CURRENCIES
+        .into_iter()
+        .filter_map(|currency| shown_amount(exalted, currency, rates))
+        .map(|(amount, abbreviation)| format!("{amount} {abbreviation}"))
+        .collect::<Vec<_>>()
+        .join(SEPARATOR)
+}
+
+/// `exalted` Exalted Orbs in `currency`, written as [`in_currency`] does, when worth showing:
+/// always in Exalted Orbs, the smallest currency; in Divine or Chaos Orbs, when the amount as
+/// written, rounded to two decimals, reaches [`SMALL_AMOUNT`].
+fn shown_amount(exalted: f64, currency: Currency, rates: Rates) -> Option<(String, &'static str)> {
+    let written = (value_in(exalted, currency, rates) * 100.0).round() / 100.0;
+    (currency == Currency::Exalted || written >= SMALL_AMOUNT)
+        .then(|| in_currency(exalted, currency, rates))
+}
+
 /// `exalted` Exalted Orbs in `currency`, written, with the abbreviation of the currency, the
 /// same in every language.
 fn in_currency(exalted: f64, currency: Currency, rates: Rates) -> (String, &'static str) {
-    let (value, abbreviation) = match currency {
-        Currency::Divine => (exalted / rates.divine, "div"),
-        Currency::Chaos => (exalted / rates.chaos, "c"),
-        Currency::Exalted => (exalted, "ex"),
+    let abbreviation = match currency {
+        Currency::Divine => "div",
+        Currency::Chaos => "c",
+        Currency::Exalted => "ex",
     };
-    (format::amount(value, currency), abbreviation)
+    (
+        format::amount(value_in(exalted, currency, rates), currency),
+        abbreviation,
+    )
+}
+
+/// `exalted` Exalted Orbs in `currency`.
+fn value_in(exalted: f64, currency: Currency, rates: Rates) -> f64 {
+    match currency {
+        Currency::Divine => exalted / rates.divine,
+        Currency::Chaos => exalted / rates.chaos,
+        Currency::Exalted => exalted,
+    }
 }
 
 /// The price of a row of a list, in one currency: Divine Orbs from one Divine Orb, Exalted
@@ -478,6 +513,35 @@ mod tests {
         assert_eq!(in_currency(9000.0, Currency::Divine, RATES).0, "12");
         assert_eq!(in_currency(9000.0, Currency::Chaos, RATES).0, "120");
         assert_eq!(in_currency(9000.0, Currency::Exalted, RATES).0, "9K");
+    }
+
+    #[test]
+    fn an_amount_under_a_tenth_of_divine_or_chaos_orb_is_hidden() {
+        let shown =
+            |exalted, currency| shown_amount(exalted, currency, RATES).map(|(amount, _)| amount);
+        // 0.1 div, 1 c: all shown.
+        assert_eq!(shown(75.0, Currency::Divine).as_deref(), Some("0.1"));
+        // 0.08 div, 0.8 c: the Divine Orbs hidden.
+        assert_eq!(shown(60.0, Currency::Divine), None);
+        assert_eq!(shown(60.0, Currency::Chaos).as_deref(), Some("0.8"));
+        // 0.0013 div, 0.013 c: only the Exalted Orbs.
+        assert_eq!(shown(1.0, Currency::Divine), None);
+        assert_eq!(shown(1.0, Currency::Chaos), None);
+        assert_eq!(shown(1.0, Currency::Exalted).as_deref(), Some("1"));
+        assert_eq!(shown(0.004, Currency::Exalted).as_deref(), Some("<0.01"));
+    }
+
+    #[test]
+    fn the_threshold_reads_the_amount_as_written() {
+        // 0.0953 div, written 0.1: shown; 0.0947 div, written 0.09: hidden.
+        assert!(shown_amount(71.5, Currency::Divine, RATES).is_some());
+        assert!(shown_amount(71.0, Currency::Divine, RATES).is_none());
+    }
+
+    #[test]
+    fn the_unit_price_leaves_out_the_small_amounts() {
+        assert_eq!(unit_amounts(20.0, RATES), "0.27 c · 20 ex");
+        assert_eq!(unit_amounts(187.5, RATES), "0.25 div · 2.5 c · 188 ex");
     }
 
     #[test]

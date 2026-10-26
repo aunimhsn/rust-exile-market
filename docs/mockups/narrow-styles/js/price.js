@@ -2,8 +2,13 @@
 function price(p, lang = "en") {
   const label = lang === "fr" ? "Prix" : "Price";
   let body = "";
-  const row = values => `<div class="prices">${[["div", values[0]], ["chaos", values[1]], ["ex", values[2]]].map(([k, v]) => `<div class="price">${orb(k)}${v}</div>`).join("")}</div>`;
-  const inline = values => `${values[0]} div · ${values[1]} c · ${values[2]} ex`;
+  // A Divine or Chaos Orb amount under 0.1 is hidden and its column stays empty, so that each currency
+  // keeps its place; the Exalted Orbs always stay.
+  const tiny = (v, i) => i < 2 && (v.startsWith("<") || (!/[KM]$/.test(v) && Number(v) < 0.1));
+  const row = values => `<div class="prices">${[["div", values[0]], ["chaos", values[1]], ["ex", values[2]]].map(([k, v], i) =>
+    tiny(v, i) ? `<div class="price"></div>` : `<div class="price">${orb(k)}${v}</div>`).join("")}</div>`;
+  const inline = values => [[values[0], "div"], [values[1], "c"], [values[2], "ex"]]
+    .filter(([v], i) => !tiny(v, i)).map(([v, k]) => `${v} ${k}`).join(" · ");
   let caption = "";
   if (p.stackValues) {
     // Stack: the value of the copied stack in large, the unit price on a small line, to compare with the offers.
