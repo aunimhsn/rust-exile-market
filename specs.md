@@ -211,7 +211,7 @@ At launch, the application asks the GitHub releases for the latest version. When
 
 - The prices of the fixed-name items, their offer counts and their history come from a public price database of the Path of Exile 2 economy (see [the technical choices](docs/technical-choices.md)). The application downloads the prices of the selected league at startup and when the league changes, then refreshes them every hour. A copied item is priced instantly from these local data, without a network request. During the download of a league without cache, the prices arrive category by category, the currency first, then the other items of the currency exchange, then the uniques: a copied orb is priced after a few seconds, without waiting for the whole download (about 26 seconds, one request per second).
 - The offers, the estimates and the item names in English and French come from the official trade site. The application searches only when the player clicks the search or refresh block, never in the background, and respects the limits announced by the trade site.
-- The trade id of each modifier line and the range of every tier of a modifier come from data of the game embedded in the application, generated again after each patch of the game (see [Game data](docs/game-data.md)): they work offline, without a request.
+- The trade id of each modifier line and the range of every tier of a modifier come from data of the game embedded in the application, generated again after each patch of the game (see [Game data](docs/game-data.md)): they work offline, without a request. A line this data doesn't know yet (a modifier added by a patch) is looked up among the templates of the stats of the trade site, downloaded with the item names.
 - The application identifies itself to both, and keeps its requests to a minimum.
 
 ## Local files
@@ -221,7 +221,7 @@ At launch, the application asks the GitHub releases for the latest version. When
 | Settings | The user's configuration directory (e.g. `~/.config/exile-market/` on Linux, `%APPDATA%\exile-market\config\` on Windows) | `settings.toml`: league, language, always on top. |
 | Window | The same directory | `window.ron`: the size and position of the window. |
 | Price cache | The user's cache directory | The last downloaded prices, used at startup and when the network is unavailable. |
-| Item names cache | The user's cache directory | The item names of the trade site in English and French (the stat names come with the filters), refreshed once a day; the old names stay while the trade site can't be reached, with a new attempt every hour (every minute while no name is known, unless the trade site refused). |
+| Item names cache | The user's cache directory | The item names and the templates of the stats of the trade site in English and French, refreshed once a day; the old names stay while the trade site can't be reached, with a new attempt every hour (every minute while no name is known, unless the trade site refused). |
 | Log | `~/.local/state/exile-market/` on Linux, `%LOCALAPPDATA%\exile-market\data\` on Windows, `~/Library/Logs/exile-market/` on macOS | `exile-market.log`: what happened during the session (start, items copied by their class line, the modifier lines whose stat isn't known, clipboard errors, panics), to follow the application and find the cause of a bug; the log of the previous session is kept as `exile-market.previous.log`. The texts copied outside the game are never logged. |
 
 None of these files are in the Git repository.

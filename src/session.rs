@@ -4,7 +4,7 @@
 use std::time::{Duration, SystemTime};
 
 use crate::clipboard::ClipboardEvent;
-use crate::game_data::{self, TradeGroup};
+use crate::game_data::{self, StatSource, TradeGroup, TradeStats};
 use crate::item::{CopiedItem, Item, ParseError, Rarity};
 use crate::item_names::ItemNames;
 use crate::language::Language;
@@ -25,7 +25,8 @@ pub struct ShownItem {
 }
 
 impl ShownItem {
-    fn new(copied: &CopiedItem) -> Self {
+    /// The item `copied`; `trade` holds the stats of the trade site, once it gave them.
+    fn new(copied: &CopiedItem, trade: Option<&TradeStats>) -> Self {
         let parsed = Item::parse(copied);
         let mut lines = CopiedLines::default();
         match &parsed {
@@ -34,7 +35,7 @@ impl ShownItem {
                 for warning in item.warnings() {
                     log::warn!("A part of a copied item couldn't be read: {warning}");
                 }
-                lines = CopiedLines::new(item.language(), item.modifiers());
+                lines = CopiedLines::new(item.language(), item.modifiers(), trade);
             }
             Err(error) => log::warn!("A copied item couldn't be read: {error}"),
         }
@@ -82,6 +83,9 @@ pub struct Session {
     prices_failed: Option<League>,
     /// The names of the items of the trade site, which find the prices of a French item.
     item_names: Option<ItemNames>,
+    /// The stats of the trade site, from the templates given with the names: the stats of
+    /// a modifier line the game data doesn't know yet.
+    trade_stats: Option<TradeStats>,
     /// Shown until another item is copied.
     item: Option<ShownItem>,
     clipboard_readable: bool,
@@ -127,6 +131,7 @@ impl Session {
             leagues_reachable: true,
             prices_failed: None,
             item_names: None,
+            trade_stats: None,
             item: None,
             clipboard_readable: true,
         }
@@ -205,16 +210,21 @@ impl Session {
 
     /// Takes in the names of the items given by the trade site.
     pub fn apply_item_names(&mut self, names: ItemNames) {
+        self.trade_stats = Some(TradeStats::new(
+            names.stat_templates(Language::English),
+            names.stat_templates(Language::French),
+        ));
         self.item_names = Some(names);
     }
 
     pub fn apply(&mut self, event: ClipboardEvent) {
         match event {
             ClipboardEvent::Copied(copied) => {
-                let shown = ShownItem::new(&copied);
+                let trade = self.trade_stats.as_ref();
+                let shown = ShownItem::new(&copied, trade);
                 if let Ok(item) = shown.parsed() {
                     self.log_price(item);
-                    log_unknown_stats(item);
+                    log_unknown_stats(item, trade);
                 }
                 self.item = Some(shown);
             }
@@ -370,12 +380,13 @@ impl Session {
     }
 }
 
-/// Logs the modifier lines of `item` whose stat isn't known, or has no trade id in their
-/// group: a modifier added by a patch of the game, or a line the parser read wrong.
-fn log_unknown_stats(item: &Item) {
+/// Logs the modifier lines of `item` whose stat isn't known, has no trade id in their group,
+/// or is known by the trade site only: a modifier added by a patch of the game, or a line the
+/// parser read wrong.
+fn log_unknown_stats(item: &Item, trade: Option<&TradeStats>) {
     for modifier in item.modifiers() {
         let group = TradeGroup::of(modifier);
-        for found in game_data::modifier_stats(item.language(), modifier) {
+        for found in game_data::modifier_stats(item.language(), modifier, trade) {
             let lines = modifier.lines.get(found.lines).unwrap_or_default();
             let text = lines.iter().map(|line| line.text.as_str());
             let text = text.collect::<Vec<_>>().join(" / ");
@@ -383,6 +394,9 @@ fn log_unknown_stats(item: &Item) {
                 None => log::warn!("Stat not found: {text}"),
                 Some(stat) if stat.stat.trade_ids(group).is_empty() => {
                     log::warn!("No {group:?} trade id for the stat: {text}");
+                }
+                Some(stat) if stat.source == StatSource::TradeSite => {
+                    log::info!("Stat known by the trade site only: {text}");
                 }
                 Some(_) => {}
             }

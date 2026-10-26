@@ -43,6 +43,22 @@ impl TradeGroup {
             ModifierKind::Rune => Self::Rune,
         }
     }
+
+    /// The group named `name` on the trade site (`explicit`, `rune`…), among the groups of
+    /// the modifier lines: none for the pseudo stats, the skills, the Sanctum or a new group.
+    #[must_use]
+    pub fn of_line(name: &str) -> Option<Self> {
+        match name {
+            "explicit" => Some(Self::Explicit),
+            "implicit" => Some(Self::Implicit),
+            "fractured" => Some(Self::Fractured),
+            "desecrated" => Some(Self::Desecrated),
+            "crafted" => Some(Self::Crafted),
+            "enchant" => Some(Self::Enchant),
+            "rune" => Some(Self::Rune),
+            _ => None,
+        }
+    }
 }
 
 /// Which side of the value of a stat is better for the player.
@@ -80,7 +96,7 @@ pub struct Stat {
     pub better: Better,
     pub(super) matchers: Vec<Matcher>,
     #[serde(default)]
-    ids: BTreeMap<TradeGroup, Vec<String>>,
+    pub(super) ids: BTreeMap<TradeGroup, Vec<String>>,
     /// Its value on the trade site is an option, e.g. the skill of `# to Level of all Arc
     /// Skills`, given by [`Matcher::value`].
     #[serde(default)]
@@ -148,6 +164,11 @@ impl Stats {
                 Err(error) => log::error!("Game data, stat {} unreadable: {error}", index + 1),
             }
         }
+        Self::new(stats)
+    }
+
+    /// The stats of `stats`, found by their strings.
+    pub(super) fn new(stats: Vec<Stat>) -> Self {
         let mut by_string: HashMap<String, Vec<(usize, usize)>> = HashMap::new();
         let mut max_lines = 1;
         for (stat_index, stat) in stats.iter().enumerate() {
@@ -219,7 +240,6 @@ impl Stats {
         (matcher.negate == other.negate && matcher.value == other.value).then_some(matcher)
     }
 
-    #[cfg(test)]
     pub fn len(&self) -> usize {
         self.list.len()
     }

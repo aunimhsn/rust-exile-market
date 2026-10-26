@@ -9,11 +9,12 @@
 //!
 //! The better side of a line is read from its words: those of its English string when the
 //! line is in another language and its stat has one (`#% de Réduction de l'Armure` is read
-//! as `#% reduced Armour`), its own words otherwise. The words were classified with the owner
+//! as `#% reduced Armour`), or else the English template of its stat on the trade site, its
+//! own words otherwise. The words were classified with the owner
 //! on 2026-10-26, on every string of the stats; the `better` value of Exiled Exchange 2 isn't
 //! used, wrong on lines such as `Lose # Life when you use a Skill`.
 
-use crate::game_data::{self, TradeGroup};
+use crate::game_data::{self, TradeGroup, TradeStats};
 use crate::item::{Modifier, ModifierKind};
 use crate::language::Language;
 use crate::trade::offers::ModifierKind as OfferKind;
@@ -216,14 +217,15 @@ struct CopiedLine {
 pub struct CopiedLines(Vec<CopiedLine>);
 
 impl CopiedLines {
-    /// The lines of `modifiers`, written in `language`.
+    /// The lines of `modifiers`, written in `language`; `trade` holds the stats of the trade
+    /// site, once it gave them.
     #[must_use]
-    pub fn new(language: Language, modifiers: &[Modifier]) -> Self {
+    pub fn new(language: Language, modifiers: &[Modifier], trade: Option<&TradeStats>) -> Self {
         let lines = modifiers.iter().flat_map(|modifier| {
             let group = TradeGroup::of(modifier);
             modifier.lines.iter().map(move |line| {
                 let template = Template::of(&line.text).text;
-                let words = game_data::english_string(language, &line.text, group);
+                let words = game_data::english_string(language, &line.text, group, trade);
                 CopiedLine {
                     kind: modifier.kind,
                     direction: direction(words.unwrap_or(&template)),
@@ -273,7 +275,7 @@ mod tests {
         language: Language,
         modifiers: &[Modifier],
     ) -> Option<Difference> {
-        CopiedLines::new(language, modifiers).difference(line, kind)
+        CopiedLines::new(language, modifiers, None).difference(line, kind)
     }
 
     fn modifier(kind: ModifierKind, line: &str) -> Modifier {
@@ -696,7 +698,8 @@ mod tests {
             game_data::english_string(
                 Language::English,
                 "10% reduced Armour",
-                TradeGroup::Explicit
+                TradeGroup::Explicit,
+                None
             ),
             None,
             "an English line keeps its own words"
@@ -717,6 +720,22 @@ mod tests {
             .map(|difference| difference.verdict),
             Some(Verdict::Worse)
         );
+    }
+
+    #[test]
+    fn a_french_line_of_the_trade_site_only_is_read_with_its_english_template() {
+        let trade = game_data::trade_stats();
+        let copied = [explicit("10% de Réduction des Dégâts par patch")];
+        let verdict = |trade| {
+            CopiedLines::new(Language::French, &copied, trade)
+                .difference("15% de Réduction des Dégâts par patch", OfferKind::Explicit)
+                .map(|difference| difference.verdict)
+        };
+
+        // Read as `#% reduced Damage per Patch`.
+        assert_eq!(verdict(Some(&trade)), Some(Verdict::Worse));
+        // `Réduction` alone isn't a word that reads the other way.
+        assert_eq!(verdict(None), Some(Verdict::Better));
     }
 
     /// The number of strings of the stats read higher, lower and unknown in `language`.
