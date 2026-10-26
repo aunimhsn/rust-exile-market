@@ -16,9 +16,10 @@ use egui::{
     TextEdit, Ui, Vec2, vec2,
 };
 
+use super::number_field::NumberField;
 use super::theme::{color, size, text};
 use super::widgets;
-use crate::filters::{self, Filter, Filters, NumberField, StatKey};
+use crate::filters::{self, Filter, Filters, StatKey};
 use crate::i18n::{Message, Translator};
 use crate::item::{Affix, Item, ItemState, Modifier, ModifierKind, Range, Rarity, StatLine};
 use crate::prices::UniqueModifiers;
@@ -97,7 +98,7 @@ struct Minimum {
 impl Minimum {
     /// A minimum of `value`, brought back within `bounds`.
     fn new(value: f64, bounds: Option<Range>) -> Self {
-        let value = bounds.map_or(value, |bounds| value.clamp(bounds.min, bounds.max));
+        let value = bounds.map_or(value, |bounds| bounds.clamp(value));
         Self { value, bounds }
     }
 
@@ -116,6 +117,7 @@ impl StatFilter {
                 .minimum
                 .map(|minimum| filters::minimum_text(minimum.value))
                 .unwrap_or_default(),
+            bounds: self.minimum.and_then(|minimum| minimum.bounds),
         }
     }
 }
@@ -156,31 +158,44 @@ pub fn count(item: &Item) -> u32 {
     len(item.modifiers())
 }
 
-/// Whether `item` has stats or filters to unfold.
-#[must_use]
-pub fn any(item: &Item) -> bool {
-    !rows(item, None).is_empty()
+/// The stats and filters of an item, decided once for a frame.
+pub struct Stats<'a> {
+    rows: Vec<Row<'a>>,
 }
 
-/// The number of filters checked for the search, beside the pill of the stats.
-#[must_use]
-pub fn active_filters(
-    item: &Item,
-    unique_modifiers: Option<&UniqueModifiers>,
-    filters: &Filters,
-) -> u32 {
-    let checked = rows(item, unique_modifiers)
-        .into_iter()
-        .filter(|row| match row {
-            Row::Stat(Stat {
-                key,
-                filter: Some(filter),
-                ..
-            }) => filters.get(*key, || filter.default_choice()).checked,
-            _ => false,
-        })
-        .count();
-    u32::try_from(checked).unwrap_or(u32::MAX)
+impl<'a> Stats<'a> {
+    /// The stats of `item`; `unique_modifiers` are the modifiers of its unique in the price
+    /// database, the ranges of a unique copied without them.
+    #[must_use]
+    pub fn new(item: &'a Item, unique_modifiers: Option<&UniqueModifiers>) -> Self {
+        Self {
+            rows: rows(item, unique_modifiers),
+        }
+    }
+
+    /// Nothing to unfold: no stat, no filter.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.rows.is_empty()
+    }
+
+    /// The number of filters checked for the search, beside the pill of the stats.
+    #[must_use]
+    pub fn active_filters(&self, filters: &Filters) -> u32 {
+        let checked = self
+            .rows
+            .iter()
+            .filter(|row| match row {
+                Row::Stat(Stat {
+                    key,
+                    filter: Some(filter),
+                    ..
+                }) => filters.get(*key, || filter.default_choice()).checked,
+                _ => false,
+            })
+            .count();
+        u32::try_from(checked).unwrap_or(u32::MAX)
+    }
 }
 
 fn len<T>(list: &[T]) -> u32 {
@@ -333,10 +348,12 @@ fn implicit_stat(key: StatKey, line: &StatLine) -> Stat<'_> {
 fn comparable_filter(line: &StatLine, bounds: Option<Range>) -> StatFilter {
     StatFilter {
         checked: true,
-        minimum: varies(line)
-            .then(|| value(line))
-            .flatten()
-            .map(|value| Minimum::new(comparable(value, line), bounds)),
+        minimum: varies(line).then(|| value(line)).flatten().map(|value| {
+            Minimum::new(
+                comparable(value, line),
+                bounds.map(|bounds| bounds.holding(value)),
+            )
+        }),
     }
 }
 
@@ -500,7 +517,11 @@ fn unique_stat<'a>(key: StatKey, line: &'a StatLine, source: RangeSource<'_>) ->
     Stat {
         filter: Some(StatFilter {
             checked: true,
-            minimum: Some(Minimum::new(value, bounds)),
+            // A legacy unique keeps its value, out of the range of today.
+            minimum: Some(Minimum::new(
+                value,
+                bounds.map(|bounds| bounds.holding(value)),
+            )),
         }),
         roll,
         ..fixed
@@ -618,15 +639,14 @@ fn ranges_text(ranges: &[Range]) -> String {
         .join(RANGE_SEPARATOR)
 }
 
-/// Draws the stats of `item`, in the item block, with the filters the player set.
-pub fn show(
-    ui: &mut Ui,
-    item: &Item,
-    unique_modifiers: Option<&UniqueModifiers>,
-    filters: &mut Filters,
-    i18n: &Translator,
-) {
-    let rows = rows(item, unique_modifiers);
+impl Stats<'_> {
+    /// Draws the stats, in the item block, with the filters the player set.
+    pub fn show(self, ui: &mut Ui, filters: &mut Filters, i18n: &Translator) {
+        show(ui, self.rows, filters, i18n);
+    }
+}
+
+fn show(ui: &mut Ui, rows: Vec<Row<'_>>, filters: &mut Filters, i18n: &Translator) {
     // "min" on the right of the first title, above the minimums.
     let mut minimum_title = rows.iter().any(|row| {
         matches!(
@@ -729,7 +749,7 @@ fn stat_row(ui: &mut Ui, stat: &Stat<'_>, filters: &mut Filters) {
         stat_text(ui, stat, (width - GUTTER - GAP - GAP - MIN_COLUMN).max(0.0));
         ui.add_space(GAP);
         if let Some(minimum) = filter.minimum {
-            minimum_field(ui, stat.key, &mut choice.minimum, minimum);
+            minimum_field(ui, stat.key, &mut choice, minimum.negative());
         }
         if choice != before {
             filters.set(stat.key, choice);
@@ -751,7 +771,7 @@ fn stat_text(ui: &mut Ui, stat: &Stat<'_>, width: f32) {
 
 /// The minimum of a filter, in its column: a number only, brought back within the range of
 /// the stat when the player leaves the field.
-fn minimum_field(ui: &mut Ui, key: StatKey, text: &mut String, minimum: Minimum) {
+fn minimum_field(ui: &mut Ui, key: StatKey, choice: &mut Filter, negative: bool) {
     let id = ui.make_persistent_id(("stat-minimum", key));
     let focused = ui.memory(|memory| memory.has_focus(id));
     let line = if focused {
@@ -765,8 +785,8 @@ fn minimum_field(ui: &mut Ui, key: StatKey, text: &mut String, minimum: Minimum)
         .corner_radius(CornerRadius::same(size::RADIUS))
         .inner_margin(MIN_PADDING);
     let mut field = NumberField {
-        text,
-        negative: minimum.negative(),
+        text: &mut choice.minimum,
+        negative,
     };
     let response = ui.add(
         TextEdit::singleline(&mut field)
@@ -778,7 +798,8 @@ fn minimum_field(ui: &mut Ui, key: StatKey, text: &mut String, minimum: Minimum)
             .desired_width(MIN_COLUMN),
     );
     if response.lost_focus() {
-        *text = filters::within(text, minimum.bounds)
+        choice.minimum = choice
+            .searched_minimum()
             .map(filters::minimum_text)
             .unwrap_or_default();
     }
@@ -1255,11 +1276,11 @@ mod tests {
             ["Unique", "■ +55 to maximum Life ≥55", "Corrupted only"]
         );
         // An item without modifiers has its filters to show.
-        assert!(any(&staff));
+        assert!(!Stats::new(&staff, None).is_empty());
         assert_eq!(texts(&staff, None), ["Corrupted only"]);
-        assert!(!any(&parse(
-            "Item Class: Staves\nRarity: Normal\nChiming Staff\n--------\nItem Level: 82"
-        )));
+        let clean =
+            parse("Item Class: Staves\nRarity: Normal\nChiming Staff\n--------\nItem Level: 82");
+        assert!(Stats::new(&clean, None).is_empty());
     }
 
     #[test]
@@ -1269,26 +1290,69 @@ mod tests {
         ));
         let mut filters = Filters::default();
 
-        // The enchantment and the two runes unchecked.
-        assert_eq!(active_filters(&crossbow, None, &filters), 7);
-        let choice = |checked| Filter {
-            checked,
-            minimum: String::new(),
-        };
-        let keys: Vec<StatKey> = rows(&crossbow, None)
-            .into_iter()
+        let stats = Stats::new(&crossbow, None);
+        let keys: Vec<StatKey> = stats
+            .rows
+            .iter()
             .filter_map(|row| match row {
                 Row::Stat(stat) => Some(stat.key),
                 _ => None,
             })
             .collect();
+        let choice = |checked| Filter {
+            checked,
+            minimum: String::new(),
+            bounds: None,
+        };
+
+        // The enchantment and the two runes unchecked.
+        assert_eq!(stats.active_filters(&filters), 7);
+        // A rune checked by the player.
         filters.set(keys[1], choice(true));
+        assert_eq!(stats.active_filters(&filters), 8);
+        // The implicit unchecked.
         filters.set(keys[3], choice(false));
-        assert_eq!(active_filters(&crossbow, None, &filters), 7);
+        assert_eq!(stats.active_filters(&filters), 7);
         filters.clear();
-        assert_eq!(active_filters(&crossbow, None, &filters), 7);
-        filters.set(keys[4], choice(false));
-        assert_eq!(active_filters(&crossbow, None, &filters), 6);
+        assert_eq!(stats.active_filters(&filters), 7);
+    }
+
+    #[test]
+    fn a_legacy_unique_keeps_its_value_out_of_the_range_of_today() {
+        let belt = parse(
+            "Item Class: Belts\nRarity: Unique\nHeadhunter\nHeavy Belt\n--------\n\
+             Item Level: 80\n--------\n+65 to maximum Life",
+        );
+        let modifiers = database(&[], &["+(40-60) to maximum Life"]);
+        let rows = rows(&belt, Some(&modifiers));
+
+        assert_eq!(
+            rows[1],
+            Row::Stat(Stat {
+                key: StatKey {
+                    modifier: 0,
+                    line: 0
+                },
+                text: "+65 to maximum Life",
+                filter: Some(StatFilter {
+                    checked: true,
+                    minimum: Some(Minimum {
+                        value: 65.0,
+                        bounds: Some(Range {
+                            min: 40.0,
+                            max: 65.0
+                        }),
+                    }),
+                }),
+                roll: Some(Roll::Bar {
+                    share: 1.0,
+                    ranges: vec![Range {
+                        min: 40.0,
+                        max: 60.0
+                    }],
+                }),
+            })
+        );
     }
 
     #[test]

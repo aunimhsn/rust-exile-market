@@ -117,7 +117,6 @@ static ENGLISH: Labels = Labels {
     armour: "Armour",
     evasion: "Evasion Rating",
     energy_shield: "Energy Shield",
-    // To check on a copied shield.
     block: "Block chance",
     note: Some("Note: "),
     states: &[
@@ -131,7 +130,6 @@ static ENGLISH: Labels = Labels {
     exceptional: &[Wording::Before("Exceptional ")],
     superior: &[Wording::Before("Superior ")],
     tier: "Tier: ",
-    // From the French marker: to check on an item copied in English.
     fixed_value: " — Unscalable Value",
     modifier_kinds: &[
         ("Prefix Modifier", PREFIX),

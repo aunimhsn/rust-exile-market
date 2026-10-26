@@ -60,7 +60,8 @@ pub struct ExileMarketApp {
     item_names: ItemNamesWatch,
     /// The stats of the item are unfolded, for every item copied until the player folds them.
     stats_open: bool,
-    /// The filters of the search as the player set them, for the item shown.
+    /// The filters of the search as the player set them, for the item shown: cleared at each
+    /// copy, even of the same item after another text.
     filters: Filters,
     /// An item was copied: the content scrolls back to the top, to its name and its price.
     scroll_to_top: bool,
@@ -238,9 +239,9 @@ impl ExileMarketApp {
         let unique_modifiers = session::unique_modifiers(item, &fixed_price);
         let to_top = std::mem::take(&mut self.scroll_to_top);
         let action = ui::content(ui, to_top, |ui| {
-            let action = ItemBlock::new(item, &self.i18n)
+            let action = ItemBlock::new(item, &mut self.filters, &self.i18n)
                 .tradable(url.is_some())
-                .stats(self.stats_open, unique_modifiers, &mut self.filters)
+                .stats(self.stats_open, unique_modifiers)
                 .show(ui);
             if let (Some(ItemBlockAction::CheckOnTrade), Some(url)) = (action, &url) {
                 ui.ctx().open_url(OpenUrl::new_tab(url));

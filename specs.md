@@ -156,7 +156,7 @@ The window has a title bar, then three bands (item, price, offers), then a statu
 
 The offers search uses the stats of the copied item as filters, like the trade site, so that the offers found are comparable.
 
-- **Unique items**: each modifier with a range is a filter, checked by default, with the value of the copied item as minimum. Modifiers without a range are the same on every copy and aren't filters.
+- **Unique items**: each modifier with a range is a filter, checked by default, with the value of the copied item as minimum. Modifiers without a range are the same on every copy and aren't filters. A legacy unique, rolled in a range that changed since, keeps its value: the range of its minimum is widened to hold it.
 - The value of a line with several numbers is their average, as on the trade site: "Adds 24 to 51 Physical Damage" is searched at 37.5.
 - **Rare and magic items, jewels**: every modifier is a filter, with a minimum at **90 % of the copied value**, to find comparable items and not only identical ones. Default choices:
   - **pseudo totals** (total elemental resistance, total maximum life, total attributes…) checked, and the modifiers they add up unchecked;
