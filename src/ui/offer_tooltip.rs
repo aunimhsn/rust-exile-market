@@ -18,6 +18,7 @@ use super::theme::{self, color, size, text};
 use super::widgets;
 use crate::i18n::{Message, NumberTag, Translator};
 use crate::item::Modifier;
+use crate::language::Language;
 use crate::roll_difference::{Difference, Verdict, difference};
 use crate::trade::offers::{ItemOffer, ModifierKind, SellerStatus};
 
@@ -163,8 +164,9 @@ impl TooltipState {
 /// What the tooltip shows of an offer.
 pub struct OfferTooltip<'a> {
     pub offer: &'a ItemOffer,
-    /// The modifiers of the copied item, to compare the rolls.
+    /// The modifiers of the copied item, to compare the rolls, and its language.
     pub modifiers: &'a [Modifier],
+    pub language: Language,
     pub name_color: Color32,
     pub suspicious: bool,
     pub copied: bool,
@@ -297,7 +299,7 @@ impl OfferTooltip<'_> {
             .flat_map(|modifier| modifier.text.lines())
             .map(|line| Line {
                 text: line.to_owned(),
-                difference: difference(line, kind, self.modifiers),
+                difference: difference(line, kind, self.language, self.modifiers),
             })
             .collect()
     }

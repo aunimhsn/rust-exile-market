@@ -4,8 +4,7 @@
 
 use std::ops::Range;
 
-use super::stats::{Matcher, Stats, normalize};
-use super::stats::{Stat, TradeGroup};
+use super::stats::{Stat, Stats, TradeGroup, normalize};
 use crate::item::Modifier;
 use crate::language::Language;
 
@@ -23,6 +22,8 @@ pub struct StatMatch {
     /// The value given by the string of the line: the option of an option stat (the skill of
     /// `# to Level of all Arc Skills`), or else the value of a line without number.
     pub matcher_value: Option<f64>,
+    /// The index of the string of the stat that matched the line.
+    matcher: usize,
 }
 
 /// The lines of a modifier written by one stat, or a line found nowhere.
@@ -71,18 +72,34 @@ fn find(stats: &'static Stats, text: &str, group: TradeGroup) -> Option<StatMatc
     let found = templates(text, &numbers).flat_map(|template| {
         stats
             .find(&template.string)
-            .map(move |(stat, matcher)| stat_match(stat, matcher, &template.values))
+            .filter_map(move |(stat, matcher)| stat_match(stat, matcher, &template.values))
     });
     first_with_id(found, |stat| has_id(stat, group))
 }
 
-fn stat_match(stat: &'static Stat, matcher: &Matcher, values: &[f64]) -> StatMatch {
+fn stat_match(stat: &'static Stat, index: usize, values: &[f64]) -> Option<StatMatch> {
+    let matcher = stat.matchers.get(index)?;
     let sign = if matcher.negate { -1.0 } else { 1.0 };
-    StatMatch {
+    Some(StatMatch {
         stat,
         values: values.iter().map(|value| value * sign).collect(),
         matcher_value: matcher.value,
+        matcher: index,
+    })
+}
+
+/// The English string of the stat of the line `text` written in `language`, at the same place
+/// among the strings of the stat: `#% de Réduction de l'Armure` is `#% reduced Armour`. None
+/// for an English line, a line found nowhere, or a stat whose strings don't line up in
+/// English.
+#[must_use]
+pub fn english_string(language: Language, text: &str, group: TradeGroup) -> Option<&'static str> {
+    if language == Language::English {
+        return None;
     }
+    let found = find(Stats::of(language), &normalize(text), group)?;
+    let twin = Stats::of(Language::English).twin(found.stat, found.matcher)?;
+    Some(&twin.string)
 }
 
 fn has_id(stat: &StatMatch, group: TradeGroup) -> bool {
@@ -239,6 +256,26 @@ fn write(text: &str, numbers: &[Number], choice: &[Written]) -> Option<Template>
     }
     string.push_str(text.get(written..)?);
     Some(Template { string, values })
+}
+
+/// Every string with `#` of the stats that can be on equipment in `language`, with its English
+/// string when it has one in another language.
+#[cfg(test)]
+#[must_use]
+pub fn equipment_strings(language: Language) -> Vec<(&'static str, Option<&'static str>)> {
+    let english = Stats::of(Language::English);
+    Stats::of(language)
+        .equipment_strings()
+        .filter_map(|(stat, index)| {
+            let twin = (language != Language::English)
+                .then(|| english.twin(stat, index))
+                .flatten();
+            Some((
+                stat.matchers.get(index)?.string.as_str(),
+                twin.map(|twin| twin.string.as_str()),
+            ))
+        })
+        .collect()
 }
 
 #[cfg(test)]

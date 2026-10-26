@@ -748,6 +748,7 @@ impl<'a> OffersBlock<'a> {
             let tooltip = OfferTooltip {
                 offer,
                 modifiers: self.item.modifiers(),
+                language: self.item.language(),
                 name_color: rarity_color(offer.item.rarity.unwrap_or(self.item.rarity())),
                 suspicious: row.suspicious,
                 copied: state.shows_copied(&offer.id, time),

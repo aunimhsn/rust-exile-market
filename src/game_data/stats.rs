@@ -118,6 +118,9 @@ pub(super) struct Stats {
     list: Vec<Stat>,
     /// The index of the stat and of its matcher, by string written as [`normalize`] does.
     by_string: HashMap<String, Vec<(usize, usize)>>,
+    /// The index of each stat by its English template and game id; none for two stats with
+    /// the same ones, neither of which is the twin of the other languages.
+    by_reference: HashMap<(String, Option<String>), Option<usize>>,
     /// The most lines a string has.
     pub max_lines: usize,
 }
@@ -167,31 +170,72 @@ impl Stats {
                 }
             }
         }
+        let mut by_reference: HashMap<_, Option<usize>> = HashMap::new();
+        for (index, stat) in stats.iter().enumerate() {
+            by_reference
+                .entry((stat.reference.clone(), stat.id.clone()))
+                .and_modify(|found| *found = None)
+                .or_insert(Some(index));
+        }
         Self {
             list: stats,
             by_string,
+            by_reference,
             max_lines,
         }
     }
 
-    /// The stats with a line written `string` (normalized), and the matcher of that line.
-    pub fn find<'a>(
-        &'a self,
-        string: &str,
-    ) -> impl Iterator<Item = (&'a Stat, &'a Matcher)> + use<'a> {
+    /// The stats with a line written `string` (normalized), and the index of the matcher of
+    /// that line.
+    pub fn find<'a>(&'a self, string: &str) -> impl Iterator<Item = (&'a Stat, usize)> + use<'a> {
         self.by_string
             .get(string)
             .into_iter()
             .flatten()
-            .filter_map(|&(stat, matcher)| {
-                let stat = self.list.get(stat)?;
-                Some((stat, stat.matchers.get(matcher)?))
-            })
+            .filter_map(|&(stat, matcher)| Some((self.list.get(stat)?, matcher)))
+    }
+
+    /// The matcher of these stats at the place of the matcher `index` of `stat`, a stat of
+    /// another language: the same English template and game id, and the strings of a stat
+    /// in the same order in every language (checked on 2026-10-26: 2,616 of the 2,901 French
+    /// strings with `#` line up). None when the matcher there doesn't negate or doesn't give
+    /// the same value: the strings don't line up.
+    pub fn twin(&self, stat: &Stat, index: usize) -> Option<&Matcher> {
+        let key = (stat.reference.clone(), stat.id.clone());
+        let twin = self.list.get((*self.by_reference.get(&key)?)?)?;
+        let (matcher, other) = (twin.matchers.get(index)?, stat.matchers.get(index)?);
+        (matcher.negate == other.negate && matcher.value == other.value).then_some(matcher)
     }
 
     #[cfg(test)]
     pub fn len(&self) -> usize {
         self.list.len()
+    }
+
+    /// The strings with `#` of the stats that can be on equipment, and the index of each.
+    #[cfg(test)]
+    pub fn equipment_strings(&self) -> impl Iterator<Item = (&Stat, usize)> {
+        const GROUPS: [TradeGroup; 7] = [
+            TradeGroup::Explicit,
+            TradeGroup::Implicit,
+            TradeGroup::Fractured,
+            TradeGroup::Desecrated,
+            TradeGroup::Crafted,
+            TradeGroup::Enchant,
+            TradeGroup::Rune,
+        ];
+        self.list
+            .iter()
+            .filter(|stat| {
+                GROUPS
+                    .iter()
+                    .any(|&group| !stat.trade_ids(group).is_empty())
+            })
+            .flat_map(|stat| {
+                let strings = stat.matchers.iter().enumerate();
+                let with_hash = strings.filter(|(_, matcher)| matcher.string.contains('#'));
+                with_hash.map(move |(index, _)| (stat, index))
+            })
     }
 }
 
@@ -235,6 +279,7 @@ mod tests {
             .find("# to maximum Life")
             .next()
             .unwrap();
+        let matcher = &stat.matchers[matcher];
 
         assert_eq!(stat.id.as_deref(), Some("base_maximum_life"));
         assert_eq!(stat.better, Better::Higher);
@@ -272,6 +317,55 @@ mod tests {
         );
 
         assert_eq!(stats.find("# à tous les Attributs").count(), 1);
+    }
+
+    #[test]
+    fn the_twin_of_a_string_is_the_english_string_at_its_place() {
+        let english = Stats::read(concat!(
+            r##"{"ref":"#% increased Armour","id":"armour","better":1,"matchers":[{"string":"#% increased Armour"},{"string":"#% reduced Armour","negate":true}]}"##,
+            "\n",
+            r##"{"ref":"# to Strength","id":"strength","better":1,"matchers":[{"string":"# to Strength"}]}"##,
+        ));
+        let french = Stats::read(concat!(
+            r##"{"ref":"#% increased Armour","id":"armour","better":1,"matchers":[{"string":"#% d'Augmentation de l'Armure"},{"string":"#% de Réduction de l'Armure","negate":true}]}"##,
+            "\n",
+            r##"{"ref":"# to Strength","id":"strength","better":1,"matchers":[{"string":"# à la Force","negate":true}]}"##,
+            "\n",
+            r##"{"ref":"# to Dexterity","id":"dexterity","better":1,"matchers":[{"string":"# à la Dextérité"}]}"##,
+        ));
+        let twin = |string| {
+            let (stat, index) = french.find(string).next().unwrap();
+            english
+                .twin(stat, index)
+                .map(|matcher| matcher.string.as_str())
+        };
+
+        assert_eq!(
+            twin("#% de Réduction de l'Armure"),
+            Some("#% reduced Armour")
+        );
+        assert_eq!(
+            twin("#% d'Augmentation de l'Armure"),
+            Some("#% increased Armour")
+        );
+        assert_eq!(twin("# à la Force"), None, "the strings don't line up");
+        assert_eq!(twin("# à la Dextérité"), None, "no such stat in English");
+    }
+
+    #[test]
+    fn two_stats_with_the_same_template_and_id_have_no_twin() {
+        let english = Stats::read(concat!(
+            r##"{"ref":"# to Strength","id":"strength","better":1,"matchers":[{"string":"# to Strength"}]}"##,
+            "\n",
+            r##"{"ref":"# to Strength","id":"strength","better":1,"matchers":[{"string":"# to Strength of the other"}]}"##,
+        ));
+        let french = Stats::read(
+            r##"{"ref":"# to Strength","id":"strength","better":1,"matchers":[{"string":"# à la Force"}]}"##,
+        );
+
+        let (stat, index) = french.find("# à la Force").next().unwrap();
+
+        assert!(english.twin(stat, index).is_none());
     }
 
     #[test]
