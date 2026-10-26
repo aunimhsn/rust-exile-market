@@ -147,17 +147,9 @@ impl TradeSite {
         name: &str,
     ) -> Result<Vec<T>, HttpError> {
         self.pace.wait();
-        let url = format!("{}/api/trade2/data/{name}", host(language));
+        let url = format!("{}/api/trade2/data/{name}", super::site(language));
         let answer: ApiResult<T> = http::get_json(&self.agent, &url, &[])?;
         Ok(answer.result)
-    }
-}
-
-/// The trade site of `language`, where its names are.
-fn host(language: Language) -> &'static str {
-    match language {
-        Language::English => "https://www.pathofexile.com",
-        Language::French => "https://fr.pathofexile.com",
     }
 }
 
