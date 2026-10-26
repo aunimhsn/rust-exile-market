@@ -116,9 +116,19 @@ impl ItemNames {
     }
 
     /// The templates of the stats of the trade site in `language`.
+    #[cfg(test)]
     #[must_use]
     pub fn stat_templates(&self, language: Language) -> &[StatTemplate] {
         &self.names(language).stats
+    }
+
+    /// Takes the templates of the stats out of the names, in English and in French: once
+    /// indexed ([`crate::game_data::TradeStats`]), they would be kept twice.
+    pub fn take_stat_templates(&mut self) -> (Vec<StatTemplate>, Vec<StatTemplate>) {
+        (
+            std::mem::take(&mut self.english.stats),
+            std::mem::take(&mut self.french.stats),
+        )
     }
 
     fn names(&self, language: Language) -> &Names {

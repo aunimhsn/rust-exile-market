@@ -209,11 +209,10 @@ impl Session {
     }
 
     /// Takes in the names of the items given by the trade site.
-    pub fn apply_item_names(&mut self, names: ItemNames) {
-        self.trade_stats = Some(TradeStats::new(
-            names.stat_templates(Language::English),
-            names.stat_templates(Language::French),
-        ));
+    pub fn apply_item_names(&mut self, mut names: ItemNames) {
+        // The names are already in the cache, with their templates.
+        let (english, french) = names.take_stat_templates();
+        self.trade_stats = Some(TradeStats::new(&english, &french));
         self.item_names = Some(names);
     }
 

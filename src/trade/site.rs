@@ -628,6 +628,17 @@ mod tests {
     }
 
     #[test]
+    fn the_stat_templates_taken_out_are_no_longer_in_the_names() {
+        let mut names = names_of_both();
+
+        let (english, french) = names.take_stat_templates();
+
+        assert_eq!((english.len(), french.len()), (3, 1));
+        assert_eq!(names.stat_templates(Language::English), []);
+        assert_eq!(names.stat_templates(Language::French), []);
+    }
+
+    #[test]
     fn the_base_types_are_those_of_the_equipment_in_each_language() {
         let names = names_of_both();
 

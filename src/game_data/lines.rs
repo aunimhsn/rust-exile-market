@@ -617,6 +617,40 @@ mod tests {
     }
 
     #[test]
+    fn a_line_without_id_in_its_group_in_both_keeps_the_stat_of_the_game_data() {
+        let trade = trade_stats();
+        // The trade site has the Mark skills as a rune only.
+        let implicit = modifier(
+            ModifierKind::Implicit,
+            None,
+            &["+2 to Level of all Mark Skills"],
+        );
+
+        let found = stat_with(Language::English, &implicit, Some(&trade));
+
+        assert_eq!(found.source, StatSource::GameData);
+        assert_eq!(
+            found.stat.trade_ids(TradeGroup::Implicit),
+            [] as [String; 0]
+        );
+    }
+
+    #[test]
+    fn a_french_line_of_the_game_data_keeps_its_english_string() {
+        let trade = trade_stats();
+
+        assert_eq!(
+            english_string(
+                Language::French,
+                "10% de Réduction de l'Armure",
+                TradeGroup::Explicit,
+                Some(&trade)
+            ),
+            Some("#% reduced Armour")
+        );
+    }
+
+    #[test]
     fn a_line_of_the_game_data_is_taken_from_it_first() {
         let trade = trade_stats();
 

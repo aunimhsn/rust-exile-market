@@ -4,8 +4,9 @@
 //!
 //! A template writes one side of its stat only (`#% reduced Charm Charges used`, without the
 //! `increased` one), and some end with a note the copied text never writes (`# to Accuracy
-//! Rating (Local)`). The note is taken out, and the stats of the same template are one stat
-//! with all their ids, like a local and a global stat in Exiled Exchange 2.
+//! Rating (Local)`). A template is looked up without its note, and with it in case a line
+//! writes it; the stats of the same template are one stat with all their ids, like a local and
+//! a global stat in Exiled Exchange 2.
 
 use std::collections::{BTreeMap, HashMap};
 use std::fmt;
@@ -52,9 +53,9 @@ impl fmt::Debug for TradeStats {
     }
 }
 
-/// The stats of the templates of one language, one per string and option. The English template
-/// of a stat is the one of its first id in `english`, or else its own string; its value is
-/// written as in its template.
+/// The stats of the templates of one language, one per string (without its note) and option.
+/// The English template of a stat is the one of its first id in `english`, or else its own
+/// string; its value is written as in its template.
 fn stats(templates: &[StatTemplate], english: &HashMap<&str, String>) -> Stats {
     let mut list: Vec<Stat> = Vec::new();
     let mut by_string: HashMap<(String, Option<i32>), usize> = HashMap::new();
@@ -67,26 +68,33 @@ fn stats(templates: &[StatTemplate], english: &HashMap<&str, String>) -> Stats {
             .entry((string.clone(), option))
             .or_insert_with(|| {
                 let reference = english.get(template.id.as_str()).unwrap_or(&string);
+                let index = list.len();
                 list.push(Stat {
                     reference: reference.clone(),
                     id: None,
                     better: Better::Neither,
-                    matchers: vec![Matcher {
-                        string,
-                        value: option.map(f64::from),
-                        negate: false,
-                    }],
+                    matchers: Vec::new(),
                     ids: BTreeMap::new(),
                     option: option.is_some(),
                     inverted: false,
                 });
-                list.len() - 1
+                index
             });
-        if let Some(stat) = list.get_mut(index) {
-            let ids = stat.ids.entry(group).or_default();
-            if !ids.contains(&id) {
-                ids.push(id);
+        let Some(stat) = list.get_mut(index) else {
+            continue;
+        };
+        for string in [string, normalize(&template.text)] {
+            if !stat.matchers.iter().any(|matcher| matcher.string == string) {
+                stat.matchers.push(Matcher {
+                    string,
+                    value: option.map(f64::from),
+                    negate: false,
+                });
             }
+        }
+        let ids = stat.ids.entry(group).or_default();
+        if !ids.contains(&id) {
+            ids.push(id);
         }
     }
     Stats::new(list)
@@ -224,6 +232,14 @@ pub mod tests {
         let [(stat, 0)] = found.as_slice() else {
             panic!("{found:?}");
         };
+        assert_eq!(
+            stats
+                .of(Language::English)
+                .find("# to Accuracy Rating (Local)")
+                .count(),
+            1,
+            "with its note too"
+        );
         assert_eq!(
             stat.trade_ids(TradeGroup::Explicit),
             ["explicit.stat_803737631", "explicit.stat_691932474"]
