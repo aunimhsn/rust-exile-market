@@ -4,9 +4,18 @@
 //! Both lines are in the language of the item: its offers are searched on the trade site of
 //! its language. Two lines are the same when they read the same with `#` in place of each
 //! number, at the same place on the item (implicit, explicit…); a line with several numbers
-//! (`Adds 5 to 82 Lightning Damage`) compares their averages.
+//! (`Adds 5 to 82 Lightning Damage`) compares their averages. The lines of the copied item are
+//! read once, when it is copied ([`CopiedLines`]).
+//!
+//! The better side of a line is read from its words: those of its English string when the
+//! line is in another language and its stat has one (`#% de Réduction de l'Armure` is read
+//! as `#% reduced Armour`), its own words otherwise. The words were classified with the owner
+//! on 2026-10-26, on every string of the stats; the `better` value of Exiled Exchange 2 isn't
+//! used, wrong on lines such as `Lose # Life when you use a Skill`.
 
+use crate::game_data::{self, TradeGroup};
 use crate::item::{Modifier, ModifierKind};
+use crate::language::Language;
 use crate::trade::offers::ModifierKind as OfferKind;
 
 /// The words that make a line read the other way, in lowercase: "reduced Movement Speed" is
@@ -15,6 +24,8 @@ use crate::trade::offers::ModifierKind as OfferKind;
 const LESS_WORDS: &[&str] = &[
     "reduced",
     "less",
+    "slower",
+    "shorter",
     "réduit",
     "réduite",
     "réduits",
@@ -28,21 +39,55 @@ const BAD_WORDS: &[&str] = &[
     "cost",
     "costs",
     "charges used",
+    "charges per use",
     "damage taken",
     "requirements",
     "lose",
+    "removes",
     "on you",
+    "against you",
+    "you take",
+    "be inflicted",
+    "penalty",
+    "seconds to cooldown",
+    // "Your Hits treat Fire Resistance as #% higher than actual value".
+    "higher than actual value",
+    "enemy stun threshold",
+    // "Abyss Pits in Map are #% less likely to have no Rewards".
+    "to have no",
+    // The Breaches and the Delirium Fog of the maps: slower is better.
+    "open and close",
+    "dissipates",
     "coût",
     "subis",
     "perd",
     "vous affectant",
 ];
 /// The words that turn what the player wants lower into what they want higher, in lowercase:
-/// "Damage taken Recouped as Life", "Mana Cost Efficiency".
-const GOOD_TURNS: &[&str] = &["recouped", "efficiency", "récupérés", "efficacité"];
+/// "Damage taken Recouped as Life", "Mana Cost Efficiency", "Gain Maximum Energy Shield equal
+/// to #% of total Strength Requirements", the buffs on the player…
+const GOOD_TURNS: &[&str] = &[
+    "recouped",
+    "recoup",
+    "efficiency",
+    "equal to",
+    "cost no",
+    "that cost",
+    // "Skills gain #% of Damage as Chaos Damage per 3 Life Cost".
+    "of damage as",
+    "reflected",
+    "debuffs on you expire",
+    "per curse on you",
+    "arcane surge on you",
+    "archon buffs on you",
+    "récupérés",
+    "efficacité",
+];
 /// What the line acts on when the player isn't its subject, in lowercase: the better side of a
 /// number is unknown (more life for the enemies, less damage on them…).
 const OTHER_SUBJECTS: &[&str] = &["enemies", "monsters", "ennemis", "monstres"];
+/// The conversions, in lowercase: their better side depends on the build.
+const BUILD_DEPENDENT: &[&str] = &["taken as", "converted to", "requirements to"];
 
 /// Which side of a number is better.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -123,7 +168,7 @@ fn average(numbers: impl ExactSizeIterator<Item = f64>) -> Option<f64> {
 fn direction(template: &str) -> Direction {
     let template = template.to_lowercase();
     let has_any = |words: &[&str]| words.iter().any(|word| has_word(&template, word));
-    if has_any(OTHER_SUBJECTS) {
+    if has_any(OTHER_SUBJECTS) || has_any(BUILD_DEPENDENT) {
         return Direction::Unknown;
     }
     let less = has_any(LESS_WORDS);
@@ -155,39 +200,81 @@ fn same_place(offer: OfferKind, kind: ModifierKind) -> bool {
     }
 }
 
-/// The difference of the offer `line`, listed as `kind`, from the same line of the copied
-/// `modifiers`, at the same place; `None` when the copied item hasn't it there, or has the
-/// same numbers.
-#[must_use]
-pub fn difference(line: &str, kind: OfferKind, modifiers: &[Modifier]) -> Option<Difference> {
-    let offer = Template::of(line);
-    // The numbers of the copied lines as the item parser read them.
-    let copied = modifiers
-        .iter()
-        .filter(|modifier| same_place(kind, modifier.kind))
-        .flat_map(|modifier| &modifier.lines)
-        .find(|copied| {
-            copied.rolls.len() == offer.numbers.len()
-                && Template::of(&copied.text).text == offer.text
-        })?;
-    let value = average(offer.numbers.iter().copied())?
-        - average(copied.rolls.iter().map(|roll| roll.value))?;
-    // A difference written 0 isn't one.
-    if crate::format::number(value.abs()) == "0" {
-        return None;
+/// A modifier line of the copied item, as the offer lines are compared with it.
+#[derive(Debug)]
+struct CopiedLine {
+    kind: ModifierKind,
+    template: String,
+    /// The numbers of the line as the item parser read them.
+    rolls: Vec<f64>,
+    direction: Direction,
+}
+
+/// The modifier lines of the copied item, read once when it is copied: the tooltip of an
+/// offer compares its lines with them each time it is drawn.
+#[derive(Debug, Default)]
+pub struct CopiedLines(Vec<CopiedLine>);
+
+impl CopiedLines {
+    /// The lines of `modifiers`, written in `language`.
+    #[must_use]
+    pub fn new(language: Language, modifiers: &[Modifier]) -> Self {
+        let lines = modifiers.iter().flat_map(|modifier| {
+            let group = TradeGroup::of(modifier);
+            modifier.lines.iter().map(move |line| {
+                let template = Template::of(&line.text).text;
+                let words = game_data::english_string(language, &line.text, group);
+                CopiedLine {
+                    kind: modifier.kind,
+                    direction: direction(words.unwrap_or(&template)),
+                    template,
+                    rolls: line.rolls.iter().map(|roll| roll.value).collect(),
+                }
+            })
+        });
+        Self(lines.collect())
     }
-    let verdict = match (direction(&offer.text), value > 0.0) {
-        (Direction::Higher, true) | (Direction::Lower, false) => Verdict::Better,
-        (Direction::Higher, false) | (Direction::Lower, true) => Verdict::Worse,
-        (Direction::Unknown, _) => Verdict::Unknown,
-    };
-    Some(Difference { value, verdict })
+
+    /// The difference of the offer `line`, listed as `kind`, from the same line of the
+    /// copied item, at the same place; `None` when the copied item hasn't it there, or has
+    /// the same numbers.
+    #[must_use]
+    pub fn difference(&self, line: &str, kind: OfferKind) -> Option<Difference> {
+        let offer = Template::of(line);
+        let copied = self.0.iter().find(|copied| {
+            same_place(kind, copied.kind)
+                && copied.rolls.len() == offer.numbers.len()
+                && copied.template == offer.text
+        })?;
+        let value =
+            average(offer.numbers.iter().copied())? - average(copied.rolls.iter().copied())?;
+        // A difference written 0 isn't one.
+        if crate::format::number(value.abs()) == "0" {
+            return None;
+        }
+        let verdict = match (copied.direction, value > 0.0) {
+            (Direction::Higher, true) | (Direction::Lower, false) => Verdict::Better,
+            (Direction::Higher, false) | (Direction::Lower, true) => Verdict::Worse,
+            (Direction::Unknown, _) => Verdict::Unknown,
+        };
+        Some(Difference { value, verdict })
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::item::StatLine;
+
+    /// The difference of the offer `line` from the copied `modifiers`, in `language`.
+    fn difference(
+        line: &str,
+        kind: OfferKind,
+        language: Language,
+        modifiers: &[Modifier],
+    ) -> Option<Difference> {
+        CopiedLines::new(language, modifiers).difference(line, kind)
+    }
 
     fn modifier(kind: ModifierKind, line: &str) -> Modifier {
         Modifier {
@@ -205,7 +292,8 @@ mod tests {
     }
 
     fn verdict(line: &str, copied: &[Modifier]) -> Option<Verdict> {
-        difference(line, OfferKind::Explicit, copied).map(|difference| difference.verdict)
+        difference(line, OfferKind::Explicit, Language::English, copied)
+            .map(|difference| difference.verdict)
     }
 
     #[test]
@@ -232,14 +320,24 @@ mod tests {
         let copied = [explicit("+55 to maximum Life"), explicit("+34 to Strength")];
 
         assert_eq!(
-            difference("+48 to maximum Life", OfferKind::Explicit, &copied),
+            difference(
+                "+48 to maximum Life",
+                OfferKind::Explicit,
+                Language::English,
+                &copied
+            ),
             Some(Difference {
                 value: -7.0,
                 verdict: Verdict::Worse,
             })
         );
         assert_eq!(
-            difference("+40 to Strength", OfferKind::Explicit, &copied),
+            difference(
+                "+40 to Strength",
+                OfferKind::Explicit,
+                Language::English,
+                &copied
+            ),
             Some(Difference {
                 value: 6.0,
                 verdict: Verdict::Better,
@@ -254,6 +352,7 @@ mod tests {
         let difference = difference(
             "Adds 5 to 82 Lightning Damage",
             OfferKind::Explicit,
+            Language::English,
             &copied,
         );
 
@@ -271,7 +370,12 @@ mod tests {
         let copied = [explicit("-10% to Fire Resistance")];
 
         assert_eq!(
-            difference("+5% to Fire Resistance", OfferKind::Explicit, &copied),
+            difference(
+                "+5% to Fire Resistance",
+                OfferKind::Explicit,
+                Language::English,
+                &copied
+            ),
             Some(Difference {
                 value: 15.0,
                 verdict: Verdict::Better,
@@ -403,6 +507,7 @@ mod tests {
             difference(
                 "Enemies in your Presence have 15% reduced Life",
                 OfferKind::Explicit,
+                Language::English,
                 &copied
             ),
             Some(Difference {
@@ -420,7 +525,9 @@ mod tests {
             modifier(ModifierKind::Corruption, "+2 to Level of all Skills"),
         ];
 
-        let value = |line, kind| difference(line, kind, &copied).map(|difference| difference.value);
+        let value = |line, kind| {
+            difference(line, kind, Language::English, &copied).map(|difference| difference.value)
+        };
 
         assert_eq!(value("+25 to Strength", OfferKind::Explicit), Some(15.0));
         assert_eq!(value("+25 to Strength", OfferKind::Implicit), None);
@@ -434,5 +541,212 @@ mod tests {
             Some(1.0),
             "the corruption adds enchantments"
         );
+    }
+
+    #[test]
+    fn slower_and_shorter_read_like_reduced() {
+        for (line, expected) in [
+            ("#% slower Curse Activation", Direction::Lower),
+            ("Leech Life #% slower", Direction::Lower),
+            (
+                "Your Heavy Stun buildup empties #% slower",
+                Direction::Lower,
+            ),
+            ("#% faster Curse Activation", Direction::Higher),
+            (
+                "Skills have a #% shorter Perfect Timing window",
+                Direction::Lower,
+            ),
+        ] {
+            assert_eq!(direction(line), expected, "{line}");
+        }
+    }
+
+    #[test]
+    fn what_the_player_wants_lower_is_better_lower() {
+        for (line, expected) in [
+            ("#% increased Charges per use", Direction::Lower),
+            ("#% reduced Charges per use", Direction::Higher),
+            (
+                "#% increased Movement Speed Penalty from using Skills while moving",
+                Direction::Lower,
+            ),
+            (
+                "Hits against you have #% reduced Critical Damage Bonus",
+                Direction::Higher,
+            ),
+            (
+                "Hits have #% increased Critical Hit Chance against you",
+                Direction::Lower,
+            ),
+            (
+                "#% chance to be inflicted with Bleeding when Hit",
+                Direction::Lower,
+            ),
+            ("Skills have # seconds to Cooldown", Direction::Lower),
+            ("You take #% of damage from Blocked Hits", Direction::Lower),
+            (
+                "Your Hits treat Fire Resistance as #% higher than actual value",
+                Direction::Lower,
+            ),
+            (
+                "Abyss Pits in Map are #% less likely to have no Rewards",
+                Direction::Higher,
+            ),
+            ("#% reduced Enemy Stun Threshold", Direction::Higher),
+            ("#% increased Enemy Stun Threshold", Direction::Lower),
+            ("Removes # of your Life per Enemy Hit", Direction::Lower),
+            (
+                "Removes #% of Mana Recovered from Life when used",
+                Direction::Lower,
+            ),
+            // The Breaches and the Delirium Fog of the maps last longer when slower.
+            ("Breaches open and close #% slower", Direction::Higher),
+            ("Breaches in Map open and close #% faster", Direction::Lower),
+            ("Delirium Fog dissipates #% slower", Direction::Higher),
+            (
+                "Delirium Fog in Area dissipates #% faster",
+                Direction::Lower,
+            ),
+        ] {
+            assert_eq!(direction(line), expected, "{line}");
+        }
+    }
+
+    #[test]
+    fn some_words_turn_what_the_player_wants_lower_into_better_higher() {
+        for (line, expected) in [
+            (
+                "You Recoup #% of Damage taken by your Offerings as Life",
+                Direction::Higher,
+            ),
+            (
+                "Gain Maximum Energy Shield equal to #% of total\nStrength Requirements of Equipped Armour Items",
+                Direction::Higher,
+            ),
+            (
+                "Favours Rerolled at Ritual Altars in Map have #% chance to cost no Tribute",
+                Direction::Higher,
+            ),
+            (
+                "Skills gain #% of Damage as Chaos Damage per 3 Life Cost",
+                Direction::Higher,
+            ),
+            // Not a gain: the cost is what the player gets.
+            (
+                "Skills Gain #% of Mana Cost as Extra Life Cost",
+                Direction::Lower,
+            ),
+            ("Debuffs on you expire #% faster", Direction::Higher),
+            ("Debuffs on you expire #% slower", Direction::Lower),
+            ("Bonded: Buffs on you expire #% faster", Direction::Lower),
+            (
+                "#% of Melee Physical Damage taken reflected to Attacker",
+                Direction::Higher,
+            ),
+            ("#% increased Damage per Curse on you", Direction::Higher),
+            ("#% reduced Totem Damage per Curse on you", Direction::Lower),
+            (
+                "#% increased effect of Arcane Surge on you",
+                Direction::Higher,
+            ),
+            ("#% reduced effect of Archon Buffs on you", Direction::Lower),
+            (
+                "#% increased Spell Damage with Spells that cost Life",
+                Direction::Higher,
+            ),
+        ] {
+            assert_eq!(direction(line), expected, "{line}");
+        }
+    }
+
+    #[test]
+    fn a_conversion_has_no_better_side() {
+        for line in [
+            "#% of Physical Damage taken as Fire Damage",
+            "#% of Elemental Damage Converted to Chaos Damage",
+            "#% of Skill Mana Costs Converted to Life Costs",
+            "Convert #% of Requirements to Dexterity",
+        ] {
+            assert_eq!(direction(line), Direction::Unknown, "{line}");
+        }
+    }
+
+    #[test]
+    fn a_french_line_is_read_with_the_words_of_its_english_string() {
+        let copied = [
+            explicit("10% de Réduction de l'Armure"),
+            explicit("20% d'Augmentation des Charges par utilisation"),
+        ];
+        let verdict = |line| {
+            difference(line, OfferKind::Explicit, Language::French, &copied)
+                .map(|difference| difference.verdict)
+        };
+
+        // Read as `#% reduced Armour` and `#% increased Charges per use`.
+        assert_eq!(
+            verdict("15% de Réduction de l'Armure"),
+            Some(Verdict::Worse)
+        );
+        assert_eq!(
+            verdict("15% d'Augmentation des Charges par utilisation"),
+            Some(Verdict::Better)
+        );
+        assert_eq!(
+            game_data::english_string(
+                Language::English,
+                "10% reduced Armour",
+                TradeGroup::Explicit
+            ),
+            None,
+            "an English line keeps its own words"
+        );
+    }
+
+    #[test]
+    fn a_french_line_without_english_string_is_read_with_its_own_words() {
+        let copied = [explicit("Réduit une chose inconnue de 10 %")];
+
+        assert_eq!(
+            difference(
+                "Réduit une chose inconnue de 15 %",
+                OfferKind::Explicit,
+                Language::French,
+                &copied
+            )
+            .map(|difference| difference.verdict),
+            Some(Verdict::Worse)
+        );
+    }
+
+    /// The number of strings of the stats read higher, lower and unknown in `language`.
+    fn counts(language: Language) -> (usize, usize, usize) {
+        let mut counts = (0, 0, 0);
+        for (string, english) in game_data::equipment_strings(language) {
+            match direction(english.unwrap_or(string)) {
+                Direction::Higher => counts.0 += 1,
+                Direction::Lower => counts.1 += 1,
+                Direction::Unknown => counts.2 += 1,
+            }
+        }
+        counts
+    }
+
+    /// The words were classified with the owner on 2026-10-26, on every string of the stats
+    /// that can be on equipment: a change of the words or of the game data changes these
+    /// counts, and the lines read differently are to look at before updating them.
+    #[test]
+    fn every_string_of_the_stats_reads_as_classified() {
+        assert_eq!(counts(Language::English), (1983, 599, 300));
+        assert_eq!(counts(Language::French), (2008, 589, 304));
+
+        // Two changes that make up for each other would keep the counts: the French strings
+        // with an English string are counted too.
+        let french = game_data::equipment_strings(Language::French);
+        let twins = french
+            .iter()
+            .filter(|(_, english)| english.is_some())
+            .count();
+        assert_eq!((twins, french.len()), (2616, 2901));
     }
 }

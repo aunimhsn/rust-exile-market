@@ -12,6 +12,7 @@ use crate::league::{League, Leagues};
 use crate::market::{MarketEvent, Source};
 use crate::prices::{PriceList, Rates, UniqueModifiers};
 use crate::pricing::{self, FixedPrice, NoFixedPrice};
+use crate::roll_difference::CopiedLines;
 use crate::trade::link::{self, TradeTarget};
 use crate::trade::search::Search;
 
@@ -19,25 +20,34 @@ use crate::trade::search::Search;
 #[derive(Debug)]
 pub struct ShownItem {
     parsed: Result<Item, ParseError>,
+    /// Its modifier lines, which the offers are compared with; none for an unreadable item.
+    lines: CopiedLines,
 }
 
 impl ShownItem {
     fn new(copied: &CopiedItem) -> Self {
         let parsed = Item::parse(copied);
+        let mut lines = CopiedLines::default();
         match &parsed {
             Ok(item) => {
                 log::debug!("{item:#?}");
                 for warning in item.warnings() {
                     log::warn!("A part of a copied item couldn't be read: {warning}");
                 }
+                lines = CopiedLines::new(item.language(), item.modifiers());
             }
             Err(error) => log::warn!("A copied item couldn't be read: {error}"),
         }
-        Self { parsed }
+        Self { parsed, lines }
     }
 
     pub fn parsed(&self) -> Result<&Item, ParseError> {
         self.parsed.as_ref().map_err(|&error| error)
+    }
+
+    #[must_use]
+    pub fn lines(&self) -> &CopiedLines {
+        &self.lines
     }
 }
 

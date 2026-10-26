@@ -2,7 +2,7 @@
 //! the strings that match a modifier line in each language, and the trade ids of each stat.
 
 use std::collections::{BTreeMap, HashMap};
-use std::sync::LazyLock;
+use std::sync::{LazyLock, OnceLock};
 
 use serde::Deserialize;
 
@@ -118,6 +118,9 @@ pub(super) struct Stats {
     list: Vec<Stat>,
     /// The index of the stat and of its matcher, by string written as [`normalize`] does.
     by_string: HashMap<String, Vec<(usize, usize)>>,
+    /// The indexes of the stats by their English template, built at the first
+    /// [`Stats::twin`]: only the English stats are asked for twins.
+    by_reference: OnceLock<HashMap<String, Vec<usize>>>,
     /// The most lines a string has.
     pub max_lines: usize,
 }
@@ -170,28 +173,81 @@ impl Stats {
         Self {
             list: stats,
             by_string,
+            by_reference: OnceLock::new(),
             max_lines,
         }
     }
 
-    /// The stats with a line written `string` (normalized), and the matcher of that line.
-    pub fn find<'a>(
-        &'a self,
-        string: &str,
-    ) -> impl Iterator<Item = (&'a Stat, &'a Matcher)> + use<'a> {
+    /// The stats with a line written `string` (normalized), and the index of the matcher of
+    /// that line among the matchers of its stat.
+    pub fn find<'a>(&'a self, string: &str) -> impl Iterator<Item = (&'a Stat, usize)> + use<'a> {
         self.by_string
             .get(string)
             .into_iter()
             .flatten()
-            .filter_map(|&(stat, matcher)| {
-                let stat = self.list.get(stat)?;
-                Some((stat, stat.matchers.get(matcher)?))
-            })
+            .filter_map(|&(stat, matcher_index)| Some((self.list.get(stat)?, matcher_index)))
+    }
+
+    /// The matcher of these stats at the place of the matcher `matcher_index` of `stat`, a
+    /// stat of another language: the stat with the same English template and game id, whose
+    /// strings are in the same order in every language (checked on 2026-10-26: 2,616 of the
+    /// 2,901 French strings with `#` of the equipment line up). None when two stats have
+    /// this template and id, or when the matcher there doesn't negate like the other or
+    /// doesn't give the same value: the strings don't line up.
+    pub fn twin(&self, stat: &Stat, matcher_index: usize) -> Option<&Matcher> {
+        let by_reference = self.by_reference.get_or_init(|| {
+            let mut by_reference: HashMap<String, Vec<usize>> = HashMap::new();
+            for (index, stat) in self.list.iter().enumerate() {
+                by_reference
+                    .entry(stat.reference.clone())
+                    .or_default()
+                    .push(index);
+            }
+            by_reference
+        });
+        let mut same = by_reference
+            .get(&stat.reference)?
+            .iter()
+            .filter_map(|&index| self.list.get(index))
+            .filter(|other| other.id == stat.id);
+        let twin = same.next()?;
+        if same.next().is_some() {
+            return None;
+        }
+        let matcher = twin.matchers.get(matcher_index)?;
+        let other = stat.matchers.get(matcher_index)?;
+        (matcher.negate == other.negate && matcher.value == other.value).then_some(matcher)
     }
 
     #[cfg(test)]
     pub fn len(&self) -> usize {
         self.list.len()
+    }
+
+    /// The strings with `#` of the stats that can be on equipment, and the index of each.
+    #[cfg(test)]
+    pub fn equipment_strings(&self) -> impl Iterator<Item = (&Stat, usize)> {
+        const GROUPS: [TradeGroup; 7] = [
+            TradeGroup::Explicit,
+            TradeGroup::Implicit,
+            TradeGroup::Fractured,
+            TradeGroup::Desecrated,
+            TradeGroup::Crafted,
+            TradeGroup::Enchant,
+            TradeGroup::Rune,
+        ];
+        self.list
+            .iter()
+            .filter(|stat| {
+                GROUPS
+                    .iter()
+                    .any(|&group| !stat.trade_ids(group).is_empty())
+            })
+            .flat_map(|stat| {
+                let strings = stat.matchers.iter().enumerate();
+                let with_hash = strings.filter(|(_, matcher)| matcher.string.contains('#'));
+                with_hash.map(move |(index, _)| (stat, index))
+            })
     }
 }
 
@@ -231,10 +287,11 @@ mod tests {
 
     #[test]
     fn a_stat_has_its_ids_in_each_group() {
-        let (stat, matcher) = Stats::of(Language::English)
+        let (stat, matcher_index) = Stats::of(Language::English)
             .find("# to maximum Life")
             .next()
             .unwrap();
+        let matcher = &stat.matchers[matcher_index];
 
         assert_eq!(stat.id.as_deref(), Some("base_maximum_life"));
         assert_eq!(stat.better, Better::Higher);
@@ -272,6 +329,55 @@ mod tests {
         );
 
         assert_eq!(stats.find("# à tous les Attributs").count(), 1);
+    }
+
+    #[test]
+    fn the_twin_of_a_string_is_the_english_string_at_its_place() {
+        let english = Stats::read(concat!(
+            r##"{"ref":"#% increased Armour","id":"armour","better":1,"matchers":[{"string":"#% increased Armour"},{"string":"#% reduced Armour","negate":true}]}"##,
+            "\n",
+            r##"{"ref":"# to Strength","id":"strength","better":1,"matchers":[{"string":"# to Strength"}]}"##,
+        ));
+        let french = Stats::read(concat!(
+            r##"{"ref":"#% increased Armour","id":"armour","better":1,"matchers":[{"string":"#% d'Augmentation de l'Armure"},{"string":"#% de Réduction de l'Armure","negate":true}]}"##,
+            "\n",
+            r##"{"ref":"# to Strength","id":"strength","better":1,"matchers":[{"string":"# à la Force","negate":true}]}"##,
+            "\n",
+            r##"{"ref":"# to Dexterity","id":"dexterity","better":1,"matchers":[{"string":"# à la Dextérité"}]}"##,
+        ));
+        let twin = |string| {
+            let (stat, index) = french.find(string).next().unwrap();
+            english
+                .twin(stat, index)
+                .map(|matcher| matcher.string.as_str())
+        };
+
+        assert_eq!(
+            twin("#% de Réduction de l'Armure"),
+            Some("#% reduced Armour")
+        );
+        assert_eq!(
+            twin("#% d'Augmentation de l'Armure"),
+            Some("#% increased Armour")
+        );
+        assert_eq!(twin("# à la Force"), None, "the strings don't line up");
+        assert_eq!(twin("# à la Dextérité"), None, "no such stat in English");
+    }
+
+    #[test]
+    fn two_stats_with_the_same_template_and_id_have_no_twin() {
+        let english = Stats::read(concat!(
+            r##"{"ref":"# to Strength","id":"strength","better":1,"matchers":[{"string":"# to Strength"}]}"##,
+            "\n",
+            r##"{"ref":"# to Strength","id":"strength","better":1,"matchers":[{"string":"# to Strength of the other"}]}"##,
+        ));
+        let french = Stats::read(
+            r##"{"ref":"# to Strength","id":"strength","better":1,"matchers":[{"string":"# à la Force"}]}"##,
+        );
+
+        let (stat, index) = french.find("# à la Force").next().unwrap();
+
+        assert!(english.twin(stat, index).is_none());
     }
 
     #[test]

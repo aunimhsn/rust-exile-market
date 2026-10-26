@@ -270,8 +270,15 @@ impl ExileMarketApp {
             PriceBlock::new(item, fixed_price, prices, league, &self.i18n).show(ui);
             if let Some(search) = &search {
                 let kind = search.query.kind();
-                offers_action =
-                    OffersBlock::new(&self.offers, kind, reference, item, &self.i18n).show(ui);
+                offers_action = OffersBlock::new(
+                    &self.offers,
+                    kind,
+                    reference,
+                    item,
+                    shown.lines(),
+                    &self.i18n,
+                )
+                .show(ui);
             } else if must_identify {
                 OffersBlock::identify(ui, &self.i18n);
             }

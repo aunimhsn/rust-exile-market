@@ -25,6 +25,7 @@ use crate::i18n::{Message, Translator};
 use crate::item::Item;
 use crate::offers::{LONG_WAIT, Offers, OffersState};
 use crate::prices::Rates;
+use crate::roll_difference::CopiedLines;
 use crate::trade::offers::{ExchangeOffer, ItemOffer, Price, SellerStatus};
 use crate::trade::query::SearchKind;
 
@@ -252,8 +253,9 @@ pub struct OffersBlock<'a> {
     offers: &'a Offers,
     kind: SearchKind,
     reference: Option<Reference>,
-    /// The copied item, whose rolls the tooltips compare.
+    /// The copied item, and its lines, which the tooltips compare.
     item: &'a Item,
+    lines: &'a CopiedLines,
     i18n: &'a Translator,
 }
 
@@ -266,6 +268,7 @@ impl<'a> OffersBlock<'a> {
         kind: SearchKind,
         reference: Option<Reference>,
         item: &'a Item,
+        lines: &'a CopiedLines,
         i18n: &'a Translator,
     ) -> Self {
         Self {
@@ -273,6 +276,7 @@ impl<'a> OffersBlock<'a> {
             kind,
             reference,
             item,
+            lines,
             i18n,
         }
     }
@@ -747,7 +751,7 @@ impl<'a> OffersBlock<'a> {
         {
             let tooltip = OfferTooltip {
                 offer,
-                modifiers: self.item.modifiers(),
+                lines: self.lines,
                 name_color: rarity_color(offer.item.rarity.unwrap_or(self.item.rarity())),
                 suspicious: row.suspicious,
                 copied: state.shows_copied(&offer.id, time),
