@@ -170,6 +170,10 @@ fn raw_url(commit: &str, path: &str) -> String {
 }
 
 fn get(agent: &ureq::Agent, url: &str) -> Result<String> {
+    read(agent, url).map_err(|error| format!("{url}: {error}").into())
+}
+
+fn read(agent: &ureq::Agent, url: &str) -> Result<String> {
     Ok(agent
         .get(url)
         .header(

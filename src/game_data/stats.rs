@@ -151,10 +151,20 @@ impl Stats {
             for (matcher_index, matcher) in stat.matchers.iter().enumerate() {
                 let string = normalize(&matcher.string);
                 max_lines = max_lines.max(string.lines().count());
-                by_string
-                    .entry(string)
-                    .or_default()
-                    .push((stat_index, matcher_index));
+                let entries = by_string.entry(string).or_default();
+                // The same string once normalized, e.g. with and without a no-break space.
+                let same = |&(other_stat, other_matcher): &(usize, usize)| {
+                    other_stat == stat_index
+                        && stat
+                            .matchers
+                            .get(other_matcher)
+                            .is_some_and(|other: &Matcher| {
+                                other.negate == matcher.negate && other.value == matcher.value
+                            })
+                };
+                if !entries.iter().any(same) {
+                    entries.push((stat_index, matcher_index));
+                }
             }
         }
         Self {
@@ -165,7 +175,10 @@ impl Stats {
     }
 
     /// The stats with a line written `string` (normalized), and the matcher of that line.
-    pub fn find(&self, string: &str) -> impl Iterator<Item = (&Stat, &Matcher)> {
+    pub fn find<'a>(
+        &'a self,
+        string: &str,
+    ) -> impl Iterator<Item = (&'a Stat, &'a Matcher)> + use<'a> {
         self.by_string
             .get(string)
             .into_iter()
@@ -235,6 +248,30 @@ mod tests {
         );
         assert_eq!(stat.trade_ids(TradeGroup::Skill), [] as [String; 0]);
         assert!(!matcher.negate);
+    }
+
+    #[test]
+    fn a_stat_that_cant_be_read_is_left_out() {
+        let stats = Stats::read(concat!(
+            r##"{"ref":"# to maximum Life","better":1,"matchers":[{"string":"# to maximum Life"}]}"##,
+            "\n",
+            r##"{"ref":"# to Strength","better":2,"matchers":[]}"##,
+            "\n",
+            "not a stat\n",
+        ));
+
+        assert_eq!(stats.len(), 1);
+        assert_eq!(stats.find("# to maximum Life").count(), 1);
+        assert!(Better::try_from(2).is_err());
+    }
+
+    #[test]
+    fn a_string_written_twice_once_normalized_is_found_once() {
+        let stats = Stats::read(
+            r##"{"ref":"# to all Attributes","better":1,"matchers":[{"string":"#\u00a0à tous les Attributs"},{"string":"# à tous les Attributs"}]}"##,
+        );
+
+        assert_eq!(stats.find("# à tous les Attributs").count(), 1);
     }
 
     #[test]

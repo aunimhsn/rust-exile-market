@@ -48,10 +48,11 @@ pub fn modifier_stats(language: Language, modifier: &Modifier) -> Vec<LineMatch>
     let mut first = 0;
     while first < texts.len() {
         let most = stats.max_lines.min(texts.len() - first);
-        let found = (1..=most).rev().find_map(|count| {
+        let windows = (1..=most).rev().filter_map(|count| {
             let text = texts.get(first..first + count)?.join("\n");
             Some((count, find(stats, &text, group)?))
         });
+        let found = first_with_id(windows, |(_, stat)| has_id(stat, group));
         let (count, stat) = found.map_or((1, None), |(count, stat)| (count, Some(stat)));
         matches.push(LineMatch {
             lines: first..first + count,
@@ -62,23 +63,42 @@ pub fn modifier_stats(language: Language, modifier: &Modifier) -> Vec<LineMatch>
     matches
 }
 
-/// The stat written `text`; among the stats with the same string, one with an id in the
-/// group of the line.
+/// The stat written `text`, preferably one with an id in the group of the line: a string
+/// with `#` can be a stat of another group (`#% of Armour also applies to Lightning Damage`
+/// is a rune) while the line is a stat that writes its number (`100% of Armour…`).
 fn find(stats: &'static Stats, text: &str, group: TradeGroup) -> Option<StatMatch> {
     let numbers = numbers(text);
-    templates(text, &numbers).find_map(|template| {
-        let candidates: Vec<(&Stat, &Matcher)> = stats.find(&template.string).collect();
-        let &(stat, matcher) = candidates
-            .iter()
-            .find(|(stat, _)| !stat.trade_ids(group).is_empty())
-            .or_else(|| candidates.first())?;
-        let sign = if matcher.negate { -1.0 } else { 1.0 };
-        Some(StatMatch {
-            stat,
-            values: template.values.iter().map(|value| value * sign).collect(),
-            matcher_value: matcher.value,
-        })
-    })
+    let found = templates(text, &numbers).flat_map(|template| {
+        stats
+            .find(&template.string)
+            .map(move |(stat, matcher)| stat_match(stat, matcher, &template.values))
+    });
+    first_with_id(found, |stat| has_id(stat, group))
+}
+
+fn stat_match(stat: &'static Stat, matcher: &Matcher, values: &[f64]) -> StatMatch {
+    let sign = if matcher.negate { -1.0 } else { 1.0 };
+    StatMatch {
+        stat,
+        values: values.iter().map(|value| value * sign).collect(),
+        matcher_value: matcher.value,
+    }
+}
+
+fn has_id(stat: &StatMatch, group: TradeGroup) -> bool {
+    !stat.stat.trade_ids(group).is_empty()
+}
+
+/// The first item that has an id in its group, or else the first item.
+fn first_with_id<T>(items: impl Iterator<Item = T>, has_id: impl Fn(&T) -> bool) -> Option<T> {
+    let mut first = None;
+    for item in items {
+        if has_id(&item) {
+            return Some(item);
+        }
+        first = first.or(Some(item));
+    }
+    first
 }
 
 /// A number of a line, with its sign when it has one.
@@ -324,6 +344,41 @@ mod tests {
         );
         assert_eq!(found.values, Vec::<f64>::new());
         assert_eq!(found.matcher_value, Some(100.0));
+    }
+
+    #[test]
+    fn a_stat_with_an_id_in_the_group_is_preferred_to_a_string_with_more_hashes() {
+        for (language, line) in [
+            (
+                Language::English,
+                "100% of Armour also applies to Lightning Damage",
+            ),
+            (
+                Language::French,
+                "100% de l'Armure s'applique également aux Dégâts de Foudre",
+            ),
+        ] {
+            let found = stat(language, &explicit(&[line]));
+
+            assert_eq!(
+                found.stat.trade_ids(TradeGroup::Explicit),
+                ["explicit.stat_2134207902"],
+                "{language:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn beyond_six_numbers_only_the_string_with_every_hash_is_looked_up() {
+        let text = "1 2 3 4 5 6 7";
+        let numbers = numbers(text);
+
+        let strings: Vec<String> = templates(text, &numbers)
+            .map(|template| template.string)
+            .collect();
+
+        assert_eq!(strings, ["# # # # # # #"]);
+        assert_eq!(templates("1 2", &super::numbers("1 2")).count(), 4);
     }
 
     #[test]
