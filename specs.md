@@ -11,7 +11,7 @@ rust-exile-market is a small desktop application that gives the price of a Path 
   - **fixed-name items** (currency and the other items of the currency exchange: fragments, essences, runes, soul cores, omens, uncut gems…, and unique items) from a public price database;
   - **rare, magic and normal items and jewels**, which have no market price, from the offers of similar items on the trade site.
 
-The reference of the interface is the mock-up [docs/mockups/narrow-styles.html](docs/mockups/narrow-styles.html) (style B · Slate). The wireframe [docs/wireframes/window-layouts.excalidraw](docs/wireframes/window-layouts.excalidraw) only fixed the first layout; where they differ, the mock-up is right.
+The single source of truth of the interface is the mock-up [docs/mockups/narrow-styles.html](docs/mockups/narrow-styles.html) and its folder `docs/mockups/narrow-styles/` (style B · Slate). The wireframe [docs/wireframes/window-layouts.excalidraw](docs/wireframes/window-layouts.excalidraw) only fixed the first layout and isn't kept up to date.
 
 ## Design principles
 
