@@ -8,6 +8,8 @@ use serde::Deserialize;
 use serde::de::{self, Deserializer};
 use serde_json::Value;
 
+use crate::item::Rarity;
+
 /// The status of a seller.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SellerStatus {
@@ -40,6 +42,8 @@ pub struct ItemOffer {
 /// What the tooltip of an offer shows of its item.
 #[derive(Debug, Clone, PartialEq)]
 pub struct OfferItem {
+    /// Normal, magic, rare or unique; `None` when the trade site doesn't say.
+    pub rarity: Option<Rarity>,
     pub name: Option<String>,
     pub base_type: String,
     pub item_level: Option<u32>,
@@ -142,6 +146,10 @@ struct ApiItem {
     ilvl: Option<u32>,
     #[serde(default)]
     corrupted: bool,
+    /// `Unique`, `Rare`…
+    rarity: Option<String>,
+    /// 0 normal, 1 magic, 2 rare, 3 unique, as in the API of Path of Exile 1.
+    frame_type: Option<u32>,
     #[serde(default)]
     enchant_mods: Vec<ApiModifier>,
     #[serde(default)]
@@ -150,6 +158,12 @@ struct ApiItem {
     implicit_mods: Vec<ApiModifier>,
     #[serde(default)]
     explicit_mods: Vec<ApiModifier>,
+    /// Explicit modifiers too, listed apart in the API of Path of Exile 1: on 2026-10-26, the
+    /// fractured items of Path of Exile 2 had their fractured lines in `explicitMods` only.
+    #[serde(default)]
+    fractured_mods: Vec<ApiModifier>,
+    #[serde(default)]
+    desecrated_mods: Vec<ApiModifier>,
 }
 
 /// A modifier as `/fetch` gives it: with its stat on 2026-10-26, a plain text in the API of
@@ -230,7 +244,9 @@ impl ApiListed {
             (ModifierKind::Enchant, item.enchant_mods),
             (ModifierKind::Rune, item.rune_mods),
             (ModifierKind::Implicit, item.implicit_mods),
+            (ModifierKind::Explicit, item.fractured_mods),
             (ModifierKind::Explicit, item.explicit_mods),
+            (ModifierKind::Explicit, item.desecrated_mods),
         ]
         .into_iter()
         .flat_map(|(kind, modifiers)| {
@@ -249,6 +265,7 @@ impl ApiListed {
             listed: self.listing.indexed.as_deref().and_then(parse_time),
             whisper: self.listing.whisper,
             item: OfferItem {
+                rarity: rarity(item.rarity.as_deref(), item.frame_type),
                 name: Some(item.name).filter(|name| !name.is_empty()),
                 base_type: item.base_type.unwrap_or(item.type_line),
                 item_level: item.ilvl,
@@ -256,6 +273,17 @@ impl ApiListed {
                 modifiers,
             },
         }
+    }
+}
+
+/// The rarity of a listed item, from its name, or else from its frame.
+fn rarity(name: Option<&str>, frame_type: Option<u32>) -> Option<Rarity> {
+    match (name, frame_type) {
+        (Some("Normal"), _) | (None, Some(0)) => Some(Rarity::Normal),
+        (Some("Magic"), _) | (None, Some(1)) => Some(Rarity::Magic),
+        (Some("Rare"), _) | (None, Some(2)) => Some(Rarity::Rare),
+        (Some("Unique"), _) | (None, Some(3)) => Some(Rarity::Unique),
+        _ => None,
     }
 }
 
@@ -409,11 +437,14 @@ mod tests {
             "whisper": "@seller Hi, I would like to buy your Andvarius Gold Ring listed for 1 divine in Standard"
         }, "item": {
             "name": "Andvarius", "typeLine": "Gold Ring", "baseType": "Gold Ring", "ilvl": 41,
+            "rarity": "Unique",
             "implicitMods": [{"description": "14% increased [ItemRarity|Rarity of Items] found", "hash": "stat.implicit.stat_3917489142"}],
             "explicitMods": [
                 {"description": "-20% to all [ElementalDamage|Elemental] [Resistances]", "hash": "stat.explicit.stat_2901986750"},
                 "+10 to Dexterity"
-            ]
+            ],
+            "fracturedMods": [{"description": "+20 to Strength", "hash": "stat.explicit.stat_4080418644"}],
+            "desecratedMods": [{"description": "+5% to Chaos Resistance"}]
         }},
         null,
         {"id": "f553", "listing": {
@@ -421,7 +452,7 @@ mod tests {
             "price": {"type": "~b/o", "amount": 2.5, "currency": "exalted"},
             "account": {"online": {"league": "Standard", "status": "afk"}},
             "whisper": "@other Hi"
-        }, "item": {"typeLine": "Gold Ring", "corrupted": true}}
+        }, "item": {"typeLine": "Gold Ring", "corrupted": true, "frameType": 1}}
     ]}"#;
 
     /// `/exchange` on 2026-10-26, shortened, with a second listing.
@@ -473,12 +504,24 @@ mod tests {
                 stat: Some("implicit.stat_3917489142".to_owned()),
             }
         );
+        let explicit: Vec<(ModifierKind, &str)> = ring.item.modifiers[1..]
+            .iter()
+            .map(|modifier| (modifier.kind, modifier.text.as_str()))
+            .collect();
         assert_eq!(
-            ring.item.modifiers[1].text,
-            "-20% to all Elemental Resistances"
+            explicit,
+            [
+                (ModifierKind::Explicit, "+20 to Strength"),
+                (ModifierKind::Explicit, "-20% to all Elemental Resistances"),
+                (ModifierKind::Explicit, "+10 to Dexterity"),
+                (ModifierKind::Explicit, "+5% to Chaos Resistance"),
+            ],
+            "the fractured and desecrated modifiers are explicit"
         );
-        assert_eq!(ring.item.modifiers[2].stat, None, "a plain text");
+        assert_eq!(ring.item.modifiers[3].stat, None, "a plain text");
+        assert_eq!(ring.item.rarity, Some(Rarity::Unique));
         let away = &offers[1];
+        assert_eq!(away.item.rarity, Some(Rarity::Magic), "from its frame");
         assert_eq!(away.seller, SellerStatus::Away);
         assert!(away.item.corrupted);
         assert_eq!(away.item.name, None);

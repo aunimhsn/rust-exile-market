@@ -216,13 +216,21 @@ offers-busy-tooltip = En attente de la réponse du site d'échange
 # L'infobulle du compte à rebours avant la prochaine recherche, par exemple « 8s ».
 offers-next-search-tooltip = Prochaine recherche dans { $wait }
 # Sous le titre, pendant une longue attente, par exemple « 4min ».
-offers-limit = Limite du site d'échange : prochaine recherche dans { $wait }.
+offers-limit = Limite du site d'échange : recherche dans { $wait }.
 offers-none = Aucune offre en ligne avec ces filtres.
 offers-none-hint = Décochez une stat ou baissez un minimum, puis cherchez à nouveau.
 offers-unreachable = Le site d'échange est injoignable.
 offers-identify = Identifiez l'objet pour chercher ses offres.
 # Le double chevron sous la liste.
 offers-more-tooltip = Afficher plus d'offres
+# L'infobulle d'une offre : un prix très en dessous du marché, le statut du vendeur, et la
+# pastille qui copie le message (whisper) du site d'échange.
+offers-suspicious = Attention : très en dessous du prix du marché.
+seller-online = En ligne
+seller-away = Absent
+seller-offline = Hors ligne
+copy-whisper = Copier le whisper
+whisper-copied = Copié
 
 ## Réglages
 

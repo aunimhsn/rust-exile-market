@@ -1,7 +1,7 @@
-//! The offers block, on band B under the price block: the search block before the first
-//! search of the item, then the offers of the trade site, the cheapest first, with the
-//! waiting block in its top right corner, which counts down to the next search and then
-//! searches again.
+//! The offers block, on band B under the price block: its title row, with a square action
+//! block in the top right corner (search, the spinner of the search, the countdown to the
+//! next search, then search again), and once they come, the offers of the trade site, the
+//! cheapest first.
 //!
 //! The rows are decided apart from the drawing ([`item_rows`], [`exchange_rows`]), and
 //! tested.
@@ -11,15 +11,18 @@ use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime};
 
 use egui::{
-    Color32, CursorIcon, Galley, Painter, Pos2, Rect, Response, Role, Sense, Stroke, Ui, Vec2,
-    WidgetInfo, pos2, vec2,
+    Color32, CursorIcon, Galley, Id, Key, Painter, Pos2, Rect, Response, Role, Sense, Stroke, Ui,
+    Vec2, WidgetInfo, pos2, vec2,
 };
 
+use super::item_block::rarity_color;
+use super::offer_tooltip::{OfferTooltip, Pointer, TooltipState, reach};
 use super::price_block::orb;
 use super::theme::{color, size, text};
 use super::widgets;
 use crate::format::{self, Currency};
 use crate::i18n::{Message, Translator};
+use crate::item::Item;
 use crate::offers::{LONG_WAIT, Offers, OffersState};
 use crate::prices::Rates;
 use crate::trade::offers::{ExchangeOffer, ItemOffer, Price, SellerStatus};
@@ -29,15 +32,12 @@ use crate::trade::query::SearchKind;
 const PADDING_Y: f32 = 12.0;
 /// The space between the label and the line under it.
 const TITLE_GAP: f32 = 4.0;
-/// The space between the label and the message of the search.
-const SEARCHING_GAP: f32 = 18.0;
 /// The space between two messages.
 const MESSAGE_GAP: f32 = 2.0;
-/// The action blocks: the search block, the height of its band, and the waiting block, the
-/// height of the title row.
-const BLOCK_WIDTH: f32 = 56.0;
+/// The title row, and the square action block in its corner: search, wait, search again.
 const HEAD_HEIGHT: f32 = 48.0;
-/// The space between the count and the waiting block.
+const BLOCK_SIZE: f32 = HEAD_HEIGHT;
+/// The space between the count and the action block, and before the count.
 const COUNT_GAP: f32 = 12.0;
 /// The space under the title row.
 const HEAD_GAP: f32 = 6.0;
@@ -55,7 +55,6 @@ const HOVER_TIME: f32 = 0.22;
 /// The spinner of the search.
 const SPINNER_RADIUS: f32 = 6.0;
 const SPINNER_STROKE: f32 = 2.0;
-const SPINNER_GAP: f32 = 10.0;
 /// Turns per second.
 const SPINNER_SPEED: f32 = 1.2;
 /// The rows: the space above and under their text, and between their columns.
@@ -78,6 +77,8 @@ const MORE_HEIGHT: f32 = 32.0;
 const MORE_GAP: f32 = 6.0;
 const MORE_RAISE: f32 = 3.0;
 const MORE_SLIDE: f32 = 2.0;
+/// The space above the message of the next offers that couldn't come.
+const MORE_FAILED_GAP: f32 = 8.0;
 /// An offer under this share of the reference price is suspicious.
 const SUSPICIOUS_SHARE: f64 = 0.25;
 
@@ -98,11 +99,21 @@ pub struct Reference {
 
 /// The price of a row, in its currency.
 #[derive(Debug, Clone, PartialEq)]
-struct RowPrice {
+pub(super) struct RowPrice {
     amount: String,
     /// One of the three currencies of the prices, shown by its orb, or another one by its
     /// name on the trade site.
-    currency: Result<Currency, String>,
+    pub(super) currency: Result<Currency, String>,
+}
+
+impl RowPrice {
+    /// The amount, followed by the name of a currency without orb.
+    pub(super) fn text(&self) -> String {
+        match &self.currency {
+            Ok(_) => self.amount.clone(),
+            Err(name) => format!("{} {name}", self.amount),
+        }
+    }
 }
 
 /// A row of the list.
@@ -149,6 +160,11 @@ fn row_price(amount: f64, id: &str) -> RowPrice {
             currency: Err(id.to_owned()),
         },
     }
+}
+
+/// The price of an offer of items, as its row and its tooltip write it.
+pub(super) fn offer_price(price: &Price) -> RowPrice {
+    row_price(price.amount, &price.currency)
 }
 
 /// Whether one item for `amount` of the currency `id` is far below `reference`.
@@ -216,6 +232,8 @@ enum Block {
     /// The time left before the next search; `None` once it is over while an answer is
     /// awaited.
     Waiting(Option<Duration>),
+    /// The search is sent: the spinner, until its answer.
+    Searching,
 }
 
 /// The block of a band whose action is `ready` once the `wait` is over and the offers aren't
@@ -234,23 +252,27 @@ pub struct OffersBlock<'a> {
     offers: &'a Offers,
     kind: SearchKind,
     reference: Option<Reference>,
+    /// The copied item, whose rolls the tooltips compare.
+    item: &'a Item,
     i18n: &'a Translator,
 }
 
 impl<'a> OffersBlock<'a> {
-    /// The block of the offers of a search of `kind`; `reference` tells the suspicious
-    /// offers.
+    /// The block of the offers of a search of `kind` for `item`; `reference` tells the
+    /// suspicious offers.
     #[must_use]
     pub fn new(
         offers: &'a Offers,
         kind: SearchKind,
         reference: Option<Reference>,
+        item: &'a Item,
         i18n: &'a Translator,
     ) -> Self {
         Self {
             offers,
             kind,
             reference,
+            item,
             i18n,
         }
     }
@@ -289,41 +311,49 @@ impl<'a> OffersBlock<'a> {
         }
         let i18n = self.i18n;
         match self.offers.state() {
-            OffersState::Idle => self.search_band(
+            OffersState::Idle => self.title_row(
                 ui,
-                &[(i18n.text(Message::OffersSearchHint), color::WEAK)],
+                (i18n.text(Message::OffersSearchHint), color::FAINT),
                 block(Block::Search, wait, busy),
             ),
-            OffersState::Unreachable => self.search_band(
+            OffersState::Unreachable => self.title_row(
                 ui,
-                &[(i18n.text(Message::OffersUnreachable), color::TEXT)],
+                (i18n.text(Message::OffersUnreachable), color::WEAK),
                 block(Block::Search, wait, busy),
             ),
             OffersState::Limited => {
                 let line = if wait.is_zero() {
-                    (i18n.text(Message::OffersSearchHint), color::WEAK)
+                    (i18n.text(Message::OffersSearchHint), color::FAINT)
                 } else {
                     (i18n.offers_limit(wait), color::WARNING)
                 };
-                self.search_band(ui, &[line], block(Block::Search, wait, busy))
+                self.title_row(ui, line, block(Block::Search, wait, busy))
             }
-            OffersState::Searching => {
-                self.searching(ui);
-                None
-            }
+            OffersState::Searching => self.title_row(
+                ui,
+                (i18n.text(Message::OffersSearching), color::FAINT),
+                Block::Searching,
+            ),
             OffersState::Items {
                 offers,
                 total,
                 more,
                 loading_more,
+                more_failed,
                 searched,
             } => {
                 let rows = item_rows(offers, self.reference, now);
                 let list = List {
                     rows: &rows,
+                    items: Some(offers),
                     total: *total,
                     exchange: false,
-                    more: *more && !loading_more,
+                    more: match (*more, *loading_more) {
+                        (_, true) => More::Loading,
+                        (true, false) => More::Chevron,
+                        (false, false) => More::None,
+                    },
+                    more_failed: *more_failed,
                 };
                 self.results(ui, &list, *searched, wait)
             }
@@ -337,91 +367,42 @@ impl<'a> OffersBlock<'a> {
                 let rows = exchange_rows(shown, self.reference, now);
                 let list = List {
                     rows: &rows,
+                    items: None,
                     total: *total,
                     exchange: true,
-                    more: shown.len() < offers.len(),
+                    more: if shown.len() < offers.len() {
+                        More::Chevron
+                    } else {
+                        More::None
+                    },
+                    more_failed: false,
                 };
                 self.results(ui, &list, *searched, wait)
             }
         }
     }
 
-    /// The label and `lines` beside an action block glued to the right edge, the height of
-    /// the band.
-    fn search_band(
+    /// Until the offers show, the band is only the title row: the label, `line` under it, and
+    /// the action `block` in the corner.
+    fn title_row(
         &self,
         ui: &mut Ui,
-        lines: &[(String, Color32)],
+        (line, line_color): (String, Color32),
         block: Block,
     ) -> Option<OffersAction> {
         let mut action = None;
-        band(ui, |ui, width| {
-            let text_width = (width - BLOCK_WIDTH - size::BAND_PADDING).max(0.0);
-            let label = label(ui, self.i18n);
-            let galleys: Vec<_> = lines
-                .iter()
-                .map(|(line, tint)| (wrapped_with(ui, line, text::item_line(), text_width), *tint))
-                .collect();
-            let lines_height: f32 = galleys.iter().map(|(galley, _)| galley.size().y).sum();
-            let height = PADDING_Y * 2.0 + label.size().y + TITLE_GAP + lines_height;
-            let (rect, _) =
-                ui.allocate_exact_size(vec2(ui.available_width(), height), Sense::hover());
-            let painter = ui.painter();
-            let left = rect.left() + size::BAND_PADDING;
-            painter.galley(
-                pos2(left, rect.top() + PADDING_Y),
-                label.clone(),
-                color::WEAK,
-            );
-            let mut top = rect.top() + PADDING_Y + label.size().y + TITLE_GAP;
-            for (galley, tint) in galleys {
-                let height = galley.size().y;
-                painter.galley(pos2(left, top), galley, tint);
-                top += height;
-            }
-            let block_rect = Rect::from_min_max(
-                pos2(rect.right() - BLOCK_WIDTH, rect.top()),
-                rect.right_bottom(),
-            );
-            if self.action_block(ui, block_rect, block) {
+        band(ui, |ui, _| {
+            let head = Head {
+                line,
+                line_color,
+                count: None,
+                block,
+            };
+            if self.head(ui, &head) {
                 action = Some(OffersAction::Search);
             }
         });
         action
-    }
-
-    /// The label, then the spinner and "Searching the trade site…".
-    fn searching(&self, ui: &mut Ui) {
-        band(ui, |ui, _| {
-            ui.add_space(PADDING_Y);
-            let label = label(ui, self.i18n);
-            let message = widgets::text_line(
-                ui,
-                self.i18n.text(Message::OffersSearching),
-                text::item_line(),
-            );
-            let line_height = message.size().y.max(SPINNER_RADIUS * 2.0);
-            let height = label.size().y + SEARCHING_GAP + line_height;
-            let (rect, _) =
-                ui.allocate_exact_size(vec2(ui.available_width(), height), Sense::hover());
-            let painter = ui.painter();
-            let left = rect.left() + size::BAND_PADDING;
-            painter.galley(pos2(left, rect.top()), label.clone(), color::WEAK);
-            let center_y = rect.bottom() - line_height / 2.0;
-            let center = pos2(left + SPINNER_RADIUS, center_y);
-            let time = ui.input(|input| input.time);
-            spinner(painter, center, time);
-            painter.galley(
-                pos2(
-                    center.x + SPINNER_RADIUS + SPINNER_GAP,
-                    center_y - message.size().y / 2.0,
-                ),
-                message,
-                color::TEXT,
-            );
-            ui.ctx().request_repaint();
-            ui.add_space(PADDING_Y);
-        });
     }
 
     /// The title row, then the list, or why it is empty.
@@ -448,7 +429,8 @@ impl<'a> OffersBlock<'a> {
                 )
             });
             let head = Head {
-                age: i18n.offers_searched(&i18n.age(age)),
+                line: i18n.offers_searched(&i18n.age(age)),
+                line_color: color::FAINT,
                 count,
                 block: block(Block::Again, wait, self.offers.busy()),
             };
@@ -485,41 +467,62 @@ impl<'a> OffersBlock<'a> {
             if !list.rows.is_empty() {
                 self.list(ui, list);
             }
-            if list.more {
-                ui.add_space(MORE_GAP);
-                if more(ui, i18n).clicked() {
-                    action = Some(OffersAction::More);
+            if list.more_failed {
+                ui.add_space(MORE_FAILED_GAP);
+                let galley = wrapped_with(
+                    ui,
+                    &i18n.text(Message::OffersUnreachable),
+                    text::note(),
+                    width,
+                );
+                let (rect, _) = ui.allocate_exact_size(
+                    vec2(ui.available_width(), galley.size().y),
+                    Sense::hover(),
+                );
+                ui.painter().galley(
+                    pos2(rect.left() + size::BAND_PADDING, rect.top()),
+                    galley,
+                    color::WEAK,
+                );
+            }
+            match list.more {
+                More::Chevron => {
+                    ui.add_space(MORE_GAP);
+                    if more(ui, i18n).clicked() {
+                        action = Some(OffersAction::More);
+                    }
                 }
-            } else {
-                ui.add_space(PADDING_Y);
+                More::Loading => {
+                    ui.add_space(MORE_GAP);
+                    let (rect, _) = ui.allocate_exact_size(
+                        vec2(ui.available_width(), MORE_HEIGHT),
+                        Sense::hover(),
+                    );
+                    let time = ui.input(|input| input.time);
+                    spinner(ui.painter(), rect.center() - vec2(0.0, MORE_RAISE), time);
+                    ui.ctx().request_repaint();
+                }
+                More::None => ui.add_space(PADDING_Y),
             }
         });
         action
     }
 
-    /// The label and the age of the offers, the count on the right, then the waiting block
-    /// in the top right corner; whether the block was clicked.
+    /// The label and the line under it, the count on the right, then the action block in
+    /// the top right corner; whether the block was clicked.
     fn head(&self, ui: &mut Ui, head: &Head) -> bool {
         let (rect, _) =
             ui.allocate_exact_size(vec2(ui.available_width(), HEAD_HEIGHT), Sense::hover());
-        let label = label(ui, self.i18n);
-        let age = widgets::text_line(ui, head.age.as_str(), text::small());
-        let painter = ui.painter();
         let left = rect.left() + size::BAND_PADDING;
-        let top = rect.center().y - (label.size().y + TITLE_GAP + age.size().y) / 2.0;
-        painter.galley(pos2(left, top), label.clone(), color::WEAK);
-        painter.galley(
-            pos2(left, top + label.size().y + TITLE_GAP),
-            age,
-            color::FAINT,
-        );
         let block_rect = Rect::from_min_max(
-            pos2(rect.right() - BLOCK_WIDTH, rect.top()),
+            pos2(rect.right() - BLOCK_SIZE, rect.top()),
             rect.right_bottom(),
         );
+        let mut line_right = block_rect.left() - COUNT_GAP;
         if let Some(count) = &head.count {
             let galley = widgets::text_line(ui, count.as_str(), text::tag());
             let size = galley.size();
+            line_right -= size.x + COUNT_GAP;
             ui.painter().galley(
                 pos2(
                     block_rect.left() - COUNT_GAP - size.x,
@@ -529,13 +532,29 @@ impl<'a> OffersBlock<'a> {
                 color::WEAK,
             );
         }
+        let label = label(ui, self.i18n);
+        // Cut with "…" in a window too narrow for it.
+        let line = widgets::truncated_line(
+            ui,
+            head.line.as_str(),
+            text::small(),
+            (line_right - left).max(0.0),
+        );
+        let painter = ui.painter();
+        let top = rect.center().y - (label.size().y + TITLE_GAP + line.size().y) / 2.0;
+        painter.galley(pos2(left, top), label.clone(), color::WEAK);
+        painter.galley(
+            pos2(left, top + label.size().y + TITLE_GAP),
+            line,
+            head.line_color,
+        );
         self.action_block(ui, block_rect, head.block)
     }
 
     /// Draws `block` in `rect`; whether it was clicked, and could be.
     fn action_block(&self, ui: &mut Ui, rect: Rect, block: Block) -> bool {
         let i18n = self.i18n;
-        let clickable = !matches!(block, Block::Waiting(_));
+        let clickable = matches!(block, Block::Search | Block::Again);
         let sense = if clickable {
             Sense::click()
         } else {
@@ -546,7 +565,7 @@ impl<'a> OffersBlock<'a> {
             Block::Search => i18n.text(Message::OffersSearchTooltip),
             Block::Again => i18n.text(Message::OffersAgainTooltip),
             Block::Waiting(Some(wait)) => i18n.offers_next_search_tooltip(wait),
-            Block::Waiting(None) => i18n.text(Message::OffersBusyTooltip),
+            Block::Waiting(None) | Block::Searching => i18n.text(Message::OffersBusyTooltip),
         };
         let hover = ui.ctx().animate_bool_with_time_and_easing(
             response.id.with("hover"),
@@ -574,6 +593,11 @@ impl<'a> OffersBlock<'a> {
                     hover,
                     color::ON_ACCENT,
                 );
+            }
+            Block::Searching => {
+                painter.rect_filled(rect, 0.0, color::CONTROL);
+                spinner(painter, rect.center(), ui.input(|input| input.time));
+                ui.ctx().request_repaint();
             }
             Block::Waiting(wait) => {
                 painter.rect_filled(rect, 0.0, color::CONTROL);
@@ -633,15 +657,110 @@ impl<'a> OffersBlock<'a> {
             painter.galley(pos2(left, top), galley, color::FAINT);
         }
 
-        for (index, row) in list.rows.iter().enumerate() {
-            let height = ROW_ORB + 2.0 * ROW_PADDING_Y;
-            let (rect, _) =
-                ui.allocate_exact_size(vec2(ui.available_width(), height), Sense::hover());
-            if index % 2 == 0 {
+        // Only the offers of items have a tooltip, and light up under the pointer; without
+        // the focus of the keyboard, which the rows wouldn't show.
+        let sense = if list.items.is_some() {
+            Sense::CLICK
+        } else {
+            Sense::hover()
+        };
+        let height = ROW_ORB + 2.0 * ROW_PADDING_Y;
+        let responses: Vec<Response> = list
+            .rows
+            .iter()
+            .map(|_| {
+                ui.allocate_exact_size(vec2(ui.available_width(), height), sense)
+                    .1
+            })
+            .collect();
+        let open = list
+            .items
+            .and_then(|offers| self.tooltip(ui, offers, list.rows, &responses));
+        for (index, (row, response)) in list.rows.iter().zip(&responses).enumerate() {
+            let rect = response.rect;
+            if list.items.is_some() {
+                let label = row.price.as_ref().map(RowPrice::text).unwrap_or_default();
+                response.widget_info(|| WidgetInfo::labeled(Role::Button, true, &label));
+            }
+            let highlighted = list.items.is_some() && (response.hovered() || open == Some(index));
+            if highlighted {
+                ui.painter().rect_filled(rect, 0.0, color::CONTROL_LINE);
+            } else if index % 2 == 0 {
                 ui.painter().rect_filled(rect, 0.0, color::ROW_ALT);
             }
             self.row(ui, rect, row, list.exchange);
         }
+    }
+
+    /// Opens, pins or closes the tooltip of the `offers` after what the pointer did over
+    /// their rows, then draws it; the index of the offer whose tooltip is open.
+    fn tooltip(
+        &self,
+        ui: &Ui,
+        offers: &[ItemOffer],
+        rows: &[Row],
+        responses: &[Response],
+    ) -> Option<usize> {
+        let ctx = ui.ctx();
+        let state_id = Id::NULL.with("offer-tooltip-state");
+        let mut state: TooltipState = ctx.data(|data| data.get_temp(state_id).unwrap_or_default());
+        let ids: Vec<&str> = offers.iter().map(|offer| offer.id.as_str()).collect();
+        let id_at = |index: Option<usize>| index.and_then(|index| ids.get(index).copied());
+        // The tooltip as drawn at the last frame, and the gap to its row.
+        let over_tooltip = state.open().is_some_and(|id| {
+            let area = ctx.memory(|memory| memory.area_rect(OfferTooltip::area_id(id)));
+            let row = ids
+                .iter()
+                .position(|other| *other == id)
+                .and_then(|index| responses.get(index));
+            match (area, row, ctx.pointer_latest_pos()) {
+                (Some(area), Some(row), Some(pointer)) => {
+                    area.contains(pointer) || reach(area, row.rect).contains(pointer)
+                }
+                _ => false,
+            }
+        });
+        let (any_click, escape, time) = ui.input(|input| {
+            (
+                input.pointer.any_click(),
+                input.key_pressed(Key::Escape),
+                input.time,
+            )
+        });
+        let pointer = Pointer {
+            hovered: id_at(responses.iter().position(Response::hovered)),
+            clicked: id_at(responses.iter().position(Response::clicked)),
+            over_tooltip,
+            any_click,
+            escape,
+            time,
+        };
+        if let Some(redraw) = state.update(&pointer, &ids) {
+            ctx.request_repaint_after(redraw);
+        }
+        let open = state
+            .open()
+            .and_then(|id| ids.iter().position(|other| *other == id));
+        if let Some(index) = open
+            && let (Some(offer), Some(row), Some(response)) =
+                (offers.get(index), rows.get(index), responses.get(index))
+        {
+            let tooltip = OfferTooltip {
+                offer,
+                modifiers: self.item.modifiers(),
+                name_color: rarity_color(offer.item.rarity.unwrap_or(self.item.rarity())),
+                suspicious: row.suspicious,
+                copied: state.shows_copied(&offer.id, time),
+                i18n: self.i18n,
+            };
+            if tooltip.show(ui, response.rect, ui.clip_rect().top()) {
+                ctx.copy_text(offer.whisper.clone());
+                state.copied(&offer.id, time);
+                ctx.request_repaint();
+            }
+        }
+        ctx.data_mut(|data| data.insert_temp(state_id, state));
+        open
     }
 
     /// Draws `row` in `rect`.
@@ -650,11 +769,7 @@ impl<'a> OffersBlock<'a> {
         let center_y = rect.center().y;
         let painter = ui.painter();
         if let Some(price) = &row.price {
-            let amount = match &price.currency {
-                Ok(_) => price.amount.clone(),
-                Err(name) => format!("{} {name}", price.amount),
-            };
-            let galley = widgets::text_line(ui, amount, text::list_amount());
+            let galley = widgets::text_line(ui, price.text(), text::list_amount());
             let size = galley.size();
             let top = center_y - size.y / 2.0;
             let tint = if row.suspicious {
@@ -721,16 +836,31 @@ impl<'a> OffersBlock<'a> {
 /// What the list shows.
 struct List<'a> {
     rows: &'a [Row],
+    /// The offers of items, whose rows open their tooltips.
+    items: Option<&'a [ItemOffer]>,
     total: u64,
     /// The offers of the currency exchange, with their stock.
     exchange: bool,
-    /// The double chevron shows more offers.
-    more: bool,
+    more: More,
+    /// The next offers couldn't come.
+    more_failed: bool,
+}
+
+/// What is under the list.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum More {
+    None,
+    /// The double chevron, which shows more offers.
+    Chevron,
+    /// The spinner, while the next offers come.
+    Loading,
 }
 
 /// The title row of the offers.
 struct Head {
-    age: String,
+    /// Under the label: the age of the offers, or what happens before they show.
+    line: String,
+    line_color: Color32,
     count: Option<String>,
     block: Block,
 }
@@ -925,6 +1055,7 @@ mod tests {
             listed: Some(SystemTime::UNIX_EPOCH),
             whisper: String::new(),
             item: OfferItem {
+                rarity: None,
                 name: Some("Headhunter".to_owned()),
                 base_type: "Heavy Belt".to_owned(),
                 item_level: None,

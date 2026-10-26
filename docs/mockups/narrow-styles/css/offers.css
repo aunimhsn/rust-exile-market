@@ -44,7 +44,6 @@
 .status.s-away i { background: var(--warn); }
 .status.s-offline i { background: var(--fall); }
 .pill.done { display: inline-flex; align-items: center; gap: 5px; background: var(--accent); color: var(--on-accent, var(--bg-a)); }
-.tt-hint { margin-top: 6px; color: var(--weak); font-size: 11.5px; text-align: right; }
 /* Pinned by a click on the row: it stays open; it looks the same, the pill says what happened. */
 .online.away { background: var(--warn) !important; }
 .online { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--rise); margin-right: 6px; vertical-align: middle; }
@@ -52,17 +51,22 @@
 .link { color: var(--accent); font-weight: 600; }
 .button { padding: 6px 12px; display: inline-flex; gap: 8px; align-items: center; }
 .button.primary { padding: 8px 16px; }
-.search-band { display: flex; align-items: stretch; }
 .search-block {
-  flex: none; width: 56px; display: grid; place-items: center;
+  flex: none; width: 48px; display: grid; place-items: center;
   background: var(--accent); color: var(--on-accent, var(--bg-a));
 }
-.search-text { flex: 1; display: grid; align-content: center; gap: 4px; padding: 12px 14px; font-size: 13px; }
 /* Search again: a flat block in the bottom right corner of the offers band; the countdown, then the refresh icon. */
 /* The title row of the offers band holds the action block in its top right corner. */
 .flat-head { margin: -12px -14px 6px 0; height: 48px; align-items: center; }
 .flat-head .right { margin-left: auto; padding-right: 12px; }
 .flat-head .again { align-self: stretch; height: auto; }
+/* Before the first search, the title row is the whole band: the search block the size of the waiting block. */
+.flat-head.idle-head { margin-bottom: -12px; }
+.flat-head .search-block { align-self: stretch; }
+.idle-head > :last-child { margin-left: auto; }
+/* The line under the label: a message in the color of the text, or a warning. */
+.title-stack .age.plain { color: var(--weak); }
+.title-stack .age.warn { color: var(--warn); }
 /* Show more offers: only a chevron under the list; the whole width stays clickable. */
 .more {
   margin: 6px -14px -12px; height: 32px; display: flex; align-items: center; justify-content: center; gap: 8px;
@@ -73,7 +77,11 @@
 .more .ico { transition: transform .2s ease-out; transform: translateY(-3px); }
 .more:hover .ico { transform: translateY(-1px); }
 @media (prefers-reduced-motion: reduce) { .more .ico { transition: none; } }
-.again { flex: none; width: 56px; height: 48px; display: grid; place-items: center; font: 600 13px/1 var(--font-body); }
+/* The next offers are coming: the spinner in place of the chevron, nothing to click. */
+.more.loading { cursor: default; }
+/* The next offers couldn't come: why, in weak text above the chevron. */
+.more-note { margin-top: 8px; color: var(--weak); font-size: 12.5px; }
+.again { flex: none; width: 48px; height: 48px; display: grid; place-items: center; font: 600 13px/1 var(--font-body); }
 .again.waiting { background: var(--control); color: var(--weak); }
 .again.ready { background: var(--accent); color: var(--on-accent, var(--bg-a)); }
 /* Hover on the white action blocks: the search icon grows, the refresh icon grows and turns. */

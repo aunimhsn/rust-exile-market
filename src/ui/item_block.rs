@@ -492,7 +492,7 @@ fn tag(ui: &mut Ui, label: &str, style: TagStyle) {
 }
 
 /// The color of the name of an item of `rarity`, as in the game.
-fn rarity_color(rarity: Rarity) -> Color32 {
+pub(super) fn rarity_color(rarity: Rarity) -> Color32 {
     match rarity {
         Rarity::Normal => color::NORMAL,
         Rarity::Magic => color::MAGIC,

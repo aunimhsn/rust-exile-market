@@ -3,8 +3,8 @@
 
 use egui::text::{LayoutJob, TextFormat};
 use egui::{
-    Align, Area, Context, CornerRadius, CursorIcon, Frame, Id, Layout, Margin, Order, Pos2, Role,
-    Sense, Shape, Stroke, Ui, Vec2, WidgetInfo, pos2, vec2,
+    Align, Area, Context, CornerRadius, CursorIcon, Frame, Id, Layout, Margin, Order, Role, Sense,
+    Ui, Vec2, WidgetInfo, pos2, vec2,
 };
 
 use super::theme::{self, color, size, text};
@@ -14,15 +14,13 @@ use crate::i18n::{Message, Translator};
 use crate::league::League;
 
 const WIDTH: f32 = 330.0;
-/// The bubble starts a little left of the league block, its arrow over the block.
+/// The bubble starts a little left of the league block, 4 px under the title bar like the
+/// list of the leagues.
 const LEFT: f32 = LEAGUE_BLOCK_LEFT - 8.0;
-const GAP_UNDER_BAR: f32 = 8.0;
+const GAP_UNDER_BAR: f32 = 4.0;
 const PADDING_X: i8 = 14;
 const PADDING_Y: i8 = 10;
 const CONTENT_GAP: f32 = 10.0;
-/// The arrow toward the league block: its half width, and its distance from the left edge.
-const ARROW_HALF_WIDTH: f32 = 6.0;
-const ARROW_LEFT: f32 = 36.0;
 const CLOSE_ZONE: f32 = 18.0;
 const CLOSE_SIZE: f32 = 7.0;
 
@@ -54,14 +52,14 @@ impl<'a> NewLeagueBubble<'a> {
                     .corner_radius(CornerRadius::same(size::BUBBLE_RADIUS))
                     .shadow(theme::floating_shadow())
                     .inner_margin(Margin::symmetric(PADDING_X, PADDING_Y));
-                let shown = frame.show(ui, |ui| {
-                    ui.set_width(WIDTH - 2.0 * f32::from(PADDING_X));
-                    ui.spacing_mut().item_spacing = vec2(CONTENT_GAP, 0.0);
-                    ui.with_layout(Layout::left_to_right(Align::Center), |ui| self.content(ui))
-                        .inner
-                });
-                arrow(ui, shown.response.rect.min);
-                shown.inner
+                frame
+                    .show(ui, |ui| {
+                        ui.set_width(WIDTH - 2.0 * f32::from(PADDING_X));
+                        ui.spacing_mut().item_spacing = vec2(CONTENT_GAP, 0.0);
+                        ui.with_layout(Layout::left_to_right(Align::Center), |ui| self.content(ui))
+                            .inner
+                    })
+                    .inner
             })
             .inner
     }
@@ -119,22 +117,4 @@ impl<'a> NewLeagueBubble<'a> {
         }
         job
     }
-}
-
-/// The arrow on the top edge of the bubble whose corner is `bubble_min`, toward the block.
-/// Drawn on the whole layer: it sticks out of the area of the bubble, which would clip it.
-fn arrow(ui: &Ui, bubble_min: Pos2) {
-    let tip = bubble_min + vec2(ARROW_LEFT, -ARROW_HALF_WIDTH);
-    let base = bubble_min.y;
-    ui.ctx()
-        .layer_painter(ui.layer_id())
-        .add(Shape::convex_polygon(
-            vec![
-                pos2(tip.x - ARROW_HALF_WIDTH, base),
-                tip,
-                pos2(tip.x + ARROW_HALF_WIDTH, base),
-            ],
-            color::BUBBLE,
-            Stroke::NONE,
-        ));
 }

@@ -271,7 +271,7 @@ impl ExileMarketApp {
             if let Some(search) = &search {
                 let kind = search.query.kind();
                 offers_action =
-                    OffersBlock::new(&self.offers, kind, reference, &self.i18n).show(ui);
+                    OffersBlock::new(&self.offers, kind, reference, item, &self.i18n).show(ui);
             } else if must_identify {
                 OffersBlock::identify(ui, &self.i18n);
             }

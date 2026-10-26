@@ -15,7 +15,6 @@ function offerTooltip(t) {
       <span class="status s-${t.status}"><i></i>${{ online: "Online", away: "Away", offline: "Offline" }[t.status]}</span>
       ${t.status === "offline" ? "" : `<span class="pill ${t.copied ? "done" : ""}">${t.copied ? `Copied${ICON.check(11)}` : "Copy whisper"}</span>`}
     </div>
-    ${t.copied ? `<div class="tt-hint">Paste it in the game chat: Enter, Ctrl+V, Enter.</div>` : ""}
   </div>`;
 }
 
@@ -23,21 +22,25 @@ function offers(o, lang = "en") {
   const fr = lang === "fr";
   const label = fr ? "Offres" : "Offers";
   if (o.state === "idle") {
-    // Like the header: a flat block the height of the band, glued to its right edge.
+    // Like the title row after a search: the hint small under the label, and the search block the size of
+    // the waiting block, in the top right corner; the band is only the height of that row.
     const action = fr ? "Chercher les offres" : "Search the offers";
-    return `<div class="b search-band">
-      <div class="search-text"><span class="label">${label}</span>
-        <div class="muted">${fr ? "Une recherche par clic, dans les limites du site d'échange." : "One search per click, within the limits of the trade site."}</div></div>
-      <div class="search-block" title="${action}" aria-label="${action}">${ICON.search(22)}</div>
-    </div>`;
+    const hint = fr ? "Une recherche par clic, dans les limites du site d'échange." : "One search per click, within the limits of the trade site.";
+    return row(hint, `<div class="search-block" title="${action}" aria-label="${action}">${ICON.search(22)}</div>`);
+  }
+  // Until the offers show, the band keeps the height of this row: the line under the label tells what
+  // happens, and the block in the corner keeps its place.
+  function row(line, block, kind = "") {
+    return `<div class="band b"><div class="head flat-head idle-head"><span class="title-stack"><span class="label">${label}</span><span class="age ${kind}">${line}</span></span>${block}</div></div>`;
   }
   if (o.state === "loading") {
-    return `<div class="band b"><div class="head"><span class="label">${label}</span></div>
-      <div class="actions" style="justify-content:flex-start;gap:10px"><span class="spinner"></span>Searching the trade site…</div></div>`;
+    return row("Searching the trade site…", `<div class="again waiting" title="Waiting for the answer of the trade site"><span class="spinner"></span></div>`);
+  }
+  if (o.state === "unreachable") {
+    return row("The trade site can't be reached.", `<div class="search-block" title="Search the offers">${ICON.search(22)}</div>`, "plain");
   }
   if (o.state === "wait") {
-    return `<div class="band b"><div class="head flat-head"><span class="title-stack"><span class="label">${label}</span><span class="age">searched 1min ago</span></span><span class="right"></span><div class="again waiting" title="Next search in 4min">4min</div></div>
-      <div class="warn">Trade site limit: next search in 4min.</div></div>`;
+    return row("Trade site limit: next search in 4min.", `<div class="again waiting" title="Next search in 4min">4min</div>`, "warn");
   }
   if (o.lines) {
     return `<div class="band b"><div class="head"><span class="label">${label}</span></div>${o.lines.map(l => `<div class="msg muted">${l}</div>`).join("")}</div>`;
@@ -51,5 +54,13 @@ function offers(o, lang = "en") {
   return `<div class="band b">
     <div class="head flat-head"><span class="title-stack"><span class="label">${label}</span><span class="age">${o.age || "searched 2min ago"}</span></span><span class="right">${o.count}</span>${again}</div>
     <div class="offers ${three ? "three" : ""}"><div class="cols">${o.columns.map(c => `<span>${c}</span>`).join("")}</div>${rows}</div>
-    <div class="more" title="${fr ? "Afficher plus d'offres" : "Show more offers"}">${ICON.downDouble(16)}</div></div>`;
+    ${more(o.more, fr)}</div>`;
+}
+
+// Under the list: the double chevron; the spinner while the next offers come; when they couldn't come, the
+// chevron again, to ask them again, with why above it.
+function more(state, fr) {
+  if (state === "loading") return `<div class="more loading"><span class="spinner"></span></div>`;
+  const chevron = `<div class="more" title="${fr ? "Afficher plus d'offres" : "Show more offers"}">${ICON.downDouble(16)}</div>`;
+  return state === "failed" ? `<div class="more-note">The trade site can't be reached.</div>${chevron}` : chevron;
 }

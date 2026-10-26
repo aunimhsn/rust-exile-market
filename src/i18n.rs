@@ -97,12 +97,18 @@ pub enum Message {
     OffersUnreachable,
     OffersIdentify,
     OffersMoreTooltip,
+    OffersSuspicious,
+    SellerOnline,
+    SellerAway,
+    SellerOffline,
+    CopyWhisper,
+    WhisperCopied,
 }
 
 impl Message {
     /// Every message, for the tests.
     #[cfg(test)]
-    const ALL: [Self; 75] = [
+    const ALL: [Self; 81] = [
         Self::LeagueModeSoftcore,
         Self::LeagueModeHardcore,
         Self::LeagueLoading,
@@ -178,6 +184,12 @@ impl Message {
         Self::OffersUnreachable,
         Self::OffersIdentify,
         Self::OffersMoreTooltip,
+        Self::OffersSuspicious,
+        Self::SellerOnline,
+        Self::SellerAway,
+        Self::SellerOffline,
+        Self::CopyWhisper,
+        Self::WhisperCopied,
     ];
 
     /// Its identifier in the `.ftl` files.
@@ -258,6 +270,12 @@ impl Message {
             Self::OffersUnreachable => "offers-unreachable",
             Self::OffersIdentify => "offers-identify",
             Self::OffersMoreTooltip => "offers-more-tooltip",
+            Self::OffersSuspicious => "offers-suspicious",
+            Self::SellerOnline => "seller-online",
+            Self::SellerAway => "seller-away",
+            Self::SellerOffline => "seller-offline",
+            Self::CopyWhisper => "copy-whisper",
+            Self::WhisperCopied => "whisper-copied",
         }
     }
 }
@@ -913,7 +931,7 @@ mod tests {
         let french = Translator::new(Language::French);
         assert_eq!(
             french.offers_limit(Duration::from_secs(240)),
-            "Limite du site d'échange\u{a0}: prochaine recherche dans 4min."
+            "Limite du site d'échange\u{a0}: recherche dans 4min."
         );
     }
 }
