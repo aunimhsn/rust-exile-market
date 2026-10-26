@@ -26,6 +26,15 @@
 - Keep `roadmap.md` consistent with `specs.md` when the specifications change.
 - When the pull request of a step (or of a sub-step, such as 10b) is merged, tell the owner that the step is done and remind them to close the session and start a new one for the next step: a fresh session costs far fewer tokens, and `roadmap.md` and the memory hold what is needed to resume.
 
+## Interface design
+
+- Draw the interface before coding it: first an editable grayscale wireframe in Excalidraw (`docs/wireframes/`, `excalidraw-wireframes` skill), which the owner edits too; then, once the layout is agreed, the interactive HTML mock-up (`docs/mockups/`, `html-mockups` skill).
+- For a desktop application, decide in the first wireframes whether the window keeps the title bar of the system or draws its own, and draw its buttons from the start.
+- The VS Code Excalidraw extension doesn't reload a file changed on disk: before rewriting a wireframe the owner has open, ask them to save it and close its tab, and commit their version first.
+- A mock-up is split into small files (the shared styles and scripts, one style sheet and one script per block, one script per section), so that a change reads only what it needs.
+- Once approved, the mock-up is the visual reference. A design change goes into the mock-up, the wireframe and `specs.md` in the same commit, and into the code when that part is already coded.
+- Check a visual change in the real application with a few screenshots in `outputs/` before showing it to the owner.
+
 ## Working folders
 
 Two folders are the exchange area between the owner and Claude Code. They are ignored by Git, except their `.gitkeep`, and hold only temporary files.
@@ -41,6 +50,7 @@ Two folders are the exchange area between the owner and Claude Code. They are ig
 - Every change must go through a pull request targeting `main`.
 - Name branches `<type>/<short-description>` in kebab-case, using the commit types below (e.g. `feat/dark-mode`, `fix/settings-save`).
 - Never switch branches in the main project directory while the owner may be testing a branch there (for example with `cargo run`): it would change the code they run. Work on any other branch in a separate Git worktree outside the project (`git worktree add <directory> -b <branch> origin/main`), and remove it with `git worktree remove <directory>` once the work is pushed.
+- When the owner says they aren't running or testing anything, work on the task branch in the main project directory instead, so that they can follow the files changing in their editor; switch it back to `main` once the pull request is merged.
 
 ## Commit messages
 
@@ -75,6 +85,7 @@ Follow [Conventional Commits 1.0.0](https://www.conventionalcommits.org/en/v1.0.
 ## Code review
 
 - Before opening any pull request that changes code or its build (`src/`, tests, `Cargo.toml`, `build.rs`, `rust-toolchain.toml`, `.github/workflows/`), run the `code-reviewer` subagent (`.claude/agents/code-reviewer.md`) on the branch.
+- Run it once per pull request, on the whole branch, to save tokens; a step too large for one review is split into sub-steps in `roadmap.md`.
 - It writes its recommendations, in French, to `outputs/<YYYY-MM-DD>-<branch>-code-review.md`. These notes are ignored by Git.
 - Summarize the recommendations to the user and apply only the ones they approve, then open the pull request.
 

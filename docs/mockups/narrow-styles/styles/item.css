@@ -1,0 +1,107 @@
+/* The item block: name, tags, facts, the stats and their filters. */
+.button, .input {
+  background: var(--control); border: 1px solid var(--control-line); border-radius: var(--radius); color: var(--text);
+  font: inherit;
+}
+
+
+.label { font: 600 11px/1 var(--font-body); letter-spacing: .1em; text-transform: uppercase; color: var(--weak); }
+.head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 8px; }
+.head .right { margin-left: auto; color: var(--weak); font-size: 12px; }
+.head .age { color: var(--faint); font-size: 12px; }
+/* The search age goes under the OFFERS title. */
+.title-stack { display: grid; gap: 4px; }
+.title-stack .age { font-size: 11.5px; line-height: 1; }
+
+.name-row { display: flex; align-items: flex-start; gap: 12px; }
+.name {
+  flex: 1; min-width: 0; font: var(--display-weight) var(--display-size)/1.15 var(--font-display);
+  text-transform: var(--display-case); letter-spacing: .01em;
+}
+/* Trade site link: a small pill, rounded like the tags; the verb says it can be clicked. */
+.trade {
+  flex: none; margin-top: 1px; padding: 4px 10px; border-radius: var(--radius);
+  background: var(--control); color: var(--text); font-size: 12px; font-weight: 600; line-height: 1.2;
+  white-space: nowrap; text-decoration: none; cursor: pointer;
+}
+.trade:hover { background: var(--control-line); color: var(--accent); }
+.link:hover { text-decoration: underline; }
+.item-band { position: relative; }
+.base { margin-top: 2px; }
+.base .cls { color: var(--weak); }
+.meta { display: flex; flex-wrap: wrap; gap: 5px 6px; align-items: center; margin-top: 6px; color: var(--weak); font-size: 13px; }
+.tag { padding: 1px 7px; border-radius: var(--radius); background: var(--control); color: var(--text); font-size: 12px; }
+.tag.corrupted { color: #fff; background: #351417; }   /* the background of the hardcore league */
+.tag.t1 { color: var(--tier-1); }   /* the number of prefixes and suffixes at tier 1 */
+.summary { font-size: 13px; }
+/* The item block in two groups: what it is (name, base and class), then its facts (base values,
+   requirements, tags), 12 px apart; the lines of a group 6 px apart. */
+.facts { display: grid; gap: 6px; margin-top: 12px; }
+.facts:empty { display: none; }
+.facts > * { margin-top: 0 !important; }
+/* The base values look farther from the requirements than the tags do: closer by 3 px. */
+.facts > .summary + .reqline { margin-top: -3px !important; }
+/* The colors of the attributes, as in the game: strength red, dexterity green, intelligence blue
+   (the softcore blue, lighter), a little apart from the rise and fall of the trend. */
+:root { --attr-str: #e0473f; --attr-dex: #3fbf4f; --attr-int: #5aa7f0; }
+.attr-str { color: var(--attr-str); }
+.attr-dex { color: var(--attr-dex); }
+.attr-int { color: var(--attr-int); }
+/* The main values of the base: the DPS of a weapon, the defences of an armour piece. The label is
+   gray, or in the color of its attribute; the number stands out. */
+.props { display: flex; flex-wrap: wrap; gap: 4px 14px; }
+.props span { color: var(--weak); }
+.props span.attr-str { color: var(--attr-str); }
+.props span.attr-dex { color: var(--attr-dex); }
+.props span.attr-int { color: var(--attr-int); }
+.props b { color: var(--text); font-weight: 700; margin-left: 5px; }
+/* Stats toggle: a pill like "Check on trade", and the number of filters next to it. */
+/* 20 px under the tags look like the 12 px above the facts: text lines carry their own air above
+   and under the letters, blocks with a background don't. */
+.stats-toggle { margin-top: 20px; display: flex; align-items: center; gap: 10px; font-size: 12px; }
+.pill {
+  padding: 4px 10px; border-radius: var(--radius); background: var(--control); color: var(--text);
+  font-size: 12px; font-weight: 600; line-height: 1.2; white-space: nowrap; cursor: pointer;
+}
+.pill:hover { background: var(--control-line); color: var(--accent); }
+.stats-toggle .filters { color: var(--accent); font-weight: 600; }
+.ico { display: block; }
+
+.rarity-unique { color: var(--rarity-unique); }
+.rarity-rare { color: var(--rarity-rare); }
+.rarity-magic { color: var(--rarity-magic); }
+.rarity-normal { color: var(--rarity-normal); }
+.rarity-currency { color: var(--rarity-currency); }
+.rarity-gem { color: var(--rarity-gem); }
+
+.stats { margin-top: 8px; display: grid; gap: 6px; }
+.req { color: var(--weak); font-size: 12px; display: flex; justify-content: space-between; }
+.reqline { margin-top: 6px; color: var(--weak); font-size: 13px; }
+.stats-group { display: flex; justify-content: space-between; margin-top: 6px; color: var(--faint); font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
+.stats-group:first-child { margin-top: 0; }
+.stats-group em { font-style: normal; letter-spacing: 0; text-transform: none; font-weight: 600; color: var(--weak); }
+.stats-group em.open { color: var(--accent); }
+/* Tier of a rare modifier, before the range of that tier. */
+.tier { display: inline-block; font-weight: 700; margin-right: 6px; line-height: 1.4; }
+.prop { font-size: 13px; color: var(--text); }
+.prop span { color: var(--weak); }
+.sep { height: 1px; background: var(--control-line); margin: 2px 0; }
+.check { width: 15px; height: 15px; border-radius: 3px; border: 1.5px solid var(--weak); background: var(--control); display: grid; place-items: center; color: var(--bg-a); }
+.check.on { background: var(--accent); border-color: var(--accent); color: var(--on-accent, var(--bg-a)); }
+.input { width: 46px; padding: 1px 6px; text-align: right; font-family: var(--font-number); font-size: 12.5px; }
+.bar { width: 96px; height: 4px; border-radius: 2px; background: var(--control-line); overflow: hidden; }
+.bar i { display: block; height: 100%; background: var(--accent); }
+.note { color: var(--faint); font-size: 12px; }
+/* A stat: its checkbox, its text, and under it its bar, its range and its minimum, so that the
+   text takes the whole width. */
+.mod2 { display: grid; grid-template-columns: 20px 1fr; gap: 3px 8px; align-items: center; color: var(--mod); font-size: 13.5px; }
+.mod2.wide { grid-template-columns: 1fr; }
+.mod2 .roll2 { grid-column: 2; display: flex; align-items: center; gap: 8px; color: var(--faint); font-size: 11px; }
+.mod2 .roll2 .input { margin-left: auto; }
+/* The minimum in its own column on the right, on the line of the checkbox. */
+.mod2.min-top { grid-template-columns: 20px 1fr 46px; align-items: start; }
+.mod2.min-top .check { margin-top: 2px; }
+.mod2.min-top > .input { grid-column: 3; grid-row: 1; }
+.mod2.min-top .roll2 { grid-column: 2; }
+/* Two lines at most, the rest under the pointer. */
+.mod2 .text { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }

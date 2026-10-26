@@ -11,7 +11,7 @@ Goal: choose the style with real content, every scenario and every state, before
 
 Start from `assets/mockup-template.html` (read its comments), copied to `docs/mockups/<name>.html`:
 
-- **One self-contained page**: the CSS and the JavaScript inline, only the fonts and the images of `assets/` outside.
+- **Small files**, so that a change reads only what it needs: the page `docs/mockups/<name>.html` only loads, in order, the files of `docs/mockups/<name>/`: `styles/` (the fonts, the tokens, the page, then one sheet per block of the interface), `scripts/` (the shared helpers and icons, one script per block, the sample data, the rendering last) and `sections/` (one script per section, each adding its windows to `SECTIONS`). Plain `<link>` and `<script>` tags, no modules, so that the files share their constants. The template is one file: split it as soon as the page has more than a few blocks.
 - **Every frame of the wireframe becomes a window**, at its real size, with sample data close to real ones (long names, large numbers, the other language). Add every scenario and state in `SECTIONS`: empty, loading, waiting, each error, each kind of content.
 - **3 or 4 styles on the same page**, switched with the tabs at the top; the address keeps the choice (`?theme=…`) to share it. Each style only sets **tokens** (CSS variables under `:root[data-theme="…"]`): fonts, colors, radius, spacing. The components use nothing else, so that a style is cheap to add or tweak.
 - The styles explore **new directions** for this application, its users and its subject. If the project has a `design-journal.md`, it records past experiences: it may inspire one style, never all of them, and nothing in it is a default.
@@ -22,6 +22,7 @@ Pitfalls met before:
 
 - A class shared by two components (`top`, `online`) silently broke the layout twice: prefix the classes of the application (`app-`) and of the states (`is-`).
 - A JavaScript function named like a browser global (`top`, `name`, `status`) breaks the page: give the components specific names.
+- A `url()` in a style sheet is relative to the sheet, not to the page: from `docs/mockups/<name>/styles/`, `assets/` is `../../../../assets/`.
 
 ## 2. Show it
 

@@ -1,0 +1,89 @@
+/* The offers, their tooltip, the search and the search again blocks. */
+.offers { margin: 0 -14px; }
+.offers .cols, .offers .row-o { display: grid; grid-template-columns: 1fr auto; gap: 12px; padding: 5px 14px; align-items: center; }
+.offers.three .cols, .offers.three .row-o { grid-template-columns: 1fr 60px 90px; }
+.offers .cols { color: var(--faint); font-size: 11px; text-transform: uppercase; letter-spacing: .08em; padding-bottom: 4px; }
+.offers .cols span:not(:first-child), .offers .row-o span:not(:first-child) { text-align: right; }
+.offers .row-o:nth-child(even) { background: var(--row-alt); }
+.offers .row-o .p { display: flex; align-items: center; gap: 6px; font-family: var(--font-number); font-weight: 600; }
+.offers .row-o img { width: 18px; height: 18px; }
+.offers .row-o.sus .p { color: var(--faint); text-decoration: line-through; }
+.offers .row-o.sus .p::after { content: "?"; color: var(--warn); text-decoration: none; display: inline-block; margin-left: 2px; }
+/* Offer hovered: the row lights up and the tooltip of its item opens next to it. */
+.offers .row-o { position: relative; }
+.offers .row-o.hovered, .offers .row-o:hover { background: var(--control-line) !important; cursor: pointer; }
+.offer-tooltip {
+  position: absolute; z-index: 2; right: 10px; bottom: calc(100% + 6px); width: 300px; padding: 12px 14px;
+  background: #20272f; border-radius: 4px; box-shadow: 0 10px 30px rgba(0, 0, 0, .6); text-align: left; font-size: 12.5px;
+}
+/* No room above the row (the first offers): the tooltip opens below it. */
+.offer-tooltip.below { bottom: auto; top: calc(100% + 6px); }
+.tt-warn { margin-top: 8px; color: var(--warn); font-size: 12px; }
+.tt-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.tt-name { font-weight: 700; font-size: 14px; }
+.tt-price { font-family: var(--font-number); font-weight: 600; }
+.tt-meta { color: var(--weak); font-size: 12px; margin-top: 2px; }
+.tt-mods { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--control-line); display: grid; gap: 3px; }
+.tt-mod { display: flex; justify-content: space-between; gap: 10px; color: var(--mod); }
+.tt-mod.prop { color: var(--text); }   /* item properties are white, as in the game */
+.tt-tier { display: inline-block; min-width: 26px; }
+/* Top tiers (1 to 3) in white, the others faint. */
+.tier { color: var(--faint); }
+.tier.tier-top { color: var(--accent); }
+/* Tier 1 in a vivid orange, so that it stands out on the dark bands; tiers 2 and 3 stay white. */
+.tier.t1 { color: var(--tier-1); }
+.delta { font-family: var(--font-number); font-weight: 600; font-size: 12px; }
+.delta.up { color: var(--rise); }
+.delta.down { color: var(--fall); }
+.tt-foot { margin-top: 10px; display: flex; align-items: center; justify-content: space-between; }
+.tt-price { display: flex; align-items: center; gap: 6px; }
+.tt-price img { width: 18px; height: 18px; }
+.status { display: inline-flex; align-items: center; gap: 6px; color: var(--weak); font-size: 12px; }
+.status i { width: 7px; height: 7px; border-radius: 50%; }
+.status.s-online i { background: var(--rise); }
+.status.s-away i { background: var(--warn); }
+.status.s-offline i { background: var(--fall); }
+.pill.done { display: inline-flex; align-items: center; gap: 5px; background: var(--accent); color: var(--on-accent, var(--bg-a)); }
+.tt-hint { margin-top: 6px; color: var(--weak); font-size: 11.5px; text-align: right; }
+/* Pinned by a click on the row: it stays open; it looks the same, the pill says what happened. */
+.online.away { background: var(--warn) !important; }
+.online { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--rise); margin-right: 6px; vertical-align: middle; }
+.actions { display: flex; align-items: center; justify-content: space-between; margin-top: 10px; }
+.link { color: var(--accent); font-weight: 600; }
+.button { padding: 6px 12px; display: inline-flex; gap: 8px; align-items: center; }
+.button.primary { padding: 8px 16px; }
+.search-band { display: flex; align-items: stretch; }
+.search-block {
+  flex: none; width: 56px; display: grid; place-items: center;
+  background: var(--accent); color: var(--on-accent, var(--bg-a));
+}
+.search-text { flex: 1; display: grid; align-content: center; gap: 4px; padding: 12px 14px; font-size: 13px; }
+/* Search again: a flat block in the bottom right corner of the offers band; the countdown, then the refresh icon. */
+/* The title row of the offers band holds the action block in its top right corner. */
+.flat-head { margin: -12px -14px 6px 0; height: 48px; align-items: center; }
+.flat-head .right { margin-left: auto; padding-right: 12px; }
+.flat-head .again { align-self: stretch; height: auto; }
+/* Show more offers: only a chevron under the list; the whole width stays clickable. */
+.more {
+  margin: 6px -14px -12px; height: 32px; display: flex; align-items: center; justify-content: center; gap: 8px;
+  color: var(--weak); cursor: pointer;
+}
+.more:hover { color: var(--accent); }
+/* The double chevron is raised 3 px to look centered (chosen by eye); on hover it slides down 2 px. */
+.more .ico { transition: transform .2s ease-out; transform: translateY(-3px); }
+.more:hover .ico { transform: translateY(-1px); }
+@media (prefers-reduced-motion: reduce) { .more .ico { transition: none; } }
+.again { flex: none; width: 56px; height: 48px; display: grid; place-items: center; font: 600 13px/1 var(--font-body); }
+.again.waiting { background: var(--control); color: var(--weak); }
+.again.ready { background: var(--accent); color: var(--on-accent, var(--bg-a)); }
+/* Hover on the white action blocks: the search icon grows, the refresh icon grows and turns. */
+.search-block, .again.ready { cursor: pointer; }
+.search-block .ico, .again.ready .ico { transition: transform .22s cubic-bezier(.2, .8, .3, 1.2); }
+.search-block:hover .ico { transform: scale(1.15); }
+.again.ready:hover .ico { transform: scale(1.12) rotate(90deg); }
+@media (prefers-reduced-motion: reduce) {
+  .search-block .ico, .again.ready .ico { transition: none; }
+}
+.button.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent, var(--bg-a)); font-weight: 700; }
+.button.wait { color: var(--faint); }
+.spinner { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--control-line); border-top-color: var(--accent); }
