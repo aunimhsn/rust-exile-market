@@ -17,9 +17,7 @@ use super::price_block::orb;
 use super::theme::{self, color, size, text};
 use super::widgets;
 use crate::i18n::{Message, NumberTag, Translator};
-use crate::item::Modifier;
-use crate::language::Language;
-use crate::roll_difference::{Difference, Verdict, difference};
+use crate::roll_difference::{CopiedLines, Difference, Verdict};
 use crate::trade::offers::{ItemOffer, ModifierKind, SellerStatus};
 
 /// How long the tooltip stays open after the pointer left its row, to reach it.
@@ -164,9 +162,8 @@ impl TooltipState {
 /// What the tooltip shows of an offer.
 pub struct OfferTooltip<'a> {
     pub offer: &'a ItemOffer,
-    /// The modifiers of the copied item, to compare the rolls, and its language.
-    pub modifiers: &'a [Modifier],
-    pub language: Language,
+    /// The modifier lines of the copied item, to compare the rolls.
+    pub lines: &'a CopiedLines,
     pub name_color: Color32,
     pub suspicious: bool,
     pub copied: bool,
@@ -299,7 +296,7 @@ impl OfferTooltip<'_> {
             .flat_map(|modifier| modifier.text.lines())
             .map(|line| Line {
                 text: line.to_owned(),
-                difference: difference(line, kind, self.language, self.modifiers),
+                difference: self.lines.difference(line, kind),
             })
             .collect()
     }

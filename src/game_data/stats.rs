@@ -2,7 +2,7 @@
 //! the strings that match a modifier line in each language, and the trade ids of each stat.
 
 use std::collections::{BTreeMap, HashMap};
-use std::sync::LazyLock;
+use std::sync::{LazyLock, OnceLock};
 
 use serde::Deserialize;
 
@@ -118,9 +118,9 @@ pub(super) struct Stats {
     list: Vec<Stat>,
     /// The index of the stat and of its matcher, by string written as [`normalize`] does.
     by_string: HashMap<String, Vec<(usize, usize)>>,
-    /// The index of each stat by its English template and game id; none for two stats with
-    /// the same ones, neither of which is the twin of the other languages.
-    by_reference: HashMap<(String, Option<String>), Option<usize>>,
+    /// The indexes of the stats by their English template, built at the first
+    /// [`Stats::twin`]: only the English stats are asked for twins.
+    by_reference: OnceLock<HashMap<String, Vec<usize>>>,
     /// The most lines a string has.
     pub max_lines: usize,
 }
@@ -170,40 +170,52 @@ impl Stats {
                 }
             }
         }
-        let mut by_reference: HashMap<_, Option<usize>> = HashMap::new();
-        for (index, stat) in stats.iter().enumerate() {
-            by_reference
-                .entry((stat.reference.clone(), stat.id.clone()))
-                .and_modify(|found| *found = None)
-                .or_insert(Some(index));
-        }
         Self {
             list: stats,
             by_string,
-            by_reference,
+            by_reference: OnceLock::new(),
             max_lines,
         }
     }
 
     /// The stats with a line written `string` (normalized), and the index of the matcher of
-    /// that line.
+    /// that line among the matchers of its stat.
     pub fn find<'a>(&'a self, string: &str) -> impl Iterator<Item = (&'a Stat, usize)> + use<'a> {
         self.by_string
             .get(string)
             .into_iter()
             .flatten()
-            .filter_map(|&(stat, matcher)| Some((self.list.get(stat)?, matcher)))
+            .filter_map(|&(stat, matcher_index)| Some((self.list.get(stat)?, matcher_index)))
     }
 
-    /// The matcher of these stats at the place of the matcher `index` of `stat`, a stat of
-    /// another language: the same English template and game id, and the strings of a stat
-    /// in the same order in every language (checked on 2026-10-26: 2,616 of the 2,901 French
-    /// strings with `#` line up). None when the matcher there doesn't negate or doesn't give
-    /// the same value: the strings don't line up.
-    pub fn twin(&self, stat: &Stat, index: usize) -> Option<&Matcher> {
-        let key = (stat.reference.clone(), stat.id.clone());
-        let twin = self.list.get((*self.by_reference.get(&key)?)?)?;
-        let (matcher, other) = (twin.matchers.get(index)?, stat.matchers.get(index)?);
+    /// The matcher of these stats at the place of the matcher `matcher_index` of `stat`, a
+    /// stat of another language: the stat with the same English template and game id, whose
+    /// strings are in the same order in every language (checked on 2026-10-26: 2,616 of the
+    /// 2,901 French strings with `#` of the equipment line up). None when two stats have
+    /// this template and id, or when the matcher there doesn't negate like the other or
+    /// doesn't give the same value: the strings don't line up.
+    pub fn twin(&self, stat: &Stat, matcher_index: usize) -> Option<&Matcher> {
+        let by_reference = self.by_reference.get_or_init(|| {
+            let mut by_reference: HashMap<String, Vec<usize>> = HashMap::new();
+            for (index, stat) in self.list.iter().enumerate() {
+                by_reference
+                    .entry(stat.reference.clone())
+                    .or_default()
+                    .push(index);
+            }
+            by_reference
+        });
+        let mut same = by_reference
+            .get(&stat.reference)?
+            .iter()
+            .filter_map(|&index| self.list.get(index))
+            .filter(|other| other.id == stat.id);
+        let twin = same.next()?;
+        if same.next().is_some() {
+            return None;
+        }
+        let matcher = twin.matchers.get(matcher_index)?;
+        let other = stat.matchers.get(matcher_index)?;
         (matcher.negate == other.negate && matcher.value == other.value).then_some(matcher)
     }
 
@@ -275,11 +287,11 @@ mod tests {
 
     #[test]
     fn a_stat_has_its_ids_in_each_group() {
-        let (stat, matcher) = Stats::of(Language::English)
+        let (stat, matcher_index) = Stats::of(Language::English)
             .find("# to maximum Life")
             .next()
             .unwrap();
-        let matcher = &stat.matchers[matcher];
+        let matcher = &stat.matchers[matcher_index];
 
         assert_eq!(stat.id.as_deref(), Some("base_maximum_life"));
         assert_eq!(stat.better, Better::Higher);

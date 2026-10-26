@@ -23,7 +23,7 @@ pub struct StatMatch {
     /// `# to Level of all Arc Skills`), or else the value of a line without number.
     pub matcher_value: Option<f64>,
     /// The index of the string of the stat that matched the line.
-    matcher: usize,
+    matcher_index: usize,
 }
 
 /// The lines of a modifier written by one stat, or a line found nowhere.
@@ -72,19 +72,21 @@ fn find(stats: &'static Stats, text: &str, group: TradeGroup) -> Option<StatMatc
     let found = templates(text, &numbers).flat_map(|template| {
         stats
             .find(&template.string)
-            .filter_map(move |(stat, matcher)| stat_match(stat, matcher, &template.values))
+            .filter_map(move |(stat, matcher_index)| {
+                stat_match(stat, matcher_index, &template.values)
+            })
     });
     first_with_id(found, |stat| has_id(stat, group))
 }
 
-fn stat_match(stat: &'static Stat, index: usize, values: &[f64]) -> Option<StatMatch> {
-    let matcher = stat.matchers.get(index)?;
+fn stat_match(stat: &'static Stat, matcher_index: usize, values: &[f64]) -> Option<StatMatch> {
+    let matcher = stat.matchers.get(matcher_index)?;
     let sign = if matcher.negate { -1.0 } else { 1.0 };
     Some(StatMatch {
         stat,
         values: values.iter().map(|value| value * sign).collect(),
         matcher_value: matcher.value,
-        matcher: index,
+        matcher_index,
     })
 }
 
@@ -98,7 +100,7 @@ pub fn english_string(language: Language, text: &str, group: TradeGroup) -> Opti
         return None;
     }
     let found = find(Stats::of(language), &normalize(text), group)?;
-    let twin = Stats::of(Language::English).twin(found.stat, found.matcher)?;
+    let twin = Stats::of(Language::English).twin(found.stat, found.matcher_index)?;
     Some(&twin.string)
 }
 

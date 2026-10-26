@@ -4,7 +4,8 @@
 //! Both lines are in the language of the item: its offers are searched on the trade site of
 //! its language. Two lines are the same when they read the same with `#` in place of each
 //! number, at the same place on the item (implicit, explicit…); a line with several numbers
-//! (`Adds 5 to 82 Lightning Damage`) compares their averages.
+//! (`Adds 5 to 82 Lightning Damage`) compares their averages. The lines of the copied item are
+//! read once, when it is copied ([`CopiedLines`]).
 //!
 //! The better side of a line is read from its words: those of its English string when the
 //! line is in another language and its stat has one (`#% de Réduction de l'Armure` is read
@@ -199,55 +200,81 @@ fn same_place(offer: OfferKind, kind: ModifierKind) -> bool {
     }
 }
 
-/// The group of the trade site where the offer lists its modifiers of `kind`.
-fn trade_group(kind: OfferKind) -> TradeGroup {
-    match kind {
-        OfferKind::Enchant => TradeGroup::Enchant,
-        OfferKind::Rune => TradeGroup::Rune,
-        OfferKind::Implicit => TradeGroup::Implicit,
-        OfferKind::Explicit => TradeGroup::Explicit,
-    }
+/// A modifier line of the copied item, as the offer lines are compared with it.
+#[derive(Debug)]
+struct CopiedLine {
+    kind: ModifierKind,
+    template: String,
+    /// The numbers of the line as the item parser read them.
+    rolls: Vec<f64>,
+    direction: Direction,
 }
 
-/// The difference of the offer `line`, listed as `kind`, from the same line of the copied
-/// `modifiers`, at the same place, both in `language`; `None` when the copied item hasn't it
-/// there, or has the same numbers.
-#[must_use]
-pub fn difference(
-    line: &str,
-    kind: OfferKind,
-    language: Language,
-    modifiers: &[Modifier],
-) -> Option<Difference> {
-    let offer = Template::of(line);
-    // The numbers of the copied lines as the item parser read them.
-    let copied = modifiers
-        .iter()
-        .filter(|modifier| same_place(kind, modifier.kind))
-        .flat_map(|modifier| &modifier.lines)
-        .find(|copied| {
-            copied.rolls.len() == offer.numbers.len()
-                && Template::of(&copied.text).text == offer.text
-        })?;
-    let value = average(offer.numbers.iter().copied())?
-        - average(copied.rolls.iter().map(|roll| roll.value))?;
-    // A difference written 0 isn't one.
-    if crate::format::number(value.abs()) == "0" {
-        return None;
+/// The modifier lines of the copied item, read once when it is copied: the tooltip of an
+/// offer compares its lines with them each time it is drawn.
+#[derive(Debug, Default)]
+pub struct CopiedLines(Vec<CopiedLine>);
+
+impl CopiedLines {
+    /// The lines of `modifiers`, written in `language`.
+    #[must_use]
+    pub fn new(language: Language, modifiers: &[Modifier]) -> Self {
+        let lines = modifiers.iter().flat_map(|modifier| {
+            let group = TradeGroup::of(modifier);
+            modifier.lines.iter().map(move |line| {
+                let template = Template::of(&line.text).text;
+                let words = game_data::english_string(language, &line.text, group);
+                CopiedLine {
+                    kind: modifier.kind,
+                    direction: direction(words.unwrap_or(&template)),
+                    template,
+                    rolls: line.rolls.iter().map(|roll| roll.value).collect(),
+                }
+            })
+        });
+        Self(lines.collect())
     }
-    let words = game_data::english_string(language, line, trade_group(kind)).unwrap_or(&offer.text);
-    let verdict = match (direction(words), value > 0.0) {
-        (Direction::Higher, true) | (Direction::Lower, false) => Verdict::Better,
-        (Direction::Higher, false) | (Direction::Lower, true) => Verdict::Worse,
-        (Direction::Unknown, _) => Verdict::Unknown,
-    };
-    Some(Difference { value, verdict })
+
+    /// The difference of the offer `line`, listed as `kind`, from the same line of the
+    /// copied item, at the same place; `None` when the copied item hasn't it there, or has
+    /// the same numbers.
+    #[must_use]
+    pub fn difference(&self, line: &str, kind: OfferKind) -> Option<Difference> {
+        let offer = Template::of(line);
+        let copied = self.0.iter().find(|copied| {
+            same_place(kind, copied.kind)
+                && copied.rolls.len() == offer.numbers.len()
+                && copied.template == offer.text
+        })?;
+        let value =
+            average(offer.numbers.iter().copied())? - average(copied.rolls.iter().copied())?;
+        // A difference written 0 isn't one.
+        if crate::format::number(value.abs()) == "0" {
+            return None;
+        }
+        let verdict = match (copied.direction, value > 0.0) {
+            (Direction::Higher, true) | (Direction::Lower, false) => Verdict::Better,
+            (Direction::Higher, false) | (Direction::Lower, true) => Verdict::Worse,
+            (Direction::Unknown, _) => Verdict::Unknown,
+        };
+        Some(Difference { value, verdict })
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::item::StatLine;
+
+    /// The difference of the offer `line` from the copied `modifiers`, in `language`.
+    fn difference(
+        line: &str,
+        kind: OfferKind,
+        language: Language,
+        modifiers: &[Modifier],
+    ) -> Option<Difference> {
+        CopiedLines::new(language, modifiers).difference(line, kind)
+    }
 
     fn modifier(kind: ModifierKind, line: &str) -> Modifier {
         Modifier {
@@ -712,5 +739,14 @@ mod tests {
     fn every_string_of_the_stats_reads_as_classified() {
         assert_eq!(counts(Language::English), (1983, 599, 300));
         assert_eq!(counts(Language::French), (2008, 589, 304));
+
+        // Two changes that make up for each other would keep the counts: the French strings
+        // with an English string are counted too.
+        let french = game_data::equipment_strings(Language::French);
+        let twins = french
+            .iter()
+            .filter(|(_, english)| english.is_some())
+            .count();
+        assert_eq!((twins, french.len()), (2616, 2901));
     }
 }
