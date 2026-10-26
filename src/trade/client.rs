@@ -82,12 +82,14 @@ pub(super) struct Request {
     pub body: Option<String>,
 }
 
-/// An answer of the trade site, whatever its status.
-#[derive(Debug, Clone, Default)]
+/// An answer of the trade site, whatever its status: its limits are read even when its body
+/// can't be.
+#[derive(Debug)]
 pub(super) struct Answer {
     pub status: u16,
     pub limits: LimitHeaders,
-    pub body: String,
+    /// Read for a success only.
+    pub body: Result<String, ureq::Error>,
 }
 
 /// How the requests are sent: over the network, or to a fake trade site in the tests.
@@ -148,10 +150,16 @@ impl Transport for Network {
             rules,
             retry_after: header("retry-after"),
         };
+        let status = response.status().as_u16();
+        let body = if (200..300).contains(&status) {
+            response.body_mut().read_to_string()
+        } else {
+            Ok(String::new())
+        };
         Ok(Answer {
-            status: response.status().as_u16(),
+            status,
             limits,
-            body: response.body_mut().read_to_string()?,
+            body,
         })
     }
 }
@@ -303,13 +311,18 @@ impl<T: Transport> TradeClient<T> {
         }
         let result = self.transport.send(request);
         // Counted once answered, with both times: nothing else is sent meanwhile
-        // (`&mut self`).
+        // (`&mut self`). Only a success that tells the limits was counted for sure by the
+        // trade site: a request that didn't reach it, or that it refused, may not be.
         let now = Instant::now();
+        let counted = result.as_ref().is_ok_and(|answer| {
+            (200..300).contains(&answer.status) && !answer.limits.rules.is_empty()
+        });
         self.limits.sent(
             policy,
             Hit {
                 sent,
                 answered: now,
+                counted,
             },
         );
         let answer = result.map_err(|error| TradeError::Http(HttpError::Request(error)))?;
@@ -324,7 +337,8 @@ impl<T: Transport> TradeClient<T> {
         if !(200..300).contains(&answer.status) {
             return Err(HttpError::Request(ureq::Error::StatusCode(answer.status)).into());
         }
-        Ok(serde_json::from_str(&answer.body).map_err(HttpError::Json)?)
+        let body = answer.body.map_err(HttpError::Request)?;
+        Ok(serde_json::from_str(&body).map_err(HttpError::Json)?)
     }
 }
 
@@ -348,7 +362,7 @@ pub(super) mod tests {
             self.answers.lock().unwrap().push_back(Answer {
                 status,
                 limits,
-                body: body.to_owned(),
+                body: Ok(body.to_owned()),
             });
         }
 
@@ -507,6 +521,45 @@ pub(super) mod tests {
         assert!(until > Instant::now() + Duration::from_secs(55));
         assert_eq!(site.requests().len(), 1);
         assert!(client.next_search(SearchKind::Items, Instant::now()) >= until);
+    }
+
+    #[test]
+    fn a_refusal_whose_body_cant_be_read_waits_all_the_same() {
+        let site = FakeSite::default();
+        let mut headers = limits("trade-search-request-limit", "5:10:60", "6:10:60");
+        headers.retry_after = Some("120".to_owned());
+        site.answers.lock().unwrap().push_back(Answer {
+            status: 429,
+            limits: headers,
+            body: Err(ureq::Error::ConnectionFailed),
+        });
+        let mut client = TradeClient::with_transport(site);
+
+        let search = client.search_items(Language::English, &League::new("Standard"), &ring());
+
+        let Err(TradeError::Refused(until)) = search else {
+            panic!("refused: {search:?}");
+        };
+        assert!(until > Instant::now() + Duration::from_secs(115));
+    }
+
+    #[test]
+    fn the_limits_of_an_answer_whose_body_cant_be_read_are_kept() {
+        let site = FakeSite::default();
+        site.answers.lock().unwrap().push_back(Answer {
+            status: 200,
+            limits: limits("trade-fetch-request-limit", "1:4:10", "1:4:0"),
+            body: Err(ureq::Error::ConnectionFailed),
+        });
+        let mut client = TradeClient::with_transport(site);
+
+        let fetch = client.fetch(Language::English, "Q1", &["a".to_owned()]);
+
+        assert!(matches!(
+            fetch,
+            Err(TradeError::Http(HttpError::Request(_)))
+        ));
+        assert!(client.next_fetch(Instant::now()) > Instant::now());
     }
 
     #[test]

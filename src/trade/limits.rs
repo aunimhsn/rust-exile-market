@@ -79,12 +79,17 @@ pub struct RuleHeaders {
 }
 
 /// A request of the application: when it left, and when its answer, or its failure, came.
-/// The trade site counted it in between: it is in a window since it left at the earliest,
-/// and until its answer leaves it at the latest; each count takes the time on the safe side.
+/// The trade site counted it in between, if it did: it is in a window since it left at the
+/// earliest, and until its answer leaves it at the latest; each count takes the time and
+/// the case on the safe side.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Hit {
     pub sent: Instant,
     pub answered: Instant,
+    /// The trade site counted it for sure: it answered a success with its limits. Only
+    /// these are taken from its counts to find the hits of the other tools; all of them stay
+    /// in the windows.
+    pub counted: bool,
 }
 
 /// A window of a policy: `hits` requests at most per `period`.
@@ -180,16 +185,26 @@ impl PolicyLimits {
                     rule.state
                 );
                 unreadable = true;
+                // Its restrictions apply all the same, those that can be read.
+                let rule_restricted = rule
+                    .state
+                    .split(',')
+                    .filter_map(triple)
+                    .map(|(_, _, restricted)| seconds(restricted))
+                    .max()
+                    .unwrap_or_default();
+                restricted = restricted.max(rule_restricted);
                 continue;
             };
             for window in read {
-                // Only the requests the trade site counts for sure: left within the window.
-                // Fewer of ours leave more hits to the other tools.
-                let start = now.checked_sub(window.period);
+                // Only the requests the trade site counts for sure: counted, and left within
+                // the window, less the margin. Fewer of ours leave more hits to the other
+                // tools.
+                let start = now.checked_sub(window.period.saturating_sub(MARGIN));
                 let ours = self
                     .sent
                     .iter()
-                    .filter(|hit| start.is_none_or(|start| hit.sent > start))
+                    .filter(|hit| hit.counted && start.is_none_or(|start| hit.sent > start))
                     .count();
                 windows.push(Window {
                     hits: window.hits,
@@ -330,11 +345,12 @@ mod tests {
 
     const SECOND: Duration = Duration::from_secs(1);
 
-    /// A request answered at once.
+    /// A request answered at once, with the limits.
     fn hit(time: Instant) -> Hit {
         Hit {
             sent: time,
             answered: time,
+            counted: true,
         }
     }
 
@@ -489,6 +505,7 @@ mod tests {
             Hit {
                 sent: start,
                 answered: start + 5 * tenth,
+                counted: true,
             },
         );
         limits.answered(Policy::Fetch, &fetch("1:10:0"), start + 5 * tenth);
@@ -499,11 +516,35 @@ mod tests {
             Hit {
                 sent: start + 102 * tenth,
                 answered: start + 104 * tenth,
+                counted: true,
             },
         );
         limits.answered(Policy::Fetch, &fetch("5:10:0"), start + 104 * tenth);
 
         let now = start + 106 * tenth;
+        assert!(limits.ready_at(Policy::Fetch, now) > now);
+    }
+
+    #[test]
+    fn a_request_that_didnt_reach_the_trade_site_doesnt_hide_the_hits_of_another_tool() {
+        let mut limits = Limits::default();
+        let start = Instant::now();
+        let fetch = |state| headers("trade-fetch-request-limit", "5:10:10", state);
+        // A request that failed without an answer, at 0 s.
+        limits.sent(
+            Policy::Fetch,
+            Hit {
+                sent: start,
+                answered: start,
+                counted: false,
+            },
+        );
+        // A browser makes 4 requests at 1 s; ours at 2 s: 5 of 5.
+        limits.sent(Policy::Fetch, hit(start + 2 * SECOND));
+        limits.answered(Policy::Fetch, &fetch("5:10:0"), start + 2 * SECOND);
+
+        // The failed one leaves the window at 11 s; the trade site still counts 5 then.
+        let now = start + 11 * SECOND + MARGIN + Duration::from_millis(100);
         assert!(limits.ready_at(Policy::Fetch, now) > now);
     }
 
@@ -534,6 +575,24 @@ mod tests {
         headers.rules.push(rule("Account", "2:30:60", "two"));
 
         limits.answered(Policy::Search, &headers, now);
+
+        assert_eq!(
+            limits.ready_at(Policy::Search, now),
+            now + 60 * SECOND + MARGIN
+        );
+    }
+
+    #[test]
+    fn the_restriction_of_a_rule_that_cant_be_read_applies() {
+        let mut limits = Limits::default();
+        let now = Instant::now();
+
+        // Its limits can't be read, its state can.
+        limits.answered(
+            Policy::Search,
+            &headers("trade-search-request-limit", "five", "6:10:60"),
+            now,
+        );
 
         assert_eq!(
             limits.ready_at(Policy::Search, now),
