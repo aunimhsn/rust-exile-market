@@ -19,7 +19,6 @@ const LESS_WORDS: &[&str] = &[
     "réduite",
     "réduits",
     "réduites",
-    "réduction",
     "en moins",
     "moins de",
 ];
@@ -364,9 +363,10 @@ mod tests {
 
     #[test]
     fn the_french_lines_are_read_whatever_their_capitals() {
+        // Lines of fr-rare-body-armour.txt.
         let copied = [
             explicit("76% d'Augmentation du Bouclier d'énergie"),
-            explicit("20% de Réduction de la Vitesse de déplacement"),
+            explicit("Réduit la durée des saignements vous affectant de 41 %."),
         ];
 
         assert_eq!(
@@ -374,8 +374,14 @@ mod tests {
             Some(Verdict::Better)
         );
         assert_eq!(
-            verdict("25% de Réduction de la Vitesse de déplacement", &copied),
-            Some(Verdict::Worse)
+            direction("Réduit la durée des saignements de # %."),
+            Direction::Lower,
+            "Réduit with its capital"
+        );
+        // "Réduction" also writes a bonus, the damage reduction: no word reads it the other way.
+        assert_eq!(
+            direction("#% de Réduction supplémentaire des Dégâts physiques"),
+            Direction::Higher
         );
     }
 
