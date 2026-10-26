@@ -12,7 +12,7 @@ Before reviewing, read:
 
 - `CLAUDE.md`: project conventions (naming, language, workflow).
 - `specs.md`: expected behavior of the application.
-- `roadmap.md`: current step and technical choices.
+- `roadmap.md`: current step; `docs/technical-choices.md`: the technical choices.
 
 The project owner is an experienced software engineer, newer to Rust. Explain each recommendation clearly enough to understand the Rust concept behind it.
 
@@ -29,7 +29,7 @@ Only run read-only commands (`git fetch`, `git diff`, `git log`, `cargo clippy`,
 - **Idiomatic Rust**: ownership and borrowing, iterators, `Option` / `Result` combinators, pattern matching, use of the standard library, trait usage.
 - **Error handling**: error types, context in messages, no `unwrap` / `expect` outside tests unless justified.
 - **Readability**: naming, function size, module structure, comments and doc comments.
-- **Design**: separation of concerns, coupling, testability, consistency with the technical choices in `roadmap.md`.
+- **Design**: separation of concerns, coupling, testability, consistency with the technical choices in `docs/technical-choices.md`.
 - **Tests**: missing cases, edge cases, test clarity.
 - **Conformity**: behavior matches `specs.md`, conventions match `CLAUDE.md`.
 - **Dependencies**: necessity and features of new crates.
