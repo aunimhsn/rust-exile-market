@@ -66,14 +66,9 @@ enum Group {
 enum Roll {
     /// Where its value falls in its ranges, from 0 to 1, and the ranges.
     Bar { share: f32, ranges: Vec<Range> },
-    /// A line of a prefix or a suffix: the tier of the modifier, written on its first line
-    /// only (the following lines keep its space, so that their ranges line up), and the
-    /// ranges of that tier.
-    Tier {
-        tier: u32,
-        first: bool,
-        ranges: Vec<Range>,
-    },
+    /// A prefix or a suffix: its tier, and the ranges of that tier; under the last line of a
+    /// hybrid modifier, the ranges of all its lines, so that it reads as one modifier.
+    Tier { tier: u32, ranges: Vec<Range> },
 }
 
 /// A stat: a line of a modifier.
@@ -247,7 +242,7 @@ struct AffixStats<'a> {
 }
 
 /// The explicit modifiers of `affix` (`None`: copied without their affixes), those with a
-/// line that varies first, each with its tier written once, on its first line.
+/// line that varies first, each with its tier and its ranges under its last line.
 fn affix_stats(item: &Item, affix: Option<Affix>) -> AffixStats<'_> {
     let mut modifiers: Vec<&Modifier> = item
         .modifiers()
@@ -258,22 +253,27 @@ fn affix_stats(item: &Item, affix: Option<Affix>) -> AffixStats<'_> {
     let stats = modifiers
         .iter()
         .flat_map(|modifier| {
-            modifier.lines.iter().enumerate().map(|(index, line)| Stat {
-                text: &line.text,
-                filter: true,
-                roll: modifier.tier.and_then(|tier| {
-                    let ranges: Vec<Range> = copied_rolls(line)
-                        .into_iter()
-                        .map(|(_, range)| range)
-                        .collect();
-                    let first = index == 0;
-                    (first || !ranges.is_empty()).then_some(Roll::Tier {
-                        tier,
-                        first,
-                        ranges,
-                    })
-                }),
-            })
+            let last = modifier.lines.len().saturating_sub(1);
+            modifier
+                .lines
+                .iter()
+                .enumerate()
+                .map(move |(index, line)| Stat {
+                    text: &line.text,
+                    filter: true,
+                    roll: modifier
+                        .tier
+                        .filter(|_| index == last)
+                        .map(|tier| Roll::Tier {
+                            tier,
+                            ranges: modifier
+                                .lines
+                                .iter()
+                                .flat_map(copied_rolls)
+                                .map(|(_, range)| range)
+                                .collect(),
+                        }),
+                })
         })
         .collect();
     AffixStats {
@@ -537,22 +537,17 @@ fn roll_line(ui: &mut Ui, roll: &Roll) {
                 painter.rect_filled(fill, radius, color::ACCENT);
                 range_label(ui, ranges);
             }
-            Roll::Tier {
-                tier,
-                first,
-                ranges,
-            } => {
+            Roll::Tier { tier, ranges } => {
                 let tint = match tier {
                     1 => color::TIER_1,
                     2 | 3 => color::ACCENT,
                     _ => color::FAINT,
                 };
-                let galley = widgets::text_line(ui, format!("T{tier}"), text::tier());
-                let (rect, _) = ui.allocate_exact_size(galley.size(), Sense::hover());
-                // The following lines of the modifier keep its space only.
-                if *first {
-                    ui.painter().galley(rect.min, galley, tint);
-                }
+                ui.label(
+                    RichText::new(format!("T{tier}"))
+                        .font(text::tier())
+                        .color(tint),
+                );
                 if !ranges.is_empty() {
                     range_label(ui, ranges);
                 }
@@ -586,8 +581,7 @@ mod tests {
     }
 
     /// The rows as texts: a title (`Prefixes 2/3`), or a stat, `□ ` first for a filter, with
-    /// its roll (`□ +55 to maximum Life [40–60 0.75]`, `□ +3 to Level [T1 3–3]`, `[8–12]` on the
-    /// following line of a modifier).
+    /// its roll (`□ +55 to maximum Life [40–60 0.75]`, `□ +3 to Level [T1 3–3]`).
     fn texts(item: &Item, unique_modifiers: Option<&UniqueModifiers>) -> Vec<String> {
         rows(item, unique_modifiers)
             .into_iter()
@@ -602,13 +596,8 @@ mod tests {
                         Some(Roll::Bar { share, ranges }) => {
                             format!(" [{} {share:.2}]", ranges_text(&ranges))
                         }
-                        Some(Roll::Tier {
-                            tier,
-                            first: true,
-                            ranges,
-                        }) => format!(" [T{tier} {}]", ranges_text(&ranges)),
-                        Some(Roll::Tier { ranges, .. }) => {
-                            format!(" [{}]", ranges_text(&ranges))
+                        Some(Roll::Tier { tier, ranges }) => {
+                            format!(" [T{tier} {}]", ranges_text(&ranges))
                         }
                     };
                     format!("{check}{text}{roll}")
@@ -831,9 +820,9 @@ mod tests {
                 "□ 5% increased Movement Speed",
                 "Prefixes 2/3",
                 "□ +86 to maximum Life [T3 85–99]",
-                // The tier of a modifier of two lines, written once.
-                "□ +20 to Evasion Rating [T5 15–25]",
-                "□ +10% increased Evasion Rating [8–12]",
+                // A hybrid modifier: its tier and the ranges of its lines under the last one.
+                "□ +20 to Evasion Rating",
+                "□ +10% increased Evasion Rating [T5 15–25 · 8–12]",
             ]
         );
     }
