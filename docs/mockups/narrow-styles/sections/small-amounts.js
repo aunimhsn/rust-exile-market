@@ -1,4 +1,4 @@
-// Section Small amounts: the Divine and Chaos Orb amounts under 0.1 are hidden, their column stays empty.
+// Section Small amounts: the Divine and Chaos Orb amounts under 0.1 are hidden, the currencies left move to the left.
 // Sample rates: 1 div = 10 c = 750 ex.
 const ANDVARIUS = { rarity: "unique", name: "Andvarius", base: "Gold Ring", cls: "Rings", tags: ["ilvl 72"], req: "Requires Level 35", statsLabel: "Stats (4)" };
 const GOLDRIM = { rarity: "unique", name: "Goldrim", base: "Feathered Tiara", cls: "Helmets", tags: ["ilvl 14"], props: [["Energy Shield", "29"]], req: "Requires Level 11", statsLabel: "Stats (4)" };

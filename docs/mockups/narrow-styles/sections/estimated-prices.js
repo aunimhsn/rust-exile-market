@@ -17,7 +17,8 @@ SECTIONS.push(["Estimated prices: rare, magic, normal, jewels", [
       ],
       mods: [
         { text: "148% increased Physical Damage", value: 148, yours: 152, tier: 2 },
-        { text: "Adds 5 to 82 Lightning Damage", tier: 3 },
+        // Several numbers: the difference of their averages, (5 + 82) / 2 against (3 + 76) / 2.
+        { text: "Adds 5 to 82 Lightning Damage", value: 43.5, yours: 39.5, tier: 3 },
         { text: "+3 to Level of all Projectile Skills", value: 3, yours: 3, tier: 1 },
         { text: "16% increased Attack Speed", value: 16, yours: 14, tier: 1 },
         { text: "+290 to Accuracy Rating", value: 290, yours: 312, tier: 5 },

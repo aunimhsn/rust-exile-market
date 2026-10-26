@@ -15,7 +15,6 @@ function offerTooltip(t) {
       <span class="status s-${t.status}"><i></i>${{ online: "Online", away: "Away", offline: "Offline" }[t.status]}</span>
       ${t.status === "offline" ? "" : `<span class="pill ${t.copied ? "done" : ""}">${t.copied ? `Copied${ICON.check(11)}` : "Copy whisper"}</span>`}
     </div>
-    ${t.copied ? `<div class="tt-hint">Paste it in the game chat: Enter, Ctrl+V, Enter.</div>` : ""}
   </div>`;
 }
 
@@ -51,5 +50,13 @@ function offers(o, lang = "en") {
   return `<div class="band b">
     <div class="head flat-head"><span class="title-stack"><span class="label">${label}</span><span class="age">${o.age || "searched 2min ago"}</span></span><span class="right">${o.count}</span>${again}</div>
     <div class="offers ${three ? "three" : ""}"><div class="cols">${o.columns.map(c => `<span>${c}</span>`).join("")}</div>${rows}</div>
-    <div class="more" title="${fr ? "Afficher plus d'offres" : "Show more offers"}">${ICON.downDouble(16)}</div></div>`;
+    ${more(o.more, fr)}</div>`;
+}
+
+// Under the list: the double chevron; the spinner while the next offers come; when they couldn't come, the
+// chevron again, to ask them again, with why above it.
+function more(state, fr) {
+  if (state === "loading") return `<div class="more loading"><span class="spinner"></span></div>`;
+  const chevron = `<div class="more" title="${fr ? "Afficher plus d'offres" : "Show more offers"}">${ICON.downDouble(16)}</div>`;
+  return state === "failed" ? `<div class="more-note">The trade site can't be reached.</div>${chevron}` : chevron;
 }

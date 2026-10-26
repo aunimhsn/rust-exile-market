@@ -54,6 +54,7 @@ The single source of truth of the interface is the mock-up [docs/mockups/narrow-
 - **JetBrains Mono** for the numbers that line up (prices, offers), weight 600.
 - Both fonts are under the SIL Open Font License and embedded in the executable.
 - Numbers: a point between the integer and the decimal parts in every language, no thousands separator (`12.4`, `950`). At most three significant digits and two decimals, without trailing zeros (`12.4`, `0.25`, `123`); Exalted Orbs without decimals from 10 (`17`, but `0.1` for a cheap item); under 0.01, `<0.01`. From 1000, an amount is shortened with `K`, rounded to one decimal, without a trailing `.0` (`1.3K`, `27.6K`, `9K` for 8990); from 100 000, without decimals (`125K`); from a million, with `M` (`1.2M`). The same in every language.
+- A price reads with what is compared first: the orb before the amount in the price block, where the eye looks for a currency; the amount before the orb in the offers and their tooltip, where the eye compares the amounts from row to row ("10 div", as the players write it).
 - Currency abbreviations, the same in every language, as the players write them: `div`, `c`, `ex` ("Unit price: 0.25 div · 2.49 c · 182 ex").
 - Durations: the number glued to its unit, without a space, in every language: `8s`, `12min`, `3h`, `5d` ("poe2scout 12min ago", "il y a 3h").
 
@@ -134,7 +135,7 @@ The window has a title bar, then three bands (item, price, offers), then a statu
 **Fixed-name items** (currency exchange and uniques):
 
 - The price in **Divine Orbs**, **Chaos Orbs** and **Exalted Orbs**, side by side, each with its orb icon, so that the price is readable at any time of the league.
-- An amount under 0.1 Divine Orb or 0.1 Chaos Orb is too small to matter and isn't shown: its column stays empty, so that each currency keeps its place (an item worth 1 Exalted Orb shows only "1" with its orb, in the third column). The Exalted Orbs are always shown. The unit price line of a stack leaves these amounts out too ("Unit price: 0.27 c · 20 ex").
+- An amount under 0.1 Divine Orb or 0.1 Chaos Orb is too small to matter and isn't shown: the currencies left move to the left (an item worth 1 Exalted Orb shows only "1" with its orb, in the first column). The Exalted Orbs are always shown. The unit price line of a stack leaves these amounts out too ("Unit price: 0.27 c · 20 ex").
 - The large price is always the value of what was copied: for a stack, the value of the whole stack, with "Stack of 7" on the right of the title and the unit price on a small line ("Unit price: 0.25 div · 2.49 c · 182 ex").
 - On the right of the title, for a unique, the number of offers behind the price ("23 offers"); for a currency exchange item, which always has plenty of offers, the stack size instead ("Stack of 7"; nothing for a single item, without a unit price line).
 - The trend, the change first, in green when it rises and in red when it falls, without icon: "+4% over the last 3 days", "−11% over the last 7 days" (a real minus sign). It compares the price with the oldest known price of the last 7 days: 7 days, or fewer for an item listed lately. Under 1 % of change, "Stable over the last 7 days" in gray. No trend without a past price.
@@ -178,14 +179,15 @@ The offers search uses the stats of the copied item as filters, like the trade s
 - **The list**: the first 10 offers, from the cheapest, among the sellers online or away. Each row shows the asked price with its orb and the listing time, with a dot for the seller status: green online, yellow away. Every other row is lighter.
   - Currency exchange items: the price per unit, the stock and the listing time.
   - An offer under a quarter of the reference price (the poe2scout price, or the estimate) is struck through and marked with "?": it is usually bait or a mistake, and it isn't counted in the estimate.
-  - A double chevron under the list loads 10 more offers; the whole width under the list is clickable.
+  - A double chevron under the list loads 10 more offers; the whole width under the list is clickable. While they come, a spinner in its place; when they can't come, "The trade site can't be reached." in weak text above the chevron, which asks them again.
 - **No offer**: "No offer online with these filters. Uncheck a stat or lower a minimum, then search again."
 - **Unidentified unique**: "Identify the item to search its offers.", without a search block: its offers are searched by its name, which it doesn't show yet.
 - **The tooltip of an offer**:
+  - Only the offers of items have a tooltip: a row of the currency exchange doesn't light up and opens nothing.
   - A row lights up one shade under the pointer, which shows it can be clicked. Hovering a row opens the tooltip of its item above the row, or below it when there is no room above. It stays open a few tenths of a second after the pointer leaves the row, and while the pointer is inside it. A click on the row pins it; a click elsewhere or Escape closes it.
-  - It shows the name, the price with its orb, the base, item level and states, then the implicit and explicit modifiers, each variable one with its difference from the copied item: green when better, red when worse. Higher is better, except for a list of stats where lower is better (costs, "reduced" penalties…); a stat whose direction is unknown gets no color.
+  - It shows the name, the price with its orb, the base, item level and states, then the implicit and explicit modifiers, each variable one with its difference from the same line of the copied item: green when better, red when worse; a line with several numbers ("Adds 5 to 82 Lightning Damage") compares their averages. Higher is better, except for a list of stats where lower is better (costs, "reduced" penalties…); a stat whose direction is unknown gets no color.
   - A suspicious offer adds "Be careful: far below the market price." in yellow under the name.
-  - At the bottom, the seller status (dot and "Online", "Away" or "Offline") and, when the seller is online or away, a **Copy whisper** pill: it copies the whisper message of the trade site ("@seller Hi, I would like to buy your…") to the clipboard, then reads "Copied" with a check mark for 2 seconds, with "Paste it in the game chat: Enter, Ctrl+V, Enter." under it.
+  - At the bottom, the seller status (dot and "Online", "Away" or "Offline") and, when the seller is online or away, a **Copy whisper** pill: it copies the whisper message of the trade site ("@seller Hi, I would like to buy your…") to the clipboard, then reads "Copied" with a check mark for 2 seconds. The whisper is in the language of the trade site searched, that of the item.
 - The application never signs in to the player's account, so it never sends a direct whisper and never travels to a hideout.
 
 ### Settings
