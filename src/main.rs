@@ -16,6 +16,7 @@ mod language;
 mod league;
 mod logging;
 mod market;
+mod offers;
 mod prices;
 mod pricing;
 mod rolls;

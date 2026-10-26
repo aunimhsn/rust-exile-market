@@ -12,6 +12,17 @@ pub enum Query {
     Exchange(String),
 }
 
+impl Query {
+    /// The kind of search the query makes.
+    #[must_use]
+    pub fn kind(&self) -> SearchKind {
+        match self {
+            Self::Items(_) => SearchKind::Items,
+            Self::Exchange(_) => SearchKind::Exchange,
+        }
+    }
+}
+
 /// The kinds of searches, whose limits differ.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SearchKind {

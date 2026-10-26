@@ -6,15 +6,28 @@ use egui::{
     WidgetInfo,
 };
 
+use std::time::Duration;
+
 use super::theme::{color, size, text};
 use super::widgets;
 use crate::i18n::{Message, Translator};
 use crate::session::PricesState;
 
+/// The state of the trade site in the status bar.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TradeStatus {
+    /// No search yet in this session.
+    Idle,
+    /// The age of the last search.
+    Searched(Duration),
+    /// A long wait before the next search.
+    Waiting(Duration),
+}
+
 /// What the status bar shows.
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum Line {
-    Sources(PricesState),
+    Sources(PricesState, TradeStatus),
     Author,
 }
 
@@ -26,10 +39,10 @@ pub struct StatusBar<'a> {
 impl<'a> StatusBar<'a> {
     /// The age of each data source.
     #[must_use]
-    pub fn sources(i18n: &'a Translator, prices: PricesState) -> Self {
+    pub fn sources(i18n: &'a Translator, prices: PricesState, trade: TradeStatus) -> Self {
         Self {
             i18n,
-            line: Line::Sources(prices),
+            line: Line::Sources(prices, trade),
         }
     }
 
@@ -53,16 +66,16 @@ impl<'a> StatusBar<'a> {
                     ui.set_max_width(ui.available_width() - size::BAND_PADDING);
                     ui.add_space(size::BAND_PADDING);
                     match self.line {
-                        Line::Sources(prices) => self.sources_line(ui, prices),
+                        Line::Sources(prices, trade) => self.sources_line(ui, prices, trade),
                         Line::Author => self.author_line(ui),
                     }
                 });
             });
     }
 
-    /// The age of the prices and of the last trade site search; no search yet in this
-    /// version.
-    fn sources_line(&self, ui: &mut Ui, prices: PricesState) {
+    /// The age of the prices and of the last trade site search, or the long wait before the
+    /// next one.
+    fn sources_line(&self, ui: &mut Ui, prices: PricesState, trade: TradeStatus) {
         let i18n = self.i18n;
         let prices = match prices {
             PricesState::Downloading { .. } => i18n.text(Message::StatusPricesDownloading),
@@ -73,7 +86,12 @@ impl<'a> StatusBar<'a> {
             } => i18n.status_prices(&i18n.age(age)),
             PricesState::Known { age, offline: true } => i18n.status_prices_offline(&i18n.age(age)),
         };
-        let line = i18n.status_bar(&prices, &i18n.text(Message::StatusTradeIdle));
+        let trade = match trade {
+            TradeStatus::Idle => i18n.text(Message::StatusTradeIdle),
+            TradeStatus::Searched(age) => i18n.status_trade(&i18n.age(age)),
+            TradeStatus::Waiting(wait) => i18n.status_trade_wait(wait),
+        };
+        let line = i18n.status_bar(&prices, &trade);
         // Cut with "…" in a narrow window, and shown whole under the pointer.
         ui.add(Label::new(faint(line)).truncate());
     }

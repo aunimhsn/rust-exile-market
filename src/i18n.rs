@@ -82,12 +82,27 @@ pub enum Message {
     HideFilters,
     FilterMinimum,
     CorruptedOffersOnly,
+    OffersLabel,
+    OffersSearchHint,
+    OffersSearchTooltip,
+    OffersSearching,
+    OffersColumnPrice,
+    OffersColumnPerUnit,
+    OffersColumnStock,
+    OffersColumnListed,
+    OffersAgainTooltip,
+    OffersBusyTooltip,
+    OffersNone,
+    OffersNoneHint,
+    OffersUnreachable,
+    OffersIdentify,
+    OffersMoreTooltip,
 }
 
 impl Message {
     /// Every message, for the tests.
     #[cfg(test)]
-    const ALL: [Self; 60] = [
+    const ALL: [Self; 75] = [
         Self::LeagueModeSoftcore,
         Self::LeagueModeHardcore,
         Self::LeagueLoading,
@@ -148,6 +163,21 @@ impl Message {
         Self::HideFilters,
         Self::FilterMinimum,
         Self::CorruptedOffersOnly,
+        Self::OffersLabel,
+        Self::OffersSearchHint,
+        Self::OffersSearchTooltip,
+        Self::OffersSearching,
+        Self::OffersColumnPrice,
+        Self::OffersColumnPerUnit,
+        Self::OffersColumnStock,
+        Self::OffersColumnListed,
+        Self::OffersAgainTooltip,
+        Self::OffersBusyTooltip,
+        Self::OffersNone,
+        Self::OffersNoneHint,
+        Self::OffersUnreachable,
+        Self::OffersIdentify,
+        Self::OffersMoreTooltip,
     ];
 
     /// Its identifier in the `.ftl` files.
@@ -213,6 +243,21 @@ impl Message {
             Self::HideFilters => "hide-filters",
             Self::FilterMinimum => "filter-minimum",
             Self::CorruptedOffersOnly => "corrupted-offers-only",
+            Self::OffersLabel => "offers-label",
+            Self::OffersSearchHint => "offers-search-hint",
+            Self::OffersSearchTooltip => "offers-search-tooltip",
+            Self::OffersSearching => "offers-searching",
+            Self::OffersColumnPrice => "offers-column-price",
+            Self::OffersColumnPerUnit => "offers-column-per-unit",
+            Self::OffersColumnStock => "offers-column-stock",
+            Self::OffersColumnListed => "offers-column-listed",
+            Self::OffersAgainTooltip => "offers-again-tooltip",
+            Self::OffersBusyTooltip => "offers-busy-tooltip",
+            Self::OffersNone => "offers-none",
+            Self::OffersNoneHint => "offers-none-hint",
+            Self::OffersUnreachable => "offers-unreachable",
+            Self::OffersIdentify => "offers-identify",
+            Self::OffersMoreTooltip => "offers-more-tooltip",
         }
     }
 }
@@ -246,6 +291,8 @@ const AGE_NOW: &str = "age-now";
 const AGE_MINUTES: &str = "age-minutes";
 const AGE_HOURS: &str = "age-hours";
 const AGE_DAYS: &str = "age-days";
+const WAIT_SECONDS: &str = "wait-seconds";
+const WAIT_MINUTES: &str = "wait-minutes";
 const DOWNLOAD_TITLE: &str = "download-title";
 const TAG_QUALITY: &str = "tag-quality";
 const TAG_SOCKETS: &str = "tag-sockets";
@@ -270,6 +317,12 @@ const SHOW_STATS: &str = "show-stats";
 const AFFIX_FILL: &str = "affix-fill";
 const AFFIX_FILL_OPEN: &str = "affix-fill-open";
 const ACTIVE_FILTERS: &str = "active-filters";
+const STATUS_TRADE: &str = "status-trade";
+const STATUS_TRADE_WAIT: &str = "status-trade-wait";
+const OFFERS_SEARCHED: &str = "offers-searched";
+const OFFERS_COUNT: &str = "offers-count";
+const OFFERS_NEXT_SEARCH_TOOLTIP: &str = "offers-next-search-tooltip";
+const OFFERS_LIMIT: &str = "offers-limit";
 /// The sentences under the bar of the download of the prices, one drawn at random per
 /// download.
 const DOWNLOAD_QUOTES: [&str; 10] = [
@@ -351,6 +404,20 @@ impl Translator {
             1..60 => (AGE_MINUTES, "minutes", minutes),
             60..1440 => (AGE_HOURS, "hours", minutes / 60),
             _ => (AGE_DAYS, "days", minutes / 1440),
+        };
+        let mut args = FluentArgs::new();
+        args.set(name, count);
+        self.format(id, Some(&args))
+    }
+
+    /// A wait, rounded up so that it never ends too soon: `8s` under a minute, `4min` from it.
+    #[must_use]
+    pub fn wait(&self, wait: Duration) -> String {
+        let seconds = wait.as_secs() + u64::from(wait.subsec_nanos() > 0);
+        let (id, name, count) = if seconds < 60 {
+            (WAIT_SECONDS, "seconds", seconds)
+        } else {
+            (WAIT_MINUTES, "minutes", seconds.div_ceil(60))
         };
         let mut args = FluentArgs::new();
         args.set(name, count);
@@ -537,6 +604,52 @@ impl Translator {
         self.format(STATUS_AUTHOR, Some(&args))
     }
 
+    /// The state of the trade site in the status bar: the age of its last search.
+    #[must_use]
+    pub fn status_trade(&self, age: &str) -> String {
+        self.format_age(STATUS_TRADE, age)
+    }
+
+    /// The state of the trade site in the status bar during a long wait before the next
+    /// search, written by [`wait`].
+    #[must_use]
+    pub fn status_trade_wait(&self, wait: Duration) -> String {
+        self.format_wait(STATUS_TRADE_WAIT, wait)
+    }
+
+    /// The age of the offers, under their title: "searched 2min ago".
+    #[must_use]
+    pub fn offers_searched(&self, age: &str) -> String {
+        self.format_age(OFFERS_SEARCHED, age)
+    }
+
+    /// The offers shown, of those found: "10 of 13 online".
+    #[must_use]
+    pub fn offers_count(&self, shown: u64, total: u64) -> String {
+        let mut args = FluentArgs::new();
+        args.set("shown", shown);
+        args.set("total", total);
+        self.format(OFFERS_COUNT, Some(&args))
+    }
+
+    /// The tooltip of the countdown before the next search.
+    #[must_use]
+    pub fn offers_next_search_tooltip(&self, wait: Duration) -> String {
+        self.format_wait(OFFERS_NEXT_SEARCH_TOOLTIP, wait)
+    }
+
+    /// The line under the title of the offers during a long wait.
+    #[must_use]
+    pub fn offers_limit(&self, wait: Duration) -> String {
+        self.format_wait(OFFERS_LIMIT, wait)
+    }
+
+    fn format_wait(&self, id: &str, wait: Duration) -> String {
+        let mut args = FluentArgs::new();
+        args.set("wait", self.wait(wait));
+        self.format(id, Some(&args))
+    }
+
     fn format_league(&self, id: &str, league: &str) -> String {
         let mut args = FluentArgs::new();
         args.set("league", league);
@@ -608,6 +721,8 @@ mod tests {
                 PRICES_UNREACHABLE,
                 AGE_NOW,
                 AGE_MINUTES,
+                WAIT_SECONDS,
+                WAIT_MINUTES,
                 AGE_HOURS,
                 AGE_DAYS,
                 DOWNLOAD_TITLE,
@@ -634,6 +749,12 @@ mod tests {
                 UNCERTAIN,
                 PRICES_DOWNLOADING,
                 NO_PRICE_FOUND,
+                STATUS_TRADE,
+                STATUS_TRADE_WAIT,
+                OFFERS_SEARCHED,
+                OFFERS_COUNT,
+                OFFERS_NEXT_SEARCH_TOOLTIP,
+                OFFERS_LIMIT,
             ])
             .chain(DOWNLOAD_QUOTES)
             .map(str::to_owned)
@@ -779,5 +900,20 @@ mod tests {
         let french = Translator::new(Language::French);
         assert_eq!(french.age(Duration::from_secs(59)), "à l'instant");
         assert_eq!(french.age(Duration::from_mins(12)), "il y a 12min");
+    }
+
+    #[test]
+    fn a_wait_is_rounded_up_so_that_it_never_ends_too_soon() {
+        let english = Translator::new(Language::English);
+        assert_eq!(english.wait(Duration::from_millis(8_200)), "9s");
+        assert_eq!(english.wait(Duration::from_secs(8)), "8s");
+        assert_eq!(english.wait(Duration::from_secs(59)), "59s");
+        assert_eq!(english.wait(Duration::from_secs(60)), "1min");
+        assert_eq!(english.wait(Duration::from_secs(181)), "4min");
+        let french = Translator::new(Language::French);
+        assert_eq!(
+            french.offers_limit(Duration::from_secs(240)),
+            "Limite du site d'échange\u{a0}: prochaine recherche dans 4min."
+        );
     }
 }

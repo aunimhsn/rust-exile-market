@@ -408,7 +408,7 @@ fn list_price(exalted: f64, rates: Rates) -> (String, Currency) {
 }
 
 /// The orb of `currency`, `size` across.
-fn orb(currency: Currency, size: f32) -> Image<'static> {
+pub(super) fn orb(currency: Currency, size: f32) -> Image<'static> {
     let source: ImageSource<'static> = match currency {
         Currency::Divine => images::divine_orb(),
         Currency::Chaos => images::chaos_orb(),

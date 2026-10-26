@@ -1,8 +1,7 @@
-//! The links to the trade site, opened in the browser: the search for a copied item, in the
-//! league shown and on the trade site of the language of the item, sellers online.
-//!
-//! The browser makes the search, not the application: these links are outside the limits of
-//! the trade site API.
+//! The search for a copied item on the trade site: what it looks for, and its query, sent
+//! by the application within the limits of the trade site API, or opened in the browser as a
+//! link, in the league shown and on the trade site of the language of the item, sellers
+//! online. The browser makes the search of a link: the links are outside those limits.
 
 use serde_json::json;
 
@@ -94,10 +93,21 @@ impl TradeTarget<'_> {
     }
 }
 
-/// The link of the search of `target` in `league`, on the trade site of `language`.
+/// The search of `item` for `target`: its corrupted state is always a filter, so that a
+/// corrupted item is compared with corrupted offers only, and a clean one with clean ones.
 #[must_use]
-pub fn url(language: Language, league: &League, target: &TradeTarget) -> String {
-    let (page, query) = match target.query() {
+pub fn query(item: &Item, target: &TradeTarget) -> Query {
+    let mut query = target.query();
+    if let Query::Items(items) = &mut query {
+        items.corrupted = Some(item.is_corrupted());
+    }
+    query
+}
+
+/// The link of the search `query` in `league`, on the trade site of `language`.
+#[must_use]
+pub fn url(language: Language, league: &League, query: &Query) -> String {
+    let (page, query) = match query.clone() {
         Query::Exchange(id) => ("exchange", json!({ "exchange": query::exchange(&id) })),
         Query::Items(items) => ("search", items.to_json()),
     };
@@ -146,7 +156,7 @@ mod tests {
         let url = url(
             crossbow.language(),
             &League::new("HC Forbidden Rites"),
-            &target,
+            &super::query(&crossbow, &target),
         );
 
         assert!(url.starts_with(
@@ -158,7 +168,10 @@ mod tests {
                 "query": {
                     "status": { "option": "online" },
                     "name": "Murmure des brumes",
-                    "type": "Arbalète de fortune"
+                    "type": "Arbalète de fortune",
+                    "filters": {
+                        "misc_filters": { "filters": { "corrupted": { "option": "false" } } }
+                    }
                 },
                 "sort": { "price": "asc" }
             })
@@ -172,7 +185,11 @@ mod tests {
         let target = target(&stack, Some(&names), None).expect("a target");
 
         assert_eq!(target, TradeTarget::Exchange { id: "transmute" });
-        let url = url(Language::French, &League::new("Standard"), &target);
+        let url = url(
+            Language::French,
+            &League::new("Standard"),
+            &super::query(&stack, &target),
+        );
         assert!(url.starts_with("https://fr.pathofexile.com/trade2/exchange/poe2/Standard?q="));
         assert_eq!(
             query(&url),
@@ -218,7 +235,8 @@ mod tests {
             &League::new("Standard"),
             &TradeTarget::Base {
                 base_type: "Ruby Ring",
-            },
+            }
+            .query(),
         );
         assert_eq!(
             query(&url)["query"]["filters"]["type_filters"]["filters"]["rarity"]["option"],
@@ -253,7 +271,34 @@ mod tests {
 
         assert_eq!(target, TradeTarget::Exchange { id: "exalted" });
         // The Exalted Orb itself is paid in Divine Orbs.
-        let url = url(Language::English, &League::new("Standard"), &target);
+        let url = url(Language::English, &League::new("Standard"), &target.query());
         assert_eq!(query(&url)["exchange"]["have"], json!(["divine"]));
+    }
+
+    #[test]
+    fn a_corrupted_item_is_compared_with_corrupted_offers_only() {
+        for state in ["Corrupted", "Twice Corrupted"] {
+            let ring = parse(&format!(
+                "Item Class: Rings\nRarity: Unique\nAndvarius\nGold Ring\n--------\n{state}"
+            ));
+            let target = target(&ring, None, None).expect("a target");
+
+            let Query::Items(items) = super::query(&ring, &target) else {
+                panic!("a search of items");
+            };
+            assert_eq!(items.corrupted, Some(true), "{state}");
+        }
+    }
+
+    #[test]
+    fn an_item_of_the_exchange_is_never_filtered_by_its_corrupted_state() {
+        let names = item_names();
+        let stack = parse(include_str!("../item/test-items/fr-currency-stack.txt"));
+        let target = target(&stack, Some(&names), None).expect("a target");
+
+        assert_eq!(
+            super::query(&stack, &target),
+            Query::Exchange("transmute".to_owned())
+        );
     }
 }
