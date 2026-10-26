@@ -115,6 +115,19 @@ pub fn choice(ui: &mut Ui, mark: Mark, label: &str) -> Response {
     response.on_hover_cursor(CursorIcon::PointingHand)
 }
 
+/// A checkbox without text, its mark at the left of a zone of `size`, centered across its
+/// height; `label` tells what it checks.
+pub fn check_box(ui: &mut Ui, checked: bool, size: Vec2, label: &str) -> Response {
+    let (rect, response) = ui.allocate_exact_size(size, Sense::click());
+    response.widget_info(|| WidgetInfo::selected(Role::CheckBox, true, checked, label));
+    Mark::Check { checked }.paint(
+        ui.painter(),
+        pos2(rect.left() + choice::MARK_SIZE / 2.0, rect.center().y),
+        response.hovered() || response.has_focus(),
+    );
+    response.on_hover_cursor(CursorIcon::PointingHand)
+}
+
 /// A line of text.
 #[must_use]
 pub fn text_line(ui: &Ui, text: impl Into<String>, font: FontId) -> Arc<Galley> {

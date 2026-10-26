@@ -9,6 +9,7 @@ use egui::{
 
 use super::theme::{color, size, text};
 use super::{item_stats, widgets};
+use crate::filters::Filters;
 use crate::i18n::{Message, NumberTag, Requirement, Translator};
 use crate::item::{DamageKind, Item, ItemState, Rarity};
 use crate::prices::UniqueModifiers;
@@ -32,6 +33,8 @@ const VALUES_REQUIREMENTS_GAP: f32 = 3.0;
 const STATS_PILL_GAP: f32 = 20.0;
 /// The space above the stats.
 const STATS_GAP: f32 = 8.0;
+/// The space between the pill of the stats and the number of active filters.
+const FILTERS_GAP: f32 = 10.0;
 /// The space between the base values, across and down when they wrap.
 const VALUE_SPACING: Vec2 = vec2(14.0, 4.0);
 /// The space between the label of a base value and its number.
@@ -152,6 +155,8 @@ pub struct ItemBlock<'a> {
     stats_open: bool,
     /// The modifiers of the unique in the price database, the ranges of its rolls.
     unique_modifiers: Option<&'a UniqueModifiers>,
+    /// The filters of the search, as the player set them.
+    filters: Option<&'a mut Filters>,
 }
 
 impl<'a> ItemBlock<'a> {
@@ -163,15 +168,22 @@ impl<'a> ItemBlock<'a> {
             tradable: false,
             stats_open: false,
             unique_modifiers: None,
+            filters: None,
         }
     }
 
     /// Unfolds the stats, with the modifiers of the unique in the price database for the
-    /// ranges of an item copied without them.
+    /// ranges of an item copied without them, and the filters the player set.
     #[must_use]
-    pub fn stats(mut self, open: bool, unique_modifiers: Option<&'a UniqueModifiers>) -> Self {
+    pub fn stats(
+        mut self,
+        open: bool,
+        unique_modifiers: Option<&'a UniqueModifiers>,
+        filters: &'a mut Filters,
+    ) -> Self {
         self.stats_open = open;
         self.unique_modifiers = unique_modifiers;
+        self.filters = Some(filters);
         self
     }
 
@@ -184,7 +196,7 @@ impl<'a> ItemBlock<'a> {
 
     /// Draws the block at the top of `ui`, on its band B, its whole width; what the player
     /// did in it.
-    pub fn show(self, ui: &mut Ui) -> Option<ItemBlockAction> {
+    pub fn show(mut self, ui: &mut Ui) -> Option<ItemBlockAction> {
         Frame::NONE
             .inner_margin(vec2(size::BAND_PADDING, PADDING_Y))
             .show(ui, |ui| {
@@ -311,26 +323,39 @@ impl<'a> ItemBlock<'a> {
         });
     }
 
-    /// The pill of the stats, and the stats once unfolded; nothing for an item without
-    /// modifiers (its filters come with step 10b: "Show filters").
-    fn stats_section(&self, ui: &mut Ui) -> Option<ItemBlockAction> {
-        let count = item_stats::count(self.item);
-        if count == 0 {
+    /// The pill of the stats and the number of active filters, and the stats once unfolded;
+    /// "Show filters" for an item without modifiers, nothing when it has no filter either.
+    fn stats_section(&mut self, ui: &mut Ui) -> Option<ItemBlockAction> {
+        let filters = self.filters.as_deref_mut()?;
+        if !item_stats::any(self.item) {
             return None;
         }
         ui.add_space(STATS_PILL_GAP);
-        let label = if self.stats_open {
-            self.i18n.text(Message::HideStats)
-        } else {
-            self.i18n.show_stats(count)
+        let label = match (item_stats::count(self.item), self.stats_open) {
+            (0, false) => self.i18n.text(Message::ShowFilters),
+            (0, true) => self.i18n.text(Message::HideFilters),
+            (_, true) => self.i18n.text(Message::HideStats),
+            (count, false) => self.i18n.show_stats(count),
         };
+        let active = item_stats::active_filters(self.item, self.unique_modifiers, filters);
         let action = ui
-            .horizontal(|ui| widgets::control_pill(ui, &label).clicked())
+            .horizontal(|ui| {
+                let clicked = widgets::control_pill(ui, &label).clicked();
+                if active > 0 {
+                    ui.add_space(FILTERS_GAP);
+                    ui.label(
+                        RichText::new(self.i18n.active_filters(active))
+                            .font(text::pill())
+                            .color(color::ACCENT),
+                    );
+                }
+                clicked
+            })
             .inner
             .then_some(ItemBlockAction::ToggleStats);
         if self.stats_open {
             ui.add_space(STATS_GAP);
-            item_stats::show(ui, self.item, self.unique_modifiers, self.i18n);
+            item_stats::show(ui, self.item, self.unique_modifiers, filters, self.i18n);
         }
         action
     }

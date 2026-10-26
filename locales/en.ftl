@@ -130,6 +130,18 @@ group-unique = Unique
 # Beside Prefixes and Suffixes: how many the item has, of the most it can have.
 affix-fill = { $filled } of { $max }
 affix-fill-open = { $filled } of { $max } · { $open } open
+# The pill of an item without modifiers, which has filters only, and once unfolded.
+show-filters = Show filters
+hide-filters = Hide filters
+# Beside the pill: the filters checked for the search.
+active-filters = { $count ->
+    [one] { $count } filter
+   *[other] { $count } filters
+}
+# On the right of the first small title, above the minimums of the filters.
+filter-minimum = min
+# Under the stats of a corrupted item: the search compares it with corrupted offers only.
+corrupted-offers-only = Corrupted offers only, like this item.
 
 ## Price block
 

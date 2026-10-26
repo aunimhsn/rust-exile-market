@@ -16,6 +16,7 @@ const FR_RARE_BODY_ARMOUR: &str = test_item!("fr-rare-body-armour.txt");
 const FR_UNIQUE_CROSSBOW: &str = test_item!("fr-unique-crossbow.txt");
 const FR_CURRENCY_STACK: &str = test_item!("fr-currency-stack.txt");
 const FR_NORMAL_EXCEPTIONAL_SHIELD: &str = test_item!("fr-normal-exceptional-shield.txt");
+const FR_UNIQUE_MACE_FIXED_VALUES: &str = test_item!("fr-unique-mace-fixed-values.txt");
 const EN_RARE_CROSSBOW: &str = test_item!("en-rare-crossbow-all-modifiers.txt");
 const EN_RARE_BOW_FRACTURED: &str = test_item!("en-rare-bow-fractured.txt");
 const EN_RARE_WAND_UNIDENTIFIED: &str = test_item!("en-rare-wand-unidentified.txt");
@@ -29,12 +30,13 @@ const EN_PLAIN_UNIQUE_JEWEL: &str = test_item!("en-plain-unique-jewel.txt");
 const EN_PLAIN_MAGIC_JEWEL_UNIDENTIFIED: &str = test_item!("en-plain-magic-jewel-unidentified.txt");
 const EN_PLAIN_CURRENCY_LARGE_STACK: &str = test_item!("en-plain-currency-large-stack.txt");
 
-const ALL: [&str; 17] = [
+const ALL: [&str; 18] = [
     FR_RARE_STAFF,
     FR_RARE_BODY_ARMOUR,
     FR_UNIQUE_CROSSBOW,
     FR_CURRENCY_STACK,
     FR_NORMAL_EXCEPTIONAL_SHIELD,
+    FR_UNIQUE_MACE_FIXED_VALUES,
     EN_RARE_CROSSBOW,
     EN_RARE_BOW_FRACTURED,
     EN_RARE_WAND_UNIDENTIFIED,
@@ -195,6 +197,31 @@ fn reads_a_french_unique_without_its_flavour_text() {
             .all(|modifier| modifier.kind == ModifierKind::Explicit(None))
     );
     assert_eq!(item.modifiers().len(), 5);
+}
+
+#[test]
+fn reads_the_lines_of_fixed_value_without_their_marker() {
+    let item = item(FR_UNIQUE_MACE_FIXED_VALUES);
+
+    let implicit = of_kind(&item, ModifierKind::Implicit);
+    assert_eq!(
+        first_line(implicit[0]).text,
+        "Les Frappes infligent des Dégâts collatéraux"
+    );
+    let texts: Vec<&str> = explicit(&item)
+        .iter()
+        .map(|modifier| first_line(modifier).text.as_str())
+        .collect();
+    assert_eq!(
+        texts,
+        [
+            "Ajoute 34 à 43 Dégâts Physiques",
+            "12% de chances d'infliger le Saignement au Toucher",
+            "10% des Dégâts Physiques Drainent de la Vie",
+            "Vous ne pouvez pas utiliser de Cris de guerre",
+            "Toutes les Attaques sont considérées comme des Attaques Améliorées",
+        ]
+    );
 }
 
 #[test]

@@ -133,6 +133,18 @@ affix-fill-open = { $filled } sur { $max } · { $open ->
     [one] { $open } libre
    *[other] { $open } libres
 }
+# La pilule d'un objet sans modificateurs, qui n'a que des filtres, et une fois dépliée.
+show-filters = Afficher les filtres
+hide-filters = Masquer les filtres
+# À côté de la pilule : les filtres cochés pour la recherche.
+active-filters = { $count ->
+    [one] { $count } filtre
+   *[other] { $count } filtres
+}
+# À droite du premier petit titre, au-dessus des minimums des filtres.
+filter-minimum = min
+# Sous les stats d'un objet corrompu : la recherche ne le compare qu'aux offres corrompues.
+corrupted-offers-only = Offres corrompues seulement, comme cet objet.
 
 ## Bloc prix
 

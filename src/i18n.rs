@@ -78,12 +78,16 @@ pub enum Message {
     GroupEnchant,
     GroupRunes,
     GroupUnique,
+    ShowFilters,
+    HideFilters,
+    FilterMinimum,
+    CorruptedOffersOnly,
 }
 
 impl Message {
     /// Every message, for the tests.
     #[cfg(test)]
-    const ALL: [Self; 56] = [
+    const ALL: [Self; 60] = [
         Self::LeagueModeSoftcore,
         Self::LeagueModeHardcore,
         Self::LeagueLoading,
@@ -140,6 +144,10 @@ impl Message {
         Self::GroupEnchant,
         Self::GroupRunes,
         Self::GroupUnique,
+        Self::ShowFilters,
+        Self::HideFilters,
+        Self::FilterMinimum,
+        Self::CorruptedOffersOnly,
     ];
 
     /// Its identifier in the `.ftl` files.
@@ -201,6 +209,10 @@ impl Message {
             Self::GroupEnchant => "group-enchant",
             Self::GroupRunes => "group-runes",
             Self::GroupUnique => "group-unique",
+            Self::ShowFilters => "show-filters",
+            Self::HideFilters => "hide-filters",
+            Self::FilterMinimum => "filter-minimum",
+            Self::CorruptedOffersOnly => "corrupted-offers-only",
         }
     }
 }
@@ -257,6 +269,7 @@ const NO_PRICE_FOUND: &str = "no-price-found";
 const SHOW_STATS: &str = "show-stats";
 const AFFIX_FILL: &str = "affix-fill";
 const AFFIX_FILL_OPEN: &str = "affix-fill-open";
+const ACTIVE_FILTERS: &str = "active-filters";
 /// The sentences under the bar of the download of the prices, one drawn at random per
 /// download.
 const DOWNLOAD_QUOTES: [&str; 10] = [
@@ -364,6 +377,12 @@ impl Translator {
     #[must_use]
     pub fn show_stats(&self, count: u32) -> String {
         self.format_number(SHOW_STATS, "count", count)
+    }
+
+    /// The number of active filters, beside the pill of the stats: "3 filters".
+    #[must_use]
+    pub fn active_filters(&self, count: u32) -> String {
+        self.format_number(ACTIVE_FILTERS, "count", count)
     }
 
     /// The fill of the prefixes or suffixes of an item: "2 of 3 · 1 open".
@@ -605,6 +624,7 @@ mod tests {
                 SHOW_STATS,
                 AFFIX_FILL,
                 AFFIX_FILL_OPEN,
+                ACTIVE_FILTERS,
                 OFFERS,
                 STACK_OF,
                 UNIT_PRICE,
@@ -657,6 +677,8 @@ mod tests {
             assert!(translator.show_stats(6).contains('6'));
             assert!(translator.affix_fill(3, 3).contains('3'));
             assert!(translator.affix_fill(2, 3).contains('1'));
+            assert!(translator.active_filters(1).contains('1'));
+            assert!(translator.active_filters(3).contains('3'));
             assert!(translator.unit_price("prices").contains("prices"));
             for direction in [Direction::Rise, Direction::Fall, Direction::Stable] {
                 assert!(translator.trend(direction, 4, 7).contains('7'));

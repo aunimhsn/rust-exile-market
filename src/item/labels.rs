@@ -43,6 +43,9 @@ pub(super) struct Labels {
     pub exceptional: &'static [Wording],
     pub superior: &'static [Wording],
     pub tier: &'static str,
+    /// The marker of the advanced copy after a line whose value never changes, e.g.
+    /// ` — Unscalable Value`.
+    pub fixed_value: &'static str,
     /// The kinds of the modifier headers. A label never ends with an earlier one, so that
     /// "Corruption Enhancement" is not taken for "Enhancement" (checked by the tests).
     pub modifier_kinds: &'static [(&'static str, ModifierKind)],
@@ -128,6 +131,8 @@ static ENGLISH: Labels = Labels {
     exceptional: &[Wording::Before("Exceptional ")],
     superior: &[Wording::Before("Superior ")],
     tier: "Tier: ",
+    // From the French marker: to check on an item copied in English.
+    fixed_value: " — Unscalable Value",
     modifier_kinds: &[
         ("Prefix Modifier", PREFIX),
         ("Suffix Modifier", SUFFIX),
@@ -188,6 +193,7 @@ static FRENCH: Labels = Labels {
     // From the data of Exiled Exchange 2: to check on a copied item.
     superior: &[Wording::After(" supérieur"), Wording::After(" supérieure")],
     tier: "Palier : ",
+    fixed_value: " — Valeur fixe",
     modifier_kinds: &[
         ("Préfixe", PREFIX),
         ("Suffixe", SUFFIX),

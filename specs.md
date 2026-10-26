@@ -157,14 +157,15 @@ The window has a title bar, then three bands (item, price, offers), then a statu
 The offers search uses the stats of the copied item as filters, like the trade site, so that the offers found are comparable.
 
 - **Unique items**: each modifier with a range is a filter, checked by default, with the value of the copied item as minimum. Modifiers without a range are the same on every copy and aren't filters.
+- The value of a line with several numbers is their average, as on the trade site: "Adds 24 to 51 Physical Damage" is searched at 37.5.
 - **Rare and magic items, jewels**: every modifier is a filter, with a minimum at **90 % of the copied value**, to find comparable items and not only identical ones. Default choices:
   - **pseudo totals** (total elemental resistance, total maximum life, total attributes…) checked, and the modifiers they add up unchecked;
   - for a weapon, the **physical and elemental DPS**, the physical one checked, and the damage and attack speed modifiers unchecked since the DPS already counts them;
   - the modifiers that remain checked; for a jewel, all its modifiers;
   - the **base type** checked; the **item level** unchecked.
 - **Normal items** (e.g. an exceptional base): the base type, the number of sockets and the item level, checked; the quality, unchecked.
-- The corrupted state is always a filter: a corrupted item is compared with corrupted offers only, a clean one with clean offers only.
-- The minimum field takes a number only: digits, one decimal point, a minus sign first for a negative stat; no letter, not even the `e` of an exponent, also when a text is pasted. It stays within the range of every tier of the stat (the range of a unique; from the lowest roll of the worst tier to the highest of the best tier for a rare), not only the tier of the copied item.
+- The corrupted state is always a filter: a corrupted item is compared with corrupted offers only, a clean one with clean offers only. Under the stats of a corrupted item, in faint text: "Corrupted offers only, like this item."
+- The minimum field takes a number only: digits, one decimal point, a minus sign first for a negative stat; no letter, not even the `e` of an exponent, also when a text is pasted. It stays within the range of every tier of the stat (the range of a unique; from the lowest roll of the worst tier to the highest of the best tier for a rare), not only the tier of the copied item: a number out of it is brought back to its nearest end when the player leaves the field, and a field left without a number has no minimum.
 - The player can check or uncheck a filter and change its minimum. Changing a filter doesn't search: the player clicks the search or refresh block, within its waiting time.
 
 ### Offers block
