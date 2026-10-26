@@ -18,7 +18,7 @@ use super::theme::{self, color, size, text};
 use super::widgets;
 use crate::i18n::{Message, NumberTag, Translator};
 use crate::item::Modifier;
-use crate::roll_difference::{Difference, difference};
+use crate::roll_difference::{Difference, Verdict, difference};
 use crate::trade::offers::{ItemOffer, ModifierKind, SellerStatus};
 
 /// How long the tooltip stays open after the pointer left its row, to reach it.
@@ -71,6 +71,8 @@ pub struct Pointer<'a> {
     /// The id of the offer of the row under the pointer.
     pub hovered: Option<&'a str>,
     pub clicked: Option<&'a str>,
+    /// Over the tooltip, or in the gap between it and its row, where the pointer passes on
+    /// the edge of the next row to reach it.
     pub over_tooltip: bool,
     /// A click anywhere: on a row, in the tooltip, or elsewhere.
     pub any_click: bool,
@@ -103,6 +105,10 @@ impl TooltipState {
             });
         } else if pointer.any_click && !pointer.over_tooltip {
             self.open = None;
+        } else if pointer.over_tooltip {
+            if let Some(open) = &mut self.open {
+                open.left_at = None;
+            }
         } else if let Some(id) = pointer.hovered {
             match &mut self.open {
                 Some(open) if open.pinned => {}
@@ -118,13 +124,9 @@ impl TooltipState {
         } else if let Some(open) = &mut self.open
             && !open.pinned
         {
-            if pointer.over_tooltip {
-                open.left_at = None;
-            } else {
-                let left_at = *open.left_at.get_or_insert(pointer.time);
-                if pointer.time - left_at >= LINGER {
-                    self.open = None;
-                }
+            let left_at = *open.left_at.get_or_insert(pointer.time);
+            if pointer.time - left_at >= LINGER {
+                self.open = None;
             }
         }
         let lingering = self
@@ -183,8 +185,10 @@ impl OfferTooltip<'_> {
     }
 
     /// Draws the tooltip over `row`, or under it when there is no room above `top`; whether
-    /// Copy whisper was clicked, and the rectangle of the tooltip.
-    pub fn show(&self, ui: &Ui, row: Rect, top: f32) -> (bool, Rect) {
+    /// Copy whisper was clicked.
+    pub fn show(&self, ui: &Ui, row: Rect, top: f32) -> bool {
+        // An area per offer, so that its height is known to place it: egui lays out a new
+        // area once without showing it, so a tooltip shows one frame after it opens.
         let id = Self::area_id(&self.offer.id);
         let height = ui
             .ctx()
@@ -214,7 +218,7 @@ impl OfferTooltip<'_> {
                     })
                     .inner
             });
-        (shown.inner, shown.response.rect)
+        shown.inner
     }
 
     fn content(&self, ui: &mut Ui) -> bool {
@@ -390,6 +394,21 @@ impl OfferTooltip<'_> {
     }
 }
 
+/// The gap between the tooltip `area` and its `row`, as wide as both: the pointer crosses it
+/// to reach the tooltip.
+#[must_use]
+pub fn reach(area: Rect, row: Rect) -> Rect {
+    let (top, bottom) = if area.bottom() <= row.top() {
+        (area.bottom(), row.top())
+    } else {
+        (row.bottom(), area.top())
+    };
+    Rect::from_min_max(
+        pos2(area.left().min(row.left()), top),
+        pos2(area.right().max(row.right()), bottom.max(top)),
+    )
+}
+
 /// A text wrapped at the width of `ui`.
 fn text_block(ui: &mut Ui, line: &str, font: egui::FontId, tint: Color32) {
     let galley = ui.painter().layout(
@@ -419,10 +438,10 @@ fn group(ui: &mut Ui, lines: &[Line]) {
         }
         let width = ui.available_width();
         let delta = line.difference.map(|difference| {
-            let tint = match difference.better {
-                Some(true) => color::RISE,
-                Some(false) => color::FALL,
-                None => color::WEAK,
+            let tint = match difference.verdict {
+                Verdict::Better => color::RISE,
+                Verdict::Worse => color::FALL,
+                Verdict::Unknown => color::WEAK,
             };
             (
                 widgets::text_line(ui, signed(difference.value), text::difference()),
@@ -599,6 +618,75 @@ mod tests {
     }
 
     #[test]
+    fn the_pointer_reaches_the_tooltip_over_the_edge_of_the_next_row() {
+        let mut state = TooltipState::default();
+        state.update(&hovering("b", 0.0), &OFFERS);
+
+        // Between the row and the tooltip, the pointer is on the edge of the row above.
+        let gap = Pointer {
+            over_tooltip: true,
+            ..hovering("a", 0.05)
+        };
+        state.update(&gap, &OFFERS);
+        assert_eq!(state.open(), Some("b"));
+
+        let inside = Pointer {
+            over_tooltip: true,
+            ..at(0.1)
+        };
+        let redraw = state.update(&inside, &OFFERS);
+        assert_eq!(state.open(), Some("b"));
+        assert_eq!(redraw, None, "nothing to wait for");
+    }
+
+    #[test]
+    fn coming_back_to_the_row_keeps_the_tooltip_open() {
+        let mut state = TooltipState::default();
+        state.update(&hovering("a", 0.0), &OFFERS);
+        state.update(&at(0.1), &OFFERS);
+
+        state.update(&hovering("a", 0.2), &OFFERS);
+        state.update(&at(0.35), &OFFERS);
+
+        assert_eq!(
+            state.open(),
+            Some("a"),
+            "the wait starts again from when it left"
+        );
+    }
+
+    #[test]
+    fn a_click_on_another_row_pins_its_tooltip() {
+        let mut state = TooltipState::default();
+        let click = |id: &'static str, time| Pointer {
+            clicked: Some(id),
+            any_click: true,
+            ..hovering(id, time)
+        };
+        state.update(&click("a", 0.0), &OFFERS);
+
+        state.update(&click("b", 1.0), &OFFERS);
+        state.update(&at(5.0), &OFFERS);
+
+        assert_eq!(state.open(), Some("b"));
+    }
+
+    #[test]
+    fn a_click_inside_an_unpinned_tooltip_keeps_it_open() {
+        let mut state = TooltipState::default();
+        state.update(&hovering("a", 0.0), &OFFERS);
+
+        let click_inside = Pointer {
+            any_click: true,
+            over_tooltip: true,
+            ..at(0.1)
+        };
+        state.update(&click_inside, &OFFERS);
+
+        assert_eq!(state.open(), Some("a"));
+    }
+
+    #[test]
     fn the_tooltip_of_an_offer_gone_closes() {
         let mut state = TooltipState::default();
         state.update(&hovering("a", 0.0), &OFFERS);
@@ -618,6 +706,22 @@ mod tests {
         assert!(!state.shows_copied("a", 3.0));
         let redraw = state.update(&at(2.0), &OFFERS);
         assert_eq!(redraw, Some(Duration::from_secs_f64(1.0)));
+    }
+
+    #[test]
+    fn the_gap_to_the_row_is_on_the_side_of_the_tooltip() {
+        let row = Rect::from_min_max(pos2(0.0, 100.0), pos2(420.0, 128.0));
+        let above = Rect::from_min_max(pos2(110.0, 20.0), pos2(410.0, 94.0));
+        let below = Rect::from_min_max(pos2(110.0, 134.0), pos2(410.0, 200.0));
+
+        assert_eq!(
+            reach(above, row),
+            Rect::from_min_max(pos2(0.0, 94.0), pos2(420.0, 100.0))
+        );
+        assert_eq!(
+            reach(below, row),
+            Rect::from_min_max(pos2(0.0, 128.0), pos2(420.0, 134.0))
+        );
     }
 
     #[test]

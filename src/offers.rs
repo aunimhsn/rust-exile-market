@@ -32,7 +32,8 @@ pub enum OffersState {
         more: bool,
         /// The next offers are asked.
         loading_more: bool,
-        /// The next offers couldn't come: the trade site can't be reached, or refused them.
+        /// The next offers couldn't come: the trade site can't be reached. Refused by its
+        /// limits, the waiting block tells it already.
         more_failed: bool,
         searched: SystemTime,
     },
@@ -254,7 +255,7 @@ impl Offers {
             }
             // More offers that couldn't come: the offers shown stay, to ask them again.
             (
-                Outcome::Unreachable | Outcome::Limited { .. },
+                failure @ (Outcome::Unreachable | Outcome::Limited { .. }),
                 OffersState::Items {
                     offers,
                     total,
@@ -267,7 +268,7 @@ impl Offers {
                 total,
                 more,
                 loading_more: false,
-                more_failed: true,
+                more_failed: matches!(failure, Outcome::Unreachable),
                 searched,
             },
             (Outcome::Unreachable, _) => OffersState::Unreachable,
@@ -318,6 +319,7 @@ mod tests {
             listed: None,
             whisper: String::new(),
             item: OfferItem {
+                rarity: None,
                 name: None,
                 base_type: "Gold Ring".to_owned(),
                 item_level: None,
@@ -637,6 +639,16 @@ mod tests {
         offers.apply(answer(outcome, after(now, 60)), SystemTime::now());
 
         assert_eq!(ids(&offers), ["a"]);
+        assert!(
+            matches!(
+                offers.state(),
+                OffersState::Items {
+                    more_failed: false,
+                    ..
+                }
+            ),
+            "the waiting block tells the refusal"
+        );
         assert_eq!(offers.wait(SearchKind::Items, now), Duration::from_secs(60));
     }
 

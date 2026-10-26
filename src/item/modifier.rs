@@ -280,7 +280,7 @@ impl StatLine {
     /// Reads the values of a line, and removes their ranges from its text:
     /// `Adds 10(1-16) to 273(239-300) Lightning Damage` gives `Adds 10 to 273 Lightning
     /// Damage` and the values 10 and 273 with their ranges.
-    pub(super) fn parse(line: &str) -> Self {
+    pub(crate) fn parse(line: &str) -> Self {
         let mut text = String::with_capacity(line.len());
         let mut rolls = Vec::new();
         let mut chars = line.chars().peekable();
