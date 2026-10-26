@@ -199,6 +199,10 @@ The gear opens the settings, which replace the content of the window in the narr
 
 The settings are saved as soon as they change. Their bottom shows the sentence "This product isn't affiliated with or endorsed by Grinding Gear Games in any way." While they are open, the status bar shows the version and the author in place of the age of the sources: "Exile Market 0.1.0 · Made by Sylent · sylent.art" ("Créé par Sylent" in French), where `sylent.art` opens the author's site in the browser.
 
+### Updates
+
+At launch, the application asks the GitHub releases for the latest version. When it is newer than the running one, a bubble says "Version 0.2.0 available", with a link to its download page; the player installs it. Closed, the bubble doesn't come back for that version. Without network, nothing is shown.
+
 ### Data sources
 
 - The prices of the fixed-name items, their offer counts and their history come from a public price database of the Path of Exile 2 economy (see [the technical choices](docs/technical-choices.md)). The application downloads the prices of the selected league at startup and when the league changes, then refreshes them every hour. A copied item is priced instantly from these local data, without a network request. During the download of a league without cache, the prices arrive category by category, the currency first, then the other items of the currency exchange, then the uniques: a copied orb is priced after a few seconds, without waiting for the whole download (about 26 seconds, one request per second).
