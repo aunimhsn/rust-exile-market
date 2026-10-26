@@ -1,0 +1,251 @@
+//! The stats of the game, from Exiled Exchange 2 (`assets/game-data/stats-<language>.ndjson`):
+//! the strings that match a modifier line in each language, and the trade ids of each stat.
+
+use std::collections::{BTreeMap, HashMap};
+use std::sync::LazyLock;
+
+use serde::Deserialize;
+
+use crate::item::{Modifier, ModifierKind, ModifierOrigin};
+use crate::language::Language;
+
+/// A group of stats on the trade site: the same stat has an id in each group where it can
+/// be, e.g. `explicit.stat_3299347043` and `fractured.stat_3299347043`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum TradeGroup {
+    Explicit,
+    Implicit,
+    Fractured,
+    Desecrated,
+    Crafted,
+    Enchant,
+    /// Added by a rune or a soul core: "Augment" on the trade site.
+    Rune,
+    Pseudo,
+    Skill,
+}
+
+impl TradeGroup {
+    /// The group where the trade site lists the lines of `modifier`.
+    #[must_use]
+    pub fn of(modifier: &Modifier) -> Self {
+        match modifier.kind {
+            ModifierKind::Implicit => Self::Implicit,
+            ModifierKind::Explicit(_) => match modifier.origin {
+                Some(ModifierOrigin::Fractured) => Self::Fractured,
+                Some(ModifierOrigin::Desecrated) => Self::Desecrated,
+                Some(ModifierOrigin::Crafted) => Self::Crafted,
+                None => Self::Explicit,
+            },
+            // The trade site lists the modifiers of the corruption with the enchantments.
+            ModifierKind::Enchant | ModifierKind::Corruption => Self::Enchant,
+            ModifierKind::Rune => Self::Rune,
+        }
+    }
+}
+
+/// Which side of the value of a stat is better for the player.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(try_from = "i8")]
+pub enum Better {
+    Higher,
+    Lower,
+    /// Neither: e.g. the number of souls of a timeless jewel.
+    Neither,
+}
+
+impl TryFrom<i8> for Better {
+    type Error = String;
+
+    fn try_from(value: i8) -> Result<Self, Self::Error> {
+        match value {
+            1 => Ok(Self::Higher),
+            -1 => Ok(Self::Lower),
+            0 => Ok(Self::Neither),
+            other => Err(format!("unknown better side {other}")),
+        }
+    }
+}
+
+/// A stat of the game.
+#[derive(Debug, PartialEq, Deserialize)]
+pub struct Stat {
+    /// Its English template, e.g. `# to maximum Life`, the same in every language.
+    #[serde(rename = "ref")]
+    pub reference: String,
+    /// Its id in the files of the game, e.g. `base_maximum_life`; none for a stat of the trade
+    /// site only, such as a pseudo stat.
+    pub id: Option<String>,
+    pub better: Better,
+    pub(super) matchers: Vec<Matcher>,
+    #[serde(default)]
+    ids: BTreeMap<TradeGroup, Vec<String>>,
+    /// Its value on the trade site is an option, e.g. the skill of `# to Level of all Arc
+    /// Skills`, given by [`Matcher::value`].
+    #[serde(default)]
+    pub option: bool,
+    /// Its value on the trade site has the other sign, e.g. `#% less Damage`.
+    #[serde(default)]
+    pub inverted: bool,
+}
+
+impl Stat {
+    /// The ids of the stat in `group`: none when it can't be there; two for a stat that is
+    /// local on some items and global on others (`# to Accuracy Rating` of a weapon or of a
+    /// ring), which the copied text doesn't tell apart.
+    #[must_use]
+    pub fn trade_ids(&self, group: TradeGroup) -> &[String] {
+        self.ids.get(&group).map_or(&[], Vec::as_slice)
+    }
+}
+
+/// A string of a language that matches a line of the stat, with `#` for its values, e.g.
+/// `#% reduced Charm Charges used`.
+#[derive(Debug, PartialEq, Deserialize)]
+pub(super) struct Matcher {
+    pub string: String,
+    /// The value the string gives: the option of an option stat, or the value of a string
+    /// without `#` (`Blind Enemies on Hit` is a chance of 100%).
+    pub value: Option<f64>,
+    /// The string writes the opposite of the stat: `reduced` for an `increased` stat.
+    #[serde(default)]
+    pub negate: bool,
+}
+
+/// The stats of a language, found by the strings of their lines.
+pub(super) struct Stats {
+    list: Vec<Stat>,
+    /// The index of the stat and of its matcher, by string written as [`normalize`] does.
+    by_string: HashMap<String, Vec<(usize, usize)>>,
+    /// The most lines a string has.
+    pub max_lines: usize,
+}
+
+static ENGLISH: LazyLock<Stats> =
+    LazyLock::new(|| Stats::read(include_str!("../../assets/game-data/stats-en.ndjson")));
+static FRENCH: LazyLock<Stats> =
+    LazyLock::new(|| Stats::read(include_str!("../../assets/game-data/stats-fr.ndjson")));
+
+impl Stats {
+    pub fn of(language: Language) -> &'static Self {
+        match language {
+            Language::English => &ENGLISH,
+            Language::French => &FRENCH,
+        }
+    }
+
+    /// Reads one stat per line; a line that can't be read is logged and left out (the tests
+    /// read every line of the embedded files).
+    fn read(text: &str) -> Self {
+        let mut stats = Vec::new();
+        for (index, line) in text.lines().enumerate() {
+            match serde_json::from_str::<Stat>(line) {
+                Ok(stat) => stats.push(stat),
+                Err(error) => log::error!("Game data, stat {} unreadable: {error}", index + 1),
+            }
+        }
+        let mut by_string: HashMap<String, Vec<(usize, usize)>> = HashMap::new();
+        let mut max_lines = 1;
+        for (stat_index, stat) in stats.iter().enumerate() {
+            for (matcher_index, matcher) in stat.matchers.iter().enumerate() {
+                let string = normalize(&matcher.string);
+                max_lines = max_lines.max(string.lines().count());
+                by_string
+                    .entry(string)
+                    .or_default()
+                    .push((stat_index, matcher_index));
+            }
+        }
+        Self {
+            list: stats,
+            by_string,
+            max_lines,
+        }
+    }
+
+    /// The stats with a line written `string` (normalized), and the matcher of that line.
+    pub fn find(&self, string: &str) -> impl Iterator<Item = (&Stat, &Matcher)> {
+        self.by_string
+            .get(string)
+            .into_iter()
+            .flatten()
+            .filter_map(|&(stat, matcher)| {
+                let stat = self.list.get(stat)?;
+                Some((stat, stat.matchers.get(matcher)?))
+            })
+    }
+
+    #[cfg(test)]
+    pub fn len(&self) -> usize {
+        self.list.len()
+    }
+}
+
+/// A line as the strings are looked up: the no-break spaces of French (`#\u{a0}%`) as
+/// spaces, and each line without the spaces around it.
+pub(super) fn normalize(text: &str) -> String {
+    text.replace(['\u{a0}', '\u{202f}'], " ")
+        .lines()
+        .map(str::trim)
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn every_stat_of_the_embedded_files_is_read() {
+        for (language, text) in [
+            (
+                Language::English,
+                include_str!("../../assets/game-data/stats-en.ndjson"),
+            ),
+            (
+                Language::French,
+                include_str!("../../assets/game-data/stats-fr.ndjson"),
+            ),
+        ] {
+            assert_eq!(
+                Stats::of(language).len(),
+                text.lines().count(),
+                "{language:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_stat_has_its_ids_in_each_group() {
+        let (stat, matcher) = Stats::of(Language::English)
+            .find("# to maximum Life")
+            .next()
+            .unwrap();
+
+        assert_eq!(stat.id.as_deref(), Some("base_maximum_life"));
+        assert_eq!(stat.better, Better::Higher);
+        assert_eq!(
+            stat.trade_ids(TradeGroup::Explicit),
+            ["explicit.stat_3299347043"]
+        );
+        assert_eq!(
+            stat.trade_ids(TradeGroup::Fractured),
+            ["fractured.stat_3299347043"]
+        );
+        assert_eq!(stat.trade_ids(TradeGroup::Skill), [] as [String; 0]);
+        assert!(!matcher.negate);
+    }
+
+    #[test]
+    fn the_no_break_spaces_and_the_spaces_around_the_lines_are_normalized() {
+        assert_eq!(
+            normalize("#\u{a0}à tous les Attributs "),
+            "# à tous les Attributs"
+        );
+        assert_eq!(
+            normalize("Increases and Reductions to\n Fire Damage"),
+            "Increases and Reductions to\nFire Damage"
+        );
+    }
+}

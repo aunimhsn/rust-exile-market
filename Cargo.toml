@@ -42,10 +42,17 @@ winit = { version = "0.30", default-features = false, features = ["x11", "waylan
 # them together.
 fluent-syntax = "0.12.0"
 
-[lints.rust]
+[lints]
+workspace = true
+
+# The generator of the game data embedded in the application (see docs/game-data.md).
+[workspace]
+members = ["tools/game-data"]
+
+[workspace.lints.rust]
 unsafe_code = "forbid"
 
-[lints.clippy]
+[workspace.lints.clippy]
 pedantic = { level = "warn", priority = -1 }
 
 # The dependencies (image decoding, fonts, rendering) stay fast in debug builds;

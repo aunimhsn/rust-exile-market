@@ -46,16 +46,19 @@ jobs:
           targets: ${{ matrix.target }}
       - name: Read the executable name and the version of Cargo.toml
         run: |
+          # The package of the application, the default member of the workspace (the
+          # other members are tools, such as the generator of the game data).
           metadata=$(cargo metadata --no-deps --format-version 1)
+          package=$(echo "$metadata" | jq -c '.workspace_default_members[0] as $id | .packages[] | select(.id == $id)')
           # The first binary target: the package name, unless [[bin]] or
           # src/bin/ gives another one.
-          name=$(echo "$metadata" | jq -r '[.packages[0].targets[] | select(.kind | index("bin")) | .name][0] // empty')
+          name=$(echo "$package" | jq -r '[.targets[] | select(.kind | index("bin")) | .name][0] // empty')
           if [ -z "$name" ]; then
             echo "Cargo.toml has no binary target to release"
             exit 1
           fi
           echo "NAME=$name" >> "$GITHUB_ENV"
-          echo "PACKAGE_VERSION=$(echo "$metadata" | jq -r '.packages[0].version')" >> "$GITHUB_ENV"
+          echo "PACKAGE_VERSION=$(echo "$package" | jq -r '.version')" >> "$GITHUB_ENV"
       - name: Check that the tag matches the version of Cargo.toml
         if: startsWith(github.ref, 'refs/tags/')
         run: |

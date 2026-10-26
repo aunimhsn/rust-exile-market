@@ -4,6 +4,7 @@
 use std::time::{Duration, SystemTime};
 
 use crate::clipboard::ClipboardEvent;
+use crate::game_data::{self, TradeGroup};
 use crate::item::{CopiedItem, Item, ParseError, Rarity};
 use crate::item_names::ItemNames;
 use crate::language::Language;
@@ -203,6 +204,7 @@ impl Session {
                 let shown = ShownItem::new(&copied);
                 if let Ok(item) = shown.parsed() {
                     self.log_price(item);
+                    log_unknown_stats(item);
                 }
                 self.item = Some(shown);
             }
@@ -355,6 +357,26 @@ impl Session {
     #[must_use]
     pub fn clipboard_readable(&self) -> bool {
         self.clipboard_readable
+    }
+}
+
+/// Logs the modifier lines of `item` whose stat isn't known, or has no trade id in their
+/// group: a modifier added by a patch of the game, or a line the parser read wrong.
+fn log_unknown_stats(item: &Item) {
+    for modifier in item.modifiers() {
+        let group = TradeGroup::of(modifier);
+        for found in game_data::modifier_stats(item.language(), modifier) {
+            let lines = modifier.lines.get(found.lines).unwrap_or_default();
+            let text = lines.iter().map(|line| line.text.as_str());
+            let text = text.collect::<Vec<_>>().join(" / ");
+            match found.stat {
+                None => log::warn!("Stat not found: {text}"),
+                Some(stat) if stat.stat.trade_ids(group).is_empty() => {
+                    log::warn!("No {group:?} trade id for the stat: {text}");
+                }
+                Some(_) => {}
+            }
+        }
     }
 }
 
