@@ -24,6 +24,7 @@
 - At the start of each session, read `roadmap.md` to know the progress; when asked to continue, resume at the first unchecked step.
 - Each step is delivered in its own pull request, which checks the step's box in `roadmap.md`.
 - Keep `roadmap.md` consistent with `specs.md` when the specifications change.
+- When the pull request of a step (or of a sub-step, such as 10b) is merged, tell the owner that the step is done and remind them to close the session and start a new one for the next step: a fresh session costs far fewer tokens, and `roadmap.md` and the memory hold what is needed to resume.
 
 ## Working folders
 
