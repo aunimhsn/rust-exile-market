@@ -19,7 +19,7 @@ mod client;
 mod limits;
 pub mod link;
 #[allow(dead_code, reason = "the offers block of step 12 shows the offers")]
-mod offers;
+pub mod offers;
 pub mod query;
 #[allow(
     dead_code,
@@ -39,7 +39,7 @@ use crate::worker::{OnDrop, Outbox, Worker};
 use site::{NamesError, TradeSite};
 
 /// The trade site of `language`.
-fn site(language: Language) -> &'static str {
+fn host(language: Language) -> &'static str {
     match language {
         Language::English => "https://www.pathofexile.com",
         Language::French => "https://fr.pathofexile.com",

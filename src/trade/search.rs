@@ -11,7 +11,7 @@ use super::offers::{ExchangeOffer, ItemOffer};
 use super::query::{Query, SearchKind};
 use crate::language::Language;
 use crate::league::League;
-use crate::worker::{OnDrop, Waited, Worker};
+use crate::worker::{OnDrop, Outbox, Waited, Worker};
 
 /// The longest wait for the limits of a fetch asked by the player: a fetch that must wait
 /// longer fails, rather than leaving the player without an answer.
@@ -49,9 +49,9 @@ pub enum Outcome {
     More { offers: Vec<ItemOffer>, more: bool },
     /// The trade site can't be reached, or answered something unexpected.
     Unreachable,
-    /// The trade site refused the request, or its limits didn't allow it: the next search
-    /// says when to search again.
-    Limited,
+    /// The trade site refused the request (`refused`), or its limits didn't allow it: nothing
+    /// is sent before `until`.
+    Limited { until: Instant, refused: bool },
 }
 
 /// When the next search may be sent, for each kind of search: their limits differ.
@@ -107,6 +107,9 @@ impl OfferSearch {
                     Waited::Elapsed => continue,
                     Waited::Stop => return,
                 };
+                let Some(order) = latest(order, outbox) else {
+                    return;
+                };
                 if !outbox.send(searches.answer(order)) {
                     return;
                 }
@@ -125,6 +128,22 @@ impl OfferSearch {
     pub fn receive(&mut self, handle: impl FnMut(Answer)) {
         self.worker.receive(handle);
     }
+}
+
+/// The order to answer among `first` and the orders given meanwhile: the last search, since
+/// the player only sees its offers, or else one request of more offers; `None` when the
+/// application asks the thread to stop.
+fn latest(first: Order, outbox: &Outbox<Answer, Order>) -> Option<Order> {
+    let mut latest = first;
+    while let Some(waited) = outbox.pending_order() {
+        match waited {
+            Waited::Order(order @ Order::Search { .. }) => latest = order,
+            // More offers of a search answered before, or asked twice.
+            Waited::Order(Order::More) | Waited::Elapsed => {}
+            Waited::Stop => return None,
+        }
+    }
+    Some(latest)
 }
 
 /// The offers of the last search of items left to fetch.
@@ -152,7 +171,14 @@ impl<T: Transport> Searches<T> {
         let outcome = self.outcome(order).unwrap_or_else(|error| {
             log::warn!("Trade site: {error}");
             match error {
-                TradeError::Wait(_) | TradeError::Refused(_) => Outcome::Limited,
+                TradeError::Wait(until) => Outcome::Limited {
+                    until,
+                    refused: false,
+                },
+                TradeError::Refused(until) => Outcome::Limited {
+                    until,
+                    refused: true,
+                },
                 TradeError::Http(_) => Outcome::Unreachable,
             }
         });
@@ -174,8 +200,8 @@ impl<T: Transport> Searches<T> {
                 league,
                 query: Query::Items(query),
             } => {
-                self.remaining = None;
-                let search = self.client.search_items(language, &league, &query)?;
+                let result = self.client.search_items(language, &league, &query);
+                let search = self.forget_unless_unsent(result)?;
                 log::info!("Trade site: {} offers found", search.total);
                 let total = search.total;
                 self.remaining = Some(Remaining {
@@ -195,8 +221,8 @@ impl<T: Transport> Searches<T> {
                 league,
                 query: Query::Exchange(want),
             } => {
-                self.remaining = None;
-                let search = self.client.search_exchange(language, &league, &want)?;
+                let result = self.client.search_exchange(language, &league, &want);
+                let search = self.forget_unless_unsent(result)?;
                 log::info!("Trade site: {} exchange offers of {want}", search.total);
                 Ok(Outcome::Exchange {
                     offers: search.offers,
@@ -208,6 +234,15 @@ impl<T: Transport> Searches<T> {
                 Ok(Outcome::More { offers, more })
             }
         }
+    }
+
+    /// Forgets the last search of items once a new search was sent, whatever its answer: the
+    /// player no longer sees its offers. A search that wasn't sent keeps it.
+    fn forget_unless_unsent<S>(&mut self, result: Result<S, TradeError>) -> Result<S, TradeError> {
+        if !matches!(result, Err(TradeError::Wait(_))) {
+            self.remaining = None;
+        }
+        result
     }
 
     /// The next 10 offers of the last search of items, and whether some are left; they
@@ -225,11 +260,10 @@ impl<T: Transport> Searches<T> {
         }
         thread::sleep(wait);
         let count = remaining.offers.len().min(FETCH_SIZE);
-        let offers = self.client.fetch(
-            remaining.language,
-            &remaining.search,
-            &remaining.offers[..count],
-        )?;
+        let ids = remaining.offers.get(..count).unwrap_or_default();
+        let offers = self
+            .client
+            .fetch(remaining.language, &remaining.search, ids)?;
         remaining.offers.drain(..count);
         Ok((offers, !remaining.offers.is_empty()))
     }
@@ -357,8 +391,15 @@ mod tests {
         search.order(search_ring());
         let refused = answer(&mut search, &wakes);
 
-        assert_eq!(refused.outcome, Outcome::Limited);
-        assert!(refused.next_search.items > Instant::now() + Duration::from_secs(55));
+        let Outcome::Limited {
+            until,
+            refused: true,
+        } = refused.outcome
+        else {
+            panic!("refused: {:?}", refused.outcome);
+        };
+        assert!(until > Instant::now() + Duration::from_secs(55));
+        assert!(refused.next_search.items >= until);
         // The exchange has its own limits: only the 10 s between two searches.
         assert!(refused.next_search.exchange < Instant::now() + Duration::from_secs(11));
     }
@@ -378,5 +419,65 @@ mod tests {
             }
         );
         assert_eq!(site.requests(), Vec::new());
+    }
+
+    #[test]
+    fn the_orders_given_during_a_search_leave_only_the_last_search() {
+        let site = FakeSite::default();
+        site.answer(200, LimitHeaders::default(), SEARCH);
+        site.answer(200, LimitHeaders::default(), &fetch(&["a"]));
+        let (mut search, wakes) = start(&site);
+        // The first search is blocked in its request while the player clicks.
+        let blocked = site.answers.lock().unwrap();
+        search.order(search_ring());
+        let start = Instant::now();
+        while site.requests().is_empty() {
+            assert!(start.elapsed() < Duration::from_secs(5), "sent");
+            thread::sleep(Duration::from_millis(5));
+        }
+        search.order(Order::More);
+        search.order(Order::Search {
+            language: Language::English,
+            league: League::new("Standard"),
+            query: Query::Exchange("divine".to_owned()),
+        });
+        search.order(Order::More);
+        drop(blocked);
+
+        let mut answers = Vec::new();
+        while answers.len() < 2 {
+            wakes
+                .recv_timeout(Duration::from_secs(5))
+                .expect("the application is woken up");
+            search.receive(|answer| answers.push(answer.outcome));
+        }
+
+        assert!(matches!(answers[0], Outcome::Items { .. }), "{answers:?}");
+        // Only the last search is answered, without the more offers asked around it: not
+        // sent, 10 s after the first one.
+        assert!(
+            matches!(answers[1], Outcome::Limited { refused: false, .. }),
+            "{answers:?}"
+        );
+        assert_eq!(answers.len(), 2);
+        assert_eq!(site.requests().len(), 2, "a search and its fetch");
+    }
+
+    #[test]
+    fn a_search_that_wasnt_sent_keeps_the_offers_left_of_the_last_one() {
+        let site = FakeSite::default();
+        site.answer(200, LimitHeaders::default(), SEARCH);
+        site.answer(200, LimitHeaders::default(), &fetch(&["a"]));
+        site.answer(200, LimitHeaders::default(), &fetch(&["k"]));
+        let (mut search, wakes) = start(&site);
+        search.order(search_ring());
+        answer(&mut search, &wakes);
+
+        // Within the 10 s: not sent.
+        search.order(search_ring());
+        answer(&mut search, &wakes);
+        search.order(Order::More);
+
+        assert_eq!(ids(&second_offers(&answer(&mut search, &wakes))), ["k"]);
     }
 }

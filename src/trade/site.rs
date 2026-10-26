@@ -147,7 +147,7 @@ impl TradeSite {
         name: &str,
     ) -> Result<Vec<T>, HttpError> {
         self.pace.wait();
-        let url = format!("{}/api/trade2/data/{name}", super::site(language));
+        let url = format!("{}/api/trade2/data/{name}", super::host(language));
         let answer: ApiResult<T> = http::get_json(&self.agent, &url, &[])?;
         Ok(answer.result)
     }

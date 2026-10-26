@@ -6,8 +6,8 @@
 
 use serde_json::json;
 
+use super::host;
 use super::query::{self, ItemQuery, Query, RarityFilter};
-use super::site;
 use crate::http;
 use crate::item::{Item, Rarity};
 use crate::item_names::ItemNames;
@@ -103,7 +103,7 @@ pub fn url(language: Language, league: &League, target: &TradeTarget) -> String 
     };
     format!(
         "{}/trade2/{page}/poe2/{}?q={}",
-        site(language),
+        host(language),
         http::encode(league.id()),
         http::encode(&query.to_string())
     )

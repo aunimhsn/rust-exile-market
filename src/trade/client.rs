@@ -10,7 +10,7 @@ use std::time::{Duration, Instant};
 
 use serde::de::DeserializeOwned;
 
-use super::limits::{LimitHeaders, Limits, Policy};
+use super::limits::{LimitHeaders, Limits, Policy, RuleHeaders};
 use super::offers::{ApiExchange, ApiFetch, ApiSearch, ExchangeOffer, ItemOffer};
 use super::query::{self, ItemQuery, SearchKind};
 use crate::http::{self, HttpError};
@@ -95,7 +95,9 @@ pub(super) trait Transport {
     fn send(&mut self, request: &Request) -> Result<Answer, ureq::Error>;
 }
 
-/// The requests sent with `ureq`, which keeps no cookie (its `cookies` feature is off).
+/// The requests sent with `ureq`, which keeps no cookie (its `cookies` feature is off, see
+/// `Cargo.toml`), and follows no redirection: each request is one request counted by the
+/// limits, and a redirection is an error status.
 pub(super) struct Network(ureq::Agent);
 
 impl Transport for Network {
@@ -106,6 +108,7 @@ impl Transport for Network {
                 .post(&request.url)
                 .config()
                 .http_status_as_error(false)
+                .max_redirects(0)
                 .build()
                 .content_type("application/json")
                 .send(body)?,
@@ -114,6 +117,7 @@ impl Transport for Network {
                 .get(&request.url)
                 .config()
                 .http_status_as_error(false)
+                .max_redirects(0)
                 .build()
                 .call()?,
         };
@@ -129,13 +133,14 @@ impl Transport for Network {
             .split(',')
             .map(str::trim)
             .filter(|rule| !rule.is_empty())
-            .filter_map(|rule| {
+            .map(|rule| {
+                // Missing, its headers are empty: unreadable, they keep the limits known.
                 let name = format!("x-rate-limit-{}", rule.to_ascii_lowercase());
-                Some((
-                    rule.to_owned(),
-                    header(&name)?,
-                    header(&format!("{name}-state"))?,
-                ))
+                RuleHeaders {
+                    name: rule.to_owned(),
+                    limits: header(&name).unwrap_or_default(),
+                    state: header(&format!("{name}-state")).unwrap_or_default(),
+                }
             })
             .collect();
         let limits = LimitHeaders {
@@ -209,7 +214,7 @@ impl<T: Transport> TradeClient<T> {
         let request = Request {
             url: format!(
                 "{}/api/trade2/search/poe2/{}",
-                super::site(language),
+                super::host(language),
                 http::encode(league.id())
             ),
             body: Some(query.to_json().to_string()),
@@ -236,7 +241,7 @@ impl<T: Transport> TradeClient<T> {
         let request = Request {
             url: format!(
                 "{}/api/trade2/fetch/{}?query={}&realm=poe2",
-                super::site(language),
+                super::host(language),
                 ids.iter()
                     .map(|id| http::encode(id))
                     .collect::<Vec<_>>()
@@ -261,7 +266,7 @@ impl<T: Transport> TradeClient<T> {
         let request = Request {
             url: format!(
                 "{}/api/trade2/exchange/poe2/{}",
-                super::site(language),
+                super::host(language),
                 http::encode(league.id())
             ),
             body: Some(query::exchange_search(want).to_string()),
@@ -296,12 +301,12 @@ impl<T: Transport> TradeClient<T> {
         if ready > now {
             return Err(TradeError::Wait(ready));
         }
-        self.limits.sent(policy, now);
-        let answer = self
-            .transport
-            .send(request)
-            .map_err(|error| TradeError::Http(HttpError::Request(error)))?;
+        let result = self.transport.send(request);
+        // Counted once answered: the trade site counted it before, so it leaves the windows
+        // later here, on the safe side; nothing else is sent meanwhile (`&mut self`).
         let now = Instant::now();
+        self.limits.sent(policy, now);
+        let answer = result.map_err(|error| TradeError::Http(HttpError::Request(error)))?;
         if answer.status == 429 {
             return Err(TradeError::Refused(self.limits.refused(
                 policy,
@@ -370,11 +375,15 @@ pub(super) mod tests {
         }
     }
 
-    /// The headers of a policy with a single window, `hits` per `period`, `counted` used.
+    /// The headers of a policy with the rule `Ip`.
     pub fn limits(policy: &str, rule: &str, state: &str) -> LimitHeaders {
         LimitHeaders {
             policy: Some(policy.to_owned()),
-            rules: vec![("Ip".to_owned(), rule.to_owned(), state.to_owned())],
+            rules: vec![RuleHeaders {
+                name: "Ip".to_owned(),
+                limits: rule.to_owned(),
+                state: state.to_owned(),
+            }],
             retry_after: None,
         }
     }

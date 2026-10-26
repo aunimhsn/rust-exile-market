@@ -269,9 +269,9 @@ impl ApiModifier {
             kind,
             text: plain_text(&text),
             // `stat.explicit.stat_3917489142`, as the queries write it.
-            stat: stat.map(|hash| {
-                hash.strip_prefix("stat.")
-                    .map_or(hash.clone(), str::to_owned)
+            stat: stat.map(|hash| match hash.strip_prefix("stat.") {
+                Some(id) => id.to_owned(),
+                None => hash,
             }),
         }
     }
@@ -370,7 +370,13 @@ fn parse_time(text: &str) -> Option<SystemTime> {
     else {
         return None;
     };
-    if !(1..=12).contains(&month) || !(1..=31).contains(&day) || hours > 23 || minutes > 59 {
+    // Outside these years, a wrong date: refused rather than computed with an overflow.
+    if !(1970..=9999).contains(&year)
+        || !(1..=12).contains(&month)
+        || !(1..=31).contains(&day)
+        || hours > 23
+        || minutes > 59
+    {
         return None;
     }
     let days = u64::try_from(days_from_civil(year, month, day)).ok()?;
@@ -527,5 +533,6 @@ mod tests {
         assert_eq!(parse_time("2026-10-23T05:30:09+02:00"), None);
         assert_eq!(parse_time("2026-13-23T05:30:09Z"), None);
         assert_eq!(parse_time("yesterday"), None);
+        assert_eq!(parse_time("9999999999999999-01-01T00:00:00Z"), None);
     }
 }

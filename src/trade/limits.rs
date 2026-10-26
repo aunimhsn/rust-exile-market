@@ -7,7 +7,8 @@
 //! another tool on the same address counts too. The application keeps the time of its own
 //! requests, and adds the hits the trade site counted beyond them, as if made when it told
 //! them: they leave the window later than the real ones, which keeps on the safe side. Nothing
-//! is taken from constants: before the first answer, no limit is known.
+//! is taken from constants: before the first answer, no limit is known. When in doubt (limits
+//! that can't be read), the limits known are kept.
 
 use std::time::{Duration, Instant};
 
@@ -60,11 +61,21 @@ impl Policy {
 pub struct LimitHeaders {
     /// `X-Rate-Limit-Policy`.
     pub policy: Option<String>,
-    /// `X-Rate-Limit-Rules`, then for each rule, `X-Rate-Limit-<rule>` and
-    /// `X-Rate-Limit-<rule>-State`, e.g. `("Ip", "5:10:60", "1:10:0")`.
-    pub rules: Vec<(String, String, String)>,
+    /// One for each rule of `X-Rate-Limit-Rules`.
+    pub rules: Vec<RuleHeaders>,
     /// `Retry-After`, in seconds.
     pub retry_after: Option<String>,
+}
+
+/// The headers of a rule; empty when missing.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct RuleHeaders {
+    /// `Ip`.
+    pub name: String,
+    /// `X-Rate-Limit-<name>`, e.g. `5:10:60,15:60:300`.
+    pub limits: String,
+    /// `X-Rate-Limit-<name>-State`, e.g. `1:10:0,1:60:0`.
+    pub state: String,
 }
 
 /// A window of a policy: `hits` requests at most per `period`.
@@ -72,9 +83,40 @@ pub struct LimitHeaders {
 struct Window {
     hits: usize,
     period: Duration,
-    /// The hits the trade site counted beyond the requests of the application, when it told
-    /// them.
-    others: Vec<Instant>,
+    /// The hits the trade site counted beyond the requests of the application…
+    others: usize,
+    /// …when it told them.
+    told: Instant,
+}
+
+impl Window {
+    /// When the window allows one more request, among the requests `sent` (oldest first).
+    fn ready_at(&self, sent: &[Instant], now: Instant) -> Instant {
+        let start = now.checked_sub(self.period);
+        let inside = |hit: Instant| start.is_none_or(|start| hit > start);
+        // The requests of the application in the window, oldest first.
+        let first = sent.partition_point(|&hit| !inside(hit));
+        let ours = sent.get(first..).unwrap_or_default();
+        let others = if inside(self.told) { self.others } else { 0 };
+        let count = ours.len().saturating_add(others);
+        if count < self.hits {
+            return now;
+        }
+        // The window allows a request once `count - hits + 1` hits have left it: the one
+        // of index `count - hits` among all of them, oldest first, found without listing
+        // them.
+        let index = count - self.hits;
+        let before_told = ours.partition_point(|&hit| hit <= self.told);
+        let leaving = if index < before_told {
+            ours.get(index)
+        } else if index - before_told < others {
+            Some(&self.told)
+        } else {
+            ours.get(index - others)
+        };
+        // None for a window of 0 requests, which allows none during its period.
+        leaving.map_or(now, |&leaving| leaving) + self.period + MARGIN
+    }
 }
 
 /// The limits of one policy.
@@ -89,25 +131,10 @@ struct PolicyLimits {
 
 impl PolicyLimits {
     fn ready_at(&self, now: Instant) -> Instant {
-        let mut ready = now.max(self.blocked_until.unwrap_or(now));
-        for window in &self.windows {
-            let start = now.checked_sub(window.period);
-            let mut hits: Vec<Instant> = self
-                .sent
-                .iter()
-                .chain(&window.others)
-                .copied()
-                .filter(|&hit| start.is_none_or(|start| hit > start))
-                .collect();
-            if hits.len() >= window.hits {
-                hits.sort_unstable();
-                // The window allows a request once enough hits have left it.
-                if let Some(&leaving) = hits.get(hits.len() - window.hits) {
-                    ready = ready.max(leaving + window.period + MARGIN);
-                }
-            }
-        }
-        ready
+        self.windows
+            .iter()
+            .map(|window| window.ready_at(&self.sent, now))
+            .fold(now.max(self.blocked_until.unwrap_or(now)), Instant::max)
     }
 
     fn sent(&mut self, now: Instant) {
@@ -125,39 +152,39 @@ impl PolicyLimits {
 
     fn answered(&mut self, headers: &LimitHeaders, now: Instant) {
         let mut windows = Vec::new();
-        for (_, rule, state) in &headers.rules {
-            for (limit, counted) in rule.split(',').zip(state.split(',')) {
-                let (Some((hits, period, _)), Some((counted, counted_period, restricted))) =
-                    (triple(limit), triple(counted))
-                else {
-                    log::warn!("Unexpected limits of the trade site: {rule} / {state}");
-                    continue;
-                };
-                if period != counted_period {
-                    log::warn!("Unexpected limits of the trade site: {rule} / {state}");
-                    continue;
-                }
-                let period = seconds(period);
-                let start = now.checked_sub(period);
+        let mut restricted = Duration::ZERO;
+        for rule in &headers.rules {
+            let Some(read) = read_rule(rule) else {
+                log::warn!(
+                    "Unexpected limits of the trade site, the known ones are kept: {} {} / {}",
+                    rule.name,
+                    rule.limits,
+                    rule.state
+                );
+                return;
+            };
+            for window in read {
+                let start = now.checked_sub(window.period);
                 let ours = self
                     .sent
                     .iter()
                     .filter(|&&hit| start.is_none_or(|start| hit > start))
                     .count();
-                let others = usize::try_from(counted).unwrap_or(usize::MAX);
                 windows.push(Window {
-                    hits: usize::try_from(hits).unwrap_or(usize::MAX),
-                    period,
-                    others: vec![now; others.saturating_sub(ours)],
+                    hits: window.hits,
+                    period: window.period,
+                    others: window.counted.saturating_sub(ours),
+                    told: now,
                 });
-                if restricted > 0 {
-                    self.block(now + seconds(restricted));
-                }
+                restricted = restricted.max(window.restricted);
             }
         }
         // An answer without limits keeps the ones known.
         if !windows.is_empty() {
             self.windows = windows;
+        }
+        if !restricted.is_zero() {
+            self.block(now + restricted);
         }
     }
 
@@ -167,6 +194,40 @@ impl PolicyLimits {
                 .map_or(until, |blocked| blocked.max(until)),
         );
     }
+}
+
+/// A window as the headers tell it.
+struct ReadWindow {
+    hits: usize,
+    period: Duration,
+    /// The hits the trade site counted in it.
+    counted: usize,
+    /// How long the trade site refuses the requests, when they went over it.
+    restricted: Duration,
+}
+
+/// The windows of a rule; `None` when a window can't be read, or when the limits and the
+/// state don't have the same windows.
+fn read_rule(rule: &RuleHeaders) -> Option<Vec<ReadWindow>> {
+    let limits: Vec<&str> = rule.limits.split(',').collect();
+    let states: Vec<&str> = rule.state.split(',').collect();
+    if limits.len() != states.len() {
+        return None;
+    }
+    limits
+        .iter()
+        .zip(&states)
+        .map(|(limit, state)| {
+            let (hits, period, _) = triple(limit)?;
+            let (counted, counted_period, restricted) = triple(state)?;
+            (period == counted_period).then(|| ReadWindow {
+                hits: count(hits),
+                period: seconds(period),
+                counted: count(counted),
+                restricted: seconds(restricted),
+            })
+        })
+        .collect()
 }
 
 /// The limits of every policy.
@@ -182,8 +243,9 @@ impl Limits {
         self.policies[policy.index()].ready_at(now)
     }
 
-    /// Counts a request of `policy` sent `now`, before its answer: a request that fails
-    /// counts too.
+    /// Counts a request of `policy` whose answer, or failure, came `now`: the trade site
+    /// counted it before, so it leaves the windows later here, on the safe side. A request
+    /// that failed counts too.
     pub fn sent(&mut self, policy: Policy, now: Instant) {
         self.policies[policy.index()].sent(now);
     }
@@ -202,7 +264,8 @@ impl Limits {
     }
 
     /// The trade site refused a request of `policy` (HTTP 429) `now`: no request of it is
-    /// sent before the delay of `Retry-After`. Returns the end of the wait.
+    /// sent before the delay of `Retry-After`, nor before the restriction it tells. Returns
+    /// the end of the wait.
     pub fn refused(&mut self, policy: Policy, headers: &LimitHeaders, now: Instant) -> Instant {
         self.answered(policy, headers, now);
         let delay = headers
@@ -219,6 +282,11 @@ impl Limits {
 /// A time read in a header, at most a day.
 fn seconds(seconds: u64) -> Duration {
     Duration::from_secs(seconds.min(LONGEST))
+}
+
+/// A number of hits read in a header.
+fn count(hits: u64) -> usize {
+    usize::try_from(hits).unwrap_or(usize::MAX)
 }
 
 /// The three numbers of `5:10:60`.
@@ -239,20 +307,33 @@ fn triple(text: &str) -> Option<(u64, u64, u64)> {
 mod tests {
     use super::*;
 
-    /// The headers of a search answer, measured on 2026-10-26, with the hits `state`.
-    fn search_headers(state: &str) -> LimitHeaders {
+    const SECOND: Duration = Duration::from_secs(1);
+
+    /// The headers of a policy with the rule `Ip`.
+    fn headers(policy: &str, limits: &str, state: &str) -> LimitHeaders {
         LimitHeaders {
-            policy: Some("trade-search-request-limit".to_owned()),
-            rules: vec![(
-                "Ip".to_owned(),
-                "5:10:60,15:60:300,30:300:1800,600:21600:3600".to_owned(),
-                state.to_owned(),
-            )],
+            policy: Some(policy.to_owned()),
+            rules: vec![rule("Ip", limits, state)],
             retry_after: None,
         }
     }
 
-    const SECOND: Duration = Duration::from_secs(1);
+    fn rule(name: &str, limits: &str, state: &str) -> RuleHeaders {
+        RuleHeaders {
+            name: name.to_owned(),
+            limits: limits.to_owned(),
+            state: state.to_owned(),
+        }
+    }
+
+    /// The headers of a search answer, measured on 2026-10-26, with the hits `state`.
+    fn search_headers(state: &str) -> LimitHeaders {
+        headers(
+            "trade-search-request-limit",
+            "5:10:60,15:60:300,30:300:1800,600:21600:3600",
+            state,
+        )
+    }
 
     #[test]
     fn before_any_answer_no_limit_is_known() {
@@ -289,19 +370,93 @@ mod tests {
     #[test]
     fn the_hits_of_another_tool_on_the_same_address_count() {
         let mut limits = Limits::default();
-        let now = Instant::now();
-        limits.sent(Policy::Search, now);
+        let start = Instant::now();
+        limits.sent(Policy::Search, start);
+        let now = start + 2 * SECOND;
 
-        // A browser made 14 searches in the last minute.
+        // A browser made 14 searches in the last minute, told at 2 s.
         limits.answered(
             Policy::Search,
             &search_headers("1:10:0,15:60:0,15:300:0,15:21600:0"),
             now,
         );
 
+        // The window is full; ours, the oldest, leaves it first.
         assert_eq!(
             limits.ready_at(Policy::Search, now),
-            now + 60 * SECOND + MARGIN
+            start + 60 * SECOND + MARGIN
+        );
+    }
+
+    #[test]
+    fn the_hits_counted_before_ours_leave_the_window_first() {
+        let mut limits = Limits::default();
+        let start = Instant::now();
+        limits.answered(
+            Policy::Fetch,
+            &headers("trade-fetch-request-limit", "3:10:10", "1:10:0"),
+            start,
+        );
+        limits.sent(Policy::Fetch, start + SECOND);
+        limits.sent(Policy::Fetch, start + 2 * SECOND);
+
+        // Another tool at 0 s, then ours at 1 s and 2 s: the one at 0 s leaves first.
+        assert_eq!(
+            limits.ready_at(Policy::Fetch, start + 3 * SECOND),
+            start + 10 * SECOND + MARGIN
+        );
+    }
+
+    #[test]
+    fn a_huge_count_of_hits_waits_without_failing() {
+        let mut limits = Limits::default();
+        let now = Instant::now();
+
+        limits.answered(
+            Policy::Search,
+            &headers(
+                "trade-search-request-limit",
+                "5:10:60",
+                "18446744073709551615:10:0",
+            ),
+            now,
+        );
+
+        assert_eq!(
+            limits.ready_at(Policy::Search, now),
+            now + 10 * SECOND + MARGIN
+        );
+    }
+
+    #[test]
+    fn a_window_of_no_request_allows_none_during_its_period() {
+        let mut limits = Limits::default();
+        let now = Instant::now();
+
+        limits.answered(
+            Policy::Search,
+            &headers("trade-search-request-limit", "0:10:60", "0:10:0"),
+            now,
+        );
+
+        assert_eq!(
+            limits.ready_at(Policy::Search, now),
+            now + 10 * SECOND + MARGIN
+        );
+    }
+
+    #[test]
+    fn every_rule_of_an_answer_counts() {
+        let mut limits = Limits::default();
+        let now = Instant::now();
+        let mut headers = search_headers("1:10:0,1:60:0,1:300:0,1:21600:0");
+        headers.rules.push(rule("Account", "2:30:60", "2:30:0"));
+
+        limits.answered(Policy::Search, &headers, now);
+
+        assert_eq!(
+            limits.ready_at(Policy::Search, now),
+            now + 30 * SECOND + MARGIN
         );
     }
 
@@ -339,16 +494,25 @@ mod tests {
     }
 
     #[test]
+    fn a_refusal_waits_for_a_restriction_longer_than_its_delay() {
+        let mut limits = Limits::default();
+        let now = Instant::now();
+        let mut headers = search_headers("1:10:0,16:60:300,16:300:0,16:21600:0");
+        headers.retry_after = Some("60".to_owned());
+
+        assert_eq!(
+            limits.refused(Policy::Search, &headers, now),
+            now + 300 * SECOND
+        );
+    }
+
+    #[test]
     fn the_policy_named_by_the_answer_is_the_one_updated() {
         let mut limits = Limits::default();
         let now = Instant::now();
 
         // A full exchange window, in an answer to what was thought a search.
-        let headers = LimitHeaders {
-            policy: Some("trade-exchange-request-limit".to_owned()),
-            rules: vec![("Ip".to_owned(), "5:15:60".to_owned(), "5:15:0".to_owned())],
-            retry_after: None,
-        };
+        let headers = headers("trade-exchange-request-limit", "5:15:60", "5:15:0");
         limits.answered(Policy::Search, &headers, now);
 
         assert_eq!(limits.ready_at(Policy::Search, now), now);
@@ -359,18 +523,26 @@ mod tests {
     }
 
     #[test]
-    fn unreadable_limits_keep_the_ones_known() {
-        let mut limits = Limits::default();
+    fn limits_partly_unreadable_keep_the_ones_known() {
         let now = Instant::now();
-        limits.answered(
-            Policy::Search,
-            &search_headers("5:10:0,5:60:0,5:300:0,5:21600:0"),
-            now,
-        );
+        let full = "5:10:0,5:60:0,5:300:0,5:21600:0";
+        for state in [
+            // A window that can't be read, among others.
+            "1:10:0,five:60:0,1:300:0,1:21600:0",
+            // A window of the limits missing in the state.
+            "1:10:0,1:60:0",
+            // A window of another period.
+            "1:10:0,1:60:0,1:301:0,1:21600:0",
+            // A rule whose headers are missing.
+            "",
+        ] {
+            let mut limits = Limits::default();
+            limits.answered(Policy::Search, &search_headers(full), now);
 
-        limits.answered(Policy::Search, &search_headers("five"), now);
+            limits.answered(Policy::Search, &search_headers(state), now);
 
-        assert!(limits.ready_at(Policy::Search, now) > now);
+            assert!(limits.ready_at(Policy::Search, now) > now, "{state:?}");
+        }
     }
 
     #[test]
