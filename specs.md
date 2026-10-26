@@ -211,6 +211,7 @@ At launch, the application asks the GitHub releases for the latest version. When
 
 - The prices of the fixed-name items, their offer counts and their history come from a public price database of the Path of Exile 2 economy (see [the technical choices](docs/technical-choices.md)). The application downloads the prices of the selected league at startup and when the league changes, then refreshes them every hour. A copied item is priced instantly from these local data, without a network request. During the download of a league without cache, the prices arrive category by category, the currency first, then the other items of the currency exchange, then the uniques: a copied orb is priced after a few seconds, without waiting for the whole download (about 26 seconds, one request per second).
 - The offers, the estimates and the item names in English and French come from the official trade site. The application searches only when the player clicks the search or refresh block, never in the background, and respects the limits announced by the trade site.
+- The trade id of each modifier line and the range of every tier of a modifier come from data of the game embedded in the application, generated again after each patch of the game (see [Game data](docs/game-data.md)): they work offline, without a request.
 - The application identifies itself to both, and keeps its requests to a minimum.
 
 ## Local files
