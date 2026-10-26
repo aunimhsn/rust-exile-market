@@ -17,7 +17,7 @@ Read only by the steps that need them:
 Path of Exile 2 leaves early access with its version 1.0 on 2026-12-11. The modifiers, their tiers and ranges, the trade site data and maybe the format of the copied text can change. After this release:
 
 - copy real items again (English and French) and rerun the parser tests;
-- check the stat ids, the pseudo stats and the filters of the trade site, and the categories of poe2scout; on a real `/fetch` of a fractured item, that its fractured modifiers aren't also in `explicitMods` (they would show twice in the tooltip);
+- check the stat ids, the pseudo stats and the filters of the trade site, and the categories of poe2scout;;
 - check the tiers and ranges given by the advanced copy, and update the modifier tables.
 
 ## Steps

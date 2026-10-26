@@ -158,7 +158,8 @@ struct ApiItem {
     implicit_mods: Vec<ApiModifier>,
     #[serde(default)]
     explicit_mods: Vec<ApiModifier>,
-    /// Explicit modifiers too, listed apart.
+    /// Explicit modifiers too, listed apart in the API of Path of Exile 1: on 2026-10-26, the
+    /// fractured items of Path of Exile 2 had their fractured lines in `explicitMods` only.
     #[serde(default)]
     fractured_mods: Vec<ApiModifier>,
     #[serde(default)]
