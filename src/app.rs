@@ -8,6 +8,7 @@ use eframe::{App, CreationContext, Frame};
 use egui::{Context, Key, OpenUrl, Ui, ViewportCommand};
 
 use crate::clipboard::{ClipboardEvent, ClipboardWatch};
+use crate::filters::Filters;
 use crate::i18n::{DOWNLOAD_QUOTE_COUNT, Message, Translator};
 use crate::league::League;
 use crate::market::MarketWatch;
@@ -59,6 +60,9 @@ pub struct ExileMarketApp {
     item_names: ItemNamesWatch,
     /// The stats of the item are unfolded, for every item copied until the player folds them.
     stats_open: bool,
+    /// The filters of the search as the player set them, for the item shown: cleared at each
+    /// copy, even of the same item after another text.
+    filters: Filters,
     /// An item was copied: the content scrolls back to the top, to its name and its price.
     scroll_to_top: bool,
     /// The sentence shown during the download of the prices of a league, drawn at its start.
@@ -95,6 +99,7 @@ impl ExileMarketApp {
             market,
             item_names: ItemNamesWatch::start(move || names_ctx.request_repaint()),
             stats_open: false,
+            filters: Filters::default(),
             scroll_to_top: false,
             download_quote: None,
         }
@@ -234,7 +239,7 @@ impl ExileMarketApp {
         let unique_modifiers = session::unique_modifiers(item, &fixed_price);
         let to_top = std::mem::take(&mut self.scroll_to_top);
         let action = ui::content(ui, to_top, |ui| {
-            let action = ItemBlock::new(item, &self.i18n)
+            let action = ItemBlock::new(item, &mut self.filters, &self.i18n)
                 .tradable(url.is_some())
                 .stats(self.stats_open, unique_modifiers)
                 .show(ui);
@@ -256,7 +261,10 @@ impl App for ExileMarketApp {
     /// clicks of the components it draws.
     fn logic(&mut self, ctx: &Context, _frame: &mut Frame) {
         self.clipboard.receive(|event| {
-            self.scroll_to_top |= matches!(event, ClipboardEvent::Copied(_));
+            if matches!(event, ClipboardEvent::Copied(_)) {
+                self.scroll_to_top = true;
+                self.filters.clear();
+            }
             self.view = self.view.after(&event);
             self.session.apply(event);
         });

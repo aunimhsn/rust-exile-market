@@ -99,6 +99,23 @@ pub struct Range {
 }
 
 impl Range {
+    /// `value` brought back within the range; never panics, unlike `f64::clamp`, on a range
+    /// written from its highest value or with a NaN end.
+    #[must_use]
+    pub fn clamp(self, value: f64) -> f64 {
+        value.max(self.min).min(self.max)
+    }
+
+    /// The range widened to hold `value`, e.g. the value of a legacy unique, rolled in a
+    /// range that changed since.
+    #[must_use]
+    pub fn holding(self, value: f64) -> Self {
+        Self {
+            min: self.min.min(value),
+            max: self.max.max(value),
+        }
+    }
+
     /// The range of the absolute values: the game shows a negative roll without its sign
     /// ("20% reduced"); none for a range across zero, which needs its sign.
     #[must_use]

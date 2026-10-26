@@ -1,0 +1,30 @@
+Item Class: Two Hand Maces
+Rarity: Unique
+The Empty Roar
+Cultist Greathammer
+--------
+Physical Damage: 70-92 (augmented)
+Critical Hit Chance: 5.00%
+Attacks per Second: 1.05
+--------
+Requires: Level 22, 41 (unmet) Str
+--------
+Sockets: S S 
+--------
+Item Level: 47
+--------
+{ Implicit Modifier — Attack }
+Strikes deal Splash Damage — Unscalable Value
+--------
+{ Unique Modifier — Damage, Physical, Attack }
+Adds 34(25-35) to 43(40-50) Physical Damage
+{ Unique Modifier — Physical, Attack, Ailment }
+12(10-20)% chance to cause Bleeding on Hit
+{ Unique Modifier — Life, Physical, Attack }
+Leeches 10% of Physical Damage as Life
+{ Unique Modifier }
+Cannot use Warcries — Unscalable Value
+{ Unique Modifier — Attack }
+All Attacks count as Empowered Attacks — Unscalable Value
+--------
+Secrecy and silence are powers all their own.

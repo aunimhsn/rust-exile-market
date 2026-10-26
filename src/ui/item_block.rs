@@ -7,8 +7,10 @@ use egui::{
     Align, Color32, CornerRadius, FontId, Frame, Label, Layout, RichText, Sense, Ui, Vec2, vec2,
 };
 
+use super::item_stats::{self, Stats};
 use super::theme::{color, size, text};
-use super::{item_stats, widgets};
+use super::widgets;
+use crate::filters::Filters;
 use crate::i18n::{Message, NumberTag, Requirement, Translator};
 use crate::item::{DamageKind, Item, ItemState, Rarity};
 use crate::prices::UniqueModifiers;
@@ -32,6 +34,8 @@ const VALUES_REQUIREMENTS_GAP: f32 = 3.0;
 const STATS_PILL_GAP: f32 = 20.0;
 /// The space above the stats.
 const STATS_GAP: f32 = 8.0;
+/// The space between the pill of the stats and the number of active filters.
+const FILTERS_GAP: f32 = 10.0;
 /// The space between the base values, across and down when they wrap.
 const VALUE_SPACING: Vec2 = vec2(14.0, 4.0);
 /// The space between the label of a base value and its number.
@@ -152,17 +156,20 @@ pub struct ItemBlock<'a> {
     stats_open: bool,
     /// The modifiers of the unique in the price database, the ranges of its rolls.
     unique_modifiers: Option<&'a UniqueModifiers>,
+    /// The filters of the search, as the player set them.
+    filters: &'a mut Filters,
 }
 
 impl<'a> ItemBlock<'a> {
     #[must_use]
-    pub fn new(item: &'a Item, i18n: &'a Translator) -> Self {
+    pub fn new(item: &'a Item, filters: &'a mut Filters, i18n: &'a Translator) -> Self {
         Self {
             item,
             i18n,
             tradable: false,
             stats_open: false,
             unique_modifiers: None,
+            filters,
         }
     }
 
@@ -184,7 +191,7 @@ impl<'a> ItemBlock<'a> {
 
     /// Draws the block at the top of `ui`, on its band B, its whole width; what the player
     /// did in it.
-    pub fn show(self, ui: &mut Ui) -> Option<ItemBlockAction> {
+    pub fn show(mut self, ui: &mut Ui) -> Option<ItemBlockAction> {
         Frame::NONE
             .inner_margin(vec2(size::BAND_PADDING, PADDING_Y))
             .show(ui, |ui| {
@@ -311,26 +318,39 @@ impl<'a> ItemBlock<'a> {
         });
     }
 
-    /// The pill of the stats, and the stats once unfolded; nothing for an item without
-    /// modifiers (its filters come with step 10b: "Show filters").
-    fn stats_section(&self, ui: &mut Ui) -> Option<ItemBlockAction> {
-        let count = item_stats::count(self.item);
-        if count == 0 {
+    /// The pill of the stats and the number of active filters, and the stats once unfolded;
+    /// "Show filters" for an item without modifiers, nothing when it has no filter either.
+    fn stats_section(&mut self, ui: &mut Ui) -> Option<ItemBlockAction> {
+        let stats = Stats::new(self.item, self.unique_modifiers);
+        if stats.is_empty() {
             return None;
         }
         ui.add_space(STATS_PILL_GAP);
-        let label = if self.stats_open {
-            self.i18n.text(Message::HideStats)
-        } else {
-            self.i18n.show_stats(count)
+        let label = match (item_stats::count(self.item), self.stats_open) {
+            (0, false) => self.i18n.text(Message::ShowFilters),
+            (0, true) => self.i18n.text(Message::HideFilters),
+            (_, true) => self.i18n.text(Message::HideStats),
+            (count, false) => self.i18n.show_stats(count),
         };
+        let active = stats.active_filters(self.filters);
         let action = ui
-            .horizontal(|ui| widgets::control_pill(ui, &label).clicked())
+            .horizontal(|ui| {
+                let clicked = widgets::control_pill(ui, &label).clicked();
+                if active > 0 {
+                    ui.add_space(FILTERS_GAP);
+                    ui.label(
+                        RichText::new(self.i18n.active_filters(active))
+                            .font(text::pill())
+                            .color(color::ACCENT),
+                    );
+                }
+                clicked
+            })
             .inner
             .then_some(ItemBlockAction::ToggleStats);
         if self.stats_open {
             ui.add_space(STATS_GAP);
-            item_stats::show(ui, self.item, self.unique_modifiers, self.i18n);
+            stats.show(ui, self.filters, self.i18n);
         }
         action
     }
@@ -512,7 +532,8 @@ mod tests {
     fn texts(text: &str, language: Language) -> Texts {
         let item = Item::parse(&CopiedItem::from_text(text).expect("an item")).expect("read");
         let i18n = Translator::new(language);
-        let block = ItemBlock::new(&item, &i18n);
+        let mut filters = Filters::default();
+        let block = ItemBlock::new(&item, &mut filters, &i18n);
         Texts {
             base_line: block.base_line().map(str::to_owned),
             tags: block.tags().into_iter().map(|(label, _)| label).collect(),

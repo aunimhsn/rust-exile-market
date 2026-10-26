@@ -371,7 +371,8 @@ fn read_headed(item: &mut Item, lines: &[&str], labels: &Labels) {
                     item.warnings.push(ParseWarning::ModifierWithoutHeader);
                     Modifier::unknown()
                 })
-                .push_line(line),
+                // The marker of a fixed value is too long for the narrow layout.
+                .push_line(&line.replacen(labels.fixed_value, "", 1)),
         }
     }
     item.modifiers.extend(current);

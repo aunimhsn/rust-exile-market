@@ -1,0 +1,30 @@
+Classe d'objet: Masses à deux mains
+Rareté: Unique
+Le Grondement creux
+Grand marteau de cultiste
+--------
+Dégâts Physiques: 70-92 (augmented)
+Chances de Touche critique: 5.00%
+Attaques par seconde: 1.05
+--------
+Prérequis : Niveau 22, 41 (unmet) For
+--------
+Châsses: S S 
+--------
+Niveau de l'objet: 47
+--------
+{ Modificateur Implicite — Attaque }
+Les Frappes infligent des Dégâts collatéraux — Valeur fixe
+--------
+{ Modificateur d'Objet unique — Dégâts, Physique, Attaque }
+Ajoute 34(25-35) à 43(40-50) Dégâts Physiques
+{ Modificateur d'Objet unique — Physique, Attaque, Altération }
+12(10-20)% de chances d'infliger le Saignement au Toucher
+{ Modificateur d'Objet unique — Vie, Physique, Attaque }
+10% des Dégâts Physiques Drainent de la Vie
+{ Modificateur d'Objet unique }
+Vous ne pouvez pas utiliser de Cris de guerre — Valeur fixe
+{ Modificateur d'Objet unique — Attaque }
+Toutes les Attaques sont considérées comme des Attaques Améliorées — Valeur fixe
+--------
+Le secret et le silence sont des pouvoirs à part entière.

@@ -164,6 +164,18 @@ pub mod text {
         fonts::text(11.0, Weight::Regular)
     }
 
+    /// The minimum of a filter, in its field.
+    #[must_use]
+    pub fn minimum() -> FontId {
+        fonts::numbers(12.5)
+    }
+
+    /// A note under the stats, e.g. the corrupted offers only.
+    #[must_use]
+    pub fn note() -> FontId {
+        fonts::text(12.0, Weight::Regular)
+    }
+
     /// The tier of a modifier, before its range.
     #[must_use]
     pub fn tier() -> FontId {
