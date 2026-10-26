@@ -223,6 +223,14 @@ offers-unreachable = Le site d'échange est injoignable.
 offers-identify = Identifiez l'objet pour chercher ses offres.
 # Le double chevron sous la liste.
 offers-more-tooltip = Afficher plus d'offres
+# L'infobulle d'une offre : un prix très en dessous du marché, le statut du vendeur, et la
+# pastille qui copie le message (whisper) du site d'échange.
+offers-suspicious = Attention : très en dessous du prix du marché.
+seller-online = En ligne
+seller-away = Absent
+seller-offline = Hors ligne
+copy-whisper = Copier le whisper
+whisper-copied = Copié
 
 ## Réglages
 

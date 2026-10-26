@@ -19,6 +19,7 @@ mod market;
 mod offers;
 mod prices;
 mod pricing;
+mod roll_difference;
 mod rolls;
 mod session;
 mod settings;

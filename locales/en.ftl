@@ -220,6 +220,14 @@ offers-unreachable = The trade site can't be reached.
 offers-identify = Identify the item to search its offers.
 # The double chevron under the list.
 offers-more-tooltip = Show more offers
+# The tooltip of an offer: a price far below the market, the seller status, and the pill
+# that copies the whisper message of the trade site.
+offers-suspicious = Be careful: far below the market price.
+seller-online = Online
+seller-away = Away
+seller-offline = Offline
+copy-whisper = Copy whisper
+whisper-copied = Copied
 
 ## Settings
 

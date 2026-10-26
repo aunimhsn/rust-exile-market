@@ -11,15 +11,18 @@ use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime};
 
 use egui::{
-    Color32, CursorIcon, Galley, Painter, Pos2, Rect, Response, Role, Sense, Stroke, Ui, Vec2,
-    WidgetInfo, pos2, vec2,
+    Color32, CursorIcon, Galley, Id, Key, Painter, Pos2, Rect, Response, Role, Sense, Stroke, Ui,
+    Vec2, WidgetInfo, pos2, vec2,
 };
 
+use super::item_block::rarity_color;
+use super::offer_tooltip::{OfferTooltip, Pointer, TooltipState};
 use super::price_block::orb;
 use super::theme::{color, size, text};
 use super::widgets;
 use crate::format::{self, Currency};
 use crate::i18n::{Message, Translator};
+use crate::item::Item;
 use crate::offers::{LONG_WAIT, Offers, OffersState};
 use crate::prices::Rates;
 use crate::trade::offers::{ExchangeOffer, ItemOffer, Price, SellerStatus};
@@ -78,6 +81,8 @@ const MORE_HEIGHT: f32 = 32.0;
 const MORE_GAP: f32 = 6.0;
 const MORE_RAISE: f32 = 3.0;
 const MORE_SLIDE: f32 = 2.0;
+/// The space above the message of the next offers that couldn't come.
+const MORE_FAILED_GAP: f32 = 8.0;
 /// An offer under this share of the reference price is suspicious.
 const SUSPICIOUS_SHARE: f64 = 0.25;
 
@@ -98,11 +103,21 @@ pub struct Reference {
 
 /// The price of a row, in its currency.
 #[derive(Debug, Clone, PartialEq)]
-struct RowPrice {
+pub(super) struct RowPrice {
     amount: String,
     /// One of the three currencies of the prices, shown by its orb, or another one by its
     /// name on the trade site.
-    currency: Result<Currency, String>,
+    pub(super) currency: Result<Currency, String>,
+}
+
+impl RowPrice {
+    /// The amount, followed by the name of a currency without orb.
+    pub(super) fn text(&self) -> String {
+        match &self.currency {
+            Ok(_) => self.amount.clone(),
+            Err(name) => format!("{} {name}", self.amount),
+        }
+    }
 }
 
 /// A row of the list.
@@ -149,6 +164,11 @@ fn row_price(amount: f64, id: &str) -> RowPrice {
             currency: Err(id.to_owned()),
         },
     }
+}
+
+/// The price of an offer of items, as its row and its tooltip write it.
+pub(super) fn offer_price(price: &Price) -> RowPrice {
+    row_price(price.amount, &price.currency)
 }
 
 /// Whether one item for `amount` of the currency `id` is far below `reference`.
@@ -234,23 +254,27 @@ pub struct OffersBlock<'a> {
     offers: &'a Offers,
     kind: SearchKind,
     reference: Option<Reference>,
+    /// The copied item, whose rolls the tooltips compare.
+    item: &'a Item,
     i18n: &'a Translator,
 }
 
 impl<'a> OffersBlock<'a> {
-    /// The block of the offers of a search of `kind`; `reference` tells the suspicious
-    /// offers.
+    /// The block of the offers of a search of `kind` for `item`; `reference` tells the
+    /// suspicious offers.
     #[must_use]
     pub fn new(
         offers: &'a Offers,
         kind: SearchKind,
         reference: Option<Reference>,
+        item: &'a Item,
         i18n: &'a Translator,
     ) -> Self {
         Self {
             offers,
             kind,
             reference,
+            item,
             i18n,
         }
     }
@@ -316,14 +340,21 @@ impl<'a> OffersBlock<'a> {
                 total,
                 more,
                 loading_more,
+                more_failed,
                 searched,
             } => {
                 let rows = item_rows(offers, self.reference, now);
                 let list = List {
                     rows: &rows,
+                    items: Some(offers),
                     total: *total,
                     exchange: false,
-                    more: *more && !loading_more,
+                    more: match (*more, *loading_more) {
+                        (_, true) => More::Loading,
+                        (true, false) => More::Chevron,
+                        (false, false) => More::None,
+                    },
+                    more_failed: *more_failed,
                 };
                 self.results(ui, &list, *searched, wait)
             }
@@ -337,9 +368,15 @@ impl<'a> OffersBlock<'a> {
                 let rows = exchange_rows(shown, self.reference, now);
                 let list = List {
                     rows: &rows,
+                    items: None,
                     total: *total,
                     exchange: true,
-                    more: shown.len() < offers.len(),
+                    more: if shown.len() < offers.len() {
+                        More::Chevron
+                    } else {
+                        More::None
+                    },
+                    more_failed: false,
                 };
                 self.results(ui, &list, *searched, wait)
             }
@@ -485,13 +522,42 @@ impl<'a> OffersBlock<'a> {
             if !list.rows.is_empty() {
                 self.list(ui, list);
             }
-            if list.more {
-                ui.add_space(MORE_GAP);
-                if more(ui, i18n).clicked() {
-                    action = Some(OffersAction::More);
+            if list.more_failed {
+                ui.add_space(MORE_FAILED_GAP);
+                let galley = wrapped_with(
+                    ui,
+                    &i18n.text(Message::OffersUnreachable),
+                    text::note(),
+                    width,
+                );
+                let (rect, _) = ui.allocate_exact_size(
+                    vec2(ui.available_width(), galley.size().y),
+                    Sense::hover(),
+                );
+                ui.painter().galley(
+                    pos2(rect.left() + size::BAND_PADDING, rect.top()),
+                    galley,
+                    color::WEAK,
+                );
+            }
+            match list.more {
+                More::Chevron => {
+                    ui.add_space(MORE_GAP);
+                    if more(ui, i18n).clicked() {
+                        action = Some(OffersAction::More);
+                    }
                 }
-            } else {
-                ui.add_space(PADDING_Y);
+                More::Loading => {
+                    ui.add_space(MORE_GAP);
+                    let (rect, _) = ui.allocate_exact_size(
+                        vec2(ui.available_width(), MORE_HEIGHT),
+                        Sense::hover(),
+                    );
+                    let time = ui.input(|input| input.time);
+                    spinner(ui.painter(), rect.center() - vec2(0.0, MORE_RAISE), time);
+                    ui.ctx().request_repaint();
+                }
+                More::None => ui.add_space(PADDING_Y),
             }
         });
         action
@@ -633,15 +699,103 @@ impl<'a> OffersBlock<'a> {
             painter.galley(pos2(left, top), galley, color::FAINT);
         }
 
-        for (index, row) in list.rows.iter().enumerate() {
-            let height = ROW_ORB + 2.0 * ROW_PADDING_Y;
-            let (rect, _) =
-                ui.allocate_exact_size(vec2(ui.available_width(), height), Sense::hover());
-            if index % 2 == 0 {
+        // Only the offers of items have a tooltip, and light up under the pointer.
+        let sense = if list.items.is_some() {
+            Sense::click()
+        } else {
+            Sense::hover()
+        };
+        let height = ROW_ORB + 2.0 * ROW_PADDING_Y;
+        let responses: Vec<Response> = list
+            .rows
+            .iter()
+            .map(|_| {
+                ui.allocate_exact_size(vec2(ui.available_width(), height), sense)
+                    .1
+            })
+            .collect();
+        let open = list
+            .items
+            .and_then(|offers| self.tooltip(ui, offers, list.rows, &responses));
+        for (index, (row, response)) in list.rows.iter().zip(&responses).enumerate() {
+            let rect = response.rect;
+            let highlighted = list.items.is_some() && (response.hovered() || open == Some(index));
+            if highlighted {
+                ui.painter().rect_filled(rect, 0.0, color::CONTROL_LINE);
+            } else if index % 2 == 0 {
                 ui.painter().rect_filled(rect, 0.0, color::ROW_ALT);
             }
             self.row(ui, rect, row, list.exchange);
         }
+    }
+
+    /// Opens, pins or closes the tooltip of the `offers` after what the pointer did over
+    /// their rows, then draws it; the index of the offer whose tooltip is open.
+    fn tooltip(
+        &self,
+        ui: &Ui,
+        offers: &[ItemOffer],
+        rows: &[Row],
+        responses: &[Response],
+    ) -> Option<usize> {
+        let ctx = ui.ctx();
+        let state_id = Id::NULL.with("offer-tooltip-state");
+        let mut state: TooltipState = ctx.data(|data| data.get_temp(state_id).unwrap_or_default());
+        let ids: Vec<&str> = offers.iter().map(|offer| offer.id.as_str()).collect();
+        let id_of = |response: Option<&Response>| {
+            response.and_then(|response| {
+                let index = responses.iter().position(|other| other.id == response.id)?;
+                ids.get(index).copied()
+            })
+        };
+        let over_tooltip = state.open().is_some_and(|id| {
+            let area = ctx.memory(|memory| memory.area_rect(OfferTooltip::area_id(id)));
+            let pointer = ctx.pointer_latest_pos();
+            area.zip(pointer)
+                .is_some_and(|(area, pointer)| area.contains(pointer))
+        });
+        let (any_click, escape, time) = ui.input(|input| {
+            (
+                input.pointer.any_click(),
+                input.key_pressed(Key::Escape),
+                input.time,
+            )
+        });
+        let pointer = Pointer {
+            hovered: id_of(responses.iter().find(|response| response.hovered())),
+            clicked: id_of(responses.iter().find(|response| response.clicked())),
+            over_tooltip,
+            any_click,
+            escape,
+            time,
+        };
+        if let Some(redraw) = state.update(&pointer, &ids) {
+            ctx.request_repaint_after(redraw);
+        }
+        let open = state
+            .open()
+            .and_then(|id| ids.iter().position(|other| *other == id));
+        if let Some(index) = open
+            && let (Some(offer), Some(row), Some(response)) =
+                (offers.get(index), rows.get(index), responses.get(index))
+        {
+            let tooltip = OfferTooltip {
+                offer,
+                modifiers: self.item.modifiers(),
+                name_color: rarity_color(self.item.rarity()),
+                suspicious: row.suspicious,
+                copied: state.shows_copied(&offer.id, time),
+                i18n: self.i18n,
+            };
+            let (copy, _) = tooltip.show(ui, response.rect, ui.clip_rect().top());
+            if copy {
+                ctx.copy_text(offer.whisper.clone());
+                state.copied(&offer.id, time);
+                ctx.request_repaint();
+            }
+        }
+        ctx.data_mut(|data| data.insert_temp(state_id, state));
+        open
     }
 
     /// Draws `row` in `rect`.
@@ -650,11 +804,7 @@ impl<'a> OffersBlock<'a> {
         let center_y = rect.center().y;
         let painter = ui.painter();
         if let Some(price) = &row.price {
-            let amount = match &price.currency {
-                Ok(_) => price.amount.clone(),
-                Err(name) => format!("{} {name}", price.amount),
-            };
-            let galley = widgets::text_line(ui, amount, text::list_amount());
+            let galley = widgets::text_line(ui, price.text(), text::list_amount());
             let size = galley.size();
             let top = center_y - size.y / 2.0;
             let tint = if row.suspicious {
@@ -721,11 +871,24 @@ impl<'a> OffersBlock<'a> {
 /// What the list shows.
 struct List<'a> {
     rows: &'a [Row],
+    /// The offers of items, whose rows open their tooltips.
+    items: Option<&'a [ItemOffer]>,
     total: u64,
     /// The offers of the currency exchange, with their stock.
     exchange: bool,
-    /// The double chevron shows more offers.
-    more: bool,
+    more: More,
+    /// The next offers couldn't come.
+    more_failed: bool,
+}
+
+/// What is under the list.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum More {
+    None,
+    /// The double chevron, which shows more offers.
+    Chevron,
+    /// The spinner, while the next offers come.
+    Loading,
 }
 
 /// The title row of the offers.

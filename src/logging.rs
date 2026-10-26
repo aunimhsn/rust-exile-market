@@ -11,8 +11,8 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 use directories::BaseDirs;
-use log::LevelFilter;
-use simplelog::{CombinedLogger, ConfigBuilder, SharedLogger, WriteLogger};
+use log::{Level, LevelFilter, Log, Metadata, Record};
+use simplelog::{CombinedLogger, Config, ConfigBuilder, SharedLogger, WriteLogger};
 
 const FILE_NAME: &str = "exile-market.log";
 const PREVIOUS_FILE_NAME: &str = "exile-market.previous.log";
@@ -33,22 +33,23 @@ pub fn init() {
         builder.set_time_format_rfc3339();
         // Local time, or UTC when the offset can't be read.
         let _ = builder.set_time_offset_to_local();
-        // arboard logs every reading of the X11 clipboard that times out: the clipboard
-        // watching logs the lasting failures itself.
-        builder.add_filter_ignore_str("arboard");
         builder.build()
     };
 
     let mut loggers: Vec<Box<dyn SharedLogger>> = Vec::new();
     #[cfg(debug_assertions)]
-    loggers.push(simplelog::TermLogger::new(
+    loggers.push(Box::new(QuietClipboard(simplelog::TermLogger::new(
         LevelFilter::Debug,
         config.clone(),
         simplelog::TerminalMode::Stderr,
         simplelog::ColorChoice::Auto,
-    ));
+    ))));
     let log_file = open_file().map(|log_file| {
-        loggers.push(WriteLogger::new(LevelFilter::Info, config, log_file.file));
+        loggers.push(Box::new(QuietClipboard(WriteLogger::new(
+            LevelFilter::Info,
+            config,
+            log_file.file,
+        ))));
         (log_file.path, log_file.rotation_error)
     });
     if CombinedLogger::init(loggers).is_err() {
@@ -74,6 +75,46 @@ pub fn init() {
         );
         default_hook(panic);
     }));
+}
+
+/// A logger without the messages of `arboard` but its warnings and errors: it logs every
+/// reading of the X11 clipboard that times out, and the clipboard watching logs the lasting
+/// failures itself; its warnings and errors explain a whisper that couldn't be copied.
+struct QuietClipboard<L>(Box<L>);
+
+/// Whether a message of `target` at `level` is logged.
+fn kept(target: &str, level: Level) -> bool {
+    level <= Level::Warn || !(target == "arboard" || target.starts_with("arboard::"))
+}
+
+impl<L: SharedLogger> Log for QuietClipboard<L> {
+    fn enabled(&self, metadata: &Metadata) -> bool {
+        kept(metadata.target(), metadata.level()) && self.0.enabled(metadata)
+    }
+
+    fn log(&self, record: &Record) {
+        if kept(record.target(), record.level()) {
+            self.0.log(record);
+        }
+    }
+
+    fn flush(&self) {
+        self.0.flush();
+    }
+}
+
+impl<L: SharedLogger + 'static> SharedLogger for QuietClipboard<L> {
+    fn level(&self) -> LevelFilter {
+        self.0.level()
+    }
+
+    fn config(&self) -> Option<&Config> {
+        self.0.config()
+    }
+
+    fn as_log(self: Box<Self>) -> Box<dyn Log> {
+        self
+    }
 }
 
 /// Opens the log file of this session, after keeping the one of the previous session when
@@ -124,4 +165,19 @@ pub fn without_home(path: &Path) -> PathBuf {
                 .map(|rest| Path::new("~").join(rest))
         })
         .unwrap_or_else(|| path.to_path_buf())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_clipboard_logs_only_its_warnings_and_errors() {
+        assert!(!kept("arboard::platform::linux::x11", Level::Info));
+        assert!(!kept("arboard", Level::Debug));
+        assert!(kept("arboard::platform::linux::x11", Level::Warn));
+        assert!(kept("arboard", Level::Error));
+        assert!(kept("rust_exile_market::clipboard", Level::Info));
+        assert!(kept("arboardish", Level::Info), "another crate");
+    }
 }

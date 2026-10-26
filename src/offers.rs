@@ -32,6 +32,8 @@ pub enum OffersState {
         more: bool,
         /// The next offers are asked.
         loading_more: bool,
+        /// The next offers couldn't come: the trade site can't be reached, or refused them.
+        more_failed: bool,
         searched: SystemTime,
     },
     /// The offers of the currency exchange, all of them, the first `shown` shown.
@@ -141,9 +143,11 @@ impl Offers {
             OffersState::Items {
                 more: true,
                 loading_more,
+                more_failed,
                 ..
             } if !busy => {
                 *loading_more = true;
+                *more_failed = false;
                 self.pending = Some(Pending {
                     order: PendingOrder::More,
                     shown: true,
@@ -220,6 +224,7 @@ impl Offers {
                 total,
                 more,
                 loading_more: false,
+                more_failed: false,
                 searched: now,
             },
             (Outcome::Exchange { offers, total }, _) => OffersState::Exchange {
@@ -243,6 +248,7 @@ impl Offers {
                     total,
                     more,
                     loading_more: false,
+                    more_failed: false,
                     searched,
                 }
             }
@@ -261,6 +267,7 @@ impl Offers {
                 total,
                 more,
                 loading_more: false,
+                more_failed: true,
                 searched,
             },
             (Outcome::Unreachable, _) => OffersState::Unreachable,
@@ -483,7 +490,25 @@ mod tests {
         );
 
         assert_eq!(ids(&offers), ["a"]);
+        assert!(matches!(
+            offers.state(),
+            OffersState::Items {
+                more_failed: true,
+                ..
+            }
+        ));
         assert_eq!(offers.more(), Some(Order::More));
+        assert!(
+            matches!(
+                offers.state(),
+                OffersState::Items {
+                    more_failed: false,
+                    loading_more: true,
+                    ..
+                }
+            ),
+            "asked again"
+        );
     }
 
     #[test]

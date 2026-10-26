@@ -329,24 +329,25 @@ impl<'a> PriceBlock<'a> {
     }
 }
 
-/// The amounts in the three currencies, side by side, each with its orb. An amount too small
-/// to matter leaves its column empty, so that each currency keeps its place.
+/// The amounts in the three currencies, side by side, each with its orb, a third of the width
+/// each. An amount too small to matter is left out, and the currencies after it move to the
+/// left.
 fn amounts(ui: &mut Ui, exalted: f64, rates: Rates) {
     let width = ui.available_width() / 3.0;
     ui.horizontal(|ui| {
         for currency in CURRENCIES {
-            let shown = shown_amount(exalted, currency, rates);
+            let Some((amount, _)) = shown_amount(exalted, currency, rates) else {
+                continue;
+            };
             ui.allocate_ui_with_layout(
                 vec2(width, ORB_SIZE),
                 Layout::left_to_right(Align::Center),
                 |ui| {
                     // A third of the width each, whatever the length of the amount.
                     ui.set_min_width(width);
-                    if let Some((amount, _)) = shown {
-                        ui.spacing_mut().item_spacing.x = ORB_GAP;
-                        ui.add(orb(currency, ORB_SIZE));
-                        ui.label(RichText::new(amount).font(text::price()).color(color::TEXT));
-                    }
+                    ui.spacing_mut().item_spacing.x = ORB_GAP;
+                    ui.add(orb(currency, ORB_SIZE));
+                    ui.label(RichText::new(amount).font(text::price()).color(color::TEXT));
                 },
             );
         }

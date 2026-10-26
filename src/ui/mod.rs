@@ -11,6 +11,7 @@ mod item_stats;
 mod league_list;
 mod new_league_bubble;
 mod number_field;
+mod offer_tooltip;
 mod offers_block;
 mod price_block;
 mod resize_edges;

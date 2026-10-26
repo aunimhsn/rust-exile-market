@@ -196,6 +196,24 @@ pub mod text {
         fonts::numbers(13.0)
     }
 
+    /// The name of the item in the tooltip of an offer.
+    #[must_use]
+    pub fn tooltip_name() -> FontId {
+        fonts::text(14.0, Weight::ExtraBold)
+    }
+
+    /// A modifier line in the tooltip of an offer.
+    #[must_use]
+    pub fn tooltip_line() -> FontId {
+        fonts::text(12.5, Weight::Regular)
+    }
+
+    /// The difference of a roll from the copied item, in the tooltip of an offer.
+    #[must_use]
+    pub fn difference() -> FontId {
+        fonts::numbers(12.0)
+    }
+
     /// The uppercase titles of the columns of the offers.
     #[must_use]
     pub fn column() -> FontId {
