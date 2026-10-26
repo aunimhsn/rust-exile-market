@@ -931,7 +931,7 @@ mod tests {
         let french = Translator::new(Language::French);
         assert_eq!(
             french.offers_limit(Duration::from_secs(240)),
-            "Limite du site d'échange\u{a0}: prochaine recherche dans 4min."
+            "Limite du site d'échange\u{a0}: recherche dans 4min."
         );
     }
 }
