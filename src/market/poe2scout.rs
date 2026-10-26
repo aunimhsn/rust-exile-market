@@ -11,7 +11,7 @@ use serde::de::DeserializeOwned;
 use super::{DownloadObserver, PriceDatabase};
 use crate::http::{self, HttpError, Pace};
 use crate::league::League;
-use crate::prices::{CurrencyPrice, Price, PriceList, Rates, UniquePrice};
+use crate::prices::{CurrencyPrice, Price, PriceList, Rates, UniqueModifiers, UniquePrice};
 
 const BASE_URL: &str = "https://api.poe2scout.com/poe2";
 /// The time between two requests, at least.
@@ -111,8 +111,28 @@ struct ApiUnique {
     name: String,
     #[serde(rename = "Type")]
     base_type: String,
+    item_metadata: Option<serde_json::Value>,
     #[serde(flatten)]
     price: ApiPrice,
+}
+
+/// The modifiers of a unique in its `ItemMetadata`, with their ranges, e.g. `+(17-23)% to
+/// Chaos Resistance`. Read leniently: metadata or a list missing, `null` or of another shape,
+/// and the values that aren't texts, lose these modifiers only, never the price of the unique.
+fn unique_modifiers(metadata: Option<&serde_json::Value>) -> UniqueModifiers {
+    let texts = |key: &str| -> Vec<String> {
+        metadata
+            .and_then(|metadata| metadata.get(key))
+            .and_then(serde_json::Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter_map(|value| value.as_str().map(str::to_owned))
+            .collect()
+    };
+    UniqueModifiers {
+        implicit: texts("implicit_mods"),
+        explicit: texts("explicit_mods"),
+    }
 }
 
 /// An item of the currency exchange in the answer of `/Currencies/ByCategory`.
@@ -322,6 +342,7 @@ impl PriceDatabase for Poe2Scout {
                     price: conversion.price(item.price)?,
                     name: item.name,
                     base_type: item.base_type,
+                    modifiers: unique_modifiers(item.item_metadata.as_ref()),
                 })
             }));
             done += 1;
@@ -427,6 +448,9 @@ mod tests {
     const UNIQUES: &str = r#"{"CurrentPage": 1, "Pages": 1, "Total": 2, "Items": [
         {"UniqueItemId": 361, "Text": "Bursting Decay Unset Ring", "Name": "Bursting Decay",
          "Type": "Unset Ring", "IsChanceable": false,
+         "ItemMetadata": {"name": "Bursting Decay", "base_type": "Unset Ring",
+          "implicit_mods": ["Grants (1-1) additional Skill Slot"],
+          "explicit_mods": ["(15-25)% increased Rarity of Items found", "+(17-23)% to Chaos Resistance"]},
          "PriceLogs": [{"Price": 149.5, "Time": "2026-10-25T00:00:00Z", "Quantity": 4}, null],
          "CurrentPrice": 150.8, "CurrentQuantity": 4},
         {"UniqueItemId": 1, "Name": "Unlisted", "Type": "Ruby Ring", "PriceLogs": [],
@@ -513,6 +537,51 @@ mod tests {
                 ("Unlisted".to_owned(), "Ruby Ring".to_owned(), None),
             ]
         );
+    }
+
+    #[test]
+    fn reads_the_implicit_and_explicit_modifiers_of_a_unique() {
+        let page: ApiPage<ApiUnique> = serde_json::from_str(UNIQUES).expect("the answer parses");
+        let modifiers: Vec<UniqueModifiers> = page
+            .items
+            .into_iter()
+            .map(|item| unique_modifiers(item.item_metadata.as_ref()))
+            .collect();
+
+        assert_eq!(
+            modifiers[0].implicit,
+            ["Grants (1-1) additional Skill Slot"]
+        );
+        assert_eq!(
+            modifiers[0].explicit,
+            [
+                "(15-25)% increased Rarity of Items found",
+                "+(17-23)% to Chaos Resistance"
+            ]
+        );
+        assert_eq!(modifiers[1], UniqueModifiers::default());
+    }
+
+    #[test]
+    fn modifiers_null_or_unexpected_lose_only_themselves() {
+        let page: ApiPage<ApiUnique> = serde_json::from_str(
+            r#"{"Pages": 1, "Items": [{"Name": "A", "Type": "Ruby Ring",
+                "ItemMetadata": {"implicit_mods": null, "explicit_mods": ["+(5-10) to Life", 3]},
+                "PriceLogs": [], "CurrentPrice": 1.0, "CurrentQuantity": 1}]}"#,
+        )
+        .expect("the page still parses");
+        let modifiers = unique_modifiers(page.items[0].item_metadata.as_ref());
+
+        assert_eq!(modifiers.implicit, Vec::<String>::new());
+        assert_eq!(modifiers.explicit, ["+(5-10) to Life"]);
+        for metadata in ["[]", r#"{"implicit_mods": "text"}"#, "null"] {
+            let metadata: serde_json::Value = serde_json::from_str(metadata).expect("json");
+            assert_eq!(
+                unique_modifiers(Some(&metadata)),
+                UniqueModifiers::default(),
+                "{metadata}"
+            );
+        }
     }
 
     #[test]

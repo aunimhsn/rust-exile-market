@@ -25,7 +25,7 @@ mod parser;
 mod weapon;
 
 pub use copied::CopiedItem;
-pub use modifier::{Affix, Modifier, ModifierKind, ModifierOrigin};
+pub use modifier::{Affix, Modifier, ModifierKind, ModifierOrigin, Range, StatLine};
 pub use parser::{ParseError, ParseWarning};
 pub use weapon::{DamageKind, Weapon};
 
@@ -65,6 +65,16 @@ pub enum ItemState {
 pub struct Stack {
     pub size: u32,
     pub max: u32,
+}
+
+/// The defences of an armour piece or a shield.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Defences {
+    pub armour: Option<u32>,
+    pub evasion: Option<u32>,
+    pub energy_shield: Option<u32>,
+    /// The chance to block, in percent.
+    pub block: Option<u32>,
 }
 
 /// What a character needs to use the item.
@@ -146,23 +156,44 @@ impl Item {
         &self.written_base_type
     }
 
+    /// A jewel, with two prefixes and two suffixes at most.
+    #[must_use]
+    pub fn is_jewel(&self) -> bool {
+        self.class == labels::Labels::of(self.language).jewels
+    }
+
     /// The damage and the speed of a weapon.
     #[must_use]
     pub fn weapon(&self) -> Option<&Weapon> {
         self.weapon.as_ref()
     }
 
-    /// The number of prefixes and suffixes at tier 1, the best one; only the advanced copy
-    /// gives the tiers.
+    /// The defences of an armour piece or a shield, as the game shows them, with the
+    /// quality, the modifiers and the runes.
     #[must_use]
-    pub fn tier_1_affixes(&self) -> usize {
-        self.modifiers
-            .iter()
-            .filter(|modifier| {
-                matches!(modifier.kind, ModifierKind::Explicit(Some(_))) && modifier.tier == Some(1)
-            })
-            .count()
+    pub fn defences(&self) -> Defences {
+        let labels = labels::Labels::of(self.language);
+        let value = |name: &str| {
+            self.properties
+                .iter()
+                .find(|property| property.name == name)
+                .and_then(|property| leading_number(&property.value))
+        };
+        Defences {
+            armour: value(labels.armour),
+            evasion: value(labels.evasion),
+            energy_shield: value(labels.energy_shield),
+            block: value(labels.block),
+        }
     }
+}
+
+/// The number at the start of a property value, e.g. 26 in `26%`.
+fn leading_number(value: &str) -> Option<u32> {
+    let end = value
+        .find(|character: char| !character.is_ascii_digit())
+        .unwrap_or(value.len());
+    value.get(..end)?.parse().ok()
 }
 
 #[cfg_attr(

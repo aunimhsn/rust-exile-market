@@ -45,7 +45,8 @@ The reference of the interface is the mock-up [docs/mockups/narrow-styles.html](
 | Rise / fall | `#5fcf80` / `#e66a5c` | Trend, roll differences, seller online / offline. |
 | Rarities | normal `#d0d0d0`, magic `#8888ff`, rare `#ffff77`, unique `#c26a2c`, currency `#b4a787`, gem `#1ba29b` | Item names, as in the game. |
 | Modifiers | `#8f8fff` | Implicit and explicit modifiers, as in the game. |
-| Tier 1 | `#ff8c1a` | Tier of a modifier at its best tier, and the T1 tag of the item block: a vivid orange that stands out. |
+| Attributes | strength `#e0473f`, dexterity `#3fbf4f`, intelligence `#5aa7f0` | The attributes of the requirements and the defences they raise (armour, evasion, energy shield), as in the game; a little apart from the rise and fall colors. |
+| Tier 1 | `#ff8c1a` | Tier of a modifier at its best tier: a vivid orange that stands out. |
 
 ### Typography
 
@@ -110,16 +111,23 @@ The window has a title bar, then three bands (item, price, offers), then a statu
 
 - The item name, in its rarity color; for an exceptional base, the full name ("Exceptional Chiming Staff").
 - A **Check on trade** pill at the top right ("Voir sur l'échange" in French), which opens the browser on the search for this item in the selected league, sellers online: a unique by its name and base type, an item of the currency exchange on its exchange page, the other items by their base type (their stats come with the filters of step 13); on the French trade site when the item was copied in French.
-- The base type of a rare or unique item, with "Exceptional" for an exceptional base, then the item class followed by tags: Corrupted, Twice Corrupted, Sanctified, Fractured, Mirrored, Unidentified, quality (`Q 20%`), sockets (`2 sockets`), item level (`ilvl 81`), stack (`Stack 7/20`), and for rare and magic items copied with Ctrl+Alt+C, the number of their prefixes and suffixes at tier 1 (`2 T1`), in the orange of tier 1, when they have one. The best tier keeps its meaning at every level of the game, unlike the tiers 2 and 3, which matter less as the player progresses; the open affixes are on almost every rare item, and show in the stats. The tags wrap to a new line when needed.
-- For a weapon, a summary line: "Physical DPS 245 · Elemental DPS 44 · Chaos DPS 30", each part when the weapon deals that damage; for a staff or a shield, the skills it grants.
-- The requirements on a small gray line, always visible: "Requires Level 65 · 145 Dex".
-- A **Show 6 stats** pill (singular for one stat; **Show filters** for an item without modifiers), and next to it the number of active filters ("3 filters"). Unfolded, the pill reads **Hide stats** and the stats appear:
-  - grouped under small titles when they are filters: Item, Weapon, Pseudo, Implicit, Explicit;
-  - each modifier in the game's modifier color, with a bar of where its value falls:
-    - for a unique, in its fixed range, written next to the bar (`40–60`, from the price database);
-    - for a rare or magic item or a jewel, over every tier of the modifier, so that a full bar means close to the best possible; next to it, its tier and the range of that tier (`T2 135–154`, from the advanced copy). Tier 1 is written in a vivid orange, tiers 2 and 3 in white bold, the others in gray. Without the advanced copy, the game gives no tier: only the value is shown;
+- The base type of a rare or unique item, with "Exceptional" for an exceptional base, then the item class in gray on the same line ("Wanderer Coat · Body Armours"); the class alone for the other items, named by their base.
+- Then the facts of the item, 12 px under the base type, 6 px apart: the main values of the base, the skills it grants, the requirements, then the tags.
+- The main values of the base on one line, the most important when choosing a weapon or an armour, each label in gray and its number in white bold: for a weapon, its DPS ("Physical DPS **245**  Elemental DPS **44**  Chaos DPS **30**", each kind it deals); for an armour piece or a shield, its defences ("Armour **412**  Evasion **380**", "Energy Shield **44**", "Block **26%**"), the label of each defence in the color of the attribute it comes from: armour red, evasion green, energy shield blue. The values of the game, with the quality, the modifiers and the runes. For a staff or a shield, the skills it grants, on a line of their own.
+- The requirements on a gray line, the size of the summary, always visible: "Requires Level 65 · 145 Dex", each attribute in its color as in the game: strength red, dexterity green, intelligence blue; 3 px under the base values, which look farther apart otherwise.
+- The tags: Corrupted, Twice Corrupted, Sanctified, Fractured, Mirrored, Unidentified, quality (`Q 20%`), sockets (`2 sockets`), item level (`ilvl 81`), stack (`Stack 7/20`). The tiers and the open affixes show in the stats only. The tags wrap to a new line when needed.
+- A **Show 6 stats** pill, counting the modifiers (singular for one stat; **Show filters** for an item without modifiers), and next to it the number of active filters ("3 filters"). Unfolded, the pill reads **Hide stats** and the stats appear; they stay unfolded for the next items copied, until the player folds them (not kept between two launches):
+  - grouped under small titles: for a rare or magic item, **Enchant**, **Runes**, **Implicit**, then the prefixes and suffixes (below), with the filter groups of step 13 on top (Item, Weapon, then **Pseudo**, the totals the trade site adds up from several modifiers, like Exiled Exchange 2); for a unique, **Enchant**, **Runes**, **Implicit** (the implicit modifiers of its base) and **Unique** (its own modifiers, no prefix nor suffix); "min", in small gray, on the right of the first title, above the minimums;
+  - in each group, the stats that vary first, then those that never vary;
+  - a stat that is a filter starts with its checkbox; a stat of a unique that never varies isn't a filter (the name of the unique already fixes it), has no checkbox and starts at the left edge;
+  - the text of a stat on two lines at most, cut with "…", and whole in its tooltip; the lines of a modifier with several stats stay together;
+  - the minimum on the line of the checkbox, in a column on the right kept for it (also on the lines without a minimum, so that the texts stay aligned): the text never runs under it; the bar and the range under the text;
+  - each modifier in the game's modifier color, without the "fixed value" marker of the game (too long for the narrow layout), with a bar of where its value falls, only when its value varies: a line without number, or whose range is one value (`(5-5)`), has no bar; on a rare or magic item it is still a filter (e.g. a fixed implicit, "5% increased Movement Speed", to search every base that has it), with a checkbox and no minimum;
+    - for a unique, in its fixed range, written next to the bar (`40–60`): from the advanced copy, or for an item copied with Ctrl+C from the modifiers of the unique in the price database, matched with the copied lines (in English only: an item copied in French gets its ranges from the advanced copy);
+    - for a rare or magic item or a jewel, over every tier of the modifier, so that a full bar means close to the best possible; next to it, its tier and the range of that tier (`T2 135–154`, from the advanced copy). Tier 1 is written in a vivid orange, tiers 2 and 3 in white bold, the others in gray. For a modifier of several stats (a hybrid, e.g. "+20 to Evasion Rating" and "+10% increased Evasion Rating"), its lines follow each other, each with its checkbox and its minimum, and its tier and the ranges of all its lines go under the last one (`T5 15–25 · 8–12`), so that it reads as one modifier. Without the advanced copy, the game gives no tier: only the value is shown. Until the modifier tables (step 13), only the tier and its range, without a bar;
+    - for an implicit modifier of a rare or magic item, in the range its base gives it, like a unique;
   - for rare and magic items and jewels, the explicit modifiers are grouped into **Prefixes** and **Suffixes** with their fill ("2 of 3 · 1 open");
-  - for filters, a checkbox on the left and the minimum value on the right (see [Stat filters](#stat-filters)).
+  - for filters, a checkbox on the left and the minimum value on the right (see [Stat filters](#stat-filters)); the runes and the enchantment are filters too (the trade site searches them), unchecked by default, a rune being easy to change.
 
 ### Price block
 
@@ -156,6 +164,7 @@ The offers search uses the stats of the copied item as filters, like the trade s
   - the **base type** checked; the **item level** unchecked.
 - **Normal items** (e.g. an exceptional base): the base type, the number of sockets and the item level, checked; the quality, unchecked.
 - The corrupted state is always a filter: a corrupted item is compared with corrupted offers only, a clean one with clean offers only.
+- The minimum field takes a number only: digits, one decimal point, a minus sign first for a negative stat; no letter, not even the `e` of an exponent, also when a text is pasted. It stays within the range of every tier of the stat (the range of a unique; from the lowest roll of the worst tier to the highest of the best tier for a rare), not only the tier of the copied item.
 - The player can check or uncheck a filter and change its minimum. Changing a filter doesn't search: the player clicks the search or refresh block, within its waiting time.
 
 ### Offers block

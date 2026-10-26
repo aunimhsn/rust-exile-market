@@ -17,6 +17,7 @@ mod logging;
 mod market;
 mod prices;
 mod pricing;
+mod rolls;
 mod session;
 mod settings;
 mod trade;

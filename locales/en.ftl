@@ -92,12 +92,15 @@ tag-sockets = { $value ->
 }
 tag-item-level = ilvl { $value }
 tag-stack = Stack { $size }/{ $max }
-# The number of prefixes and suffixes at tier 1, the best one.
-tag-tier-1 = { $value } T1
-# The summary of a weapon, its parts joined by " · ".
-dps-physical = Physical DPS { $dps }
-dps-elemental = Elemental DPS { $dps }
-dps-chaos = Chaos DPS { $dps }
+# The main values of the base, each followed by its number in bold: the DPS of a weapon,
+# the defences of an armour piece or a shield.
+dps-physical = Physical DPS
+dps-elemental = Elemental DPS
+dps-chaos = Chaos DPS
+defence-armour = Armour
+defence-evasion = Evasion
+defence-energy-shield = Energy Shield
+defence-block = Block
 # The summary of an item that grants skills, e.g. "Level 18 Sigil of Power", joined by " · ".
 granted-skill = Grants Skill: { $skill }
 # The requirements line, its parts joined by " · ": "Requires Level 65 · 145 Dex".
@@ -106,6 +109,27 @@ requirement-level = Level { $value }
 requirement-strength = { $value } Str
 requirement-dexterity = { $value } Dex
 requirement-intelligence = { $value } Int
+
+## Stats of the item
+
+# The pill under the item block, and once unfolded.
+show-stats = { $count ->
+    [one] Show { $count } stat
+   *[other] Show { $count } stats
+}
+hide-stats = Hide stats
+# The small titles of the stats.
+group-enchant = Enchant
+group-runes = Runes
+group-implicit = Implicit
+group-prefixes = Prefixes
+group-suffixes = Suffixes
+group-explicit = Explicit
+# The modifiers of a unique, no prefix nor suffix.
+group-unique = Unique
+# Beside Prefixes and Suffixes: how many the item has, of the most it can have.
+affix-fill = { $filled } of { $max }
+affix-fill-open = { $filled } of { $max } · { $open } open
 
 ## Price block
 

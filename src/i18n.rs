@@ -8,7 +8,6 @@ use std::time::Duration;
 
 use fluent_bundle::{FluentArgs, FluentBundle, FluentResource};
 
-use crate::item::DamageKind;
 use crate::language::Language;
 use crate::prices::Direction;
 
@@ -64,12 +63,27 @@ pub enum Message {
     NoMarketPriceNormal,
     FrenchNamesDownloading,
     PricesDownloadingNoLeague,
+    HideStats,
+    GroupImplicit,
+    GroupPrefixes,
+    GroupSuffixes,
+    GroupExplicit,
+    DpsPhysical,
+    DpsElemental,
+    DpsChaos,
+    DefenceArmour,
+    DefenceEvasion,
+    DefenceEnergyShield,
+    DefenceBlock,
+    GroupEnchant,
+    GroupRunes,
+    GroupUnique,
 }
 
 impl Message {
     /// Every message, for the tests.
     #[cfg(test)]
-    const ALL: [Self; 41] = [
+    const ALL: [Self; 56] = [
         Self::LeagueModeSoftcore,
         Self::LeagueModeHardcore,
         Self::LeagueLoading,
@@ -111,6 +125,21 @@ impl Message {
         Self::NoMarketPriceNormal,
         Self::FrenchNamesDownloading,
         Self::PricesDownloadingNoLeague,
+        Self::HideStats,
+        Self::GroupImplicit,
+        Self::GroupPrefixes,
+        Self::GroupSuffixes,
+        Self::GroupExplicit,
+        Self::DpsPhysical,
+        Self::DpsElemental,
+        Self::DpsChaos,
+        Self::DefenceArmour,
+        Self::DefenceEvasion,
+        Self::DefenceEnergyShield,
+        Self::DefenceBlock,
+        Self::GroupEnchant,
+        Self::GroupRunes,
+        Self::GroupUnique,
     ];
 
     /// Its identifier in the `.ftl` files.
@@ -157,6 +186,21 @@ impl Message {
             Self::NoMarketPriceNormal => "no-market-price-normal",
             Self::FrenchNamesDownloading => "french-names-downloading",
             Self::PricesDownloadingNoLeague => "prices-downloading-no-league",
+            Self::HideStats => "hide-stats",
+            Self::GroupImplicit => "group-implicit",
+            Self::GroupPrefixes => "group-prefixes",
+            Self::GroupSuffixes => "group-suffixes",
+            Self::GroupExplicit => "group-explicit",
+            Self::DpsPhysical => "dps-physical",
+            Self::DpsElemental => "dps-elemental",
+            Self::DpsChaos => "dps-chaos",
+            Self::DefenceArmour => "defence-armour",
+            Self::DefenceEvasion => "defence-evasion",
+            Self::DefenceEnergyShield => "defence-energy-shield",
+            Self::DefenceBlock => "defence-block",
+            Self::GroupEnchant => "group-enchant",
+            Self::GroupRunes => "group-runes",
+            Self::GroupUnique => "group-unique",
         }
     }
 }
@@ -167,8 +211,6 @@ pub enum NumberTag {
     Quality,
     Sockets,
     ItemLevel,
-    /// The prefixes and suffixes at tier 1.
-    Tier1,
 }
 
 /// The parts of the requirements line.
@@ -197,10 +239,6 @@ const TAG_QUALITY: &str = "tag-quality";
 const TAG_SOCKETS: &str = "tag-sockets";
 const TAG_ITEM_LEVEL: &str = "tag-item-level";
 const TAG_STACK: &str = "tag-stack";
-const TAG_TIER_1: &str = "tag-tier-1";
-const DPS_PHYSICAL: &str = "dps-physical";
-const DPS_ELEMENTAL: &str = "dps-elemental";
-const DPS_CHAOS: &str = "dps-chaos";
 const GRANTED_SKILL: &str = "granted-skill";
 const REQUIRES: &str = "requires";
 const REQUIREMENT_LEVEL: &str = "requirement-level";
@@ -216,6 +254,9 @@ const TREND_STABLE: &str = "trend-stable";
 const UNCERTAIN: &str = "uncertain";
 const PRICES_DOWNLOADING: &str = "prices-downloading";
 const NO_PRICE_FOUND: &str = "no-price-found";
+const SHOW_STATS: &str = "show-stats";
+const AFFIX_FILL: &str = "affix-fill";
+const AFFIX_FILL_OPEN: &str = "affix-fill-open";
 /// The sentences under the bar of the download of the prices, one drawn at random per
 /// download.
 const DOWNLOAD_QUOTES: [&str; 10] = [
@@ -319,6 +360,26 @@ impl Translator {
         self.format(DOWNLOAD_QUOTES[index % DOWNLOAD_QUOTE_COUNT], None)
     }
 
+    /// The pill that unfolds the stats of the item: "Show 6 stats".
+    #[must_use]
+    pub fn show_stats(&self, count: u32) -> String {
+        self.format_number(SHOW_STATS, "count", count)
+    }
+
+    /// The fill of the prefixes or suffixes of an item: "2 of 3 · 1 open".
+    #[must_use]
+    pub fn affix_fill(&self, filled: u32, max: u32) -> String {
+        let mut args = FluentArgs::new();
+        args.set("filled", filled);
+        args.set("max", max);
+        let open = max.saturating_sub(filled);
+        if open == 0 {
+            return self.format(AFFIX_FILL, Some(&args));
+        }
+        args.set("open", open);
+        self.format(AFFIX_FILL_OPEN, Some(&args))
+    }
+
     /// The number of offers behind the price of a unique: "23 offers".
     #[must_use]
     pub fn offers(&self, count: u32) -> String {
@@ -373,14 +434,13 @@ impl Translator {
     }
 
     /// A tag of the item block with a number: the quality (`Q 20%`), the sockets, the item
-    /// level, the T1 affixes.
+    /// level.
     #[must_use]
     pub fn tag(&self, tag: NumberTag, value: u32) -> String {
         let id = match tag {
             NumberTag::Quality => TAG_QUALITY,
             NumberTag::Sockets => TAG_SOCKETS,
             NumberTag::ItemLevel => TAG_ITEM_LEVEL,
-            NumberTag::Tier1 => TAG_TIER_1,
         };
         self.format_number(id, "value", value)
     }
@@ -394,17 +454,6 @@ impl Translator {
         self.format(TAG_STACK, Some(&args))
     }
 
-    /// A part of the summary of a weapon: its DPS of a kind, rounded.
-    #[must_use]
-    pub fn dps(&self, kind: DamageKind, dps: u32) -> String {
-        let id = match kind {
-            DamageKind::Physical => DPS_PHYSICAL,
-            DamageKind::Elemental => DPS_ELEMENTAL,
-            DamageKind::Chaos => DPS_CHAOS,
-        };
-        self.format_number(id, "dps", dps)
-    }
-
     /// The summary of an item that grants skills, e.g. a staff, from the skills joined by
     /// the caller.
     #[must_use]
@@ -414,12 +463,19 @@ impl Translator {
         self.format(GRANTED_SKILL, Some(&args))
     }
 
-    /// The requirements line, from its parts joined by the caller.
+    /// The texts of the requirements line before and after its parts, which the caller
+    /// writes each in its color: `("Requires ", "")`.
     #[must_use]
-    pub fn requires(&self, parts: &str) -> String {
+    pub fn requires_around(&self) -> (String, String) {
+        // A character no translation writes, in place of the parts.
+        const PARTS: &str = "\u{1}";
         let mut args = FluentArgs::new();
-        args.set("parts", parts);
-        self.format(REQUIRES, Some(&args))
+        args.set("parts", PARTS);
+        let line = self.format(REQUIRES, Some(&args));
+        match line.split_once(PARTS) {
+            Some((before, after)) => (before.to_owned(), after.to_owned()),
+            None => (line, String::new()),
+        }
     }
 
     /// A part of the requirements line: the level, or an attribute.
@@ -540,16 +596,15 @@ mod tests {
                 TAG_SOCKETS,
                 TAG_ITEM_LEVEL,
                 TAG_STACK,
-                TAG_TIER_1,
-                DPS_PHYSICAL,
-                DPS_ELEMENTAL,
-                DPS_CHAOS,
                 GRANTED_SKILL,
                 REQUIRES,
                 REQUIREMENT_LEVEL,
                 REQUIREMENT_STRENGTH,
                 REQUIREMENT_DEXTERITY,
                 REQUIREMENT_INTELLIGENCE,
+                SHOW_STATS,
+                AFFIX_FILL,
+                AFFIX_FILL_OPEN,
                 OFFERS,
                 STACK_OF,
                 UNIT_PRICE,
@@ -585,38 +640,30 @@ mod tests {
             for age in [0, 60, 3600, 86_400] {
                 assert_ne!(translator.age(Duration::from_secs(age)), "", "{language:?}");
             }
-            for tag in [
-                NumberTag::Quality,
-                NumberTag::Sockets,
-                NumberTag::ItemLevel,
-                NumberTag::Tier1,
-            ] {
+            for tag in [NumberTag::Quality, NumberTag::Sockets, NumberTag::ItemLevel] {
                 for value in [0, 1, 2, 20] {
                     let text = translator.tag(tag, value);
                     assert!(text.contains(&value.to_string()), "{text} in {language:?}");
                 }
             }
             assert!(translator.stack_tag(7, 20).contains("7/20"), "{language:?}");
-            for kind in [
-                DamageKind::Physical,
-                DamageKind::Elemental,
-                DamageKind::Chaos,
-            ] {
-                assert!(translator.dps(kind, 245).contains("245"), "{language:?}");
-            }
             assert!(translator.granted_skill("Skill").contains("Skill"));
             for count in [0, 1, 4, 23] {
                 assert!(translator.offers(count).contains(&count.to_string()));
                 assert_ne!(translator.uncertain(count), "");
             }
             assert!(translator.stack_of(7).contains('7'));
+            assert!(translator.show_stats(1).contains('1'));
+            assert!(translator.show_stats(6).contains('6'));
+            assert!(translator.affix_fill(3, 3).contains('3'));
+            assert!(translator.affix_fill(2, 3).contains('1'));
             assert!(translator.unit_price("prices").contains("prices"));
             for direction in [Direction::Rise, Direction::Fall, Direction::Stable] {
                 assert!(translator.trend(direction, 4, 7).contains('7'));
             }
             assert!(translator.prices_downloading("League").contains("League"));
             assert!(translator.no_price_found("League").contains("League"));
-            assert!(translator.requires("parts").contains("parts"));
+            assert_ne!(translator.requires_around().0, "", "{language:?}");
             for requirement in [
                 Requirement::Level,
                 Requirement::Strength,
@@ -648,6 +695,15 @@ mod tests {
     }
 
     #[test]
+    fn the_open_affixes_agree_in_number_in_french() {
+        let french = Translator::new(Language::French);
+
+        assert_eq!(french.affix_fill(2, 3), "2 sur 3 · 1 libre");
+        assert_eq!(french.affix_fill(1, 3), "1 sur 3 · 2 libres");
+        assert_eq!(french.affix_fill(3, 3), "3 sur 3");
+    }
+
+    #[test]
     fn arguments_are_inserted_without_isolation_marks() {
         assert_eq!(
             Translator::new(Language::English).status_bar("A", "B"),
@@ -665,6 +721,14 @@ mod tests {
             assert!(line.starts_with("App 0.1.0 · "), "{line}");
             assert!(line.ends_with("Author · author.site"), "{line}");
         }
+    }
+
+    #[test]
+    fn the_fill_of_the_affixes_tells_the_open_ones() {
+        let english = Translator::new(Language::English);
+
+        assert_eq!(english.affix_fill(3, 3), "3 of 3");
+        assert_eq!(english.affix_fill(2, 3), "2 of 3 · 1 open");
     }
 
     #[test]

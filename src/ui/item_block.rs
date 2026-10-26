@@ -1,15 +1,17 @@
 //! The item block: the name of the copied item in its rarity color, the Check on trade pill,
-//! its base type, its class and tags, the summary of a weapon or the skills it grants, and
-//! its requirements.
+//! its base type and class, then its facts (the main values of its base, the skills it
+//! grants, its requirements, its tags), and the pill of its stats.
 
+use egui::text::{LayoutJob, TextFormat};
 use egui::{
-    Align, CornerRadius, Frame, Label, Layout, RichText, Sense, Ui, Vec2, WidgetText, vec2,
+    Align, Color32, CornerRadius, FontId, Frame, Label, Layout, RichText, Sense, Ui, Vec2, vec2,
 };
 
 use super::theme::{color, size, text};
-use super::widgets;
+use super::{item_stats, widgets};
 use crate::i18n::{Message, NumberTag, Requirement, Translator};
 use crate::item::{DamageKind, Item, ItemState, Rarity};
+use crate::prices::UniqueModifiers;
 
 /// The space above and under the block.
 const PADDING_Y: f32 = 12.0;
@@ -17,15 +19,28 @@ const PADDING_Y: f32 = 12.0;
 const NAME_GAP: f32 = 12.0;
 /// The space between the name and the base type.
 const BASE_GAP: f32 = 2.0;
-/// The space above the class and tags, and above the requirements.
-const LINE_GAP: f32 = 6.0;
-/// The space above the summary.
-const SUMMARY_GAP: f32 = 8.0;
+/// The space above the facts: the block reads in two groups, what the item is, then its
+/// facts.
+const FACTS_GAP: f32 = 12.0;
+/// The space between two facts.
+const FACT_GAP: f32 = 6.0;
+/// The space between the base values and the requirements, which look farther apart than
+/// the other facts.
+const VALUES_REQUIREMENTS_GAP: f32 = 3.0;
+/// The space above the pill of the stats: a block with a background carries no air of its
+/// own, unlike a line of text.
+const STATS_PILL_GAP: f32 = 20.0;
+/// The space above the stats.
+const STATS_GAP: f32 = 8.0;
+/// The space between the base values, across and down when they wrap.
+const VALUE_SPACING: Vec2 = vec2(14.0, 4.0);
+/// The space between the label of a base value and its number.
+const VALUE_NUMBER_GAP: f32 = 5.0;
 /// The space between the tags, across and down when they wrap.
 const TAG_SPACING: Vec2 = vec2(6.0, 5.0);
 /// The space around the text of a tag.
 const TAG_PADDING: Vec2 = vec2(7.0, 1.0);
-/// The separator of the parts of the summary and of the requirements.
+/// The separator of the base type and the class, of the skills and of the requirements.
 const SEPARATOR: &str = " · ";
 /// The largest DPS shown: far over any weapon, under the largest `u32`.
 const MAX_DPS: f64 = 1e6;
@@ -34,6 +49,8 @@ const MAX_DPS: f64 = 1e6;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ItemBlockAction {
     CheckOnTrade,
+    /// The pill of the stats: unfolds them, or folds them.
+    ToggleStats,
 }
 
 /// The style of a tag.
@@ -41,7 +58,6 @@ pub enum ItemBlockAction {
 enum TagStyle {
     Plain,
     Corrupted,
-    Tier1,
 }
 
 /// The state tags, in the order of the specifications.
@@ -70,11 +86,72 @@ const STATE_TAGS: [(ItemState, Message, TagStyle); 6] = [
     ),
 ];
 
+/// A main value of the base: the DPS of a weapon, of each kind it deals, or a defence of an
+/// armour piece or a shield.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum BaseValue {
+    Dps(DamageKind, u32),
+    Armour(u32),
+    Evasion(u32),
+    EnergyShield(u32),
+    /// The chance to block, in percent.
+    Block(u32),
+}
+
+impl BaseValue {
+    fn label(self) -> Message {
+        match self {
+            Self::Dps(DamageKind::Physical, _) => Message::DpsPhysical,
+            Self::Dps(DamageKind::Elemental, _) => Message::DpsElemental,
+            Self::Dps(DamageKind::Chaos, _) => Message::DpsChaos,
+            Self::Armour(_) => Message::DefenceArmour,
+            Self::Evasion(_) => Message::DefenceEvasion,
+            Self::EnergyShield(_) => Message::DefenceEnergyShield,
+            Self::Block(_) => Message::DefenceBlock,
+        }
+    }
+
+    /// The color of the label: the one of the attribute a defence comes from, as in the
+    /// game.
+    fn label_color(self) -> Color32 {
+        match self {
+            Self::Armour(_) => color::STRENGTH,
+            Self::Evasion(_) => color::DEXTERITY,
+            Self::EnergyShield(_) => color::INTELLIGENCE,
+            Self::Dps(..) | Self::Block(_) => color::WEAK,
+        }
+    }
+
+    fn number(self) -> String {
+        match self {
+            Self::Block(percent) => format!("{percent}%"),
+            Self::Dps(_, value)
+            | Self::Armour(value)
+            | Self::Evasion(value)
+            | Self::EnergyShield(value) => value.to_string(),
+        }
+    }
+}
+
+/// A fact of the item, under its base type.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum Fact {
+    BaseValues(Vec<BaseValue>),
+    Skills(String),
+    /// Each part with its color.
+    Requirements(Vec<(String, Color32)>),
+    Tags(Vec<(String, TagStyle)>),
+}
+
 pub struct ItemBlock<'a> {
     item: &'a Item,
     i18n: &'a Translator,
     /// The trade site has a search for this item.
     tradable: bool,
+    /// The stats are unfolded.
+    stats_open: bool,
+    /// The modifiers of the unique in the price database, the ranges of its rolls.
+    unique_modifiers: Option<&'a UniqueModifiers>,
 }
 
 impl<'a> ItemBlock<'a> {
@@ -84,7 +161,18 @@ impl<'a> ItemBlock<'a> {
             item,
             i18n,
             tradable: false,
+            stats_open: false,
+            unique_modifiers: None,
         }
+    }
+
+    /// Unfolds the stats, with the modifiers of the unique in the price database for the
+    /// ranges of an item copied without them.
+    #[must_use]
+    pub fn stats(mut self, open: bool, unique_modifiers: Option<&'a UniqueModifiers>) -> Self {
+        self.stats_open = open;
+        self.unique_modifiers = unique_modifiers;
+        self
     }
 
     /// Shows the Check on trade pill: the trade site has a search for this item.
@@ -102,29 +190,12 @@ impl<'a> ItemBlock<'a> {
             .show(ui, |ui| {
                 ui.set_width(ui.available_width());
                 ui.spacing_mut().item_spacing = Vec2::ZERO;
-                let action = self.name_row(ui);
-                if let Some(base_type) = self.base_line() {
-                    ui.add_space(BASE_GAP);
-                    ui.add(Label::new(line(base_type)).wrap());
-                }
-                ui.add_space(LINE_GAP);
-                self.class_and_tags(ui);
-                if let Some(summary) = self.summary() {
-                    ui.add_space(SUMMARY_GAP);
-                    ui.add(Label::new(line(&summary)).wrap());
-                }
-                if let Some(requirements) = self.requirements() {
-                    ui.add_space(LINE_GAP);
-                    ui.add(
-                        Label::new(
-                            RichText::new(requirements)
-                                .font(text::tag())
-                                .color(color::WEAK),
-                        )
-                        .wrap(),
-                    );
-                }
-                action
+                let trade_action = self.name_row(ui);
+                ui.add_space(BASE_GAP);
+                ui.add(Label::new(self.base_and_class()).wrap());
+                self.facts(ui);
+                let stats_action = self.stats_section(ui);
+                trade_action.or(stats_action)
             })
             .inner
     }
@@ -159,25 +230,115 @@ impl<'a> ItemBlock<'a> {
         .inner
     }
 
+    /// The base type of a rare or unique item, then its class in gray: "Wanderer Coat · Body
+    /// Armours"; the class alone for the other items, named by their base.
+    fn base_and_class(&self) -> LayoutJob {
+        let mut job = LayoutJob::default();
+        let font = text::item_line();
+        if let Some(base_type) = self.base_line() {
+            append(&mut job, base_type, &font, color::TEXT);
+            append(&mut job, SEPARATOR, &font, color::WEAK);
+        }
+        append(&mut job, self.item.class(), &font, color::WEAK);
+        job
+    }
+
+    /// The facts of the item, those it has, 6 px apart.
+    fn facts(&self, ui: &mut Ui) {
+        let mut previous = None;
+        for fact in self.fact_list() {
+            ui.add_space(match (&previous, &fact) {
+                (None, _) => FACTS_GAP,
+                (Some(Fact::BaseValues(_)), Fact::Requirements(_)) => VALUES_REQUIREMENTS_GAP,
+                _ => FACT_GAP,
+            });
+            match &fact {
+                Fact::BaseValues(values) => self.base_values_line(ui, values),
+                Fact::Skills(skills) => {
+                    ui.add(
+                        Label::new(
+                            RichText::new(skills)
+                                .font(text::item_line())
+                                .color(color::TEXT),
+                        )
+                        .wrap(),
+                    );
+                }
+                Fact::Requirements(parts) => {
+                    ui.add(Label::new(self.requirements_line(parts)).wrap());
+                }
+                Fact::Tags(tags) => tags_line(ui, tags),
+            }
+            previous = Some(fact);
+        }
+    }
+
+    /// The facts the item has, in their order.
+    fn fact_list(&self) -> Vec<Fact> {
+        let base_values = self.base_values();
+        let tags = self.tags();
+        [
+            (!base_values.is_empty()).then_some(Fact::BaseValues(base_values)),
+            self.skills().map(Fact::Skills),
+            self.requirements().map(Fact::Requirements),
+            (!tags.is_empty()).then_some(Fact::Tags(tags)),
+        ]
+        .into_iter()
+        .flatten()
+        .collect()
+    }
+
+    /// The base values, each label in gray or in the color of its attribute and its number
+    /// in white bold, wrapped when needed.
+    fn base_values_line(&self, ui: &mut Ui, values: &[BaseValue]) {
+        ui.horizontal_wrapped(|ui| {
+            ui.spacing_mut().item_spacing = VALUE_SPACING;
+            for &value in values {
+                let mut job = LayoutJob::default();
+                append(
+                    &mut job,
+                    &self.i18n.text(value.label()),
+                    &text::item_line(),
+                    value.label_color(),
+                );
+                job.append(
+                    &value.number(),
+                    VALUE_NUMBER_GAP,
+                    TextFormat::simple(text::base_value(), color::TEXT),
+                );
+                ui.add(Label::new(job).extend());
+            }
+        });
+    }
+
+    /// The pill of the stats, and the stats once unfolded; nothing for an item without
+    /// modifiers (its filters come with step 10b: "Show filters").
+    fn stats_section(&self, ui: &mut Ui) -> Option<ItemBlockAction> {
+        let count = item_stats::count(self.item);
+        if count == 0 {
+            return None;
+        }
+        ui.add_space(STATS_PILL_GAP);
+        let label = if self.stats_open {
+            self.i18n.text(Message::HideStats)
+        } else {
+            self.i18n.show_stats(count)
+        };
+        let action = ui
+            .horizontal(|ui| widgets::control_pill(ui, &label).clicked())
+            .inner
+            .then_some(ItemBlockAction::ToggleStats);
+        if self.stats_open {
+            ui.add_space(STATS_GAP);
+            item_stats::show(ui, self.item, self.unique_modifiers, self.i18n);
+        }
+        action
+    }
+
     /// The base type under the name of a rare or unique item, as the game writes it, with
     /// "Exceptional"; the other items are named by their base.
     fn base_line(&self) -> Option<&str> {
         self.item.name().map(|_| self.item.written_base_type())
-    }
-
-    /// The class, then the tags, wrapped when needed.
-    fn class_and_tags(&self, ui: &mut Ui) {
-        ui.horizontal_wrapped(|ui| {
-            ui.spacing_mut().item_spacing = TAG_SPACING;
-            ui.label(
-                RichText::new(self.item.class())
-                    .font(text::item_line())
-                    .color(color::WEAK),
-            );
-            for (label, style) in self.tags() {
-                tag(ui, &label, style);
-            }
-        });
     }
 
     /// The tags, in the order of the specifications: the states, then the numbers.
@@ -202,54 +363,99 @@ impl<'a> ItemBlock<'a> {
         if let Some(stack) = item.stack() {
             tags.push((i18n.stack_tag(stack.size, stack.max), TagStyle::Plain));
         }
-        let tier_1 = item.tier_1_affixes();
-        if tier_1 > 0 && matches!(item.rarity(), Rarity::Magic | Rarity::Rare) {
-            let count = u32::try_from(tier_1).unwrap_or(u32::MAX);
-            tags.push((i18n.tag(NumberTag::Tier1, count), TagStyle::Tier1));
-        }
         tags
     }
 
-    /// The DPS of a weapon, each kind it deals, or the skills an item grants.
-    fn summary(&self) -> Option<String> {
+    /// The DPS of a weapon, each kind it deals; or the defences of an armour piece or a
+    /// shield.
+    fn base_values(&self) -> Vec<BaseValue> {
         if let Some(weapon) = self.item.weapon() {
             let dps = weapon.dps();
-            let parts: Vec<String> = [
+            return [
                 (DamageKind::Physical, dps.physical),
                 (DamageKind::Elemental, dps.elemental),
                 (DamageKind::Chaos, dps.chaos),
             ]
             .into_iter()
-            .filter_map(|(kind, value)| Some(self.i18n.dps(kind, rounded(value)?)))
+            .filter_map(|(kind, value)| Some(BaseValue::Dps(kind, rounded(value)?)))
             .collect();
-            return (!parts.is_empty()).then(|| parts.join(SEPARATOR));
         }
+        let defences = self.item.defences();
+        [
+            defences.armour.map(BaseValue::Armour),
+            defences.evasion.map(BaseValue::Evasion),
+            defences.energy_shield.map(BaseValue::EnergyShield),
+            defences.block.map(BaseValue::Block),
+        ]
+        .into_iter()
+        .flatten()
+        .collect()
+    }
+
+    /// The skills the item grants, e.g. a staff.
+    fn skills(&self) -> Option<String> {
         let skills = self.item.granted_skills();
         (!skills.is_empty()).then(|| self.i18n.granted_skill(&skills.join(SEPARATOR)))
     }
 
-    /// The level and the attributes the item requires.
-    fn requirements(&self) -> Option<String> {
+    /// The level and the attributes the item requires, each in its color.
+    fn requirements(&self) -> Option<Vec<(String, Color32)>> {
         let requirements = self.item.requirements();
-        let parts: Vec<String> = [
-            (Requirement::Level, requirements.level),
-            (Requirement::Strength, requirements.strength),
-            (Requirement::Dexterity, requirements.dexterity),
-            (Requirement::Intelligence, requirements.intelligence),
+        let parts: Vec<(String, Color32)> = [
+            (Requirement::Level, requirements.level, color::WEAK),
+            (
+                Requirement::Strength,
+                requirements.strength,
+                color::STRENGTH,
+            ),
+            (
+                Requirement::Dexterity,
+                requirements.dexterity,
+                color::DEXTERITY,
+            ),
+            (
+                Requirement::Intelligence,
+                requirements.intelligence,
+                color::INTELLIGENCE,
+            ),
         ]
         .into_iter()
-        .filter_map(|(part, value)| Some(self.i18n.requirement(part, value?)))
+        .filter_map(|(part, value, tint)| Some((self.i18n.requirement(part, value?), tint)))
         .collect();
-        (!parts.is_empty()).then(|| self.i18n.requires(&parts.join(SEPARATOR)))
+        (!parts.is_empty()).then_some(parts)
+    }
+
+    /// The requirements line, in gray with each attribute in its color: "Requires Level 65 ·
+    /// 145 Dex".
+    fn requirements_line(&self, parts: &[(String, Color32)]) -> LayoutJob {
+        let font = text::item_line();
+        let (before, after) = self.i18n.requires_around();
+        let mut job = LayoutJob::default();
+        append(&mut job, &before, &font, color::WEAK);
+        for (index, (part, tint)) in parts.iter().enumerate() {
+            if index > 0 {
+                append(&mut job, SEPARATOR, &font, color::WEAK);
+            }
+            append(&mut job, part, &font, *tint);
+        }
+        append(&mut job, &after, &font, color::WEAK);
+        job
     }
 }
 
-/// A line of the item block.
-fn line(text: &str) -> WidgetText {
-    RichText::new(text)
-        .font(text::item_line())
-        .color(color::TEXT)
-        .into()
+/// Adds `text` to `job`, in `font` and `tint`.
+fn append(job: &mut LayoutJob, text: &str, font: &FontId, tint: Color32) {
+    job.append(text, 0.0, TextFormat::simple(font.clone(), tint));
+}
+
+/// The tags, wrapped when needed.
+fn tags_line(ui: &mut Ui, tags: &[(String, TagStyle)]) {
+    ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing = TAG_SPACING;
+        for (label, style) in tags {
+            tag(ui, label, *style);
+        }
+    });
 }
 
 /// A tag: its label on a small block.
@@ -257,7 +463,6 @@ fn tag(ui: &mut Ui, label: &str, style: TagStyle) {
     let (fill, tint) = match style {
         TagStyle::Plain => (color::CONTROL, color::TEXT),
         TagStyle::Corrupted => (color::CORRUPTED_TAG, color::CORRUPTED_TAG_TEXT),
-        TagStyle::Tier1 => (color::CONTROL, color::TIER_1),
     };
     let galley = widgets::text_line(ui, label, text::tag());
     let (rect, _) = ui.allocate_exact_size(galley.size() + 2.0 * TAG_PADDING, Sense::hover());
@@ -267,7 +472,7 @@ fn tag(ui: &mut Ui, label: &str, style: TagStyle) {
 }
 
 /// The color of the name of an item of `rarity`, as in the game.
-fn rarity_color(rarity: Rarity) -> egui::Color32 {
+fn rarity_color(rarity: Rarity) -> Color32 {
     match rarity {
         Rarity::Normal => color::NORMAL,
         Rarity::Magic => color::MAGIC,
@@ -299,7 +504,8 @@ mod tests {
     struct Texts {
         base_line: Option<String>,
         tags: Vec<String>,
-        summary: Option<String>,
+        base_values: Vec<String>,
+        skills: Option<String>,
         requirements: Option<String>,
     }
 
@@ -310,8 +516,15 @@ mod tests {
         Texts {
             base_line: block.base_line().map(str::to_owned),
             tags: block.tags().into_iter().map(|(label, _)| label).collect(),
-            summary: block.summary(),
-            requirements: block.requirements(),
+            base_values: block
+                .base_values()
+                .into_iter()
+                .map(|value| format!("{} {}", i18n.text(value.label()), value.number()))
+                .collect(),
+            skills: block.skills(),
+            requirements: block
+                .requirements()
+                .map(|parts| block.requirements_line(&parts).text),
         }
     }
 
@@ -328,18 +541,11 @@ mod tests {
         assert_eq!(crossbow.base_line.as_deref(), Some("Gemini Crossbow"));
         assert_eq!(
             crossbow.tags,
-            [
-                "Corrupted",
-                "Fractured",
-                "Q 20%",
-                "2 sockets",
-                "ilvl 80",
-                "2 T1"
-            ]
+            ["Corrupted", "Fractured", "Q 20%", "2 sockets", "ilvl 80",]
         );
         assert_eq!(
-            crossbow.summary.as_deref(),
-            Some("Physical DPS 288 · Elemental DPS 267")
+            crossbow.base_values,
+            ["Physical DPS 288", "Elemental DPS 267"]
         );
         assert_eq!(
             crossbow.requirements.as_deref(),
@@ -348,19 +554,21 @@ mod tests {
     }
 
     #[test]
-    fn a_magic_item_has_a_t1_tag_and_a_unique_never_has_one() {
-        let magic = english(
-            "Item Class: Rings\nRarity: Magic\nGlimmering Ruby Ring of the Lynx\n--------\n\
-             Item Level: 68\n--------\n\
-             { Prefix Modifier \"Glimmering\" (Tier: 1) — Life }\n+80(70-89) to maximum Life\n\
-             { Suffix Modifier \"of the Lynx\" (Tier: 4) — Attribute }\n+20(17-20) to Dexterity",
+    fn an_armour_piece_or_a_shield_shows_its_defences() {
+        let focus = english(include_str!("../item/test-items/en-unique-focus.txt"));
+        let shield = texts(
+            include_str!("../item/test-items/fr-normal-exceptional-shield.txt"),
+            Language::French,
         );
-        let unique = english(include_str!("../item/test-items/en-unique-focus.txt"));
 
-        assert_eq!(magic.tags, ["ilvl 68", "1 T1"]);
-        assert_eq!(magic.base_line, None, "named by its base");
-        assert_eq!(unique.tags, ["ilvl 81"]);
-        assert_eq!(unique.base_line.as_deref(), Some("Crystal Focus"));
+        assert_eq!(focus.tags, ["ilvl 81"]);
+        assert_eq!(focus.base_line.as_deref(), Some("Crystal Focus"));
+        assert_eq!(focus.base_values, ["Energy Shield 44"]);
+        assert_eq!(shield.base_line, None, "named by its base");
+        assert_eq!(
+            shield.base_values,
+            ["Armure 112", "Évasion 102", "Blocage 25%"]
+        );
     }
 
     #[test]
@@ -372,7 +580,7 @@ mod tests {
 
         assert_eq!(stack.tags, ["Pile 40/40"]);
         assert_eq!(stack.requirements, None);
-        assert_eq!(stack.summary, None);
+        assert_eq!(stack.base_values, Vec::<String>::new());
     }
 
     #[test]
@@ -400,7 +608,7 @@ mod tests {
         );
         assert!(
             staff
-                .summary
+                .skills
                 .is_some_and(|line| line.starts_with("Octroie l'aptitude"))
         );
         assert_eq!(

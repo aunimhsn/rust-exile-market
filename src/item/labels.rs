@@ -11,6 +11,8 @@ use crate::language::Language;
 /// separator, as the game writes it (`"Requires: "`, `"Prérequis : "`).
 pub(super) struct Labels {
     pub item_class: &'static str,
+    /// The item class of the jewels, which have two prefixes and two suffixes at most.
+    pub jewels: &'static str,
     pub rarity: &'static str,
     pub rarities: &'static [(&'static str, Rarity)],
     pub item_level: &'static str,
@@ -28,6 +30,11 @@ pub(super) struct Labels {
     /// damage are told by their markers, the same in every language.
     pub physical_damage: &'static str,
     pub attacks_per_second: &'static str,
+    /// The names of the defences of an armour piece or a shield.
+    pub armour: &'static str,
+    pub evasion: &'static str,
+    pub energy_shield: &'static str,
+    pub block: &'static str,
     /// The note of a priced item; unknown in some languages.
     pub note: Option<&'static str>,
     /// The state lines at the end of the item; "Unidentified" may be followed by a tier.
@@ -82,6 +89,7 @@ const UNIQUE: ModifierKind = ModifierKind::Explicit(None);
 
 static ENGLISH: Labels = Labels {
     item_class: "Item Class: ",
+    jewels: "Jewels",
     rarity: "Rarity: ",
     rarities: &[
         ("Normal", Rarity::Normal),
@@ -103,6 +111,11 @@ static ENGLISH: Labels = Labels {
     grants_skill: "Grants Skill: ",
     physical_damage: "Physical Damage",
     attacks_per_second: "Attacks per Second",
+    armour: "Armour",
+    evasion: "Evasion Rating",
+    energy_shield: "Energy Shield",
+    // To check on a copied shield.
+    block: "Block chance",
     note: Some("Note: "),
     states: &[
         ("Corrupted", ItemState::Corrupted),
@@ -133,6 +146,7 @@ static ENGLISH: Labels = Labels {
 
 static FRENCH: Labels = Labels {
     item_class: "Classe d'objet: ",
+    jewels: "Joyaux",
     rarity: "Rareté: ",
     rarities: &[
         ("Normal", Rarity::Normal),
@@ -154,6 +168,10 @@ static FRENCH: Labels = Labels {
     grants_skill: "Octroie l'Aptitude: ",
     physical_damage: "Dégâts Physiques",
     attacks_per_second: "Attaques par seconde",
+    armour: "Armure",
+    evasion: "Score d'Évasion",
+    energy_shield: "Bouclier d'énergie",
+    block: "Chances de Blocage",
     note: None,
     states: &[
         ("Corrompu", ItemState::Corrupted),

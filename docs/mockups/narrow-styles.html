@@ -421,13 +421,37 @@
   .link:hover { text-decoration: underline; }
   .item-band { position: relative; }
   .base { margin-top: 2px; }
+  .base .cls { color: var(--weak); }
   .meta { display: flex; flex-wrap: wrap; gap: 5px 6px; align-items: center; margin-top: 6px; color: var(--weak); font-size: 13px; }
   .tag { padding: 1px 7px; border-radius: var(--radius); background: var(--control); color: var(--text); font-size: 12px; }
   .tag.corrupted { color: #fff; background: #351417; }   /* the background of the hardcore league */
   .tag.t1 { color: var(--tier-1); }   /* the number of prefixes and suffixes at tier 1 */
-  .summary { margin-top: 8px; font-size: 13px; }
+  .summary { font-size: 13px; }
+  /* The item block in two groups: what it is (name, base and class), then its facts (base values,
+     requirements, tags), 12 px apart; the lines of a group 6 px apart. */
+  .facts { display: grid; gap: 6px; margin-top: 12px; }
+  .facts:empty { display: none; }
+  .facts > * { margin-top: 0 !important; }
+  /* The base values look farther from the requirements than the tags do: closer by 3 px. */
+  .facts > .summary + .reqline { margin-top: -3px !important; }
+  /* The colors of the attributes, as in the game: strength red, dexterity green, intelligence blue
+     (the softcore blue, lighter), a little apart from the rise and fall of the trend. */
+  :root { --attr-str: #e0473f; --attr-dex: #3fbf4f; --attr-int: #5aa7f0; }
+  .attr-str { color: var(--attr-str); }
+  .attr-dex { color: var(--attr-dex); }
+  .attr-int { color: var(--attr-int); }
+  /* The main values of the base: the DPS of a weapon, the defences of an armour piece. The label is
+     gray, or in the color of its attribute; the number stands out. */
+  .props { display: flex; flex-wrap: wrap; gap: 4px 14px; }
+  .props span { color: var(--weak); }
+  .props span.attr-str { color: var(--attr-str); }
+  .props span.attr-dex { color: var(--attr-dex); }
+  .props span.attr-int { color: var(--attr-int); }
+  .props b { color: var(--text); font-weight: 700; margin-left: 5px; }
   /* Stats toggle: a pill like "Check on trade", and the number of filters next to it. */
-  .stats-toggle { margin-top: 10px; display: flex; align-items: center; gap: 10px; font-size: 12px; }
+  /* 20 px under the tags look like the 12 px above the facts: text lines carry their own air above
+     and under the letters, blocks with a background don't. */
+  .stats-toggle { margin-top: 20px; display: flex; align-items: center; gap: 10px; font-size: 12px; }
   .pill {
     padding: 4px 10px; border-radius: var(--radius); background: var(--control); color: var(--text);
     font-size: 12px; font-weight: 600; line-height: 1.2; white-space: nowrap; cursor: pointer;
@@ -445,7 +469,7 @@
 
   .stats { margin-top: 8px; display: grid; gap: 6px; }
   .req { color: var(--weak); font-size: 12px; display: flex; justify-content: space-between; }
-  .reqline { margin-top: 6px; color: var(--weak); font-size: 12px; }
+  .reqline { margin-top: 6px; color: var(--weak); font-size: 13px; }
   .stats-group { display: flex; justify-content: space-between; margin-top: 6px; color: var(--faint); font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
   .stats-group:first-child { margin-top: 0; }
   .stats-group em { font-style: normal; letter-spacing: 0; text-transform: none; font-weight: 600; color: var(--weak); }
@@ -455,15 +479,25 @@
   .prop { font-size: 13px; color: var(--text); }
   .prop span { color: var(--weak); }
   .sep { height: 1px; background: var(--control-line); margin: 2px 0; }
-  .mod { display: grid; grid-template-columns: 20px 1fr auto; gap: 2px 8px; align-items: center; color: var(--mod); font-size: 13.5px; }
-  .mod.fixed { grid-template-columns: 20px 1fr; }
   .check { width: 15px; height: 15px; border-radius: 3px; border: 1.5px solid var(--weak); background: var(--control); display: grid; place-items: center; color: var(--bg-a); }
   .check.on { background: var(--accent); border-color: var(--accent); color: var(--on-accent, var(--bg-a)); }
   .input { width: 46px; padding: 1px 6px; text-align: right; font-family: var(--font-number); font-size: 12.5px; }
-  .roll { grid-column: 2; display: flex; align-items: center; gap: 8px; color: var(--faint); font-size: 11px; }
   .bar { width: 96px; height: 4px; border-radius: 2px; background: var(--control-line); overflow: hidden; }
   .bar i { display: block; height: 100%; background: var(--accent); }
   .note { color: var(--faint); font-size: 12px; }
+  /* A stat: its checkbox, its text, and under it its bar, its range and its minimum, so that the
+     text takes the whole width. */
+  .mod2 { display: grid; grid-template-columns: 20px 1fr; gap: 3px 8px; align-items: center; color: var(--mod); font-size: 13.5px; }
+  .mod2.wide { grid-template-columns: 1fr; }
+  .mod2 .roll2 { grid-column: 2; display: flex; align-items: center; gap: 8px; color: var(--faint); font-size: 11px; }
+  .mod2 .roll2 .input { margin-left: auto; }
+  /* The minimum in its own column on the right, on the line of the checkbox. */
+  .mod2.min-top { grid-template-columns: 20px 1fr 46px; align-items: start; }
+  .mod2.min-top .check { margin-top: 2px; }
+  .mod2.min-top > .input { grid-column: 3; grid-row: 1; }
+  .mod2.min-top .roll2 { grid-column: 2; }
+  /* Two lines at most, the rest under the pointer. */
+  .mod2 .text { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 
   .prices { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
   .price { display: flex; align-items: center; gap: 7px; font: 600 19px/1 var(--font-number); }
@@ -663,6 +697,11 @@
       <div class="app-icon-button" title="Close">${svg(13, '<path d="M4 4l8 8M12 4l-8 8"/>')}</div>
     </div>${leagueList()}`;
   };
+  // The attribute of a requirement or of a base property, for its color.
+  const colorAttributes = text => text.replace(/(\d+ )(Str|For)\b/g, '<span class="attr-str">$1$2</span>')
+    .replace(/(\d+ )(Dex)\b/g, '<span class="attr-dex">$1$2</span>')
+    .replace(/(\d+ )(Int)\b/g, '<span class="attr-int">$1$2</span>');
+  const propClass = name => ({ Armour: "attr-str", Evasion: "attr-dex", "Energy Shield": "attr-int" })[name] || "";
   const foot = (value = "poe2scout 12min ago · GGG trade 2min ago") => `<div class="foot a">${value}</div>`;
   // One line per warning, in the same band.
   const banner = (...values) => `<div class="banner"><span>${values.map(value => `<span>${value}</span>`).join("")}</span></div>`;
@@ -692,13 +731,24 @@
         if (row.group) return `<div class="stats-group"><span>${row.group}${row.fill ? ` <em>${row.fill}</em>` : ""}</span>${row.min ? "<span>min</span>" : ""}</div>`;
         if (row.prop) return `<div class="prop"><span>${row.prop[0]}:</span> ${row.prop[1]}</div>`;
         if (row.note) return `<div class="note">${row.note}</div>`;
-        const check = row.check === undefined ? "<span></span>" : `<span class="check ${row.check ? "on" : ""}">${row.check ? ICON.check(11) : ""}</span>`;
+        // The tier and the ranges of a hybrid modifier, under all its lines: it reads as one modifier.
+        if (row.rollOnly) return `<div class="mod2 min-top"><span></span><div class="roll2" style="grid-column: 2"><span class="range"><span class="tier t${row.tier}">T${row.tier}</span>${row.range}</span></div></div>`;
+        // A filter: its checkbox, its text on two lines at most (whole under the pointer), its minimum
+        // on the line of the checkbox in a column kept for it, and its bar and range under the text.
+        // A stat without a filter has no checkbox and starts at the left edge.
+        const box = row.check === undefined ? "" : `<span class="check ${row.check ? "on" : ""}">${row.check ? ICON.check(11) : ""}</span>`;
+        const tier = row.tier ? `<span class="tier ${row.tier <= 3 ? "tier-top" : ""} t${row.tier}">T${row.tier}</span>` : "";
+        // No bar for the tier of a rare until the modifier tables (step 13).
+        const bar = row.range && !row.noBar ? `<span class="bar"><i style="width:${row.share * 100}%"></i></span>` : "";
         const input = row.min !== undefined ? `<span class="input">${row.min}</span>` : "";
-        const range = `<span class="range">${row.tier ? `<span class="tier ${row.tier <= 3 ? "tier-top" : ""} t${row.tier}">T${row.tier}</span>` : ""}${row.range}</span>`;
-        // The bar covers every tier of the modifier (the fixed range of a unique); the text gives the tier and its range.
-        const bar = `<span class="bar"><i style="width:${row.share * 100}%"></i></span>`;
-        const roll = row.range ? `<div class="roll">${bar}${range}</div>` : "";
-        return `<div class="mod ${input ? "" : "fixed"}">${check}<span>${row.mod}</span>${input}${roll}</div>`;
+        const plain = row.mod.replace(/<br>/g, " ");
+        const text = `<span class="text" title="${plain.replace(/"/g, "&quot;")}">${row.mod}</span>`;
+        if (box) {
+          const rollTop = row.range ? `<div class="roll2">${bar}<span class="range">${tier}${row.range}</span></div>` : "";
+          return `<div class="mod2 min-top">${box}${text}${input || "<span></span>"}${rollTop}</div>`;
+        }
+        const roll = row.range || input ? `<div class="roll2">${bar}<span class="range">${tier}${row.range || ""}</span>${input}</div>` : "";
+        return `<div class="mod2 ${box ? "" : "wide"}">${box}${text}${roll}</div>`;
       }).join("")}</div>`;
     } else if (it.statsLabel) {
       stats = `<div class="stats-toggle"><span class="pill">${pill(false)}</span>${filters}</div>`;
@@ -709,10 +759,13 @@
           <div class="name rarity-${it.rarity}">${it.name}</div>
           <a class="trade" title="${it.tradeTitle || "Open the search on the trade site"}">${it.tradeLabel || "Check on trade"}</a>
         </div>
-        ${it.base ? `<div class="base">${it.base}</div>` : ""}
-        <div class="meta"><span>${it.cls}</span>${tags}</div>
-        ${it.summary ? `<div class="summary">${it.summary}</div>` : ""}
-        ${it.req ? `<div class="reqline">${it.req}</div>` : ""}
+        <div class="base">${it.base ? `${it.base} <span class="cls">· ${it.cls}</span>` : `<span class="cls">${it.cls}</span>`}</div>
+        <div class="facts">
+          ${it.summary ? `<div class="summary">${it.summary}</div>` : ""}
+          ${it.props ? `<div class="summary props">${it.props.map(([k, v]) => `<div><span class="${propClass(k)}">${k}</span><b>${v}</b></div>`).join("")}</div>` : ""}
+          ${it.req ? `<div class="reqline">${colorAttributes(it.req)}</div>` : ""}
+          ${tags ? `<div class="meta">${tags}</div>` : ""}
+        </div>
         ${stats}
       </div>`;
   }
@@ -820,10 +873,10 @@
   // Sample items.
   const HH = { rarity: "unique", name: "Headhunter", base: "Heavy Belt", cls: "Belts", tags: ["Corrupted", "ilvl 80"], req: "Requires Level 50", statsLabel: "Stats (6)", filters: "3 filters" };
   const HH_STATS = [
-    { minHeader: true },
+    { group: "Implicit", min: true },
     { mod: "26% increased Stun Threshold", check: false, min: 26, range: "20–30", share: .6 },
     { mod: "Has 2 Charm Slots", check: false, min: 2, range: "1–3", share: .5 },
-    "sep",
+    { group: "Unique" },
     { mod: "+55 to maximum Life", check: true, min: 55, range: "40–60", share: .75 },
     { mod: "+34 to Strength", check: true, min: 34, range: "20–40", share: .7 },
     { mod: "+22 to Dexterity", check: true, min: 22, range: "20–40", share: .1 },
@@ -834,7 +887,7 @@
   const HH_OFFERS = { count: "10 of 13 online", columns: ["Price", "Listed"], rows: [
     { v: "6", k: "ex", when: "2h ago", sus: true }, { v: "1", k: "chaos", when: "5d ago", sus: true }, { v: "8", k: "div", when: "3h ago" },
     { v: "10", k: "div", when: "3h ago" }, { v: "11", k: "div", when: "40min ago", away: true }, { v: "12", k: "div", when: "1d ago" }] };
-  const BOW = { rarity: "rare", name: "Storm Bite", base: "Gemini Bow", cls: "Bows", tags: ["ilvl 81", "Q 20%", "2 sockets"], summary: "Physical DPS 245 · Elemental DPS 44", req: "Requires Level 65 · 145 Dex", statsLabel: "Stats (9)" };
+  const BOW = { rarity: "rare", name: "Storm Bite", base: "Gemini Bow", cls: "Bows", tags: ["ilvl 81", "Q 20%", "2 sockets"], props: [["Physical DPS", "245"], ["Elemental DPS", "44"]], req: "Requires Level 65 · 145 Dex", statsLabel: "Stats (9)" };
   // Rare, magic and jewels: no market price, so the price is estimated from similar offers.
   // Minimums are prefilled at 90 % of the copied values, to find comparable items.
   const BOW_FILTERS = [
@@ -854,7 +907,7 @@
     { mod: "+312 to Accuracy Rating", check: true, min: 281, tier: 4, range: "296–344", share: .5 },
     { note: "The physical DPS already counts the damage and speed modifiers." },
   ];
-  const BOW_RARE = { ...BOW, tags: [...BOW.tags, "1 T1"], statsLabel: "Stats (6)", filters: "4 filters" };
+  const BOW_RARE = { ...BOW, tags: [...BOW.tags], statsLabel: "Stats (6)", filters: "4 filters" };
   const RARE_ESTIMATE_BEFORE = { lines: ["No market price for rare items.", "Search similar offers to estimate it."] };
   const RING = { rarity: "rare", name: "Storm Spiral", base: "Sapphire Ring", cls: "Rings", tags: ["ilvl 77"], req: "Requires Level 54", statsLabel: "Stats (6)", filters: "2 filters" };
   const RING_FILTERS = [
@@ -883,7 +936,7 @@
     { mod: "Quality: 0%", check: false, min: 0 },
     { note: "A normal item has no modifiers: its base, sockets and item level make its value." },
   ];
-  const JEWEL = { rarity: "rare", name: "Brood Ember", base: "Ruby", cls: "Jewels", tags: ["ilvl 81", "3 T1"], statsLabel: "Stats (4)", filters: "4 filters" };
+  const JEWEL = { rarity: "rare", name: "Brood Ember", base: "Ruby", cls: "Jewels", tags: ["ilvl 81"], statsLabel: "Stats (4)", filters: "4 filters" };
   const JEWEL_FILTERS = [
     { group: "Prefixes", fill: "2 of 2", min: true },
     { mod: "12% increased Projectile Damage", check: true, min: 10, tier: 1, range: "11–13", share: .9 },
@@ -896,6 +949,74 @@
   const win = (...parts) => `<div class="win">${parts.join("")}</div>`;
 
   const SECTIONS = [
+    ["Stats and their filters", [
+      ["Unique with its filters", win(topBar(),
+        item({ rarity: "unique", name: "Facebreaker", base: "Stocky Mitts", cls: "Gloves", tags: ["ilvl 60"], props: [["Armour", "15"]], filters: "1 filter", statsLabel: "Stats (6)",
+          stats: [
+            { group: "Unique", min: true },
+            { mod: "41% increased Stun Buildup", check: true, min: 41, range: "30–50", share: .55 },
+            { mod: "Has 4 to 12 Physical damage, +3 to +4 per Boss's Face Broken" },
+            { mod: "5% more Unarmed Damage per 5 Strength" },
+            { mod: "+0.3 metres to Melee Strike Range while Unarmed" },
+            { mod: "+1 to Armour per Strength" },
+            { mod: "Can Attack as though using a One Handed Mace while both of your hand slots are empty<br>Unarmed Attacks that would use an Equipped One Hand Mace's damage use this Item's damage" },
+          ] }, true), price({ values: ["0.8", "8", "600"], offers: "14 offers", trend: "−6% over the last 7 days", rising: false }), foot())],
+      ["Unique with a range inside a mechanic", win(topBar(),
+        item({ rarity: "unique", name: "Rhythm of Ruin", base: "Ornate Belt", cls: "Belts", tags: ["ilvl 75"], filters: "2 filters", statsLabel: "Stats (4)",
+          stats: [
+            { group: "Unique", min: true },
+            { mod: "+38 to maximum Life", check: true, min: 38, range: "30–50", share: .4 },
+            { mod: "Gain 3 Explosive Rhythm every 3 times you use a Grenade Skill", check: true, min: 3, range: "2–3", share: 1 },
+            { mod: "18% increased Grenade Damage", check: false, min: 18, range: "15–25", share: .3 },
+            { mod: "Remove all Explosive Rhythm on reaching 10 to gain Explosive Fervour for 10 Seconds" },
+          ] }, true), price(HH_PRICE), foot())],
+      ["The Lethal Draw: a long line with a range", win(topBar(),
+        item({ rarity: "unique", name: "The Lethal Draw", base: "Sacral Quiver", cls: "Quivers", tags: ["ilvl 70"], req: "Requires Level 16", filters: "4 filters", statsLabel: "Stats (5)",
+          stats: [
+            { group: "Implicit", min: true },
+            { mod: "Gain 3 Life per Enemy Hit with Attacks", check: true, min: 3, range: "2–3", share: 1 },
+            { group: "Unique" },
+            { mod: "8% increased Attack Speed", check: true, min: 8, range: "5–10", share: .6 },
+            { mod: "21% chance to Pierce an Enemy", check: true, min: 21, range: "15–25", share: .6 },
+            { mod: "Bow Attacks consume 7% of your maximum Life Flask Charges if possible to deal added Physical damage equal to 10% of Flask's Life Recovery amount", check: true, min: 7, range: "5–10", share: .4 },
+            { mod: "Gain 5 Life per Enemy Hit with Attacks" },
+          ] }, true), price({ values: ["0.1", "1", "75"], offers: "38 offers", trend: "Stable over the last 7 days", stable: true }), foot())],
+      ["Daevata's Wind: two long lines with a range", win(topBar(),
+        item({ rarity: "unique", name: "Daevata's Wind", base: "War Spear", cls: "Spears", tags: ["ilvl 64"], props: [["Physical DPS", "141"]], req: "Requires Level 21 · 14 Str · 31 Dex", filters: "6 filters", statsLabel: "Stats (6)",
+          stats: [
+            { group: "Implicit", min: true },
+            { mod: "31% increased Projectile Speed with this Weapon", check: true, min: 31, range: "25–35", share: .6 },
+            { group: "Unique" },
+            { mod: "Adds 24 to 25 Physical Damage", check: true, min: 24, range: "21–26", share: .6 },
+            { mod: "15% increased Attack Speed", check: true, min: 15, range: "10–20", share: .5 },
+            { mod: "48% increased Melee Damage if you've dealt a Projectile Attack Hit in the past eight seconds", check: true, min: 48, range: "30–60", share: .6 },
+            { mod: "37% increased Projectile Damage if you've dealt a Melee Hit in the past eight seconds", check: true, min: 37, range: "30–60", share: .23 },
+            { mod: "+100 to Evasion Rating" },
+          ] }, true), price({ values: ["0.4", "4", "300"], offers: "12 offers", trend: "+8% over the last 7 days" }), foot())],
+      ["Rare with a hybrid modifier: its tier and both ranges under its lines", win(topBar(),
+        item({ rarity: "rare", name: "Doom Shell", base: "Wanderer Coat", cls: "Body Armours", tags: ["ilvl 82"], props: [["Armour", "412"], ["Evasion", "380"]], req: "Requires Level 65 · 59 Str · 59 Dex", filters: "4 filters", statsLabel: "Stats (4)",
+          stats: [
+            { group: "Prefixes", fill: "2 of 3 · 1 open", min: true },
+            { mod: "+86 to maximum Life", check: true, min: 77, tier: 3, range: "85–99", share: .1, noBar: true },
+            { mod: "+20 to Evasion Rating", check: true, min: 18 },
+            { mod: "+10% increased Evasion Rating", check: false, min: 9 },
+            { rollOnly: true, tier: 5, range: "15–25 · 8–12" },
+            { group: "Suffixes", fill: "1 of 3 · 2 open" },
+            { mod: "+41% to Cold Resistance", check: true, min: 37, tier: 1, range: "41–45", share: .1, noBar: true },
+          ] }, true), price(RARE_ESTIMATE_BEFORE), foot())],
+      ["Rare with a fixed implicit", win(topBar(),
+        item({ rarity: "rare", name: "Gale Shroud", base: "Wayfarer Jacket", cls: "Body Armours", tags: ["ilvl 82"], props: [["Evasion", "512"]], req: "Requires Level 70 · 152 Dex", filters: "3 filters", statsLabel: "Stats (5)",
+          stats: [
+            { group: "Implicit", min: true },
+            { mod: "5% increased Movement Speed", check: false },
+            { group: "Prefixes", fill: "2 of 3 · 1 open" },
+            { mod: "+86 to maximum Life", check: true, min: 77, tier: 3, range: "85–99", share: .1, noBar: true },
+            { mod: "62% increased Evasion Rating", check: false, min: 56, tier: 4, range: "56–67", share: .5, noBar: true },
+            { group: "Suffixes", fill: "2 of 3 · 1 open" },
+            { mod: "+41% to Cold Resistance", check: true, min: 37, tier: 1, range: "41–45", share: .1, noBar: true },
+            { mod: "+23% to Lightning Resistance", check: true, min: 21, tier: 4, range: "21–25", share: .5, noBar: true },
+          ] }, true), price(RARE_ESTIMATE_BEFORE), foot())],
+    ]],
     ["Main", [
       ["Main", win(topBar(), item(HH), price(HH_PRICE), offers(HH_OFFERS), foot())],
       ["Stats unfolded (filters)", win(topBar(), item({ ...HH, stats: HH_STATS }, true), foot())],
@@ -904,10 +1025,10 @@
       ["Settings open", win(topBar(true), settings, foot(`<span class="app-author">Exile Market 0.1.0 · Made by Sylent · <a href="https://sylent.art" target="_blank" rel="noopener">sylent.art</a></span>`))],
     ]],
     ["Other items", [
-      ["Unique bow: corrupted, quality, sockets", win(topBar(), item({ rarity: "unique", name: "Death's Harp", base: "Dualstring Bow", cls: "Bows", tags: ["Corrupted", "Q 20%", "2 sockets", "ilvl 79"], summary: "Physical DPS 198", req: "Requires Level 52 · 96 Dex", statsLabel: "Stats (5)", filters: "2 filters" }),
+      ["Unique bow: corrupted, quality, sockets", win(topBar(), item({ rarity: "unique", name: "Death's Harp", base: "Dualstring Bow", cls: "Bows", tags: ["Corrupted", "Q 20%", "2 sockets", "ilvl 79"], props: [["Physical DPS", "198"]], req: "Requires Level 52 · 96 Dex", statsLabel: "Stats (5)", filters: "2 filters" }),
         price({ values: ["1.8", "18", "1.3K"], offers: "4 offers", warning: "Only 4 offers: the price is uncertain" }),
         offers({ count: "4 of 4 online", columns: ["Price", "Listed"], rows: [{ v: "1.5", k: "div", when: "5h ago" }, { v: "1.8", k: "div", when: "1d ago" }, { v: "2", k: "div", when: "50min ago" }, { v: "2.5", k: "div", when: "3d ago" }] }), foot())],
-      ["Many tags (they wrap)", win(topBar(), item({ rarity: "unique", name: "Ironbound", base: "Runeforged Warden Bow", cls: "Bows", tags: ["Twice Corrupted", "Sanctified", "Fractured", "Mirrored", "Q 23%", "3 sockets", "ilvl 82"], summary: "Physical DPS 312", req: "Requires Level 70 · 172 Dex", statsLabel: "Stats (6)", filters: "3 filters" }),
+      ["Many tags (they wrap)", win(topBar(), item({ rarity: "unique", name: "Ironbound", base: "Runeforged Warden Bow", cls: "Bows", tags: ["Twice Corrupted", "Sanctified", "Fractured", "Mirrored", "Q 23%", "3 sockets", "ilvl 82"], props: [["Physical DPS", "312"]], req: "Requires Level 70 · 172 Dex", statsLabel: "Stats (6)", filters: "3 filters" }),
         price({ values: ["38", "376", "27.6K"], offers: "2 offers", warning: "Only 2 offers: the price is uncertain" }), offers({ state: "idle" }), foot())],
     ]],
     ["Estimated prices: rare, magic, normal, jewels", [
@@ -954,6 +1075,49 @@
         offers({ count: "10 of 11 online", columns: ["Price", "Listed"], rows: [
           { v: "350", k: "ex", when: "2h ago" }, { v: "0.5", k: "div", when: "1d ago" }, { v: "0.6", k: "div", when: "30min ago" },
           { v: "0.7", k: "div", when: "4h ago", away: true }, { v: "1", k: "div", when: "3d ago" }] }), foot())],
+    ]],
+    ["Runes, enchantments and implicits", [
+      ["Rare: enchantment, runes and implicit, each with its title", win(topBar(),
+        item({ rarity: "rare", name: "Storm Core", base: "Gemini Crossbow", cls: "Crossbows", tags: ["Corrupted", "Fractured", "Q 20%", "2 sockets", "ilvl 80"], props: [["Physical DPS", "288"], ["Elemental DPS", "267"]], req: "Requires Level 78 · 89 Str · 89 Dex", statsLabel: "Stats (10)", stats: [
+          { group: "Enchant" },
+          { mod: "45% increased Elemental Damage with Attacks" },
+          { group: "Runes" },
+          { mod: "18% increased Physical Damage" },
+          { mod: "Gain 30 Mana per enemy killed" },
+          { group: "Implicit" },
+          { mod: "Loads an additional bolt" },
+          { group: "Prefixes", fill: "3 of 3" },
+          { mod: "Adds 10 to 273 Lightning Damage", tier: 2, range: "1–16 · 239–300", share: .5, noBar: true },
+          { mod: "Adds 24 to 51 Physical Damage", tier: 3, range: "23–35 · 39–59", share: .4, noBar: true },
+          { mod: "109% increased Elemental Damage with Attacks", tier: 2, range: "100–119", share: .5, noBar: true },
+          { group: "Suffixes", fill: "3 of 3" },
+          { mod: "Leeches 7.59% of Physical Damage as Mana", tier: 1, range: "7–7.9", share: .6, noBar: true },
+          { mod: "Gain 21 Mana per enemy killed", tier: 3, range: "21–27", share: 0, noBar: true },
+          { mod: "18% increased Attack Speed", tier: 1, range: "17–19", share: .5, noBar: true },
+        ] }, true), price(RARE_ESTIMATE_BEFORE), foot())],
+      ["Unique with runes", win(topBar(),
+        item({ rarity: "unique", name: "Death's Harp", base: "Dualstring Bow", cls: "Bows", tags: ["Corrupted", "Q 20%", "2 sockets", "ilvl 79"], props: [["Physical DPS", "198"]], req: "Requires Level 52 · 96 Dex", statsLabel: "Stats (6)", stats: [
+          { group: "Runes" },
+          { mod: "20% increased Physical Damage" },
+          { mod: "Adds 7 to 11 Fire Damage" },
+          { group: "Implicit" },
+          { mod: "Bow Attacks fire an additional Arrow" },
+          { group: "Unique" },
+          { mod: "138% increased Physical Damage", range: "100–150", share: .76 },
+          { mod: "+18% to Critical Damage Bonus", range: "15–25", share: .3 },
+          { mod: "Your Hits can't be Evaded" },
+        ] }, true), price({ values: ["1.8", "18", "1.3K"], offers: "4 offers", warning: "Only 4 offers: the price is uncertain" }), foot())],
+    ]],
+    ["Base properties", [
+      ["Rare body armour: armour and evasion", win(topBar(),
+        item({ rarity: "rare", name: "Doom Shell", base: "Wanderer Coat", cls: "Body Armours", tags: ["Q 20%", "2 sockets", "ilvl 82"], props: [["Armour", "412"], ["Evasion", "380"]], req: "Requires Level 65 · 59 Str · 59 Dex", statsLabel: "Stats (6)" }),
+        price(RARE_ESTIMATE_BEFORE), foot())],
+      ["Unique focus: energy shield", win(topBar(),
+        item({ rarity: "unique", name: "The Eternal Spark", base: "Crystal Focus", cls: "Foci", tags: ["ilvl 81"], props: [["Energy Shield", "44"]], req: "Requires Level 26 · 43 Int", statsLabel: "Stats (5)" }),
+        price({ values: ["<0.01", "0.01", "1"], offers: "1655 offers", trend: "Stable over the last 5 days", stable: true }), foot())],
+      ["Shield: armour and block", win(topBar(),
+        item({ rarity: "rare", name: "Rune Wall", base: "Tawhoan Tower Shield", cls: "Shields", tags: ["ilvl 79"], props: [["Armour", "290"], ["Block", "26%"]], req: "Requires Level 70 · 121 Str", statsLabel: "Stats (5)" }),
+        price(RARE_ESTIMATE_BEFORE), foot())],
     ]],
     ["Special cases", [
       ["Currency stack", win(topBar(), item({ rarity: "currency", name: "Orb of Annulment", cls: "Stackable Currency", tags: ["Stack 7/20"], statsLabel: "Stats (1)" }),

@@ -6,9 +6,10 @@ use std::time::{Duration, SystemTime};
 use crate::clipboard::ClipboardEvent;
 use crate::item::{CopiedItem, Item, ParseError, Rarity};
 use crate::item_names::ItemNames;
+use crate::language::Language;
 use crate::league::{League, Leagues};
 use crate::market::{MarketEvent, Source};
-use crate::prices::{PriceList, Rates};
+use crate::prices::{PriceList, Rates, UniqueModifiers};
 use crate::pricing::{self, FixedPrice, NoFixedPrice};
 use crate::trade::link::{self, TradeTarget};
 
@@ -35,6 +36,21 @@ impl ShownItem {
 
     pub fn parsed(&self) -> Result<&Item, ParseError> {
         self.parsed.as_ref().map_err(|&error| error)
+    }
+}
+
+/// The modifiers of the unique `item` in the price database, from its `fixed_price`, for the
+/// ranges of its rolls; none for an item copied in French, whose lines aren't in English.
+#[must_use]
+pub fn unique_modifiers<'a>(
+    item: &Item,
+    fixed_price: &Result<(FixedPrice<'a>, Rates), NoFixedPrice>,
+) -> Option<&'a UniqueModifiers> {
+    match fixed_price {
+        Ok((FixedPrice::Unique(unique), _)) if item.language() == Language::English => {
+            Some(&unique.modifiers)
+        }
+        _ => None,
     }
 }
 
@@ -316,7 +332,7 @@ impl Session {
 mod tests {
     use super::*;
     use crate::league::LeagueMode;
-    use crate::prices::Rates;
+    use crate::prices::{Price, Rates, UniquePrice};
 
     fn leagues(ids: &[&str]) -> MarketEvent {
         MarketEvent::Leagues(Leagues::new(ids.iter().map(|&id| League::new(id))))
@@ -462,6 +478,40 @@ mod tests {
 
     fn ago(minutes: u64) -> SystemTime {
         now() - Duration::from_mins(minutes)
+    }
+
+    #[test]
+    fn only_an_item_copied_in_english_gets_the_modifiers_of_its_unique() {
+        let unique = UniquePrice {
+            name: "The Eternal Spark".to_owned(),
+            base_type: "Crystal Focus".to_owned(),
+            price: Price {
+                exalted: 1.0,
+                quantity: 10,
+                history: Vec::new(),
+            },
+            modifiers: UniqueModifiers {
+                implicit: Vec::new(),
+                explicit: vec!["(50-70)% increased Energy Shield".to_owned()],
+            },
+        };
+        let rates = prices("Forbidden Rites", now()).rates;
+        let fixed_price = Ok((FixedPrice::Unique(&unique), rates));
+        let parse =
+            |text: &str| Item::parse(&CopiedItem::from_text(text).expect("an item")).expect("read");
+        let english = parse(include_str!("item/test-items/en-unique-focus.txt"));
+        let french = parse(include_str!("item/test-items/fr-unique-crossbow.txt"));
+
+        assert_eq!(
+            unique_modifiers(&english, &fixed_price),
+            Some(&unique.modifiers)
+        );
+        // Its lines aren't in English, like the modifiers of the price database.
+        assert_eq!(unique_modifiers(&french, &fixed_price), None);
+        assert_eq!(
+            unique_modifiers(&english, &Err(NoFixedPrice::PricesUnknown)),
+            None
+        );
     }
 
     #[test]
