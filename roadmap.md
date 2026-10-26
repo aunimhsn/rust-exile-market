@@ -32,11 +32,7 @@ Path of Exile 2 leaves early access with its version 1.0 on 2026-12-11. The modi
 - [x] **7. Price data** (#15, #16)
 - [x] **8. French item names** (#17)
 - [x] **9. Price display** (#18, #19)
-- [ ] **10. Item stats and filters**, in three pull requests:
-  - **10a, the stats** (done, #20)
-  - **Interlude, token economy** (done, #23)
-  - **10b, the filters of the uniques** (done, #25)
-  - **10c, the small amounts of the price block**: hide the Divine Orb (or Chaos Orb) amount when it is too small to matter (asked by the owner on 2026-10-26: under 0.5 for them, 0.1 suggested); decide on a mock-up the threshold and what the freed third of the row becomes.
+- [x] **10. Item stats and filters** (#20, #23, #25, #26)
 - [ ] **11. Trade site client**: search, fetch and currency exchange, limits read from the headers, waiting time before the next search, following the [Trade site usage](docs/trade-site-usage.md) rules.
 - [ ] **12. Offers display**: search block, waiting and refresh block, offer rows with the seller status, suspicious offers, currency exchange offers, more offers, searching, long wait and no offer states; the offer tooltip (position, pin, roll differences, Copy whisper, with a note when the whisper is in the seller's language, which the trade site uses) and the hover animations; the log filter that hides all the messages of `arboard` let through its warnings and errors, which explain a whisper that couldn't be copied.
 - [ ] **13. Estimated prices**: the roll bar of the rare and magic modifiers over every tier; filters of the rare and magic items and jewels (pseudo totals, weapon DPS, base, item level; their minimums at 90 % of the copied value are there since 10b, and the range of every tier of a modifier keeps them within it) and of the normal items (base, sockets, item level, exceptional bases), estimated price from the median of the 5 cheapest similar offers, uncertainty warning; the template of each modifier line (`Adds # to # Lightning Damage`) to match it with the stat ids of the trade site, and the item class as a type rather than a translated name.

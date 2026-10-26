@@ -45,6 +45,8 @@ const ENOUGH_OFFERS: u32 = 5;
 const SEPARATOR: &str = " · ";
 /// The currencies of the amounts, in their order.
 const CURRENCIES: [Currency; 3] = [Currency::Divine, Currency::Chaos, Currency::Exalted];
+/// Under this many Divine or Chaos Orbs, an amount is too small to matter and isn't shown.
+const SMALL_AMOUNT: f64 = 0.1;
 
 /// What the price block shows.
 #[derive(Debug, Clone, PartialEq)]
@@ -216,10 +218,13 @@ impl<'a> PriceBlock<'a> {
         amounts(ui, price.exalted * f64::from(stack.unwrap_or(1)), rates);
         if stack.is_some() {
             let unit = CURRENCIES
+                .into_iter()
+                .filter(|&currency| worth_showing(price.exalted, currency, rates))
                 .map(|currency| {
                     let (amount, abbreviation) = in_currency(price.exalted, currency, rates);
                     format!("{amount} {abbreviation}")
                 })
+                .collect::<Vec<_>>()
                 .join(SEPARATOR);
             ui.add_space(LINE_GAP);
             line(ui, &self.i18n.unit_price(&unit), color::WEAK);
@@ -329,11 +334,13 @@ impl<'a> PriceBlock<'a> {
     }
 }
 
-/// The amounts in the three currencies, side by side, each with its orb.
+/// The amounts in the three currencies, side by side, each with its orb. An amount too small
+/// to matter leaves its column empty, so that each currency keeps its place.
 fn amounts(ui: &mut Ui, exalted: f64, rates: Rates) {
     let width = ui.available_width() / 3.0;
     ui.horizontal(|ui| {
         for currency in CURRENCIES {
+            let shown = worth_showing(exalted, currency, rates);
             let (amount, _) = in_currency(exalted, currency, rates);
             ui.allocate_ui_with_layout(
                 vec2(width, ORB_SIZE),
@@ -341,24 +348,44 @@ fn amounts(ui: &mut Ui, exalted: f64, rates: Rates) {
                 |ui| {
                     // A third of the width each, whatever the length of the amount.
                     ui.set_min_width(width);
-                    ui.spacing_mut().item_spacing.x = ORB_GAP;
-                    ui.add(orb(currency, ORB_SIZE));
-                    ui.label(RichText::new(amount).font(text::price()).color(color::TEXT));
+                    if shown {
+                        ui.spacing_mut().item_spacing.x = ORB_GAP;
+                        ui.add(orb(currency, ORB_SIZE));
+                        ui.label(RichText::new(amount).font(text::price()).color(color::TEXT));
+                    }
                 },
             );
         }
     });
 }
 
+/// Whether `exalted` Exalted Orbs are worth showing in `currency`: always in Exalted Orbs,
+/// the smallest currency; in Divine or Chaos Orbs, from [`SMALL_AMOUNT`].
+fn worth_showing(exalted: f64, currency: Currency, rates: Rates) -> bool {
+    currency == Currency::Exalted || value_in(exalted, currency, rates) >= SMALL_AMOUNT
+}
+
 /// `exalted` Exalted Orbs in `currency`, written, with the abbreviation of the currency, the
 /// same in every language.
 fn in_currency(exalted: f64, currency: Currency, rates: Rates) -> (String, &'static str) {
-    let (value, abbreviation) = match currency {
-        Currency::Divine => (exalted / rates.divine, "div"),
-        Currency::Chaos => (exalted / rates.chaos, "c"),
-        Currency::Exalted => (exalted, "ex"),
+    let abbreviation = match currency {
+        Currency::Divine => "div",
+        Currency::Chaos => "c",
+        Currency::Exalted => "ex",
     };
-    (format::amount(value, currency), abbreviation)
+    (
+        format::amount(value_in(exalted, currency, rates), currency),
+        abbreviation,
+    )
+}
+
+/// `exalted` Exalted Orbs in `currency`.
+fn value_in(exalted: f64, currency: Currency, rates: Rates) -> f64 {
+    match currency {
+        Currency::Divine => exalted / rates.divine,
+        Currency::Chaos => exalted / rates.chaos,
+        Currency::Exalted => exalted,
+    }
 }
 
 /// The price of a row of a list, in one currency: Divine Orbs from one Divine Orb, Exalted
@@ -478,6 +505,20 @@ mod tests {
         assert_eq!(in_currency(9000.0, Currency::Divine, RATES).0, "12");
         assert_eq!(in_currency(9000.0, Currency::Chaos, RATES).0, "120");
         assert_eq!(in_currency(9000.0, Currency::Exalted, RATES).0, "9K");
+    }
+
+    #[test]
+    fn an_amount_under_a_tenth_of_divine_or_chaos_orb_is_hidden() {
+        // 0.1 div, 1 c: all shown.
+        assert!(worth_showing(75.0, Currency::Divine, RATES));
+        // 0.08 div, 0.8 c: the Divine Orbs hidden.
+        assert!(!worth_showing(60.0, Currency::Divine, RATES));
+        assert!(worth_showing(60.0, Currency::Chaos, RATES));
+        // 0.0013 div, 0.013 c: only the Exalted Orbs.
+        assert!(!worth_showing(1.0, Currency::Divine, RATES));
+        assert!(!worth_showing(1.0, Currency::Chaos, RATES));
+        assert!(worth_showing(1.0, Currency::Exalted, RATES));
+        assert!(worth_showing(0.004, Currency::Exalted, RATES));
     }
 
     #[test]

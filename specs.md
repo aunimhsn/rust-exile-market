@@ -134,6 +134,7 @@ The window has a title bar, then three bands (item, price, offers), then a statu
 **Fixed-name items** (currency exchange and uniques):
 
 - The price in **Divine Orbs**, **Chaos Orbs** and **Exalted Orbs**, side by side, each with its orb icon, so that the price is readable at any time of the league.
+- An amount under 0.1 Divine Orb or 0.1 Chaos Orb is too small to matter and isn't shown: its column stays empty, so that each currency keeps its place (an item worth 1 Exalted Orb shows only "1" with its orb, in the third column). The Exalted Orbs are always shown. The unit price line of a stack leaves these amounts out too ("Unit price: 0.27 c · 20 ex").
 - The large price is always the value of what was copied: for a stack, the value of the whole stack, with "Stack of 7" on the right of the title and the unit price on a small line ("Unit price: 0.25 div · 2.49 c · 182 ex").
 - On the right of the title, for a unique, the number of offers behind the price ("23 offers"); for a currency exchange item, which always has plenty of offers, the stack size instead ("Stack of 7"; nothing for a single item, without a unit price line).
 - The trend, the change first, in green when it rises and in red when it falls, without icon: "+4% over the last 3 days", "−11% over the last 7 days" (a real minus sign). It compares the price with the oldest known price of the last 7 days: 7 days, or fewer for an item listed lately. Under 1 % of change, "Stable over the last 7 days" in gray. No trend without a past price.
