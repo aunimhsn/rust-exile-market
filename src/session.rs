@@ -12,7 +12,7 @@ use crate::market::{MarketEvent, Source};
 use crate::prices::{PriceList, Rates, UniqueModifiers};
 use crate::pricing::{self, FixedPrice, NoFixedPrice};
 use crate::trade::link::{self, TradeTarget};
-use crate::trade::search::Order;
+use crate::trade::search::Search;
 
 /// What the parser read from the last item copied in the game.
 #[derive(Debug)]
@@ -279,13 +279,13 @@ impl Session {
     /// The search for `item` on the trade site, in the league shown; none before the league
     /// is known, and for an unidentified unique, which is identified to be searched.
     #[must_use]
-    pub fn trade_search(&self, item: &Item) -> Option<Order> {
+    pub fn trade_search(&self, item: &Item) -> Option<Search> {
         let league = self.league.as_ref()?;
         let target = self.trade_target(item)?;
         if let TradeTarget::UnidentifiedUnique { .. } = target {
             return None;
         }
-        Some(Order::Search {
+        Some(Search {
             language: item.language(),
             league: league.clone(),
             query: link::query(item, &target),
@@ -683,5 +683,34 @@ mod tests {
             None
         );
         assert_eq!(session.leagues(), None);
+    }
+
+    #[test]
+    fn the_offers_are_searched_in_the_league_shown_once_the_item_is_identified() {
+        const UNIQUE: &str = "Item Class: Rings\nRarity: Unique\nAndvarius\nGold Ring";
+        const UNIDENTIFIED: &str =
+            "Item Class: Rings\nRarity: Unique\nGold Ring\n--------\nUnidentified";
+        let parsed =
+            |session: &Session| -> Item { session.item().unwrap().parsed().unwrap().clone() };
+        let mut unknown_league = Session::new(None);
+        copy(&mut unknown_league, UNIQUE);
+        assert_eq!(
+            unknown_league.trade_search(&parsed(&unknown_league)),
+            None,
+            "the league isn't known yet"
+        );
+
+        let mut session = session();
+        copy(&mut session, UNIQUE);
+        let unique = parsed(&session);
+        let search = session.trade_search(&unique).expect("a search");
+        assert_eq!(search.league, League::new("Forbidden Rites"));
+        assert_eq!(search.language, Language::English);
+        assert!(!session.must_identify(&unique));
+
+        copy(&mut session, UNIDENTIFIED);
+        let unidentified = parsed(&session);
+        assert_eq!(session.trade_search(&unidentified), None);
+        assert!(session.must_identify(&unidentified));
     }
 }

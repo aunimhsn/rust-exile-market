@@ -19,7 +19,7 @@ use crate::session::{self, LeagueChange, PricesState, Session};
 use crate::settings::{SettingChange, Settings, SettingsFile};
 use crate::trade::ItemNamesWatch;
 use crate::trade::query::SearchKind;
-use crate::trade::search::{OfferSearch, Order};
+use crate::trade::search::{OfferSearch, Search};
 use crate::ui::{
     self, BubbleAction, EmptyState, ItemBlock, ItemBlockAction, LeagueList, LeagueListAction,
     NewLeagueBubble, OffersAction, OffersBlock, PriceBlock, PriceDownload, Reference, ResizeEdges,
@@ -227,7 +227,8 @@ impl ExileMarketApp {
         warnings
     }
 
-    fn item(&mut self, ui: &mut Ui, prices: PricesState) {
+    /// The item shown, with the `search` of its offers when it can be searched.
+    fn item(&mut self, ui: &mut Ui, prices: PricesState, search: Option<Search>) {
         let Some(shown) = self.session.item() else {
             let empty = EmptyState::new(&self.i18n);
             if let (PricesState::Downloading { progress }, Some((league, quote))) =
@@ -251,7 +252,6 @@ impl ExileMarketApp {
         };
         // The pill shows only when its link can be opened: the league and the search known.
         let url = self.session.trade_url(item);
-        let search = self.session.trade_search(item);
         let must_identify = self.session.must_identify(item);
         let fixed_price = self.session.fixed_price(item);
         let unique_modifiers = session::unique_modifiers(item, &fixed_price);
@@ -268,9 +268,10 @@ impl ExileMarketApp {
             }
             let league = self.session.league().map(League::name);
             PriceBlock::new(item, fixed_price, prices, league, &self.i18n).show(ui);
-            if let Some(Order::Search { query, .. }) = &search {
+            if let Some(search) = &search {
+                let kind = search.query.kind();
                 offers_action =
-                    OffersBlock::new(&self.offers, query.kind(), reference, &self.i18n).show(ui);
+                    OffersBlock::new(&self.offers, kind, reference, &self.i18n).show(ui);
             } else if must_identify {
                 OffersBlock::identify(ui, &self.i18n);
             }
@@ -291,17 +292,10 @@ impl ExileMarketApp {
         }
     }
 
-    /// The kind of search of the item shown; a search of items when none can be searched.
-    fn search_kind(&self) -> SearchKind {
-        self.session
-            .item()
-            .and_then(|shown| shown.parsed().ok())
-            .and_then(|item| self.session.trade_search(item))
-            .and_then(|order| match order {
-                Order::Search { query, .. } => Some(query.kind()),
-                Order::More => None,
-            })
-            .unwrap_or(SearchKind::Items)
+    /// The search of the offers of the item shown, when it can be searched.
+    fn shown_search(&self) -> Option<Search> {
+        let item = self.session.item()?.parsed().ok()?;
+        self.session.trade_search(item)
     }
 }
 
@@ -313,15 +307,17 @@ impl App for ExileMarketApp {
             if matches!(event, ClipboardEvent::Copied(_)) {
                 self.scroll_to_top = true;
                 self.filters.clear();
-            }
-            if matches!(event, ClipboardEvent::Copied(_)) {
                 self.offers.clear();
             }
             self.view = self.view.after(&event);
             self.session.apply(event);
         });
-        self.search
-            .receive(|answer| self.offers.apply(answer, SystemTime::now()));
+        if self
+            .search
+            .receive(|answer| self.offers.apply(answer, SystemTime::now()))
+        {
+            self.offers.thread_lost();
+        }
         let mut shown = None;
         self.market.receive(|event| {
             let closed = self.settings.closed_new_leagues();
@@ -379,12 +375,12 @@ impl App for ExileMarketApp {
             // The age of the prices changes with the time, without an event.
             ctx.request_repaint_after(Duration::from_secs(60 - age.as_secs() % 60));
         }
-        let trade = trade_status(
-            &self.offers,
-            self.search_kind(),
-            Instant::now(),
-            SystemTime::now(),
-        );
+        let search = self.shown_search();
+        // The status bar tells the wait before a search of the item shown.
+        let kind = search
+            .as_ref()
+            .map_or(SearchKind::Items, |search| search.query.kind());
+        let trade = trade_status(&self.offers, kind, Instant::now(), SystemTime::now());
         match trade {
             // The age of the last search, and the countdown of the long wait, change with the time.
             TradeStatus::Searched(age) => {
@@ -398,7 +394,7 @@ impl App for ExileMarketApp {
             View::Settings => StatusBar::author(&self.i18n).show(ui),
         }
         match self.view {
-            View::Item => self.item(ui, prices),
+            View::Item => self.item(ui, prices, search),
             View::Settings => {
                 if let Some(change) = SettingsPanel::new(&self.settings, &self.i18n).show(ui) {
                     self.change_setting(ui.ctx(), change);
@@ -428,7 +424,7 @@ fn reference(fixed_price: &Result<(FixedPrice, Rates), NoFixedPrice>) -> Option<
 /// search of `kind`, or else the age of the last search.
 fn trade_status(offers: &Offers, kind: SearchKind, now: Instant, clock: SystemTime) -> TradeStatus {
     match (offers.wait(kind, now), offers.last_search()) {
-        (Some(wait), _) if wait > LONG_WAIT => TradeStatus::Waiting(wait),
+        (wait, _) if wait > LONG_WAIT => TradeStatus::Waiting(wait),
         (_, Some(searched)) => {
             TradeStatus::Searched(clock.duration_since(searched).unwrap_or_default())
         }
@@ -476,7 +472,7 @@ mod tests {
             trade_status(&offers, SearchKind::Items, now, clock),
             TradeStatus::Idle
         );
-        let search = Order::Search {
+        let search = Search {
             language: crate::language::Language::English,
             league: League::new("Standard"),
             query: Query::Exchange("divine".to_owned()),

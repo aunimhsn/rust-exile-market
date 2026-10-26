@@ -71,6 +71,12 @@ age-minutes = { $minutes }min ago
 age-hours = { $hours }h ago
 age-days = { $days }d ago
 
+## Waits, rounded up
+
+# E.g. "8s", "4min".
+wait-seconds = { $seconds }s
+wait-minutes = { $minutes }min
+
 ## Warnings
 
 clipboard-unreadable = The clipboard can't be read.
@@ -201,6 +207,9 @@ offers-column-per-unit = Per unit
 offers-column-stock = Stock
 offers-column-listed = Listed
 offers-again-tooltip = Search again
+# The tooltip of the dark block while the answer of the last search or of more offers is
+# awaited.
+offers-busy-tooltip = Waiting for the answer of the trade site
 # The tooltip of the countdown before the next search, e.g. "8s".
 offers-next-search-tooltip = Next search in { $wait }
 # Under the title, during a long wait, e.g. "4min".

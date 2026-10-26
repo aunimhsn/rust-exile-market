@@ -213,15 +213,20 @@ enum Block {
     Search,
     /// Search again.
     Again,
-    /// The time left before the next search; unknown while an answer is awaited.
+    /// The time left before the next search; `None` once it is over while an answer is
+    /// awaited.
     Waiting(Option<Duration>),
 }
 
-/// The block of a band whose action is `ready` once the wait allows a search.
-fn block(ready: Block, wait: Option<Duration>) -> Block {
-    match wait {
-        Some(Duration::ZERO) => ready,
-        wait => Block::Waiting(wait),
+/// The block of a band whose action is `ready` once the `wait` is over and the offers aren't
+/// `busy`.
+fn block(ready: Block, wait: Duration, busy: bool) -> Block {
+    if !wait.is_zero() {
+        Block::Waiting(Some(wait))
+    } else if busy {
+        Block::Waiting(None)
+    } else {
+        ready
     }
 }
 
@@ -272,7 +277,8 @@ impl<'a> OffersBlock<'a> {
     pub fn show(self, ui: &mut Ui) -> Option<OffersAction> {
         let now = SystemTime::now();
         let wait = self.offers.wait(self.kind, Instant::now());
-        if let Some(wait) = wait.filter(|wait| !wait.is_zero()) {
+        let busy = self.offers.busy();
+        if !wait.is_zero() {
             // The countdown changes every second.
             let to_next_second = Duration::from_nanos(u64::from(wait.subsec_nanos()));
             ui.ctx().request_repaint_after(if to_next_second.is_zero() {
@@ -286,19 +292,20 @@ impl<'a> OffersBlock<'a> {
             OffersState::Idle => self.search_band(
                 ui,
                 &[(i18n.text(Message::OffersSearchHint), color::WEAK)],
-                block(Block::Search, wait),
+                block(Block::Search, wait, busy),
             ),
             OffersState::Unreachable => self.search_band(
                 ui,
                 &[(i18n.text(Message::OffersUnreachable), color::TEXT)],
-                block(Block::Search, wait),
+                block(Block::Search, wait, busy),
             ),
             OffersState::Limited => {
-                let line = match wait {
-                    Some(wait) if !wait.is_zero() => (i18n.offers_limit(wait), color::WARNING),
-                    _ => (i18n.text(Message::OffersSearchHint), color::WEAK),
+                let line = if wait.is_zero() {
+                    (i18n.text(Message::OffersSearchHint), color::WEAK)
+                } else {
+                    (i18n.offers_limit(wait), color::WARNING)
                 };
-                self.search_band(ui, &[line], block(Block::Search, wait))
+                self.search_band(ui, &[line], block(Block::Search, wait, busy))
             }
             OffersState::Searching => {
                 self.searching(ui);
@@ -423,7 +430,7 @@ impl<'a> OffersBlock<'a> {
         ui: &mut Ui,
         list: &List,
         searched: SystemTime,
-        wait: Option<Duration>,
+        wait: Duration,
     ) -> Option<OffersAction> {
         let i18n = self.i18n;
         let age = SystemTime::now()
@@ -443,14 +450,14 @@ impl<'a> OffersBlock<'a> {
             let head = Head {
                 age: i18n.offers_searched(&i18n.age(age)),
                 count,
-                block: block(Block::Again, wait),
+                block: block(Block::Again, wait, self.offers.busy()),
             };
             if self.head(ui, &head) {
                 action = Some(OffersAction::Search);
             }
             ui.add_space(HEAD_GAP);
             let mut lines = Vec::new();
-            if let Some(wait) = wait.filter(|&wait| wait > LONG_WAIT) {
+            if wait > LONG_WAIT {
                 lines.push((i18n.offers_limit(wait), color::WARNING));
             }
             if list.rows.is_empty() {
@@ -536,10 +543,10 @@ impl<'a> OffersBlock<'a> {
         };
         let response = ui.interact(rect, ui.scope_id().with("offers-block"), sense);
         let tooltip = match block {
-            Block::Search => Some(i18n.text(Message::OffersSearchTooltip)),
-            Block::Again => Some(i18n.text(Message::OffersAgainTooltip)),
-            Block::Waiting(Some(wait)) => Some(i18n.offers_next_search_tooltip(wait)),
-            Block::Waiting(None) => None,
+            Block::Search => i18n.text(Message::OffersSearchTooltip),
+            Block::Again => i18n.text(Message::OffersAgainTooltip),
+            Block::Waiting(Some(wait)) => i18n.offers_next_search_tooltip(wait),
+            Block::Waiting(None) => i18n.text(Message::OffersBusyTooltip),
         };
         let hover = ui.ctx().animate_bool_with_time_and_easing(
             response.id.with("hover"),
@@ -571,19 +578,15 @@ impl<'a> OffersBlock<'a> {
             Block::Waiting(wait) => {
                 painter.rect_filled(rect, 0.0, color::CONTROL);
                 if let Some(wait) = wait {
-                    let galley = widgets::text_line(ui, crate::i18n::wait(wait), text::countdown());
+                    let galley = widgets::text_line(ui, i18n.wait(wait), text::countdown());
                     let size = galley.size();
                     ui.painter()
                         .galley(rect.center() - size / 2.0, galley, color::WEAK);
                 }
             }
         }
-        let label = tooltip.clone().unwrap_or_default();
-        response.widget_info(|| WidgetInfo::labeled(Role::Button, clickable, &label));
-        let response = match tooltip {
-            Some(tooltip) => response.on_hover_text(tooltip),
-            None => response,
-        };
+        response.widget_info(|| WidgetInfo::labeled(Role::Button, clickable, &tooltip));
+        let response = response.on_hover_text(tooltip);
         clickable && response.on_hover_cursor(CursorIcon::PointingHand).clicked()
     }
 
@@ -1023,12 +1026,21 @@ mod tests {
     }
 
     #[test]
-    fn the_block_searches_only_once_the_wait_is_over() {
-        assert_eq!(block(Block::Again, Some(Duration::ZERO)), Block::Again);
+    fn the_block_searches_only_once_the_wait_is_over_and_no_answer_is_awaited() {
+        assert_eq!(block(Block::Again, Duration::ZERO, false), Block::Again);
+        let eight = Duration::from_secs(8);
         assert_eq!(
-            block(Block::Again, Some(Duration::from_secs(8))),
-            Block::Waiting(Some(Duration::from_secs(8)))
+            block(Block::Again, eight, false),
+            Block::Waiting(Some(eight))
         );
-        assert_eq!(block(Block::Search, None), Block::Waiting(None));
+        assert_eq!(
+            block(Block::Again, eight, true),
+            Block::Waiting(Some(eight)),
+            "the countdown stays while more offers come"
+        );
+        assert_eq!(
+            block(Block::Search, Duration::ZERO, true),
+            Block::Waiting(None)
+        );
     }
 }

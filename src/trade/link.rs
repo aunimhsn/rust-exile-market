@@ -1,8 +1,7 @@
-//! The links to the trade site, opened in the browser: the search for a copied item, in the
-//! league shown and on the trade site of the language of the item, sellers online.
-//!
-//! The browser makes the search, not the application: these links are outside the limits of
-//! the trade site API.
+//! The search for a copied item on the trade site: what it looks for, and its query, sent
+//! by the application within the limits of the trade site API, or opened in the browser as a
+//! link, in the league shown and on the trade site of the language of the item, sellers
+//! online. The browser makes the search of a link: the links are outside those limits.
 
 use serde_json::json;
 
@@ -274,5 +273,32 @@ mod tests {
         // The Exalted Orb itself is paid in Divine Orbs.
         let url = url(Language::English, &League::new("Standard"), &target.query());
         assert_eq!(query(&url)["exchange"]["have"], json!(["divine"]));
+    }
+
+    #[test]
+    fn a_corrupted_item_is_compared_with_corrupted_offers_only() {
+        for state in ["Corrupted", "Twice Corrupted"] {
+            let ring = parse(&format!(
+                "Item Class: Rings\nRarity: Unique\nAndvarius\nGold Ring\n--------\n{state}"
+            ));
+            let target = target(&ring, None, None).expect("a target");
+
+            let Query::Items(items) = super::query(&ring, &target) else {
+                panic!("a search of items");
+            };
+            assert_eq!(items.corrupted, Some(true), "{state}");
+        }
+    }
+
+    #[test]
+    fn an_item_of_the_exchange_is_never_filtered_by_its_corrupted_state() {
+        let names = item_names();
+        let stack = parse(include_str!("../item/test-items/fr-currency-stack.txt"));
+        let target = target(&stack, Some(&names), None).expect("a target");
+
+        assert_eq!(
+            super::query(&stack, &target),
+            Query::Exchange("transmute".to_owned())
+        );
     }
 }

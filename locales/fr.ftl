@@ -71,6 +71,12 @@ age-minutes = il y a { $minutes }min
 age-hours = il y a { $hours }h
 age-days = il y a { $days }j
 
+## Attentes, arrondies vers le haut
+
+# Par exemple « 8s », « 4min ».
+wait-seconds = { $seconds }s
+wait-minutes = { $minutes }min
+
 ## Avertissements
 
 clipboard-unreadable = Le presse-papiers ne peut pas être lu.
@@ -194,8 +200,8 @@ offers-label = Offres
 offers-search-hint = Une recherche par clic, dans les limites du site d'échange.
 offers-search-tooltip = Chercher les offres
 offers-searching = Recherche sur le site d'échange…
-# Sous le titre, par exemple « recherché il y a 2min ».
-offers-searched = recherché { $age }
+# Sous le titre, par exemple « recherche il y a 2min ».
+offers-searched = recherche { $age }
 # À droite du titre : les offres affichées, parmi celles trouvées.
 offers-count = { $shown } sur { $total } en ligne
 # Les titres des colonnes des offres.
@@ -204,6 +210,9 @@ offers-column-per-unit = Par unité
 offers-column-stock = Stock
 offers-column-listed = Publiée
 offers-again-tooltip = Chercher à nouveau
+# L'infobulle du bloc sombre pendant qu'on attend la réponse de la dernière recherche ou
+# des offres suivantes.
+offers-busy-tooltip = En attente de la réponse du site d'échange
 # L'infobulle du compte à rebours avant la prochaine recherche, par exemple « 8s ».
 offers-next-search-tooltip = Prochaine recherche dans { $wait }
 # Sous le titre, pendant une longue attente, par exemple « 4min ».

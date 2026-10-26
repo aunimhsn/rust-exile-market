@@ -9,7 +9,7 @@ use std::time::{Duration, Instant, SystemTime};
 
 use crate::trade::offers::{ExchangeOffer, ItemOffer};
 use crate::trade::query::SearchKind;
-use crate::trade::search::{Answer, NextSearch, Order, Outcome};
+use crate::trade::search::{Answer, NextSearch, Order, Outcome, Search};
 
 /// The offers shown at once, and added by each click on the double chevron.
 pub const PAGE: usize = 10;
@@ -18,9 +18,10 @@ pub const PAGE: usize = 10;
 pub const LONG_WAIT: Duration = Duration::from_mins(1);
 
 /// What the offers block shows for the item shown.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub enum OffersState {
     /// No search for this item yet.
+    #[default]
     Idle,
     Searching,
     /// The offers of a search of items, the cheapest first.
@@ -46,17 +47,23 @@ pub enum OffersState {
     Limited,
 }
 
+/// The kinds of orders.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PendingOrder {
+    Search(SearchKind),
+    More,
+}
+
 /// The order waiting for its answer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct Pending {
-    /// A search of this kind, or more offers when `None`.
-    search: Option<SearchKind>,
+    order: PendingOrder,
     /// Asked for the item shown: no item was copied since.
     shown: bool,
 }
 
 /// The offers of the item shown, and the searches.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct Offers {
     state: OffersState,
     pending: Option<Pending>,
@@ -64,17 +71,8 @@ pub struct Offers {
     next_search: Option<NextSearch>,
     /// When the last search was answered with its offers.
     last_search: Option<SystemTime>,
-}
-
-impl Default for Offers {
-    fn default() -> Self {
-        Self {
-            state: OffersState::Idle,
-            pending: None,
-            next_search: None,
-            last_search: None,
-        }
-    }
+    /// The thread of the searches is gone: no answer will come, and no order is sent.
+    lost: bool,
 }
 
 impl Offers {
@@ -99,41 +97,42 @@ impl Offers {
         }
     }
 
-    /// How long to wait at `now` before a search of `kind` may be sent; `None` while the
-    /// answer of an order hasn't come, which nothing can count down.
+    /// No order may be sent: the answer of the last one hasn't come, or the thread of the
+    /// searches is gone.
     #[must_use]
-    pub fn wait(&self, kind: SearchKind, now: Instant) -> Option<Duration> {
-        if self.pending.is_some() {
-            return None;
-        }
-        Some(self.next_search.map_or(Duration::ZERO, |next| {
-            next.of(kind).saturating_duration_since(now)
-        }))
+    pub fn busy(&self) -> bool {
+        self.pending.is_some() || self.lost
     }
 
-    /// Asks the search `order` at `now`: the order to send, or `None` when it isn't allowed
-    /// yet.
+    /// How long to wait at `now` before the limits allow a search of `kind`, once the
+    /// offers are no longer [busy](Self::busy).
     #[must_use]
-    pub fn search(&mut self, order: Order, now: Instant) -> Option<Order> {
-        let Order::Search { query, .. } = &order else {
-            return None;
-        };
-        let kind = query.kind();
-        if self.wait(kind, now) != Some(Duration::ZERO) {
+    pub fn wait(&self, kind: SearchKind, now: Instant) -> Duration {
+        self.next_search.map_or(Duration::ZERO, |next| {
+            next.of(kind).saturating_duration_since(now)
+        })
+    }
+
+    /// Asks `search` at `now`: the order to send, or `None` when it isn't allowed yet.
+    #[must_use]
+    pub fn search(&mut self, search: Search, now: Instant) -> Option<Order> {
+        let kind = search.query.kind();
+        if self.busy() || !self.wait(kind, now).is_zero() {
             return None;
         }
         self.pending = Some(Pending {
-            search: Some(kind),
+            order: PendingOrder::Search(kind),
             shown: true,
         });
         self.state = OffersState::Searching;
-        Some(order)
+        Some(Order::Search(search))
     }
 
     /// Shows 10 more offers: those of the currency exchange are all known, those of a search
     /// of items are fetched with the order returned.
     #[must_use]
     pub fn more(&mut self) -> Option<Order> {
+        let busy = self.busy();
         match &mut self.state {
             OffersState::Exchange { offers, shown, .. } => {
                 *shown = (*shown + PAGE).min(offers.len());
@@ -143,10 +142,10 @@ impl Offers {
                 more: true,
                 loading_more,
                 ..
-            } if self.pending.is_none() => {
+            } if !busy => {
                 *loading_more = true;
                 self.pending = Some(Pending {
-                    search: None,
+                    order: PendingOrder::More,
                     shown: true,
                 });
                 Some(Order::More)
@@ -155,28 +154,55 @@ impl Offers {
         }
     }
 
+    /// The thread of the searches is gone: the order waiting for its answer won't get one,
+    /// and no order is sent any more.
+    pub fn thread_lost(&mut self) {
+        self.lost = true;
+        if self.pending.take().is_some_and(|pending| pending.shown) {
+            self.state = OffersState::Unreachable;
+        }
+    }
+
     /// Takes in the answer of the last order, received at `now`.
     pub fn apply(&mut self, answer: Answer, now: SystemTime) {
-        let Some(pending) = self.pending.take() else {
-            log::warn!("Trade site: an answer without an order");
-            return;
-        };
+        let pending = self.pending.take();
+        // The waiting time first, whatever the order: it keeps the account of the player safe.
         let mut next_search = answer.next_search;
-        if let (Outcome::Limited { until, .. }, Some(kind)) = (&answer.outcome, pending.search) {
-            // Nothing is sent before the end of the wait, whatever the limits known.
-            let next = match kind {
-                SearchKind::Items => &mut next_search.items,
-                SearchKind::Exchange => &mut next_search.exchange,
+        if let Outcome::Limited { until, .. } = &answer.outcome {
+            // Nothing is sent before the end of the wait, whatever the limits known: for the
+            // kind of the search refused, for both when the order is unknown. The limits of the
+            // fetch of more offers are already in those of the searches of items.
+            let (items, exchange) = match pending.map(|pending| pending.order) {
+                Some(PendingOrder::Search(SearchKind::Items)) => (true, false),
+                Some(PendingOrder::Search(SearchKind::Exchange)) => (false, true),
+                Some(PendingOrder::More) => (false, false),
+                None => (true, true),
             };
-            *next = (*next).max(*until);
+            if items {
+                next_search.items = next_search.items.max(*until);
+            }
+            if exchange {
+                next_search.exchange = next_search.exchange.max(*until);
+            }
         }
-        self.next_search = Some(next_search);
+        // No answer shortens a wait told before.
+        self.next_search = Some(match self.next_search {
+            Some(known) => NextSearch {
+                items: known.items.max(next_search.items),
+                exchange: known.exchange.max(next_search.exchange),
+            },
+            None => next_search,
+        });
         if matches!(
             answer.outcome,
             Outcome::Items { .. } | Outcome::Exchange { .. }
         ) {
             self.last_search = Some(now);
         }
+        let Some(pending) = pending else {
+            log::warn!("Trade site: an answer without an order");
+            return;
+        };
         if !pending.shown {
             return;
         }
@@ -230,7 +256,7 @@ impl Offers {
                     searched,
                     ..
                 },
-            ) if pending.search.is_none() => OffersState::Items {
+            ) if pending.order == PendingOrder::More => OffersState::Items {
                 offers,
                 total,
                 more,
@@ -252,8 +278,8 @@ mod tests {
     use crate::trade::offers::{OfferItem, Price, SellerStatus};
     use crate::trade::query::{ItemQuery, Query};
 
-    fn item_search() -> Order {
-        Order::Search {
+    fn item_search() -> Search {
+        Search {
             language: Language::English,
             league: League::new("Standard"),
             query: Query::Items(ItemQuery {
@@ -266,8 +292,8 @@ mod tests {
         }
     }
 
-    fn exchange_search() -> Order {
-        Order::Search {
+    fn exchange_search() -> Search {
+        Search {
             language: Language::English,
             league: League::new("Standard"),
             query: Query::Exchange("divine".to_owned()),
@@ -348,17 +374,13 @@ mod tests {
         let now = Instant::now();
         let mut offers = Offers::default();
 
-        assert_eq!(offers.wait(SearchKind::Exchange, now), Some(Duration::ZERO));
+        assert_eq!(offers.wait(SearchKind::Exchange, now), Duration::ZERO);
         assert_eq!(
             offers.search(exchange_search(), now),
-            Some(exchange_search())
+            Some(Order::Search(exchange_search()))
         );
         assert_eq!(offers.state(), &OffersState::Searching);
-        assert_eq!(
-            offers.wait(SearchKind::Exchange, now),
-            None,
-            "an answer is awaited"
-        );
+        assert!(offers.busy(), "an answer is awaited");
         assert_eq!(offers.search(exchange_search(), now), None);
 
         let outcome = Outcome::Exchange {
@@ -378,13 +400,13 @@ mod tests {
         assert_eq!(offers.last_search(), Some(SystemTime::UNIX_EPOCH));
         assert_eq!(
             offers.wait(SearchKind::Exchange, now),
-            Some(Duration::from_secs(10))
+            Duration::from_secs(10)
         );
         assert_eq!(offers.search(exchange_search(), now), None, "too soon");
         let later = now + Duration::from_secs(10);
         assert_eq!(
             offers.search(exchange_search(), later),
-            Some(exchange_search())
+            Some(Order::Search(exchange_search()))
         );
     }
 
@@ -485,7 +507,7 @@ mod tests {
         assert_eq!(offers.last_search(), Some(SystemTime::UNIX_EPOCH));
         assert_eq!(
             offers.wait(SearchKind::Items, now),
-            Some(Duration::from_secs(10)),
+            Duration::from_secs(10),
             "the waiting time applies to every item"
         );
     }
@@ -509,7 +531,7 @@ mod tests {
         assert_eq!(offers.last_search(), None);
         assert_eq!(
             offers.wait(SearchKind::Items, now),
-            Some(Duration::from_secs(240))
+            Duration::from_secs(240)
         );
         assert_eq!(offers.search(item_search(), just_before), None);
     }
@@ -527,5 +549,143 @@ mod tests {
 
         assert_eq!(offers.state(), &OffersState::Unreachable);
         assert_eq!(offers.last_search(), None);
+    }
+
+    #[test]
+    fn more_offers_for_a_previous_item_change_only_the_waiting_time() {
+        let now = Instant::now();
+        let mut offers = Offers::default();
+        let _ = offers.search(item_search(), now);
+        offers.apply(
+            answer(items(&["a"], true), after(now, 10)),
+            SystemTime::UNIX_EPOCH,
+        );
+        assert_eq!(offers.more(), Some(Order::More));
+
+        offers.clear();
+        let outcome = Outcome::More {
+            offers: vec![offer("b")],
+            more: false,
+        };
+        offers.apply(answer(outcome, after(now, 20)), SystemTime::now());
+
+        assert_eq!(offers.state(), &OffersState::Idle);
+        assert!(!offers.busy());
+        assert_eq!(offers.wait(SearchKind::Items, now), Duration::from_secs(20));
+    }
+
+    #[test]
+    fn a_refused_search_of_the_exchange_waits_only_before_the_next_one() {
+        let now = Instant::now();
+        let mut offers = Offers::default();
+        let _ = offers.search(exchange_search(), now);
+        let outcome = Outcome::Limited {
+            until: now + Duration::from_secs(240),
+            refused: true,
+        };
+
+        offers.apply(answer(outcome, after(now, 10)), SystemTime::UNIX_EPOCH);
+
+        assert_eq!(
+            offers.wait(SearchKind::Exchange, now),
+            Duration::from_secs(240)
+        );
+        assert_eq!(offers.wait(SearchKind::Items, now), Duration::from_secs(10));
+    }
+
+    #[test]
+    fn refused_more_offers_wait_as_the_limits_of_the_fetch_tell() {
+        let now = Instant::now();
+        let mut offers = Offers::default();
+        let _ = offers.search(item_search(), now);
+        offers.apply(
+            answer(items(&["a"], true), after(now, 10)),
+            SystemTime::UNIX_EPOCH,
+        );
+        let _ = offers.more();
+        let outcome = Outcome::Limited {
+            until: now + Duration::from_secs(240),
+            refused: true,
+        };
+
+        // The limits of the fetch are already in the waiting time of the searches of items.
+        offers.apply(answer(outcome, after(now, 60)), SystemTime::now());
+
+        assert_eq!(ids(&offers), ["a"]);
+        assert_eq!(offers.wait(SearchKind::Items, now), Duration::from_secs(60));
+    }
+
+    #[test]
+    fn no_answer_shortens_a_wait_told_before() {
+        let now = Instant::now();
+        let mut offers = Offers::default();
+        let _ = offers.search(item_search(), now);
+        let outcome = Outcome::Limited {
+            until: now + Duration::from_secs(240),
+            refused: true,
+        };
+        offers.apply(answer(outcome, after(now, 10)), SystemTime::UNIX_EPOCH);
+
+        // An answer without an order, and limits that would allow a search sooner.
+        offers.apply(
+            answer(items(&["a"], false), after(now, 10)),
+            SystemTime::now(),
+        );
+
+        assert_eq!(
+            offers.wait(SearchKind::Items, now),
+            Duration::from_secs(240)
+        );
+    }
+
+    #[test]
+    fn a_limit_answered_without_an_order_applies_to_both_kinds_of_searches() {
+        let now = Instant::now();
+        let mut offers = Offers::default();
+        let outcome = Outcome::Limited {
+            until: now + Duration::from_secs(240),
+            refused: true,
+        };
+
+        offers.apply(answer(outcome, after(now, 10)), SystemTime::UNIX_EPOCH);
+
+        assert_eq!(offers.state(), &OffersState::Idle);
+        assert_eq!(
+            offers.wait(SearchKind::Items, now),
+            Duration::from_secs(240)
+        );
+        assert_eq!(
+            offers.wait(SearchKind::Exchange, now),
+            Duration::from_secs(240)
+        );
+    }
+
+    #[test]
+    fn a_lost_thread_of_the_searches_shows_the_trade_site_unreachable_for_good() {
+        let now = Instant::now();
+        let mut offers = Offers::default();
+        let _ = offers.search(item_search(), now);
+
+        offers.thread_lost();
+
+        assert_eq!(offers.state(), &OffersState::Unreachable);
+        assert!(offers.busy());
+        let later = now + Duration::from_mins(10);
+        assert_eq!(offers.search(item_search(), later), None);
+    }
+
+    #[test]
+    fn a_lost_thread_asks_no_more_offers() {
+        let now = Instant::now();
+        let mut offers = Offers::default();
+        let _ = offers.search(item_search(), now);
+        offers.apply(
+            answer(items(&["a"], true), after(now, 10)),
+            SystemTime::UNIX_EPOCH,
+        );
+
+        offers.thread_lost();
+
+        assert_eq!(offers.more(), None);
     }
 }

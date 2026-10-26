@@ -17,15 +17,18 @@ use crate::worker::{OnDrop, Outbox, Waited, Worker};
 /// longer fails, rather than leaving the player without an answer.
 const LONGEST_FETCH_WAIT: Duration = Duration::from_secs(5);
 
+/// A search, in `league`, on the trade site of `language`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Search {
+    pub language: Language,
+    pub league: League,
+    pub query: Query,
+}
+
 /// What the player asks.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Order {
-    /// A search, in `league`, on the trade site of `language`.
-    Search {
-        language: Language,
-        league: League,
-        query: Query,
-    },
+    Search(Search),
     /// 10 more offers of the last search of items.
     More,
 }
@@ -125,9 +128,11 @@ impl OfferSearch {
         self.worker.order(order);
     }
 
-    /// Gives the answers received since the last call to `handle`, without waiting.
-    pub fn receive(&mut self, handle: impl FnMut(Answer)) {
-        self.worker.receive(handle);
+    /// Gives the answers received since the last call to `handle`, without waiting; `true`
+    /// the first time the thread is found gone (a panic): no answer will come any more.
+    #[must_use]
+    pub fn receive(&mut self, handle: impl FnMut(Answer)) -> bool {
+        self.worker.receive(handle)
     }
 }
 
@@ -138,7 +143,7 @@ fn latest(first: Order, outbox: &Outbox<Answer, Order>) -> Option<Order> {
     let mut latest = first;
     while let Some(waited) = outbox.pending_order() {
         match waited {
-            Waited::Order(order @ Order::Search { .. }) => latest = order,
+            Waited::Order(order @ Order::Search(_)) => latest = order,
             // More offers of a search answered before, or asked twice.
             Waited::Order(Order::More) | Waited::Elapsed => {}
             Waited::Stop => return None,
@@ -196,11 +201,11 @@ impl<T: Transport> Searches<T> {
 
     fn outcome(&mut self, order: Order) -> Result<Outcome, TradeError> {
         match order {
-            Order::Search {
+            Order::Search(Search {
                 language,
                 league,
                 query: Query::Items(query),
-            } => {
+            }) => {
                 let result = self.client.search_items(language, &league, &query);
                 let search = self.forget_unless_unsent(result)?;
                 log::info!("Trade site: {} offers found", search.total);
@@ -219,11 +224,11 @@ impl<T: Transport> Searches<T> {
                     more,
                 })
             }
-            Order::Search {
+            Order::Search(Search {
                 language,
                 league,
                 query: Query::Exchange(want),
-            } => {
+            }) => {
                 let result = self.client.search_exchange(language, &league, &want);
                 let search = self.forget_unless_unsent(result)?;
                 log::info!("Trade site: {} exchange offers of {want}", search.total);
@@ -310,16 +315,16 @@ mod tests {
             .recv_timeout(Duration::from_secs(5))
             .expect("the application is woken up");
         let mut answers = Vec::new();
-        search.receive(|answer| answers.push(answer));
+        let _ = search.receive(|answer| answers.push(answer));
         answers.pop().expect("an answer")
     }
 
     fn search_ring() -> Order {
-        Order::Search {
+        Order::Search(Search {
             language: Language::English,
             league: League::new("Standard"),
             query: Query::Items(ring()),
-        }
+        })
     }
 
     fn ids(offers: &[ItemOffer]) -> Vec<&str> {
@@ -439,11 +444,11 @@ mod tests {
             thread::sleep(Duration::from_millis(5));
         }
         search.order(Order::More);
-        search.order(Order::Search {
+        search.order(Order::Search(Search {
             language: Language::English,
             league: League::new("Standard"),
             query: Query::Exchange("divine".to_owned()),
-        });
+        }));
         search.order(Order::More);
         drop(blocked);
 
@@ -452,7 +457,7 @@ mod tests {
             wakes
                 .recv_timeout(Duration::from_secs(5))
                 .expect("the application is woken up");
-            search.receive(|answer| answers.push(answer.outcome));
+            let _ = search.receive(|answer| answers.push(answer.outcome));
         }
 
         assert!(matches!(answers[0], Outcome::Items { .. }), "{answers:?}");

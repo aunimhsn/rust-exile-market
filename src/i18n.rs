@@ -91,6 +91,7 @@ pub enum Message {
     OffersColumnStock,
     OffersColumnListed,
     OffersAgainTooltip,
+    OffersBusyTooltip,
     OffersNone,
     OffersNoneHint,
     OffersUnreachable,
@@ -101,7 +102,7 @@ pub enum Message {
 impl Message {
     /// Every message, for the tests.
     #[cfg(test)]
-    const ALL: [Self; 74] = [
+    const ALL: [Self; 75] = [
         Self::LeagueModeSoftcore,
         Self::LeagueModeHardcore,
         Self::LeagueLoading,
@@ -171,6 +172,7 @@ impl Message {
         Self::OffersColumnStock,
         Self::OffersColumnListed,
         Self::OffersAgainTooltip,
+        Self::OffersBusyTooltip,
         Self::OffersNone,
         Self::OffersNoneHint,
         Self::OffersUnreachable,
@@ -250,6 +252,7 @@ impl Message {
             Self::OffersColumnStock => "offers-column-stock",
             Self::OffersColumnListed => "offers-column-listed",
             Self::OffersAgainTooltip => "offers-again-tooltip",
+            Self::OffersBusyTooltip => "offers-busy-tooltip",
             Self::OffersNone => "offers-none",
             Self::OffersNoneHint => "offers-none-hint",
             Self::OffersUnreachable => "offers-unreachable",
@@ -288,6 +291,8 @@ const AGE_NOW: &str = "age-now";
 const AGE_MINUTES: &str = "age-minutes";
 const AGE_HOURS: &str = "age-hours";
 const AGE_DAYS: &str = "age-days";
+const WAIT_SECONDS: &str = "wait-seconds";
+const WAIT_MINUTES: &str = "wait-minutes";
 const DOWNLOAD_TITLE: &str = "download-title";
 const TAG_QUALITY: &str = "tag-quality";
 const TAG_SOCKETS: &str = "tag-sockets";
@@ -334,17 +339,6 @@ const DOWNLOAD_QUOTES: [&str; 10] = [
 ];
 /// The number of sentences of the download of the prices.
 pub const DOWNLOAD_QUOTE_COUNT: usize = DOWNLOAD_QUOTES.len();
-
-/// A wait, rounded up, the same in every language: `8s` under a minute, `4min` from it.
-#[must_use]
-pub fn wait(wait: Duration) -> String {
-    let seconds = wait.as_secs() + u64::from(wait.subsec_nanos() > 0);
-    if seconds < 60 {
-        format!("{seconds}s")
-    } else {
-        format!("{}min", seconds.div_ceil(60))
-    }
-}
 
 /// Gives the texts of the interface in one language.
 pub struct Translator {
@@ -410,6 +404,20 @@ impl Translator {
             1..60 => (AGE_MINUTES, "minutes", minutes),
             60..1440 => (AGE_HOURS, "hours", minutes / 60),
             _ => (AGE_DAYS, "days", minutes / 1440),
+        };
+        let mut args = FluentArgs::new();
+        args.set(name, count);
+        self.format(id, Some(&args))
+    }
+
+    /// A wait, rounded up so that it never ends too soon: `8s` under a minute, `4min` from it.
+    #[must_use]
+    pub fn wait(&self, wait: Duration) -> String {
+        let seconds = wait.as_secs() + u64::from(wait.subsec_nanos() > 0);
+        let (id, name, count) = if seconds < 60 {
+            (WAIT_SECONDS, "seconds", seconds)
+        } else {
+            (WAIT_MINUTES, "minutes", seconds.div_ceil(60))
         };
         let mut args = FluentArgs::new();
         args.set(name, count);
@@ -638,7 +646,7 @@ impl Translator {
 
     fn format_wait(&self, id: &str, wait: Duration) -> String {
         let mut args = FluentArgs::new();
-        args.set("wait", self::wait(wait));
+        args.set("wait", self.wait(wait));
         self.format(id, Some(&args))
     }
 
@@ -713,6 +721,8 @@ mod tests {
                 PRICES_UNREACHABLE,
                 AGE_NOW,
                 AGE_MINUTES,
+                WAIT_SECONDS,
+                WAIT_MINUTES,
                 AGE_HOURS,
                 AGE_DAYS,
                 DOWNLOAD_TITLE,
@@ -894,11 +904,12 @@ mod tests {
 
     #[test]
     fn a_wait_is_rounded_up_so_that_it_never_ends_too_soon() {
-        assert_eq!(wait(Duration::from_millis(8_200)), "9s");
-        assert_eq!(wait(Duration::from_secs(8)), "8s");
-        assert_eq!(wait(Duration::from_secs(59)), "59s");
-        assert_eq!(wait(Duration::from_secs(60)), "1min");
-        assert_eq!(wait(Duration::from_secs(181)), "4min");
+        let english = Translator::new(Language::English);
+        assert_eq!(english.wait(Duration::from_millis(8_200)), "9s");
+        assert_eq!(english.wait(Duration::from_secs(8)), "8s");
+        assert_eq!(english.wait(Duration::from_secs(59)), "59s");
+        assert_eq!(english.wait(Duration::from_secs(60)), "1min");
+        assert_eq!(english.wait(Duration::from_secs(181)), "4min");
         let french = Translator::new(Language::French);
         assert_eq!(
             french.offers_limit(Duration::from_secs(240)),
