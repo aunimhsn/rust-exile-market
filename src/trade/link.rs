@@ -4,8 +4,10 @@
 //! The browser makes the search, not the application: these links are outside the limits of
 //! the trade site API.
 
-use serde_json::{Value, json};
+use serde_json::json;
 
+use super::host;
+use super::query::{self, ItemQuery, Query, RarityFilter};
 use crate::http;
 use crate::item::{Item, Rarity};
 use crate::item_names::ItemNames;
@@ -66,64 +68,45 @@ pub fn target<'a>(
     })
 }
 
+impl TradeTarget<'_> {
+    /// The search of the target, without stat filters.
+    #[must_use]
+    pub fn query(&self) -> Query {
+        let items = |name: Option<&str>, base_type: &str, rarity| {
+            Query::Items(ItemQuery {
+                name: name.map(str::to_owned),
+                base_type: base_type.to_owned(),
+                rarity,
+                corrupted: None,
+                stats: Vec::new(),
+            })
+        };
+        match *self {
+            TradeTarget::Exchange { id } => Query::Exchange(id.to_owned()),
+            TradeTarget::Unique { name, base_type } => items(Some(name), base_type, None),
+            TradeTarget::UnidentifiedUnique { base_type } => {
+                items(None, base_type, Some(RarityFilter::Unique))
+            }
+            TradeTarget::Base { base_type } => {
+                items(None, base_type, Some(RarityFilter::NotUnique))
+            }
+        }
+    }
+}
+
 /// The link of the search of `target` in `league`, on the trade site of `language`.
 #[must_use]
 pub fn url(language: Language, league: &League, target: &TradeTarget) -> String {
-    let online = json!({ "option": "online" });
-    let (page, query) = match *target {
-        TradeTarget::Exchange { id } => {
-            // Paid in Exalted Orbs, or in Divine Orbs for the Exalted Orb itself.
-            let have = if id == "exalted" { "divine" } else { "exalted" };
-            let query = json!({
-                "exchange": { "status": online, "have": [have], "want": [id] }
-            });
-            ("exchange", query)
-        }
-        TradeTarget::Unique { name, base_type } => (
-            "search",
-            search(&json!({ "status": online, "name": name, "type": base_type })),
-        ),
-        TradeTarget::UnidentifiedUnique { base_type } => (
-            "search",
-            search(&json!({
-                "status": online,
-                "type": base_type,
-                "filters": rarity("unique"),
-            })),
-        ),
-        TradeTarget::Base { base_type } => (
-            "search",
-            search(&json!({
-                "status": online,
-                "type": base_type,
-                "filters": rarity("nonunique"),
-            })),
-        ),
+    let (page, query) = match target.query() {
+        Query::Exchange(id) => ("exchange", json!({ "exchange": query::exchange(&id) })),
+        Query::Items(items) => ("search", items.to_json()),
     };
     format!(
         "{}/trade2/{page}/poe2/{}?q={}",
-        site(language),
+        host(language),
         http::encode(league.id()),
         http::encode(&query.to_string())
     )
-}
-
-/// A search of the items of `query`, the cheapest first.
-fn search(query: &Value) -> Value {
-    json!({ "query": query, "sort": { "price": "asc" } })
-}
-
-/// The filter of the rarity `option`: `unique`, or `nonunique`.
-fn rarity(option: &str) -> Value {
-    json!({ "type_filters": { "filters": { "rarity": { "option": option } } } })
-}
-
-/// The trade site of `language`.
-fn site(language: Language) -> &'static str {
-    match language {
-        Language::English => "https://www.pathofexile.com",
-        Language::French => "https://fr.pathofexile.com",
-    }
 }
 
 #[cfg(test)]
@@ -131,6 +114,7 @@ mod tests {
     use super::*;
     use crate::item::CopiedItem;
     use crate::item_names::tests::item_names;
+    use serde_json::Value;
 
     fn parse(text: &str) -> Item {
         Item::parse(&CopiedItem::from_text(text).expect("an item")).expect("read")

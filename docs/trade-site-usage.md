@@ -8,11 +8,12 @@ The trade site announces its limits per IP address in the `X-Rate-Limit-*` heade
 |---|---|
 | Search (`trade-search-request-limit`) | 5 per 10 s (60 s penalty), 15 per 60 s (300 s), 30 per 300 s (1,800 s), 600 per 6 h (3,600 s) |
 | Fetch (`trade-fetch-request-limit`), 10 offers per request | 12 per 4 s (10 s penalty), 16 per 12 s (300 s), 50 per 300 s (300 s), 1,000 per 6 h (1,800 s) |
+| Currency exchange (`trade-exchange-request-limit`), measured on 2026-10-26 | 5 per 15 s (60 s penalty), 10 per 90 s (300 s), 30 per 300 s (1,800 s) |
 
 Guardrails:
 
 - A search only runs when the player clicks the search or refresh block: copying an item never searches by itself (sorting the loot copies many items in a row). One click makes one search and one fetch; the double chevron makes one more fetch. Nothing runs in the background.
 - After each search, the waiting block lasts at least 10 seconds, and longer until every window of the limits allows a new search. The limits are read from the headers of every response (the IP address may share them with a browser or another tool), never from constants; after a refusal (HTTP 429), the block waits for the `Retry-After` delay, and the application never retries by itself.
-- Never send a `POESESSID` session cookie: the searches work without an account. So no direct whisper and no travel to a hideout; **Copy whisper** only copies the whisper text of the listing to the clipboard.
+- Never send a `POESESSID` session cookie: the searches work without an account. The trade site sets one in each answer; the HTTP client keeps no cookie (the `cookies` feature of `ureq` is off). So no direct whisper and no travel to a hideout; **Copy whisper** only copies the whisper text of the listing to the clipboard.
 - Send a `User-Agent` with the application name, its version and the repository address.
 - The README states which services the application calls, and this risk.

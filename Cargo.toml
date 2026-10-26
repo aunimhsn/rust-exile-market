@@ -27,7 +27,9 @@ simplelog = "0.12.2"
 sys-locale = "0.3"
 toml = "1.1.8"
 unic-langid = "0.9.6"
-ureq = "3.5.0"
+# Its default features, written out: the `cookies` feature must stay off, so that no session
+# cookie of the trade site is ever sent back (see docs/trade-site-usage.md).
+ureq = { version = "3.5.0", default-features = false, features = ["rustls", "gzip"] }
 
 # To choose the X11 backend of the window (see main.rs). A dependency of eframe also builds
 # winit with Wayland: wayland-dlopen loads its library at run time, so that building doesn't

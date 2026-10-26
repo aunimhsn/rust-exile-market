@@ -1,13 +1,31 @@
-//! The official trade site: the links to its searches ([`link`]), and the names of the items
-//! in each language, read on their own thread, which find the price of an item copied in
-//! French.
+//! The official trade site: the links to its searches ([`link`]), its offers, searched on
+//! their own thread when the player asks ([`search`]), and the names of the items in each
+//! language, read on their own thread, which find the price of an item copied in French.
 //!
 //! The thread gives the names of the cache at once, then downloads them when they are older
 //! than a day, and every day after. When the trade site can't be reached, the names of the
 //! cache stay, and it tries again every hour; every minute while no name is known, unless
 //! the trade site refused the request.
 
+#[allow(
+    dead_code,
+    reason = "the offers block of step 12 asks for the searches"
+)]
+mod client;
+#[allow(
+    dead_code,
+    reason = "the offers block of step 12 asks for the searches"
+)]
+mod limits;
 pub mod link;
+#[allow(dead_code, reason = "the offers block of step 12 shows the offers")]
+pub mod offers;
+pub mod query;
+#[allow(
+    dead_code,
+    reason = "the offers block of step 12 asks for the searches"
+)]
+pub mod search;
 mod site;
 
 use std::path::{Path, PathBuf};
@@ -15,9 +33,18 @@ use std::time::{Duration, Instant, SystemTime};
 
 use crate::files;
 use crate::item_names::ItemNames;
+use crate::language::Language;
 use crate::logging;
 use crate::worker::{OnDrop, Outbox, Worker};
 use site::{NamesError, TradeSite};
+
+/// The trade site of `language`.
+fn host(language: Language) -> &'static str {
+    match language {
+        Language::English => "https://www.pathofexile.com",
+        Language::French => "https://fr.pathofexile.com",
+    }
+}
 
 /// The file of the names in the cache directory.
 const CACHE_FILE: &str = "item-names.json";
