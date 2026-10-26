@@ -24,9 +24,11 @@ cargo build --release
 
 ```sh
 cargo fmt --all
-cargo clippy --all-targets --all-features -- -D warnings
-cargo test --all-features
+cargo clippy --workspace --all-targets --all-features -- -D warnings
+cargo test --workspace --all-features
 ```
+
+The game data embedded in the application (`assets/game-data/`) is generated again after each patch of the game with `cargo run -p game-data` (see [Game data](docs/game-data.md)).
 
 ## Release
 

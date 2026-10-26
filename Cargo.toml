@@ -1,11 +1,11 @@
 [package]
 name = "rust-exile-market"
 version = "0.1.0"
-edition = "2024"
-rust-version = "1.95"
+edition.workspace = true
+rust-version.workspace = true
 description = "Price checker for Path of Exile 2 items."
 authors = ["Aunim HASSAN"]
-license = "MIT OR Apache-2.0"
+license.workspace = true
 repository = "https://github.com/aunimhsn/rust-exile-market"
 readme = "README.md"
 publish = false
@@ -21,15 +21,13 @@ fluent-bundle = "0.16"
 # version of image (Cargo merges the features of a crate), for the orbs of assets/currencies.
 image = { version = "0.25.10", default-features = false, features = ["png"] }
 log = "0.4"
-serde = { version = "1.0.229", features = ["derive"] }
-serde_json = "1.0.154"
+serde.workspace = true
+serde_json.workspace = true
 simplelog = "0.12.2"
 sys-locale = "0.3"
 toml = "1.1.8"
 unic-langid = "0.9.6"
-# Its default features, written out: the `cookies` feature must stay off, so that no session
-# cookie of the trade site is ever sent back (see docs/trade-site-usage.md).
-ureq = { version = "3.5.0", default-features = false, features = ["rustls", "gzip"] }
+ureq.workspace = true
 
 # To choose the X11 backend of the window (see main.rs). A dependency of eframe also builds
 # winit with Wayland: wayland-dlopen loads its library at run time, so that building doesn't
@@ -42,10 +40,29 @@ winit = { version = "0.30", default-features = false, features = ["x11", "waylan
 # them together.
 fluent-syntax = "0.12.0"
 
-[lints.rust]
+[lints]
+workspace = true
+
+# The generator of the game data embedded in the application (see docs/game-data.md).
+[workspace]
+members = ["tools/game-data"]
+
+[workspace.package]
+edition = "2024"
+rust-version = "1.95"
+license = "MIT OR Apache-2.0"
+
+[workspace.dependencies]
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+# Its default features, written out: the `cookies` feature must stay off, so that no session
+# cookie of the trade site is ever sent back (see docs/trade-site-usage.md).
+ureq = { version = "3.5.0", default-features = false, features = ["rustls", "gzip"] }
+
+[workspace.lints.rust]
 unsafe_code = "forbid"
 
-[lints.clippy]
+[workspace.lints.clippy]
 pedantic = { level = "warn", priority = -1 }
 
 # The dependencies (image decoding, fonts, rendering) stay fast in debug builds;

@@ -25,4 +25,6 @@ The icons in `icons/` come from [Lucide](https://lucide.dev), © Lucide Icons an
 
 The files in `logo/` belong to this project and are covered by its license: `exile-market.png` (the full logo) and `emblem.svg` (the emblem without the text, white so that the application can tint it).
 
+The files in `game-data/` are generated from the data of Exiled Exchange 2 (MIT license), which comes from the files of the game and belongs to Grinding Gear Games: see `game-data/NOTICE.md`.
+
 This product isn't affiliated with or endorsed by Grinding Gear Games in any way.

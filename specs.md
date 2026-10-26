@@ -222,7 +222,7 @@ At launch, the application asks the GitHub releases for the latest version. When
 | Window | The same directory | `window.ron`: the size and position of the window. |
 | Price cache | The user's cache directory | The last downloaded prices, used at startup and when the network is unavailable. |
 | Item names cache | The user's cache directory | The item names of the trade site in English and French (the stat names come with the filters), refreshed once a day; the old names stay while the trade site can't be reached, with a new attempt every hour (every minute while no name is known, unless the trade site refused). |
-| Log | `~/.local/state/exile-market/` on Linux, `%LOCALAPPDATA%\exile-market\data\` on Windows, `~/Library/Logs/exile-market/` on macOS | `exile-market.log`: what happened during the session (start, items copied by their class line, clipboard errors, panics), to follow the application and find the cause of a bug; the log of the previous session is kept as `exile-market.previous.log`. The texts copied outside the game are never logged. |
+| Log | `~/.local/state/exile-market/` on Linux, `%LOCALAPPDATA%\exile-market\data\` on Windows, `~/Library/Logs/exile-market/` on macOS | `exile-market.log`: what happened during the session (start, items copied by their class line, the modifier lines whose stat isn't known, clipboard errors, panics), to follow the application and find the cause of a bug; the log of the previous session is kept as `exile-market.previous.log`. The texts copied outside the game are never logged. |
 
 None of these files are in the Git repository.
 

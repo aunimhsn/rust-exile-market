@@ -20,7 +20,7 @@ The project owner is an experienced software engineer, newer to Rust. Explain ea
 
 1. Run `git fetch origin`, then `git diff origin/main...HEAD` and `git log origin/main..HEAD --oneline` to identify the changes. Compare with `origin/main`, not the local `main`, which may be behind.
 2. Review the changed Rust code, tests, `Cargo.toml`, `build.rs`, `rust-toolchain.toml` and workflows in `.github/`. Read the surrounding code when needed to judge a change.
-3. Run `cargo clippy --all-targets --all-features -- -D warnings` and `cargo test --all-features`. If `cargo` is not on the `PATH`, prepend `$HOME/.cargo/bin`.
+3. Run `cargo clippy --workspace --all-targets --all-features -- -D warnings` and `cargo test --workspace --all-features`. If `cargo` is not on the `PATH`, prepend `$HOME/.cargo/bin`.
 
 Only run read-only commands (`git fetch`, `git diff`, `git log`, `cargo clippy`, `cargo test`, etc.). Never commit, push, edit or format files.
 

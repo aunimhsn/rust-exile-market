@@ -27,8 +27,8 @@ jobs:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
       - run: cargo fmt --all --check
-      - run: cargo clippy --locked --all-targets --all-features -- -D warnings
-      - run: cargo test --locked --all-features
+      - run: cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
+      - run: cargo test --locked --workspace --all-features
 
   msrv:
     name: Minimum Rust version
@@ -43,4 +43,4 @@ jobs:
           toolchain: ${{ steps.msrv.outputs.version }}
       - uses: Swatinem/rust-cache@v2
       # `+version` overrides the stable channel of rust-toolchain.toml.
-      - run: cargo +${{ steps.msrv.outputs.version }} check --locked --all-targets --all-features
+      - run: cargo +${{ steps.msrv.outputs.version }} check --locked --workspace --all-targets --all-features
