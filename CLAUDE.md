@@ -26,7 +26,7 @@
 - Keep `roadmap.md` consistent with `specs.md` when the specifications change.
 - Keep `roadmap.md` short, since it is read at every session: the steps to come in detail, one line per step done with its pull requests. When the pull request of a step (or of a sub-step) is merged, move the detail of the step to `docs/roadmap-archive.md`. Reference notes (technical choices, rules of the external services) live in `docs/`, linked from `roadmap.md`, and are read only by the steps that need them.
 - Read `specs.md` by section: list its headings first (`grep -n '^#' specs.md`), then read only the sections the step needs.
-- When the pull request of a step (or of a sub-step, such as 10b) is merged, tell the owner that the step is done and remind them to close the session and start a new one for the next step: a fresh session costs far fewer tokens, and `roadmap.md` and the memory hold what is needed to resume.
+- When the pull request of a step (or of a sub-step, such as 10b) is merged, tell the owner that the step is done and remind them to start a new session for the next step by typing `/clear` (give them the command): a fresh session costs far fewer tokens, and `roadmap.md` and the memory hold what is needed to resume.
 
 ## Interface design
 
