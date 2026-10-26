@@ -22,21 +22,25 @@ function offers(o, lang = "en") {
   const fr = lang === "fr";
   const label = fr ? "Offres" : "Offers";
   if (o.state === "idle") {
-    // Like the header: a flat block the height of the band, glued to its right edge.
+    // Like the title row after a search: the hint small under the label, and the search block the size of
+    // the waiting block, in the top right corner; the band is only the height of that row.
     const action = fr ? "Chercher les offres" : "Search the offers";
-    return `<div class="b search-band">
-      <div class="search-text"><span class="label">${label}</span>
-        <div class="muted">${fr ? "Une recherche par clic, dans les limites du site d'échange." : "One search per click, within the limits of the trade site."}</div></div>
-      <div class="search-block" title="${action}" aria-label="${action}">${ICON.search(22)}</div>
-    </div>`;
+    const hint = fr ? "Une recherche par clic, dans les limites du site d'échange." : "One search per click, within the limits of the trade site.";
+    return row(hint, `<div class="search-block" title="${action}" aria-label="${action}">${ICON.search(22)}</div>`);
+  }
+  // Until the offers show, the band keeps the height of this row: the line under the label tells what
+  // happens, and the block in the corner keeps its place.
+  function row(line, block, kind = "") {
+    return `<div class="band b"><div class="head flat-head idle-head"><span class="title-stack"><span class="label">${label}</span><span class="age ${kind}">${line}</span></span>${block}</div></div>`;
   }
   if (o.state === "loading") {
-    return `<div class="band b"><div class="head"><span class="label">${label}</span></div>
-      <div class="actions" style="justify-content:flex-start;gap:10px"><span class="spinner"></span>Searching the trade site…</div></div>`;
+    return row("Searching the trade site…", `<div class="again waiting" title="Waiting for the answer of the trade site"><span class="spinner"></span></div>`);
+  }
+  if (o.state === "unreachable") {
+    return row("The trade site can't be reached.", `<div class="search-block" title="Search the offers">${ICON.search(22)}</div>`, "plain");
   }
   if (o.state === "wait") {
-    return `<div class="band b"><div class="head flat-head"><span class="title-stack"><span class="label">${label}</span><span class="age">searched 1min ago</span></span><span class="right"></span><div class="again waiting" title="Next search in 4min">4min</div></div>
-      <div class="warn">Trade site limit: next search in 4min.</div></div>`;
+    return row("Trade site limit: next search in 4min.", `<div class="again waiting" title="Next search in 4min">4min</div>`, "warn");
   }
   if (o.lines) {
     return `<div class="band b"><div class="head"><span class="label">${label}</span></div>${o.lines.map(l => `<div class="msg muted">${l}</div>`).join("")}</div>`;

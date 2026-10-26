@@ -34,6 +34,7 @@ SECTIONS.push(["Offer states", [
   ["Loading more offers", win(topBar(), item(HH), price(HH_PRICE), offers({ ...HH_OFFERS, more: "loading" }), foot())],
   ["More offers that couldn't come", win(topBar(), item(HH), price(HH_PRICE), offers({ ...HH_OFFERS, more: "failed" }), foot())],
   ["Ready to search again", win(topBar(), item(HH), price(HH_PRICE), offers({ ...HH_OFFERS, ready: true, age: "searched 5min ago" }), foot("poe2scout 12min ago · GGG trade 5min ago"))],
+  ["Trade site unreachable", win(topBar(), item(HH), price(HH_PRICE), offers({ state: "unreachable" }), foot())],
   ["Long wait before the next search", win(topBar(), item(HH), price(HH_PRICE), offers({ state: "wait" }), foot("poe2scout 12min ago · GGG trade: next search in 4min"))],
   ["No offer online", win(topBar(), item(HH), price(HH_PRICE), offers({ lines: ["No offer online with these filters.", "Uncheck a stat or lower a minimum, then search again."] }), foot())],
   ["No price found", win(topBar(), item({ rarity: "unique", name: "Strugglescream", base: "Stellar Amulet", cls: "Amulets", tags: ["ilvl 76"], req: "Requires Level 60", statsLabel: "Stats (5)", filters: "2 filters" }),
