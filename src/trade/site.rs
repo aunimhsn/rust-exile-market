@@ -1,5 +1,5 @@
 //! The official trade site of Path of Exile 2, in each language of the game client: for now,
-//! the names of its items.
+//! the names of its items and the templates of its stats.
 //!
 //! The rules of its use are in `roadmap.md` (trade site usage).
 
@@ -10,8 +10,9 @@ use std::time::{Duration, SystemTime};
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
 
+use crate::game_data::TradeGroup;
 use crate::http::{self, HttpError, Pace};
-use crate::item_names::{ItemNames, Names, UniqueName, UniqueNames};
+use crate::item_names::{ItemNames, Names, StatTemplate, UniqueName, UniqueNames};
 use crate::language::Language;
 
 /// The time between two requests, at least: the data endpoints announce no limit.
@@ -103,11 +104,25 @@ struct ApiStatic {
     text: String,
 }
 
+/// A group of `/data/stats`, e.g. `explicit`.
+#[derive(Deserialize)]
+struct ApiStatGroup {
+    id: String,
+    entries: Vec<ApiStat>,
+}
+
+#[derive(Deserialize)]
+struct ApiStat {
+    id: String,
+    text: String,
+}
+
 /// The data of one language.
 struct LanguageData {
     language: Language,
     items: Vec<ApiItemCategory>,
     exchange: Vec<ApiStaticGroup>,
+    stats: Vec<ApiStatGroup>,
 }
 
 /// The client of the trade site, which identifies the application and spaces its requests.
@@ -125,7 +140,8 @@ impl TradeSite {
         }
     }
 
-    /// The names of the items in English and in French: four requests.
+    /// The names of the items and the templates of the stats in English and in French: six
+    /// requests.
     pub fn item_names(&mut self) -> Result<ItemNames, NamesError> {
         let english = self.language_data(Language::English)?;
         let french = self.language_data(Language::French)?;
@@ -137,6 +153,7 @@ impl TradeSite {
             language,
             items: self.data(language, "items")?,
             exchange: self.data(language, "static")?,
+            stats: self.data(language, "stats")?,
         })
     }
 
@@ -174,8 +191,9 @@ fn item_names(
     ))
 }
 
-/// The names of one language: the items of the currency exchange, and the base types of the
-/// equipment, each once.
+/// The names of one language: the items of the currency exchange, the base types of the
+/// equipment, each once, and the templates of the stats of the modifier lines (not those of
+/// the pseudo stats or of the Sanctum).
 fn names(data: &LanguageData) -> Result<Names, NamesError> {
     let language = data.language;
     let exchange = data
@@ -195,9 +213,20 @@ fn names(data: &LanguageData) -> Result<Names, NamesError> {
         .map(|item| item.base_type.clone())
         .filter(|base_type| seen.insert(base_type.clone()))
         .collect();
+    let stats = data
+        .stats
+        .iter()
+        .filter(|group| TradeGroup::of_line(&group.id).is_some())
+        .flat_map(|group| &group.entries)
+        .map(|stat| StatTemplate {
+            id: stat.id.clone(),
+            text: stat.text.clone(),
+        })
+        .collect();
     let names = Names {
         exchange,
         base_types,
+        stats,
     };
     if names.exchange.is_empty() {
         return Err(NamesError::Missing(
@@ -207,6 +236,9 @@ fn names(data: &LanguageData) -> Result<Names, NamesError> {
     }
     if names.base_types.is_empty() {
         return Err(NamesError::Missing("base types", language));
+    }
+    if names.stats.is_empty() {
+        return Err(NamesError::Missing("stat templates", language));
     }
     Ok(names)
 }
@@ -346,23 +378,56 @@ mod tests {
         ]}
     ]}"#;
 
-    fn data(language: Language, items: &str, exchange: &str) -> LanguageData {
+    /// The shape of `/data/stats` on 2026-10-26, a few stats of it.
+    const ENGLISH_STATS: &str = r##"{"result": [
+        {"id": "pseudo", "label": "Pseudo", "entries": [
+            {"id": "pseudo.pseudo_total_life", "text": "+# total maximum Life", "type": "pseudo"}
+        ]},
+        {"id": "explicit", "label": "Explicit", "entries": [
+            {"id": "explicit.stat_3299347043", "text": "# to maximum Life", "type": "explicit"},
+            {"id": "explicit.stat_2954116742|46224", "text": "Allocates Arcane Alchemy", "type": "explicit"}
+        ]},
+        {"id": "rune", "label": "Augment", "entries": [
+            {"id": "rune.stat_1992191903", "text": "# to Level of all Mark Skills", "type": "augment"}
+        ]},
+        {"id": "sanctum", "label": "Sanctum", "entries": [
+            {"id": "sanctum.stat_2878762585", "text": "Resolve Mitigation chance is #%", "type": "sanctum"}
+        ]}
+    ]}"##;
+
+    const FRENCH_STATS: &str = r##"{"result": [
+        {"id": "explicit", "label": "Explicite", "entries": [
+            {"id": "explicit.stat_3299347043", "text": "# de Vie maximale", "type": "explicit"}
+        ]}
+    ]}"##;
+
+    fn data(language: Language, items: &str, exchange: &str, stats: &str) -> LanguageData {
         let items: ApiResult<ApiItemCategory> = serde_json::from_str(items).expect("items");
         let exchange: ApiResult<ApiStaticGroup> = serde_json::from_str(exchange).expect("static");
+        let stats: ApiResult<ApiStatGroup> = serde_json::from_str(stats).expect("stats");
         LanguageData {
             language,
             items: items.result,
             exchange: exchange.result,
+            stats: stats.result,
         }
     }
 
-    fn names_of_both() -> ItemNames {
-        item_names(
-            SystemTime::UNIX_EPOCH,
-            &data(Language::English, ENGLISH_ITEMS, ENGLISH_STATIC),
-            &data(Language::French, FRENCH_ITEMS, FRENCH_STATIC),
+    fn english() -> LanguageData {
+        data(
+            Language::English,
+            ENGLISH_ITEMS,
+            ENGLISH_STATIC,
+            ENGLISH_STATS,
         )
-        .expect("every kind of names")
+    }
+
+    fn french() -> LanguageData {
+        data(Language::French, FRENCH_ITEMS, FRENCH_STATIC, FRENCH_STATS)
+    }
+
+    fn names_of_both() -> ItemNames {
+        item_names(SystemTime::UNIX_EPOCH, &english(), &french()).expect("every kind of names")
     }
 
     /// The uniques of a category, as `misalignment` takes them.
@@ -502,8 +567,8 @@ mod tests {
 
         let names = item_names(
             SystemTime::UNIX_EPOCH,
-            &data(Language::English, ENGLISH_ITEMS, ENGLISH_STATIC),
-            &data(Language::French, FRENCH_ITEMS, empty),
+            &english(),
+            &data(Language::French, FRENCH_ITEMS, empty, FRENCH_STATS),
         );
 
         assert!(matches!(
@@ -513,13 +578,64 @@ mod tests {
 
         let english_empty = item_names(
             SystemTime::UNIX_EPOCH,
-            &data(Language::English, empty, ENGLISH_STATIC),
-            &data(Language::French, FRENCH_ITEMS, FRENCH_STATIC),
+            &data(Language::English, empty, ENGLISH_STATIC, ENGLISH_STATS),
+            &french(),
         );
         assert!(matches!(
             english_empty,
             Err(NamesError::Missing(_, Language::English))
         ));
+
+        // Only the pseudo stats.
+        let only_others = r#"{"result": [{"id": "pseudo", "label": "Pseudo", "entries": [
+            {"id": "pseudo.pseudo_total_life", "text": "+# total maximum Life", "type": "pseudo"}
+        ]}]}"#;
+        let without_stats = item_names(
+            SystemTime::UNIX_EPOCH,
+            &english(),
+            &data(Language::French, FRENCH_ITEMS, FRENCH_STATIC, only_others),
+        );
+        assert!(matches!(
+            without_stats,
+            Err(NamesError::Missing("stat templates", Language::French))
+        ));
+    }
+
+    #[test]
+    fn the_stat_templates_are_those_of_the_modifier_lines() {
+        let names = names_of_both();
+
+        let ids: Vec<&str> = names
+            .stat_templates(Language::English)
+            .iter()
+            .map(|template| template.id.as_str())
+            .collect();
+        assert_eq!(
+            ids,
+            [
+                "explicit.stat_3299347043",
+                "explicit.stat_2954116742|46224",
+                "rune.stat_1992191903"
+            ]
+        );
+        assert_eq!(
+            names.stat_templates(Language::French),
+            [StatTemplate {
+                id: "explicit.stat_3299347043".to_owned(),
+                text: "# de Vie maximale".to_owned(),
+            }]
+        );
+    }
+
+    #[test]
+    fn the_stat_templates_taken_out_are_no_longer_in_the_names() {
+        let mut names = names_of_both();
+
+        let (english, french) = names.take_stat_templates();
+
+        assert_eq!((english.len(), french.len()), (3, 1));
+        assert_eq!(names.stat_templates(Language::English), []);
+        assert_eq!(names.stat_templates(Language::French), []);
     }
 
     #[test]

@@ -1,9 +1,10 @@
 //! The names of the items in each language of the game client, from the trade site: the
 //! items of the currency exchange by their id, the base types of the equipment, and the
-//! uniques side by side in English and French.
+//! uniques side by side in English and French; and the templates of its stats.
 //!
 //! The price database only knows the English names: these names find the price of an item
-//! copied in French.
+//! copied in French. The templates find the trade id of a modifier line the data of the game
+//! doesn't know yet ([`crate::game_data::TradeStats`]).
 
 use std::collections::HashMap;
 use std::time::{Duration, SystemTime};
@@ -20,6 +21,17 @@ pub struct Names {
     pub exchange: HashMap<String, String>,
     /// The base types of the equipment, to find in the name of a magic item.
     pub base_types: Vec<String>,
+    /// The templates of the stats of the modifier lines on the trade site.
+    pub stats: Vec<StatTemplate>,
+}
+
+/// The template of a stat on the trade site, e.g. `explicit.stat_3299347043`, `# to maximum
+/// Life`; the id of a stat with an option ends with it, e.g. `enchant.stat_2954116742|46224`,
+/// `Allocates Arcane Alchemy`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StatTemplate {
+    pub id: String,
+    pub text: String,
 }
 
 /// A unique item: its name and its base type.
@@ -56,6 +68,8 @@ pub struct NameCounts {
     pub base_types: usize,
     /// The uniques in both languages.
     pub uniques: usize,
+    /// The templates of the stats, in English.
+    pub stats: usize,
 }
 
 /// The names of the items, as the trade site gave them at one time.
@@ -97,7 +111,24 @@ impl ItemNames {
             exchange: self.english.exchange.len(),
             base_types: self.english.base_types.len(),
             uniques: self.uniques.len(),
+            stats: self.english.stats.len(),
         }
+    }
+
+    /// The templates of the stats of the trade site in `language`.
+    #[cfg(test)]
+    #[must_use]
+    pub fn stat_templates(&self, language: Language) -> &[StatTemplate] {
+        &self.names(language).stats
+    }
+
+    /// Takes the templates of the stats out of the names, in English and in French: once
+    /// indexed ([`crate::game_data::TradeStats`]), they would be kept twice.
+    pub fn take_stat_templates(&mut self) -> (Vec<StatTemplate>, Vec<StatTemplate>) {
+        (
+            std::mem::take(&mut self.english.stats),
+            std::mem::take(&mut self.french.stats),
+        )
     }
 
     fn names(&self, language: Language) -> &Names {
@@ -183,6 +214,7 @@ pub mod tests {
                 .map(|&(name, id)| (name.to_owned(), id.to_owned()))
                 .collect(),
             base_types: base_types.iter().map(|&base| base.to_owned()).collect(),
+            stats: Vec::new(),
         };
         ItemNames::new(
             SystemTime::UNIX_EPOCH,

@@ -1,10 +1,14 @@
 //! The stat of each line of a modifier. The numbers of the line become `#` (with their sign),
 //! or stay written for the strings that write one (`retain 40% of Glory`), and the string is
-//! looked up among the stats of the language of the item.
+//! looked up among the stats of the language of the item: those of Exiled Exchange 2, then
+//! those of the trade site, for a line the first ones don't know or have no id for in its
+//! group.
 
+use std::iter;
 use std::ops::Range;
 
 use super::stats::{Stat, Stats, TradeGroup, normalize};
+use super::trade_site::TradeStats;
 use crate::item::Modifier;
 use crate::language::Language;
 
@@ -12,12 +16,23 @@ use crate::language::Language;
 /// up: each number can be written three ways.
 const MAX_NUMBERS: usize = 6;
 
+/// Where the stat of a line was found.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StatSource {
+    /// The stats of Exiled Exchange 2, embedded.
+    GameData,
+    /// The templates of the trade site: a line the game data doesn't know yet.
+    TradeSite,
+}
+
 /// The stat of a line.
 #[derive(Debug, Clone, PartialEq)]
-pub struct StatMatch {
-    pub stat: &'static Stat,
+pub struct StatMatch<'a> {
+    pub stat: &'a Stat,
+    pub source: StatSource,
     /// The values of the line in the order of its `#`, with the sign of the stat: the line
-    /// `20% reduced Charm Charges used` gives -20.
+    /// `20% reduced Charm Charges used` gives -20 (a stat of the trade site writes the side
+    /// of its template: 20 for `#% reduced Charm Charges used`).
     pub values: Vec<f64>,
     /// The value given by the string of the line: the option of an option stat (the skill of
     /// `# to Level of all Arc Skills`), or else the value of a line without number.
@@ -28,17 +43,64 @@ pub struct StatMatch {
 
 /// The lines of a modifier written by one stat, or a line found nowhere.
 #[derive(Debug, Clone, PartialEq)]
-pub struct LineMatch {
+pub struct LineMatch<'a> {
     /// One line, or several for a stat written on several lines.
     pub lines: Range<usize>,
-    pub stat: Option<StatMatch>,
+    pub stat: Option<StatMatch<'a>>,
+}
+
+/// Where the lines of a language are looked up.
+struct Lookup<'a> {
+    game: &'static Stats,
+    /// None until the trade site gave its templates.
+    trade: Option<&'a Stats>,
+}
+
+impl<'a> Lookup<'a> {
+    fn new(language: Language, trade: Option<&'a TradeStats>) -> Self {
+        Self {
+            game: Stats::of(language),
+            trade: trade.map(|trade| trade.of(language)),
+        }
+    }
+
+    /// The most lines a string has.
+    fn max_lines(&self) -> usize {
+        let trade = self.trade.map_or(1, |trade| trade.max_lines);
+        self.game.max_lines.max(trade)
+    }
+
+    /// The stat written `text`, preferably one with an id in the group of the line: a
+    /// string with `#` can be a stat of another group (`#% of Armour also applies to
+    /// Lightning Damage` is a rune) while the line is a stat that writes its number (`100% of
+    /// Armour…`). The stats of the game data come first, then those of the trade site.
+    fn find(&self, text: &str, group: TradeGroup) -> Option<StatMatch<'a>> {
+        let numbers = numbers(text);
+        let sources = iter::once((self.game, StatSource::GameData))
+            .chain(self.trade.map(|trade| (trade, StatSource::TradeSite)));
+        let found = sources.flat_map(|(stats, source)| {
+            templates(text, &numbers).flat_map(move |template| {
+                stats
+                    .find(&template.string)
+                    .filter_map(move |(stat, matcher_index)| {
+                        stat_match(stat, source, matcher_index, &template.values)
+                    })
+            })
+        });
+        first_with_id(found, |stat| has_id(stat, group))
+    }
 }
 
 /// The stats of the lines of `modifier`, in their order; a stat written on several lines is
-/// preferred to the stats of these lines one by one.
+/// preferred to the stats of these lines one by one. `trade` holds the templates of the trade
+/// site, once it gave them.
 #[must_use]
-pub fn modifier_stats(language: Language, modifier: &Modifier) -> Vec<LineMatch> {
-    let stats = Stats::of(language);
+pub fn modifier_stats<'a>(
+    language: Language,
+    modifier: &Modifier,
+    trade: Option<&'a TradeStats>,
+) -> Vec<LineMatch<'a>> {
+    let lookup = Lookup::new(language, trade);
     let group = TradeGroup::of(modifier);
     let texts: Vec<String> = modifier
         .lines
@@ -48,10 +110,10 @@ pub fn modifier_stats(language: Language, modifier: &Modifier) -> Vec<LineMatch>
     let mut matches = Vec::new();
     let mut first = 0;
     while first < texts.len() {
-        let most = stats.max_lines.min(texts.len() - first);
+        let most = lookup.max_lines().min(texts.len() - first);
         let windows = (1..=most).rev().filter_map(|count| {
             let text = texts.get(first..first + count)?.join("\n");
-            Some((count, find(stats, &text, group)?))
+            Some((count, lookup.find(&text, group)?))
         });
         let found = first_with_id(windows, |(_, stat)| has_id(stat, group));
         let (count, stat) = found.map_or((1, None), |(count, stat)| (count, Some(stat)));
@@ -64,26 +126,17 @@ pub fn modifier_stats(language: Language, modifier: &Modifier) -> Vec<LineMatch>
     matches
 }
 
-/// The stat written `text`, preferably one with an id in the group of the line: a string
-/// with `#` can be a stat of another group (`#% of Armour also applies to Lightning Damage`
-/// is a rune) while the line is a stat that writes its number (`100% of Armour…`).
-fn find(stats: &'static Stats, text: &str, group: TradeGroup) -> Option<StatMatch> {
-    let numbers = numbers(text);
-    let found = templates(text, &numbers).flat_map(|template| {
-        stats
-            .find(&template.string)
-            .filter_map(move |(stat, matcher_index)| {
-                stat_match(stat, matcher_index, &template.values)
-            })
-    });
-    first_with_id(found, |stat| has_id(stat, group))
-}
-
-fn stat_match(stat: &'static Stat, matcher_index: usize, values: &[f64]) -> Option<StatMatch> {
+fn stat_match<'a>(
+    stat: &'a Stat,
+    source: StatSource,
+    matcher_index: usize,
+    values: &[f64],
+) -> Option<StatMatch<'a>> {
     let matcher = stat.matchers.get(matcher_index)?;
     let sign = if matcher.negate { -1.0 } else { 1.0 };
     Some(StatMatch {
         stat,
+        source,
         values: values.iter().map(|value| value * sign).collect(),
         matcher_value: matcher.value,
         matcher_index,
@@ -91,17 +144,28 @@ fn stat_match(stat: &'static Stat, matcher_index: usize, values: &[f64]) -> Opti
 }
 
 /// The English string of the stat of the line `text` written in `language`, at the same place
-/// among the strings of the stat: `#% de Réduction de l'Armure` is `#% reduced Armour`. None
-/// for an English line, a line found nowhere, or a stat whose strings don't line up in
-/// English.
+/// among the strings of the stat: `#% de Réduction de l'Armure` is `#% reduced Armour`; for a
+/// stat of the trade site, the English template of its id (its own template when the English
+/// trade site hasn't this id). None for an English line, a line found nowhere, or a stat whose
+/// strings don't line up in English.
 #[must_use]
-pub fn english_string(language: Language, text: &str, group: TradeGroup) -> Option<&'static str> {
+pub fn english_string<'a>(
+    language: Language,
+    text: &str,
+    group: TradeGroup,
+    trade: Option<&'a TradeStats>,
+) -> Option<&'a str> {
     if language == Language::English {
         return None;
     }
-    let found = find(Stats::of(language), &normalize(text), group)?;
-    let twin = Stats::of(Language::English).twin(found.stat, found.matcher_index)?;
-    Some(&twin.string)
+    let found = Lookup::new(language, trade).find(&normalize(text), group)?;
+    match found.source {
+        StatSource::GameData => {
+            let twin = Stats::of(Language::English).twin(found.stat, found.matcher_index)?;
+            Some(&twin.string)
+        }
+        StatSource::TradeSite => Some(&found.stat.reference),
+    }
 }
 
 fn has_id(stat: &StatMatch, group: TradeGroup) -> bool {
@@ -283,6 +347,7 @@ pub fn equipment_strings(language: Language) -> Vec<(&'static str, Option<&'stat
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::game_data::trade_stats;
     use crate::item::{CopiedItem, Item, ModifierKind, ModifierOrigin, StatLine};
 
     fn modifier(kind: ModifierKind, origin: Option<ModifierOrigin>, lines: &[&str]) -> Modifier {
@@ -301,8 +366,17 @@ mod tests {
     }
 
     /// The stat of a modifier of one line.
-    fn stat(language: Language, modifier: &Modifier) -> StatMatch {
-        match modifier_stats(language, modifier).as_slice() {
+    fn stat(language: Language, modifier: &Modifier) -> StatMatch<'static> {
+        stat_with(language, modifier, None)
+    }
+
+    /// The stat of a modifier of one line, with the stats of the trade site `trade`.
+    fn stat_with<'a>(
+        language: Language,
+        modifier: &Modifier,
+        trade: Option<&'a TradeStats>,
+    ) -> StatMatch<'a> {
+        match modifier_stats(language, modifier, trade).as_slice() {
             [
                 LineMatch {
                     stat: Some(stat), ..
@@ -448,7 +522,7 @@ mod tests {
             "Spells fire Projectiles in a circle",
         ]);
 
-        let matches = modifier_stats(Language::English, &modifier);
+        let matches = modifier_stats(Language::English, &modifier, None);
 
         let lines: Vec<_> = matches.iter().map(|found| found.lines.clone()).collect();
         assert_eq!(lines, [0..1, 1..3]);
@@ -462,6 +536,7 @@ mod tests {
         let matches = modifier_stats(
             Language::English,
             &explicit(&["Grants a strange power", "+30 to maximum Life"]),
+            None,
         );
 
         assert_eq!(matches[0].stat, None);
@@ -499,6 +574,134 @@ mod tests {
         let found = stat(Language::English, &explicit(&["+120 to Accuracy Rating"]));
 
         assert_eq!(found.stat.trade_ids(TradeGroup::Explicit).len(), 2);
+    }
+
+    #[test]
+    fn a_line_the_game_data_doesnt_know_is_found_on_the_trade_site() {
+        let trade = trade_stats();
+        let line = "Sacrifice up to 10 Chaos Orbs to receive double on Trial completion";
+
+        let without = modifier_stats(Language::English, &explicit(&[line]), None);
+        assert_eq!(without[0].stat, None, "not in the game data");
+
+        let found = stat_with(Language::English, &explicit(&[line]), Some(&trade));
+        assert_eq!(found.source, StatSource::TradeSite);
+        assert_eq!(
+            found.stat.trade_ids(TradeGroup::Explicit),
+            ["explicit.stat_3076483222"]
+        );
+        assert_eq!(found.values, Vec::<f64>::new());
+        assert_eq!(found.matcher_value, Some(49977.0), "its option");
+    }
+
+    #[test]
+    fn a_line_without_id_in_its_group_takes_the_one_of_the_trade_site() {
+        let trade = trade_stats();
+        let rune = modifier(
+            ModifierKind::Rune,
+            None,
+            &["+2 to Level of all Mark Skills"],
+        );
+
+        let known = stat(Language::English, &rune);
+        assert_eq!(known.source, StatSource::GameData);
+        assert_eq!(known.stat.trade_ids(TradeGroup::Rune), [] as [String; 0]);
+
+        let found = stat_with(Language::English, &rune, Some(&trade));
+        assert_eq!(found.source, StatSource::TradeSite);
+        assert_eq!(
+            found.stat.trade_ids(TradeGroup::Rune),
+            ["rune.stat_1992191903"]
+        );
+        assert_eq!(found.values, [2.0]);
+    }
+
+    #[test]
+    fn a_line_without_id_in_its_group_in_both_keeps_the_stat_of_the_game_data() {
+        let trade = trade_stats();
+        // The trade site has the Mark skills as a rune only.
+        let implicit = modifier(
+            ModifierKind::Implicit,
+            None,
+            &["+2 to Level of all Mark Skills"],
+        );
+
+        let found = stat_with(Language::English, &implicit, Some(&trade));
+
+        assert_eq!(found.source, StatSource::GameData);
+        assert_eq!(
+            found.stat.trade_ids(TradeGroup::Implicit),
+            [] as [String; 0]
+        );
+    }
+
+    #[test]
+    fn a_french_line_of_the_game_data_keeps_its_english_string() {
+        let trade = trade_stats();
+
+        assert_eq!(
+            english_string(
+                Language::French,
+                "10% de Réduction de l'Armure",
+                TradeGroup::Explicit,
+                Some(&trade)
+            ),
+            Some("#% reduced Armour")
+        );
+    }
+
+    #[test]
+    fn a_line_of_the_game_data_is_taken_from_it_first() {
+        let trade = trade_stats();
+
+        let found = stat_with(
+            Language::English,
+            &explicit(&["+42 to maximum Life"]),
+            Some(&trade),
+        );
+
+        assert_eq!(found.source, StatSource::GameData);
+        assert_eq!(found.stat.id.as_deref(), Some("base_maximum_life"));
+    }
+
+    #[test]
+    fn a_stat_of_the_trade_site_on_several_lines_takes_them_together() {
+        let trade = trade_stats();
+        let modifier = explicit(&["+30 to maximum Life", "Gain 3 Patches", "while it Patches"]);
+
+        let matches = modifier_stats(Language::English, &modifier, Some(&trade));
+
+        let lines: Vec<_> = matches.iter().map(|found| found.lines.clone()).collect();
+        assert_eq!(lines, [0..1, 1..3]);
+        let patches = matches[1].stat.as_ref().unwrap();
+        assert_eq!(patches.source, StatSource::TradeSite);
+        assert_eq!(patches.values, [3.0]);
+    }
+
+    #[test]
+    fn a_french_line_of_the_trade_site_has_the_english_template_of_its_id() {
+        let trade = trade_stats();
+        let english =
+            |text| english_string(Language::French, text, TradeGroup::Explicit, Some(&trade));
+
+        assert_eq!(
+            english("12% de Réduction des Dégâts par patch"),
+            Some("#% reduced Damage per Patch")
+        );
+        assert_eq!(
+            english("12% de Réduction de quelque chose"),
+            Some("#% de Réduction de quelque chose"),
+            "no English template: its own"
+        );
+        assert_eq!(
+            english_string(
+                Language::French,
+                "12% de Réduction des Dégâts par patch",
+                TradeGroup::Explicit,
+                None
+            ),
+            None
+        );
     }
 
     macro_rules! test_item {
@@ -540,7 +743,7 @@ mod tests {
             let item = Item::parse(&CopiedItem::from_text(text).unwrap()).unwrap();
             for modifier in item.modifiers() {
                 let group = TradeGroup::of(modifier);
-                for line in modifier_stats(item.language(), modifier) {
+                for line in modifier_stats(item.language(), modifier, None) {
                     let texts: Vec<&str> = modifier.lines[line.lines.clone()]
                         .iter()
                         .map(|line| line.text.as_str())

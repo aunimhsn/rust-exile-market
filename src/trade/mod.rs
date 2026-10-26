@@ -1,6 +1,7 @@
 //! The official trade site: the links to its searches ([`link`]), its offers, searched on
 //! their own thread when the player asks ([`search`]), and the names of the items in each
-//! language, read on their own thread, which find the price of an item copied in French.
+//! language, read on their own thread, which find the price of an item copied in French, with
+//! the templates of its stats.
 //!
 //! The thread gives the names of the cache at once, then downloads them when they are older
 //! than a day, and every day after. When the trade site can't be reached, the names of the
@@ -36,7 +37,7 @@ fn host(language: Language) -> &'static str {
 /// The file of the names in the cache directory.
 const CACHE_FILE: &str = "item-names.json";
 /// Changed with the shape of [`ItemNames`]: a file of another version is downloaded again.
-const CACHE_VERSION: u32 = 1;
+const CACHE_VERSION: u32 = 2;
 
 /// When the thread downloads the names: every `refresh`, and after a failure, `retry` while
 /// names are known, `retry_without_names` before.
@@ -130,10 +131,12 @@ fn watch(
                 Ok(names) => {
                     let counts = names.counts();
                     log::info!(
-                        "Item names: {} of the currency exchange, {} base types, {} uniques",
+                        "Item names: {} of the currency exchange, {} base types, {} uniques, \
+                         {} stat templates",
                         counts.exchange,
                         counts.base_types,
-                        counts.uniques
+                        counts.uniques,
+                        counts.stats
                     );
                     failing = false;
                     known = true;
