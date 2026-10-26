@@ -279,6 +279,12 @@ impl Item {
         self.states.contains(&state)
     }
 
+    /// Corrupted once or twice.
+    #[must_use]
+    pub fn is_corrupted(&self) -> bool {
+        self.has_state(ItemState::Corrupted) || self.has_state(ItemState::TwiceCorrupted)
+    }
+
     #[must_use]
     pub fn states(&self) -> &[ItemState] {
         &self.states

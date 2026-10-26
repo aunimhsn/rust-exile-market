@@ -2,7 +2,7 @@
 //! database, and the window built from the components of [`crate::ui`].
 
 use std::hash::{BuildHasher, RandomState};
-use std::time::{Duration, SystemTime};
+use std::time::{Duration, Instant, SystemTime};
 
 use eframe::{App, CreationContext, Frame};
 use egui::{Context, Key, OpenUrl, Ui, ViewportCommand};
@@ -12,13 +12,18 @@ use crate::filters::Filters;
 use crate::i18n::{DOWNLOAD_QUOTE_COUNT, Message, Translator};
 use crate::league::League;
 use crate::market::MarketWatch;
+use crate::offers::{LONG_WAIT, Offers};
+use crate::prices::Rates;
+use crate::pricing::{FixedPrice, NoFixedPrice};
 use crate::session::{self, LeagueChange, PricesState, Session};
 use crate::settings::{SettingChange, Settings, SettingsFile};
 use crate::trade::ItemNamesWatch;
+use crate::trade::query::SearchKind;
+use crate::trade::search::{OfferSearch, Order};
 use crate::ui::{
     self, BubbleAction, EmptyState, ItemBlock, ItemBlockAction, LeagueList, LeagueListAction,
-    NewLeagueBubble, PriceBlock, PriceDownload, ResizeEdges, SettingsPanel, StatusBar, TitleBar,
-    TitleBarAction, UnreadableItem, WarningBand,
+    NewLeagueBubble, OffersAction, OffersBlock, PriceBlock, PriceDownload, Reference, ResizeEdges,
+    SettingsPanel, StatusBar, TitleBar, TitleBarAction, TradeStatus, UnreadableItem, WarningBand,
 };
 
 /// What the window shows under the title bar.
@@ -58,6 +63,10 @@ pub struct ExileMarketApp {
     clipboard: ClipboardWatch,
     market: MarketWatch,
     item_names: ItemNamesWatch,
+    /// The searches of the trade site, asked by the player.
+    search: OfferSearch,
+    /// The offers of the item shown, and the waiting time before the next search.
+    offers: Offers,
     /// The stats of the item are unfolded, for every item copied until the player folds them.
     stats_open: bool,
     /// The filters of the search as the player set them, for the item shown: cleared at each
@@ -82,6 +91,7 @@ impl ExileMarketApp {
         let clipboard_ctx = creation.egui_ctx.clone();
         let market_ctx = creation.egui_ctx.clone();
         let names_ctx = creation.egui_ctx.clone();
+        let search_ctx = creation.egui_ctx.clone();
         // The prices of the league of the last session, until the leagues arrive.
         let market = MarketWatch::start(settings.league(), move || market_ctx.request_repaint());
 
@@ -98,6 +108,8 @@ impl ExileMarketApp {
             clipboard: ClipboardWatch::start(move || clipboard_ctx.request_repaint()),
             market,
             item_names: ItemNamesWatch::start(move || names_ctx.request_repaint()),
+            search: OfferSearch::start(move || search_ctx.request_repaint()),
+            offers: Offers::default(),
             stats_open: false,
             filters: Filters::default(),
             scroll_to_top: false,
@@ -134,6 +146,10 @@ impl ExileMarketApp {
         }
         if changed {
             self.settings_file.save(&self.settings);
+        }
+        // The offers shown were searched in the previous league.
+        if self.session.league() != Some(&league) {
+            self.offers.clear();
         }
         self.session.choose_league(league);
         self.market.price(self.session.league());
@@ -235,9 +251,13 @@ impl ExileMarketApp {
         };
         // The pill shows only when its link can be opened: the league and the search known.
         let url = self.session.trade_url(item);
+        let search = self.session.trade_search(item);
+        let must_identify = self.session.must_identify(item);
         let fixed_price = self.session.fixed_price(item);
         let unique_modifiers = session::unique_modifiers(item, &fixed_price);
+        let reference = reference(&fixed_price);
         let to_top = std::mem::take(&mut self.scroll_to_top);
+        let mut offers_action = None;
         let action = ui::content(ui, to_top, |ui| {
             let action = ItemBlock::new(item, &mut self.filters, &self.i18n)
                 .tradable(url.is_some())
@@ -248,11 +268,40 @@ impl ExileMarketApp {
             }
             let league = self.session.league().map(League::name);
             PriceBlock::new(item, fixed_price, prices, league, &self.i18n).show(ui);
+            if let Some(Order::Search { query, .. }) = &search {
+                offers_action =
+                    OffersBlock::new(&self.offers, query.kind(), reference, &self.i18n).show(ui);
+            } else if must_identify {
+                OffersBlock::identify(ui, &self.i18n);
+            }
             action
         });
         if action == Some(ItemBlockAction::ToggleStats) {
             self.stats_open = !self.stats_open;
         }
+        let order = match (offers_action, search) {
+            (Some(OffersAction::Search), Some(search)) => {
+                self.offers.search(search, Instant::now())
+            }
+            (Some(OffersAction::More), _) => self.offers.more(),
+            _ => None,
+        };
+        if let Some(order) = order {
+            self.search.order(order);
+        }
+    }
+
+    /// The kind of search of the item shown; a search of items when none can be searched.
+    fn search_kind(&self) -> SearchKind {
+        self.session
+            .item()
+            .and_then(|shown| shown.parsed().ok())
+            .and_then(|item| self.session.trade_search(item))
+            .and_then(|order| match order {
+                Order::Search { query, .. } => Some(query.kind()),
+                Order::More => None,
+            })
+            .unwrap_or(SearchKind::Items)
     }
 }
 
@@ -265,9 +314,14 @@ impl App for ExileMarketApp {
                 self.scroll_to_top = true;
                 self.filters.clear();
             }
+            if matches!(event, ClipboardEvent::Copied(_)) {
+                self.offers.clear();
+            }
             self.view = self.view.after(&event);
             self.session.apply(event);
         });
+        self.search
+            .receive(|answer| self.offers.apply(answer, SystemTime::now()));
         let mut shown = None;
         self.market.receive(|event| {
             let closed = self.settings.closed_new_leagues();
@@ -275,10 +329,12 @@ impl App for ExileMarketApp {
                 shown = Some(league);
             }
         });
-        if let Some(league) = shown
-            && self.settings.set_league(&league)
-        {
-            self.settings_file.save(&self.settings);
+        if let Some(league) = shown {
+            // The offers shown were searched in the previous league.
+            self.offers.clear();
+            if self.settings.set_league(&league) {
+                self.settings_file.save(&self.settings);
+            }
         }
         // The league shown at the first launch, or after the end of a league.
         self.market.price(self.session.league());
@@ -323,8 +379,22 @@ impl App for ExileMarketApp {
             // The age of the prices changes with the time, without an event.
             ctx.request_repaint_after(Duration::from_secs(60 - age.as_secs() % 60));
         }
+        let trade = trade_status(
+            &self.offers,
+            self.search_kind(),
+            Instant::now(),
+            SystemTime::now(),
+        );
+        match trade {
+            // The age of the last search, and the countdown of the long wait, change with the time.
+            TradeStatus::Searched(age) => {
+                ctx.request_repaint_after(Duration::from_secs(60 - age.as_secs() % 60));
+            }
+            TradeStatus::Waiting(_) => ctx.request_repaint_after(Duration::from_secs(1)),
+            TradeStatus::Idle => {}
+        }
         match self.view {
-            View::Item => StatusBar::sources(&self.i18n, prices).show(ui),
+            View::Item => StatusBar::sources(&self.i18n, prices, trade).show(ui),
             View::Settings => StatusBar::author(&self.i18n).show(ui),
         }
         match self.view {
@@ -341,6 +411,28 @@ impl App for ExileMarketApp {
     /// starts again at each launch.
     fn persist_egui_memory(&self) -> bool {
         false
+    }
+}
+
+/// The price of one item that tells a suspicious offer: the price of a fixed-name item.
+fn reference(fixed_price: &Result<(FixedPrice, Rates), NoFixedPrice>) -> Option<Reference> {
+    let (exalted, rates) = match fixed_price {
+        Ok((FixedPrice::Currency(currency), rates)) => (currency.price.exalted, *rates),
+        Ok((FixedPrice::Unique(unique), rates)) => (unique.price.exalted, *rates),
+        Ok((FixedPrice::Uniques(_), _)) | Err(_) => return None,
+    };
+    Some(Reference { exalted, rates })
+}
+
+/// The state of the trade site in the status bar, at `now`: the long wait before the next
+/// search of `kind`, or else the age of the last search.
+fn trade_status(offers: &Offers, kind: SearchKind, now: Instant, clock: SystemTime) -> TradeStatus {
+    match (offers.wait(kind, now), offers.last_search()) {
+        (Some(wait), _) if wait > LONG_WAIT => TradeStatus::Waiting(wait),
+        (_, Some(searched)) => {
+            TradeStatus::Searched(clock.duration_since(searched).unwrap_or_default())
+        }
+        (_, None) => TradeStatus::Idle,
     }
 }
 
@@ -370,6 +462,50 @@ mod tests {
 
         assert_eq!(View::Settings.after(&copied), View::Item);
         assert_eq!(View::Item.after(&copied), View::Item);
+    }
+
+    #[test]
+    fn the_status_bar_tells_a_long_wait_rather_than_the_age_of_the_last_search() {
+        use crate::trade::query::Query;
+        use crate::trade::search::{Answer, NextSearch, Outcome};
+
+        let now = Instant::now();
+        let clock = SystemTime::UNIX_EPOCH + Duration::from_secs(600);
+        let mut offers = Offers::default();
+        assert_eq!(
+            trade_status(&offers, SearchKind::Items, now, clock),
+            TradeStatus::Idle
+        );
+        let search = Order::Search {
+            language: crate::language::Language::English,
+            league: League::new("Standard"),
+            query: Query::Exchange("divine".to_owned()),
+        };
+        let _ = offers.search(search, now);
+        let answer = |seconds| Answer {
+            outcome: Outcome::Exchange {
+                offers: Vec::new(),
+                total: 0,
+            },
+            next_search: NextSearch {
+                items: now + Duration::from_secs(seconds),
+                exchange: now + Duration::from_secs(10),
+            },
+        };
+        offers.apply(
+            answer(240),
+            SystemTime::UNIX_EPOCH + Duration::from_secs(480),
+        );
+
+        assert_eq!(
+            trade_status(&offers, SearchKind::Items, now, clock),
+            TradeStatus::Waiting(Duration::from_secs(240))
+        );
+        assert_eq!(
+            trade_status(&offers, SearchKind::Exchange, now, clock),
+            TradeStatus::Searched(Duration::from_secs(120)),
+            "the usual 10 s aren't told"
+        );
     }
 
     #[test]

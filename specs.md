@@ -180,6 +180,7 @@ The offers search uses the stats of the copied item as filters, like the trade s
   - An offer under a quarter of the reference price (the poe2scout price, or the estimate) is struck through and marked with "?": it is usually bait or a mistake, and it isn't counted in the estimate.
   - A double chevron under the list loads 10 more offers; the whole width under the list is clickable.
 - **No offer**: "No offer online with these filters. Uncheck a stat or lower a minimum, then search again."
+- **Unidentified unique**: "Identify the item to search its offers.", without a search block: its offers are searched by its name, which it doesn't show yet.
 - **The tooltip of an offer**:
   - A row lights up one shade under the pointer, which shows it can be clicked. Hovering a row opens the tooltip of its item above the row, or below it when there is no room above. It stays open a few tenths of a second after the pointer leaves the row, and while the pointer is inside it. A click on the row pins it; a click elsewhere or Escape closes it.
   - It shows the name, the price with its orb, the base, item level and states, then the implicit and explicit modifiers, each variable one with its difference from the copied item: green when better, red when worse. Higher is better, except for a list of stats where lower is better (costs, "reduced" penalties…); a stat whose direction is unknown gets no color.

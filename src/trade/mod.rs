@@ -7,24 +7,11 @@
 //! cache stay, and it tries again every hour; every minute while no name is known, unless
 //! the trade site refused the request.
 
-#[allow(
-    dead_code,
-    reason = "the offers block of step 12 asks for the searches"
-)]
 mod client;
-#[allow(
-    dead_code,
-    reason = "the offers block of step 12 asks for the searches"
-)]
 mod limits;
 pub mod link;
-#[allow(dead_code, reason = "the offers block of step 12 shows the offers")]
 pub mod offers;
 pub mod query;
-#[allow(
-    dead_code,
-    reason = "the offers block of step 12 asks for the searches"
-)]
 pub mod search;
 mod site;
 

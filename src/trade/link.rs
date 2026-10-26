@@ -94,10 +94,21 @@ impl TradeTarget<'_> {
     }
 }
 
-/// The link of the search of `target` in `league`, on the trade site of `language`.
+/// The search of `item` for `target`: its corrupted state is always a filter, so that a
+/// corrupted item is compared with corrupted offers only, and a clean one with clean ones.
 #[must_use]
-pub fn url(language: Language, league: &League, target: &TradeTarget) -> String {
-    let (page, query) = match target.query() {
+pub fn query(item: &Item, target: &TradeTarget) -> Query {
+    let mut query = target.query();
+    if let Query::Items(items) = &mut query {
+        items.corrupted = Some(item.is_corrupted());
+    }
+    query
+}
+
+/// The link of the search `query` in `league`, on the trade site of `language`.
+#[must_use]
+pub fn url(language: Language, league: &League, query: &Query) -> String {
+    let (page, query) = match query.clone() {
         Query::Exchange(id) => ("exchange", json!({ "exchange": query::exchange(&id) })),
         Query::Items(items) => ("search", items.to_json()),
     };
@@ -146,7 +157,7 @@ mod tests {
         let url = url(
             crossbow.language(),
             &League::new("HC Forbidden Rites"),
-            &target,
+            &super::query(&crossbow, &target),
         );
 
         assert!(url.starts_with(
@@ -158,7 +169,10 @@ mod tests {
                 "query": {
                     "status": { "option": "online" },
                     "name": "Murmure des brumes",
-                    "type": "Arbalète de fortune"
+                    "type": "Arbalète de fortune",
+                    "filters": {
+                        "misc_filters": { "filters": { "corrupted": { "option": "false" } } }
+                    }
                 },
                 "sort": { "price": "asc" }
             })
@@ -172,7 +186,11 @@ mod tests {
         let target = target(&stack, Some(&names), None).expect("a target");
 
         assert_eq!(target, TradeTarget::Exchange { id: "transmute" });
-        let url = url(Language::French, &League::new("Standard"), &target);
+        let url = url(
+            Language::French,
+            &League::new("Standard"),
+            &super::query(&stack, &target),
+        );
         assert!(url.starts_with("https://fr.pathofexile.com/trade2/exchange/poe2/Standard?q="));
         assert_eq!(
             query(&url),
@@ -218,7 +236,8 @@ mod tests {
             &League::new("Standard"),
             &TradeTarget::Base {
                 base_type: "Ruby Ring",
-            },
+            }
+            .query(),
         );
         assert_eq!(
             query(&url)["query"]["filters"]["type_filters"]["filters"]["rarity"]["option"],
@@ -253,7 +272,7 @@ mod tests {
 
         assert_eq!(target, TradeTarget::Exchange { id: "exalted" });
         // The Exalted Orb itself is paid in Divine Orbs.
-        let url = url(Language::English, &League::new("Standard"), &target);
+        let url = url(Language::English, &League::new("Standard"), &target.query());
         assert_eq!(query(&url)["exchange"]["have"], json!(["divine"]));
     }
 }

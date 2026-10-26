@@ -21,7 +21,7 @@ use super::theme::{color, size, text};
 use super::widgets;
 use crate::filters::{self, Filter, Filters, StatKey};
 use crate::i18n::{Message, Translator};
-use crate::item::{Affix, Item, ItemState, Modifier, ModifierKind, Range, Rarity, StatLine};
+use crate::item::{Affix, Item, Modifier, ModifierKind, Range, Rarity, StatLine};
 use crate::prices::UniqueModifiers;
 use crate::{format, rolls};
 
@@ -211,10 +211,7 @@ fn rows<'a>(item: &'a Item, unique_modifiers: Option<&UniqueModifiers>) -> Vec<R
         affix_rows(item)
     };
     // The corrupted state is always a filter; a currency is never corrupted.
-    let corrupted = [ItemState::Corrupted, ItemState::TwiceCorrupted]
-        .into_iter()
-        .any(|state| item.has_state(state));
-    if corrupted && item.rarity() != Rarity::Currency {
+    if item.is_corrupted() && item.rarity() != Rarity::Currency {
         rows.push(Row::CorruptedOnly);
     }
     rows

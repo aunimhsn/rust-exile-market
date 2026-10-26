@@ -12,6 +12,7 @@ use crate::market::{MarketEvent, Source};
 use crate::prices::{PriceList, Rates, UniqueModifiers};
 use crate::pricing::{self, FixedPrice, NoFixedPrice};
 use crate::trade::link::{self, TradeTarget};
+use crate::trade::search::Order;
 
 /// What the parser read from the last item copied in the game.
 #[derive(Debug)]
@@ -275,13 +276,42 @@ impl Session {
         link::target(item, self.item_names.as_ref(), prices)
     }
 
+    /// The search for `item` on the trade site, in the league shown; none before the league
+    /// is known, and for an unidentified unique, which is identified to be searched.
+    #[must_use]
+    pub fn trade_search(&self, item: &Item) -> Option<Order> {
+        let league = self.league.as_ref()?;
+        let target = self.trade_target(item)?;
+        if let TradeTarget::UnidentifiedUnique { .. } = target {
+            return None;
+        }
+        Some(Order::Search {
+            language: item.language(),
+            league: league.clone(),
+            query: link::query(item, &target),
+        })
+    }
+
+    /// An unidentified unique, whose offers are searched once it is identified.
+    #[must_use]
+    pub fn must_identify(&self, item: &Item) -> bool {
+        matches!(
+            self.trade_target(item),
+            Some(TradeTarget::UnidentifiedUnique { .. })
+        )
+    }
+
     /// The link of the search for `item` on the trade site, in the league shown; none before
     /// the league is known.
     #[must_use]
     pub fn trade_url(&self, item: &Item) -> Option<String> {
         let league = self.league.as_ref()?;
         let target = self.trade_target(item)?;
-        Some(link::url(item.language(), league, &target))
+        Some(link::url(
+            item.language(),
+            league,
+            &link::query(item, &target),
+        ))
     }
 
     /// The prices of the league shown, complete or still downloading.

@@ -60,6 +60,8 @@ pub mod color {
     pub const FALL: Color32 = Color32::from_rgb(0xe6, 0x6a, 0x5c);
     /// An uncertain price.
     pub const WARNING: Color32 = Color32::from_rgb(0xf0, 0xb8, 0x5a);
+    /// Every other row of the offers, on band B.
+    pub const ROW_ALT: Color32 = Color32::from_rgb(0x1a, 0x20, 0x28);
     /// Every other row of a list on band A: a light veil.
     pub const ROW_VEIL: Color32 = Color32::from_rgba_premultiplied(8, 8, 8, 8);
 }
@@ -192,6 +194,21 @@ pub mod text {
     #[must_use]
     pub fn list_amount() -> FontId {
         fonts::numbers(13.0)
+    }
+
+    /// The uppercase titles of the columns of the offers.
+    #[must_use]
+    pub fn column() -> FontId {
+        fonts::text(11.0, Weight::Regular)
+    }
+
+    /// The extra space between the letters of the titles of the columns.
+    pub const COLUMN_LETTER_SPACING: f32 = 0.9;
+
+    /// The countdown of the waiting block.
+    #[must_use]
+    pub fn countdown() -> FontId {
+        fonts::text(13.0, Weight::SemiBold)
     }
 
     /// The keys to press, drawn as key caps.

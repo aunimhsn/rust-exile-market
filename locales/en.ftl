@@ -30,6 +30,10 @@ status-prices-downloading = poe2scout: downloading prices…
 status-prices = poe2scout { $age }
 status-prices-offline = poe2scout { $age } (offline)
 status-trade-idle = GGG trade: no search yet
+# The age of the last search of the trade site, e.g. "2min ago".
+status-trade = GGG trade { $age }
+# During a long wait before the next search, e.g. "4min".
+status-trade-wait = GGG trade: next search in { $wait }
 # While the settings are open: the version and the author; the site, last, is a link.
 status-author = { $app } { $version } · Made by { $author } · { $site }
 
@@ -179,6 +183,34 @@ prices-downloading = The prices of { $league } are downloading…
 prices-downloading-no-league = Downloading the prices…
 french-names-downloading = The French item names are downloading…
 no-price-found = No price found for this item in { $league }.
+
+## Offers block
+
+offers-label = Offers
+# Before the first search of the item, beside the search block.
+offers-search-hint = One search per click, within the limits of the trade site.
+offers-search-tooltip = Search the offers
+offers-searching = Searching the trade site…
+# Under the title, e.g. "searched 2min ago".
+offers-searched = searched { $age }
+# On the right of the title: the offers shown, of those found.
+offers-count = { $shown } of { $total } online
+# The titles of the columns of the offers.
+offers-column-price = Price
+offers-column-per-unit = Per unit
+offers-column-stock = Stock
+offers-column-listed = Listed
+offers-again-tooltip = Search again
+# The tooltip of the countdown before the next search, e.g. "8s".
+offers-next-search-tooltip = Next search in { $wait }
+# Under the title, during a long wait, e.g. "4min".
+offers-limit = Trade site limit: next search in { $wait }.
+offers-none = No offer online with these filters.
+offers-none-hint = Uncheck a stat or lower a minimum, then search again.
+offers-unreachable = The trade site can't be reached.
+offers-identify = Identify the item to search its offers.
+# The double chevron under the list.
+offers-more-tooltip = Show more offers
 
 ## Settings
 
