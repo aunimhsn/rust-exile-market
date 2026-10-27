@@ -1,5 +1,5 @@
-//! The stat filters of the offers search, as the player sets them: whether each stat of the
-//! item is searched, its minimum and its maximum. They are kept for the item shown, until an
+//! The filters of the offers search, as the player sets them: whether each stat of the item,
+//! or its base type, item level or DPS, is searched, its minimum and its maximum. They are kept for the item shown, until an
 //! item is copied, even the same one after another text; a stat the player didn't touch keeps
 //! the choice made for it by default.
 //!
@@ -17,6 +17,25 @@ use crate::item::Range;
 pub struct StatKey {
     pub modifier: usize,
     pub line: usize,
+}
+
+/// What a filter searches.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum FilterKey {
+    /// A line of a modifier.
+    Stat(StatKey),
+    /// The base type of the item: unchecked, the offers may have any base.
+    BaseType,
+    Property(Property),
+}
+
+/// A property of the item the trade site searches with a minimum and a maximum.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Property {
+    ItemLevel,
+    PhysicalDps,
+    /// Fire, cold and lightning together.
+    ElementalDps,
 }
 
 /// A half of the range field of a filter.
@@ -110,17 +129,17 @@ impl Filter {
 /// The filters the player changed, for the item shown.
 #[derive(Debug, Default)]
 pub struct Filters {
-    changed: HashMap<StatKey, Filter>,
+    changed: HashMap<FilterKey, Filter>,
 }
 
 impl Filters {
     /// The filter of `key` as the player set it, or else `default`.
     #[must_use]
-    pub fn get(&self, key: StatKey, default: impl FnOnce() -> Filter) -> Filter {
+    pub fn get(&self, key: FilterKey, default: impl FnOnce() -> Filter) -> Filter {
         self.changed.get(&key).cloned().unwrap_or_else(default)
     }
 
-    pub fn set(&mut self, key: StatKey, filter: Filter) {
+    pub fn set(&mut self, key: FilterKey, filter: Filter) {
         self.changed.insert(key, filter);
     }
 

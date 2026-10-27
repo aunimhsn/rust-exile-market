@@ -137,6 +137,9 @@ group-suffixes = Suffixes
 group-explicit = Explicite
 # Les modificateurs d'un unique, sans préfixe ni suffixe.
 group-unique = Unique
+# Les filtres du type de base et du niveau d'objet d'un objet rare, magique ou normal, et du DPS d'une arme.
+group-item = Objet
+group-weapon = Arme
 # À côté de Préfixes et Suffixes : combien l'objet en a, sur le maximum possible.
 affix-fill = { $filled } sur { $max }
 affix-fill-open = { $filled } sur { $max } · { $open ->
@@ -156,6 +159,11 @@ filter-range = min – max
 # L'infobulle du champ d'un filtre : les jets qu'il accepte, puis, en gris, pour une ligne où une valeur basse est meilleure.
 filter-rolls = Jets de { $low } à { $high }
 filter-lower-better = Plus c'est bas, mieux c'est
+# Les filtres des propriétés d'un objet, avec leur valeur.
+filter-base-type = Base : { $base }
+filter-item-level = Niveau d'objet : { $value }
+filter-physical-dps = DPS physique : { $value }
+filter-elemental-dps = DPS élémentaire : { $value }
 # L'infobulle d'une ligne que le site d'échange ne peut pas chercher (un modificateur ajouté par un patch), sur deux lignes.
 filter-unsearchable = Le site d'échange ne peut pas chercher cette ligne.
 filter-unsearchable-hint = Il se peut que les offres ne l'aient pas.

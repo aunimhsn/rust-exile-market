@@ -1,5 +1,6 @@
-//! The stats of the item, unfolded under the item block: its modifiers in the color of the
-//! game, grouped, the stats that vary first. A unique, or an implicit modifier of a rare,
+//! The stats of the item, unfolded under the item block: for a rare, magic or normal item,
+//! first the filters of its base type, item level and DPS, then its modifiers in the color of
+//! the game, grouped, the stats that vary first. A unique, or an implicit modifier of a rare,
 //! shows a bar of where its value falls in its range; a prefix or a suffix, its tier and the
 //! range of that tier (its bar over every tier comes with the modifier tables, step 13).
 //!
@@ -7,10 +8,13 @@
 //! range field on the right, also when it has no limit; a stat of a unique that never varies
 //! isn't a filter and starts at the left edge; a line the trade site can't search shows the
 //! "not allowed" sign in place of its checkbox. A line better lower is searched with a
-//! maximum, any other with a minimum. A corrupted item ends with a note: the search compares
+//! maximum, any other with a minimum. The damage and attack speed modifiers of a weapon start
+//! unchecked: its DPS counts them. A corrupted item ends with a note: the search compares
 //! it with corrupted offers only.
 //!
 //! The rows are decided apart from the drawing ([`rows`]), and tested.
+
+use std::borrow::Cow;
 
 use egui::text::{LayoutJob, TextFormat};
 use egui::{
@@ -21,7 +25,7 @@ use egui::{
 use super::number_field::NumberField;
 use super::theme::{self, color, size, text};
 use super::widgets;
-use crate::filters::{self, Filter, Filters, Half, StatKey};
+use crate::filters::{self, Filter, FilterKey, Filters, Half, Property, StatKey};
 use crate::i18n::{Message, Translator};
 use crate::item::{Affix, Item, Modifier, ModifierKind, Range, Rarity, StatLine};
 use crate::prices::UniqueModifiers;
@@ -71,6 +75,10 @@ const COMPARABLE_MARGIN: f64 = 0.1;
 /// A small title of the stats.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Group {
+    /// The base type and the item level of a rare, magic or normal item.
+    Item,
+    /// The DPS of a weapon.
+    Weapon,
     /// The enchantments, and the modifiers added by the corruption.
     Enchant,
     Runes,
@@ -129,6 +137,16 @@ struct Limit {
 }
 
 impl Limit {
+    /// A minimum of `value`, with no range to stay in.
+    fn minimum(value: f64) -> Self {
+        Self {
+            value,
+            half: Half::Minimum,
+            bounds: None,
+            rolls: None,
+        }
+    }
+
     /// A limit of `value` filling `half`, for `line` copied with the value `copied`, which
     /// rolls in `range`: its bounds are `range`, widened to hold `copied` for a legacy unique,
     /// rolled in a range that changed since.
@@ -173,11 +191,33 @@ impl StatFilter {
     }
 }
 
-/// A stat: a line of a modifier.
+/// The text of a stat.
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum StatText<'a> {
+    /// A line of a modifier.
+    Line(&'a str),
+    BaseType(&'a str),
+    /// A property of the item, with its value.
+    Property(Property, f64),
+}
+
+impl<'a> StatText<'a> {
+    fn text(self, i18n: &Translator) -> Cow<'a, str> {
+        match self {
+            Self::Line(text) => Cow::Borrowed(text),
+            Self::BaseType(base_type) => Cow::Owned(i18n.filter_base_type(base_type)),
+            Self::Property(property, value) => {
+                Cow::Owned(i18n.filter_property(property, &format::number(value)))
+            }
+        }
+    }
+}
+
+/// A stat: a line of a modifier, or a property of the item.
 #[derive(Debug, Clone, PartialEq)]
 struct Stat<'a> {
-    key: StatKey,
-    text: &'a str,
+    key: FilterKey,
+    text: StatText<'a>,
     /// A filter of the search, with its checkbox and its range field.
     filter: Option<StatFilter>,
     /// A line the trade site can't search, which would be a filter: the "not allowed" sign in
@@ -220,16 +260,18 @@ pub struct Stats<'a> {
 impl<'a> Stats<'a> {
     /// The stats of `item`, whose modifier `lines` tell which are better lower, and their
     /// `stats` which the trade site can search; `unique_modifiers` are the modifiers of its
-    /// unique in the price database, the ranges of a unique copied without them.
+    /// unique in the price database, the ranges of a unique copied without them; `base_type`
+    /// is the base type its search looks for, a filter.
     #[must_use]
     pub fn new(
         item: &'a Item,
         lines: &CopiedLines,
         stats: &LineStats,
         unique_modifiers: Option<&UniqueModifiers>,
+        base_type: Option<&'a str>,
     ) -> Self {
         Self {
-            rows: rows(item, lines, stats, unique_modifiers),
+            rows: rows(item, lines, stats, unique_modifiers, base_type),
         }
     }
 
@@ -245,9 +287,9 @@ impl<'a> Stats<'a> {
         len(&self.checked(filters))
     }
 
-    /// The filters checked for the search, as the player set them or else by default.
+    /// The filters of the search, checked or not, as the player set them or else by default.
     #[must_use]
-    pub fn checked(&self, filters: &Filters) -> Vec<(StatKey, Filter)> {
+    pub fn filters(&self, filters: &Filters) -> Vec<(FilterKey, Filter)> {
         self.rows
             .iter()
             .filter_map(|row| match row {
@@ -258,8 +300,15 @@ impl<'a> Stats<'a> {
                 }) => Some((*key, filters.get(*key, || filter.default_choice()))),
                 _ => None,
             })
-            .filter(|(_, filter)| filter.checked)
             .collect()
+    }
+
+    /// The filters checked for the search, as the player set them or else by default.
+    #[must_use]
+    pub fn checked(&self, filters: &Filters) -> Vec<(FilterKey, Filter)> {
+        let mut checked = self.filters(filters);
+        checked.retain(|(_, filter)| filter.checked);
+        checked
     }
 }
 
@@ -269,22 +318,35 @@ fn len<T>(list: &[T]) -> u32 {
 
 /// The rows of the stats of `item`, whose modifier `lines` tell which are better lower, and
 /// their `stats` which the trade site can search; `unique_modifiers` are the modifiers of its
-/// unique in the price database, the ranges of a unique copied without them.
+/// unique in the price database, the ranges of a unique copied without them; `base_type` is
+/// the base type its search looks for, a filter.
 fn rows<'a>(
     item: &'a Item,
     lines: &CopiedLines,
     stats: &LineStats,
     unique_modifiers: Option<&UniqueModifiers>,
+    base_type: Option<&'a str>,
 ) -> Vec<Row<'a>> {
-    let reading = Reading { lines, stats };
-    let mut rows = if item.rarity() == Rarity::Unique {
-        unique_rows(item, unique_modifiers, &reading)
-    } else {
-        affix_rows(item, &reading)
+    let mut rows = Vec::new();
+    if matches!(item.rarity(), Rarity::Normal | Rarity::Magic | Rarity::Rare) {
+        push_group(&mut rows, Group::Item, item_filters(item, base_type));
+        push_group(&mut rows, Group::Weapon, dps_filters(item));
+    }
+    let reading = Reading {
+        lines,
+        stats,
+        dps_filters: rows.contains(&Row::Group(Group::Weapon)),
     };
+    if item.rarity() == Rarity::Unique {
+        rows.extend(unique_rows(item, unique_modifiers, &reading));
+    } else {
+        rows.extend(affix_rows(item, &reading));
+    }
     for row in &mut rows {
-        if let Row::Stat(stat) = row {
-            searchable(stat, stats.get(stat.key));
+        if let Row::Stat(stat) = row
+            && let FilterKey::Stat(key) = stat.key
+        {
+            searchable(stat, stats.get(key));
         }
     }
     // The corrupted state is always a filter; a currency is never corrupted.
@@ -305,15 +367,84 @@ fn searchable(stat: &mut Stat<'_>, line: Option<&LineStat>) {
     }
 }
 
+/// The filters of the base type of a rare, magic or normal item, checked, and of its item
+/// level, unchecked, with the level of the item as its minimum.
+fn item_filters<'a>(item: &Item, base_type: Option<&'a str>) -> Vec<Stat<'a>> {
+    let base_type = base_type.map(|base_type| Stat {
+        key: FilterKey::BaseType,
+        text: StatText::BaseType(base_type),
+        filter: Some(StatFilter {
+            checked: true,
+            limit: None,
+        }),
+        unsearchable: false,
+        roll: None,
+    });
+    let item_level = item.item_level().map(|level| {
+        property_filter(
+            Property::ItemLevel,
+            f64::from(level),
+            f64::from(level),
+            false,
+        )
+    });
+    base_type.into_iter().chain(item_level).collect()
+}
+
+/// The filters of the DPS of a weapon, each kind it deals, with a minimum at 90 % of its
+/// DPS: the physical one checked, the elemental one unchecked.
+fn dps_filters(item: &Item) -> Vec<Stat<'static>> {
+    let Some(weapon) = item.weapon() else {
+        return Vec::new();
+    };
+    let dps = weapon.dps();
+    [
+        (Property::PhysicalDps, dps.physical, true),
+        (Property::ElementalDps, dps.elemental, false),
+    ]
+    .into_iter()
+    .filter_map(|(property, dps, checked)| {
+        // As the item block shows it.
+        let dps = dps.round();
+        (dps >= 1.0).then(|| {
+            let minimum = (dps * (1.0 - COMPARABLE_MARGIN)).round();
+            property_filter(property, dps, minimum, checked)
+        })
+    })
+    .collect()
+}
+
+/// The filter of `property`, of the value `value`, with a minimum of `minimum`.
+fn property_filter(property: Property, value: f64, minimum: f64, checked: bool) -> Stat<'static> {
+    Stat {
+        key: FilterKey::Property(property),
+        text: StatText::Property(property, value),
+        filter: Some(StatFilter {
+            checked,
+            limit: Some(Limit::minimum(minimum)),
+        }),
+        unsearchable: false,
+        roll: None,
+    }
+}
+
 /// How the stats read the modifier lines of the item, beyond their text.
 struct Reading<'r> {
     /// They tell the lines better lower.
     lines: &'r CopiedLines,
-    /// They tell the numbers of each line its stat counts.
+    /// They tell the numbers of each line its stat counts, and the damage of a weapon.
     stats: &'r LineStats,
+    /// The item has the filters of the DPS of a weapon.
+    dps_filters: bool,
 }
 
 impl Reading<'_> {
+    /// The line `key` starts checked: unchecked when the DPS of the weapon counts it, its
+    /// damage or its attack speed.
+    fn checked(&self, key: StatKey) -> bool {
+        !(self.dps_filters && self.stats.weapon_damage(key))
+    }
+
     /// The half of the range field the stat `key` fills: the maximum for a line better lower.
     fn half(&self, key: StatKey) -> Half {
         if self.lines.better_lower(key) {
@@ -467,8 +598,8 @@ fn added<'a>(key: StatKey, line: &'a StatLine, reading: &Reading<'_>) -> Stat<'a
     let half = reading.half(key);
     let counted = reading.counted(key, line);
     Stat {
-        key,
-        text: &line.text,
+        key: FilterKey::Stat(key),
+        text: StatText::Line(&line.text),
         filter: Some(StatFilter {
             checked: false,
             limit: value(&counted).map(|value| Limit::new(value, half, None, value, &counted)),
@@ -484,23 +615,29 @@ fn implicit_stat<'a>(key: StatKey, line: &'a StatLine, reading: &Reading<'_>) ->
     let counted = reading.counted(key, line);
     let ranges = copied_ranges(&counted);
     Stat {
-        key,
-        text: &line.text,
+        key: FilterKey::Stat(key),
+        text: StatText::Line(&line.text),
         filter: Some(comparable_filter(
             &counted,
             bounds(&counted, &ranges),
             reading.half(key),
+            reading.checked(key),
         )),
         unsearchable: false,
         roll: bar(magnitudes(&counted, &ranges)),
     }
 }
 
-/// A filter of a rare, magic or normal item: checked, when the line varies with a minimum at
-/// 90 % of the copied value, or a maximum at 110 % when `half` is the maximum.
-fn comparable_filter(line: &StatLine, bounds: Option<Range>, half: Half) -> StatFilter {
+/// A filter of a rare, magic or normal item, when the line varies with a minimum at 90 % of
+/// the copied value, or a maximum at 110 % when `half` is the maximum.
+fn comparable_filter(
+    line: &StatLine,
+    bounds: Option<Range>,
+    half: Half,
+    checked: bool,
+) -> StatFilter {
     StatFilter {
-        checked: true,
+        checked,
         limit: varies(line)
             .then(|| value(line))
             .flatten()
@@ -554,13 +691,14 @@ fn affix_stats<'a>(item: &'a Item, affix: Option<Affix>, reading: &Reading<'_>) 
                         line: line_index,
                     };
                     Stat {
-                        key,
-                        text: &line.text,
+                        key: FilterKey::Stat(key),
+                        text: StatText::Line(&line.text),
                         // The range of every tier comes with the modifier tables (step 13).
                         filter: Some(comparable_filter(
                             &reading.counted(key, line),
                             None,
                             reading.half(key),
+                            reading.checked(key),
                         )),
                         unsearchable: false,
                         roll: modifier
@@ -669,8 +807,8 @@ fn unique_stat<'a>(
         RangeSource::Unknown => None,
     };
     let fixed = Stat {
-        key,
-        text: &whole.text,
+        key: FilterKey::Stat(key),
+        text: StatText::Line(&whole.text),
         filter: None,
         unsearchable: false,
         roll: None,
@@ -855,6 +993,8 @@ fn show(ui: &mut Ui, rows: Vec<Row<'_>>, filters: &mut Filters, i18n: &Translato
 /// "min – max" on its right, above the range fields of the filters.
 fn group_title(ui: &mut Ui, group: Group, range: bool, i18n: &Translator) {
     let (message, fill) = match group {
+        Group::Item => (Message::GroupItem, None),
+        Group::Weapon => (Message::GroupWeapon, None),
         Group::Enchant => (Message::GroupEnchant, None),
         Group::Runes => (Message::GroupRunes, None),
         Group::Implicit => (Message::GroupImplicit, None),
@@ -899,6 +1039,7 @@ fn group_title(ui: &mut Ui, group: Group, range: bool, i18n: &Translator) {
 /// A stat in the color of the modifiers, on two lines at most, and its roll under it; a
 /// filter between its checkbox and the column of its range field.
 fn stat_row(ui: &mut Ui, stat: &Stat<'_>, filters: &mut Filters, i18n: &Translator, bar: RollBar) {
+    let text = stat.text.text(i18n);
     ui.horizontal_top(|ui| {
         let width = ui.available_width();
         let line_height = ui.fonts_mut(|fonts| fonts.row_height(&text::body()));
@@ -910,20 +1051,21 @@ fn stat_row(ui: &mut Ui, stat: &Stat<'_>, filters: &mut Filters, i18n: &Translat
             ui.add_space(GAP);
             stat_text(
                 ui,
-                stat,
+                &text,
+                stat.roll.as_ref(),
                 (width - GUTTER - GAP - GAP - RANGE_COLUMN).max(0.0),
                 bar,
             );
             return;
         }
         let Some(filter) = stat.filter else {
-            stat_text(ui, stat, width, bar);
+            stat_text(ui, &text, stat.roll.as_ref(), width, bar);
             return;
         };
         let mut choice = filters.get(stat.key, || filter.default_choice());
         let before = choice.clone();
         // The checkbox on the first line of the text.
-        if widgets::check_box(ui, choice.checked, vec2(GUTTER, line_height), stat.text).clicked() {
+        if widgets::check_box(ui, choice.checked, vec2(GUTTER, line_height), &text).clicked() {
             choice.checked = !choice.checked;
         }
         ui.add_space(GAP);
@@ -934,7 +1076,8 @@ fn stat_row(ui: &mut Ui, stat: &Stat<'_>, filters: &mut Filters, i18n: &Translat
         };
         stat_text(
             ui,
-            stat,
+            &text,
+            stat.roll.as_ref(),
             (width - GUTTER - GAP - GAP - column).max(0.0),
             bar,
         );
@@ -949,11 +1092,11 @@ fn stat_row(ui: &mut Ui, stat: &Stat<'_>, filters: &mut Filters, i18n: &Translat
 }
 
 /// The text of a stat and its roll, `width` across.
-fn stat_text(ui: &mut Ui, stat: &Stat<'_>, width: f32, bar: RollBar) {
+fn stat_text(ui: &mut Ui, text: &str, roll: Option<&Roll>, width: f32, bar: RollBar) {
     ui.allocate_ui_with_layout(vec2(width, 0.0), Layout::top_down(Align::Min), |ui| {
         ui.set_width(width);
-        ui.add(Label::new(clamped(stat.text)).wrap());
-        if let Some(roll) = &stat.roll {
+        ui.add(Label::new(clamped(text)).wrap());
+        if let Some(roll) = roll {
             ui.add_space(ROLL_GAP);
             roll_line(ui, roll, bar);
         }
@@ -963,7 +1106,7 @@ fn stat_text(ui: &mut Ui, stat: &Stat<'_>, width: f32, bar: RollBar) {
 /// The range field of a filter, in its column: its minimum, a dash, its maximum, each half a
 /// number only, brought back within the range of the stat when the player leaves it; its
 /// tooltip under the pointer.
-fn range_field(ui: &mut Ui, key: StatKey, choice: &mut Filter, limit: Limit, i18n: &Translator) {
+fn range_field(ui: &mut Ui, key: FilterKey, choice: &mut Filter, limit: Limit, i18n: &Translator) {
     let halves = [Half::Minimum, Half::Maximum];
     let ids = halves.map(|half| ui.make_persistent_id(("stat-range", key, half)));
     let focused = ui.memory(|memory| ids.iter().any(|&id| memory.has_focus(id)));
@@ -1039,7 +1182,7 @@ fn tooltip_lines(limit: Limit, i18n: &Translator) -> Vec<(String, Color32)> {
 /// The tooltip of a range field in `field`: the rolls it accepts, then "Lower is better" in
 /// gray for a line better lower; none when it has nothing to say. Under the field, their
 /// right edges together, so that it stays in the window.
-fn field_tooltip(ui: &Ui, key: StatKey, field: Rect, limit: Limit, i18n: &Translator) {
+fn field_tooltip(ui: &Ui, key: FilterKey, field: Rect, limit: Limit, i18n: &Translator) {
     let lines = tooltip_lines(limit, i18n);
     if lines.is_empty() {
         return;
@@ -1057,7 +1200,7 @@ fn field_tooltip(ui: &Ui, key: StatKey, field: Rect, limit: Limit, i18n: &Transl
 /// The tooltip of the "not allowed" sign of a line the trade site can't search, in `sign`:
 /// two sentences, one per line. Under the sign, opening to the right since the sign is on the
 /// left edge.
-fn unsearchable_tooltip(ui: &Ui, key: StatKey, sign: Rect, i18n: &Translator) {
+fn unsearchable_tooltip(ui: &Ui, key: FilterKey, sign: Rect, i18n: &Translator) {
     let lines = [Message::FilterUnsearchable, Message::FilterUnsearchableHint]
         .map(|message| (i18n.text(message), color::TEXT));
     let at = pos2(
@@ -1186,7 +1329,12 @@ mod tests {
             None,
         );
         let stats = LineStats::new(item.language(), item.modifiers(), None);
-        super::rows(item, &lines, &stats, unique_modifiers)
+        super::rows(item, &lines, &stats, unique_modifiers, base_type(item))
+    }
+
+    /// The base type the search of `item` looks for, among its filters: none for a unique.
+    fn base_type(item: &Item) -> Option<&str> {
+        (item.rarity() != Rarity::Unique).then(|| item.base_type())
     }
 
     /// The rows as texts: a title (`Prefixes 2/3`), the note of a corrupted item, or a stat,
@@ -1232,6 +1380,13 @@ mod tests {
                         }
                         Some(Roll::Tier { tier, ranges }) => {
                             format!(" [T{tier} {}]", ranges_text(&ranges))
+                        }
+                    };
+                    let text = match text {
+                        StatText::Line(text) => text.to_owned(),
+                        StatText::BaseType(base_type) => format!("Base: {base_type}"),
+                        StatText::Property(property, value) => {
+                            format!("{property:?}: {}", format::number(value))
                         }
                     };
                     format!("{check}{text}{limit}{roll}")
@@ -1420,6 +1575,14 @@ mod tests {
         assert_eq!(
             texts(&crossbow, None),
             [
+                // The base type checked, the item level unchecked at the level of the item.
+                "Item",
+                "■ Base: Gemini Crossbow",
+                "□ ItemLevel: 80 ≥80",
+                // 90 % of the DPS, the elemental one unchecked.
+                "Weapon",
+                "■ PhysicalDps: 288 ≥259",
+                "□ ElementalDps: 267 ≥240",
                 "Enchant",
                 // The enchantment and the runes unchecked, with their value.
                 "□ 45% increased Elemental Damage with Attacks ≥45",
@@ -1430,14 +1593,16 @@ mod tests {
                 // A line without number: no minimum.
                 "■ Loads an additional bolt",
                 "Prefixes 3/3",
-                // 90 % of the copied value, of the average of two numbers.
-                "■ Adds 10 to 273 Lightning Damage ≥127 [T2 1–16 · 239–300]",
-                "■ Adds 24 to 51 Physical Damage ≥34 [T3 23–35 · 39–59]",
+                // 90 % of the copied value, of the average of two numbers; the damage and
+                // the attack speed of the weapon unchecked, since its DPS counts them.
+                "□ Adds 10 to 273 Lightning Damage ≥127 [T2 1–16 · 239–300]",
+                "□ Adds 24 to 51 Physical Damage ≥34 [T3 23–35 · 39–59]",
+                // Not a damage of the weapon: its attacks get it from any item.
                 "■ 109% increased Elemental Damage with Attacks ≥98 [T2 100–119]",
                 "Suffixes 3/3",
                 "■ Leeches 7.59% of Physical Damage as Mana ≥6.83 [T1 7–7.9]",
                 "■ Gain 21 Mana per enemy killed ≥19 [T3 21–27]",
-                "■ 18% increased Attack Speed ≥16 [T1 17–19]",
+                "□ 18% increased Attack Speed ≥16 [T1 17–19]",
                 "Corrupted only",
             ]
         );
@@ -1450,6 +1615,9 @@ mod tests {
         assert_eq!(
             texts(&ring, None),
             [
+                "Item",
+                "■ Base: Prismatic Ring",
+                "□ ItemLevel: 79 ≥79",
                 "Implicit",
                 "■ +8% to all Elemental Resistances ≥7",
                 "Explicit",
@@ -1474,6 +1642,8 @@ mod tests {
         assert_eq!(
             texts(&boots, None),
             [
+                "Item",
+                "■ Base: Lattice Sandals",
                 "Implicit",
                 // 90 % of 12, within the range of the implicit.
                 "■ +12 to Dexterity ≥11 [10–15 0.40]",
@@ -1503,11 +1673,39 @@ mod tests {
         assert!(english.is_jewel());
         assert_eq!(
             texts(&english, None),
-            ["Prefixes 1/2", "■ +12 to maximum Life ≥11 [T2 10–14]"]
+            [
+                "Item",
+                "■ Base: Ruby",
+                "Prefixes 1/2",
+                "■ +12 to maximum Life ≥11 [T2 10–14]"
+            ]
         );
         assert_eq!(
             texts(&french, None),
-            ["Prefixes 1/2", "■ +12 de Vie maximale ≥11 [T2 10–14]"]
+            [
+                "Item",
+                "■ Base: Rubis",
+                "Prefixes 1/2",
+                "■ +12 de Vie maximale ≥11 [T2 10–14]"
+            ]
+        );
+    }
+
+    #[test]
+    fn the_attack_speed_of_an_item_that_isnt_a_weapon_stays_checked() {
+        let quiver = parse(
+            "Item Class: Quivers\nRarity: Magic\nQuick Broadhead Quiver\n--------\n\
+             { Suffix Modifier \"of Skill\" (Tier: 4) }\n8(7-9)% increased Attack Speed",
+        );
+
+        assert_eq!(
+            texts(&quiver, None),
+            [
+                "Item",
+                "■ Base: Quick Broadhead Quiver",
+                "Suffixes 1/1",
+                "■ 8% increased Attack Speed ≥7 [T4 7–9]",
+            ]
         );
     }
 
@@ -1518,8 +1716,16 @@ mod tests {
         assert_eq!(
             texts(&mace, None),
             [
+                // Its whole name here: the application finds its base type among the names of
+                // the trade site.
+                "Item",
+                "■ Base: Crackling Temple Maul of the Brute",
+                "□ ItemLevel: 32 ≥32",
+                "Weapon",
+                "■ PhysicalDps: 64 ≥58",
+                "□ ElementalDps: 31 ≥28",
                 "Prefixes 1/1",
-                "■ Adds 1 to 50 Lightning Damage ≥23 [T7 1–4 · 46–66]",
+                "□ Adds 1 to 50 Lightning Damage ≥23 [T7 1–4 · 46–66]",
                 "Suffixes 1/1",
                 "■ +8 to Strength ≥7 [T8 5–8]",
             ]
@@ -1557,7 +1763,7 @@ mod tests {
             max: 15.0,
         });
         assert_eq!(
-            limit(&rows(&boots, None)[1]),
+            limit(&rows(&boots, None)[3]),
             Limit {
                 value: 10.0,
                 half: Half::Minimum,
@@ -1607,6 +1813,8 @@ mod tests {
         assert_eq!(
             texts(&rare, None),
             [
+                "Item",
+                "■ Base: Ruby Ring",
                 "Implicit",
                 "■ 12% increased Charm Charges used ≤13 [10–15 0.40]",
                 "Suffixes 1/3",
@@ -1739,15 +1947,27 @@ mod tests {
             ["Unique", "■ +55 to maximum Life ≥55", "Corrupted only"]
         );
         // An item without modifiers has its filters to show.
-        assert!(
-            !Stats::new(&staff, &CopiedLines::default(), &LineStats::default(), None).is_empty()
+        let stats = |item| {
+            Stats::new(
+                item,
+                &CopiedLines::default(),
+                &LineStats::default(),
+                None,
+                base_type(item),
+            )
+        };
+        assert!(!stats(&staff).is_empty());
+        assert_eq!(
+            texts(&staff, None),
+            [
+                "Item",
+                "■ Base: Chiming Staff",
+                "□ ItemLevel: 82 ≥82",
+                "Corrupted only"
+            ]
         );
-        assert_eq!(texts(&staff, None), ["Corrupted only"]);
-        let clean =
-            parse("Item Class: Staves\nRarity: Normal\nChiming Staff\n--------\nItem Level: 82");
-        assert!(
-            Stats::new(&clean, &CopiedLines::default(), &LineStats::default(), None).is_empty()
-        );
+        let orb = parse("Item Class: Stackable Currency\nRarity: Currency\nExalted Orb");
+        assert!(stats(&orb).is_empty());
     }
 
     #[test]
@@ -1769,7 +1989,7 @@ mod tests {
             None,
         );
         let line_stats = LineStats::new(unique.language(), unique.modifiers(), None);
-        let stats = Stats::new(&unique, &lines, &line_stats, None);
+        let stats = Stats::new(&unique, &lines, &line_stats, None, None);
 
         assert_eq!(
             texts(&unique, None),
@@ -1789,28 +2009,13 @@ mod tests {
         );
         let filters = Filters::default();
         assert_eq!(stats.active_filters(&filters), 3);
-        let checked: Vec<StatKey> = stats
+        let checked: Vec<FilterKey> = stats
             .checked(&filters)
             .into_iter()
             .map(|(key, _)| key)
             .collect();
-        assert_eq!(
-            checked,
-            [
-                StatKey {
-                    modifier: 0,
-                    line: 0
-                },
-                StatKey {
-                    modifier: 2,
-                    line: 0
-                },
-                StatKey {
-                    modifier: 3,
-                    line: 1
-                }
-            ]
-        );
+        let key = |modifier, line| FilterKey::Stat(StatKey { modifier, line });
+        assert_eq!(checked, [key(0, 0), key(2, 0), key(3, 1)]);
     }
 
     #[test]
@@ -1827,8 +2032,8 @@ mod tests {
             None,
         );
         let line_stats = LineStats::new(crossbow.language(), crossbow.modifiers(), None);
-        let stats = Stats::new(&crossbow, &lines, &line_stats, None);
-        let keys: Vec<StatKey> = stats
+        let stats = Stats::new(&crossbow, &lines, &line_stats, None, base_type(&crossbow));
+        let keys: Vec<FilterKey> = stats
             .rows
             .iter()
             .filter_map(|row| match row {
@@ -1843,16 +2048,18 @@ mod tests {
             bounds: None,
         };
 
-        // The enchantment and the two runes unchecked.
-        assert_eq!(stats.active_filters(&filters), 7);
+        // The base type, the physical DPS, the implicit and three modifiers; the item level,
+        // the elemental DPS, the enchantment, the two runes, the damage and the attack speed
+        // unchecked.
+        assert_eq!(stats.active_filters(&filters), 6);
         // A rune checked by the player.
-        filters.set(keys[1], choice(true));
-        assert_eq!(stats.active_filters(&filters), 8);
+        filters.set(keys[5], choice(true));
+        assert_eq!(stats.active_filters(&filters), 7);
         // The implicit unchecked.
-        filters.set(keys[3], choice(false));
-        assert_eq!(stats.active_filters(&filters), 7);
+        filters.set(keys[7], choice(false));
+        assert_eq!(stats.active_filters(&filters), 6);
         filters.clear();
-        assert_eq!(stats.active_filters(&filters), 7);
+        assert_eq!(stats.active_filters(&filters), 6);
     }
 
     #[test]
@@ -1867,11 +2074,11 @@ mod tests {
         assert_eq!(
             rows[1],
             Row::Stat(Stat {
-                key: StatKey {
+                key: FilterKey::Stat(StatKey {
                     modifier: 0,
                     line: 0
-                },
-                text: "+65 to maximum Life",
+                }),
+                text: StatText::Line("+65 to maximum Life"),
                 filter: Some(StatFilter {
                     checked: true,
                     limit: Some(Limit {

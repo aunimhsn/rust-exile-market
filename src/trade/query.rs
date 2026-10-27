@@ -4,6 +4,8 @@
 
 use serde_json::{Map, Value, json};
 
+use crate::filters::Property;
+
 /// What a search looks for.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Query {
@@ -35,11 +37,41 @@ pub enum SearchKind {
 pub struct ItemQuery {
     /// The name of a unique.
     pub name: Option<String>,
-    pub base_type: String,
+    /// Any base type when `None`.
+    pub base_type: Option<String>,
     pub rarity: Option<RarityFilter>,
     /// Corrupted offers only, or clean ones only; either when `None`.
     pub corrupted: Option<bool>,
+    pub properties: Vec<PropertyFilter>,
     pub stats: Vec<StatFilter>,
+}
+
+/// The filters of the search of an item, as the player left them.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct SearchFilters {
+    /// The base type unchecked: the offers may have any base.
+    pub any_base: bool,
+    pub properties: Vec<PropertyFilter>,
+    pub stats: Vec<StatFilter>,
+}
+
+/// A property of the offers, with its minimum and its maximum.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PropertyFilter {
+    pub property: Property,
+    pub minimum: Option<f64>,
+    pub maximum: Option<f64>,
+}
+
+impl PropertyFilter {
+    /// The group of the filters of the trade site the property is in, and its id there.
+    fn id(&self) -> (&'static str, &'static str) {
+        match self.property {
+            Property::ItemLevel => ("type_filters", "ilvl"),
+            Property::PhysicalDps => ("equipment_filters", "pdps"),
+            Property::ElementalDps => ("equipment_filters", "edps"),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -62,19 +94,25 @@ pub struct StatFilter {
 impl StatFilter {
     /// The filter of `id`, as the trade site reads it.
     fn to_json(&self, id: &str) -> Value {
-        let mut value = Map::new();
-        if let Some(minimum) = self.minimum {
-            value.insert("min".to_owned(), json!(minimum));
-        }
-        if let Some(maximum) = self.maximum {
-            value.insert("max".to_owned(), json!(maximum));
-        }
+        let value = limits(self.minimum, self.maximum);
         if value.is_empty() {
             json!({ "id": id })
         } else {
             json!({ "id": id, "value": value })
         }
     }
+}
+
+/// A minimum and a maximum, as the trade site reads them: an empty map without limits.
+fn limits(minimum: Option<f64>, maximum: Option<f64>) -> Map<String, Value> {
+    let mut value = Map::new();
+    if let Some(minimum) = minimum {
+        value.insert("min".to_owned(), json!(minimum));
+    }
+    if let Some(maximum) = maximum {
+        value.insert("max".to_owned(), json!(maximum));
+    }
+    value
 }
 
 impl ItemQuery {
@@ -86,29 +124,44 @@ impl ItemQuery {
         if let Some(name) = &self.name {
             query.insert("name".to_owned(), json!(name));
         }
-        query.insert("type".to_owned(), json!(self.base_type));
+        if let Some(base_type) = &self.base_type {
+            query.insert("type".to_owned(), json!(base_type));
+        }
         if !self.stats.is_empty() {
             query.insert("stats".to_owned(), self.stats_json());
         }
-        let mut filters = Map::new();
+        // Each group of filters, with its filters by id.
+        let mut groups: Map<String, Value> = Map::new();
+        let mut add = |group: &str, id: &str, filter: Value| {
+            let filters = groups
+                .entry(group)
+                .or_insert_with(|| json!({ "filters": {} }));
+            filters["filters"][id] = filter;
+        };
         if let Some(rarity) = self.rarity {
             let option = match rarity {
                 RarityFilter::Unique => "unique",
                 RarityFilter::NotUnique => "nonunique",
             };
-            filters.insert(
-                "type_filters".to_owned(),
-                json!({ "filters": { "rarity": { "option": option } } }),
-            );
+            add("type_filters", "rarity", json!({ "option": option }));
+        }
+        for property in &self.properties {
+            let (group, id) = property.id();
+            let value = limits(property.minimum, property.maximum);
+            // Without limits, it filters nothing.
+            if !value.is_empty() {
+                add(group, id, Value::Object(value));
+            }
         }
         if let Some(corrupted) = self.corrupted {
-            filters.insert(
-                "misc_filters".to_owned(),
-                json!({ "filters": { "corrupted": { "option": corrupted.to_string() } } }),
+            add(
+                "misc_filters",
+                "corrupted",
+                json!({ "option": corrupted.to_string() }),
             );
         }
-        if !filters.is_empty() {
-            query.insert("filters".to_owned(), Value::Object(filters));
+        if !groups.is_empty() {
+            query.insert("filters".to_owned(), Value::Object(groups));
         }
         json!({ "query": query, "sort": { "price": "asc" } })
     }
@@ -169,9 +222,10 @@ mod tests {
     fn a_search_writes_only_its_filters() {
         let query = ItemQuery {
             name: None,
-            base_type: "Ruby Ring".to_owned(),
+            base_type: Some("Ruby Ring".to_owned()),
             rarity: None,
             corrupted: None,
+            properties: Vec::new(),
             stats: Vec::new(),
         };
 
@@ -188,9 +242,10 @@ mod tests {
     fn the_stats_and_the_corrupted_state_are_filters() {
         let query = ItemQuery {
             name: Some("Andvarius".to_owned()),
-            base_type: "Gold Ring".to_owned(),
+            base_type: Some("Gold Ring".to_owned()),
             rarity: Some(RarityFilter::Unique),
             corrupted: Some(false),
+            properties: Vec::new(),
             stats: vec![
                 StatFilter {
                     ids: vec!["explicit.stat_3917489142".to_owned()],
@@ -230,9 +285,10 @@ mod tests {
     fn a_local_and_a_global_stat_are_searched_in_a_count_group() {
         let query = ItemQuery {
             name: Some("Bloodthirst".to_owned()),
-            base_type: "Gold Ring".to_owned(),
+            base_type: Some("Gold Ring".to_owned()),
             rarity: None,
             corrupted: None,
+            properties: Vec::new(),
             stats: vec![
                 StatFilter {
                     ids: vec![
@@ -268,9 +324,10 @@ mod tests {
     fn a_count_group_without_limits_searches_its_ids_alone() {
         let query = ItemQuery {
             name: None,
-            base_type: "Gold Ring".to_owned(),
+            base_type: Some("Gold Ring".to_owned()),
             rarity: None,
             corrupted: None,
+            properties: Vec::new(),
             stats: vec![StatFilter {
                 ids: vec![
                     "explicit.stat_691932474".to_owned(),
@@ -287,6 +344,54 @@ mod tests {
                 { "id": "explicit.stat_691932474" },
                 { "id": "explicit.stat_803737631" }
             ] }])
+        );
+    }
+
+    #[test]
+    fn the_properties_are_filters_and_the_base_type_may_be_left_out() {
+        let query = ItemQuery {
+            name: None,
+            base_type: None,
+            rarity: Some(RarityFilter::NotUnique),
+            corrupted: Some(false),
+            properties: vec![
+                PropertyFilter {
+                    property: Property::ItemLevel,
+                    minimum: Some(81.0),
+                    maximum: None,
+                },
+                PropertyFilter {
+                    property: Property::PhysicalDps,
+                    minimum: Some(220.0),
+                    maximum: Some(300.0),
+                },
+                PropertyFilter {
+                    property: Property::ElementalDps,
+                    minimum: None,
+                    maximum: None,
+                },
+            ],
+            stats: Vec::new(),
+        };
+
+        assert_eq!(
+            query.to_json(),
+            json!({
+                "query": {
+                    "status": { "option": "online" },
+                    "filters": {
+                        "type_filters": { "filters": {
+                            "rarity": { "option": "nonunique" },
+                            "ilvl": { "min": 81.0 }
+                        } },
+                        "equipment_filters": { "filters": {
+                            "pdps": { "min": 220.0, "max": 300.0 }
+                        } },
+                        "misc_filters": { "filters": { "corrupted": { "option": "false" } } }
+                    }
+                },
+                "sort": { "price": "asc" }
+            })
         );
     }
 

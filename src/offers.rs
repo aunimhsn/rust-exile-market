@@ -292,7 +292,8 @@ mod tests {
             league: League::new("Standard"),
             query: Query::Items(ItemQuery {
                 name: Some("Andvarius".to_owned()),
-                base_type: "Gold Ring".to_owned(),
+                base_type: Some("Gold Ring".to_owned()),
+                properties: Vec::new(),
                 rarity: None,
                 corrupted: Some(false),
                 stats: Vec::new(),
