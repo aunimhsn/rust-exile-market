@@ -6,7 +6,7 @@
 
 use std::time::Duration;
 
-use fluent_bundle::{FluentArgs, FluentBundle, FluentResource};
+use fluent_bundle::{FluentArgs, FluentBundle, FluentResource, FluentValue};
 
 use crate::filters::Property;
 use crate::language::Language;
@@ -625,31 +625,25 @@ impl Translator {
     /// The similar offers found, on the right of the title of an estimated price: "18 similar".
     #[must_use]
     pub fn similar(&self, total: u64) -> String {
-        let mut args = FluentArgs::new();
-        args.set("count", total);
-        self.format(SIMILAR, Some(&args))
+        self.format_number(SIMILAR, "count", total)
     }
 
     /// The warning of an estimate from few offers.
     #[must_use]
     pub fn estimate_uncertain(&self, counted: usize) -> String {
-        let mut args = FluentArgs::new();
-        args.set("count", counted);
-        self.format(ESTIMATE_UNCERTAIN, Some(&args))
+        self.format_number(ESTIMATE_UNCERTAIN, "count", counted)
     }
 
-    /// How an estimate is made, from the `counted` offers: the `cheapest` of more offers,
-    /// or all of them.
+    /// How an estimate from all the `counted` offers is made.
     #[must_use]
-    pub fn estimate_median(&self, counted: usize, cheapest: bool) -> String {
-        let mut args = FluentArgs::new();
-        args.set("count", counted);
-        let id = if cheapest {
-            ESTIMATE_MEDIAN_CHEAPEST
-        } else {
-            ESTIMATE_MEDIAN
-        };
-        self.format(id, Some(&args))
+    pub fn estimate_median(&self, counted: usize) -> String {
+        self.format_number(ESTIMATE_MEDIAN, "count", counted)
+    }
+
+    /// How an estimate from the `counted` cheapest offers is made.
+    #[must_use]
+    pub fn estimate_median_cheapest(&self, counted: usize) -> String {
+        self.format_number(ESTIMATE_MEDIAN_CHEAPEST, "count", counted)
     }
 
     /// The price block while the prices of `league` are downloading.
@@ -801,7 +795,12 @@ impl Translator {
         self.format(id, Some(&args))
     }
 
-    fn format_number(&self, id: &str, name: &'static str, value: u32) -> String {
+    fn format_number(
+        &self,
+        id: &str,
+        name: &'static str,
+        value: impl Into<FluentValue<'static>>,
+    ) -> String {
         let mut args = FluentArgs::new();
         args.set(name, value);
         self.format(id, Some(&args))
@@ -964,9 +963,9 @@ mod tests {
             }
             for count in [1, 4] {
                 assert_ne!(translator.estimate_uncertain(count), "");
-                assert_ne!(translator.estimate_median(count, false), "");
+                assert_ne!(translator.estimate_median(count), "");
             }
-            assert!(translator.estimate_median(5, true).contains('5'));
+            assert!(translator.estimate_median_cheapest(5).contains('5'));
             assert!(translator.show_stats(1).contains('1'));
             assert!(translator.show_stats(6).contains('6'));
             assert!(translator.affix_fill(3, 3).contains('3'));
@@ -1066,11 +1065,8 @@ mod tests {
     fn an_estimate_from_one_offer_is_its_price() {
         for language in Language::ALL {
             let translator = Translator::new(language);
-            assert!(
-                !translator.estimate_median(1, false).contains('1'),
-                "{language:?}"
-            );
-            assert!(translator.estimate_median(3, false).contains('3'));
+            assert!(!translator.estimate_median(1).contains('1'), "{language:?}");
+            assert!(translator.estimate_median(3).contains('3'));
         }
         assert_eq!(
             Translator::new(Language::English).estimate_uncertain(3),

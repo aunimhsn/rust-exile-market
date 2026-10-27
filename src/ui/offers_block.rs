@@ -313,6 +313,7 @@ impl<'a> OffersBlock<'a> {
                 loading_more,
                 more_failed,
                 searched,
+                ..
             } => {
                 let rows = item_rows(offers, self.reference, now);
                 let list = List {

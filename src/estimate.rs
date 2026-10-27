@@ -3,11 +3,11 @@
 //! normal item, a jewel), the median of its cheapest similar offers.
 //!
 //! The estimate is itself the reference of its offers: the median of the first page of
-//! offers tells the suspicious ones, which it leaves out. That median holds as long as fewer
-//! than half the offers of the page are bait, and doesn't move when the next offers load.
+//! offers, the answer to the search, tells the suspicious ones, which it leaves out. That
+//! median holds as long as fewer than half the offers of the page are bait, and doesn't move
+//! when the next offers load.
 
 use crate::format::Currency;
-use crate::offers::PAGE;
 use crate::prices::Rates;
 use crate::trade::offers::{ItemOffer, currency};
 
@@ -38,8 +38,7 @@ impl Reference {
 }
 
 /// `amount` of the currency `id`, in Exalted Orbs; `None` for a currency without a rate.
-#[must_use]
-pub fn in_exalted(amount: f64, id: &str, rates: Rates) -> Option<f64> {
+fn in_exalted(amount: f64, id: &str, rates: Rates) -> Option<f64> {
     Some(match currency(id)? {
         Currency::Exalted => amount,
         Currency::Divine => amount * rates.divine,
@@ -60,14 +59,13 @@ pub struct Estimate {
     pub reference: Reference,
 }
 
-/// The estimate from the `offers` of a search of items, the cheapest first, of the `total`
-/// found, with the `rates` of the currencies; `None` without an offer priced in one of the
-/// three currencies.
+/// The estimate from the `first_page` of offers of a search of items, the cheapest first, of
+/// the `total` found, with the `rates` of the currencies; `None` without an offer priced in
+/// one of the three currencies.
 #[must_use]
-pub fn estimate(offers: &[ItemOffer], total: u64, rates: Rates) -> Option<Estimate> {
-    let mut prices: Vec<f64> = offers
+pub fn estimate(first_page: &[ItemOffer], total: u64, rates: Rates) -> Option<Estimate> {
+    let mut prices: Vec<f64> = first_page
         .iter()
-        .take(PAGE)
         .filter_map(|offer| offer.price.as_ref())
         .filter_map(|price| in_exalted(price.amount, &price.currency, rates))
         .collect();
@@ -146,15 +144,15 @@ mod tests {
         let mut offers = vec![offer(300.0, "exalted")];
         offers.extend(divines(&[2.0, 2.2, 2.4, 2.5, 3.0, 3.1, 3.5, 4.0, 4.2]));
 
-        let estimate = estimate(&offers, 18, RATES).unwrap();
+        let bow = estimate(&offers, 18, RATES).unwrap();
 
-        assert!((estimate.exalted - 2.4 * 700.0).abs() < 1e-9);
-        assert_eq!(estimate.counted, 5);
-        assert_eq!(estimate.total, 18);
+        assert!((bow.exalted - 2.4 * 700.0).abs() < 1e-9);
+        assert_eq!(bow.counted, 5);
+        assert_eq!(bow.total, 18);
         // The median of the ten: (2.5 + 3) / 2 div.
-        assert!((estimate.reference.exalted - 2.75 * 700.0).abs() < 1e-9);
-        assert!(estimate.reference.suspicious(300.0, "exalted"));
-        assert!(!estimate.reference.suspicious(2.0, "divine"));
+        assert!((bow.reference.exalted - 2.75 * 700.0).abs() < 1e-9);
+        assert!(bow.reference.suspicious(300.0, "exalted"));
+        assert!(!bow.reference.suspicious(2.0, "divine"));
     }
 
     #[test]
@@ -166,10 +164,10 @@ mod tests {
             offer(1.0, "chaos"),
         ];
 
-        let estimate = estimate(&offers, 3, RATES).unwrap();
+        let magic = estimate(&offers, 3, RATES).unwrap();
 
-        assert!((estimate.exalted - 70.0).abs() < 1e-9);
-        assert_eq!(estimate.counted, 3);
+        assert!((magic.exalted - 70.0).abs() < 1e-9);
+        assert_eq!(magic.counted, 3);
     }
 
     #[test]
@@ -181,17 +179,17 @@ mod tests {
             offer(1.1, "divine"),
         ];
 
-        let estimate = estimate(&offers, 3, RATES).unwrap();
+        let sorted = estimate(&offers, 3, RATES).unwrap();
 
-        assert!((estimate.exalted - 700.0).abs() < 1e-9);
+        assert!((sorted.exalted - 700.0).abs() < 1e-9);
     }
 
     #[test]
     fn an_even_count_of_offers_gives_the_mean_of_the_two_middle_ones() {
-        let estimate = estimate(&divines(&[1.0, 2.0, 3.0, 5.0]), 4, RATES).unwrap();
+        let even = estimate(&divines(&[1.0, 2.0, 3.0, 5.0]), 4, RATES).unwrap();
 
-        assert!((estimate.exalted - 2.5 * 700.0).abs() < 1e-9);
-        assert_eq!(estimate.counted, 4);
+        assert!((even.exalted - 2.5 * 700.0).abs() < 1e-9);
+        assert_eq!(even.counted, 4);
     }
 
     #[test]
@@ -200,23 +198,11 @@ mod tests {
         let mut offers = vec![offer(10.0, "exalted"), offer(20.0, "exalted")];
         offers.extend(divines(&[1.0, 1.2, 1.4, 1.6]));
 
-        let estimate = estimate(&offers, 6, RATES).unwrap();
+        let baited = estimate(&offers, 6, RATES).unwrap();
 
-        assert_eq!(estimate.counted, 4);
-        assert_eq!(estimate.total, 6);
-        assert!((estimate.exalted - 1.3 * 700.0).abs() < 1e-9);
-    }
-
-    #[test]
-    fn only_the_first_page_tells_the_suspicious_offers() {
-        // The next ten offers, far dearer, would raise the median above 4 × 0.6 div.
-        let mut offers = divines(&[0.6; PAGE]);
-        offers.extend(divines(&[10.0; PAGE]));
-
-        let estimate = estimate(&offers, 40, RATES).unwrap();
-
-        assert!((estimate.reference.exalted - 0.6 * 700.0).abs() < 1e-9);
-        assert!((estimate.exalted - 0.6 * 700.0).abs() < 1e-9);
+        assert_eq!(baited.counted, 4);
+        assert_eq!(baited.total, 6);
+        assert!((baited.exalted - 1.3 * 700.0).abs() < 1e-9);
     }
 
     #[test]
@@ -228,10 +214,10 @@ mod tests {
         assert_eq!(estimate(&[offer(1.0, "annul")], 1, RATES), None);
         assert_eq!(estimate(&[], 0, RATES), None);
 
-        let estimate = estimate(&offers, 3, RATES).unwrap();
+        let known = estimate(&offers, 3, RATES).unwrap();
 
-        assert_eq!(estimate.counted, 1);
-        assert!((estimate.exalted - 2.0 * 700.0).abs() < 1e-9);
+        assert_eq!(known.counted, 1);
+        assert!((known.exalted - 2.0 * 700.0).abs() < 1e-9);
     }
 
     #[test]

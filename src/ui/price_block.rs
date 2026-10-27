@@ -282,12 +282,13 @@ impl<'a> PriceBlock<'a> {
             ui.add_space(LINE_GAP);
             line(ui, &self.i18n.estimate_uncertain(counted), color::WARNING);
         }
+        let note = if counted == COUNTED {
+            self.i18n.estimate_median_cheapest(counted)
+        } else {
+            self.i18n.estimate_median(counted)
+        };
         ui.add_space(LINE_GAP);
-        line(
-            ui,
-            &self.i18n.estimate_median(counted, counted == COUNTED),
-            color::WEAK,
-        );
+        line(ui, &note, color::WEAK);
     }
 
     /// The uniques an unidentified item can be, each with its price in its own currency; a

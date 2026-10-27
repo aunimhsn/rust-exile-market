@@ -28,6 +28,9 @@ pub enum OffersState {
     Items {
         offers: Vec<ItemOffer>,
         total: u64,
+        /// The offers of the answer to the search, first in `offers`: fewer than a page when
+        /// some were gone since the search.
+        first_page: usize,
         /// Some offers are left to fetch.
         more: bool,
         /// The next offers are asked.
@@ -168,10 +171,9 @@ impl Offers {
         }
     }
 
-    /// Takes in the answer of the last order, received at `now`.
-    pub fn apply(&mut self, answer: Answer, now: SystemTime) {
-        let pending = self.pending.take();
-        // The waiting time first, whatever the order: it keeps the account of the player safe.
+    /// Takes in the waiting time told by `answer` to the `pending` order: no answer shortens
+    /// a wait told before.
+    fn wait_after(&mut self, answer: &Answer, pending: Option<Pending>) {
         let mut next_search = answer.next_search;
         if let Outcome::Limited { until, .. } = &answer.outcome {
             // Nothing is sent before the end of the wait, whatever the limits known: for the
@@ -198,6 +200,13 @@ impl Offers {
             },
             None => next_search,
         });
+    }
+
+    /// Takes in the answer of the last order, received at `now`.
+    pub fn apply(&mut self, answer: Answer, now: SystemTime) {
+        let pending = self.pending.take();
+        // The waiting time first, whatever the order: it keeps the account of the player safe.
+        self.wait_after(&answer, pending);
         if matches!(
             answer.outcome,
             Outcome::Items { .. } | Outcome::Exchange { .. }
@@ -221,6 +230,7 @@ impl Offers {
                 },
                 _,
             ) => OffersState::Items {
+                first_page: offers.len(),
                 offers,
                 total,
                 more,
@@ -239,6 +249,7 @@ impl Offers {
                 OffersState::Items {
                     mut offers,
                     total,
+                    first_page,
                     searched,
                     ..
                 },
@@ -247,6 +258,7 @@ impl Offers {
                 OffersState::Items {
                     offers,
                     total,
+                    first_page,
                     more,
                     loading_more: false,
                     more_failed: false,
@@ -259,6 +271,7 @@ impl Offers {
                 OffersState::Items {
                     offers,
                     total,
+                    first_page,
                     more,
                     searched,
                     ..
@@ -266,6 +279,7 @@ impl Offers {
             ) if pending.order == PendingOrder::More => OffersState::Items {
                 offers,
                 total,
+                first_page,
                 more,
                 loading_more: false,
                 more_failed: matches!(failure, Outcome::Unreachable),
@@ -473,6 +487,10 @@ mod tests {
             OffersState::Items { more: false, loading_more: false, searched, .. }
                 if *searched == SystemTime::UNIX_EPOCH
         ));
+        assert!(
+            matches!(offers.state(), OffersState::Items { first_page: 2, .. }),
+            "the next offers aren't in the answer to the search"
+        );
         assert_eq!(offers.more(), None, "none left");
     }
 
