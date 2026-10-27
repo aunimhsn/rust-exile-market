@@ -295,8 +295,8 @@ fn rows<'a>(
 }
 
 /// Takes the filter away from `stat` when the trade site can't search it as its `line`:
-/// a line it can't search shows the "not allowed" sign instead, and the line after the first
-/// of a stat written on several lines is searched by the first.
+/// a line it can't search shows the "not allowed" sign instead, and another line of a stat
+/// written on several lines is searched by its first line with a number of the stat.
 fn searchable(stat: &mut Stat<'_>, line: Option<&LineStat>) {
     match line {
         Some(LineStat::Searched(_)) => {}
@@ -1286,7 +1286,7 @@ mod tests {
             "When you kill a Rare monster, you gain its Modifiers for 60 seconds",
         ];
         let partial = database(
-            &[],
+            &["26% increased Stun Threshold"],
             &["When you kill a Rare monster, you gain its Modifiers for 60 seconds"],
         );
 
@@ -1301,10 +1301,28 @@ mod tests {
             texts(&headhunter, Some(&partial)),
             [
                 "Implicit",
-                "■ 26% increased Stun Threshold ≥26",
+                "26% increased Stun Threshold",
                 "Unique",
                 "■ +55 to maximum Life ≥55",
                 "When you kill a Rare monster, you gain its Modifiers for 60 seconds",
+            ]
+        );
+    }
+
+    #[test]
+    fn a_number_written_by_the_string_of_a_stat_has_no_range_from_the_price_database() {
+        let unique = parse(
+            "Item Class: Gloves\nRarity: Unique\nTest Grip\nSuede Bracers\n--------\n\
+             Item Level: 80\n--------\n1% more Unarmed Damage per 5 Strength",
+        );
+        let modifiers = database(&[], &["1% more Unarmed Damage per (4-6) Strength"]);
+
+        // The 1 is written by the string of the stat: the field holds the 5, in its range.
+        assert_eq!(
+            texts(&unique, Some(&modifiers)),
+            [
+                "Unique",
+                "■ 1% more Unarmed Damage per 5 Strength ≥5 [4–6 0.50]"
             ]
         );
     }

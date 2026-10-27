@@ -32,8 +32,6 @@ pub struct TradeStat {
     /// Its id, with the option of an option stat (`explicit.stat_448592698|98`); or a local
     /// and a global one written the same (`# to Accuracy Rating`).
     ids: Vec<String>,
-    /// The indexes of the numbers of the line its stat counts.
-    numbers: Vec<usize>,
     /// None for a line without number: its stat alone is searched.
     value: Option<TradeValue>,
 }
@@ -65,7 +63,7 @@ impl TradeStat {
         found: &game_data::StatMatch,
         group: TradeGroup,
         line: &StatLine,
-        numbers: Vec<usize>,
+        numbers: &[usize],
     ) -> Option<Self> {
         let ids = found.stat.trade_ids(group);
         if ids.is_empty() {
@@ -77,11 +75,9 @@ impl TradeStat {
         } else {
             ids.to_vec()
         };
-        let value = trade_value(found, line, &numbers);
         Some(Self {
             ids,
-            numbers,
-            value,
+            value: trade_value(found, line, numbers),
         })
     }
 
@@ -170,9 +166,18 @@ fn written(value: f64) -> f64 {
     (value * 1e6).round() / 1e6
 }
 
+/// A modifier line of the copied item.
+#[derive(Debug)]
+struct Line {
+    key: StatKey,
+    stat: LineStat,
+    /// The indexes of its numbers its stat counts; none when its stat isn't known.
+    numbers: Option<Vec<usize>>,
+}
+
 /// The stats of the modifier lines of the copied item.
 #[derive(Debug, Default)]
-pub struct LineStats(Vec<(StatKey, LineStat)>);
+pub struct LineStats(Vec<Line>);
 
 impl LineStats {
     /// The stats of the lines of `modifiers`, written in `language`; `trade` holds the stats
@@ -183,21 +188,25 @@ impl LineStats {
         for (index, modifier) in modifiers.iter().enumerate() {
             let group = TradeGroup::of(modifier);
             for found in game_data::modifier_stats(language, modifier, trade) {
-                let mut numbers = counted_numbers(&found, modifier);
+                let numbers = counted_numbers(&found, modifier);
                 // The first line with a number of the stat holds its filter: `Life that would
                 // be lost… is instead Reserved` / `until you take no Damage to Life for #
                 // seconds`.
-                let offset = numbers.iter().position(|line| !line.is_empty());
-                let searched = found.lines.start + offset.unwrap_or(0);
-                let numbers = numbers.get_mut(offset.unwrap_or(0)).map(std::mem::take);
+                let offset = numbers
+                    .iter()
+                    .position(|line| !line.is_empty())
+                    .unwrap_or(0);
+                let searched = found.lines.start + offset;
                 let stat = found
                     .stat
                     .as_ref()
                     .zip(modifier.lines.get(searched))
                     .and_then(|(stat, line)| {
-                        TradeStat::new(stat, group, line, numbers.unwrap_or_default())
+                        let counted = numbers.get(offset).map_or(&[][..], Vec::as_slice);
+                        TradeStat::new(stat, group, line, counted)
                     });
-                for line in found.lines {
+                let known = found.stat.is_some();
+                for (line, numbers) in found.lines.zip(numbers) {
                     let key = StatKey {
                         modifier: index,
                         line,
@@ -207,7 +216,11 @@ impl LineStats {
                         Some(_) => LineStat::Continued,
                         None => LineStat::Unsearchable,
                     };
-                    lines.push((key, line_stat));
+                    lines.push(Line {
+                        key,
+                        stat: line_stat,
+                        numbers: known.then_some(numbers),
+                    });
                 }
             }
         }
@@ -217,20 +230,18 @@ impl LineStats {
     /// The stat of the line `key`; none for a line that isn't of the copied item.
     #[must_use]
     pub fn get(&self, key: StatKey) -> Option<&LineStat> {
-        self.0
-            .iter()
-            .find(|(line, _)| *line == key)
-            .map(|(_, stat)| stat)
+        self.line(key).map(|line| &line.stat)
     }
 
-    /// The indexes of the numbers of the line `key` its stat counts; none for a line it doesn't
-    /// search, whose numbers all count.
+    /// The indexes of the numbers of the line `key` its stat counts, also on a line it doesn't
+    /// search; none when its stat isn't known, and all its numbers count.
     #[must_use]
     pub fn numbers(&self, key: StatKey) -> Option<&[usize]> {
-        match self.get(key)? {
-            LineStat::Searched(stat) => Some(&stat.numbers),
-            LineStat::Continued | LineStat::Unsearchable => None,
-        }
+        self.line(key)?.numbers.as_deref()
+    }
+
+    fn line(&self, key: StatKey) -> Option<&Line> {
+        self.0.iter().find(|line| line.key == key)
     }
 
     /// The stat filters of the search, from the filters the player `checked`: the lines the
@@ -477,7 +488,7 @@ mod tests {
 
         // The 5 is written by the string of the stat.
         assert_eq!(stats.get(key(0, 0)), Some(&LineStat::Continued));
-        assert_eq!(stats.numbers(key(0, 0)), None);
+        assert_eq!(stats.numbers(key(0, 0)), Some(&[][..]));
         assert_eq!(stats.numbers(key(0, 1)), Some(&[0][..]));
         assert_eq!(stats.get(key(0, 2)), Some(&LineStat::Continued));
     }
@@ -489,6 +500,8 @@ mod tests {
 
         assert!(matches!(stats.get(key(0, 0)), Some(LineStat::Searched(_))));
         assert_eq!(stats.get(key(1, 0)), Some(&LineStat::Unsearchable));
+        // Found nowhere: all its numbers count.
+        assert_eq!(stats.numbers(key(1, 0)), None);
         assert_eq!(
             stats.stat_filters(&[(key(1, 0), filter("3", ""))]),
             Vec::new()
