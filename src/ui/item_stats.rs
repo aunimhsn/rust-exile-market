@@ -57,6 +57,14 @@ const WIDE_HALF_WIDTH: f32 = 31.0;
 const WIDE_CHARACTERS: usize = 4;
 /// The space around the halves of a range field.
 const RANGE_PADDING: Margin = Margin::symmetric(2, 1);
+/// The range field raised by 1 px on the line of its checkbox: taller than the checkbox, it
+/// looked too low (tuned by eye by the owner on the mock-up). The row keeps its height.
+const RANGE_RAISE: Margin = Margin {
+    left: 0,
+    right: 0,
+    top: -1,
+    bottom: 1,
+};
 /// The space between a range field and its tooltip, under it.
 const TOOLTIP_GAP: f32 = 8.0;
 /// The space around the text of the tooltip of a range field, and between its lines.
@@ -1228,6 +1236,7 @@ fn range_field(ui: &mut Ui, key: FilterKey, choice: &mut Filter, limit: Limit, i
         .stroke(stroke)
         .corner_radius(CornerRadius::same(size::RADIUS))
         .inner_margin(RANGE_PADDING)
+        .outer_margin(RANGE_RAISE)
         .show(ui, |ui| {
             // The halves and the dash one line of numbers high, the dash in the middle.
             ui.spacing_mut().item_spacing.x = 0.0;
