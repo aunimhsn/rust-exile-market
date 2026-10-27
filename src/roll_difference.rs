@@ -4,8 +4,9 @@
 //! Both lines are in the language of the item: its offers are searched on the trade site of
 //! its language. Two lines are the same when they read the same with `#` in place of each
 //! number, at the same place on the item (implicit, explicit…); a line with several numbers
-//! (`Adds 5 to 82 Lightning Damage`) compares their averages. The lines of the copied item are
-//! read once, when it is copied ([`CopiedLines`]).
+//! (`Adds 5 to 82 Lightning Damage`) compares their averages, of the numbers its stat counts
+//! only (not the 3 of `20% chance to gain Onslaught for 3 seconds`). The lines of the copied
+//! item are read once, when it is copied ([`CopiedLines`]).
 //!
 //! The better side of a line is read from its words: those of its English string when the
 //! line is in another language and its stat has one (`#% de Réduction de l'Armure` is read
@@ -19,6 +20,7 @@ use crate::game_data::{self, TradeGroup, TradeStats};
 use crate::item::{Modifier, ModifierKind};
 use crate::language::Language;
 use crate::trade::offers::ModifierKind as OfferKind;
+use crate::trade::stat_filters::LineStats;
 
 /// The words that make a line read the other way, in lowercase: "reduced Movement Speed" is
 /// worse when its number is higher, "increased Mana Cost" too, and "reduced Mana Cost" is
@@ -212,6 +214,9 @@ struct CopiedLine {
     template: String,
     /// The numbers of the line as the item parser read them.
     rolls: Vec<f64>,
+    /// The indexes of the numbers its stat counts, when known; the others are written by the
+    /// string of the stat, the same on every item.
+    counted: Option<Vec<usize>>,
     direction: Direction,
 }
 
@@ -221,10 +226,15 @@ struct CopiedLine {
 pub struct CopiedLines(Vec<CopiedLine>);
 
 impl CopiedLines {
-    /// The lines of `modifiers`, written in `language`; `trade` holds the stats of the trade
-    /// site, once it gave them.
+    /// The lines of `modifiers`, written in `language`, whose `stats` tell the numbers each
+    /// stat counts; `trade` holds the stats of the trade site, once it gave them.
     #[must_use]
-    pub fn new(language: Language, modifiers: &[Modifier], trade: Option<&TradeStats>) -> Self {
+    pub fn new(
+        language: Language,
+        modifiers: &[Modifier],
+        stats: &LineStats,
+        trade: Option<&TradeStats>,
+    ) -> Self {
         let lines = modifiers.iter().enumerate().flat_map(|(index, modifier)| {
             let group = TradeGroup::of(modifier);
             modifier
@@ -232,6 +242,10 @@ impl CopiedLines {
                 .iter()
                 .enumerate()
                 .map(move |(line_index, line)| {
+                    let key = StatKey {
+                        modifier: index,
+                        line: line_index,
+                    };
                     let template = Template::of(&line.text).text;
                     let words = game_data::english_string(language, &line.text, group, trade);
                     CopiedLine {
@@ -241,6 +255,7 @@ impl CopiedLines {
                         direction: direction(words.unwrap_or(&template)),
                         template,
                         rolls: line.rolls.iter().map(|roll| roll.value).collect(),
+                        counted: stats.numbers(key).map(<[usize]>::to_vec),
                     }
                 })
         });
@@ -269,8 +284,17 @@ impl CopiedLines {
                 && copied.rolls.len() == offer.numbers.len()
                 && copied.template == offer.text
         })?;
-        let value =
-            average(offer.numbers.iter().copied())? - average(copied.rolls.iter().copied())?;
+        let counted = |numbers: &[f64]| -> Vec<f64> {
+            match &copied.counted {
+                Some(counted) => counted
+                    .iter()
+                    .filter_map(|&number| numbers.get(number).copied())
+                    .collect(),
+                None => numbers.to_vec(),
+            }
+        };
+        let value = average(counted(&offer.numbers).into_iter())?
+            - average(counted(&copied.rolls).into_iter())?;
         // A difference written 0 isn't one.
         if crate::format::number(value.abs()) == "0" {
             return None;
@@ -296,7 +320,7 @@ mod tests {
         language: Language,
         modifiers: &[Modifier],
     ) -> Option<Difference> {
-        CopiedLines::new(language, modifiers, None).difference(line, kind)
+        CopiedLines::new(language, modifiers, &LineStats::default(), None).difference(line, kind)
     }
 
     fn modifier(kind: ModifierKind, line: &str) -> Modifier {
@@ -458,6 +482,34 @@ mod tests {
     }
 
     #[test]
+    fn a_number_written_by_the_string_of_a_stat_isnt_compared() {
+        let copied = [
+            explicit("1% more Unarmed Damage per 5 Strength"),
+            explicit("Adds 1 to 55 Lightning damage to Attacks"),
+        ];
+        let stats = LineStats::new(Language::English, &copied, None);
+        let lines = CopiedLines::new(Language::English, &copied, &stats, None);
+        let value = |line: &str| {
+            lines
+                .difference(line, OfferKind::Explicit)
+                .map(|difference| difference.value)
+        };
+
+        // The 1 is written by the string of the stat: only the 5 is compared.
+        assert_eq!(value("1% more Unarmed Damage per 3 Strength"), Some(-2.0));
+        // Both numbers are of the stat: their averages are compared.
+        assert_eq!(value("Adds 1 to 65 Lightning damage to Attacks"), Some(5.0));
+        // Without the stats, every number counts.
+        let unknown = CopiedLines::new(Language::English, &copied, &LineStats::default(), None);
+        assert_eq!(
+            unknown
+                .difference("1% more Unarmed Damage per 3 Strength", OfferKind::Explicit)
+                .map(|difference| difference.value),
+            Some(-1.0)
+        );
+    }
+
+    #[test]
     fn a_line_of_the_copied_item_tells_whether_it_is_better_lower() {
         let mut hybrid = explicit("+20 to Evasion Rating");
         hybrid
@@ -468,7 +520,7 @@ mod tests {
             hybrid,
             explicit("15% reduced Life of nearby Enemies"),
         ];
-        let lines = CopiedLines::new(Language::English, &copied, None);
+        let lines = CopiedLines::new(Language::English, &copied, &LineStats::default(), None);
         let key = |modifier, line| StatKey { modifier, line };
 
         assert!(lines.better_lower(key(0, 0)));
@@ -770,7 +822,7 @@ mod tests {
         let trade = game_data::trade_stats();
         let copied = [explicit("10% de Réduction des Dégâts par patch")];
         let verdict = |trade| {
-            CopiedLines::new(Language::French, &copied, trade)
+            CopiedLines::new(Language::French, &copied, &LineStats::default(), trade)
                 .difference("15% de Réduction des Dégâts par patch", OfferKind::Explicit)
                 .map(|difference| difference.verdict)
         };

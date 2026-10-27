@@ -53,8 +53,8 @@ impl ShownItem {
     /// Reads the modifier lines of the item, with the stats of the trade site `trade`.
     fn read_lines(&mut self, trade: Option<&TradeStats>) {
         if let Ok(item) = &self.parsed {
-            self.lines = CopiedLines::new(item.language(), item.modifiers(), trade);
             self.stats = LineStats::new(item.language(), item.modifiers(), trade);
+            self.lines = CopiedLines::new(item.language(), item.modifiers(), &self.stats, trade);
         }
     }
 

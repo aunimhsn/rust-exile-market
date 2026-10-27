@@ -1179,7 +1179,12 @@ mod tests {
 
     /// The rows of `item`, its lines read in English.
     fn rows<'a>(item: &'a Item, unique_modifiers: Option<&UniqueModifiers>) -> Vec<Row<'a>> {
-        let lines = CopiedLines::new(item.language(), item.modifiers(), None);
+        let lines = CopiedLines::new(
+            item.language(),
+            item.modifiers(),
+            &LineStats::default(),
+            None,
+        );
         let stats = LineStats::new(item.language(), item.modifiers(), None);
         super::rows(item, &lines, &stats, unique_modifiers)
     }
@@ -1739,7 +1744,12 @@ mod tests {
              { Unique Modifier }\nLife that would be lost by taking Damage is instead Reserved\n\
              until you take no Damage to Life for 5(4-6) seconds",
         );
-        let lines = CopiedLines::new(unique.language(), unique.modifiers(), None);
+        let lines = CopiedLines::new(
+            unique.language(),
+            unique.modifiers(),
+            &LineStats::default(),
+            None,
+        );
         let line_stats = LineStats::new(unique.language(), unique.modifiers(), None);
         let stats = Stats::new(&unique, &lines, &line_stats, None);
 
@@ -1792,7 +1802,12 @@ mod tests {
         ));
         let mut filters = Filters::default();
 
-        let lines = CopiedLines::new(crossbow.language(), crossbow.modifiers(), None);
+        let lines = CopiedLines::new(
+            crossbow.language(),
+            crossbow.modifiers(),
+            &LineStats::default(),
+            None,
+        );
         let line_stats = LineStats::new(crossbow.language(), crossbow.modifiers(), None);
         let stats = Stats::new(&crossbow, &lines, &line_stats, None);
         let keys: Vec<StatKey> = stats
