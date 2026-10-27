@@ -162,6 +162,8 @@ pub struct ItemBlock<'a> {
     stats_open: bool,
     /// The modifiers of the unique in the price database, the ranges of its rolls.
     unique_modifiers: Option<&'a UniqueModifiers>,
+    /// The base type its search looks for, a filter.
+    base_type: Option<&'a str>,
     /// The filters of the search, as the player set them.
     filters: &'a mut Filters,
 }
@@ -183,16 +185,23 @@ impl<'a> ItemBlock<'a> {
             tradable: false,
             stats_open: false,
             unique_modifiers: None,
+            base_type: None,
             filters,
         }
     }
 
     /// Unfolds the stats, with the modifiers of the unique in the price database for the
-    /// ranges of an item copied without them.
+    /// ranges of an item copied without them, and the base type its search looks for.
     #[must_use]
-    pub fn stats(mut self, open: bool, unique_modifiers: Option<&'a UniqueModifiers>) -> Self {
+    pub fn stats(
+        mut self,
+        open: bool,
+        unique_modifiers: Option<&'a UniqueModifiers>,
+        base_type: Option<&'a str>,
+    ) -> Self {
         self.stats_open = open;
         self.unique_modifiers = unique_modifiers;
+        self.base_type = base_type;
         self
     }
 
@@ -335,7 +344,13 @@ impl<'a> ItemBlock<'a> {
     /// The pill of the stats and the number of active filters, and the stats once unfolded;
     /// "Show filters" for an item without modifiers, nothing when it has no filter either.
     fn stats_section(&mut self, ui: &mut Ui) -> Option<ItemBlockAction> {
-        let stats = Stats::new(self.item, self.lines, self.stats, self.unique_modifiers);
+        let stats = Stats::new(
+            self.item,
+            self.lines,
+            self.stats,
+            self.unique_modifiers,
+            self.base_type,
+        );
         if stats.is_empty() {
             return None;
         }

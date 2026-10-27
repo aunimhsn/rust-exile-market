@@ -137,6 +137,9 @@ group-suffixes = Suffixes
 group-explicit = Explicit
 # The modifiers of a unique, no prefix nor suffix.
 group-unique = Unique
+# The filters of the base type and the item level of a rare, magic or normal item, and of the DPS of a weapon.
+group-item = Item
+group-weapon = Weapon
 # Beside Prefixes and Suffixes: how many the item has, of the most it can have.
 affix-fill = { $filled } of { $max }
 affix-fill-open = { $filled } of { $max } · { $open } open
@@ -153,6 +156,11 @@ filter-range = min – max
 # The tooltip of a range field: the rolls it accepts, then for a line better lower, in gray.
 filter-rolls = Rolls { $low } to { $high }
 filter-lower-better = Lower is better
+# The filters of the properties of an item, with their value.
+filter-base-type = Base: { $base }
+filter-item-level = Item level: { $value }
+filter-physical-dps = Physical DPS: { $value }
+filter-elemental-dps = Elemental DPS: { $value }
 # The tooltip of a line the trade site can't search (a modifier added by a patch), on two lines.
 filter-unsearchable = The trade site can't search this line.
 filter-unsearchable-hint = The offers may not have it.

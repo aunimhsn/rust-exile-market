@@ -19,7 +19,7 @@ use crate::pricing::{FixedPrice, NoFixedPrice};
 use crate::session::{self, LeagueChange, PricesState, Session, ShownItem};
 use crate::settings::{SettingChange, Settings, SettingsFile};
 use crate::trade::ItemNamesWatch;
-use crate::trade::query::{SearchKind, StatFilter};
+use crate::trade::query::{SearchFilters, SearchKind};
 use crate::trade::search::{OfferSearch, Search};
 use crate::ui::{
     self, BubbleAction, EmptyState, ItemBlock, ItemBlockAction, LeagueList, LeagueListAction,
@@ -269,12 +269,16 @@ impl ExileMarketApp {
                 &self.i18n,
             )
             .tradable(tradable)
-            .stats(self.stats_open, unique_modifiers)
+            .stats(
+                self.stats_open,
+                unique_modifiers,
+                self.session.filtered_base_type(item),
+            )
             .show(ui);
             if action == Some(ItemBlockAction::CheckOnTrade) {
                 // With the filters as the player just left them.
-                let stats = stat_filters(&self.session, shown, item, &self.filters);
-                if let Some(url) = self.session.trade_url(item, stats) {
+                let filters = search_filters(&self.session, shown, item, &self.filters);
+                if let Some(url) = self.session.trade_url(item, filters) {
                     ui.ctx().open_url(OpenUrl::new_tab(url));
                 }
             }
@@ -315,23 +319,29 @@ impl ExileMarketApp {
     fn shown_search(&self) -> Option<Search> {
         let shown = self.session.item()?;
         let item = shown.parsed().ok()?;
-        let stats = stat_filters(&self.session, shown, item, &self.filters);
-        self.session.trade_search(item, stats)
+        let filters = search_filters(&self.session, shown, item, &self.filters);
+        self.session.trade_search(item, filters)
     }
 }
 
-/// The stat filters of the search of `item`, the item `shown`: the filters the player
-/// checked, or else those checked by default.
-fn stat_filters(
+/// The filters of the search of `item`, the item `shown`: as the player set them, or else
+/// by default.
+fn search_filters(
     session: &Session,
     shown: &ShownItem,
     item: &Item,
     filters: &Filters,
-) -> Vec<StatFilter> {
+) -> SearchFilters {
     let fixed_price = session.fixed_price(item);
     let unique_modifiers = session::unique_modifiers(item, &fixed_price);
-    let stats = Stats::new(item, shown.lines(), shown.stats(), unique_modifiers);
-    shown.stats().stat_filters(&stats.checked(filters))
+    let stats = Stats::new(
+        item,
+        shown.lines(),
+        shown.stats(),
+        unique_modifiers,
+        session.filtered_base_type(item),
+    );
+    shown.stats().search_filters(&stats.filters(filters))
 }
 
 impl App for ExileMarketApp {

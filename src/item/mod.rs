@@ -47,6 +47,13 @@ impl Rarity {
     fn has_explicit_modifiers(self) -> bool {
         matches!(self, Self::Magic | Self::Rare | Self::Unique)
     }
+
+    /// Whether the item is searched by its base type, item level and DPS among its filters:
+    /// a rare, magic or normal item, or a jewel.
+    #[must_use]
+    pub fn has_item_filters(self) -> bool {
+        matches!(self, Self::Normal | Self::Magic | Self::Rare)
+    }
 }
 
 /// A state written at the end of the item.

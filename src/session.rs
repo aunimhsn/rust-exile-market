@@ -14,7 +14,7 @@ use crate::prices::{PriceList, Rates, UniqueModifiers};
 use crate::pricing::{self, FixedPrice, NoFixedPrice};
 use crate::roll_difference::CopiedLines;
 use crate::trade::link::{self, TradeTarget};
-use crate::trade::query::{SearchKind, StatFilter};
+use crate::trade::query::{SearchFilters, SearchKind};
 use crate::trade::search::Search;
 use crate::trade::stat_filters::LineStats;
 
@@ -323,17 +323,33 @@ impl Session {
         link::target(item, self.item_names.as_ref(), prices)
     }
 
-    /// The search for `item` on the trade site with the filters of its `stats`, in the league
-    /// shown; none before the league is known, and for an unidentified unique, which is
-    /// identified to be searched.
+    /// The base type of `item` among its filters, which its search looks for unless the
+    /// player unchecks it: for a rare, magic or normal item, or a jewel; none for a magic item
+    /// whose base type isn't known yet.
     #[must_use]
-    pub fn trade_search(&self, item: &Item, stats: Vec<StatFilter>) -> Option<Search> {
+    pub fn filtered_base_type<'a>(&'a self, item: &'a Item) -> Option<&'a str> {
+        if !item.rarity().has_item_filters() {
+            return None;
+        }
+        match self.trade_target(item)? {
+            TradeTarget::Base { base_type } => Some(base_type),
+            TradeTarget::Unique { .. }
+            | TradeTarget::UnidentifiedUnique { .. }
+            | TradeTarget::Exchange { .. } => None,
+        }
+    }
+
+    /// The search for `item` on the trade site with its `filters`, in the league shown; none
+    /// before the league is known, and for an unidentified unique, which is identified to be
+    /// searched.
+    #[must_use]
+    pub fn trade_search(&self, item: &Item, filters: SearchFilters) -> Option<Search> {
         let league = self.league.as_ref()?;
         let target = self.searched_target(item)?;
         Some(Search {
             language: item.language(),
             league: league.clone(),
-            query: link::query(item, &target, stats),
+            query: link::query(item, &target, filters),
         })
     }
 
@@ -367,16 +383,16 @@ impl Session {
         )
     }
 
-    /// The link of the search for `item` on the trade site with the filters of its `stats`,
-    /// in the league shown; none before the league is known.
+    /// The link of the search for `item` on the trade site with its `filters`, in the league
+    /// shown; none before the league is known.
     #[must_use]
-    pub fn trade_url(&self, item: &Item, stats: Vec<StatFilter>) -> Option<String> {
+    pub fn trade_url(&self, item: &Item, filters: SearchFilters) -> Option<String> {
         let league = self.league.as_ref()?;
         let target = self.trade_target(item)?;
         Some(link::url(
             item.language(),
             league,
-            &link::query(item, &target, stats),
+            &link::query(item, &target, filters),
         ))
     }
 
@@ -820,6 +836,29 @@ mod tests {
     }
 
     #[test]
+    fn the_base_type_among_the_filters_of_a_magic_item_comes_with_the_names() {
+        const MACE: &str = include_str!("item/test-items/en-magic-mace.txt");
+        let mut session = session();
+        let base_type = |session: &Session| {
+            let item = session.item()?.parsed().ok()?;
+            session.filtered_base_type(item).map(str::to_owned)
+        };
+
+        copy(&mut session, MACE);
+        assert_eq!(base_type(&session), None, "the names aren't known yet");
+        session.apply_item_names(crate::item_names::tests::item_names());
+        assert_eq!(base_type(&session).as_deref(), Some("Temple Maul"));
+        copy(&mut session, RING);
+        assert_eq!(base_type(&session).as_deref(), Some("Ruby Ring"));
+        // A unique is searched by its name, without a filter of its base type.
+        copy(
+            &mut session,
+            "Item Class: Rings\nRarity: Unique\nAndvarius\nGold Ring",
+        );
+        assert_eq!(base_type(&session), None);
+    }
+
+    #[test]
     fn the_offers_are_searched_in_the_league_shown_once_the_item_is_identified() {
         const UNIQUE: &str = "Item Class: Rings\nRarity: Unique\nAndvarius\nGold Ring";
         const UNIDENTIFIED: &str =
@@ -829,7 +868,7 @@ mod tests {
         let mut unknown_league = Session::new(None);
         copy(&mut unknown_league, UNIQUE);
         assert_eq!(
-            unknown_league.trade_search(&parsed(&unknown_league), Vec::new()),
+            unknown_league.trade_search(&parsed(&unknown_league), SearchFilters::default()),
             None,
             "the league isn't known yet"
         );
@@ -840,7 +879,9 @@ mod tests {
         let mut session = session();
         copy(&mut session, UNIQUE);
         let unique = parsed(&session);
-        let search = session.trade_search(&unique, Vec::new()).expect("a search");
+        let search = session
+            .trade_search(&unique, SearchFilters::default())
+            .expect("a search");
         assert_eq!(search.league, League::new("Forbidden Rites"));
         assert_eq!(search.language, Language::English);
         assert!(!session.must_identify(&unique));
@@ -849,7 +890,10 @@ mod tests {
 
         copy(&mut session, UNIDENTIFIED);
         let unidentified = parsed(&session);
-        assert_eq!(session.trade_search(&unidentified, Vec::new()), None);
+        assert_eq!(
+            session.trade_search(&unidentified, SearchFilters::default()),
+            None
+        );
         assert!(session.must_identify(&unidentified));
         assert_eq!(session.search_kind(&unidentified), None);
         // Its link searches its base type.

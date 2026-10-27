@@ -1,6 +1,6 @@
 //! The stat of each modifier line of the copied item on the trade site, read once when it is
-//! copied: its ids, and how the value of its range field is written there; then the stat
-//! filters of a search, from the filters the player checked.
+//! copied: its ids, and how the value of its range field is written there; then the filters
+//! of a search, from the filters the player checked.
 //!
 //! The value of a range field is the average of the numbers of its line the stat counts, its
 //! `#` ([`LineStats::numbers`]), not those its string writes (the 3 of `#% chance to gain
@@ -8,11 +8,21 @@
 //! with the sign of the stat: a `reduced` line of an `increased` stat, or an inverted stat
 //! (`#% less Damage`), has the other sign there, its minimum and its maximum swapped.
 
-use super::query::StatFilter;
-use crate::filters::{Filter, StatKey};
+use super::query::{PropertyFilter, SearchFilters, StatFilter};
+use crate::filters::{Filter, FilterKey, StatKey};
 use crate::game_data::{self, TradeGroup, TradeStats};
 use crate::item::{Modifier, StatLine};
 use crate::language::Language;
+
+/// The game stats of the damage and the attack speed of a weapon, which its DPS counts.
+const WEAPON_DAMAGE: [&str; 6] = [
+    "local_physical_damage_+%",
+    "local_minimum_added_physical_damage",
+    "local_minimum_added_fire_damage",
+    "local_minimum_added_cold_damage",
+    "local_minimum_added_lightning_damage",
+    "local_attack_speed_+%",
+];
 
 /// How a line is searched on the trade site.
 #[derive(Debug, Clone, PartialEq)]
@@ -173,6 +183,8 @@ struct Line {
     stat: LineStat,
     /// The indexes of its numbers its stat counts; none when its stat isn't known.
     numbers: Option<Vec<usize>>,
+    /// Its stat is the damage or the attack speed of a weapon, which its DPS counts.
+    weapon_damage: bool,
 }
 
 /// The stats of the modifier lines of the copied item.
@@ -206,6 +218,13 @@ impl LineStats {
                         TradeStat::new(stat, group, line, counted)
                     });
                 let known = found.stat.is_some();
+                let weapon_damage = found.stat.as_ref().is_some_and(|found| {
+                    found
+                        .stat
+                        .id
+                        .as_deref()
+                        .is_some_and(|id| WEAPON_DAMAGE.contains(&id))
+                });
                 for (line, numbers) in found.lines.zip(numbers) {
                     let key = StatKey {
                         modifier: index,
@@ -220,6 +239,7 @@ impl LineStats {
                         key,
                         stat: line_stat,
                         numbers: known.then_some(numbers),
+                        weapon_damage,
                     });
                 }
             }
@@ -240,17 +260,56 @@ impl LineStats {
         self.line(key)?.numbers.as_deref()
     }
 
+    /// The stat of the line `key` is the damage or the attack speed of a weapon, which its DPS
+    /// counts.
+    #[must_use]
+    pub fn weapon_damage(&self, key: StatKey) -> bool {
+        self.line(key).is_some_and(|line| line.weapon_damage)
+    }
+
     fn line(&self, key: StatKey) -> Option<&Line> {
         self.0.iter().find(|line| line.key == key)
     }
 
+    /// The filters of the search, from every filter of the item as the player set it: those
+    /// checked, and any base type when the filter of the base type is unchecked.
+    #[must_use]
+    pub fn search_filters(&self, filters: &[(FilterKey, Filter)]) -> SearchFilters {
+        let checked = || filters.iter().filter(|(_, filter)| filter.checked);
+        let stats = checked().filter_map(|(key, filter)| match key {
+            FilterKey::Stat(key) => Some((*key, filter)),
+            FilterKey::BaseType | FilterKey::Property(_) => None,
+        });
+        SearchFilters {
+            any_base: filters
+                .iter()
+                .any(|(key, filter)| *key == FilterKey::BaseType && !filter.checked),
+            properties: checked()
+                .filter_map(|(key, filter)| match key {
+                    FilterKey::Property(property) => {
+                        let (minimum, maximum) = filter.limits();
+                        Some(PropertyFilter {
+                            property: *property,
+                            minimum,
+                            maximum,
+                        })
+                    }
+                    FilterKey::Stat(_) | FilterKey::BaseType => None,
+                })
+                .collect(),
+            stats: self.stat_filters(stats),
+        }
+    }
+
     /// The stat filters of the search, from the filters the player `checked`: the lines the
     /// trade site can't search are left out.
-    #[must_use]
-    pub fn stat_filters(&self, checked: &[(StatKey, Filter)]) -> Vec<StatFilter> {
+    fn stat_filters<'f>(
+        &self,
+        checked: impl IntoIterator<Item = (StatKey, &'f Filter)>,
+    ) -> Vec<StatFilter> {
         checked
-            .iter()
-            .filter_map(|(key, filter)| match self.get(*key)? {
+            .into_iter()
+            .filter_map(|(key, filter)| match self.get(key)? {
                 LineStat::Searched(stat) => Some(stat.filter(filter)),
                 LineStat::Continued | LineStat::Unsearchable => None,
             })
@@ -261,6 +320,7 @@ impl LineStats {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::filters::Property;
     use crate::item::{CopiedItem, Item, Range};
 
     fn parse(text: &str) -> Item {
@@ -283,6 +343,11 @@ mod tests {
         StatKey { modifier, line }
     }
 
+    /// The filters `filters`, as `LineStats::stat_filters` takes them.
+    fn refs(filters: &[(StatKey, Filter)]) -> impl Iterator<Item = (StatKey, &Filter)> {
+        filters.iter().map(|(key, filter)| (*key, filter))
+    }
+
     fn filter(minimum: &str, maximum: &str) -> Filter {
         Filter {
             checked: true,
@@ -295,7 +360,8 @@ mod tests {
     /// The stat filter of the first line of `lines`, with the limits `minimum` and `maximum`.
     fn searched(lines: &str, minimum: &str, maximum: &str) -> StatFilter {
         let item = unique(lines);
-        let filters = line_stats(&item).stat_filters(&[(key(0, 0), filter(minimum, maximum))]);
+        let filters =
+            line_stats(&item).stat_filters(refs(&[(key(0, 0), filter(minimum, maximum))]));
         filters.into_iter().next().expect("a stat filter")
     }
 
@@ -364,7 +430,7 @@ mod tests {
         let stats = line_stats(&item);
 
         assert_eq!(
-            stats.stat_filters(&[(key(0, 0), filter("37.5", ""))]),
+            stats.stat_filters(refs(&[(key(0, 0), filter("37.5", ""))])),
             [stat("explicit.stat_1940865751", Some(37.5), None)]
         );
     }
@@ -396,7 +462,10 @@ mod tests {
         let stats = LineStats::new(item.language(), item.modifiers(), Some(&trade));
 
         assert_eq!(
-            stats.stat_filters(&[(key(0, 0), filter("", "20")), (key(1, 0), filter("10", "")),]),
+            stats.stat_filters(refs(&[
+                (key(0, 0), filter("", "20")),
+                (key(1, 0), filter("10", "")),
+            ])),
             [
                 // Its value is written as its template: 20, not -20.
                 stat("explicit.stat_1000000001", None, Some(20.0)),
@@ -436,7 +505,7 @@ mod tests {
         });
 
         assert_eq!(
-            line_stats(&item).stat_filters(&[(key(0, 0), life)]),
+            line_stats(&item).stat_filters(refs(&[(key(0, 0), life)])),
             [stat("explicit.stat_3299347043", Some(40.0), Some(60.0))]
         );
     }
@@ -453,8 +522,10 @@ mod tests {
         assert_eq!(stats.get(key(0, 1)), Some(&LineStat::Continued));
         assert_eq!(stats.numbers(key(0, 0)), Some(&[0][..]));
         // The field holds the 20 only, not the 3 its string writes.
-        let searched =
-            stats.stat_filters(&[(key(0, 0), filter("15", "25")), (key(0, 1), filter("", ""))]);
+        let searched = stats.stat_filters(refs(&[
+            (key(0, 0), filter("15", "25")),
+            (key(0, 1), filter("", "")),
+        ]));
         assert_eq!(searched.len(), 1, "{searched:?}");
         assert_eq!(searched[0].minimum, Some(15.0));
         assert_eq!(searched[0].maximum, Some(25.0));
@@ -471,7 +542,7 @@ mod tests {
 
         assert_eq!(stats.get(key(0, 0)), Some(&LineStat::Continued));
         assert_eq!(
-            stats.stat_filters(&[(key(0, 1), filter("", "5"))]),
+            stats.stat_filters(refs(&[(key(0, 1), filter("", "5"))])),
             [stat("explicit.stat_1777740627", None, Some(5.0))]
         );
     }
@@ -503,8 +574,87 @@ mod tests {
         // Found nowhere: all its numbers count.
         assert_eq!(stats.numbers(key(1, 0)), None);
         assert_eq!(
-            stats.stat_filters(&[(key(1, 0), filter("3", ""))]),
+            stats.stat_filters(refs(&[(key(1, 0), filter("3", ""))])),
             Vec::new()
         );
+    }
+
+    /// The modifier `lines` of a rare weapon, the prefixes and suffixes copied without their
+    /// affixes, in `language`.
+    fn weapon(language: Language, lines: &str) -> Item {
+        let header = match language {
+            Language::English => {
+                "Item Class: Bows\nRarity: Rare\nDoom Song\nGemini Bow\n--------\nItem Level: 80"
+            }
+            Language::French => {
+                "Classe d'objet: Arcs\nRareté: Rare\nChant funeste\nArc jumelé\n--------\n\
+                 Niveau de l'objet: 80"
+            }
+        };
+        parse(&format!("{header}\n--------\n{lines}"))
+    }
+
+    #[test]
+    fn the_damage_and_the_attack_speed_of_a_weapon_are_known_in_every_language() {
+        let english = weapon(
+            Language::English,
+            "152% increased Physical Damage\nAdds 3 to 71 Lightning Damage\n\
+             14% increased Attack Speed\n109% increased Elemental Damage with Attacks\n\
+             Adds 5 to 9 Chaos Damage",
+        );
+        let french = weapon(
+            Language::French,
+            "152% d'Augmentation des Dégâts Physiques\nAjoute 21 à 38 Dégâts Physiques",
+        );
+
+        let damage = |item: &Item| {
+            let stats = line_stats(item);
+            (0..item.modifiers().len())
+                .map(|modifier| stats.weapon_damage(key(modifier, 0)))
+                .collect::<Vec<_>>()
+        };
+        // Not the elemental damage of its attacks, which any item gives; nor its chaos
+        // damage, which neither DPS filter counts.
+        assert_eq!(damage(&english), [true, true, true, false, false]);
+        assert_eq!(damage(&french), [true, true]);
+    }
+
+    #[test]
+    fn the_filters_of_a_search_are_those_checked_and_any_base_when_it_is_unchecked() {
+        let item = unique("+52 to maximum Life\n+12 to Strength");
+        let stats = line_stats(&item);
+        let unchecked = |minimum| Filter {
+            checked: false,
+            ..filter(minimum, "")
+        };
+        let mut filters = vec![
+            (FilterKey::BaseType, filter("", "")),
+            (FilterKey::Property(Property::ItemLevel), unchecked("80")),
+            (
+                FilterKey::Property(Property::PhysicalDps),
+                filter("220", ""),
+            ),
+            (FilterKey::Stat(key(0, 0)), filter("47", "")),
+            (FilterKey::Stat(key(1, 0)), unchecked("11")),
+        ];
+
+        let searched = stats.search_filters(&filters);
+        assert!(!searched.any_base);
+        assert_eq!(
+            searched.properties,
+            [PropertyFilter {
+                property: Property::PhysicalDps,
+                minimum: Some(220.0),
+                maximum: None,
+            }]
+        );
+        assert_eq!(
+            searched.stats,
+            [stat("explicit.stat_3299347043", Some(47.0), None)]
+        );
+        filters[0].1.checked = false;
+        assert!(stats.search_filters(&filters).any_base);
+        // An item without filter of its base type, a unique, is searched by it.
+        assert!(!stats.search_filters(&filters[1..]).any_base);
     }
 }

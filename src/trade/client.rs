@@ -388,7 +388,8 @@ pub(super) mod tests {
     pub fn ring() -> ItemQuery {
         ItemQuery {
             name: Some("Andvarius".to_owned()),
-            base_type: "Gold Ring".to_owned(),
+            base_type: Some("Gold Ring".to_owned()),
+            properties: Vec::new(),
             rarity: Some(RarityFilter::Unique),
             corrupted: None,
             stats: Vec::new(),

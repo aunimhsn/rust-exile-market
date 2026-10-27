@@ -6,7 +6,7 @@
 use serde_json::json;
 
 use super::host;
-use super::query::{self, ItemQuery, Query, RarityFilter, StatFilter};
+use super::query::{self, ItemQuery, Query, RarityFilter, SearchFilters};
 use crate::http;
 use crate::item::{Item, Rarity};
 use crate::item_names::ItemNames;
@@ -23,7 +23,7 @@ pub enum TradeTarget<'a> {
     UnidentifiedUnique { base_type: &'a str },
     /// An item of the currency exchange, on its exchange page.
     Exchange { id: &'a str },
-    /// Another item, by its base type, until its stats become filters (step 13).
+    /// Another item, by its base type and its filters.
     Base { base_type: &'a str },
 }
 
@@ -68,15 +68,16 @@ pub fn target<'a>(
 }
 
 impl TradeTarget<'_> {
-    /// The search of the target, without stat filters.
+    /// The search of the target, without filters.
     #[must_use]
     pub fn query(&self) -> Query {
         let items = |name: Option<&str>, base_type: &str, rarity| {
             Query::Items(ItemQuery {
                 name: name.map(str::to_owned),
-                base_type: base_type.to_owned(),
+                base_type: Some(base_type.to_owned()),
                 rarity,
                 corrupted: None,
+                properties: Vec::new(),
                 stats: Vec::new(),
             })
         };
@@ -95,15 +96,24 @@ impl TradeTarget<'_> {
 
 /// The search of `item` for `target`: its corrupted state is always a filter, so that a
 /// corrupted item is compared with corrupted offers only, and a clean one with clean ones; a
-/// unique is searched with the filters of its `stats` the player checked (the other items
-/// with theirs from step 13f).
+/// unique is searched with the stats of its `filters` the player checked, the other items
+/// with all their filters, any base type when the player unchecked it and another filter
+/// narrows the search (never a search of every item of the league).
 #[must_use]
-pub fn query(item: &Item, target: &TradeTarget, stats: Vec<StatFilter>) -> Query {
+pub fn query(item: &Item, target: &TradeTarget, filters: SearchFilters) -> Query {
     let mut query = target.query();
     if let Query::Items(items) = &mut query {
         items.corrupted = Some(item.is_corrupted());
-        if let TradeTarget::Unique { .. } = target {
-            items.stats = stats;
+        match target {
+            TradeTarget::Unique { .. } => items.stats = filters.stats,
+            TradeTarget::Base { .. } => {
+                if filters.any_base && filters.narrows() {
+                    items.base_type = None;
+                }
+                items.properties = filters.properties;
+                items.stats = filters.stats;
+            }
+            TradeTarget::UnidentifiedUnique { .. } | TradeTarget::Exchange { .. } => {}
         }
     }
     query
@@ -127,8 +137,10 @@ pub fn url(language: Language, league: &League, query: &Query) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::filters::Property;
     use crate::item::CopiedItem;
     use crate::item_names::tests::item_names;
+    use crate::trade::query::{PropertyFilter, StatFilter};
     use serde_json::Value;
 
     fn parse(text: &str) -> Item {
@@ -161,7 +173,7 @@ mod tests {
         let url = url(
             crossbow.language(),
             &League::new("HC Forbidden Rites"),
-            &super::query(&crossbow, &target, Vec::new()),
+            &super::query(&crossbow, &target, SearchFilters::default()),
         );
 
         assert!(url.starts_with(
@@ -193,7 +205,7 @@ mod tests {
         let url = url(
             Language::French,
             &League::new("Standard"),
-            &super::query(&stack, &target, Vec::new()),
+            &super::query(&stack, &target, SearchFilters::default()),
         );
         assert!(url.starts_with("https://fr.pathofexile.com/trade2/exchange/poe2/Standard?q="));
         assert_eq!(
@@ -288,7 +300,7 @@ mod tests {
             ));
             let target = target(&ring, None, None).expect("a target");
 
-            let Query::Items(items) = super::query(&ring, &target, Vec::new()) else {
+            let Query::Items(items) = super::query(&ring, &target, SearchFilters::default()) else {
                 panic!("a search of items");
             };
             assert_eq!(items.corrupted, Some(true), "{state}");
@@ -296,24 +308,85 @@ mod tests {
     }
 
     #[test]
-    fn only_a_unique_is_searched_with_its_stats_until_step_13f() {
+    fn a_unique_is_searched_with_its_stats_and_the_other_items_with_all_their_filters() {
         let stats = vec![StatFilter {
             ids: vec!["explicit.stat_3299347043".to_owned()],
             minimum: Some(45.0),
             maximum: None,
         }];
-        let searched = |item: &Item| {
+        let properties = vec![PropertyFilter {
+            property: Property::ItemLevel,
+            minimum: Some(81.0),
+            maximum: None,
+        }];
+        let filters = |any_base| SearchFilters {
+            any_base,
+            properties: properties.clone(),
+            stats: stats.clone(),
+        };
+        let searched = |item: &Item, any_base| {
             let target = target(item, None, None).expect("a target");
-            match super::query(item, &target, stats.clone()) {
-                Query::Items(items) => items.stats,
+            match super::query(item, &target, filters(any_base)) {
+                Query::Items(items) => items,
                 Query::Exchange(_) => panic!("a search of items"),
             }
         };
 
         let unique = parse("Item Class: Rings\nRarity: Unique\nAndvarius\nGold Ring");
+        let searched_unique = searched(&unique, true);
+        assert_eq!(searched_unique.stats, stats);
+        // A unique is searched by its name and base type, without the filters of the others.
+        assert_eq!(searched_unique.base_type.as_deref(), Some("Gold Ring"));
+        assert_eq!(searched_unique.properties, Vec::new());
         let rare = parse("Item Class: Rings\nRarity: Rare\nWoe Loop\nRuby Ring");
-        assert_eq!(searched(&unique), stats);
-        assert_eq!(searched(&rare), Vec::new());
+        let searched_rare = searched(&rare, false);
+        assert_eq!(searched_rare.stats, stats);
+        assert_eq!(searched_rare.properties, properties);
+        assert_eq!(searched_rare.base_type.as_deref(), Some("Ruby Ring"));
+        // The base type unchecked: any base.
+        assert_eq!(searched(&rare, true).base_type, None);
+    }
+
+    #[test]
+    fn the_base_type_is_searched_when_nothing_else_narrows_the_search() {
+        let rare = parse("Item Class: Rings\nRarity: Rare\nWoe Loop\nRuby Ring");
+        let target = target(&rare, None, None).expect("a target");
+        let base_type = |filters| match super::query(&rare, &target, filters) {
+            Query::Items(items) => items.base_type,
+            Query::Exchange(_) => panic!("a search of items"),
+        };
+        let item_level = |minimum| PropertyFilter {
+            property: Property::ItemLevel,
+            minimum,
+            maximum: None,
+        };
+
+        assert_eq!(
+            base_type(SearchFilters {
+                any_base: true,
+                ..SearchFilters::default()
+            })
+            .as_deref(),
+            Some("Ruby Ring")
+        );
+        // A property without limit narrows nothing.
+        assert_eq!(
+            base_type(SearchFilters {
+                any_base: true,
+                properties: vec![item_level(None)],
+                stats: Vec::new(),
+            })
+            .as_deref(),
+            Some("Ruby Ring")
+        );
+        assert_eq!(
+            base_type(SearchFilters {
+                any_base: true,
+                properties: vec![item_level(Some(81.0))],
+                stats: Vec::new(),
+            }),
+            None
+        );
     }
 
     #[test]
@@ -323,7 +396,7 @@ mod tests {
         let target = target(&stack, Some(&names), None).expect("a target");
 
         assert_eq!(
-            super::query(&stack, &target, Vec::new()),
+            super::query(&stack, &target, SearchFilters::default()),
             Query::Exchange("transmute".to_owned())
         );
     }

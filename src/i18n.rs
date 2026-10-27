@@ -8,6 +8,7 @@ use std::time::Duration;
 
 use fluent_bundle::{FluentArgs, FluentBundle, FluentResource};
 
+use crate::filters::Property;
 use crate::language::Language;
 use crate::prices::Direction;
 
@@ -78,6 +79,8 @@ pub enum Message {
     GroupEnchant,
     GroupRunes,
     GroupUnique,
+    GroupItem,
+    GroupWeapon,
     ShowFilters,
     HideFilters,
     FilterRange,
@@ -111,7 +114,7 @@ pub enum Message {
 impl Message {
     /// Every message, for the tests.
     #[cfg(test)]
-    const ALL: [Self; 84] = [
+    const ALL: [Self; 86] = [
         Self::LeagueModeSoftcore,
         Self::LeagueModeHardcore,
         Self::LeagueLoading,
@@ -168,6 +171,8 @@ impl Message {
         Self::GroupEnchant,
         Self::GroupRunes,
         Self::GroupUnique,
+        Self::GroupItem,
+        Self::GroupWeapon,
         Self::ShowFilters,
         Self::HideFilters,
         Self::FilterRange,
@@ -257,6 +262,8 @@ impl Message {
             Self::GroupEnchant => "group-enchant",
             Self::GroupRunes => "group-runes",
             Self::GroupUnique => "group-unique",
+            Self::GroupItem => "group-item",
+            Self::GroupWeapon => "group-weapon",
             Self::ShowFilters => "show-filters",
             Self::HideFilters => "hide-filters",
             Self::FilterRange => "filter-range",
@@ -345,6 +352,10 @@ const AFFIX_FILL: &str = "affix-fill";
 const AFFIX_FILL_OPEN: &str = "affix-fill-open";
 const ACTIVE_FILTERS: &str = "active-filters";
 const FILTER_ROLLS: &str = "filter-rolls";
+const FILTER_BASE_TYPE: &str = "filter-base-type";
+const FILTER_ITEM_LEVEL: &str = "filter-item-level";
+const FILTER_PHYSICAL_DPS: &str = "filter-physical-dps";
+const FILTER_ELEMENTAL_DPS: &str = "filter-elemental-dps";
 const STATUS_TRADE: &str = "status-trade";
 const STATUS_TRADE_WAIT: &str = "status-trade-wait";
 const OFFERS_SEARCHED: &str = "offers-searched";
@@ -502,6 +513,28 @@ impl Translator {
         args.set("low", low);
         args.set("high", high);
         self.format(FILTER_ROLLS, Some(&args))
+    }
+
+    /// The filter of the base type of an item: "Base: Gemini Bow".
+    #[must_use]
+    pub fn filter_base_type(&self, base_type: &str) -> String {
+        let mut args = FluentArgs::new();
+        args.set("base", base_type);
+        self.format(FILTER_BASE_TYPE, Some(&args))
+    }
+
+    /// The filter of a property of an item, with its `value` written by
+    /// [`crate::format::number`]: "Item level: 81", "Physical DPS: 245".
+    #[must_use]
+    pub fn filter_property(&self, property: Property, value: &str) -> String {
+        let id = match property {
+            Property::ItemLevel => FILTER_ITEM_LEVEL,
+            Property::PhysicalDps => FILTER_PHYSICAL_DPS,
+            Property::ElementalDps => FILTER_ELEMENTAL_DPS,
+        };
+        let mut args = FluentArgs::new();
+        args.set("value", value);
+        self.format(id, Some(&args))
     }
 
     /// The number of offers behind the price of a unique: "23 offers".
@@ -779,6 +812,10 @@ mod tests {
                 AFFIX_FILL_OPEN,
                 ACTIVE_FILTERS,
                 FILTER_ROLLS,
+                FILTER_BASE_TYPE,
+                FILTER_ITEM_LEVEL,
+                FILTER_PHYSICAL_DPS,
+                FILTER_ELEMENTAL_DPS,
                 OFFERS,
                 STACK_OF,
                 UNIT_PRICE,
