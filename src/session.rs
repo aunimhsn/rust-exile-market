@@ -14,7 +14,7 @@ use crate::prices::{PriceList, Rates, UniqueModifiers};
 use crate::pricing::{self, FixedPrice, NoFixedPrice};
 use crate::roll_difference::CopiedLines;
 use crate::trade::link::{self, TradeTarget};
-use crate::trade::query::StatFilter;
+use crate::trade::query::{SearchKind, StatFilter};
 use crate::trade::search::Search;
 use crate::trade::stat_filters::LineStats;
 
@@ -32,23 +32,29 @@ impl ShownItem {
     /// The item `copied`; `trade` holds the stats of the trade site, once it gave them.
     fn new(copied: &CopiedItem, trade: Option<&TradeStats>) -> Self {
         let parsed = Item::parse(copied);
-        let mut lines = CopiedLines::default();
-        let mut stats = LineStats::default();
         match &parsed {
             Ok(item) => {
                 log::debug!("{item:#?}");
                 for warning in item.warnings() {
                     log::warn!("A part of a copied item couldn't be read: {warning}");
                 }
-                lines = CopiedLines::new(item.language(), item.modifiers(), trade);
-                stats = LineStats::new(item.language(), item.modifiers(), trade);
             }
             Err(error) => log::warn!("A copied item couldn't be read: {error}"),
         }
-        Self {
+        let mut shown = Self {
             parsed,
-            lines,
-            stats,
+            lines: CopiedLines::default(),
+            stats: LineStats::default(),
+        };
+        shown.read_lines(trade);
+        shown
+    }
+
+    /// Reads the modifier lines of the item, with the stats of the trade site `trade`.
+    fn read_lines(&mut self, trade: Option<&TradeStats>) {
+        if let Ok(item) = &self.parsed {
+            self.lines = CopiedLines::new(item.language(), item.modifiers(), trade);
+            self.stats = LineStats::new(item.language(), item.modifiers(), trade);
         }
     }
 
@@ -227,7 +233,12 @@ impl Session {
     pub fn apply_item_names(&mut self, mut names: ItemNames) {
         // The names are already in the cache, with their templates.
         let (english, french) = names.take_stat_templates();
-        self.trade_stats = Some(TradeStats::new(&english, &french));
+        let trade = TradeStats::new(&english, &french);
+        // An item copied before them may have a line only the trade site knows.
+        if let Some(shown) = &mut self.item {
+            shown.read_lines(Some(&trade));
+        }
+        self.trade_stats = Some(trade);
         self.item_names = Some(names);
     }
 
@@ -318,15 +329,33 @@ impl Session {
     #[must_use]
     pub fn trade_search(&self, item: &Item, stats: Vec<StatFilter>) -> Option<Search> {
         let league = self.league.as_ref()?;
-        let target = self.trade_target(item)?;
-        if let TradeTarget::UnidentifiedUnique { .. } = target {
-            return None;
-        }
+        let target = self.searched_target(item)?;
         Some(Search {
             language: item.language(),
             league: league.clone(),
             query: link::query(item, &target, stats),
         })
+    }
+
+    /// The kind of the search of `item`, without building it; none when it has no search
+    /// ([`Self::trade_search`]).
+    #[must_use]
+    pub fn search_kind(&self, item: &Item) -> Option<SearchKind> {
+        self.league.as_ref()?;
+        Some(self.searched_target(item)?.query().kind())
+    }
+
+    /// What the search of `item` looks for; none for an unidentified unique, which is
+    /// identified to be searched.
+    fn searched_target<'a>(&'a self, item: &'a Item) -> Option<TradeTarget<'a>> {
+        self.trade_target(item)
+            .filter(|target| !matches!(target, TradeTarget::UnidentifiedUnique { .. }))
+    }
+
+    /// The link of the search for `item` can be opened: the league and its target known.
+    #[must_use]
+    pub fn tradable(&self, item: &Item) -> bool {
+        self.league.is_some() && self.trade_target(item).is_some()
     }
 
     /// An unidentified unique, whose offers are searched once it is identified.
@@ -747,6 +776,50 @@ mod tests {
     }
 
     #[test]
+    fn the_lines_of_the_item_shown_are_read_again_with_the_stats_of_the_trade_site() {
+        use crate::filters::StatKey;
+        use crate::item_names::{ItemNames, Names, StatTemplate};
+        use crate::trade::stat_filters::LineStat;
+
+        let mut session = session();
+        // A modifier of a patch Exiled Exchange 2 doesn't know yet, copied before the names
+        // of the trade site arrive.
+        copy(
+            &mut session,
+            "Item Class: Rings\nRarity: Unique\nAndvarius\nGold Ring\n--------\n\
+             Item Level: 80\n--------\n20% reduced Damage per Patch",
+        );
+        let line = StatKey {
+            modifier: 0,
+            line: 0,
+        };
+        let stat = |session: &Session| session.item().unwrap().stats().get(line).cloned();
+        assert_eq!(stat(&session), Some(LineStat::Unsearchable));
+
+        let names = |stats| Names {
+            exchange: std::collections::HashMap::new(),
+            base_types: Vec::new(),
+            stats,
+        };
+        let template = StatTemplate {
+            id: "explicit.stat_1000000001".to_owned(),
+            text: "#% reduced Damage per Patch".to_owned(),
+        };
+        session.apply_item_names(ItemNames::new(
+            SystemTime::UNIX_EPOCH,
+            names(vec![template]),
+            names(Vec::new()),
+            Vec::new(),
+        ));
+
+        assert!(
+            matches!(stat(&session), Some(LineStat::Searched(_))),
+            "{:?}",
+            stat(&session)
+        );
+    }
+
+    #[test]
     fn the_offers_are_searched_in_the_league_shown_once_the_item_is_identified() {
         const UNIQUE: &str = "Item Class: Rings\nRarity: Unique\nAndvarius\nGold Ring";
         const UNIDENTIFIED: &str =
@@ -760,6 +833,9 @@ mod tests {
             None,
             "the league isn't known yet"
         );
+        let unknown = parsed(&unknown_league);
+        assert_eq!(unknown_league.search_kind(&unknown), None);
+        assert!(!unknown_league.tradable(&unknown));
 
         let mut session = session();
         copy(&mut session, UNIQUE);
@@ -768,10 +844,15 @@ mod tests {
         assert_eq!(search.league, League::new("Forbidden Rites"));
         assert_eq!(search.language, Language::English);
         assert!(!session.must_identify(&unique));
+        assert_eq!(session.search_kind(&unique), Some(SearchKind::Items));
+        assert!(session.tradable(&unique));
 
         copy(&mut session, UNIDENTIFIED);
         let unidentified = parsed(&session);
         assert_eq!(session.trade_search(&unidentified, Vec::new()), None);
         assert!(session.must_identify(&unidentified));
+        assert_eq!(session.search_kind(&unidentified), None);
+        // Its link searches its base type.
+        assert!(session.tradable(&unidentified));
     }
 }

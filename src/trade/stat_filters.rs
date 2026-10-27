@@ -17,7 +17,8 @@ use crate::language::Language;
 #[derive(Debug, Clone, PartialEq)]
 pub enum LineStat {
     Searched(TradeStat),
-    /// A line after the first of a stat written on several lines: the first one searches it.
+    /// Another line of a stat written on several lines: the line with its numbers searches it,
+    /// or else the first.
     Continued,
     /// A line without trade id in its group: a modifier added by a patch the game data
     /// doesn't know yet, or a line the parser read wrong.
@@ -55,7 +56,7 @@ impl TradeValue {
 }
 
 impl TradeStat {
-    /// The stat `found` of `line`, the first line of its stat, in `group`; none when it has no
+    /// The stat `found` of `line`, the line with its numbers, in `group`; none when it has no
     /// id there, or is an option stat whose option isn't known.
     fn new(found: &game_data::StatMatch, group: TradeGroup, line: &StatLine) -> Option<Self> {
         let ids = found.stat.trade_ids(group);
@@ -137,11 +138,22 @@ impl LineStats {
         for (index, modifier) in modifiers.iter().enumerate() {
             let group = TradeGroup::of(modifier);
             for found in game_data::modifier_stats(language, modifier, trade) {
-                let first = found.lines.start;
+                // The line with the numbers of the stat holds its filter: `Life that would be
+                // lost… is instead Reserved` / `until you take no Damage to Life for # seconds`.
+                let searched = found
+                    .lines
+                    .clone()
+                    .find(|&line| {
+                        modifier
+                            .lines
+                            .get(line)
+                            .is_some_and(|line| !line.rolls.is_empty())
+                    })
+                    .unwrap_or(found.lines.start);
                 let stat = found
                     .stat
                     .as_ref()
-                    .zip(modifier.lines.get(first))
+                    .zip(modifier.lines.get(searched))
                     .and_then(|(stat, line)| TradeStat::new(stat, group, line));
                 for line in found.lines {
                     let key = StatKey {
@@ -149,7 +161,7 @@ impl LineStats {
                         line,
                     };
                     let line_stat = match &stat {
-                        Some(stat) if line == first => LineStat::Searched(stat.clone()),
+                        Some(stat) if line == searched => LineStat::Searched(stat.clone()),
                         Some(_) => LineStat::Continued,
                         None => LineStat::Unsearchable,
                     };
@@ -268,6 +280,11 @@ mod tests {
             searched("20% increased Charm Charges used", "", "20"),
             stat("explicit.stat_1570770415", Some(-20.0), None)
         );
+        // Its minimum and its maximum swap.
+        assert_eq!(
+            searched("20% increased Charm Charges used", "15", "25"),
+            stat("explicit.stat_1570770415", Some(-25.0), Some(-15.0))
+        );
         // A reduced line of an inverted stat keeps its sign and its limits.
         assert_eq!(
             searched("20% reduced Charm Charges used", "15", ""),
@@ -303,6 +320,26 @@ mod tests {
         assert_eq!(
             searched("+2 to Level of all Arc Skills", "2", ""),
             stat("explicit.stat_448592698|98", Some(2.0), None)
+        );
+    }
+
+    #[test]
+    fn a_stat_of_the_trade_site_is_searched_as_its_template_writes_it() {
+        let trade = game_data::trade_stats();
+        let item = unique(
+            "20% reduced Damage per Patch\n\
+             Sacrifice up to 10 Chaos Orbs to receive double on Trial completion",
+        );
+        let stats = LineStats::new(item.language(), item.modifiers(), Some(&trade));
+
+        assert_eq!(
+            stats.stat_filters(&[(key(0, 0), filter("", "20")), (key(1, 0), filter("10", "")),]),
+            [
+                // Its value is written as its template: 20, not -20.
+                stat("explicit.stat_1000000001", None, Some(20.0)),
+                // An option of the trade site, its number written in its template.
+                stat("explicit.stat_3076483222|49977", None, None),
+            ]
         );
     }
 
@@ -358,6 +395,22 @@ mod tests {
         assert_eq!(searched.len(), 1, "{searched:?}");
         assert_eq!(searched[0].minimum, Some(15.0));
         assert_eq!(searched[0].maximum, Some(25.0));
+    }
+
+    #[test]
+    fn a_stat_whose_numbers_are_on_its_second_line_is_searched_by_it() {
+        let item = unique(
+            "{ Unique Modifier — Life }\n\
+             Life that would be lost by taking Damage is instead Reserved\n\
+             until you take no Damage to Life for 5(4-6) seconds",
+        );
+        let stats = line_stats(&item);
+
+        assert_eq!(stats.get(key(0, 0)), Some(&LineStat::Continued));
+        assert_eq!(
+            stats.stat_filters(&[(key(0, 1), filter("", "5"))]),
+            [stat("explicit.stat_1777740627", None, Some(5.0))]
+        );
     }
 
     #[test]

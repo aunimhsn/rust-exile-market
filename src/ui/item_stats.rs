@@ -1690,7 +1690,9 @@ mod tests {
              { Unique Modifier }\n+52(40-60) to maximum Life\n\
              { Unique Modifier }\nGain 3(2-4) Thunder Charges when you Dodge Roll\n\
              { Unique Modifier }\n20(15-25)% chance to gain Onslaught for 3 seconds when you kill an\n\
-             enemy affected by Abyssal Wasting",
+             enemy affected by Abyssal Wasting\n\
+             { Unique Modifier }\nLife that would be lost by taking Damage is instead Reserved\n\
+             until you take no Damage to Life for 5(4-6) seconds",
         );
         let lines = CopiedLines::new(unique.language(), unique.modifiers(), None);
         let line_stats = LineStats::new(unique.language(), unique.modifiers(), None);
@@ -1706,10 +1708,13 @@ mod tests {
                 // The second line of a stat is searched by the first.
                 "■ 20% chance to gain Onslaught for 3 seconds when you kill an ≥11.5 [15–25 0.50]",
                 "enemy affected by Abyssal Wasting",
+                // Or by the line with its numbers.
+                "Life that would be lost by taking Damage is instead Reserved",
+                "■ until you take no Damage to Life for 5 seconds ≤5 [4–6 0.50]",
             ]
         );
         let filters = Filters::default();
-        assert_eq!(stats.active_filters(&filters), 2);
+        assert_eq!(stats.active_filters(&filters), 3);
         let checked: Vec<StatKey> = stats
             .checked(&filters)
             .into_iter()
@@ -1725,6 +1730,10 @@ mod tests {
                 StatKey {
                     modifier: 2,
                     line: 0
+                },
+                StatKey {
+                    modifier: 3,
+                    line: 1
                 }
             ]
         );

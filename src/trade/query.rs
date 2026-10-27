@@ -117,19 +117,22 @@ impl ItemQuery {
     /// then a `count` group of minimum 1 for each stat of several ids, which finds the offers
     /// with either of them, like Exiled Exchange 2.
     fn stats_json(&self) -> Value {
-        let (single, several): (Vec<&StatFilter>, Vec<&StatFilter>) =
-            self.stats.iter().partition(|stat| stat.ids.len() < 2);
+        let mut and = Vec::new();
         let mut groups = Vec::new();
-        let and: Vec<Value> = single
-            .iter()
-            .flat_map(|stat| stat.ids.iter().map(|id| stat.to_json(id)))
-            .collect();
-        if !and.is_empty() {
-            groups.push(json!({ "type": "and", "filters": and }));
+        for stat in &self.stats {
+            match stat.ids.as_slice() {
+                [] => {}
+                [id] => and.push(stat.to_json(id)),
+                ids => {
+                    let filters: Vec<Value> = ids.iter().map(|id| stat.to_json(id)).collect();
+                    groups.push(
+                        json!({ "type": "count", "value": { "min": 1 }, "filters": filters }),
+                    );
+                }
+            }
         }
-        for stat in several {
-            let filters: Vec<Value> = stat.ids.iter().map(|id| stat.to_json(id)).collect();
-            groups.push(json!({ "type": "count", "value": { "min": 1 }, "filters": filters }));
+        if !and.is_empty() {
+            groups.insert(0, json!({ "type": "and", "filters": and }));
         }
         Value::Array(groups)
     }
@@ -258,6 +261,32 @@ mod tests {
                     { "id": "explicit.stat_803737631", "value": { "min": 150.0, "max": 200.0 } }
                 ] }
             ])
+        );
+    }
+
+    #[test]
+    fn a_count_group_without_limits_searches_its_ids_alone() {
+        let query = ItemQuery {
+            name: None,
+            base_type: "Gold Ring".to_owned(),
+            rarity: None,
+            corrupted: None,
+            stats: vec![StatFilter {
+                ids: vec![
+                    "explicit.stat_691932474".to_owned(),
+                    "explicit.stat_803737631".to_owned(),
+                ],
+                minimum: None,
+                maximum: None,
+            }],
+        };
+
+        assert_eq!(
+            query.to_json()["query"]["stats"],
+            json!([{ "type": "count", "value": { "min": 1 }, "filters": [
+                { "id": "explicit.stat_691932474" },
+                { "id": "explicit.stat_803737631" }
+            ] }])
         );
     }
 
