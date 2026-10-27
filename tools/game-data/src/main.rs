@@ -480,6 +480,9 @@ mod tests {
         let new =
             bases(&[r#"{"name": "Idol", "namespace": "ITEM", "craftable": {"category": "Idol"}}"#]);
 
-        assert!(new.is_err());
+        assert_eq!(
+            new.expect_err("a new category").to_string(),
+            "unknown category Idol of Idol"
+        );
     }
 }

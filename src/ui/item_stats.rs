@@ -458,18 +458,19 @@ fn sockets_filter(item: &Item, category: Option<Category>) -> Option<Stat<'stati
     ))
 }
 
-/// The filter of the quality of an item, with its value as its minimum, like Exiled Exchange 2:
-/// for a charm, checked from 10 %; for a flask from 20 %, checked above; for any other item of
-/// `category` above 20 % (an exceptional quality), checked except on a rare, whose craft is
-/// usually done; and on a normal item that has quality, unchecked.
+/// The filter of the quality of an item of the base `category`, with its value as its minimum,
+/// like Exiled Exchange 2: for a charm, checked from 10 %; for a flask from 20 %, checked above;
+/// for any other item above 20 % (an exceptional quality), checked except on a rare, whose craft
+/// is usually done; and on a normal item that has quality, unchecked.
 fn quality_filter(item: &Item, category: Option<Category>) -> Option<Stat<'static>> {
     let quality = item.quality().filter(|&quality| quality > 0)?;
     let checked = match category {
-        Some(Category::Charm) => Some(quality >= CHARM_QUALITY),
-        Some(Category::Flask) if quality >= MAX_USUAL_QUALITY => Some(quality > MAX_USUAL_QUALITY),
-        _ if quality > MAX_USUAL_QUALITY => Some(item.rarity() != Rarity::Rare),
-        _ => (item.rarity() == Rarity::Normal).then_some(false),
-    }?;
+        Some(Category::Charm) => quality >= CHARM_QUALITY,
+        Some(Category::Flask) if quality >= MAX_USUAL_QUALITY => quality > MAX_USUAL_QUALITY,
+        _ if quality > MAX_USUAL_QUALITY => item.rarity() != Rarity::Rare,
+        _ if item.rarity() == Rarity::Normal => false,
+        _ => return None,
+    };
     let quality = f64::from(quality);
     Some(property_filter(
         Property::Quality,
@@ -1293,7 +1294,8 @@ fn range_field(ui: &mut Ui, key: FilterKey, choice: &mut Filter, limit: Limit, i
                 }
             }
         });
-    let rect = field.response.rect;
+    // The field as it is drawn, without the margin that raises it.
+    let rect = field.response.rect - RANGE_RAISE;
     if ui.rect_contains_pointer(rect) {
         field_tooltip(ui, key, rect, limit, i18n);
     }
@@ -1479,7 +1481,7 @@ mod tests {
     /// first `■ ` for a checked filter, `□ ` for an unchecked one or `⊘ ` for a line the trade
     /// site can't search, then its minimum or its maximum and its roll (`■ +55 to maximum Life
     /// ≥55 [40–60 0.75]`, `■ 18% reduced Movement Speed ≤18`, `■ +3 to Level [T1 3–3]`).
-    fn row_texts(rows: Vec<Row<'_>>) -> Vec<String> {
+    fn row_texts<'a>(rows: impl IntoIterator<Item = Row<'a>>) -> Vec<String> {
         rows.into_iter()
             .map(|row| match row {
                 Row::Group(Group::Prefixes { filled, max }) => format!("Prefixes {filled}/{max}"),
@@ -1949,8 +1951,7 @@ mod tests {
             rows.into_iter()
                 .skip_while(|row| *row != Row::Group(Group::Item))
                 .skip(1)
-                .take_while(|row| matches!(row, Row::Stat(_)))
-                .collect(),
+                .take_while(|row| matches!(row, Row::Stat(_))),
         )
     }
 
