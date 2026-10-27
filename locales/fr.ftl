@@ -153,7 +153,7 @@ active-filters = { $count ->
 }
 # À droite du premier petit titre, au-dessus des champs des filtres.
 filter-range = min – max
-# L'infobulle du champ d'un filtre : les jets qu'il accepte, puis pour une ligne meilleure basse, en gris.
+# L'infobulle du champ d'un filtre : les jets qu'il accepte, puis, en gris, pour une ligne où une valeur basse est meilleure.
 filter-rolls = Jets de { $low } à { $high }
 filter-lower-better = Plus c'est bas, mieux c'est
 # Sous les stats d'un objet corrompu : la recherche ne le compare qu'aux offres corrompues.

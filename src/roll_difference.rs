@@ -14,6 +14,7 @@
 //! on 2026-10-26, on every string of the stats; the `better` value of Exiled Exchange 2 isn't
 //! used, wrong on lines such as `Lose # Life when you use a Skill`.
 
+use crate::filters::StatKey;
 use crate::game_data::{self, TradeGroup, TradeStats};
 use crate::item::{Modifier, ModifierKind};
 use crate::language::Language;
@@ -246,13 +247,13 @@ impl CopiedLines {
         Self(lines.collect())
     }
 
-    /// Whether the line `line` of the modifier `modifier` of the copied item is better lower,
-    /// as "18% reduced Movement Speed"; not when its better side is unknown.
+    /// Whether the line `key` of the copied item is better lower, as "18% reduced Movement
+    /// Speed"; not when its better side is unknown.
     #[must_use]
-    pub fn better_lower(&self, modifier: usize, line: usize) -> bool {
+    pub fn better_lower(&self, key: StatKey) -> bool {
         self.0.iter().any(|copied| {
-            copied.modifier == modifier
-                && copied.line == line
+            copied.modifier == key.modifier
+                && copied.line == key.line
                 && copied.direction == Direction::Lower
         })
     }
@@ -468,13 +469,14 @@ mod tests {
             explicit("15% reduced Life of nearby Enemies"),
         ];
         let lines = CopiedLines::new(Language::English, &copied, None);
+        let key = |modifier, line| StatKey { modifier, line };
 
-        assert!(lines.better_lower(0, 0));
-        assert!(!lines.better_lower(1, 0));
-        assert!(lines.better_lower(1, 1));
+        assert!(lines.better_lower(key(0, 0)));
+        assert!(!lines.better_lower(key(1, 0)));
+        assert!(lines.better_lower(key(1, 1)));
         // Its better side unknown: searched with a minimum, as any line.
-        assert!(!lines.better_lower(2, 0));
-        assert!(!lines.better_lower(3, 0));
+        assert!(!lines.better_lower(key(2, 0)));
+        assert!(!lines.better_lower(key(3, 0)));
     }
 
     #[test]

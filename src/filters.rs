@@ -193,4 +193,35 @@ mod tests {
         // An empty half has no limit.
         assert_eq!(settled("55", "", Half::Minimum), texts("55", ""));
     }
+
+    #[test]
+    fn a_filter_without_range_or_with_a_negative_one_is_settled_alike() {
+        let settled = |minimum: &str, maximum: &str, bounds, half| {
+            let mut filter = filter(minimum, maximum, bounds);
+            filter.settle(half);
+            (filter.minimum, filter.maximum)
+        };
+        let negative = Some(Range {
+            min: -20.0,
+            max: -10.0,
+        });
+
+        // Without range: any number, written as a number.
+        assert_eq!(
+            settled("600.50", "", None, Half::Minimum),
+            texts("600.5", "")
+        );
+        assert_eq!(settled("70", "50", None, Half::Minimum), texts("70", "70"));
+        assert_eq!(settled("-", "", None, Half::Minimum), texts("", ""));
+        // A negative range: -5 is above it, -25 under it.
+        assert_eq!(settled("-5", "", negative, Half::Minimum), texts("-10", ""));
+        assert_eq!(
+            settled("", "-25", negative, Half::Maximum),
+            texts("", "-20")
+        );
+        assert_eq!(
+            settled("-12", "-15", negative, Half::Maximum),
+            texts("-15", "-15")
+        );
+    }
 }

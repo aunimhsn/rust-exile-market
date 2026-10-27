@@ -13,8 +13,8 @@
 
 use egui::text::{LayoutJob, TextFormat};
 use egui::{
-    Align, Align2, Area, CornerRadius, Frame, Id, Label, Layout, Margin, Order, Rect, RichText,
-    Sense, Stroke, TextEdit, Ui, Vec2, pos2, vec2,
+    Align, Align2, Area, Color32, CornerRadius, Frame, Id, Label, Layout, Margin, Order, Rect,
+    RichText, Sense, Stroke, TextEdit, Ui, Vec2, pos2, vec2,
 };
 
 use super::number_field::NumberField;
@@ -59,10 +59,10 @@ const BAR_SIZE: Vec2 = vec2(96.0, 4.0);
 const ROLL_GAP: f32 = 3.0;
 /// The separator of the ranges of a stat with several rolls.
 const RANGE_SEPARATOR: &str = " · ";
-/// The share of the copied value given to the minimum of a rare, magic or normal item, to
-/// find comparable items and not only identical ones; to the maximum of a line better lower.
-const COMPARABLE_MINIMUM: f64 = 0.9;
-const COMPARABLE_MAXIMUM: f64 = 1.1;
+/// The share of the copied value the limit of a rare, magic or normal item leaves below it
+/// for a minimum, above it for the maximum of a line better lower, to find comparable items
+/// and not only identical ones.
+const COMPARABLE_MARGIN: f64 = 0.1;
 
 /// A small title of the stats.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -119,19 +119,22 @@ struct Limit {
     /// The maximum for a line better lower, the minimum otherwise.
     half: Half,
     bounds: Option<Range>,
-    /// The rolls the tooltip of the field tells: the range of a line with one number; the
-    /// field of a line with several holds their average, not a roll.
+    /// The rolls the tooltip of the field tells: the range of today of a line with one
+    /// number; the field of a line with several holds their average, not a roll.
     rolls: Option<Range>,
 }
 
 impl Limit {
-    /// A limit of `value`, a value of `line`, filling `half`, brought back within `bounds`.
-    fn new(value: f64, half: Half, bounds: Option<Range>, line: &StatLine) -> Self {
+    /// A limit of `value` filling `half`, for `line` copied with the value `copied`, which
+    /// rolls in `range`: its bounds are `range`, widened to hold `copied` for a legacy unique,
+    /// rolled in a range that changed since.
+    fn new(value: f64, half: Half, range: Option<Range>, copied: f64, line: &StatLine) -> Self {
+        let bounds = range.map(|range| range.holding(copied));
         Self {
             value: bounds.map_or(value, |bounds| bounds.clamp(value)),
             half,
             bounds,
-            rolls: bounds.filter(|_| line.rolls.len() == 1),
+            rolls: range.filter(|_| line.rolls.len() == 1),
         }
     }
 
@@ -260,7 +263,7 @@ fn rows<'a>(
     unique_modifiers: Option<&UniqueModifiers>,
 ) -> Vec<Row<'a>> {
     let half = |key: StatKey| {
-        if lines.better_lower(key.modifier, key.line) {
+        if lines.better_lower(key) {
             Half::Maximum
         } else {
             Half::Minimum
@@ -306,13 +309,17 @@ fn unique_rows<'a>(
     // A stat of a unique varies when it is a filter.
     let varies = |_: &StatLine, stat: &Stat<'_>| stat.filter.is_some();
     let mut rows = Vec::new();
-    let added = |key, line| added(key, line, half(key));
+    let added_stat = |key, line| added(key, line, half(key));
     push_group(
         &mut rows,
         Group::Enchant,
-        stats(item, is_enchant, added, varies),
+        stats(item, is_enchant, added_stat, varies),
     );
-    push_group(&mut rows, Group::Runes, stats(item, is_rune, added, varies));
+    push_group(
+        &mut rows,
+        Group::Runes,
+        stats(item, is_rune, added_stat, varies),
+    );
     push_group(
         &mut rows,
         Group::Implicit,
@@ -347,17 +354,17 @@ fn affix_rows<'a>(item: &'a Item, half: HalfOf<'_>) -> Vec<Row<'a>> {
     let line_varies = |line: &StatLine, _: &Stat<'_>| varies(line);
     let prefixes = affix_stats(item, Some(Affix::Prefix), half);
     let suffixes = affix_stats(item, Some(Affix::Suffix), half);
-    let added = |key, line| added(key, line, half(key));
+    let added_stat = |key, line| added(key, line, half(key));
     let mut rows = Vec::new();
     push_group(
         &mut rows,
         Group::Enchant,
-        stats(item, is_enchant, added, line_varies),
+        stats(item, is_enchant, added_stat, line_varies),
     );
     push_group(
         &mut rows,
         Group::Runes,
-        stats(item, is_rune, added, line_varies),
+        stats(item, is_rune, added_stat, line_varies),
     );
     push_group(
         &mut rows,
@@ -401,7 +408,7 @@ fn added(key: StatKey, line: &StatLine, half: Half) -> Stat<'_> {
         text: &line.text,
         filter: Some(StatFilter {
             checked: false,
-            limit: value(line).map(|value| Limit::new(value, half, None, line)),
+            limit: value(line).map(|value| Limit::new(value, half, None, value, line)),
         }),
         roll: None,
     }
@@ -424,29 +431,26 @@ fn implicit_stat(key: StatKey, line: &StatLine, half: Half) -> Stat<'_> {
 fn comparable_filter(line: &StatLine, bounds: Option<Range>, half: Half) -> StatFilter {
     StatFilter {
         checked: true,
-        limit: varies(line).then(|| value(line)).flatten().map(|value| {
-            Limit::new(
-                comparable(value, line, half),
-                half,
-                bounds.map(|bounds| bounds.holding(value)),
-                line,
-            )
-        }),
+        limit: varies(line)
+            .then(|| value(line))
+            .flatten()
+            .map(|value| Limit::new(comparable(value, line, half), half, bounds, value, line)),
     }
 }
 
-/// 90 % of `value`, a value of `line`, for a minimum, 110 % for a maximum: rounded when the
-/// line has whole numbers only.
+/// The limit 10 % of `value`, a value of `line`, below it for a minimum, above it for a
+/// maximum, also for a negative value (`-15` gets a minimum of `-17`, not `-14`, which the
+/// item itself wouldn't pass): rounded when the line has whole numbers only.
 fn comparable(value: f64, line: &StatLine, half: Half) -> f64 {
-    let share = value
-        * match half {
-            Half::Minimum => COMPARABLE_MINIMUM,
-            Half::Maximum => COMPARABLE_MAXIMUM,
-        };
+    let margin = value.abs() * COMPARABLE_MARGIN;
+    let limit = match half {
+        Half::Minimum => value - margin,
+        Half::Maximum => value + margin,
+    };
     if line.rolls.iter().all(|roll| roll.value.fract() == 0.0) {
-        share.round()
+        limit.round()
     } else {
-        share
+        limit
     }
 }
 
@@ -609,12 +613,7 @@ fn unique_stat<'a>(
         filter: Some(StatFilter {
             checked: true,
             // A legacy unique keeps its value, out of the range of today.
-            limit: Some(Limit::new(
-                value,
-                half,
-                bounds.map(|bounds| bounds.holding(value)),
-                line,
-            )),
+            limit: Some(Limit::new(value, half, bounds, value, line)),
         }),
         roll,
         ..fixed
@@ -932,18 +931,24 @@ fn range_field(ui: &mut Ui, key: StatKey, choice: &mut Filter, limit: Limit, i18
     }
 }
 
-/// The tooltip of a range field in `field`: the rolls it accepts, then "Lower is better" in
-/// gray for a line better lower; none when it has nothing to say. Under the field, their
-/// right edges together, so that it stays in the window.
-fn field_tooltip(ui: &Ui, key: StatKey, field: Rect, limit: Limit, i18n: &Translator) {
+/// The lines of the tooltip of the range field of `limit`, with their colors: the rolls it
+/// accepts, then "Lower is better" in gray for a line better lower.
+fn tooltip_lines(limit: Limit, i18n: &Translator) -> Vec<(String, Color32)> {
     let rolls = limit
         .rolls
         .map(|rolls| i18n.filter_rolls(&format::number(rolls.min), &format::number(rolls.max)));
     let lower = (limit.half == Half::Maximum).then(|| i18n.text(Message::FilterLowerBetter));
-    let lines: Vec<(String, egui::Color32)> = [(rolls, color::TEXT), (lower, color::WEAK)]
+    [(rolls, color::TEXT), (lower, color::WEAK)]
         .into_iter()
         .filter_map(|(line, tint)| Some((line?, tint)))
-        .collect();
+        .collect()
+}
+
+/// The tooltip of a range field in `field`: the rolls it accepts, then "Lower is better" in
+/// gray for a line better lower; none when it has nothing to say. Under the field, their
+/// right edges together, so that it stays in the window.
+fn field_tooltip(ui: &Ui, key: StatKey, field: Rect, limit: Limit, i18n: &Translator) {
+    let lines = tooltip_lines(limit, i18n);
     if lines.is_empty() {
         return;
     }
@@ -1475,10 +1480,50 @@ mod tests {
     }
 
     #[test]
+    fn a_rare_limit_leaves_10_percent_on_the_worse_side_also_for_a_negative_value() {
+        let whole = StatLine::parse("-15% to Fire Resistance");
+        let decimal = StatLine::parse("-7.5% to Fire Resistance");
+        let limit = |value, line, half| comparable(value, line, half);
+
+        assert!((limit(12.0, &whole, Half::Minimum) - 11.0).abs() < 1e-9);
+        assert!((limit(18.0, &whole, Half::Maximum) - 20.0).abs() < 1e-9);
+        // The item passes its own filter.
+        assert!((limit(-15.0, &whole, Half::Minimum) - -17.0).abs() < 1e-9);
+        assert!((limit(-15.0, &whole, Half::Maximum) - -14.0).abs() < 1e-9);
+        assert!((limit(-7.5, &decimal, Half::Minimum) - -8.25).abs() < 1e-9);
+    }
+
+    #[test]
+    fn the_tooltip_of_a_range_field_tells_its_rolls_and_its_better_side() {
+        let i18n = Translator::new(crate::language::Language::English);
+        let range = Some(Range {
+            min: 15.0,
+            max: 25.0,
+        });
+        let tooltip = |half, rolls| {
+            let limit = Limit {
+                value: 18.0,
+                half,
+                bounds: range,
+                rolls,
+            };
+            tooltip_lines(limit, &i18n)
+        };
+        let rolls = ("Rolls 15 to 25".to_owned(), color::TEXT);
+        let lower = ("Lower is better".to_owned(), color::WEAK);
+
+        assert_eq!(tooltip(Half::Minimum, range), std::slice::from_ref(&rolls));
+        assert_eq!(tooltip(Half::Maximum, range), [rolls, lower.clone()]);
+        // A line of several numbers, or a rare before the modifier tables.
+        assert_eq!(tooltip(Half::Maximum, None), [lower]);
+        assert_eq!(tooltip(Half::Minimum, None), []);
+    }
+
+    #[test]
     fn a_range_field_holds_four_characters_a_side_when_its_stat_reaches_them() {
         let line = StatLine::parse("+2250 Armour if you've Blocked Recently");
         let wide = |value, min, max| {
-            Limit::new(value, Half::Minimum, Some(Range { min, max }), &line).wide()
+            Limit::new(value, Half::Minimum, Some(Range { min, max }), value, &line).wide()
         };
 
         assert!(!wide(245.0, 200.0, 320.0));
@@ -1488,14 +1533,15 @@ mod tests {
         assert!(wide(16.3, 15.0, 20.0));
         assert!(wide(-20.5, -25.0, -10.0));
         // Without a range, e.g. a rare at 90 % before the modifier tables: its value.
-        assert!(Limit::new(6.83, Half::Minimum, None, &line).wide());
-        assert!(!Limit::new(163.0, Half::Minimum, None, &line).wide());
+        assert!(Limit::new(6.83, Half::Minimum, None, 7.59, &line).wide());
+        assert!(!Limit::new(163.0, Half::Minimum, None, 181.0, &line).wide());
     }
 
     #[test]
     fn a_negative_stat_takes_a_minus_sign() {
         let line = StatLine::parse("-15% to Fire Resistance");
-        let negative = |value, bounds| Limit::new(value, Half::Minimum, bounds, &line).negative();
+        let negative =
+            |value, bounds| Limit::new(value, Half::Minimum, bounds, value, &line).negative();
 
         assert!(negative(-15.0, None));
         assert!(!negative(15.0, None));
@@ -1610,7 +1656,7 @@ mod tests {
                         }),
                         rolls: Some(Range {
                             min: 40.0,
-                            max: 65.0
+                            max: 60.0
                         }),
                     }),
                 }),
