@@ -70,26 +70,47 @@ struct Variant {
 
 /// The tiers of a type of modifier that roll on the same bases, as the application reads them
 /// (`src/game_data/modifiers.rs`).
-#[derive(Serialize, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Serialize)]
 pub struct Modifier {
     #[serde(rename = "type")]
     kind: String,
     affix: String,
-    /// The English template of each line, as Exiled Exchange 2 writes it (`Adds # to #
-    /// Lightning Damage`).
-    lines: Vec<String>,
+    lines: Vec<Line>,
     /// Each tag and its weight, as `["bow", 1]`.
     spawn: Vec<(String, u32)>,
     tiers: Vec<Tier>,
 }
 
+/// A line of a modifier.
+#[derive(Serialize, Clone, PartialEq, Eq, PartialOrd, Ord)]
+struct Line {
+    /// Its English template, as Exiled Exchange 2 writes it (`Adds # to # Lightning Damage`).
+    template: String,
+    /// What the value of the stat is divided by to be shown, e.g. 1000 for milliseconds shown
+    /// in seconds: the value of a line written without number (`Inherent Rage loss starts 1
+    /// second later`) is that of the stat, 1000.
+    #[serde(skip_serializing_if = "is_one")]
+    divisor: i64,
+}
+
+#[expect(
+    clippy::trivially_copy_pass_by_ref,
+    reason = "the signature serde asks for"
+)]
+fn is_one(value: &i64) -> bool {
+    *value == 1
+}
+
 #[derive(Serialize, PartialEq, Eq, PartialOrd, Ord)]
 struct Tier {
     level: u32,
-    /// The range of each `#` of the lines, in their order, as the game shows them (per second
-    /// for a value stored per minute), with the sign of the stat.
-    ranges: Vec<[Number; 2]>,
+    /// For each line, the range of each of its values, as the game shows them (per second for
+    /// a value stored per minute), with the sign of the stat.
+    ranges: Vec<LineRanges>,
 }
+
+/// The range of each value of a line.
+type LineRanges = Vec<[Number; 2]>;
 
 /// A number written as an integer when it is one.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -112,7 +133,7 @@ impl Serialize for Number {
         } else {
             #[expect(
                 clippy::cast_precision_loss,
-                reason = "the values of the game are far below 2^52"
+                reason = "the values of the game are far below 2^53"
             )]
             let value = self.scaled as f64 / Self::SCALE as f64;
             // Two decimals, as the game shows them at most.
@@ -122,19 +143,23 @@ impl Serialize for Number {
 }
 
 /// The modifiers of one type and affix, with the same lines, that roll on the same bases.
-type Key = (String, String, Vec<String>, Vec<SpawnWeight>);
+type Key = (String, String, Vec<Line>, Vec<SpawnWeight>);
 
 /// The tags of each base, by its English name.
 pub type BaseTags = BTreeMap<String, Vec<String>>;
 
+/// The English template of Exiled Exchange 2 (its `ref`) of each of its English strings, and of
+/// each template itself: `Loads # additional bolts` is `Loads an additional bolt`.
+pub type Templates = BTreeMap<String, String>;
+
 /// The modifier tables of `modifiers`, the lines of their stats written as the English
-/// templates of Exiled Exchange 2 (`references`), and the tags of the bases that the tables
-/// read, by English name of the base.
+/// templates of Exiled Exchange 2, and the tags of the bases that the tables read, by English
+/// name of the base.
 pub fn reduce(
     modifiers: &BTreeMap<String, SourceModifier>,
     bases: &BTreeMap<String, SourceBase>,
     translations: &[Translation],
-    references: &BTreeSet<String>,
+    templates: &Templates,
 ) -> Result<(Vec<Modifier>, BaseTags)> {
     let mut by_stat: HashMap<&str, usize> = HashMap::new();
     for (index, translation) in translations.iter().enumerate() {
@@ -143,7 +168,6 @@ pub fn reduce(
         }
     }
     let mut grouped: BTreeMap<Key, Vec<Tier>> = BTreeMap::new();
-    let mut unknown_lines = BTreeSet::new();
     for (id, modifier) in modifiers {
         let rolls = DOMAINS.contains(&modifier.domain.as_str())
             && ["prefix", "suffix"].contains(&modifier.generation_type.as_str())
@@ -152,14 +176,8 @@ pub fn reduce(
         if !rolls {
             continue;
         }
-        let (lines, ranges) = lines(
-            modifier,
-            translations,
-            &by_stat,
-            references,
-            &mut unknown_lines,
-        )
-        .map_err(|error| format!("{id}: {error}"))?;
+        let (lines, ranges) = lines(modifier, translations, &by_stat, templates)
+            .map_err(|error| format!("{id}: {error}"))?;
         grouped
             .entry((
                 modifier.kind.clone(),
@@ -173,23 +191,60 @@ pub fn reduce(
                 ranges,
             });
     }
+
+    let released: Vec<&SourceBase> = bases
+        .values()
+        .filter(|base| base.release_state == "released")
+        .collect();
+    let tags_of_bases: BTreeSet<&String> = released.iter().flat_map(|base| &base.tags).collect();
+    let mut tables = Vec::new();
+    let mut unknown_lines = BTreeSet::new();
+    for ((kind, affix, lines, spawn), mut tiers) in grouped {
+        // Only the tags of the bases matter, in their order: the first one a base has decides.
+        let spawn: Vec<(String, u32)> = spawn
+            .into_iter()
+            .filter(|spawn| tags_of_bases.contains(&spawn.tag))
+            .map(|spawn| (spawn.tag, spawn.weight))
+            .collect();
+        // A modifier that rolls on no released base, e.g. one of Path of Exile left in the
+        // files.
+        if !spawn.iter().any(|&(_, weight)| weight > 0) {
+            continue;
+        }
+        for line in &lines {
+            if !templates.contains_key(&line.template) {
+                unknown_lines.insert(line.template.clone());
+            }
+        }
+        tiers.sort();
+        tables.push(Modifier {
+            kind,
+            affix,
+            lines,
+            spawn,
+            tiers,
+        });
+    }
     for line in unknown_lines {
         println!("Modifier line without template: {line}");
     }
+    let base_tags = base_tags(&released, &tables);
+    Ok((tables, base_tags))
+}
 
-    let tags_used: BTreeSet<String> = grouped
-        .keys()
-        .flat_map(|(_, _, _, spawn)| spawn.iter().map(|spawn| spawn.tag.clone()))
+/// The tags of each base among `released` that tell where a modifier of `tables` rolls, by its
+/// name.
+fn base_tags(released: &[&SourceBase], tables: &[Modifier]) -> BaseTags {
+    let tags_used: BTreeSet<&String> = tables
+        .iter()
+        .flat_map(|table| table.spawn.iter().map(|(tag, _)| tag))
         .collect();
     let mut base_tags = BaseTags::new();
-    for base in bases.values() {
-        if base.release_state != "released" {
-            continue;
-        }
+    for base in released {
         let tags: Vec<String> = base
             .tags
             .iter()
-            .filter(|tag| tags_used.contains(*tag))
+            .filter(|tag| tags_used.contains(tag))
             .cloned()
             .collect();
         // A name of several bases, e.g. the "Random Helmet" of each attribute, the
@@ -204,38 +259,18 @@ pub fn reduce(
             }
         }
     }
-
-    let base_tag_set: BTreeSet<&String> = base_tags.values().flatten().collect();
-    let mut tables = Vec::new();
-    for ((kind, affix, lines, spawn), mut tiers) in grouped {
-        tiers.sort();
-        // Only the tags of the bases matter, in their order: the first one a base has decides.
-        let spawn = spawn
-            .into_iter()
-            .filter(|spawn| base_tag_set.contains(&spawn.tag))
-            .map(|spawn| (spawn.tag, spawn.weight))
-            .collect();
-        tables.push(Modifier {
-            kind,
-            affix,
-            lines,
-            spawn,
-            tiers,
-        });
-    }
-    Ok((tables, base_tags))
+    base_tags
 }
 
-/// The lines of `modifier`, each as the English template of Exiled Exchange 2, and the range
-/// of each `#` of these lines; a line without template is written as the game writes it, and
-/// added to `unknown`.
+/// The lines of `modifier`, each with the English template of Exiled Exchange 2 of one of its
+/// strings (a line without template is written as the game writes it), and the range of each
+/// of their values.
 fn lines(
     modifier: &SourceModifier,
     translations: &[Translation],
     by_stat: &HashMap<&str, usize>,
-    references: &BTreeSet<String>,
-    unknown: &mut BTreeSet<String>,
-) -> Result<(Vec<String>, Vec<[Number; 2]>)> {
+    templates: &Templates,
+) -> Result<(Vec<Line>, Vec<LineRanges>)> {
     let mut lines = Vec::new();
     let mut ranges = Vec::new();
     // The translations written, once each: one can write several stats.
@@ -252,35 +287,74 @@ fn lines(
             continue;
         }
         written.push(index);
-        let variant = translation
-            .english
-            .iter()
-            .find(|variant| references.contains(&template(&variant.string)))
-            .or_else(|| translation.english.first())
-            .ok_or("a translation without text")?;
-        let line = template(&variant.string);
-        if !references.contains(&line) {
-            unknown.insert(line.clone());
-        }
-        for index in placeholders(&variant.string) {
-            let id = translation
-                .ids
-                .get(index)
-                .ok_or_else(|| format!("no stat {index} in {}", variant.string))?;
-            let (min, max) = modifier
-                .stats
-                .iter()
-                .find(|stat| stat.id == *id)
-                .map_or((0, 0), |stat| (stat.min, stat.max));
-            let handlers = variant
-                .index_handlers
-                .get(index)
-                .map_or(&[][..], Vec::as_slice);
-            ranges.push([scale(min, handlers)?, scale(max, handlers)?]);
-        }
+        let (line, line_ranges) = line(modifier, translation, templates)?;
         lines.push(line);
+        ranges.push(line_ranges);
     }
     Ok((lines, ranges))
+}
+
+/// The line `translation` writes for `modifier`, and the range of each of its values.
+fn line(
+    modifier: &SourceModifier,
+    translation: &Translation,
+    templates: &Templates,
+) -> Result<(Line, LineRanges)> {
+    let first = translation
+        .english
+        .first()
+        .ok_or("a translation without text")?;
+    let template = translation
+        .english
+        .iter()
+        .find_map(|variant| templates.get(&template(&variant.string)))
+        .cloned()
+        .unwrap_or_else(|| template(&first.string));
+    // The values are those of the string that writes the most of them: `Loads {0} additional
+    // bolts`, not `Loads an additional bolt`. A string that writes none (`Upgrades Radius to
+    // Medium`) has the values of its stats, as Exiled Exchange 2 gives them.
+    let general = translation
+        .english
+        .iter()
+        .rev()
+        .max_by_key(|variant| placeholders(&variant.string).len())
+        .unwrap_or(first);
+    let mut indexes = placeholders(&general.string);
+    if indexes.is_empty() {
+        indexes = (0..translation.ids.len())
+            .filter(|&index| {
+                translation
+                    .ids
+                    .get(index)
+                    .is_some_and(|id| modifier.stats.iter().any(|stat| stat.id == *id))
+            })
+            .collect();
+    }
+    let mut ranges = Vec::new();
+    let mut divisor = None;
+    for index in indexes {
+        let id = translation
+            .ids
+            .get(index)
+            .ok_or_else(|| format!("no stat {index} in {}", general.string))?;
+        // A stat the modifier doesn't have is 0, e.g. `local_weapon_no_physical_damage`.
+        let (min, max) = modifier
+            .stats
+            .iter()
+            .find(|stat| stat.id == *id)
+            .map_or((0, 0), |stat| (stat.min, stat.max));
+        let handlers = general
+            .index_handlers
+            .get(index)
+            .map_or(&[][..], Vec::as_slice);
+        divisor.get_or_insert(divisor_of(handlers)?);
+        ranges.push([scale(min, handlers)?, scale(max, handlers)?]);
+    }
+    let line = Line {
+        template,
+        divisor: divisor.unwrap_or(1),
+    };
+    Ok((line, ranges))
 }
 
 /// The template of a string of the game, as Exiled Exchange 2 writes it: `{0:+d} to
@@ -296,6 +370,8 @@ fn template(string: &str) -> String {
             ']'
         };
         let Some(end) = rest[start..].find(close).map(|end| start + end) else {
+            // Not closed: written as it is.
+            rest = &rest[start..];
             break;
         };
         let inside = &rest[start + 1..end];
@@ -328,31 +404,313 @@ fn placeholders(string: &str) -> Vec<usize> {
     indexes
 }
 
-/// A value of a stat as the game shows it, e.g. per second for a value stored per minute;
-/// the sign stays that of the stat (`negate` writes `reduced` in place of a minus sign).
-fn scale(value: i64, handlers: &[String]) -> Result<Number> {
-    let mut scaled = value * Number::SCALE;
+/// What the value of a stat is divided by to be shown with `handlers`, e.g. 60 for a value
+/// stored per minute shown per second; the sign stays that of the stat (`negate` writes
+/// `reduced` in place of a minus sign).
+fn divisor_of(handlers: &[String]) -> Result<i64> {
+    let mut divisor = 1;
     for handler in handlers {
-        let divisor = match handler.as_str() {
+        divisor *= match handler.as_str() {
             "negate" => 1,
             "divide_by_one_hundred" => 100,
-            "per_minute_to_per_second" | "per_minute_to_per_second_2dp" => 60,
+            "per_minute_to_per_second"
+            | "per_minute_to_per_second_2dp"
+            | "per_minute_to_per_second_2dp_if_required" => 60,
             "divide_by_ten_1dp_if_required" => 10,
             "milliseconds_to_seconds" => 1000,
             // A new handler is decided before it is embedded.
             other => return Err(format!("unknown handler {other}").into()),
         };
-        if scaled % divisor != 0 {
-            return Err(format!("{value} can't be divided by {divisor}").into());
-        }
-        scaled /= divisor;
     }
-    Ok(Number { scaled })
+    Ok(divisor)
+}
+
+/// A value of a stat as the game shows it with `handlers` ([`divisor_of`]).
+fn scale(value: i64, handlers: &[String]) -> Result<Number> {
+    let divisor = divisor_of(handlers)?;
+    let scaled = value * Number::SCALE;
+    if scaled % divisor != 0 {
+        return Err(format!("{value} can't be divided by {divisor}").into());
+    }
+    Ok(Number {
+        scaled: scaled / divisor,
+    })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The tables and the tags of the bases from `modifiers` of `mods.json`, `bases` of
+    /// `base_items.json` and `translations` of `stat_descriptions.json`, written as JSON, the
+    /// templates of Exiled Exchange 2 being `templates` (string, template).
+    fn tables(
+        modifiers: &str,
+        bases: &str,
+        translations: &str,
+        templates: &[(&str, &str)],
+    ) -> (serde_json::Value, BaseTags) {
+        let templates = templates
+            .iter()
+            .map(|&(string, template)| (string.to_owned(), template.to_owned()))
+            .collect();
+        let (tables, tags) = reduce(
+            &serde_json::from_str(modifiers).expect("modifiers"),
+            &serde_json::from_str(bases).expect("bases"),
+            &serde_json::from_str::<Vec<_>>(translations).expect("translations"),
+            &templates,
+        )
+        .expect("reduced");
+        (serde_json::to_value(tables).expect("written"), tags)
+    }
+
+    /// A modifier of `mods.json`, rolling where `spawn` says, with `stats`.
+    fn modifier(kind: &str, level: u32, spawn: &str, stats: &str) -> String {
+        format!(
+            r#"{{"domain": "item", "generation_type": "suffix", "is_essence_only": false, "type": "{kind}", "required_level": {level}, "spawn_weights": {spawn}, "stats": {stats}}}"#
+        )
+    }
+
+    const BASES: &str = r#"{
+        "Bow": {"name": "Bow", "release_state": "released", "tags": ["bow", "weapon", "default"]},
+        "Ring": {"name": "Ring", "release_state": "released", "tags": ["ring", "default"]},
+        "Old": {"name": "Old", "release_state": "unreleased", "tags": ["fishing_rod", "default"]}
+    }"#;
+
+    #[test]
+    fn the_tiers_of_a_type_on_the_same_bases_make_one_table_sorted_by_level() {
+        let weapon = r#"[{"tag": "weapon", "weight": 1}, {"tag": "default", "weight": 0}]"#;
+        let ring = r#"[{"tag": "ring", "weight": 1}, {"tag": "default", "weight": 0}]"#;
+        let speed = |min: u32, max: u32| {
+            format!(r#"[{{"id": "attack_speed_+%", "min": {min}, "max": {max}}}]"#)
+        };
+        let modifiers = format!(
+            r#"{{"Speed2": {}, "Speed1": {}, "RingSpeed1": {}}}"#,
+            modifier("Speed", 20, weapon, &speed(8, 10)),
+            modifier("Speed", 1, weapon, &speed(5, 7)),
+            modifier("Speed", 1, ring, &speed(3, 4)),
+        );
+        let translations = r#"[{"ids": ["attack_speed_+%"], "English": [{"string": "{0}% increased Attack Speed", "index_handlers": [[]]}], "hidden": null}]"#;
+
+        let (tables, _) = tables(
+            &modifiers,
+            BASES,
+            translations,
+            &[("#% increased Attack Speed", "#% increased Attack Speed")],
+        );
+
+        assert_eq!(
+            tables,
+            // In the order of their spawn weights.
+            serde_json::json!([
+                {"type": "Speed", "affix": "suffix", "lines": [{"template": "#% increased Attack Speed"}],
+                 "spawn": [["ring", 1], ["default", 0]],
+                 "tiers": [{"level": 1, "ranges": [[[3, 4]]]}]},
+                {"type": "Speed", "affix": "suffix", "lines": [{"template": "#% increased Attack Speed"}],
+                 "spawn": [["weapon", 1], ["default", 0]],
+                 "tiers": [{"level": 1, "ranges": [[[5, 7]]]}, {"level": 20, "ranges": [[[8, 10]]]}]}
+            ])
+        );
+    }
+
+    #[test]
+    fn a_table_rolling_on_no_released_base_is_left_out_with_the_tags_of_no_base() {
+        let modifiers = format!(
+            r#"{{"Fishing": {}, "Ring": {}}}"#,
+            modifier(
+                "Fishing",
+                1,
+                r#"[{"tag": "fishing_rod", "weight": 1}, {"tag": "default", "weight": 0}]"#,
+                r#"[{"id": "fish_quantity_+%", "min": 5, "max": 10}]"#
+            ),
+            modifier(
+                "Life",
+                1,
+                r#"[{"tag": "amulet", "weight": 1}, {"tag": "ring", "weight": 1}, {"tag": "default", "weight": 0}]"#,
+                r#"[{"id": "base_maximum_life", "min": 5, "max": 10}]"#
+            ),
+        );
+        let translations = r#"[
+            {"ids": ["fish_quantity_+%"], "English": [{"string": "{0}% increased Quantity of Fish Caught", "index_handlers": [[]]}], "hidden": null},
+            {"ids": ["base_maximum_life"], "English": [{"string": "{0:+d} to maximum Life", "index_handlers": [[]]}], "hidden": null}
+        ]"#;
+
+        let (tables, tags) = tables(
+            &modifiers,
+            BASES,
+            translations,
+            &[("# to maximum Life", "# to maximum Life")],
+        );
+
+        let types: Vec<_> = tables
+            .as_array()
+            .expect("tables")
+            .iter()
+            .map(|table| (table["type"].clone(), table["spawn"].clone()))
+            .collect();
+        assert_eq!(
+            types,
+            [(
+                serde_json::json!("Life"),
+                serde_json::json!([["ring", 1], ["default", 0]])
+            )]
+        );
+        // The tags of the tables only, of the released bases only.
+        assert_eq!(
+            tags.get("Ring"),
+            Some(&vec!["ring".to_owned(), "default".to_owned()])
+        );
+        assert_eq!(tags.get("Bow"), Some(&vec!["default".to_owned()]));
+        assert_eq!(tags.get("Old"), None);
+    }
+
+    #[test]
+    fn a_name_of_several_bases_with_other_tags_gets_none() {
+        let bases = r#"{
+            "StrHelmet": {"name": "Random Helmet", "release_state": "released", "tags": ["str_armour", "default"]},
+            "IntHelmet": {"name": "Random Helmet", "release_state": "released", "tags": ["int_armour", "default"]},
+            "Cap": {"name": "Cap", "release_state": "released", "tags": ["int_armour", "default"]}
+        }"#;
+        let modifiers = format!(
+            r#"{{"Shield": {}}}"#,
+            modifier(
+                "EnergyShield",
+                1,
+                r#"[{"tag": "int_armour", "weight": 1}, {"tag": "default", "weight": 0}]"#,
+                r#"[{"id": "local_energy_shield", "min": 5, "max": 10}]"#
+            ),
+        );
+        let translations = r#"[{"ids": ["local_energy_shield"], "English": [{"string": "{0:+d} to maximum Energy Shield", "index_handlers": [[]]}], "hidden": null}]"#;
+
+        let (_, tags) = tables(&modifiers, bases, translations, &[]);
+
+        assert_eq!(tags.get("Random Helmet"), Some(&Vec::new()));
+        assert_eq!(
+            tags.get("Cap"),
+            Some(&vec!["int_armour".to_owned(), "default".to_owned()])
+        );
+    }
+
+    /// The lines and the tiers of the one table of a modifier of `stats`, written by
+    /// `translation`, with `templates`.
+    fn one_table(
+        stats: &[&str],
+        translation: &str,
+        templates: &[(&str, &str)],
+    ) -> serde_json::Value {
+        let weapon = r#"[{"tag": "weapon", "weight": 1}, {"tag": "default", "weight": 0}]"#;
+        let modifiers: Vec<String> = stats
+            .iter()
+            .enumerate()
+            .map(|(index, stats)| {
+                format!(
+                    r#""Tier{index}": {}"#,
+                    modifier(
+                        "Kind",
+                        10 * u32::try_from(index).expect("small"),
+                        weapon,
+                        stats
+                    )
+                )
+            })
+            .collect();
+        let (tables, _) = tables(
+            &format!("{{{}}}", modifiers.join(", ")),
+            BASES,
+            &format!("[{translation}]"),
+            templates,
+        );
+        serde_json::json!([tables[0]["lines"].clone(), tables[0]["tiers"].clone()])
+    }
+
+    #[test]
+    fn a_line_written_without_number_takes_its_values_from_the_string_that_writes_them() {
+        let bolts = one_table(
+            &[
+                r#"[{"id": "base_number_of_crossbow_bolts", "min": 1, "max": 1}]"#,
+                r#"[{"id": "base_number_of_crossbow_bolts", "min": 2, "max": 2}]"#,
+            ],
+            r#"{"ids": ["base_number_of_crossbow_bolts", "quality_display"], "English": [
+                {"string": "Loads an additional bolt", "index_handlers": [[], []]},
+                {"string": "Loads {0} additional bolts", "index_handlers": [[], []]}
+            ], "hidden": null}"#,
+            &[
+                ("Loads an additional bolt", "Loads an additional bolt"),
+                ("Loads # additional bolts", "Loads an additional bolt"),
+            ],
+        );
+
+        assert_eq!(
+            bolts,
+            serde_json::json!([
+                [{"template": "Loads an additional bolt"}],
+                [{"level": 0, "ranges": [[[1, 1]]]}, {"level": 10, "ranges": [[[2, 2]]]}]
+            ])
+        );
+    }
+
+    #[test]
+    fn a_line_shown_scaled_keeps_its_divisor_for_the_value_of_its_string_without_number() {
+        let rage = one_table(
+            &[r#"[{"id": "rage_loss_delay_ms_+", "min": 1000, "max": 2000}]"#],
+            r#"{"ids": ["rage_loss_delay_ms_+"], "English": [
+                {"string": "Inherent [Rage|Rage] loss starts 1 second later", "index_handlers": [["milliseconds_to_seconds"]]},
+                {"string": "Inherent [Rage|Rage] loss starts {0} seconds later", "index_handlers": [["milliseconds_to_seconds"]]}
+            ], "hidden": null}"#,
+            &[(
+                "Inherent Rage loss starts 1 second later",
+                "Inherent Rage loss starts 1 second later",
+            )],
+        );
+
+        assert_eq!(
+            rage,
+            serde_json::json!([
+                [{"template": "Inherent Rage loss starts 1 second later", "divisor": 1000}],
+                [{"level": 0, "ranges": [[[1, 2]]]}]
+            ])
+        );
+    }
+
+    #[test]
+    fn a_line_without_number_in_every_string_has_the_values_of_its_stat() {
+        let radius = one_table(
+            &[r#"[{"id": "local_jewel_display_radius_change", "min": 1, "max": 1}]"#],
+            r#"{"ids": ["local_jewel_display_radius_change"], "English": [
+                {"string": "Upgrades Radius to Medium", "index_handlers": [[]]},
+                {"string": "Upgrades Radius to Large", "index_handlers": [[]]}
+            ], "hidden": null}"#,
+            // Found by a string of Exiled Exchange 2, not by its template.
+            &[("Upgrades Radius to Medium", "Upgrades Radius to #")],
+        );
+
+        assert_eq!(
+            radius,
+            serde_json::json!([
+                [{"template": "Upgrades Radius to #"}],
+                [{"level": 0, "ranges": [[[1, 1]]]}]
+            ])
+        );
+    }
+
+    #[test]
+    fn a_number_of_a_stat_the_modifier_doesnt_have_is_zero() {
+        let added = one_table(
+            &[r#"[{"id": "local_maximum_added_fire_damage", "min": 10, "max": 15}]"#],
+            r#"{"ids": ["local_minimum_added_fire_damage", "local_maximum_added_fire_damage"], "English": [
+                {"string": "Adds {0} to {1} [Fire|Fire] Damage", "index_handlers": [[], []]}
+            ], "hidden": null}"#,
+            &[],
+        );
+
+        assert_eq!(
+            added,
+            serde_json::json!([
+                [{"template": "Adds # to # Fire Damage"}],
+                [{"level": 0, "ranges": [[[0, 0], [10, 15]]]}]
+            ])
+        );
+    }
 
     #[test]
     fn a_string_of_the_game_becomes_the_template_of_exiled_exchange_2() {
@@ -365,6 +723,9 @@ mod tests {
             "Leech #% of Physical Attack Damage as Life"
         );
         assert_eq!(placeholders("Adds {1} to {0} Damage, {} more"), [1, 0, 2]);
+        // A brace or a bracket not closed is written as it is.
+        assert_eq!(template("abc {0"), "abc {0");
+        assert_eq!(template("abc [Fire"), "abc [Fire");
     }
 
     #[test]

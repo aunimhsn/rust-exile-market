@@ -21,26 +21,40 @@ struct Table {
     #[serde(rename = "type")]
     kind: String,
     affix: TableAffix,
-    /// The English template of each line, as Exiled Exchange 2 writes it.
-    lines: Vec<String>,
+    lines: Vec<TableLine>,
     /// Each tag and its weight: the first tag of the list a base has tells whether the
     /// modifier rolls on it (above zero) or not.
     spawn: Vec<(String, u32)>,
     tiers: Vec<TableTier>,
 }
 
-#[derive(Deserialize, Clone, Copy, PartialEq, Eq)]
+#[derive(Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 enum TableAffix {
     Prefix,
     Suffix,
 }
 
+#[derive(Deserialize, PartialEq)]
+struct TableLine {
+    /// The English template of the line, as Exiled Exchange 2 writes it.
+    template: String,
+    /// What the value of the stat is divided by to be shown: the value of a line written
+    /// without number is that of the stat (1000 for `Inherent Rage loss starts 1 second
+    /// later`, shown in seconds).
+    #[serde(default = "one")]
+    divisor: f64,
+}
+
+fn one() -> f64 {
+    1.0
+}
+
 #[derive(Deserialize)]
 struct TableTier {
     level: u32,
-    /// The range of each `#` of the lines, in their order, with the sign of the stat.
-    ranges: Vec<[f64; 2]>,
+    /// For each line, the range of each of its values, with the sign of the stat.
+    ranges: Vec<Vec<[f64; 2]>>,
 }
 
 impl Table {
@@ -50,6 +64,11 @@ impl Table {
             .iter()
             .find(|(tag, _)| tags.contains(tag))
             .is_some_and(|&(_, weight)| weight > 0)
+    }
+
+    /// Whether the table holds tiers of the same modifier as `other`, maybe on other bases.
+    fn same_modifier(&self, other: &Self) -> bool {
+        self.kind == other.kind && self.affix == other.affix && self.lines == other.lines
     }
 }
 
@@ -93,6 +112,10 @@ impl ModifierTiers {
 /// without stat, a base without tags; or whose values (and ranges, with the advanced copy) are
 /// in no tier: a modifier of the lords of the Abyss is desecrated, like some ordinary ones,
 /// and rolls its own range.
+///
+/// When several tiers hold the copied values (the plain copy gives no range), the best one is
+/// taken; when several modifiers hold them (a prefix and a suffix of rarity on a ring, in the
+/// plain copy), the first of the file.
 #[must_use]
 pub fn modifier_tiers(
     language: Language,
@@ -109,58 +132,41 @@ pub fn modifier_tiers(
     };
     let tags = bases::tags(language, base_type)?;
     let copied = Copied::of(modifier, matches)?;
+    find(&TABLES, affixes, tags, &copied)
+}
 
+/// The tiers of `copied` among `tables`, on a base with `tags`: those of the modifier, among
+/// `affixes`, that holds it best.
+fn find(
+    tables: &[Table],
+    affixes: &[TableAffix],
+    tags: &[String],
+    copied: &Copied<'_>,
+) -> Option<ModifierTiers> {
     let mut best: Option<(Fit, ModifierTiers)> = None;
-    let mut seen: Vec<(&str, TableAffix)> = Vec::new();
-    for table in TABLES.iter() {
-        let key = (table.kind.as_str(), table.affix);
-        if !affixes.contains(&table.affix) || seen.contains(&key) {
+    for (index, table) in tables.iter().enumerate() {
+        if !affixes.contains(&table.affix) {
             continue;
         }
         let Some(order) = copied.order(&table.lines) else {
             continue;
         };
-        seen.push(key);
-        // Every table of the type, prefix or suffix, that rolls on the base: a type can roll
-        // other ranges on other bases (the added damage of a two-handed weapon).
-        let mut tiers: Vec<&TableTier> = TABLES
-            .iter()
-            .filter(|other| {
-                (other.kind.as_str(), other.affix) == key
-                    && other.lines == table.lines
-                    && other.rolls_on(tags)
-            })
-            .flat_map(|other| &other.tiers)
-            .collect();
-        tiers.sort_by_key(|tier| tier.level);
-        let tiers: Option<Vec<Tier>> = tiers
-            .iter()
-            .rev()
-            .zip(1..)
-            .map(|(tier, number)| {
-                Some(Tier {
-                    number,
-                    level: tier.level,
-                    ranges: order
-                        .iter()
-                        .map(|&index| {
-                            let [min, max] = *tier.ranges.get(index)?;
-                            Some(Range {
-                                min: min.min(max),
-                                max: min.max(max),
-                            })
-                        })
-                        .collect::<Option<_>>()?,
-                })
-            })
-            .collect();
-        let Some(tiers) = tiers else {
+        // Each modifier once, at its first table.
+        let first = tables
+            .get(..index)
+            .is_none_or(|before| !before.iter().any(|other| other.same_modifier(table)));
+        if !first {
+            continue;
+        }
+        let Some(tiers) = tiers_on_base(tables, table, tags, &order, copied) else {
             continue;
         };
+        let values = copied.values(&table.lines, &order);
+        // The best tier first, on a tie.
         let found = tiers
             .iter()
             .enumerate()
-            .filter_map(|(index, tier)| Some((copied.fit(tier)?, index)))
+            .filter_map(|(index, tier)| Some((copied.fit(&values, tier)?, index)))
             .min_by_key(|&(fit, _)| fit);
         if let Some((fit, found)) = found
             && best.as_ref().is_none_or(|(best, _)| fit < *best)
@@ -169,6 +175,53 @@ pub fn modifier_tiers(
         }
     }
     best.map(|(_, tiers)| tiers)
+}
+
+/// Every tier of the modifier of `table` that rolls on a base with `tags`, the best first, the
+/// ranges of each in the order of the copied lines (`order`, [`Copied::order`]): a type can
+/// roll other ranges on other bases (the added damage of a two-handed weapon). None when a
+/// line of a tier hasn't as many values as the copied one.
+fn tiers_on_base(
+    tables: &[Table],
+    table: &Table,
+    tags: &[String],
+    order: &[usize],
+    copied: &Copied<'_>,
+) -> Option<Vec<Tier>> {
+    let mut tiers: Vec<&TableTier> = tables
+        .iter()
+        .filter(|other| other.same_modifier(table) && other.rolls_on(tags))
+        .flat_map(|other| &other.tiers)
+        .collect();
+    tiers.sort_by_key(|tier| tier.level);
+    tiers
+        .iter()
+        .rev()
+        .zip(1..)
+        .map(|(tier, number)| {
+            Some(Tier {
+                number,
+                level: tier.level,
+                ranges: ranges_in_order(tier, order, copied)?,
+            })
+        })
+        .collect()
+}
+
+/// The ranges of `tier` in the order of the copied lines.
+fn ranges_in_order(tier: &TableTier, order: &[usize], copied: &Copied<'_>) -> Option<Vec<Range>> {
+    let mut ranges = Vec::new();
+    for (line, &index) in copied.lines.iter().zip(order) {
+        let line_ranges = tier.ranges.get(index)?;
+        if line_ranges.len() != line.count() {
+            return None;
+        }
+        ranges.extend(line_ranges.iter().map(|&[min, max]| Range {
+            min: min.min(max),
+            max: min.max(max),
+        }));
+    }
+    Some(ranges)
 }
 
 /// How well a tier holds the copied modifier, the best first.
@@ -180,20 +233,39 @@ enum Fit {
     Rounded,
 }
 
-/// The values of a copied modifier, and the ranges of its tier when the advanced copy gave
-/// them, with the English template of each line.
-struct Copied<'a> {
-    /// The English template of each stat of the modifier, and the index of its first value.
-    stats: Vec<(&'a str, usize)>,
+/// A copied line of a modifier, the lines of a stat written on several lines counting as one.
+struct CopiedLine<'a> {
+    /// The English template of its stat.
+    template: &'a str,
+    /// The values of its `#`, with the sign of the stat.
     values: Vec<f64>,
-    /// The ranges the advanced copy gave, as the game writes them: without their sign.
+    /// The value its string gives, for a line without `#` (`Loads an additional bolt` is 1),
+    /// as the stat stores it.
+    written: Option<f64>,
+}
+
+impl CopiedLine<'_> {
+    /// How many values the line has.
+    fn count(&self) -> usize {
+        if self.values.is_empty() {
+            usize::from(self.written.is_some())
+        } else {
+            self.values.len()
+        }
+    }
+}
+
+/// The lines of a copied modifier, and the ranges of its tier when the advanced copy gave them.
+struct Copied<'a> {
+    lines: Vec<CopiedLine<'a>>,
+    /// The ranges the advanced copy gave for each value of the lines, in their order, as the
+    /// game writes them: without their sign.
     ranges: Option<Vec<Range>>,
 }
 
 impl<'a> Copied<'a> {
     fn of(modifier: &Modifier, matches: &[LineMatch<'a>]) -> Option<Self> {
-        let mut stats = Vec::new();
-        let mut values = Vec::new();
+        let mut lines = Vec::new();
         let mut ranges = Some(Vec::new());
         for line_match in matches {
             let stat = line_match.stat.as_ref()?;
@@ -201,8 +273,11 @@ impl<'a> Copied<'a> {
             if stat.source != StatSource::GameData {
                 return None;
             }
-            stats.push((stat.stat.reference.as_str(), values.len()));
-            values.extend(&stat.values);
+            lines.push(CopiedLine {
+                template: stat.stat.reference.as_str(),
+                values: stat.values.clone(),
+                written: stat.matcher_value.filter(|_| stat.values.is_empty()),
+            });
             let rolls = modifier
                 .lines
                 .get(line_match.lines.clone())?
@@ -218,53 +293,53 @@ impl<'a> Copied<'a> {
                 }
             }
         }
-        let ranges = ranges.filter(|ranges| ranges.len() == values.len());
-        Some(Self {
-            stats,
-            values,
-            ranges,
-        })
+        // A line written without number has no range in the advanced copy.
+        let count: usize = lines.iter().map(CopiedLine::count).sum();
+        let ranges = ranges.filter(|ranges| ranges.len() == count);
+        Some(Self { lines, ranges })
     }
 
-    /// For each value of the copied lines, the index of its range in a tier of the table whose
-    /// lines are `lines`: its lines in another order are the same modifier. None when the
-    /// lines differ.
-    fn order(&self, lines: &[String]) -> Option<Vec<usize>> {
-        if lines.len() != self.stats.len() {
+    /// For each copied line, the index of the line of the same template in `lines`, the lines
+    /// of a table: its lines in another order are the same modifier. None when the lines
+    /// differ.
+    fn order(&self, lines: &[TableLine]) -> Option<Vec<usize>> {
+        if lines.len() != self.lines.len() {
             return None;
         }
-        let mut order = vec![0; self.values.len()];
         let mut used = vec![false; lines.len()];
-        let mut first_in_table = 0;
-        let mut starts = Vec::new();
-        for line in lines {
-            starts.push(first_in_table);
-            first_in_table += line.matches('#').count();
-        }
-        if first_in_table != self.values.len() {
-            return None;
-        }
-        for (index, &(reference, first)) in self.stats.iter().enumerate() {
-            let line = (0..lines.len()).find(|&line| {
-                !used.get(line).copied().unwrap_or(true)
-                    && lines.get(line).is_some_and(|text| text == reference)
-            })?;
-            *used.get_mut(line)? = true;
-            let next = self
-                .stats
-                .get(index + 1)
-                .map_or(self.values.len(), |&(_, next)| next);
-            let start = *starts.get(line)?;
-            for (offset, slot) in order.get_mut(first..next)?.iter_mut().enumerate() {
-                *slot = start + offset;
+        self.lines
+            .iter()
+            .map(|copied| {
+                let index = lines
+                    .iter()
+                    .zip(&used)
+                    .position(|(line, &used)| !used && line.template == copied.template)?;
+                *used.get_mut(index)? = true;
+                Some(index)
+            })
+            .collect()
+    }
+
+    /// The values of the copied lines, in their order, as the table of `lines` shows them: the
+    /// value a line without number gives, divided as its table line says.
+    fn values(&self, lines: &[TableLine], order: &[usize]) -> Vec<f64> {
+        let mut values = Vec::new();
+        for (copied, &index) in self.lines.iter().zip(order) {
+            values.extend(&copied.values);
+            if let Some(written) = copied.written {
+                let divisor = lines.get(index).map_or(1.0, |line| line.divisor);
+                values.push(written / divisor);
             }
         }
-        Some(order)
+        values
     }
 
-    /// How well `tier` holds the copied modifier; none when it doesn't hold it, or its ranges
+    /// How well `tier` holds the copied `values`; none when it doesn't hold them, or its ranges
     /// aren't those the advanced copy gave.
-    fn fit(&self, tier: &Tier) -> Option<Fit> {
+    fn fit(&self, values: &[f64], tier: &Tier) -> Option<Fit> {
+        if values.len() != tier.ranges.len() {
+            return None;
+        }
         if let Some(ranges) = &self.ranges {
             let same = ranges.iter().zip(&tier.ranges).all(|(copied, range)| {
                 range.magnitude().is_some_and(|range| {
@@ -277,7 +352,7 @@ impl<'a> Copied<'a> {
             }
         }
         let within = |margin: f64| {
-            self.values
+            values
                 .iter()
                 .zip(&tier.ranges)
                 .all(|(&value, range)| range.min - margin <= value && value <= range.max + margin)
@@ -312,13 +387,17 @@ fn read(text: &str) -> Vec<Table> {
 mod tests {
     use super::*;
     use crate::game_data::modifier_stats;
-    use crate::item::{CopiedItem, Item};
+    use crate::item::{CopiedItem, Item, ModifierOrigin, StatLine};
 
     #[test]
     fn every_table_of_the_embedded_file_is_read() {
         let text = include_str!("../../assets/game-data/modifiers.ndjson");
 
         assert_eq!(TABLES.len(), text.lines().count());
+    }
+
+    fn range(min: f64, max: f64) -> Range {
+        Range { min, max }
     }
 
     /// A tier number and the ranges of its values, as the game writes them.
@@ -389,8 +468,11 @@ mod tests {
                 // The crossbow was copied before a patch added a tier above its leech, `of
                 // the Desperate` (8–8.9), the S1 of the offers checked on the trade site on
                 // 2026-10-27.
-                let leech = [Range { min: 7.0, max: 7.9 }];
-                let number = if ranges == leech { 2 } else { number };
+                let number = if ranges == [range(7.0, 7.9)] {
+                    2
+                } else {
+                    number
+                };
                 if let Some(tier) = tier {
                     assert_eq!(tier, (number, ranges));
                     found += 1;
@@ -404,7 +486,6 @@ mod tests {
         // don't have isn't: the lightning damage of the mace, copied before a patch changed
         // its ranges, and the two modifiers of Amanamu, a lord of the Abyss, desecrated with
         // ranges of their own.
-        let range = |min, max| Range { min, max };
         assert_eq!(
             missing,
             [
@@ -415,36 +496,114 @@ mod tests {
         );
     }
 
+    /// A modifier of `affix` with `lines`, copied without the advanced copy: the stats read the
+    /// numbers of the text, and the ranges of the advanced copy are in the rolls.
+    fn modifier(affix: Option<Affix>, lines: &[&str]) -> Modifier {
+        Modifier {
+            kind: ModifierKind::Explicit(affix),
+            origin: None,
+            name: None,
+            tier: None,
+            tags: Vec::new(),
+            lines: lines
+                .iter()
+                .map(|text| StatLine {
+                    text: (*text).to_owned(),
+                    rolls: Vec::new(),
+                })
+                .collect(),
+        }
+    }
+
+    /// The tiers of `modifier` on `base_type`, in English.
+    fn tiers(base_type: &str, modifier: &Modifier) -> Option<ModifierTiers> {
+        let matches = modifier_stats(Language::English, modifier, None);
+        modifier_tiers(Language::English, base_type, modifier, &matches)
+    }
+
     #[test]
     fn a_tier_is_numbered_among_the_tiers_of_the_base() {
-        let text = include_str!("../item/test-items/en-rare-crossbow-all-modifiers.txt");
-        let item = Item::parse(&CopiedItem::from_text(text).expect("an item")).expect("read");
-        let lightning = item
-            .modifiers()
-            .iter()
-            .find(|modifier| modifier.name.as_deref() == Some("Electrocuting"))
-            .expect("the lightning damage");
-        let matches = modifier_stats(item.language(), lightning, None);
+        let lightning = modifier(Some(Affix::Prefix), &["Adds 10 to 273 Lightning Damage"]);
 
-        let tiers = modifier_tiers(item.language(), item.base_type(), lightning, &matches)
-            .expect("its tiers");
+        let tiers = tiers("Gemini Crossbow", &lightning).expect("its tiers");
 
         // The tiers of a two-handed weapon, not those of a one-handed one.
         assert_eq!(tiers.tiers.len(), 10);
         assert_eq!(
             tiers.tiers.first().map(|tier| tier.ranges.clone()),
-            Some(vec![
-                Range {
-                    min: 1.0,
-                    max: 19.0
-                },
-                Range {
-                    min: 310.0,
-                    max: 358.0
-                }
-            ])
+            Some(vec![range(1.0, 19.0), range(310.0, 358.0)])
         );
         assert_eq!(tiers.tiers.last().map(|tier| tier.level), Some(1));
         assert_eq!(tiers.tier().map(|tier| tier.number), Some(2));
+    }
+
+    #[test]
+    fn a_line_written_without_number_finds_its_tier_by_the_value_of_its_string() {
+        let number_of = |line: &str| {
+            let bolts = modifier(Some(Affix::Suffix), &[line]);
+            tiers("Gemini Crossbow", &bolts).and_then(|tiers| Some(tiers.tier()?.number))
+        };
+
+        assert_eq!(number_of("Loads an additional bolt"), Some(2));
+        assert_eq!(number_of("Loads 2 additional bolts"), Some(1));
+        assert_eq!(number_of("Loads 3 additional bolts"), None);
+    }
+
+    #[test]
+    fn the_lines_of_a_hybrid_in_another_order_are_the_same_modifier() {
+        let champion = modifier(
+            Some(Affix::Prefix),
+            &["+100 to Accuracy Rating", "50% increased Physical Damage"],
+        );
+
+        let tiers = tiers("Gemini Crossbow", &champion).expect("its tiers");
+
+        let tier = tiers.tier().expect("its tier");
+        assert_eq!(tier.number, 4);
+        // In the order of the copied lines.
+        assert_eq!(tier.ranges, [range(98.0, 123.0), range(45.0, 54.0)]);
+    }
+
+    #[test]
+    fn a_modifier_outside_the_prefixes_and_suffixes_has_no_tiers() {
+        let mut implicit = modifier(None, &["Loads an additional bolt"]);
+        implicit.kind = ModifierKind::Implicit;
+        let mut desecrated = modifier(Some(Affix::Prefix), &["Adds 10 to 273 Lightning Damage"]);
+        desecrated.origin = Some(ModifierOrigin::Desecrated);
+
+        assert_eq!(tiers("Gemini Crossbow", &implicit), None);
+        // A base the data doesn't know.
+        assert_eq!(tiers("Unknown Crossbow", &desecrated), None);
+        // An ordinary modifier desecrated is in the tables.
+        assert!(tiers("Gemini Crossbow", &desecrated).is_some());
+    }
+
+    #[test]
+    fn the_value_of_a_line_without_number_is_divided_as_its_table_shows_it() {
+        let tables = read(concat!(
+            r#"{"type": "Rage", "affix": "suffix", "lines": [{"template": "Inherent Rage loss starts 1 second later", "divisor": 1000}], "#,
+            r#""spawn": [["weapon", 1]], "tiers": [{"level": 1, "ranges": [[[1, 1]]]}, {"level": 50, "ranges": [[[2, 3]]]}]}"#
+        ));
+        let copied = |values: Vec<f64>, written| Copied {
+            lines: vec![CopiedLine {
+                template: "Inherent Rage loss starts 1 second later",
+                values,
+                written,
+            }],
+            ranges: None,
+        };
+        let number = |copied| {
+            find(
+                &tables,
+                &[TableAffix::Suffix],
+                &["weapon".to_owned()],
+                &copied,
+            )
+            .and_then(|tiers| Some(tiers.tier()?.number))
+        };
+
+        // `Inherent Rage loss starts 1 second later` gives the 1000 milliseconds of the stat.
+        assert_eq!(number(copied(Vec::new(), Some(1000.0))), Some(2));
+        assert_eq!(number(copied(vec![2.5], None)), Some(1));
     }
 }

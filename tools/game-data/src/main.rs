@@ -3,8 +3,8 @@
 //! `docs/game-data.md`). Run it again after each patch of the game:
 //!
 //! - `cargo run -p game-data` reads the latest commit of each;
-//! - `cargo run -p game-data -- <commit of Exiled Exchange 2> [<commit of RePoE>]` reads given
-//!   ones.
+//! - `cargo run -p game-data -- <commit of Exiled Exchange 2> [<commit of the data of RePoE>
+//!   [<commit of the code of RePoE>]]` reads given ones, the code of RePoE for its license.
 //!
 //! The files it writes have one stat, one base or one modifier per line, so that the changes
 //! of a patch read well in a diff.
@@ -208,6 +208,7 @@ fn main() -> Result<()> {
     let mut arguments = std::env::args().skip(1);
     let reference = arguments.next().unwrap_or_else(|| "master".to_owned());
     let repoe_reference = arguments.next().unwrap_or_else(|| "master".to_owned());
+    let repoe_code_reference = arguments.next().unwrap_or_else(|| "master".to_owned());
     let agent = ureq::Agent::new_with_defaults();
     let commit = latest_commit(&agent, REPOSITORY, &reference)?;
     println!("Exiled Exchange 2, commit {}", commit.sha);
@@ -239,23 +240,11 @@ fn main() -> Result<()> {
             reduce(&source).map_err(|error| format!("{language}: {error}"))?,
         ));
     }
-    let references: BTreeSet<String> = sources
+    let english = sources
         .iter()
-        .filter(|(language, _)| *language == "en")
-        .flat_map(|(_, stats)| stats.iter().map(|stat| stat.reference.clone()))
-        .collect();
-    let repoe = |path: &str| {
-        get(
-            &agent,
-            &raw_url(REPOE, &repoe_commit.sha, &format!("data/{path}")),
-        )
-    };
-    let (tables, base_tags) = modifiers::reduce(
-        &serde_json::from_str(&repoe("mods.json")?)?,
-        &serde_json::from_str(&repoe("base_items.json")?)?,
-        &serde_json::from_str::<Vec<_>>(&repoe("stat_translations/stat_descriptions.json")?)?,
-        &references,
-    )?;
+        .find(|(language, _)| *language == "en")
+        .map_or(&[][..], |(_, stats)| stats.as_slice());
+    let (tables, base_tags) = modifier_tables(&agent, &repoe_commit.sha, &templates(english))?;
     println!("{} modifier tables", tables.len());
     write_lines(&output.join("modifiers.ndjson"), &tables)?;
 
@@ -288,7 +277,12 @@ fn main() -> Result<()> {
     }
 
     let license = get(&agent, &raw_url(REPOSITORY, &commit.sha, "LICENSE"))?;
-    let repoe_license = get(&agent, &raw_url(REPOE_CODE, "master", "LICENSE.md"))?;
+    let repoe_code_commit = latest_commit(&agent, REPOE_CODE, &repoe_code_reference)?;
+    println!("RePoE code, commit {}", repoe_code_commit.sha);
+    let repoe_license = get(
+        &agent,
+        &raw_url(REPOE_CODE, &repoe_code_commit.sha, "LICENSE.md"),
+    )?;
     fs::write(
         output.join("NOTICE.md"),
         notice(
@@ -303,10 +297,44 @@ fn main() -> Result<()> {
                 license: &repoe_license,
             },
             repoe_version.trim(),
+            &repoe_code_commit.sha,
         ),
     )?;
     println!("Written to {}", output.canonicalize()?.display());
     Ok(())
+}
+
+/// The English templates of `stats`, the English stats of Exiled Exchange 2, by each of their
+/// strings.
+fn templates(stats: &[Stat]) -> modifiers::Templates {
+    let mut templates = modifiers::Templates::new();
+    for stat in stats {
+        templates.insert(stat.reference.clone(), stat.reference.clone());
+    }
+    // A template is its own first: a string of another stat can be written the same.
+    for stat in stats {
+        for matcher in &stat.matchers {
+            templates
+                .entry(matcher.string.clone())
+                .or_insert_with(|| stat.reference.clone());
+        }
+    }
+    templates
+}
+
+/// The modifier tables of the commit `commit` of the data of RePoE, and the tags of the bases.
+fn modifier_tables(
+    agent: &ureq::Agent,
+    commit: &str,
+    templates: &modifiers::Templates,
+) -> Result<(Vec<modifiers::Modifier>, modifiers::BaseTags)> {
+    let repoe = |path: &str| get(agent, &raw_url(REPOE, commit, &format!("data/{path}")));
+    modifiers::reduce(
+        &serde_json::from_str(&repoe("mods.json")?)?,
+        &serde_json::from_str(&repoe("base_items.json")?)?,
+        &serde_json::from_str::<Vec<_>>(&repoe("stat_translations/stat_descriptions.json")?)?,
+        templates,
+    )
 }
 
 /// `assets/game-data/` of the application.
@@ -411,15 +439,15 @@ fn reduce_bases(source: &str, tags: &modifiers::BaseTags) -> Result<Vec<Base>> {
         let (Some(name), Some(craftable)) = (item.name, item.craftable) else {
             continue;
         };
-        if let Some(english) = item.ref_name {
-            english_names.insert(name.clone(), english);
-        }
         if item.namespace != "ITEM" || LEFT_OUT_CATEGORIES.contains(&craftable.category.as_str()) {
             continue;
         }
         // A new category of the game is decided before it is embedded.
         if !CATEGORIES.contains(&craftable.category.as_str()) {
             return Err(format!("unknown category {} of {name}", craftable.category).into());
+        }
+        if let Some(english) = item.ref_name {
+            english_names.insert(name.clone(), english);
         }
         *categories
             .entry(name)
@@ -492,7 +520,14 @@ struct Source<'a> {
     license: &'a str,
 }
 
-fn notice(exiled_exchange: &Source, repoe: &Source, repoe_version: &str) -> String {
+/// The notice of the generated files; the license of `repoe` is that of its code, at the commit
+/// `repoe_code`.
+fn notice(
+    exiled_exchange: &Source,
+    repoe: &Source,
+    repoe_version: &str,
+    repoe_code: &str,
+) -> String {
     format!(
         "# Game data notice
 
@@ -508,7 +543,7 @@ Their texts, ids and values come from the files of Path of Exile 2 and belong to
 {}
 ```
 
-The code of the RePoE fork ([{REPOE_CODE}](https://github.com/{REPOE_CODE})), which exports these data, is under the MIT license, whose notice follows:
+The code of the RePoE fork ([{REPOE_CODE}](https://github.com/{REPOE_CODE}), commit `{repoe_code}`), which exports these data, is under the MIT license, whose notice follows:
 
 ```text
 {}

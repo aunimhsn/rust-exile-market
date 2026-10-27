@@ -32,7 +32,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-The code of the RePoE fork ([repoe-fork/repoe](https://github.com/repoe-fork/repoe)), which exports these data, is under the MIT license, whose notice follows:
+The code of the RePoE fork ([repoe-fork/repoe](https://github.com/repoe-fork/repoe), commit `aa9fa7c394b18a7a89f913f86703112b3f9d20f1`), which exports these data, is under the MIT license, whose notice follows:
 
 ```text
 MIT License
