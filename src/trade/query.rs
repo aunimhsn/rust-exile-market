@@ -55,6 +55,19 @@ pub struct SearchFilters {
     pub stats: Vec<StatFilter>,
 }
 
+impl SearchFilters {
+    /// Something other than the base type narrows the search: a stat, or a property with a
+    /// limit.
+    #[must_use]
+    pub fn narrows(&self) -> bool {
+        !self.stats.is_empty()
+            || self
+                .properties
+                .iter()
+                .any(|property| property.minimum.is_some() || property.maximum.is_some())
+    }
+}
+
 /// A property of the offers, with its minimum and its maximum.
 #[derive(Debug, Clone, PartialEq)]
 pub struct PropertyFilter {

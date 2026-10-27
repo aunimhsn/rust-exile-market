@@ -276,12 +276,10 @@ impl LineStats {
     #[must_use]
     pub fn search_filters(&self, filters: &[(FilterKey, Filter)]) -> SearchFilters {
         let checked = || filters.iter().filter(|(_, filter)| filter.checked);
-        let stats: Vec<(StatKey, Filter)> = checked()
-            .filter_map(|(key, filter)| match key {
-                FilterKey::Stat(key) => Some((*key, filter.clone())),
-                FilterKey::BaseType | FilterKey::Property(_) => None,
-            })
-            .collect();
+        let stats = checked().filter_map(|(key, filter)| match key {
+            FilterKey::Stat(key) => Some((*key, filter)),
+            FilterKey::BaseType | FilterKey::Property(_) => None,
+        });
         SearchFilters {
             any_base: filters
                 .iter()
@@ -299,16 +297,19 @@ impl LineStats {
                     FilterKey::Stat(_) | FilterKey::BaseType => None,
                 })
                 .collect(),
-            stats: self.stat_filters(&stats),
+            stats: self.stat_filters(stats),
         }
     }
 
     /// The stat filters of the search, from the filters the player `checked`: the lines the
     /// trade site can't search are left out.
-    fn stat_filters(&self, checked: &[(StatKey, Filter)]) -> Vec<StatFilter> {
+    fn stat_filters<'f>(
+        &self,
+        checked: impl IntoIterator<Item = (StatKey, &'f Filter)>,
+    ) -> Vec<StatFilter> {
         checked
-            .iter()
-            .filter_map(|(key, filter)| match self.get(*key)? {
+            .into_iter()
+            .filter_map(|(key, filter)| match self.get(key)? {
                 LineStat::Searched(stat) => Some(stat.filter(filter)),
                 LineStat::Continued | LineStat::Unsearchable => None,
             })
@@ -342,6 +343,11 @@ mod tests {
         StatKey { modifier, line }
     }
 
+    /// The filters `filters`, as `LineStats::stat_filters` takes them.
+    fn refs(filters: &[(StatKey, Filter)]) -> impl Iterator<Item = (StatKey, &Filter)> {
+        filters.iter().map(|(key, filter)| (*key, filter))
+    }
+
     fn filter(minimum: &str, maximum: &str) -> Filter {
         Filter {
             checked: true,
@@ -354,7 +360,8 @@ mod tests {
     /// The stat filter of the first line of `lines`, with the limits `minimum` and `maximum`.
     fn searched(lines: &str, minimum: &str, maximum: &str) -> StatFilter {
         let item = unique(lines);
-        let filters = line_stats(&item).stat_filters(&[(key(0, 0), filter(minimum, maximum))]);
+        let filters =
+            line_stats(&item).stat_filters(refs(&[(key(0, 0), filter(minimum, maximum))]));
         filters.into_iter().next().expect("a stat filter")
     }
 
@@ -423,7 +430,7 @@ mod tests {
         let stats = line_stats(&item);
 
         assert_eq!(
-            stats.stat_filters(&[(key(0, 0), filter("37.5", ""))]),
+            stats.stat_filters(refs(&[(key(0, 0), filter("37.5", ""))])),
             [stat("explicit.stat_1940865751", Some(37.5), None)]
         );
     }
@@ -455,7 +462,10 @@ mod tests {
         let stats = LineStats::new(item.language(), item.modifiers(), Some(&trade));
 
         assert_eq!(
-            stats.stat_filters(&[(key(0, 0), filter("", "20")), (key(1, 0), filter("10", "")),]),
+            stats.stat_filters(refs(&[
+                (key(0, 0), filter("", "20")),
+                (key(1, 0), filter("10", "")),
+            ])),
             [
                 // Its value is written as its template: 20, not -20.
                 stat("explicit.stat_1000000001", None, Some(20.0)),
@@ -495,7 +505,7 @@ mod tests {
         });
 
         assert_eq!(
-            line_stats(&item).stat_filters(&[(key(0, 0), life)]),
+            line_stats(&item).stat_filters(refs(&[(key(0, 0), life)])),
             [stat("explicit.stat_3299347043", Some(40.0), Some(60.0))]
         );
     }
@@ -512,8 +522,10 @@ mod tests {
         assert_eq!(stats.get(key(0, 1)), Some(&LineStat::Continued));
         assert_eq!(stats.numbers(key(0, 0)), Some(&[0][..]));
         // The field holds the 20 only, not the 3 its string writes.
-        let searched =
-            stats.stat_filters(&[(key(0, 0), filter("15", "25")), (key(0, 1), filter("", ""))]);
+        let searched = stats.stat_filters(refs(&[
+            (key(0, 0), filter("15", "25")),
+            (key(0, 1), filter("", "")),
+        ]));
         assert_eq!(searched.len(), 1, "{searched:?}");
         assert_eq!(searched[0].minimum, Some(15.0));
         assert_eq!(searched[0].maximum, Some(25.0));
@@ -530,7 +542,7 @@ mod tests {
 
         assert_eq!(stats.get(key(0, 0)), Some(&LineStat::Continued));
         assert_eq!(
-            stats.stat_filters(&[(key(0, 1), filter("", "5"))]),
+            stats.stat_filters(refs(&[(key(0, 1), filter("", "5"))])),
             [stat("explicit.stat_1777740627", None, Some(5.0))]
         );
     }
@@ -562,7 +574,7 @@ mod tests {
         // Found nowhere: all its numbers count.
         assert_eq!(stats.numbers(key(1, 0)), None);
         assert_eq!(
-            stats.stat_filters(&[(key(1, 0), filter("3", ""))]),
+            stats.stat_filters(refs(&[(key(1, 0), filter("3", ""))])),
             Vec::new()
         );
     }

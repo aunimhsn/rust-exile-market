@@ -25,7 +25,7 @@ const BOW_FILTERS = [
   { mod: "Item level: 81", check: false, min: 81 },
   { group: "Weapon" },
   { mod: "Physical DPS: 245", check: true, min: 220 },
-  { mod: "Elemental DPS: 44", check: false, min: 40 },
+  { mod: "Elemental DPS: 44", check: false, min: 39 },
   { group: "Prefixes", fill: "3 of 3" },
   { mod: "152% increased Physical Damage", check: false, min: 137, tier: 2, range: "135–154", share: .8 },
   { mod: "Adds 21 to 38 Physical Damage", check: false, tier: 4, range: "18–42", share: .45 },

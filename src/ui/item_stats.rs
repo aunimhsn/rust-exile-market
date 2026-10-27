@@ -9,7 +9,8 @@
 //! isn't a filter and starts at the left edge; a line the trade site can't search shows the
 //! "not allowed" sign in place of its checkbox. A line better lower is searched with a
 //! maximum, any other with a minimum. The damage and attack speed modifiers of a weapon start
-//! unchecked: its DPS counts them. A corrupted item ends with a note: the search compares
+//! unchecked: its DPS counts them, the physical one checked, the elemental one when it is at
+//! least the physical one. A corrupted item ends with a note: the search compares
 //! it with corrupted offers only.
 //!
 //! The rows are decided apart from the drawing ([`rows`]), and tested.
@@ -328,15 +329,18 @@ fn rows<'a>(
     base_type: Option<&'a str>,
 ) -> Vec<Row<'a>> {
     let mut rows = Vec::new();
-    if matches!(item.rarity(), Rarity::Normal | Rarity::Magic | Rarity::Rare) {
+    let dps = if item.rarity().has_item_filters() {
         push_group(&mut rows, Group::Item, item_filters(item, base_type));
-        push_group(&mut rows, Group::Weapon, dps_filters(item));
-    }
+        dps_filters(item)
+    } else {
+        Vec::new()
+    };
     let reading = Reading {
         lines,
         stats,
-        dps_filters: rows.contains(&Row::Group(Group::Weapon)),
+        dps_filters: !dps.is_empty(),
     };
+    push_group(&mut rows, Group::Weapon, dps);
     if item.rarity() == Rarity::Unique {
         rows.extend(unique_rows(item, unique_modifiers, &reading));
     } else {
@@ -392,7 +396,9 @@ fn item_filters<'a>(item: &Item, base_type: Option<&'a str>) -> Vec<Stat<'a>> {
 }
 
 /// The filters of the DPS of a weapon, each kind it deals, with a minimum at 90 % of its
-/// DPS: the physical one checked, the elemental one unchecked.
+/// DPS, rounded down so that the weapon passes it: the physical one checked, the elemental
+/// one when it is at least the physical one, so that a weapon mostly elemental is compared
+/// with elemental ones.
 fn dps_filters(item: &Item) -> Vec<Stat<'static>> {
     let Some(weapon) = item.weapon() else {
         return Vec::new();
@@ -400,15 +406,19 @@ fn dps_filters(item: &Item) -> Vec<Stat<'static>> {
     let dps = weapon.dps();
     [
         (Property::PhysicalDps, dps.physical, true),
-        (Property::ElementalDps, dps.elemental, false),
+        (
+            Property::ElementalDps,
+            dps.elemental,
+            dps.elemental >= dps.physical,
+        ),
     ]
     .into_iter()
     .filter_map(|(property, dps, checked)| {
         // As the item block shows it.
-        let dps = dps.round();
-        (dps >= 1.0).then(|| {
-            let minimum = (dps * (1.0 - COMPARABLE_MARGIN)).round();
-            property_filter(property, dps, minimum, checked)
+        let shown = dps.round();
+        (shown >= 1.0).then(|| {
+            let minimum = (dps * (1.0 - COMPARABLE_MARGIN)).floor();
+            property_filter(property, shown, minimum, checked)
         })
     })
     .collect()
@@ -1692,6 +1702,29 @@ mod tests {
     }
 
     #[test]
+    fn a_weapon_mostly_elemental_is_searched_by_its_elemental_dps_too() {
+        let weapon = |physical: &str, lightning: &str| {
+            parse(&format!(
+                "Item Class: Two Hand Maces\nRarity: Rare\nStorm Fall\nTemple Maul\n--------\n\
+                 Physical Damage: {physical}\nLightning Damage: {lightning} (lightning)\n\
+                 Attacks per Second: 1.00\n--------\nItem Level: 80"
+            ))
+        };
+        let dps = |item: &Item| texts(item, None)[4..6].to_vec();
+
+        assert_eq!(
+            dps(&weapon("10-20", "1-59")),
+            ["■ PhysicalDps: 15 ≥13", "■ ElementalDps: 30 ≥27"]
+        );
+        // 90 % of a small DPS, of 2.5 and not of the 3 shown, rounded down: the weapon
+        // passes its own filter.
+        assert_eq!(
+            dps(&weapon("10-20", "1-4")),
+            ["■ PhysicalDps: 15 ≥13", "□ ElementalDps: 3 ≥2"]
+        );
+    }
+
+    #[test]
     fn the_attack_speed_of_an_item_that_isnt_a_weapon_stays_checked() {
         let quiver = parse(
             "Item Class: Quivers\nRarity: Magic\nQuick Broadhead Quiver\n--------\n\
@@ -1722,8 +1755,8 @@ mod tests {
                 "■ Base: Crackling Temple Maul of the Brute",
                 "□ ItemLevel: 32 ≥32",
                 "Weapon",
-                "■ PhysicalDps: 64 ≥58",
-                "□ ElementalDps: 31 ≥28",
+                "■ PhysicalDps: 64 ≥57",
+                "□ ElementalDps: 31 ≥27",
                 "Prefixes 1/1",
                 "□ Adds 1 to 50 Lightning Damage ≥23 [T7 1–4 · 46–66]",
                 "Suffixes 1/1",

@@ -161,7 +161,7 @@ filter-rolls = Jets de { $low } à { $high }
 filter-lower-better = Plus c'est bas, mieux c'est
 # Les filtres des propriétés d'un objet, avec leur valeur.
 filter-base-type = Base : { $base }
-filter-item-level = Niveau d'objet : { $value }
+filter-item-level = Niveau de l'objet : { $value }
 filter-physical-dps = DPS physique : { $value }
 filter-elemental-dps = DPS élémentaire : { $value }
 # L'infobulle d'une ligne que le site d'échange ne peut pas chercher (un modificateur ajouté par un patch), sur deux lignes.

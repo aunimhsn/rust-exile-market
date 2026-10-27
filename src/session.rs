@@ -324,10 +324,13 @@ impl Session {
     }
 
     /// The base type of `item` among its filters, which its search looks for unless the
-    /// player unchecks it; none for a unique, which its name fixes, an item of the currency
-    /// exchange, or a magic item whose base type isn't known yet.
+    /// player unchecks it: for a rare, magic or normal item, or a jewel; none for a magic item
+    /// whose base type isn't known yet.
     #[must_use]
     pub fn filtered_base_type<'a>(&'a self, item: &'a Item) -> Option<&'a str> {
+        if !item.rarity().has_item_filters() {
+            return None;
+        }
         match self.trade_target(item)? {
             TradeTarget::Base { base_type } => Some(base_type),
             TradeTarget::Unique { .. }
@@ -830,6 +833,29 @@ mod tests {
             "{:?}",
             stat(&session)
         );
+    }
+
+    #[test]
+    fn the_base_type_among_the_filters_of_a_magic_item_comes_with_the_names() {
+        const MACE: &str = include_str!("item/test-items/en-magic-mace.txt");
+        let mut session = session();
+        let base_type = |session: &Session| {
+            let item = session.item()?.parsed().ok()?;
+            session.filtered_base_type(item).map(str::to_owned)
+        };
+
+        copy(&mut session, MACE);
+        assert_eq!(base_type(&session), None, "the names aren't known yet");
+        session.apply_item_names(crate::item_names::tests::item_names());
+        assert_eq!(base_type(&session).as_deref(), Some("Temple Maul"));
+        copy(&mut session, RING);
+        assert_eq!(base_type(&session).as_deref(), Some("Ruby Ring"));
+        // A unique is searched by its name, without a filter of its base type.
+        copy(
+            &mut session,
+            "Item Class: Rings\nRarity: Unique\nAndvarius\nGold Ring",
+        );
+        assert_eq!(base_type(&session), None);
     }
 
     #[test]

@@ -97,7 +97,8 @@ impl TradeTarget<'_> {
 /// The search of `item` for `target`: its corrupted state is always a filter, so that a
 /// corrupted item is compared with corrupted offers only, and a clean one with clean ones; a
 /// unique is searched with the stats of its `filters` the player checked, the other items
-/// with all their filters, any base type when the player unchecked it.
+/// with all their filters, any base type when the player unchecked it and another filter
+/// narrows the search (never a search of every item of the league).
 #[must_use]
 pub fn query(item: &Item, target: &TradeTarget, filters: SearchFilters) -> Query {
     let mut query = target.query();
@@ -106,7 +107,7 @@ pub fn query(item: &Item, target: &TradeTarget, filters: SearchFilters) -> Query
         match target {
             TradeTarget::Unique { .. } => items.stats = filters.stats,
             TradeTarget::Base { .. } => {
-                if filters.any_base {
+                if filters.any_base && filters.narrows() {
                     items.base_type = None;
                 }
                 items.properties = filters.properties;
@@ -344,6 +345,48 @@ mod tests {
         assert_eq!(searched_rare.base_type.as_deref(), Some("Ruby Ring"));
         // The base type unchecked: any base.
         assert_eq!(searched(&rare, true).base_type, None);
+    }
+
+    #[test]
+    fn the_base_type_is_searched_when_nothing_else_narrows_the_search() {
+        let rare = parse("Item Class: Rings\nRarity: Rare\nWoe Loop\nRuby Ring");
+        let target = target(&rare, None, None).expect("a target");
+        let base_type = |filters| match super::query(&rare, &target, filters) {
+            Query::Items(items) => items.base_type,
+            Query::Exchange(_) => panic!("a search of items"),
+        };
+        let item_level = |minimum| PropertyFilter {
+            property: Property::ItemLevel,
+            minimum,
+            maximum: None,
+        };
+
+        assert_eq!(
+            base_type(SearchFilters {
+                any_base: true,
+                ..SearchFilters::default()
+            })
+            .as_deref(),
+            Some("Ruby Ring")
+        );
+        // A property without limit narrows nothing.
+        assert_eq!(
+            base_type(SearchFilters {
+                any_base: true,
+                properties: vec![item_level(None)],
+                stats: Vec::new(),
+            })
+            .as_deref(),
+            Some("Ruby Ring")
+        );
+        assert_eq!(
+            base_type(SearchFilters {
+                any_base: true,
+                properties: vec![item_level(Some(81.0))],
+                stats: Vec::new(),
+            }),
+            None
+        );
     }
 
     #[test]
