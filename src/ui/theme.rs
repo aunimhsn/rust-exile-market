@@ -246,6 +246,8 @@ pub mod size {
     pub const BAND_PADDING: f32 = 14.0;
     /// Rounding of the small information elements; the action blocks stay square.
     pub const RADIUS: u8 = 3;
+    /// Rounding of the scroll bar: its ends nearly square, even when it is thin.
+    pub const SCROLL_BAR_RADIUS: u8 = 1;
     /// Width of the clickable zone of an icon of the title bar, drawn without a block.
     pub const ICON_ZONE: f32 = 36.0;
     /// Rounding of the bubbles that open over the content.
@@ -310,7 +312,7 @@ pub fn apply(ctx: &Context) {
     visuals.selection.bg_fill = color::CONTROL_LINE;
     visuals.selection.stroke = Stroke::new(1.0, color::ACCENT);
 
-    let radius = CornerRadius::same(size::RADIUS);
+    round_widgets(&mut visuals, size::RADIUS);
     let widgets = &mut visuals.widgets;
     for state in [
         &mut widgets.noninteractive,
@@ -319,7 +321,6 @@ pub fn apply(ctx: &Context) {
         &mut widgets.active,
         &mut widgets.open,
     ] {
-        state.corner_radius = radius;
         state.bg_stroke = Stroke::NONE;
     }
     widgets.inactive.weak_bg_fill = color::CONTROL;
@@ -330,6 +331,21 @@ pub fn apply(ctx: &Context) {
     widgets.active.bg_fill = color::CONTROL_LINE;
 
     ctx.set_visuals_of(egui::Theme::Dark, visuals);
+}
+
+/// Rounds the widgets of `visuals` by `radius`, in every state.
+pub fn round_widgets(visuals: &mut Visuals, radius: u8) {
+    let radius = CornerRadius::same(radius);
+    let widgets = &mut visuals.widgets;
+    for state in [
+        &mut widgets.noninteractive,
+        &mut widgets.inactive,
+        &mut widgets.hovered,
+        &mut widgets.active,
+        &mut widgets.open,
+    ] {
+        state.corner_radius = radius;
+    }
 }
 
 #[cfg(test)]

@@ -62,6 +62,7 @@ The single source of truth of the interface is the mock-up [docs/mockups/narrow-
 
 - **Action blocks are flat**, the height of their band, glued to its edge: the league block in the title bar; in the offers band, a 48 px square in the corner of its title row (search, its spinner, the countdown, search again). The icons of the title bar have no block: only the icon.
 - **Small information elements are rounded by 3 px**: tags, inputs, checkboxes (15 px, drawn check mark), pills.
+- **The scroll bar is rounded by 1 px**, its ends nearly square, also while it is thin; it widens under the pointer (the floating bar of egui).
 - **Secondary actions are pills** with a verb: "Check on trade", "Show 6 stats", "Copy whisper".
 - What opens over the content (the tooltip of an offer, the bubble of a new league) is a plain rectangle, radius 4 px, with a shadow, without an arrow toward what it belongs to.
 
