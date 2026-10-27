@@ -316,6 +316,12 @@ impl Session {
         Ok((price, rates))
     }
 
+    /// The rates of the currencies of the prices of the league shown, once known.
+    #[must_use]
+    pub fn rates(&self) -> Option<Rates> {
+        self.league_prices().map(|prices| prices.list.rates)
+    }
+
     /// What the search for `item` on the trade site looks for; none for a magic item whose
     /// base type isn't known yet.
     fn trade_target<'a>(&'a self, item: &'a Item) -> Option<TradeTarget<'a>> {

@@ -1,5 +1,6 @@
 //! The price block, on band A under the item block: the price of a fixed-name item in the
-//! three currencies, with its stack, its offers and its trend; the possible uniques of an
+//! three currencies, with its stack, its offers and its trend; the estimated price of the
+//! other items, once their similar offers are searched; the possible uniques of an
 //! unidentified item; or, without a price, why.
 //!
 //! What the block shows is decided apart from the drawing ([`view`]), and tested.
@@ -11,6 +12,7 @@ use egui::{
 use super::images;
 use super::theme::{color, size, text};
 use super::widgets;
+use crate::estimate::{COUNTED, Estimate};
 use crate::format::{self, Currency};
 use crate::i18n::{Message, Translator};
 use crate::item::{Item, Rarity};
@@ -57,6 +59,8 @@ enum PriceView<'a> {
         rates: Rates,
         unique: bool,
     },
+    /// The price of a rare, magic or normal item, from its similar offers.
+    Estimated(Estimate),
     /// The uniques an unidentified item can be.
     Candidates {
         candidates: &'a [Candidate<'a>],
@@ -79,10 +83,11 @@ enum Notice<'a> {
     NoPriceFound(&'a str),
 }
 
-/// What the block shows for the fixed `price` of an item of `rarity`, given the state of the
-/// `prices` of the `league` shown.
+/// What the block shows for the fixed `price` of an item of `rarity`, or else its
+/// `estimate`, given the state of the `prices` of the `league` shown.
 fn view<'a>(
     price: &'a Result<(FixedPrice<'a>, Rates), NoFixedPrice>,
+    estimate: Option<Estimate>,
     rarity: Rarity,
     prices: PricesState,
     league: Option<&'a str>,
@@ -108,7 +113,10 @@ fn view<'a>(
             candidates,
             rates: *rates,
         },
-        Err(NoFixedPrice::NotFixedName) => PriceView::Notice(Notice::NoMarketPrice(rarity)),
+        Err(NoFixedPrice::NotFixedName) => match estimate {
+            Some(estimate) => PriceView::Estimated(estimate),
+            None => PriceView::Notice(Notice::NoMarketPrice(rarity)),
+        },
         Err(NoFixedPrice::NamesUnknown) => PriceView::Notice(Notice::FrenchNamesDownloading),
         Err(NoFixedPrice::PricesUnknown) => PriceView::Notice(downloading),
         Err(NoFixedPrice::NotPriced) => PriceView::Notice(match (prices, league) {
@@ -123,6 +131,7 @@ fn view<'a>(
 pub struct PriceBlock<'a> {
     item: &'a Item,
     price: Result<(FixedPrice<'a>, Rates), NoFixedPrice>,
+    estimate: Option<Estimate>,
     prices: PricesState,
     league: Option<&'a str>,
     i18n: &'a Translator,
@@ -142,15 +151,29 @@ impl<'a> PriceBlock<'a> {
         Self {
             item,
             price,
+            estimate: None,
             prices,
             league,
             i18n,
         }
     }
 
+    /// The estimated price of an item without a fixed price, from its similar offers.
+    #[must_use]
+    pub fn estimate(mut self, estimate: Option<Estimate>) -> Self {
+        self.estimate = estimate;
+        self
+    }
+
     /// Draws the block, the whole width of `ui`.
     pub fn show(self, ui: &mut Ui) {
-        let view = view(&self.price, self.item.rarity(), self.prices, self.league);
+        let view = view(
+            &self.price,
+            self.estimate,
+            self.item.rarity(),
+            self.prices,
+            self.league,
+        );
         Frame::NONE
             .fill(color::BAND_A)
             .inner_margin(vec2(size::BAND_PADDING, PADDING_Y))
@@ -165,6 +188,7 @@ impl<'a> PriceBlock<'a> {
                         rates,
                         unique,
                     } => self.priced(ui, price, rates, unique),
+                    PriceView::Estimated(estimate) => self.estimated(ui, estimate),
                     PriceView::Candidates { candidates, rates } => {
                         self.candidates(ui, candidates, rates);
                     }
@@ -173,11 +197,16 @@ impl<'a> PriceBlock<'a> {
             });
     }
 
-    /// The title, and on its right the offers of a unique or the size of a stack.
+    /// The title, and on its right the offers of a unique or of an estimate, or the size of
+    /// a stack.
     fn title_row(&self, ui: &mut Ui, view: &PriceView) {
+        let title = match view {
+            PriceView::Estimated(_) => Message::EstimatedPriceLabel,
+            _ => Message::PriceLabel,
+        };
         let label = widgets::spaced_line(
             ui,
-            self.i18n.text(Message::PriceLabel).to_uppercase(),
+            self.i18n.text(title).to_uppercase(),
             text::label(),
             text::LABEL_LETTER_SPACING,
         );
@@ -190,6 +219,7 @@ impl<'a> PriceBlock<'a> {
             PriceView::Priced { unique: false, .. } => {
                 self.stack_size().map(|size| self.i18n.stack_of(size))
             }
+            PriceView::Estimated(estimate) => Some(self.i18n.similar(estimate.total)),
             PriceView::Candidates { .. } | PriceView::Notice(_) => None,
         };
         ui.horizontal(|ui| {
@@ -241,6 +271,23 @@ impl<'a> PriceBlock<'a> {
             ui.add_space(LINE_GAP);
             line(ui, &self.i18n.uncertain(price.quantity), color::WARNING);
         }
+    }
+
+    /// The estimated price in the three currencies, the warning of an estimate from few
+    /// offers, then how it is made.
+    fn estimated(&self, ui: &mut Ui, estimate: Estimate) {
+        amounts(ui, estimate.exalted, estimate.reference.rates);
+        let counted = estimate.counted;
+        if counted < COUNTED {
+            ui.add_space(LINE_GAP);
+            line(ui, &self.i18n.estimate_uncertain(counted), color::WARNING);
+        }
+        ui.add_space(LINE_GAP);
+        line(
+            ui,
+            &self.i18n.estimate_median(counted, counted == COUNTED),
+            color::WEAK,
+        );
     }
 
     /// The uniques an unidentified item can be, each with its price in its own currency; a
@@ -442,6 +489,7 @@ fn message(ui: &mut Ui, text: &str, tint: egui::Color32) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::estimate::Reference;
     use std::time::Duration;
 
     const RATES: Rates = Rates {
@@ -459,7 +507,7 @@ mod tests {
         prices: PricesState,
         league: Option<&'a str>,
     ) -> PriceView<'a> {
-        view(price, Rarity::Currency, prices, league)
+        view(price, None, Rarity::Currency, prices, league)
     }
 
     #[test]
@@ -467,8 +515,32 @@ mod tests {
         let price = Err(NoFixedPrice::NotFixedName);
 
         assert_eq!(
-            view(&price, Rarity::Magic, KNOWN, Some("Standard")),
+            view(&price, None, Rarity::Magic, KNOWN, Some("Standard")),
             PriceView::Notice(Notice::NoMarketPrice(Rarity::Magic))
+        );
+    }
+
+    #[test]
+    fn once_its_offers_are_searched_a_rare_item_has_an_estimated_price() {
+        let estimate = Estimate {
+            exalted: 1680.0,
+            counted: 5,
+            total: 18,
+            reference: Reference {
+                exalted: 1925.0,
+                rates: RATES,
+            },
+        };
+
+        assert_eq!(
+            view(
+                &Err(NoFixedPrice::NotFixedName),
+                Some(estimate),
+                Rarity::Rare,
+                KNOWN,
+                Some("Standard")
+            ),
+            PriceView::Estimated(estimate)
         );
     }
 

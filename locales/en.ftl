@@ -184,6 +184,8 @@ corrupted-offers-only = Corrupted offers only, like this item.
 ## Price block
 
 price-label = Price
+# The price of a rare, magic or normal item, from the offers of similar items.
+estimated-price-label = Estimated price
 # On the right of the price title.
 offers = { $count ->
     [one] { $count } offer
@@ -201,6 +203,22 @@ uncertain = { $count ->
     [one] Only { $count } offer: the price is uncertain
    *[other] Only { $count } offers: the price is uncertain
 }
+# On the right of the title of an estimated price: the similar offers found.
+similar = { $count ->
+    [one] { $count } similar
+   *[other] { $count } similar
+}
+# Under an estimated price from fewer than 5 offers, the suspicious ones left out.
+estimate-uncertain = { $count ->
+    [one] Only { $count } similar offer: the estimate is uncertain
+   *[other] Only { $count } similar offers: the estimate is uncertain
+}
+# Under an estimated price: how it is made.
+estimate-median = { $count ->
+    [one] Price of the only similar offer.
+   *[other] Median of the { $count } similar offers.
+}
+estimate-median-cheapest = Median of the { $count } cheapest similar offers.
 # An unidentified unique whose base type has several uniques.
 identify-to-price = Identify the item to get its price.
 possible-uniques = Possible uniques

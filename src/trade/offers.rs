@@ -8,6 +8,7 @@ use serde::Deserialize;
 use serde::de::{self, Deserializer};
 use serde_json::Value;
 
+use crate::format::Currency;
 use crate::item::Rarity;
 
 /// The status of a seller.
@@ -24,6 +25,17 @@ pub struct Price {
     pub amount: f64,
     /// The id of the currency on the trade site (`exalted`, `divine`, `chaos`…).
     pub currency: String,
+}
+
+/// The currency of the prices of the trade site `id`; `None` for another currency.
+#[must_use]
+pub fn currency(id: &str) -> Option<Currency> {
+    match id {
+        "exalted" => Some(Currency::Exalted),
+        "divine" => Some(Currency::Divine),
+        "chaos" => Some(Currency::Chaos),
+        _ => None,
+    }
 }
 
 /// A listed item.

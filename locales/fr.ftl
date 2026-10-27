@@ -187,6 +187,8 @@ corrupted-offers-only = Offres corrompues seulement, comme cet objet.
 ## Bloc prix
 
 price-label = Prix
+# Le prix d'un objet rare, magique ou normal, d'après les offres d'objets similaires.
+estimated-price-label = Prix estimé
 # À droite du titre du prix.
 offers = { $count ->
     [one] { $count } offre
@@ -204,6 +206,22 @@ uncertain = { $count ->
     [one] Une seule offre : le prix est incertain
    *[other] Seulement { $count } offres : le prix est incertain
 }
+# À droite du titre d'un prix estimé : les offres similaires trouvées.
+similar = { $count ->
+    [one] { $count } similaire
+   *[other] { $count } similaires
+}
+# Sous un prix estimé d'après moins de 5 offres, les offres suspectes mises à part.
+estimate-uncertain = { $count ->
+    [one] Une seule offre similaire : l'estimation est incertaine
+   *[other] Seulement { $count } offres similaires : l'estimation est incertaine
+}
+# Sous un prix estimé : comment il est calculé.
+estimate-median = { $count ->
+    [one] Prix de la seule offre similaire.
+   *[other] Médiane des { $count } offres similaires.
+}
+estimate-median-cheapest = Médiane des { $count } offres similaires les moins chères.
 # Un unique non identifié dont la base a plusieurs uniques.
 identify-to-price = Identifiez l'objet pour obtenir son prix.
 possible-uniques = Uniques possibles

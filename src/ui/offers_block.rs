@@ -20,13 +20,13 @@ use super::offer_tooltip::{OfferTooltip, Pointer, TooltipState, reach};
 use super::price_block::orb;
 use super::theme::{color, size, text};
 use super::widgets;
+use crate::estimate::Reference;
 use crate::format::{self, Currency};
 use crate::i18n::{Message, Translator};
 use crate::item::Item;
 use crate::offers::{LONG_WAIT, Offers, OffersState};
-use crate::prices::Rates;
 use crate::roll_difference::CopiedLines;
-use crate::trade::offers::{ExchangeOffer, ItemOffer, Price, SellerStatus};
+use crate::trade::offers::{ExchangeOffer, ItemOffer, Price, SellerStatus, currency};
 use crate::trade::query::SearchKind;
 
 /// The space above and under the content of the band, and between the label and a message.
@@ -80,22 +80,12 @@ const MORE_RAISE: f32 = 3.0;
 const MORE_SLIDE: f32 = 2.0;
 /// The space above the message of the next offers that couldn't come.
 const MORE_FAILED_GAP: f32 = 8.0;
-/// An offer under this share of the reference price is suspicious.
-const SUSPICIOUS_SHARE: f64 = 0.25;
 
 /// What the player asks from the block.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OffersAction {
     Search,
     More,
-}
-
-/// The price of one item that tells a suspicious offer: the price of the price database, in
-/// Exalted Orbs, with the rates of its currencies.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Reference {
-    pub exalted: f64,
-    pub rates: Rates,
 }
 
 /// The price of a row, in its currency.
@@ -130,25 +120,6 @@ struct Row {
     listed: Option<Duration>,
 }
 
-/// The currency of the prices of the trade site `id`.
-fn currency(id: &str) -> Option<Currency> {
-    match id {
-        "exalted" => Some(Currency::Exalted),
-        "divine" => Some(Currency::Divine),
-        "chaos" => Some(Currency::Chaos),
-        _ => None,
-    }
-}
-
-/// `amount` of the currency `id`, in Exalted Orbs; `None` for a currency without a rate.
-fn in_exalted(amount: f64, id: &str, rates: Rates) -> Option<f64> {
-    Some(match currency(id)? {
-        Currency::Exalted => amount,
-        Currency::Divine => amount * rates.divine,
-        Currency::Chaos => amount * rates.chaos,
-    })
-}
-
 /// `amount` of the currency `id`, as a row writes it.
 fn row_price(amount: f64, id: &str) -> RowPrice {
     match currency(id) {
@@ -170,10 +141,7 @@ pub(super) fn offer_price(price: &Price) -> RowPrice {
 
 /// Whether one item for `amount` of the currency `id` is far below `reference`.
 fn is_suspicious(amount: f64, id: &str, reference: Option<Reference>) -> bool {
-    reference.is_some_and(|reference| {
-        in_exalted(amount, id, reference.rates)
-            .is_some_and(|exalted| exalted < reference.exalted * SUSPICIOUS_SHARE)
-    })
+    reference.is_some_and(|reference| reference.suspicious(amount, id))
 }
 
 fn listed_since(listed: Option<SystemTime>, now: SystemTime) -> Option<Duration> {
@@ -1036,6 +1004,7 @@ fn spinner(painter: &Painter, center: Pos2, time: f64) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::prices::Rates;
     use crate::trade::offers::OfferItem;
 
     const RATES: Rates = Rates {

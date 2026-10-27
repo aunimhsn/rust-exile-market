@@ -56,6 +56,7 @@ pub enum Message {
     TagMirrored,
     TagUnidentified,
     PriceLabel,
+    EstimatedPriceLabel,
     PossibleUniques,
     IdentifyToPrice,
     NoOffers,
@@ -116,7 +117,7 @@ pub enum Message {
 impl Message {
     /// Every message, for the tests.
     #[cfg(test)]
-    const ALL: [Self; 87] = [
+    const ALL: [Self; 88] = [
         Self::LeagueModeSoftcore,
         Self::LeagueModeHardcore,
         Self::LeagueLoading,
@@ -149,6 +150,7 @@ impl Message {
         Self::TagMirrored,
         Self::TagUnidentified,
         Self::PriceLabel,
+        Self::EstimatedPriceLabel,
         Self::PossibleUniques,
         Self::IdentifyToPrice,
         Self::NoOffers,
@@ -241,6 +243,7 @@ impl Message {
             Self::TagMirrored => "tag-mirrored",
             Self::TagUnidentified => "tag-unidentified",
             Self::PriceLabel => "price-label",
+            Self::EstimatedPriceLabel => "estimated-price-label",
             Self::PossibleUniques => "possible-uniques",
             Self::IdentifyToPrice => "identify-to-price",
             Self::NoOffers => "no-offers",
@@ -349,6 +352,10 @@ const TREND_RISE: &str = "trend-rise";
 const TREND_FALL: &str = "trend-fall";
 const TREND_STABLE: &str = "trend-stable";
 const UNCERTAIN: &str = "uncertain";
+const SIMILAR: &str = "similar";
+const ESTIMATE_UNCERTAIN: &str = "estimate-uncertain";
+const ESTIMATE_MEDIAN: &str = "estimate-median";
+const ESTIMATE_MEDIAN_CHEAPEST: &str = "estimate-median-cheapest";
 const PRICES_DOWNLOADING: &str = "prices-downloading";
 const NO_PRICE_FOUND: &str = "no-price-found";
 const SHOW_STATS: &str = "show-stats";
@@ -615,6 +622,36 @@ impl Translator {
         self.format_number(UNCERTAIN, "count", count)
     }
 
+    /// The similar offers found, on the right of the title of an estimated price: "18 similar".
+    #[must_use]
+    pub fn similar(&self, total: u64) -> String {
+        let mut args = FluentArgs::new();
+        args.set("count", total);
+        self.format(SIMILAR, Some(&args))
+    }
+
+    /// The warning of an estimate from few offers.
+    #[must_use]
+    pub fn estimate_uncertain(&self, counted: usize) -> String {
+        let mut args = FluentArgs::new();
+        args.set("count", counted);
+        self.format(ESTIMATE_UNCERTAIN, Some(&args))
+    }
+
+    /// How an estimate is made, from the `counted` offers: the `cheapest` of more offers,
+    /// or all of them.
+    #[must_use]
+    pub fn estimate_median(&self, counted: usize, cheapest: bool) -> String {
+        let mut args = FluentArgs::new();
+        args.set("count", counted);
+        let id = if cheapest {
+            ESTIMATE_MEDIAN_CHEAPEST
+        } else {
+            ESTIMATE_MEDIAN
+        };
+        self.format(id, Some(&args))
+    }
+
     /// The price block while the prices of `league` are downloading.
     #[must_use]
     pub fn prices_downloading(&self, league: &str) -> String {
@@ -871,6 +908,10 @@ mod tests {
                 TREND_FALL,
                 TREND_STABLE,
                 UNCERTAIN,
+                SIMILAR,
+                ESTIMATE_UNCERTAIN,
+                ESTIMATE_MEDIAN,
+                ESTIMATE_MEDIAN_CHEAPEST,
                 PRICES_DOWNLOADING,
                 NO_PRICE_FOUND,
                 STATUS_TRADE,
@@ -918,6 +959,14 @@ mod tests {
                 assert_ne!(translator.uncertain(count), "");
             }
             assert!(translator.stack_of(7).contains('7'));
+            for count in [1, 3, 5, 18] {
+                assert!(translator.similar(count).contains(&count.to_string()));
+            }
+            for count in [1, 4] {
+                assert_ne!(translator.estimate_uncertain(count), "");
+                assert_ne!(translator.estimate_median(count, false), "");
+            }
+            assert!(translator.estimate_median(5, true).contains('5'));
             assert!(translator.show_stats(1).contains('1'));
             assert!(translator.show_stats(6).contains('6'));
             assert!(translator.affix_fill(3, 3).contains('3'));
@@ -1010,6 +1059,22 @@ mod tests {
             Translator::new(Language::English)
                 .uncertain(0)
                 .starts_with("No offer")
+        );
+    }
+
+    #[test]
+    fn an_estimate_from_one_offer_is_its_price() {
+        for language in Language::ALL {
+            let translator = Translator::new(language);
+            assert!(
+                !translator.estimate_median(1, false).contains('1'),
+                "{language:?}"
+            );
+            assert!(translator.estimate_median(3, false).contains('3'));
+        }
+        assert_eq!(
+            Translator::new(Language::English).estimate_uncertain(3),
+            "Only 3 similar offers: the estimate is uncertain"
         );
     }
 

@@ -8,12 +8,13 @@ use eframe::{App, CreationContext, Frame};
 use egui::{Context, Key, OpenUrl, Ui, ViewportCommand};
 
 use crate::clipboard::{ClipboardEvent, ClipboardWatch};
+use crate::estimate::{self, Estimate, Reference};
 use crate::filters::Filters;
 use crate::i18n::{DOWNLOAD_QUOTE_COUNT, Message, Translator};
 use crate::item::Item;
 use crate::league::League;
 use crate::market::MarketWatch;
-use crate::offers::{LONG_WAIT, Offers};
+use crate::offers::{LONG_WAIT, Offers, OffersState};
 use crate::prices::Rates;
 use crate::pricing::{FixedPrice, NoFixedPrice};
 use crate::session::{self, LeagueChange, PricesState, Session, ShownItem};
@@ -23,7 +24,7 @@ use crate::trade::query::{SearchFilters, SearchKind};
 use crate::trade::search::{OfferSearch, Search};
 use crate::ui::{
     self, BubbleAction, EmptyState, ItemBlock, ItemBlockAction, LeagueList, LeagueListAction,
-    NewLeagueBubble, OffersAction, OffersBlock, PriceBlock, PriceDownload, Reference, ResizeEdges,
+    NewLeagueBubble, OffersAction, OffersBlock, PriceBlock, PriceDownload, ResizeEdges,
     SettingsPanel, Stats, StatusBar, TitleBar, TitleBarAction, TradeStatus, UnreadableItem,
     WarningBand,
 };
@@ -257,7 +258,9 @@ impl ExileMarketApp {
         let must_identify = self.session.must_identify(item);
         let fixed_price = self.session.fixed_price(item);
         let unique_modifiers = session::unique_modifiers(item, &fixed_price);
-        let reference = reference(&fixed_price);
+        let estimate = estimate(&self.offers, &fixed_price, self.session.rates());
+        // Without a fixed price, the estimate tells the suspicious offers.
+        let reference = reference(&fixed_price).or(estimate.map(|estimate| estimate.reference));
         let to_top = std::mem::take(&mut self.scroll_to_top);
         let mut offers_action = None;
         let action = ui::content(ui, to_top, |ui| {
@@ -283,7 +286,9 @@ impl ExileMarketApp {
                 }
             }
             let league = self.session.league().map(League::name);
-            PriceBlock::new(item, fixed_price, prices, league, &self.i18n).show(ui);
+            PriceBlock::new(item, fixed_price, prices, league, &self.i18n)
+                .estimate(estimate)
+                .show(ui);
             if let Some(kind) = kind {
                 offers_action = OffersBlock::new(
                     &self.offers,
@@ -465,6 +470,22 @@ fn reference(fixed_price: &Result<(FixedPrice, Rates), NoFixedPrice>) -> Option<
         Ok((FixedPrice::Uniques(_), _)) | Err(_) => return None,
     };
     Some(Reference { exalted, rates })
+}
+
+/// The estimated price of an item without a fixed price, from the `offers` of its search
+/// and the `rates` of the prices of the league.
+fn estimate(
+    offers: &Offers,
+    fixed_price: &Result<(FixedPrice, Rates), NoFixedPrice>,
+    rates: Option<Rates>,
+) -> Option<Estimate> {
+    let Err(NoFixedPrice::NotFixedName) = fixed_price else {
+        return None;
+    };
+    let OffersState::Items { offers, total, .. } = offers.state() else {
+        return None;
+    };
+    estimate::estimate(offers, *total, rates?)
 }
 
 /// The state of the trade site in the status bar, at `now`: the long wait before the next
