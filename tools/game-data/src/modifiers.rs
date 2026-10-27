@@ -278,8 +278,8 @@ fn base_tags(released: &[&SourceBase], tables: &[Modifier]) -> BaseTags {
 }
 
 /// The lines of `modifier`, each with the English template of Exiled Exchange 2 of one of its
-/// strings (a line without template is written as the game writes it, without range), and the
-/// range of each of their values.
+/// strings, and the range of each of their values. A line without template is marked unknown
+/// (written as the game writes it, without range): [`reduce`] leaves its modifier out.
 fn lines(
     modifier: &SourceModifier,
     translations: &[Translation],
@@ -379,10 +379,25 @@ fn line(
         let (min, max) = stat_of(modifier, id).map_or((0, 0), |stat| (stat.min, stat.max));
         ranges.push([scale(min, handlers(index))?, scale(max, handlers(index))?]);
     }
-    // The value of a line written without number is that of its stat, its first.
-    let divisor = match indexes.first() {
-        Some(&index) => divisor_of(handlers(index))?,
-        None => 1,
+    // A string without number of Exiled Exchange 2 gives the value of the stat, e.g. 1000
+    // milliseconds for `Inherent Rage loss starts 1 second later`, which the application
+    // divides to compare it with the ranges as the game shows them; a line without such a
+    // string needs no divisor.
+    let written = translation.english.iter().any(|variant| {
+        placeholders(&variant.string).is_empty()
+            && templates.contains_key(&self::template(&variant.string))
+    });
+    let divisor = match (written, indexes.as_slice()) {
+        (false, _) | (true, []) => 1,
+        (true, &[index]) => divisor_of(handlers(index))?,
+        // Which of its values the string without number gives is to decide.
+        (true, _) => {
+            return Err(format!(
+                "{} has several values and a string without number",
+                general.string
+            )
+            .into());
+        }
     };
     let line = Line {
         template,
@@ -909,5 +924,36 @@ mod tests {
         let (tables, _) = tables(&modifiers, BASES, translations, &[]);
 
         assert_eq!(tables, serde_json::json!([]));
+    }
+
+    #[test]
+    fn a_line_of_several_values_with_a_string_without_number_stops_the_generator() {
+        let modifiers = format!(
+            r#"{{"Thorns": {}}}"#,
+            modifier(
+                "Thorns",
+                1,
+                r#"[{"tag": "weapon", "weight": 1}]"#,
+                r#"[{"id": "minimum_thorns", "min": 1, "max": 2}, {"id": "maximum_thorns", "min": 3, "max": 4}]"#
+            )
+        );
+        let translations = r#"[{"ids": ["minimum_thorns", "maximum_thorns"], "English": [
+            {"string": "Thorns", "index_handlers": [[], []]},
+            {"string": "{0} to {1} Thorns damage", "index_handlers": [[], []]}
+        ], "hidden": null}]"#;
+
+        let error = reduce(
+            &serde_json::from_str(&modifiers).expect("modifiers"),
+            &serde_json::from_str(BASES).expect("bases"),
+            &serde_json::from_str::<Vec<_>>(translations).expect("translations"),
+            &[("Thorns".to_owned(), "# to # Thorns damage".to_owned())].into(),
+        )
+        .err()
+        .map(|error| error.to_string());
+
+        assert_eq!(
+            error.as_deref(),
+            Some("Thorns: {0} to {1} Thorns damage has several values and a string without number")
+        );
     }
 }

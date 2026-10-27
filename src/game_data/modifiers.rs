@@ -39,9 +39,10 @@ enum TableAffix {
 struct TableLine {
     /// The English template of the line, as Exiled Exchange 2 writes it.
     template: String,
-    /// What the value of the stat is divided by to be shown: the value of a line written
-    /// without number is that of the stat (1000 for `Inherent Rage loss starts 1 second
-    /// later`, shown in seconds).
+    /// What the value of the stat is divided by to be shown, for a line of one value that can
+    /// be written without number: its value is then that of the stat (1000 for `Inherent Rage
+    /// loss starts 1 second later`, shown in seconds; no such line rolls on a base on
+    /// 2026-10-28, the generator writes the divisor when one does).
     #[serde(default = "one")]
     divisor: f64,
 }
@@ -685,5 +686,24 @@ mod tests {
             tiers.tier().map(|tier| tier.ranges.clone()),
             Some(vec![range(10.0, 20.0), range(1.0, 5.0)])
         );
+    }
+
+    #[test]
+    fn a_line_with_a_divisor_has_one_value() {
+        // The divisor is for the value of a line written without number, a single value.
+        for table in TABLES.iter() {
+            for (index, line) in table.lines.iter().enumerate() {
+                if (line.divisor - 1.0).abs() > f64::EPSILON {
+                    for tier in &table.tiers {
+                        assert_eq!(
+                            tier.ranges.get(index).map(Vec::len),
+                            Some(1),
+                            "{}",
+                            line.template
+                        );
+                    }
+                }
+            }
+        }
     }
 }
