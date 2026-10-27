@@ -43,15 +43,16 @@ pub fn content<R>(ui: &mut egui::Ui, to_top: bool, add: impl FnOnce(&mut egui::U
     egui::CentralPanel::no_frame()
         .frame(egui::Frame::NONE.fill(theme::color::BAND_B))
         .show(ui, |ui| {
-            // The scroll bar takes the rounding of the widgets of the ui around it, its content
-            // that of the other widgets.
+            // The scroll bar takes the rounding of the widgets of the ui around it; its content
+            // gets the look of the widgets back.
+            let widgets = ui.visuals().widgets.clone();
             theme::round_widgets(ui.visuals_mut(), theme::size::SCROLL_BAR_RADIUS);
             let mut area = egui::ScrollArea::vertical().auto_shrink(false);
             if to_top {
                 area = area.vertical_scroll_offset(0.0);
             }
             area.show(ui, |ui| {
-                theme::round_widgets(ui.visuals_mut(), theme::size::RADIUS);
+                ui.visuals_mut().widgets = widgets;
                 add(ui)
             })
             .inner
