@@ -37,24 +37,24 @@ const BOW_FILTERS = [
 ];
 const BOW_RARE = { ...BOW, tags: [...BOW.tags], statsLabel: "Stats (6)", filters: "4 filters" };
 const RARE_ESTIMATE_BEFORE = { lines: ["No market price for rare items.", "Search similar offers to estimate it."] };
-const RING = { rarity: "rare", name: "Storm Spiral", base: "Sapphire Ring", cls: "Rings", tags: ["ilvl 77"], req: "Requires Level 54", statsLabel: "Stats (6)", filters: "3 filters" };
+const RING = { rarity: "rare", name: "Storm Spiral", base: "Sapphire Ring", cls: "Rings", tags: ["ilvl 77"], req: "Requires Level 54", statsLabel: "Stats (6)", filters: "5 filters" };
 const RING_FILTERS = [
   { group: "Item", min: true },
   { mod: "Base: Sapphire Ring", check: true },
   { mod: "Item level: 77", check: false, min: 77 },
   { group: "Pseudo" },
-  { mod: "+83% total Elemental Resistance", check: true, min: 74 },
-  { mod: "+65 total maximum Life", check: true, min: 58 },
+  { mod: "+83% total Elemental Resistance", check: true, min: 75 },
+  { mod: "+65 total maximum Life", check: true, min: 59 },
+  { mod: "+12 total to Dexterity", check: true, min: 11 },
   { group: "Implicit" },
-  { mod: "+22% to Cold Resistance", check: false, min: 19, range: "20–30", share: .2 },
+  { mod: "+22% to Cold Resistance", check: false, min: 20, range: "20–30", share: .2 },
   { group: "Prefixes", fill: "2 of 3 · 1 open" },
-  { mod: "+65 to maximum Life", check: false, min: 58, tier: 5, range: "60–69", share: .4 },
-  { mod: "+21 to maximum Energy Shield", check: false, min: 18, tier: 6, range: "17–23", share: .3 },
+  { mod: "+65 to maximum Life", check: false, min: 59, tier: 5, range: "60–69", share: .4 },
+  { mod: "+21 to maximum Energy Shield", check: true, min: 19, tier: 6, range: "17–23", share: .3 },
   { group: "Suffixes", fill: "3 of 3" },
   { mod: "+38% to Fire Resistance", check: false, min: 34, tier: 2, range: "36–40", share: .82 },
-  { mod: "+23% to Lightning Resistance", check: false, min: 20, tier: 4, range: "21–25", share: .44 },
-  { mod: "+12 to Dexterity", check: false, min: 10, tier: 6, range: "9–12", share: .25 },
-  { note: "Pseudo stats add up the same stat from all modifiers: the resistances, the life." },
+  { mod: "+23% to Lightning Resistance", check: false, min: 21, tier: 4, range: "21–25", share: .44 },
+  { mod: "+12 to Dexterity", check: false, min: 11, tier: 6, range: "9–12", share: .25 },
 ];
 const MAGIC = { rarity: "magic", name: "Glimmering Sapphire Ring of the Lynx", cls: "Rings", tags: ["ilvl 68"], req: "Requires Level 44", statsLabel: "Stats (3)", filters: "2 filters" };
 // Exceptional base: a normal item whose value is its base, its sockets and its item level.

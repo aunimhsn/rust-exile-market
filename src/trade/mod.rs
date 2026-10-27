@@ -12,6 +12,7 @@ mod client;
 mod limits;
 pub mod link;
 pub mod offers;
+pub mod pseudo;
 pub mod query;
 pub mod search;
 mod site;

@@ -1,6 +1,6 @@
 //! The stat of each modifier line of the copied item on the trade site, read once when it is
 //! copied: its ids, and how the value of its range field is written there; then the filters
-//! of a search, from the filters the player checked.
+//! of a search, from the filters the player checked, and the pseudo totals of the item.
 //!
 //! The value of a range field is the average of the numbers of its line the stat counts, its
 //! `#` ([`LineStats::numbers`]), not those its string writes (the 3 of `#% chance to gain
@@ -8,6 +8,7 @@
 //! with the sign of the stat: a `reduced` line of an `increased` stat, or an inverted stat
 //! (`#% less Damage`), has the other sign there, its minimum and its maximum swapped.
 
+use super::pseudo::{self, CountedLine, PseudoTotal};
 use super::query::{PropertyFilter, SearchFilters, StatFilter};
 use crate::filters::{Filter, FilterKey, StatKey};
 use crate::game_data::{self, TradeGroup, TradeStats};
@@ -183,13 +184,16 @@ struct Line {
     stat: LineStat,
     /// The indexes of its numbers its stat counts; none when its stat isn't known.
     numbers: Option<Vec<usize>>,
-    /// Its stat is the damage or the attack speed of a weapon, which its DPS counts.
-    weapon_damage: bool,
+    /// The id of its stat in the files of the game (`base_maximum_life`), when known.
+    game_id: Option<String>,
 }
 
-/// The stats of the modifier lines of the copied item.
+/// The stats of the modifier lines of the copied item, and its pseudo totals.
 #[derive(Debug, Default)]
-pub struct LineStats(Vec<Line>);
+pub struct LineStats {
+    lines: Vec<Line>,
+    pseudo: Vec<PseudoTotal>,
+}
 
 impl LineStats {
     /// The stats of the lines of `modifiers`, written in `language`; `trade` holds the stats
@@ -218,13 +222,7 @@ impl LineStats {
                         TradeStat::new(stat, group, line, counted)
                     });
                 let known = found.stat.is_some();
-                let weapon_damage = found.stat.as_ref().is_some_and(|found| {
-                    found
-                        .stat
-                        .id
-                        .as_deref()
-                        .is_some_and(|id| WEAPON_DAMAGE.contains(&id))
-                });
+                let game_id = found.stat.as_ref().and_then(|found| found.stat.id.clone());
                 for (line, numbers) in found.lines.zip(numbers) {
                     let key = StatKey {
                         modifier: index,
@@ -239,12 +237,26 @@ impl LineStats {
                         key,
                         stat: line_stat,
                         numbers: known.then_some(numbers),
-                        weapon_damage,
+                        game_id: game_id.clone(),
                     });
                 }
             }
         }
-        Self(lines)
+        let counted: Vec<CountedLine<'_>> = lines
+            .iter()
+            .filter_map(|line| match &line.stat {
+                LineStat::Searched(TradeStat {
+                    value: Some(value), ..
+                }) => Some(CountedLine {
+                    key: line.key,
+                    game_id: line.game_id.as_deref()?,
+                    value: value.trade,
+                }),
+                _ => None,
+            })
+            .collect();
+        let pseudo = pseudo::totals(&counted);
+        Self { lines, pseudo }
     }
 
     /// The stat of the line `key`; none for a line that isn't of the copied item.
@@ -264,11 +276,26 @@ impl LineStats {
     /// counts.
     #[must_use]
     pub fn weapon_damage(&self, key: StatKey) -> bool {
-        self.line(key).is_some_and(|line| line.weapon_damage)
+        self.line(key)
+            .and_then(|line| line.game_id.as_deref())
+            .is_some_and(|id| WEAPON_DAMAGE.contains(&id))
+    }
+
+    /// The pseudo totals of the item that are filters, for any item: the stats show them for
+    /// a rare or magic one only.
+    #[must_use]
+    pub fn pseudo_totals(&self) -> &[PseudoTotal] {
+        &self.pseudo
+    }
+
+    /// The line `key` is added up by a pseudo total, also on an item that doesn't show them.
+    #[must_use]
+    pub fn added_up(&self, key: StatKey) -> bool {
+        self.pseudo.iter().any(|total| total.lines.contains(&key))
     }
 
     fn line(&self, key: StatKey) -> Option<&Line> {
-        self.0.iter().find(|line| line.key == key)
+        self.lines.iter().find(|line| line.key == key)
     }
 
     /// The filters of the search, from every filter of the item as the player set it: those
@@ -278,7 +305,19 @@ impl LineStats {
         let checked = || filters.iter().filter(|(_, filter)| filter.checked);
         let stats = checked().filter_map(|(key, filter)| match key {
             FilterKey::Stat(key) => Some((*key, filter)),
-            FilterKey::BaseType | FilterKey::Property(_) => None,
+            FilterKey::BaseType | FilterKey::Property(_) | FilterKey::Pseudo(_) => None,
+        });
+        // A pseudo total is written as the trade site writes it.
+        let pseudo = checked().filter_map(|(key, filter)| match key {
+            FilterKey::Pseudo(pseudo) => {
+                let (minimum, maximum) = filter.limits();
+                Some(StatFilter {
+                    ids: vec![pseudo.trade_id().to_owned()],
+                    minimum: minimum.map(written),
+                    maximum: maximum.map(written),
+                })
+            }
+            FilterKey::Stat(_) | FilterKey::BaseType | FilterKey::Property(_) => None,
         });
         SearchFilters {
             any_base: filters
@@ -294,10 +333,10 @@ impl LineStats {
                             maximum,
                         })
                     }
-                    FilterKey::Stat(_) | FilterKey::BaseType => None,
+                    FilterKey::Stat(_) | FilterKey::BaseType | FilterKey::Pseudo(_) => None,
                 })
                 .collect(),
-            stats: self.stat_filters(stats),
+            stats: pseudo.chain(self.stat_filters(stats)).collect(),
         }
     }
 
@@ -322,6 +361,7 @@ mod tests {
     use super::*;
     use crate::filters::Property;
     use crate::item::{CopiedItem, Item, Range};
+    use crate::trade::pseudo::Pseudo;
 
     fn parse(text: &str) -> Item {
         Item::parse(&CopiedItem::from_text(text).expect("an item")).expect("read")
@@ -617,6 +657,112 @@ mod tests {
         // damage, which neither DPS filter counts.
         assert_eq!(damage(&english), [true, true, true, false, false]);
         assert_eq!(damage(&french), [true, true]);
+    }
+
+    /// A rare ring with resistances, life and strength in several groups, in `language`.
+    fn rare_ring(language: Language) -> Item {
+        parse(match language {
+            Language::English => {
+                "Item Class: Rings\nRarity: Rare\nStorm Spiral\nSapphire Ring\n--------\n\
+                 Item Level: 77\n--------\n+10% to Lightning Resistance (rune)\n--------\n\
+                 +22% to Cold Resistance (implicit)\n--------\n+65 to maximum Life\n\
+                 +38% to Fire Resistance\n+10% to all Elemental Resistances\n+12 to Strength\n\
+                 +23% to Chaos Resistance"
+            }
+            Language::French => {
+                "Classe d'objet: Anneaux\nRareté: Rare\nSpirale\nAnneau de saphir\n--------\n\
+                 Niveau de l'objet: 77\n--------\n+10% à la Résistance à la foudre (rune)\n\
+                 --------\n+22% à la Résistance au froid (implicit)\n--------\n\
+                 +65 de Vie maximale\n+38% à la Résistance au feu\n\
+                 +10% à toutes les Résistances Élémentaires\n+12 de Force\n\
+                 +23% à la Résistance au chaos"
+            }
+        })
+    }
+
+    #[test]
+    fn the_pseudo_totals_add_up_the_lines_of_every_group_in_every_language() {
+        for language in [Language::English, Language::French] {
+            let item = rare_ring(language);
+            let stats = line_stats(&item);
+            let totals: Vec<(Pseudo, f64)> = stats
+                .pseudo_totals()
+                .iter()
+                .map(|total| (total.pseudo, total.value))
+                .collect();
+
+            assert_eq!(
+                totals,
+                [
+                    // The rune, the implicit, and each element of all of them.
+                    (Pseudo::ElementalResistance, 100.0),
+                    (Pseudo::ChaosResistance, 23.0),
+                    // Each point of strength twice.
+                    (Pseudo::Life, 89.0),
+                    (Pseudo::Strength, 12.0),
+                ],
+                "{language:?}"
+            );
+            for modifier in 0..item.modifiers().len() {
+                assert!(stats.added_up(key(modifier, 0)), "{language:?} {modifier}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_negative_line_counts_against_its_total() {
+        let item = parse(
+            "Item Class: Rings\nRarity: Rare\nVile Loop\nAmethyst Ring\n--------\n\
+             Item Level: 77\n--------\n-13% to Chaos Resistance (implicit)\n--------\n\
+             +17% to Fire and Chaos Resistances",
+        );
+        let totals: Vec<(Pseudo, f64)> = line_stats(&item)
+            .pseudo_totals()
+            .iter()
+            .map(|total| (total.pseudo, total.value))
+            .collect();
+
+        assert_eq!(
+            totals,
+            [
+                (Pseudo::ElementalResistance, 17.0),
+                (Pseudo::ChaosResistance, 4.0),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_pseudo_total_is_searched_by_its_id_before_the_lines() {
+        let item = rare_ring(Language::English);
+        let stats = line_stats(&item);
+        let filters = [
+            (FilterKey::Stat(key(2, 0)), filter("60", "")),
+            (
+                FilterKey::Pseudo(Pseudo::ElementalResistance),
+                filter("90", "120"),
+            ),
+            (FilterKey::Pseudo(Pseudo::Life), filter("", "")),
+            (
+                FilterKey::Pseudo(Pseudo::Strength),
+                Filter {
+                    checked: false,
+                    ..filter("11", "")
+                },
+            ),
+        ];
+
+        assert_eq!(
+            stats.search_filters(&filters).stats,
+            [
+                stat(
+                    "pseudo.pseudo_total_elemental_resistance",
+                    Some(90.0),
+                    Some(120.0)
+                ),
+                stat("pseudo.pseudo_total_life", None, None),
+                stat("explicit.stat_3299347043", Some(60.0), None),
+            ]
+        );
     }
 
     #[test]

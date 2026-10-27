@@ -1,7 +1,7 @@
 //! The filters of the offers search, as the player sets them: whether each stat of the item,
-//! or its base type, item level or DPS, is searched, its minimum and its maximum. They are kept for the item shown, until an
-//! item is copied, even the same one after another text; a stat the player didn't touch keeps
-//! the choice made for it by default.
+//! or its base type, item level, DPS or pseudo totals, is searched, its minimum and its
+//! maximum. They are kept for the item shown, until an item is copied, even the same one after
+//! another text; a stat the player didn't touch keeps the choice made for it by default.
 //!
 //! The minimum and the maximum searched stay within the range of the stat, whatever the
 //! player is typing ([`Filter::searched`]).
@@ -10,6 +10,7 @@ use std::collections::HashMap;
 
 use crate::format;
 use crate::item::Range;
+use crate::trade::pseudo::Pseudo;
 
 /// A line of a modifier of the item: the index of its modifier among the modifiers of the
 /// item, and of the line in it.
@@ -27,6 +28,8 @@ pub enum FilterKey {
     /// The base type of the item: unchecked, the offers may have any base.
     BaseType,
     Property(Property),
+    /// A total the trade site adds up from several lines.
+    Pseudo(Pseudo),
 }
 
 /// A property of the item the trade site searches with a minimum and a maximum.
