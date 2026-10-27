@@ -12,6 +12,13 @@ use crate::Result;
 /// The domains of the modifiers kept: the equipment, the jewels, the flasks and the charms.
 const DOMAINS: [&str; 3] = ["item", "misc", "flask"];
 
+/// Whether `tag` is one of the Time-Lost jewels: their modifiers are written by the game
+/// within `Small Passive Skills in Radius also grant …` or `Notable Passive Skills…`, which
+/// RePoE doesn't say; left out until step 13k.
+fn radius_jewel(tag: &str) -> bool {
+    tag == "radius_jewel" || tag.ends_with("_radius_jewel")
+}
+
 /// A modifier of `mods.json`, with the fields the generator reads.
 #[derive(Deserialize)]
 pub struct SourceModifier {
@@ -91,6 +98,10 @@ struct Line {
     /// second later`) is that of the stat, 1000.
     #[serde(skip_serializing_if = "is_one")]
     divisor: i64,
+    /// Whether the template is one of Exiled Exchange 2: a line without template can't be
+    /// found, nor its modifier.
+    #[serde(skip)]
+    known: bool,
 }
 
 #[expect(
@@ -172,7 +183,10 @@ pub fn reduce(
         let rolls = DOMAINS.contains(&modifier.domain.as_str())
             && ["prefix", "suffix"].contains(&modifier.generation_type.as_str())
             && !modifier.is_essence_only
-            && modifier.spawn_weights.iter().any(|spawn| spawn.weight > 0);
+            && modifier
+                .spawn_weights
+                .iter()
+                .any(|spawn| spawn.weight > 0 && !radius_jewel(&spawn.tag));
         if !rolls {
             continue;
         }
@@ -211,10 +225,11 @@ pub fn reduce(
         if !spawn.iter().any(|&(_, weight)| weight > 0) {
             continue;
         }
-        for line in &lines {
-            if !templates.contains_key(&line.template) {
-                unknown_lines.insert(line.template.clone());
-            }
+        // A line without template can't be found, nor its modifier.
+        let unknown: Vec<&Line> = lines.iter().filter(|line| !line.known).collect();
+        if !unknown.is_empty() {
+            unknown_lines.extend(unknown.iter().map(|line| line.template.clone()));
+            continue;
         }
         tiers.sort();
         tables.push(Modifier {
@@ -226,7 +241,7 @@ pub fn reduce(
         });
     }
     for line in unknown_lines {
-        println!("Modifier line without template: {line}");
+        println!("Modifier line without template, its modifier left out: {line}");
     }
     let base_tags = base_tags(&released, &tables);
     Ok((tables, base_tags))
@@ -263,8 +278,8 @@ fn base_tags(released: &[&SourceBase], tables: &[Modifier]) -> BaseTags {
 }
 
 /// The lines of `modifier`, each with the English template of Exiled Exchange 2 of one of its
-/// strings (a line without template is written as the game writes it), and the range of each
-/// of their values.
+/// strings (a line without template is written as the game writes it, without range), and the
+/// range of each of their values.
 fn lines(
     modifier: &SourceModifier,
     translations: &[Translation],
@@ -304,15 +319,23 @@ fn line(
         .english
         .first()
         .ok_or("a translation without text")?;
-    let template = translation
+    let Some(template) = translation
         .english
         .iter()
         .find_map(|variant| templates.get(&template(&variant.string)))
         .cloned()
-        .unwrap_or_else(|| template(&first.string));
+    else {
+        // Without template, the line can't be found: written as the game writes it.
+        let line = Line {
+            template: template(&first.string),
+            divisor: 1,
+            known: false,
+        };
+        return Ok((line, Vec::new()));
+    };
     // The values are those of the string that writes the most of them: `Loads {0} additional
-    // bolts`, not `Loads an additional bolt`. A string that writes none (`Upgrades Radius to
-    // Medium`) has the values of its stats, as Exiled Exchange 2 gives them.
+    // bolts`, not `Loads an additional bolt` (`max_by_key` keeps the last of the maximums: the
+    // variants reversed, the first one).
     let general = translation
         .english
         .iter()
@@ -320,41 +343,58 @@ fn line(
         .max_by_key(|variant| placeholders(&variant.string).len())
         .unwrap_or(first);
     let mut indexes = placeholders(&general.string);
-    if indexes.is_empty() {
+    // A template with a value no string writes (`Upgrades Radius to #`, `Upgrades Radius to
+    // Medium`) has the values of its stats, as Exiled Exchange 2 gives them; a template
+    // without value (`Instant Recovery`) has none.
+    if indexes.is_empty() && template.contains('#') {
         indexes = (0..translation.ids.len())
             .filter(|&index| {
                 translation
                     .ids
                     .get(index)
-                    .is_some_and(|id| modifier.stats.iter().any(|stat| stat.id == *id))
+                    .is_some_and(|id| stat_of(modifier, id).is_some())
             })
             .collect();
     }
+    let handlers = |index: usize| {
+        general
+            .index_handlers
+            .get(index)
+            .map_or(&[][..], Vec::as_slice)
+    };
+    // A stat that rolls is written by a value of its line, or its range would be lost.
+    for (index, id) in translation.ids.iter().enumerate() {
+        let rolls = stat_of(modifier, id).is_some_and(|stat| stat.min != stat.max);
+        if rolls && !indexes.contains(&index) {
+            return Err(format!("{id} rolls but {} doesn't write it", general.string).into());
+        }
+    }
     let mut ranges = Vec::new();
-    let mut divisor = None;
-    for index in indexes {
+    for &index in &indexes {
         let id = translation
             .ids
             .get(index)
             .ok_or_else(|| format!("no stat {index} in {}", general.string))?;
         // A stat the modifier doesn't have is 0, e.g. `local_weapon_no_physical_damage`.
-        let (min, max) = modifier
-            .stats
-            .iter()
-            .find(|stat| stat.id == *id)
-            .map_or((0, 0), |stat| (stat.min, stat.max));
-        let handlers = general
-            .index_handlers
-            .get(index)
-            .map_or(&[][..], Vec::as_slice);
-        divisor.get_or_insert(divisor_of(handlers)?);
-        ranges.push([scale(min, handlers)?, scale(max, handlers)?]);
+        let (min, max) = stat_of(modifier, id).map_or((0, 0), |stat| (stat.min, stat.max));
+        ranges.push([scale(min, handlers(index))?, scale(max, handlers(index))?]);
     }
+    // The value of a line written without number is that of its stat, its first.
+    let divisor = match indexes.first() {
+        Some(&index) => divisor_of(handlers(index))?,
+        None => 1,
+    };
     let line = Line {
         template,
-        divisor: divisor.unwrap_or(1),
+        divisor,
+        known: true,
     };
     Ok((line, ranges))
+}
+
+/// The stat `id` of `modifier`, if it has it.
+fn stat_of<'a>(modifier: &'a SourceModifier, id: &str) -> Option<&'a SourceStat> {
+    modifier.stats.iter().find(|stat| stat.id == id)
 }
 
 /// The template of a string of the game, as Exiled Exchange 2 writes it: `{0:+d} to
@@ -582,7 +622,12 @@ mod tests {
         );
         let translations = r#"[{"ids": ["local_energy_shield"], "English": [{"string": "{0:+d} to maximum Energy Shield", "index_handlers": [[]]}], "hidden": null}]"#;
 
-        let (_, tags) = tables(&modifiers, bases, translations, &[]);
+        let (_, tags) = tables(
+            &modifiers,
+            bases,
+            translations,
+            &[("# to maximum Energy Shield", "# to maximum Energy Shield")],
+        );
 
         assert_eq!(tags.get("Random Helmet"), Some(&Vec::new()));
         assert_eq!(
@@ -654,7 +699,7 @@ mod tests {
         let rage = one_table(
             &[r#"[{"id": "rage_loss_delay_ms_+", "min": 1000, "max": 2000}]"#],
             r#"{"ids": ["rage_loss_delay_ms_+"], "English": [
-                {"string": "Inherent [Rage|Rage] loss starts 1 second later", "index_handlers": [["milliseconds_to_seconds"]]},
+                {"string": "Inherent [Rage|Rage] loss starts 1 second later", "index_handlers": [[]]},
                 {"string": "Inherent [Rage|Rage] loss starts {0} seconds later", "index_handlers": [["milliseconds_to_seconds"]]}
             ], "hidden": null}"#,
             &[(
@@ -700,7 +745,7 @@ mod tests {
             r#"{"ids": ["local_minimum_added_fire_damage", "local_maximum_added_fire_damage"], "English": [
                 {"string": "Adds {0} to {1} [Fire|Fire] Damage", "index_handlers": [[], []]}
             ], "hidden": null}"#,
-            &[],
+            &[("Adds # to # Fire Damage", "Adds # to # Fire Damage")],
         );
 
         assert_eq!(
@@ -740,5 +785,129 @@ mod tests {
         assert_eq!(serde_json::to_string(&per_second).expect("written"), "23.1");
         assert_eq!(serde_json::to_string(&permyriad).expect("written"), "-7.9");
         assert!(scale(1, &["new_handler".to_owned()]).is_err());
+    }
+
+    #[test]
+    fn a_line_without_value_has_no_range() {
+        let instant = one_table(
+            &[r#"[{"id": "local_flask_recovers_instantly", "min": 1, "max": 1}]"#],
+            r#"{"ids": ["local_flask_recovers_instantly"], "English": [
+                {"string": "Instant Recovery", "index_handlers": [[]]}
+            ], "hidden": null}"#,
+            &[("Instant Recovery", "Instant Recovery")],
+        );
+
+        assert_eq!(
+            instant,
+            serde_json::json!([
+                [{"template": "Instant Recovery"}],
+                [{"level": 0, "ranges": [[]]}]
+            ])
+        );
+    }
+
+    #[test]
+    fn only_the_prefixes_and_suffixes_that_roll_are_kept_without_their_hidden_stats() {
+        let life = r#"[{"id": "base_maximum_life", "min": 5, "max": 10}, {"id": "hidden_stat", "min": 1, "max": 1}]"#;
+        let ring = r#"[{"tag": "ring", "weight": 1}, {"tag": "default", "weight": 0}]"#;
+        let kept = modifier("Life", 1, ring, life);
+        let other = |field: &str, value: &str| {
+            let text = kept.replace(field, value);
+            assert_ne!(text, kept);
+            text
+        };
+        let modifiers = format!(
+            r#"{{"Kept": {kept}, "Monster": {}, "Unique": {}, "Essence": {}, "Nowhere": {}, "TimeLost": {}}}"#,
+            other(r#""domain": "item""#, r#""domain": "monster""#),
+            other(
+                r#""generation_type": "suffix""#,
+                r#""generation_type": "unique""#
+            ),
+            other(r#""is_essence_only": false"#, r#""is_essence_only": true"#),
+            other(
+                r#"{"tag": "ring", "weight": 1}"#,
+                r#"{"tag": "ring", "weight": 0}"#
+            ),
+            other(
+                r#"{"tag": "ring", "weight": 1}"#,
+                r#"{"tag": "str_radius_jewel", "weight": 1}"#
+            ),
+        );
+        let translations = r#"[
+            {"ids": ["base_maximum_life"], "English": [{"string": "{0:+d} to maximum Life", "index_handlers": [[]]}], "hidden": null},
+            {"ids": ["hidden_stat"], "English": [{"string": "Hidden {0}", "index_handlers": [[]]}], "hidden": true}
+        ]"#;
+
+        let (tables, _) = tables(
+            &modifiers,
+            BASES,
+            translations,
+            &[("# to maximum Life", "# to maximum Life")],
+        );
+
+        assert_eq!(
+            tables,
+            serde_json::json!([
+                {"type": "Life", "affix": "suffix", "lines": [{"template": "# to maximum Life"}],
+                 "spawn": [["ring", 1], ["default", 0]],
+                 "tiers": [{"level": 1, "ranges": [[[5, 10]]]}]}
+            ])
+        );
+    }
+
+    #[test]
+    fn a_stat_that_rolls_without_being_written_stops_the_generator() {
+        let modifiers = format!(
+            r#"{{"Bolts": {}}}"#,
+            modifier(
+                "Bolts",
+                1,
+                r#"[{"tag": "weapon", "weight": 1}]"#,
+                r#"[{"id": "base_number_of_crossbow_bolts", "min": 1, "max": 2}]"#
+            )
+        );
+        let translations = r#"[{"ids": ["base_number_of_crossbow_bolts"], "English": [
+            {"string": "Loads an additional bolt", "index_handlers": [[]]}
+        ], "hidden": null}]"#;
+
+        let error = reduce(
+            &serde_json::from_str(&modifiers).expect("modifiers"),
+            &serde_json::from_str(BASES).expect("bases"),
+            &serde_json::from_str::<Vec<_>>(translations).expect("translations"),
+            &[(
+                "Loads an additional bolt".to_owned(),
+                "Loads an additional bolt".to_owned(),
+            )]
+            .into(),
+        )
+        .err()
+        .map(|error| error.to_string());
+
+        assert_eq!(
+            error.as_deref(),
+            Some(
+                "Bolts: base_number_of_crossbow_bolts rolls but Loads an additional bolt doesn't write it"
+            )
+        );
+    }
+
+    #[test]
+    fn a_modifier_with_a_line_without_template_is_left_out() {
+        let modifiers = format!(
+            r#"{{"Hook": {}}}"#,
+            modifier(
+                "Hook",
+                1,
+                r#"[{"tag": "weapon", "weight": 1}]"#,
+                r#"[{"id": "fishing_hook_type", "min": 1, "max": 2}]"#
+            )
+        );
+        let translations = r#"[{"ids": ["fishing_hook_type"], "English": [
+            {"string": "Karui Stone Hook", "index_handlers": [[]]}
+        ], "hidden": null}]"#;
+
+        let (tables, _) = tables(&modifiers, BASES, translations, &[]);
+
+        assert_eq!(tables, serde_json::json!([]));
     }
 }

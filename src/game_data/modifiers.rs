@@ -293,9 +293,13 @@ impl<'a> Copied<'a> {
                 }
             }
         }
-        // A line written without number has no range in the advanced copy.
+        // The advanced copy writes no range for a line without number (`Loads an additional
+        // bolt`): the modifier is then found by its values only, as it is when a range is
+        // missing.
         let count: usize = lines.iter().map(CopiedLine::count).sum();
-        let ranges = ranges.filter(|ranges| ranges.len() == count);
+        let ranges = ranges.filter(|ranges| {
+            lines.iter().all(|line| line.written.is_none()) && ranges.len() == count
+        });
         Some(Self { lines, ranges })
     }
 
@@ -605,5 +609,81 @@ mod tests {
         // `Inherent Rage loss starts 1 second later` gives the 1000 milliseconds of the stat.
         assert_eq!(number(copied(Vec::new(), Some(1000.0))), Some(2));
         assert_eq!(number(copied(vec![2.5], None)), Some(1));
+    }
+
+    #[test]
+    fn a_line_without_value_is_found_with_the_other_lines_of_its_modifier() {
+        let instant = modifier(
+            Some(Affix::Prefix),
+            &["Instant Recovery", "50% reduced Amount Recovered"],
+        );
+
+        let tiers = tiers("Ultimate Life Flask", &instant).expect("its tiers");
+
+        assert_eq!(tiers.tier().map(|tier| tier.number), Some(1));
+        assert_eq!(
+            tiers.tier().map(|tier| tier.ranges.clone()),
+            Some(vec![range(-50.0, -50.0)])
+        );
+    }
+
+    #[test]
+    fn the_modifiers_of_the_time_lost_jewels_arent_in_the_tables_yet() {
+        // Written within "Small Passive Skills in Radius also grant…" by the game, step 13k.
+        let ailments = modifier(
+            Some(Affix::Suffix),
+            &["5% increased chance to inflict Ailments"],
+        );
+
+        assert_eq!(tiers("Time-Lost Emerald", &ailments), None);
+    }
+
+    #[test]
+    fn two_tables_with_the_same_lines_in_another_order_are_two_modifiers() {
+        let table = |kind: &str, lines: [&str; 2], level: u32| {
+            format!(
+                r#"{{"type": "{kind}", "affix": "prefix", "lines": [{{"template": "{}"}}, {{"template": "{}"}}], "spawn": [["weapon", 1]], "tiers": [{{"level": {level}, "ranges": [[[1, 5]], [[10, 20]]]}}]}}"#,
+                lines[0], lines[1]
+            )
+        };
+        let tables = read(
+            &[
+                table("Hybrid", ["A #", "B #"], 1),
+                table("Hybrid", ["B #", "A #"], 50),
+            ]
+            .join("\n"),
+        );
+        let copied = Copied {
+            lines: vec![
+                CopiedLine {
+                    template: "B #",
+                    values: vec![15.0],
+                    written: None,
+                },
+                CopiedLine {
+                    template: "A #",
+                    values: vec![3.0],
+                    written: None,
+                },
+            ],
+            ranges: None,
+        };
+
+        let tiers = find(
+            &tables,
+            &[TableAffix::Prefix],
+            &["weapon".to_owned()],
+            &copied,
+        )
+        .expect("its tiers");
+
+        // The first table holds the copied values, its lines put in the copied order; the
+        // second, its own lines in the copied order, holds neither 15 in 1–5 nor 3 in 10–20.
+        assert_eq!(tiers.tiers.len(), 1);
+        assert_eq!(tiers.tiers.first().map(|tier| tier.level), Some(1));
+        assert_eq!(
+            tiers.tier().map(|tier| tier.ranges.clone()),
+            Some(vec![range(10.0, 20.0), range(1.0, 5.0)])
+        );
     }
 }

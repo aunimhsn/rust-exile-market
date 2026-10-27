@@ -243,7 +243,8 @@ fn main() -> Result<()> {
     let english = sources
         .iter()
         .find(|(language, _)| *language == "en")
-        .map_or(&[][..], |(_, stats)| stats.as_slice());
+        .map(|(_, stats)| stats.as_slice())
+        .ok_or("no English stats")?;
     let (tables, base_tags) = modifier_tables(&agent, &repoe_commit.sha, &templates(english))?;
     println!("{} modifier tables", tables.len());
     write_lines(&output.join("modifiers.ndjson"), &tables)?;

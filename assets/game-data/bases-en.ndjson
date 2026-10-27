@@ -1429,10 +1429,10 @@
 {"name":"Threaded Shoes","category":"Boots","tags":["dex_int_armour","boots","armour","default"]}
 {"name":"Thunder Talisman","category":"Talisman","tags":["talisman","two_hand_weapon","weapon","default"]}
 {"name":"Tideseer Mantle","category":"Body Armour","tags":["str_int_armour","body_armour","armour","default"]}
-{"name":"Time-Lost Diamond","category":"Jewel","tags":["str_radius_jewel","dex_radius_jewel","int_radius_jewel","radius_jewel","default"]}
-{"name":"Time-Lost Emerald","category":"Jewel","tags":["dex_radius_jewel","radius_jewel","default"]}
-{"name":"Time-Lost Ruby","category":"Jewel","tags":["str_radius_jewel","radius_jewel","default"]}
-{"name":"Time-Lost Sapphire","category":"Jewel","tags":["int_radius_jewel","radius_jewel","default"]}
+{"name":"Time-Lost Diamond","category":"Jewel","tags":["default"]}
+{"name":"Time-Lost Emerald","category":"Jewel","tags":["default"]}
+{"name":"Time-Lost Ruby","category":"Jewel","tags":["default"]}
+{"name":"Time-Lost Sapphire","category":"Jewel","tags":["default"]}
 {"name":"Timeless Jewel","category":"Jewel"}
 {"name":"Titan Mitts","category":"Gloves","tags":["str_armour","gloves","armour","default"]}
 {"name":"Tonal Focus","category":"Focus","tags":["int_armour","focus","armour","default"]}

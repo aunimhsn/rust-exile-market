@@ -550,7 +550,7 @@
 {"name":"Diadème perlé runeforgé","category":"Helmet","tags":["int_armour","helmet","armour","default"]}
 {"name":"Diadème perlé runomaîtrisé","category":"Helmet","tags":["int_armour","helmet","armour","default"]}
 {"name":"Diamant","category":"Jewel","tags":["strjewel","dexjewel","intjewel","default"]}
-{"name":"Diamant perdu dans le temps","category":"Jewel","tags":["str_radius_jewel","dex_radius_jewel","int_radius_jewel","radius_jewel","default"]}
+{"name":"Diamant perdu dans le temps","category":"Jewel","tags":["default"]}
 {"name":"Défenseur vénérable","category":"Shield","tags":["str_dex_armour","str_dex_shield","shield","armour","default"]}
 {"name":"Défenseur vénérable runomaîtrisé","category":"Shield","tags":["str_dex_armour","str_dex_shield","shield","armour","default"]}
 {"name":"Espadon affûté","category":"Two Hand Sword","tags":["sword","two_hand_weapon","weapon","default"]}
@@ -1230,7 +1230,7 @@
 {"name":"Robe éclairée","category":"Body Armour","tags":["int_armour","body_armour","armour","default"]}
 {"name":"Robe éclairée runomaîtrisée","category":"Body Armour","tags":["int_armour","body_armour","armour","default"]}
 {"name":"Rubis","category":"Jewel","tags":["strjewel","default"]}
-{"name":"Rubis perdu dans le temps","category":"Jewel","tags":["str_radius_jewel","radius_jewel","default"]}
+{"name":"Rubis perdu dans le temps","category":"Jewel","tags":["default"]}
 {"name":"Sabre d'abordage","category":"One Hand Sword","tags":["sword","one_hand_weapon","weapon","default"]}
 {"name":"Sandales de Sekhema","category":"Boots","tags":["int_armour","boots","armour","default"]}
 {"name":"Sandales de Sekhema runeforgées","category":"Boots","tags":["int_armour","boots","armour","default"]}
@@ -1257,7 +1257,7 @@
 {"name":"Sandales érodées par le sable","category":"Boots","tags":["int_armour","boots","armour","default"]}
 {"name":"Sandales érodées par le sable runeforgées","category":"Boots","tags":["int_armour","boots","armour","default"]}
 {"name":"Saphir","category":"Jewel","tags":["intjewel","default"]}
-{"name":"Saphir perdu dans le temps","category":"Jewel","tags":["int_radius_jewel","radius_jewel","default"]}
+{"name":"Saphir perdu dans le temps","category":"Jewel","tags":["default"]}
 {"name":"Sceau abyssal","category":"Ring","tags":["ring","default"]}
 {"name":"Sceptre cliquetant","category":"Sceptre","tags":["sceptre","default"]}
 {"name":"Sceptre courroucé","category":"Sceptre","tags":["sceptre","default"]}
@@ -1524,7 +1524,7 @@
 {"name":"Écu vaal","category":"Shield","tags":["str_int_armour","str_int_shield","shield","armour","default"]}
 {"name":"Écu vaal runeforgé","category":"Shield","tags":["str_int_armour","str_int_shield","shield","armour","default"]}
 {"name":"Émeraude","category":"Jewel","tags":["dexjewel","default"]}
-{"name":"Émeraude perdue dans le temps","category":"Jewel","tags":["dex_radius_jewel","radius_jewel","default"]}
+{"name":"Émeraude perdue dans le temps","category":"Jewel","tags":["default"]}
 {"name":"Épée courte","category":"One Hand Sword","tags":["sword","one_hand_weapon","weapon","default"]}
 {"name":"Épée courte roussie","category":"One Hand Sword","tags":["sword","one_hand_weapon","weapon","default"]}
 {"name":"Épée courte runique","category":"One Hand Sword","tags":["sword","one_hand_weapon","weapon","default"]}
