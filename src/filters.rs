@@ -1,7 +1,8 @@
 //! The filters of the offers search, as the player sets them: whether each stat of the item,
-//! or its base type, item level, DPS or pseudo totals, is searched, its minimum and its
-//! maximum. They are kept for the item shown, until an item is copied, even the same one after
-//! another text; a stat the player didn't touch keeps the choice made for it by default.
+//! or its base type, item level, sockets, quality, required level, DPS or pseudo totals, is
+//! searched, its minimum and its maximum. They are kept for the item shown, until an item is
+//! copied, even the same one after another text; a stat the player didn't touch keeps the
+//! choice made for it by default.
 //!
 //! The minimum and the maximum searched stay within the range of the stat, whatever the
 //! player is typing ([`Filter::searched`]).
@@ -36,6 +37,12 @@ pub enum FilterKey {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Property {
     ItemLevel,
+    /// The augmentable sockets, empty or not.
+    Sockets,
+    /// The quality, in percent.
+    Quality,
+    /// The level a character needs, searched with a maximum.
+    RequiredLevel,
     PhysicalDps,
     /// Fire, cold and lightning together.
     ElementalDps,

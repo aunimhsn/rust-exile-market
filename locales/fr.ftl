@@ -137,7 +137,7 @@ group-suffixes = Suffixes
 group-explicit = Explicite
 # Les modificateurs d'un unique, sans préfixe ni suffixe.
 group-unique = Unique
-# Les filtres du type de base et du niveau d'objet d'un objet rare, magique ou normal, et du DPS d'une arme.
+# Les filtres du type de base, du niveau d'objet, des châsses, de la qualité et du niveau requis d'un objet rare, magique ou normal.
 group-item = Objet
 group-weapon = Arme
 # Les totaux que le site d'échange additionne sur plusieurs modificateurs.
@@ -164,6 +164,9 @@ filter-lower-better = Plus c'est bas, mieux c'est
 # Les filtres des propriétés d'un objet, avec leur valeur.
 filter-base-type = Base : { $base }
 filter-item-level = Niveau de l'objet : { $value }
+filter-sockets = Châsses : { $value }
+filter-quality = Qualité : { $value }%
+filter-required-level = Niveau requis : { $value }
 filter-physical-dps = DPS physique : { $value }
 filter-elemental-dps = DPS élémentaire : { $value }
 # Les filtres des totaux pseudo, avec leur valeur.
