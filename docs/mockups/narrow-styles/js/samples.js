@@ -1,4 +1,17 @@
 // Sample items, prices and offers, used by several sections.
+// The Item group of a rare, magic or normal item (13h): its base, then its item level, sockets, quality and
+// required level when it has them, each `{ value, check }`: the item level first, which every item has, so
+// that the rows stay in place from one item to the next. The sockets a base usually has are shown unchecked;
+// a normal item without quality has no quality filter. The required level of a rare for leveling is searched
+// with a maximum: the offers a character of that level can use.
+const itemFilters = ({ base, level, sockets, quality, required }) => [
+  { group: "Item", min: true },
+  { mod: `Base: ${base}`, check: true },
+  level && { mod: `Item level: ${level.value}`, check: level.check, min: level.value },
+  sockets && { mod: `Sockets: ${sockets.value}`, check: sockets.check, min: sockets.value },
+  quality && { mod: `Quality: ${quality.value}%`, check: quality.check, min: quality.value },
+  required && { mod: `Required level: ${required.value}`, check: false, min: required.value, max: required.value, lower: true },
+].filter(Boolean);
 // Sample items.
 const HH = { rarity: "unique", name: "Headhunter", base: "Heavy Belt", cls: "Belts", tags: ["Corrupted", "ilvl 80"], req: "Requires Level 50", statsLabel: "Stats (6)", filters: "3 filters" };
 const HH_STATS = [
@@ -20,9 +33,8 @@ const BOW = { rarity: "rare", name: "Storm Bite", base: "Gemini Bow", cls: "Bows
 // Rare, magic and jewels: no market price, so the price is estimated from similar offers.
 // Minimums are prefilled at 90 % of the copied values, to find comparable items.
 const BOW_FILTERS = [
-  { group: "Item", min: true },
-  { mod: "Base: Gemini Bow", check: true },
-  { mod: "Item level: 81", check: false, min: 81 },
+  // A bow usually has two sockets; its quality isn't exceptional.
+  ...itemFilters({ base: "Gemini Bow", level: { value: 81, check: false }, sockets: { value: 2, check: false } }),
   { group: "Weapon" },
   { mod: "Physical DPS: 245", check: true, min: 220 },
   { mod: "Elemental DPS: 44", check: false, min: 39 },
@@ -59,14 +71,8 @@ const RING_FILTERS = [
 const MAGIC = { rarity: "magic", name: "Glimmering Sapphire Ring of the Lynx", cls: "Rings", tags: ["ilvl 68"], req: "Requires Level 44", statsLabel: "Stats (3)", filters: "2 filters" };
 // Exceptional base: a normal item whose value is its base, its sockets and its item level.
 const STAFF = { rarity: "normal", name: "Exceptional Chiming Staff", cls: "Staves", tags: ["3 sockets", "ilvl 82"], summary: "Grants Skill: Level 18 Sigil of Power", req: "Requires Level 78 · 137 Int", statsLabel: "Stats (0)", filters: "3 filters" };
-const STAFF_FILTERS = [
-  { group: "Item", min: true },
-  { mod: "Base: Chiming Staff", check: true },
-  { mod: "Sockets: 3", check: true, min: 3 },
-  { mod: "Item level: 82", check: true, min: 82 },
-  { mod: "Quality: 0%", check: false, min: 0 },
-  { note: "A normal item has no modifiers: its base, sockets and item level make its value." },
-];
+// Exceptional by its sockets: a staff usually has two. The trade site doesn't know its name.
+const STAFF_FILTERS = itemFilters({ base: "Chiming Staff", level: { value: 82, check: true }, sockets: { value: 3, check: true } });
 const JEWEL = { rarity: "rare", name: "Brood Ember", base: "Ruby", cls: "Jewels", tags: ["ilvl 81"], statsLabel: "Stats (4)", filters: "5 filters" };
 const JEWEL_FILTERS = [
   { group: "Item", min: true },
