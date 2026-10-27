@@ -202,11 +202,12 @@ pub struct PseudoTotal {
     pub lines: Vec<StatKey>,
 }
 
-/// A modifier line the trade site searches: its key, its game stat and its value there.
+/// A modifier line the trade site searches: its key, the game id of its stat and its value
+/// there, the value of the game for a stat that isn't inverted, as those of the rules.
 #[derive(Debug, Clone, Copy)]
 pub struct CountedLine<'a> {
     pub key: StatKey,
-    pub stat: &'a str,
+    pub game_id: &'a str,
     pub value: f64,
 }
 
@@ -214,7 +215,7 @@ pub struct CountedLine<'a> {
 /// those of its rules whose lines it has, above zero.
 #[must_use]
 pub fn totals(lines: &[CountedLine<'_>]) -> Vec<PseudoTotal> {
-    let has = |stats: &[&str]| lines.iter().any(|line| stats.contains(&line.stat));
+    let has = |stats: &[&str]| lines.iter().any(|line| stats.contains(&line.game_id));
     RULES
         .iter()
         .filter_map(|rule| {
@@ -222,7 +223,7 @@ pub fn totals(lines: &[CountedLine<'_>]) -> Vec<PseudoTotal> {
                 .iter()
                 .filter_map(|line| {
                     let &(_, multiplier) =
-                        rule.stats.iter().find(|(stat, _)| *stat == line.stat)?;
+                        rule.stats.iter().find(|(stat, _)| *stat == line.game_id)?;
                     Some((line.key, line.value * multiplier))
                 })
                 .collect();
@@ -248,9 +249,9 @@ mod tests {
         stats
             .iter()
             .enumerate()
-            .map(|(modifier, &(stat, value))| CountedLine {
+            .map(|(modifier, &(game_id, value))| CountedLine {
                 key: StatKey { modifier, line: 0 },
-                stat,
+                game_id,
                 value,
             })
             .collect()
@@ -353,8 +354,10 @@ mod tests {
         );
     }
 
+    /// The totals add up the values of the trade site, which are those of the game: no stat of
+    /// the rules has the other sign there.
     #[test]
-    fn the_stats_of_the_rules_are_stats_of_the_game() {
+    fn the_stats_of_the_rules_are_stats_of_the_game_not_inverted() {
         let mut stats: Vec<&str> = RULES
             .iter()
             .flat_map(|rule| rule.stats.iter().map(|&(stat, _)| stat))
@@ -363,9 +366,10 @@ mod tests {
         stats.dedup();
         for language in [Language::English, Language::French] {
             for stat in &stats {
-                assert!(
-                    game_data::has_stat(language, stat),
-                    "{stat} isn't a stat of the {language:?} game data"
+                assert_eq!(
+                    game_data::stat_inverted(language, stat),
+                    Some(false),
+                    "{stat} in the {language:?} game data"
                 );
             }
         }

@@ -166,8 +166,8 @@ filter-base-type = Base : { $base }
 filter-item-level = Niveau de l'objet : { $value }
 filter-physical-dps = DPS physique : { $value }
 filter-elemental-dps = DPS élémentaire : { $value }
-# Les filtres des totaux pseudo, écrits comme les lignes du jeu, avec leur valeur.
-pseudo-elemental-resistance = +{ $value }% aux Résistances élémentaires au total
+# Les filtres des totaux pseudo, avec leur valeur.
+pseudo-elemental-resistance = +{ $value }% aux Résistances Élémentaires au total
 pseudo-chaos-resistance = +{ $value }% à la Résistance au chaos au total
 pseudo-life = +{ $value } de Vie maximale au total
 pseudo-mana = +{ $value } de Mana maximal au total

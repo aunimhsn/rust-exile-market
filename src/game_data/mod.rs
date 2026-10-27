@@ -31,9 +31,12 @@ pub use trade_site::TradeStats;
 #[cfg(test)]
 pub use trade_site::tests::trade_stats;
 
-/// A stat of the game data of `language` has the game id `id` (`base_maximum_life`).
+/// Whether the stat of the game id `id` (`base_maximum_life`) in the game data of `language`
+/// has the other sign on the trade site; none when no stat has this id.
 #[cfg(test)]
 #[must_use]
-pub fn has_stat(language: crate::language::Language, id: &str) -> bool {
-    stats::Stats::of(language).has_id(id)
+pub fn stat_inverted(language: crate::language::Language, id: &str) -> Option<bool> {
+    stats::Stats::of(language)
+        .by_id(id)
+        .map(|stat| stat.inverted)
 }

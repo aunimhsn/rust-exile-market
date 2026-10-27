@@ -249,7 +249,7 @@ impl LineStats {
                     value: Some(value), ..
                 }) => Some(CountedLine {
                     key: line.key,
-                    stat: line.game_id.as_deref()?,
+                    game_id: line.game_id.as_deref()?,
                     value: value.trade,
                 }),
                 _ => None,
@@ -281,13 +281,14 @@ impl LineStats {
             .is_some_and(|id| WEAPON_DAMAGE.contains(&id))
     }
 
-    /// The pseudo totals of the item that are filters, a rare or magic one.
+    /// The pseudo totals of the item that are filters, for any item: the stats show them for
+    /// a rare or magic one only.
     #[must_use]
     pub fn pseudo_totals(&self) -> &[PseudoTotal] {
         &self.pseudo
     }
 
-    /// The line `key` is added up by a pseudo total.
+    /// The line `key` is added up by a pseudo total, also on an item that doesn't show them.
     #[must_use]
     pub fn added_up(&self, key: StatKey) -> bool {
         self.pseudo.iter().any(|total| total.lines.contains(&key))
@@ -706,6 +707,28 @@ mod tests {
                 assert!(stats.added_up(key(modifier, 0)), "{language:?} {modifier}");
             }
         }
+    }
+
+    #[test]
+    fn a_negative_line_counts_against_its_total() {
+        let item = parse(
+            "Item Class: Rings\nRarity: Rare\nVile Loop\nAmethyst Ring\n--------\n\
+             Item Level: 77\n--------\n-13% to Chaos Resistance (implicit)\n--------\n\
+             +17% to Fire and Chaos Resistances",
+        );
+        let totals: Vec<(Pseudo, f64)> = line_stats(&item)
+            .pseudo_totals()
+            .iter()
+            .map(|total| (total.pseudo, total.value))
+            .collect();
+
+        assert_eq!(
+            totals,
+            [
+                (Pseudo::ElementalResistance, 17.0),
+                (Pseudo::ChaosResistance, 4.0),
+            ]
+        );
     }
 
     #[test]

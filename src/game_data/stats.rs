@@ -244,10 +244,10 @@ impl Stats {
         self.list.len()
     }
 
-    /// A stat has the game id `id`.
+    /// The stat of the game id `id`, when there is one.
     #[cfg(test)]
-    pub fn has_id(&self, id: &str) -> bool {
-        self.list.iter().any(|stat| stat.id.as_deref() == Some(id))
+    pub fn by_id(&self, id: &str) -> Option<&Stat> {
+        self.list.iter().find(|stat| stat.id.as_deref() == Some(id))
     }
 
     /// The strings with `#` of the stats that can be on equipment, and the index of each.

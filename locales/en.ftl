@@ -163,7 +163,7 @@ filter-base-type = Base: { $base }
 filter-item-level = Item level: { $value }
 filter-physical-dps = Physical DPS: { $value }
 filter-elemental-dps = Elemental DPS: { $value }
-# The filters of the pseudo totals, as the trade site writes them, with their value.
+# The filters of the pseudo totals, with their value.
 pseudo-elemental-resistance = +{ $value }% total Elemental Resistance
 pseudo-chaos-resistance = +{ $value }% total to Chaos Resistance
 pseudo-life = +{ $value } total maximum Life
