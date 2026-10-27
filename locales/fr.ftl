@@ -156,6 +156,9 @@ filter-range = min – max
 # L'infobulle du champ d'un filtre : les jets qu'il accepte, puis, en gris, pour une ligne où une valeur basse est meilleure.
 filter-rolls = Jets de { $low } à { $high }
 filter-lower-better = Plus c'est bas, mieux c'est
+# L'infobulle d'une ligne que le site d'échange ne cherche pas (un modificateur ajouté par un patch), sur deux lignes.
+filter-unsearchable = Le site d'échange ne cherche pas cette ligne.
+filter-unsearchable-hint = Les offres peuvent ne pas l'avoir.
 # Sous les stats d'un objet corrompu : la recherche ne le compare qu'aux offres corrompues.
 corrupted-offers-only = Offres corrompues seulement, comme cet objet.
 

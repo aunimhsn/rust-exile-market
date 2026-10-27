@@ -25,6 +25,7 @@ mod widgets;
 
 pub use empty_state::{EmptyState, PriceDownload};
 pub use item_block::{ItemBlock, ItemBlockAction};
+pub use item_stats::Stats;
 pub use league_list::{LeagueList, LeagueListAction};
 pub use new_league_bubble::{BubbleAction, NewLeagueBubble};
 pub use offers_block::{OffersAction, OffersBlock, Reference};

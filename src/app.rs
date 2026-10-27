@@ -10,20 +10,22 @@ use egui::{Context, Key, OpenUrl, Ui, ViewportCommand};
 use crate::clipboard::{ClipboardEvent, ClipboardWatch};
 use crate::filters::Filters;
 use crate::i18n::{DOWNLOAD_QUOTE_COUNT, Message, Translator};
+use crate::item::Item;
 use crate::league::League;
 use crate::market::MarketWatch;
 use crate::offers::{LONG_WAIT, Offers};
 use crate::prices::Rates;
 use crate::pricing::{FixedPrice, NoFixedPrice};
-use crate::session::{self, LeagueChange, PricesState, Session};
+use crate::session::{self, LeagueChange, PricesState, Session, ShownItem};
 use crate::settings::{SettingChange, Settings, SettingsFile};
 use crate::trade::ItemNamesWatch;
-use crate::trade::query::SearchKind;
+use crate::trade::query::{SearchKind, StatFilter};
 use crate::trade::search::{OfferSearch, Search};
 use crate::ui::{
     self, BubbleAction, EmptyState, ItemBlock, ItemBlockAction, LeagueList, LeagueListAction,
     NewLeagueBubble, OffersAction, OffersBlock, PriceBlock, PriceDownload, Reference, ResizeEdges,
-    SettingsPanel, StatusBar, TitleBar, TitleBarAction, TradeStatus, UnreadableItem, WarningBand,
+    SettingsPanel, Stats, StatusBar, TitleBar, TitleBarAction, TradeStatus, UnreadableItem,
+    WarningBand,
 };
 
 /// What the window shows under the title bar.
@@ -251,7 +253,7 @@ impl ExileMarketApp {
             return;
         };
         // The pill shows only when its link can be opened: the league and the search known.
-        let url = self.session.trade_url(item);
+        let tradable = self.session.trade_url(item, Vec::new()).is_some();
         let must_identify = self.session.must_identify(item);
         let fixed_price = self.session.fixed_price(item);
         let unique_modifiers = session::unique_modifiers(item, &fixed_price);
@@ -259,12 +261,22 @@ impl ExileMarketApp {
         let to_top = std::mem::take(&mut self.scroll_to_top);
         let mut offers_action = None;
         let action = ui::content(ui, to_top, |ui| {
-            let action = ItemBlock::new(item, shown.lines(), &mut self.filters, &self.i18n)
-                .tradable(url.is_some())
-                .stats(self.stats_open, unique_modifiers)
-                .show(ui);
-            if let (Some(ItemBlockAction::CheckOnTrade), Some(url)) = (action, &url) {
-                ui.ctx().open_url(OpenUrl::new_tab(url));
+            let action = ItemBlock::new(
+                item,
+                shown.lines(),
+                shown.stats(),
+                &mut self.filters,
+                &self.i18n,
+            )
+            .tradable(tradable)
+            .stats(self.stats_open, unique_modifiers)
+            .show(ui);
+            if action == Some(ItemBlockAction::CheckOnTrade) {
+                // With the filters as the player just left them.
+                let stats = stat_filters(&self.session, shown, item, &self.filters);
+                if let Some(url) = self.session.trade_url(item, stats) {
+                    ui.ctx().open_url(OpenUrl::new_tab(url));
+                }
             }
             let league = self.session.league().map(League::name);
             PriceBlock::new(item, fixed_price, prices, league, &self.i18n).show(ui);
@@ -288,9 +300,10 @@ impl ExileMarketApp {
             self.stats_open = !self.stats_open;
         }
         let order = match (offers_action, search) {
-            (Some(OffersAction::Search), Some(search)) => {
-                self.offers.search(search, Instant::now())
-            }
+            // With the filters as the player just left them.
+            (Some(OffersAction::Search), Some(_)) => self
+                .shown_search()
+                .and_then(|search| self.offers.search(search, Instant::now())),
             (Some(OffersAction::More), _) => self.offers.more(),
             _ => None,
         };
@@ -301,9 +314,25 @@ impl ExileMarketApp {
 
     /// The search of the offers of the item shown, when it can be searched.
     fn shown_search(&self) -> Option<Search> {
-        let item = self.session.item()?.parsed().ok()?;
-        self.session.trade_search(item)
+        let shown = self.session.item()?;
+        let item = shown.parsed().ok()?;
+        let stats = stat_filters(&self.session, shown, item, &self.filters);
+        self.session.trade_search(item, stats)
     }
+}
+
+/// The stat filters of the search of `item`, the item `shown`: the filters the player
+/// checked, or else those checked by default.
+fn stat_filters(
+    session: &Session,
+    shown: &ShownItem,
+    item: &Item,
+    filters: &Filters,
+) -> Vec<StatFilter> {
+    let fixed_price = session.fixed_price(item);
+    let unique_modifiers = session::unique_modifiers(item, &fixed_price);
+    let stats = Stats::new(item, shown.lines(), shown.stats(), unique_modifiers);
+    shown.stats().stat_filters(&stats.checked(filters))
 }
 
 impl App for ExileMarketApp {

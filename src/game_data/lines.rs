@@ -37,6 +37,9 @@ pub struct StatMatch<'a> {
     /// The value given by the string of the line: the option of an option stat (the skill of
     /// `# to Level of all Arc Skills`), or else the value of a line without number.
     pub matcher_value: Option<f64>,
+    /// The string of the line writes the opposite of the stat: `reduced` for an `increased`
+    /// stat, whose values are given with the sign of the stat.
+    pub negate: bool,
     /// The index of the string of the stat that matched the line.
     matcher_index: usize,
 }
@@ -139,6 +142,7 @@ fn stat_match<'a>(
         source,
         values: values.iter().map(|value| value * sign).collect(),
         matcher_value: matcher.value,
+        negate: matcher.negate,
         matcher_index,
     })
 }

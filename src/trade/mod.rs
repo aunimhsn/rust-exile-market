@@ -15,6 +15,7 @@ pub mod offers;
 pub mod query;
 pub mod search;
 mod site;
+pub mod stat_filters;
 
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, SystemTime};

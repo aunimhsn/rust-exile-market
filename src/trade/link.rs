@@ -6,7 +6,7 @@
 use serde_json::json;
 
 use super::host;
-use super::query::{self, ItemQuery, Query, RarityFilter};
+use super::query::{self, ItemQuery, Query, RarityFilter, StatFilter};
 use crate::http;
 use crate::item::{Item, Rarity};
 use crate::item_names::ItemNames;
@@ -94,12 +94,17 @@ impl TradeTarget<'_> {
 }
 
 /// The search of `item` for `target`: its corrupted state is always a filter, so that a
-/// corrupted item is compared with corrupted offers only, and a clean one with clean ones.
+/// corrupted item is compared with corrupted offers only, and a clean one with clean ones; a
+/// unique is searched with the filters of its `stats` the player checked (the other items
+/// with theirs from step 13f).
 #[must_use]
-pub fn query(item: &Item, target: &TradeTarget) -> Query {
+pub fn query(item: &Item, target: &TradeTarget, stats: Vec<StatFilter>) -> Query {
     let mut query = target.query();
     if let Query::Items(items) = &mut query {
         items.corrupted = Some(item.is_corrupted());
+        if let TradeTarget::Unique { .. } = target {
+            items.stats = stats;
+        }
     }
     query
 }
@@ -156,7 +161,7 @@ mod tests {
         let url = url(
             crossbow.language(),
             &League::new("HC Forbidden Rites"),
-            &super::query(&crossbow, &target),
+            &super::query(&crossbow, &target, Vec::new()),
         );
 
         assert!(url.starts_with(
@@ -188,7 +193,7 @@ mod tests {
         let url = url(
             Language::French,
             &League::new("Standard"),
-            &super::query(&stack, &target),
+            &super::query(&stack, &target, Vec::new()),
         );
         assert!(url.starts_with("https://fr.pathofexile.com/trade2/exchange/poe2/Standard?q="));
         assert_eq!(
@@ -283,11 +288,32 @@ mod tests {
             ));
             let target = target(&ring, None, None).expect("a target");
 
-            let Query::Items(items) = super::query(&ring, &target) else {
+            let Query::Items(items) = super::query(&ring, &target, Vec::new()) else {
                 panic!("a search of items");
             };
             assert_eq!(items.corrupted, Some(true), "{state}");
         }
+    }
+
+    #[test]
+    fn only_a_unique_is_searched_with_its_stats_until_step_13f() {
+        let stats = vec![StatFilter {
+            ids: vec!["explicit.stat_3299347043".to_owned()],
+            minimum: Some(45.0),
+            maximum: None,
+        }];
+        let searched = |item: &Item| {
+            let target = target(item, None, None).expect("a target");
+            match super::query(item, &target, stats.clone()) {
+                Query::Items(items) => items.stats,
+                Query::Exchange(_) => panic!("a search of items"),
+            }
+        };
+
+        let unique = parse("Item Class: Rings\nRarity: Unique\nAndvarius\nGold Ring");
+        let rare = parse("Item Class: Rings\nRarity: Rare\nWoe Loop\nRuby Ring");
+        assert_eq!(searched(&unique), stats);
+        assert_eq!(searched(&rare), Vec::new());
     }
 
     #[test]
@@ -297,7 +323,7 @@ mod tests {
         let target = target(&stack, Some(&names), None).expect("a target");
 
         assert_eq!(
-            super::query(&stack, &target),
+            super::query(&stack, &target, Vec::new()),
             Query::Exchange("transmute".to_owned())
         );
     }

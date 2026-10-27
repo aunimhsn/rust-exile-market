@@ -5,16 +5,17 @@
 //!
 //! A stat that is a filter of the search starts with its checkbox and keeps the column of its
 //! range field on the right, also when it has no limit; a stat of a unique that never varies
-//! isn't a filter and starts at the left edge. A line better lower is searched with a maximum,
-//! any other with a minimum. A corrupted item ends with a note: the search compares it with
-//! corrupted offers only.
+//! isn't a filter and starts at the left edge; a line the trade site can't search shows the
+//! "not allowed" sign in place of its checkbox. A line better lower is searched with a
+//! maximum, any other with a minimum. A corrupted item ends with a note: the search compares
+//! it with corrupted offers only.
 //!
 //! The rows are decided apart from the drawing ([`rows`]), and tested.
 
 use egui::text::{LayoutJob, TextFormat};
 use egui::{
-    Align, Align2, Area, Color32, CornerRadius, Frame, Id, Label, Layout, Margin, Order, Rect,
-    RichText, Sense, Stroke, TextEdit, Ui, Vec2, pos2, vec2,
+    Align, Align2, Area, Color32, CornerRadius, Frame, Id, Label, Layout, Margin, Order, Pos2,
+    Rect, RichText, Sense, Stroke, TextEdit, Ui, Vec2, pos2, vec2,
 };
 
 use super::number_field::NumberField;
@@ -25,6 +26,7 @@ use crate::i18n::{Message, Translator};
 use crate::item::{Affix, Item, Modifier, ModifierKind, Range, Rarity, StatLine};
 use crate::prices::UniqueModifiers;
 use crate::roll_difference::CopiedLines;
+use crate::trade::stat_filters::{LineStat, LineStats};
 use crate::{format, rolls};
 
 /// The space between two rows.
@@ -51,6 +53,8 @@ const TOOLTIP_GAP: f32 = 8.0;
 /// The space around the text of the tooltip of a range field, and between its lines.
 const TOOLTIP_PADDING: Margin = Margin::symmetric(8, 5);
 const TOOLTIP_LINE_GAP: f32 = 3.0;
+/// How far the tooltip of the "not allowed" sign starts left of the sign.
+const UNSEARCHABLE_TOOLTIP_SHIFT: f32 = 4.0;
 /// The lines of the text of a stat, at most; the whole text is in its tooltip.
 const MAX_LINES: usize = 2;
 /// The bar of a roll.
@@ -176,6 +180,9 @@ struct Stat<'a> {
     text: &'a str,
     /// A filter of the search, with its checkbox and its range field.
     filter: Option<StatFilter>,
+    /// A line the trade site can't search, which would be a filter: the "not allowed" sign in
+    /// place of its checkbox.
+    unsearchable: bool,
     roll: Option<Roll>,
 }
 
@@ -211,17 +218,18 @@ pub struct Stats<'a> {
 }
 
 impl<'a> Stats<'a> {
-    /// The stats of `item`, whose modifier `lines` tell which are better lower;
-    /// `unique_modifiers` are the modifiers of its unique in the price database, the ranges
-    /// of a unique copied without them.
+    /// The stats of `item`, whose modifier `lines` tell which are better lower, and their
+    /// `stats` which the trade site can search; `unique_modifiers` are the modifiers of its
+    /// unique in the price database, the ranges of a unique copied without them.
     #[must_use]
     pub fn new(
         item: &'a Item,
         lines: &CopiedLines,
+        stats: &LineStats,
         unique_modifiers: Option<&UniqueModifiers>,
     ) -> Self {
         Self {
-            rows: rows(item, lines, unique_modifiers),
+            rows: rows(item, lines, stats, unique_modifiers),
         }
     }
 
@@ -234,19 +242,24 @@ impl<'a> Stats<'a> {
     /// The number of filters checked for the search, beside the pill of the stats.
     #[must_use]
     pub fn active_filters(&self, filters: &Filters) -> u32 {
-        let checked = self
-            .rows
+        len(&self.checked(filters))
+    }
+
+    /// The filters checked for the search, as the player set them or else by default.
+    #[must_use]
+    pub fn checked(&self, filters: &Filters) -> Vec<(StatKey, Filter)> {
+        self.rows
             .iter()
-            .filter(|row| match row {
+            .filter_map(|row| match row {
                 Row::Stat(Stat {
                     key,
                     filter: Some(filter),
                     ..
-                }) => filters.get(*key, || filter.default_choice()).checked,
-                _ => false,
+                }) => Some((*key, filters.get(*key, || filter.default_choice()))),
+                _ => None,
             })
-            .count();
-        u32::try_from(checked).unwrap_or(u32::MAX)
+            .filter(|(_, filter)| filter.checked)
+            .collect()
     }
 }
 
@@ -254,12 +267,13 @@ fn len<T>(list: &[T]) -> u32 {
     u32::try_from(list.len()).unwrap_or(u32::MAX)
 }
 
-/// The rows of the stats of `item`, whose modifier `lines` tell which are better lower;
-/// `unique_modifiers` are the modifiers of its unique in the price database, the ranges of a
-/// unique copied without them.
+/// The rows of the stats of `item`, whose modifier `lines` tell which are better lower, and
+/// their `stats` which the trade site can search; `unique_modifiers` are the modifiers of its
+/// unique in the price database, the ranges of a unique copied without them.
 fn rows<'a>(
     item: &'a Item,
     lines: &CopiedLines,
+    stats: &LineStats,
     unique_modifiers: Option<&UniqueModifiers>,
 ) -> Vec<Row<'a>> {
     let half = |key: StatKey| {
@@ -274,11 +288,27 @@ fn rows<'a>(
     } else {
         affix_rows(item, &half)
     };
+    for row in &mut rows {
+        if let Row::Stat(stat) = row {
+            searchable(stat, stats.get(stat.key));
+        }
+    }
     // The corrupted state is always a filter; a currency is never corrupted.
     if item.is_corrupted() && item.rarity() != Rarity::Currency {
         rows.push(Row::CorruptedOnly);
     }
     rows
+}
+
+/// Takes the filter away from `stat` when the trade site can't search it as its `line`:
+/// a line it can't search shows the "not allowed" sign instead, and the line after the first
+/// of a stat written on several lines is searched by the first.
+fn searchable(stat: &mut Stat<'_>, line: Option<&LineStat>) {
+    match line {
+        Some(LineStat::Searched(_)) => {}
+        Some(LineStat::Continued) => stat.filter = None,
+        Some(LineStat::Unsearchable) | None => stat.unsearchable = stat.filter.take().is_some(),
+    }
 }
 
 /// The half of the range field each stat fills.
@@ -410,6 +440,7 @@ fn added(key: StatKey, line: &StatLine, half: Half) -> Stat<'_> {
             checked: false,
             limit: value(line).map(|value| Limit::new(value, half, None, value, line)),
         }),
+        unsearchable: false,
         roll: None,
     }
 }
@@ -422,6 +453,7 @@ fn implicit_stat(key: StatKey, line: &StatLine, half: Half) -> Stat<'_> {
         key,
         text: &line.text,
         filter: Some(comparable_filter(line, bounds(line, &ranges), half)),
+        unsearchable: false,
         roll: bar(magnitudes(line, &ranges)),
     }
 }
@@ -488,6 +520,7 @@ fn affix_stats<'a>(item: &'a Item, affix: Option<Affix>, half: HalfOf<'_>) -> Af
                         text: &line.text,
                         // The range of every tier comes with the modifier tables (step 13).
                         filter: Some(comparable_filter(line, None, half(key))),
+                        unsearchable: false,
                         roll: modifier
                             .tier
                             .filter(|_| line_index == last)
@@ -595,6 +628,7 @@ fn unique_stat<'a>(
         key,
         text: &line.text,
         filter: None,
+        unsearchable: false,
         roll: None,
     };
     let (roll, bounds) = match &ranges {
@@ -823,6 +857,21 @@ fn group_title(ui: &mut Ui, group: Group, range: bool, i18n: &Translator) {
 fn stat_row(ui: &mut Ui, stat: &Stat<'_>, filters: &mut Filters, i18n: &Translator, bar: RollBar) {
     ui.horizontal_top(|ui| {
         let width = ui.available_width();
+        let line_height = ui.fonts_mut(|fonts| fonts.row_height(&text::body()));
+        if stat.unsearchable {
+            let sign = widgets::not_allowed_sign(ui, vec2(GUTTER, line_height));
+            if sign.hovered() {
+                unsearchable_tooltip(ui, stat.key, sign.rect, i18n);
+            }
+            ui.add_space(GAP);
+            stat_text(
+                ui,
+                stat,
+                (width - GUTTER - GAP - GAP - RANGE_COLUMN).max(0.0),
+                bar,
+            );
+            return;
+        }
         let Some(filter) = stat.filter else {
             stat_text(ui, stat, width, bar);
             return;
@@ -830,7 +879,6 @@ fn stat_row(ui: &mut Ui, stat: &Stat<'_>, filters: &mut Filters, i18n: &Translat
         let mut choice = filters.get(stat.key, || filter.default_choice());
         let before = choice.clone();
         // The checkbox on the first line of the text.
-        let line_height = ui.fonts_mut(|fonts| fonts.row_height(&text::body()));
         if widgets::check_box(ui, choice.checked, vec2(GUTTER, line_height), stat.text).clicked() {
             choice.checked = !choice.checked;
         }
@@ -952,11 +1000,42 @@ fn field_tooltip(ui: &Ui, key: StatKey, field: Rect, limit: Limit, i18n: &Transl
     if lines.is_empty() {
         return;
     }
-    Area::new(Id::NULL.with(("stat-range-tooltip", key)))
+    let at = pos2(field.right(), field.bottom() + TOOLTIP_GAP);
+    tooltip(
+        ui,
+        Id::NULL.with(("stat-range-tooltip", key)),
+        at,
+        Align2::RIGHT_TOP,
+        lines,
+    );
+}
+
+/// The tooltip of the "not allowed" sign of a line the trade site can't search, in `sign`:
+/// two sentences, one per line. Under the sign, opening to the right since the sign is on the
+/// left edge.
+fn unsearchable_tooltip(ui: &Ui, key: StatKey, sign: Rect, i18n: &Translator) {
+    let lines = [Message::FilterUnsearchable, Message::FilterUnsearchableHint]
+        .map(|message| (i18n.text(message), color::TEXT));
+    let at = pos2(
+        sign.left() - UNSEARCHABLE_TOOLTIP_SHIFT,
+        sign.bottom() + TOOLTIP_GAP,
+    );
+    tooltip(
+        ui,
+        Id::NULL.with(("unsearchable-tooltip", key)),
+        at,
+        Align2::LEFT_TOP,
+        lines.into(),
+    );
+}
+
+/// A tooltip of `lines` in their colors, its corner `pivot` at `at`.
+fn tooltip(ui: &Ui, id: Id, at: Pos2, pivot: Align2, lines: Vec<(String, Color32)>) {
+    Area::new(id)
         .order(Order::Tooltip)
         .interactable(false)
-        .pivot(Align2::RIGHT_TOP)
-        .fixed_pos(pos2(field.right(), field.bottom() + TOOLTIP_GAP))
+        .pivot(pivot)
+        .fixed_pos(at)
         .show(ui.ctx(), |ui| {
             Frame::NONE
                 .fill(color::BUBBLE)
@@ -1057,11 +1136,13 @@ mod tests {
     /// The rows of `item`, its lines read in English.
     fn rows<'a>(item: &'a Item, unique_modifiers: Option<&UniqueModifiers>) -> Vec<Row<'a>> {
         let lines = CopiedLines::new(item.language(), item.modifiers(), None);
-        super::rows(item, &lines, unique_modifiers)
+        let stats = LineStats::new(item.language(), item.modifiers(), None);
+        super::rows(item, &lines, &stats, unique_modifiers)
     }
 
     /// The rows as texts: a title (`Prefixes 2/3`), the note of a corrupted item, or a stat,
-    /// first `■ ` for a checked filter or `□ ` for an unchecked one, then its minimum or its
+    /// first `■ ` for a checked filter, `□ ` for an unchecked one or `⊘ ` for a line the trade
+    /// site can't search, then its minimum or its
     /// maximum and its roll (`■ +55 to maximum Life ≥55 [40–60 0.75]`, `■ 18% reduced
     /// Movement Speed ≤18`, `■ +3 to Level [T1 3–3]`).
     fn texts(item: &Item, unique_modifiers: Option<&UniqueModifiers>) -> Vec<String> {
@@ -1073,9 +1154,14 @@ mod tests {
                 Row::Group(group) => format!("{group:?}"),
                 Row::CorruptedOnly => "Corrupted only".to_owned(),
                 Row::Stat(Stat {
-                    text, filter, roll, ..
+                    text,
+                    filter,
+                    unsearchable,
+                    roll,
+                    ..
                 }) => {
                     let check = match filter {
+                        _ if unsearchable => "⊘ ",
                         Some(StatFilter { checked: true, .. }) => "■ ",
                         Some(StatFilter { checked: false, .. }) => "□ ",
                         None => "",
@@ -1179,13 +1265,13 @@ mod tests {
             "Item Class: Rings\nRarity: Unique\nVenom Loop\nAmethyst Ring\n--------\n\
              Item Level: 80\n--------\n\
              +10% to Chaos Resistance (implicit)\n--------\n+20% to Chaos Resistance\n\
-             Adds 1 to 55 Lightning Damage to Attacks",
+             Adds 1 to 55 Lightning damage to Attacks",
         );
         let modifiers = database(
             &["+(7-13)% to Chaos Resistance"],
             &[
                 "+(17-23)% to Chaos Resistance",
-                "Adds 1 to (50-60) Lightning Damage to Attacks",
+                "Adds 1 to (50-60) Lightning damage to Attacks",
             ],
         );
 
@@ -1198,7 +1284,7 @@ mod tests {
                 "■ +20% to Chaos Resistance ≥20 [17–23 0.50]",
                 // The fixed number before the roll keeps its place; the minimum is the
                 // average of both numbers, as on the trade site.
-                "■ Adds 1 to 55 Lightning Damage to Attacks ≥28 [50–60 0.50]",
+                "■ Adds 1 to 55 Lightning damage to Attacks ≥28 [50–60 0.50]",
             ]
         );
     }
@@ -1376,9 +1462,9 @@ mod tests {
     fn a_limit_stays_within_the_range_of_its_stat() {
         let ring = parse(
             "Item Class: Rings\nRarity: Unique\nVenom Loop\nAmethyst Ring\n--------\n\
-             Item Level: 80\n--------\nAdds 1 to 55 Lightning Damage to Attacks",
+             Item Level: 80\n--------\nAdds 1 to 55 Lightning damage to Attacks",
         );
-        let modifiers = database(&[], &["Adds 1 to (50-60) Lightning Damage to Attacks"]);
+        let modifiers = database(&[], &["Adds 1 to (50-60) Lightning damage to Attacks"]);
         let boots = parse(
             "Item Class: Boots\nRarity: Rare\nGale Tread\nLattice Sandals\n--------\n\
              { Implicit Modifier }\n+10(10-15) to Dexterity",
@@ -1436,7 +1522,7 @@ mod tests {
         );
         let rare = parse(
             "Item Class: Rings\nRarity: Rare\nGale Loop\nRuby Ring\n--------\n\
-             { Implicit Modifier }\n12(10-15)% increased Mana Cost of Skills\n--------\n\
+             { Implicit Modifier }\n12(10-15)% increased Charm Charges used\n--------\n\
              { Suffix Modifier \"of the Hare\" (Tier: 2) }\n18(15-25)% reduced Movement Speed",
         );
 
@@ -1454,7 +1540,7 @@ mod tests {
             texts(&rare, None),
             [
                 "Implicit",
-                "■ 12% increased Mana Cost of Skills ≤13 [10–15 0.40]",
+                "■ 12% increased Charm Charges used ≤13 [10–15 0.40]",
                 "Suffixes 1/3",
                 "■ 18% reduced Movement Speed ≤20 [T2 15–25]",
             ]
@@ -1585,11 +1671,63 @@ mod tests {
             ["Unique", "■ +55 to maximum Life ≥55", "Corrupted only"]
         );
         // An item without modifiers has its filters to show.
-        assert!(!Stats::new(&staff, &CopiedLines::default(), None).is_empty());
+        assert!(
+            !Stats::new(&staff, &CopiedLines::default(), &LineStats::default(), None).is_empty()
+        );
         assert_eq!(texts(&staff, None), ["Corrupted only"]);
         let clean =
             parse("Item Class: Staves\nRarity: Normal\nChiming Staff\n--------\nItem Level: 82");
-        assert!(Stats::new(&clean, &CopiedLines::default(), None).is_empty());
+        assert!(
+            Stats::new(&clean, &CopiedLines::default(), &LineStats::default(), None).is_empty()
+        );
+    }
+
+    #[test]
+    fn a_line_the_trade_site_cant_search_isnt_a_filter() {
+        let unique = parse(
+            "Item Class: Boots\nRarity: Unique\nStormtread\nLattice Sandals\n--------\n\
+             Item Level: 72\n--------\n\
+             { Unique Modifier }\n+52(40-60) to maximum Life\n\
+             { Unique Modifier }\nGain 3(2-4) Thunder Charges when you Dodge Roll\n\
+             { Unique Modifier }\n20(15-25)% chance to gain Onslaught for 3 seconds when you kill an\n\
+             enemy affected by Abyssal Wasting",
+        );
+        let lines = CopiedLines::new(unique.language(), unique.modifiers(), None);
+        let line_stats = LineStats::new(unique.language(), unique.modifiers(), None);
+        let stats = Stats::new(&unique, &lines, &line_stats, None);
+
+        assert_eq!(
+            texts(&unique, None),
+            [
+                "Unique",
+                "■ +52 to maximum Life ≥52 [40–60 0.60]",
+                // Its roll still shows, without a filter.
+                "⊘ Gain 3 Thunder Charges when you Dodge Roll [2–4 0.50]",
+                // The second line of a stat is searched by the first.
+                "■ 20% chance to gain Onslaught for 3 seconds when you kill an ≥11.5 [15–25 0.50]",
+                "enemy affected by Abyssal Wasting",
+            ]
+        );
+        let filters = Filters::default();
+        assert_eq!(stats.active_filters(&filters), 2);
+        let checked: Vec<StatKey> = stats
+            .checked(&filters)
+            .into_iter()
+            .map(|(key, _)| key)
+            .collect();
+        assert_eq!(
+            checked,
+            [
+                StatKey {
+                    modifier: 0,
+                    line: 0
+                },
+                StatKey {
+                    modifier: 2,
+                    line: 0
+                }
+            ]
+        );
     }
 
     #[test]
@@ -1600,7 +1738,8 @@ mod tests {
         let mut filters = Filters::default();
 
         let lines = CopiedLines::new(crossbow.language(), crossbow.modifiers(), None);
-        let stats = Stats::new(&crossbow, &lines, None);
+        let line_stats = LineStats::new(crossbow.language(), crossbow.modifiers(), None);
+        let stats = Stats::new(&crossbow, &lines, &line_stats, None);
         let keys: Vec<StatKey> = stats
             .rows
             .iter()
@@ -1660,6 +1799,7 @@ mod tests {
                         }),
                     }),
                 }),
+                unsearchable: false,
                 roll: Some(Roll::Bar {
                     share: 1.0,
                     ranges: vec![Range {

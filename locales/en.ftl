@@ -153,6 +153,9 @@ filter-range = min – max
 # The tooltip of a range field: the rolls it accepts, then for a line better lower, in gray.
 filter-rolls = Rolls { $low } to { $high }
 filter-lower-better = Lower is better
+# The tooltip of a line the trade site can't search (a modifier added by a patch), on two lines.
+filter-unsearchable = The trade site can't search this line.
+filter-unsearchable-hint = The offers may not have it.
 # Under the stats of a corrupted item: the search compares it with corrupted offers only.
 corrupted-offers-only = Corrupted offers only, like this item.
 
