@@ -34,6 +34,10 @@ pub struct StatMatch<'a> {
     /// `20% reduced Charm Charges used` gives -20 (a stat of the trade site writes the side
     /// of its template: 20 for `#% reduced Charm Charges used`).
     pub values: Vec<f64>,
+    /// For each number of the line, in its order (over all its lines for a stat written on
+    /// several), whether it is a `#` of the stat; not a number the string writes (the 3 of
+    /// `#% chance to gain Onslaught for 3 seconds`).
+    pub counted: Vec<bool>,
     /// The value given by the string of the line: the option of an option stat (the skill of
     /// `# to Level of all Arc Skills`), or else the value of a line without number.
     pub matcher_value: Option<f64>,
@@ -86,7 +90,7 @@ impl<'a> Lookup<'a> {
                 stats
                     .find(&template.string)
                     .filter_map(move |(stat, matcher_index)| {
-                        stat_match(stat, source, matcher_index, &template.values)
+                        stat_match(stat, source, matcher_index, &template)
                     })
             })
         });
@@ -133,14 +137,15 @@ fn stat_match<'a>(
     stat: &'a Stat,
     source: StatSource,
     matcher_index: usize,
-    values: &[f64],
+    template: &Template,
 ) -> Option<StatMatch<'a>> {
     let matcher = stat.matchers.get(matcher_index)?;
     let sign = if matcher.negate { -1.0 } else { 1.0 };
     Some(StatMatch {
         stat,
         source,
-        values: values.iter().map(|value| value * sign).collect(),
+        values: template.values.iter().map(|value| value * sign).collect(),
+        counted: template.counted.clone(),
         matcher_value: matcher.value,
         negate: matcher.negate,
         matcher_index,
@@ -264,10 +269,11 @@ enum Written {
     Number,
 }
 
-/// A string to look up, and the values of its `#`.
+/// A string to look up, the values of its `#`, and whether each number of the line is one.
 struct Template {
     string: String,
     values: Vec<f64>,
+    counted: Vec<bool>,
 }
 
 /// The strings `text` can match, those with the most `#` first, then those without the
@@ -325,7 +331,12 @@ fn write(text: &str, numbers: &[Number], choice: &[Written]) -> Option<Template>
         written = number.end;
     }
     string.push_str(text.get(written..)?);
-    Some(Template { string, values })
+    let counted = choice.iter().map(|&way| way != Written::Number).collect();
+    Some(Template {
+        string,
+        values,
+        counted,
+    })
 }
 
 /// Every string with `#` of the stats that can be on equipment in `language`, with its English

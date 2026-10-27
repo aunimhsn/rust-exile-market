@@ -276,17 +276,11 @@ fn rows<'a>(
     stats: &LineStats,
     unique_modifiers: Option<&UniqueModifiers>,
 ) -> Vec<Row<'a>> {
-    let half = |key: StatKey| {
-        if lines.better_lower(key) {
-            Half::Maximum
-        } else {
-            Half::Minimum
-        }
-    };
+    let reading = Reading { lines, stats };
     let mut rows = if item.rarity() == Rarity::Unique {
-        unique_rows(item, unique_modifiers, &half)
+        unique_rows(item, unique_modifiers, &reading)
     } else {
-        affix_rows(item, &half)
+        affix_rows(item, &reading)
     };
     for row in &mut rows {
         if let Row::Stat(stat) = row {
@@ -311,15 +305,52 @@ fn searchable(stat: &mut Stat<'_>, line: Option<&LineStat>) {
     }
 }
 
-/// The half of the range field each stat fills.
-type HalfOf<'h> = &'h dyn Fn(StatKey) -> Half;
+/// How the stats read the modifier lines of the item, beyond their text.
+struct Reading<'r> {
+    /// They tell the lines better lower.
+    lines: &'r CopiedLines,
+    /// They tell the numbers of each line its stat counts.
+    stats: &'r LineStats,
+}
+
+impl Reading<'_> {
+    /// The half of the range field the stat `key` fills: the maximum for a line better lower.
+    fn half(&self, key: StatKey) -> Half {
+        if self.lines.better_lower(key) {
+            Half::Maximum
+        } else {
+            Half::Minimum
+        }
+    }
+
+    /// `line`, the line `key`, with the numbers its stat counts only: not those its string
+    /// writes (the 3 of `20% chance to gain Onslaught for 3 seconds`), which never vary.
+    fn counted(&self, key: StatKey, line: &StatLine) -> StatLine {
+        StatLine {
+            text: line.text.clone(),
+            rolls: self.pick(key, &line.rolls),
+        }
+    }
+
+    /// Among `items`, one for each number of the line `key`, those of the numbers its stat
+    /// counts; all of them when its stat isn't known.
+    fn pick<T: Clone>(&self, key: StatKey, items: &[T]) -> Vec<T> {
+        let picked = self.stats.numbers(key).and_then(|numbers| {
+            numbers
+                .iter()
+                .map(|&number| items.get(number).cloned())
+                .collect::<Option<Vec<T>>>()
+        });
+        picked.unwrap_or_else(|| items.to_vec())
+    }
+}
 
 /// The rows of a unique: its enchantments, its runes, the implicit modifiers of its base,
 /// then its own modifiers.
 fn unique_rows<'a>(
     item: &'a Item,
     unique_modifiers: Option<&UniqueModifiers>,
-    half: HalfOf<'_>,
+    reading: &Reading<'_>,
 ) -> Vec<Row<'a>> {
     let copied = item
         .modifiers()
@@ -339,7 +370,7 @@ fn unique_rows<'a>(
     // A stat of a unique varies when it is a filter.
     let varies = |_: &StatLine, stat: &Stat<'_>| stat.filter.is_some();
     let mut rows = Vec::new();
-    let added_stat = |key, line| added(key, line, half(key));
+    let added_stat = |key, line| added(key, line, reading);
     push_group(
         &mut rows,
         Group::Enchant,
@@ -356,7 +387,7 @@ fn unique_rows<'a>(
         stats(
             item,
             is_implicit,
-            |key, line| unique_stat(key, line, implicit, half(key)),
+            |key, line| unique_stat(key, line, implicit, reading),
             varies,
         ),
     );
@@ -366,7 +397,7 @@ fn unique_rows<'a>(
         stats(
             item,
             |kind| matches!(kind, ModifierKind::Explicit(_)),
-            |key, line| unique_stat(key, line, explicit, half(key)),
+            |key, line| unique_stat(key, line, explicit, reading),
             varies,
         ),
     );
@@ -375,16 +406,16 @@ fn unique_rows<'a>(
 
 /// The rows of a rare, magic or normal item: its enchantments, its runes, its implicit
 /// modifiers, then its prefixes and suffixes.
-fn affix_rows<'a>(item: &'a Item, half: HalfOf<'_>) -> Vec<Row<'a>> {
+fn affix_rows<'a>(item: &'a Item, reading: &Reading<'_>) -> Vec<Row<'a>> {
     let max = match item.rarity() {
         Rarity::Magic => 1,
         _ if item.is_jewel() => 2,
         _ => 3,
     };
     let line_varies = |line: &StatLine, _: &Stat<'_>| varies(line);
-    let prefixes = affix_stats(item, Some(Affix::Prefix), half);
-    let suffixes = affix_stats(item, Some(Affix::Suffix), half);
-    let added_stat = |key, line| added(key, line, half(key));
+    let prefixes = affix_stats(item, Some(Affix::Prefix), reading);
+    let suffixes = affix_stats(item, Some(Affix::Suffix), reading);
+    let added_stat = |key, line| added(key, line, reading);
     let mut rows = Vec::new();
     push_group(
         &mut rows,
@@ -402,7 +433,7 @@ fn affix_rows<'a>(item: &'a Item, half: HalfOf<'_>) -> Vec<Row<'a>> {
         stats(
             item,
             is_implicit,
-            |key, line| implicit_stat(key, line, half(key)),
+            |key, line| implicit_stat(key, line, reading),
             line_varies,
         ),
     );
@@ -425,20 +456,22 @@ fn affix_rows<'a>(item: &'a Item, half: HalfOf<'_>) -> Vec<Row<'a>> {
     push_group(
         &mut rows,
         Group::Explicit,
-        affix_stats(item, None, half).stats,
+        affix_stats(item, None, reading).stats,
     );
     rows
 }
 
 /// A line of an enchantment or a rune: a filter, since the trade site searches them, without
-/// a roll; unchecked, a rune being easy to change. Its value fills `half`.
-fn added(key: StatKey, line: &StatLine, half: Half) -> Stat<'_> {
+/// a roll; unchecked, a rune being easy to change.
+fn added<'a>(key: StatKey, line: &'a StatLine, reading: &Reading<'_>) -> Stat<'a> {
+    let half = reading.half(key);
+    let counted = reading.counted(key, line);
     Stat {
         key,
         text: &line.text,
         filter: Some(StatFilter {
             checked: false,
-            limit: value(line).map(|value| Limit::new(value, half, None, value, line)),
+            limit: value(&counted).map(|value| Limit::new(value, half, None, value, &counted)),
         }),
         unsearchable: false,
         roll: None,
@@ -446,15 +479,20 @@ fn added(key: StatKey, line: &StatLine, half: Half) -> Stat<'_> {
 }
 
 /// A line of an implicit modifier of a rare, magic or normal item: a filter, rolled in the
-/// range its base gives it, its limit filling `half`.
-fn implicit_stat(key: StatKey, line: &StatLine, half: Half) -> Stat<'_> {
-    let ranges = copied_ranges(line);
+/// range its base gives it.
+fn implicit_stat<'a>(key: StatKey, line: &'a StatLine, reading: &Reading<'_>) -> Stat<'a> {
+    let counted = reading.counted(key, line);
+    let ranges = copied_ranges(&counted);
     Stat {
         key,
         text: &line.text,
-        filter: Some(comparable_filter(line, bounds(line, &ranges), half)),
+        filter: Some(comparable_filter(
+            &counted,
+            bounds(&counted, &ranges),
+            reading.half(key),
+        )),
         unsearchable: false,
-        roll: bar(magnitudes(line, &ranges)),
+        roll: bar(magnitudes(&counted, &ranges)),
     }
 }
 
@@ -494,7 +532,7 @@ struct AffixStats<'a> {
 
 /// The explicit modifiers of `affix` (`None`: copied without their affixes), those with a
 /// line that varies first, each with its tier and its ranges under its last line.
-fn affix_stats<'a>(item: &'a Item, affix: Option<Affix>, half: HalfOf<'_>) -> AffixStats<'a> {
+fn affix_stats<'a>(item: &'a Item, affix: Option<Affix>, reading: &Reading<'_>) -> AffixStats<'a> {
     let mut modifiers: Vec<(usize, &Modifier)> = item
         .modifiers()
         .iter()
@@ -519,7 +557,11 @@ fn affix_stats<'a>(item: &'a Item, affix: Option<Affix>, half: HalfOf<'_>) -> Af
                         key,
                         text: &line.text,
                         // The range of every tier comes with the modifier tables (step 13).
-                        filter: Some(comparable_filter(line, None, half(key))),
+                        filter: Some(comparable_filter(
+                            &reading.counted(key, line),
+                            None,
+                            reading.half(key),
+                        )),
                         unsearchable: false,
                         roll: modifier
                             .tier
@@ -609,24 +651,26 @@ fn is_implicit(kind: ModifierKind) -> bool {
     kind == ModifierKind::Implicit
 }
 
-/// A line of a unique: a filter checked with its value filling `half` and its bar when it
+/// A line of a unique: a filter checked with its value filling its half and its bar when it
 /// varies, at the left edge otherwise.
 fn unique_stat<'a>(
     key: StatKey,
-    line: &'a StatLine,
+    whole: &'a StatLine,
     source: RangeSource<'_>,
-    half: Half,
+    reading: &Reading<'_>,
 ) -> Stat<'a> {
+    let line = &reading.counted(key, whole);
     let ranges = match source {
         RangeSource::Copied => Some(copied_ranges(line)),
-        RangeSource::Database(modifiers) => rolls::unique_ranges(&line.text, modifiers)
+        RangeSource::Database(modifiers) => rolls::unique_ranges(&whole.text, modifiers)
             // One range or none for each number of the line.
-            .filter(|ranges| ranges.len() == line.rolls.len()),
+            .filter(|ranges| ranges.len() == whole.rolls.len())
+            .map(|ranges| reading.pick(key, &ranges)),
         RangeSource::Unknown => None,
     };
     let fixed = Stat {
         key,
-        text: &line.text,
+        text: &whole.text,
         filter: None,
         unsearchable: false,
         roll: None,
@@ -647,7 +691,7 @@ fn unique_stat<'a>(
         filter: Some(StatFilter {
             checked: true,
             // A legacy unique keeps its value, out of the range of today.
-            limit: Some(Limit::new(value, half, bounds, value, line)),
+            limit: Some(Limit::new(value, reading.half(key), bounds, value, line)),
         }),
         roll,
         ..fixed
@@ -1232,8 +1276,9 @@ mod tests {
             "Implicit",
             "■ 26% increased Stun Threshold ≥26",
             "Unique",
-            "■ When you kill a Rare monster, you gain its Modifiers for 60 seconds ≥60",
             "■ +55 to maximum Life ≥55",
+            // The string of its stat writes the 60: it never varies.
+            "When you kill a Rare monster, you gain its Modifiers for 60 seconds",
         ];
         let partial = database(
             &[],
@@ -1706,7 +1751,8 @@ mod tests {
                 // Its roll still shows, without a filter.
                 "⊘ Gain 3 Thunder Charges when you Dodge Roll [2–4 0.50]",
                 // The second line of a stat is searched by the first.
-                "■ 20% chance to gain Onslaught for 3 seconds when you kill an ≥11.5 [15–25 0.50]",
+                // Its field holds the 20, not the 3 its string writes.
+                "■ 20% chance to gain Onslaught for 3 seconds when you kill an ≥20 [15–25 0.50]",
                 "enemy affected by Abyssal Wasting",
                 // Or by the line with its numbers.
                 "Life that would be lost by taking Damage is instead Reserved",

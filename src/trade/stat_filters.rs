@@ -2,10 +2,11 @@
 //! copied: its ids, and how the value of its range field is written there; then the stat
 //! filters of a search, from the filters the player checked.
 //!
-//! The value of a range field is the average of the numbers of its line (see
-//! `ui::item_stats`); the trade site reads the average of the numbers of the stat, with the
-//! sign of the stat: a `reduced` line of an `increased` stat, or an inverted stat (`#% less
-//! Damage`), has the other sign there, its minimum and its maximum swapped.
+//! The value of a range field is the average of the numbers of its line the stat counts, its
+//! `#` ([`LineStats::numbers`]), not those its string writes (the 3 of `#% chance to gain
+//! Onslaught for 3 seconds`); the trade site reads the average of the numbers of the stat,
+//! with the sign of the stat: a `reduced` line of an `increased` stat, or an inverted stat
+//! (`#% less Damage`), has the other sign there, its minimum and its maximum swapped.
 
 use super::query::StatFilter;
 use crate::filters::{Filter, StatKey};
@@ -17,8 +18,8 @@ use crate::language::Language;
 #[derive(Debug, Clone, PartialEq)]
 pub enum LineStat {
     Searched(TradeStat),
-    /// Another line of a stat written on several lines: the line with its numbers searches it,
-    /// or else the first.
+    /// Another line of a stat written on several lines: the first line with a number of the
+    /// stat searches it, or else the first line.
     Continued,
     /// A line without trade id in its group: a modifier added by a patch the game data
     /// doesn't know yet, or a line the parser read wrong.
@@ -31,6 +32,8 @@ pub struct TradeStat {
     /// Its id, with the option of an option stat (`explicit.stat_448592698|98`); or a local
     /// and a global one written the same (`# to Accuracy Rating`).
     ids: Vec<String>,
+    /// The indexes of the numbers of the line its stat counts.
+    numbers: Vec<usize>,
     /// None for a line without number: its stat alone is searched.
     value: Option<TradeValue>,
 }
@@ -43,8 +46,8 @@ struct TradeValue {
     /// The value of the copied line on the trade site.
     trade: f64,
     /// How much the value on the trade site changes with the value of the field: -1 for a
-    /// `reduced` line of an `increased` stat; another number when the line writes a number
-    /// its stat doesn't count (`1% more Unarmed Damage per # Strength`).
+    /// `reduced` line of an `increased` stat; a share when the stat has numbers on other lines
+    /// too (`Take #% more Damage from Hits` / `Take #% more Damage over time`).
     slope: f64,
 }
 
@@ -56,9 +59,14 @@ impl TradeValue {
 }
 
 impl TradeStat {
-    /// The stat `found` of `line`, the line with its numbers, in `group`; none when it has no
+    /// The stat `found` of `line`, whose `numbers` it counts, in `group`; none when it has no
     /// id there, or is an option stat whose option isn't known.
-    fn new(found: &game_data::StatMatch, group: TradeGroup, line: &StatLine) -> Option<Self> {
+    fn new(
+        found: &game_data::StatMatch,
+        group: TradeGroup,
+        line: &StatLine,
+        numbers: Vec<usize>,
+    ) -> Option<Self> {
         let ids = found.stat.trade_ids(group);
         if ids.is_empty() {
             return None;
@@ -69,9 +77,11 @@ impl TradeStat {
         } else {
             ids.to_vec()
         };
+        let value = trade_value(found, line, &numbers);
         Some(Self {
             ids,
-            value: trade_value(found, line),
+            numbers,
+            value,
         })
     }
 
@@ -98,12 +108,19 @@ impl TradeStat {
     }
 }
 
-/// The value of `line` on the trade site, given its stat `found`; none for a line or a stat
-/// without number.
-fn trade_value(found: &game_data::StatMatch, line: &StatLine) -> Option<TradeValue> {
-    let numbers = line.rolls.len();
+/// The value of `line` on the trade site, given its stat `found`, which counts its `numbers`;
+/// none for a line or a stat without number.
+fn trade_value(
+    found: &game_data::StatMatch,
+    line: &StatLine,
+    numbers: &[usize],
+) -> Option<TradeValue> {
+    let rolls: Vec<f64> = numbers
+        .iter()
+        .filter_map(|&number| Some(line.rolls.get(number)?.value))
+        .collect();
     let values = found.values.len();
-    if numbers == 0 || values == 0 {
+    if rolls.is_empty() || values == 0 {
         return None;
     }
     let sign = |minus: bool| if minus { -1.0 } else { 1.0 };
@@ -111,13 +128,41 @@ fn trade_value(found: &game_data::StatMatch, line: &StatLine) -> Option<TradeVal
     // The values of the stat, written as the line writes them.
     let written_sign = sign(found.negate);
     #[expect(clippy::cast_precision_loss, reason = "a few numbers in a line")]
-    let (numbers, values) = (numbers as f64, values as f64);
+    let (numbers, values) = (rolls.len() as f64, values as f64);
     Some(TradeValue {
-        copied: line.rolls.iter().map(|roll| roll.value).sum::<f64>() / numbers,
+        copied: rolls.iter().sum::<f64>() / numbers,
         trade: inverted * found.values.iter().sum::<f64>() / values,
-        // The field moves the numbers of the line, those of the stat among them, by as much.
+        // The field moves the numbers of the stat on its line by as much.
         slope: inverted * written_sign * numbers / values,
     })
+}
+
+/// For each line of `found`, a line of `modifier`, the indexes of its numbers the stat counts;
+/// all of them when the numbers of the lines don't line up with those the stat read.
+fn counted_numbers(found: &game_data::LineMatch, modifier: &Modifier) -> Vec<Vec<usize>> {
+    let counts: Vec<usize> = found
+        .lines
+        .clone()
+        .map(|line| modifier.lines.get(line).map_or(0, |line| line.rolls.len()))
+        .collect();
+    let counted = found
+        .stat
+        .as_ref()
+        .map(|stat| stat.counted.as_slice())
+        .filter(|counted| counted.len() == counts.iter().sum::<usize>());
+    let mut start = 0;
+    counts
+        .iter()
+        .map(|&count| {
+            let numbers = (0..count)
+                .filter(|number| {
+                    counted.is_none_or(|counted| counted.get(start + number) == Some(&true))
+                })
+                .collect();
+            start += count;
+            numbers
+        })
+        .collect()
 }
 
 /// A limit as the search writes it, without the noise of the calculation (`37.500000001`).
@@ -138,23 +183,20 @@ impl LineStats {
         for (index, modifier) in modifiers.iter().enumerate() {
             let group = TradeGroup::of(modifier);
             for found in game_data::modifier_stats(language, modifier, trade) {
-                // The line with the numbers of the stat holds its filter: `Life that would be
-                // lost… is instead Reserved` / `until you take no Damage to Life for # seconds`.
-                let searched = found
-                    .lines
-                    .clone()
-                    .find(|&line| {
-                        modifier
-                            .lines
-                            .get(line)
-                            .is_some_and(|line| !line.rolls.is_empty())
-                    })
-                    .unwrap_or(found.lines.start);
+                let mut numbers = counted_numbers(&found, modifier);
+                // The first line with a number of the stat holds its filter: `Life that would
+                // be lost… is instead Reserved` / `until you take no Damage to Life for #
+                // seconds`.
+                let offset = numbers.iter().position(|line| !line.is_empty());
+                let searched = found.lines.start + offset.unwrap_or(0);
+                let numbers = numbers.get_mut(offset.unwrap_or(0)).map(std::mem::take);
                 let stat = found
                     .stat
                     .as_ref()
                     .zip(modifier.lines.get(searched))
-                    .and_then(|(stat, line)| TradeStat::new(stat, group, line));
+                    .and_then(|(stat, line)| {
+                        TradeStat::new(stat, group, line, numbers.unwrap_or_default())
+                    });
                 for line in found.lines {
                     let key = StatKey {
                         modifier: index,
@@ -179,6 +221,16 @@ impl LineStats {
             .iter()
             .find(|(line, _)| *line == key)
             .map(|(_, stat)| stat)
+    }
+
+    /// The indexes of the numbers of the line `key` its stat counts; none for a line it doesn't
+    /// search, whose numbers all count.
+    #[must_use]
+    pub fn numbers(&self, key: StatKey) -> Option<&[usize]> {
+        match self.get(key)? {
+            LineStat::Searched(stat) => Some(&stat.numbers),
+            LineStat::Continued | LineStat::Unsearchable => None,
+        }
     }
 
     /// The stat filters of the search, from the filters the player `checked`: the lines the
@@ -308,9 +360,9 @@ mod tests {
 
     #[test]
     fn a_number_written_in_the_string_of_a_stat_isnt_searched() {
-        // The field holds the average of 1 and 5, the trade site counts the 5 only.
+        // The field holds the 5 only, the number the stat counts.
         assert_eq!(
-            searched("1% more Unarmed Damage per 5 Strength", "3", "4"),
+            searched("1% more Unarmed Damage per 5 Strength", "5", "7"),
             stat("explicit.stat_3452816629", Some(5.0), Some(7.0))
         );
     }
@@ -388,10 +440,10 @@ mod tests {
         let stats = line_stats(&item);
 
         assert_eq!(stats.get(key(0, 1)), Some(&LineStat::Continued));
-        // The field holds the average of 20 and 3, the trade site counts the 20 only: the
-        // field from 9 to 14 is a roll from 15 to 25.
+        assert_eq!(stats.numbers(key(0, 0)), Some(&[0][..]));
+        // The field holds the 20 only, not the 3 its string writes.
         let searched =
-            stats.stat_filters(&[(key(0, 0), filter("9", "14")), (key(0, 1), filter("", ""))]);
+            stats.stat_filters(&[(key(0, 0), filter("15", "25")), (key(0, 1), filter("", ""))]);
         assert_eq!(searched.len(), 1, "{searched:?}");
         assert_eq!(searched[0].minimum, Some(15.0));
         assert_eq!(searched[0].maximum, Some(25.0));
@@ -411,6 +463,23 @@ mod tests {
             stats.stat_filters(&[(key(0, 1), filter("", "5"))]),
             [stat("explicit.stat_1777740627", None, Some(5.0))]
         );
+    }
+
+    #[test]
+    fn a_stat_is_searched_by_its_first_line_with_one_of_its_numbers() {
+        let item = unique(
+            "{ Unique Modifier — Damage }\n\
+             Alternating every 5 seconds:\n\
+             Take 20% more Damage from Hits\n\
+             Take 20% more Damage over time",
+        );
+        let stats = line_stats(&item);
+
+        // The 5 is written by the string of the stat.
+        assert_eq!(stats.get(key(0, 0)), Some(&LineStat::Continued));
+        assert_eq!(stats.numbers(key(0, 0)), None);
+        assert_eq!(stats.numbers(key(0, 1)), Some(&[0][..]));
+        assert_eq!(stats.get(key(0, 2)), Some(&LineStat::Continued));
     }
 
     #[test]
