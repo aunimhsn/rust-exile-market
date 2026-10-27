@@ -137,7 +137,7 @@ group-suffixes = Suffixes
 group-explicit = Explicite
 # Les modificateurs d'un unique, sans préfixe ni suffixe.
 group-unique = Unique
-# Les filtres du type de base et du niveau d'objet d'un objet rare, magique ou normal, et du DPS d'une arme.
+# Les filtres du type de base, du niveau d'objet, des châsses, de la qualité et du niveau requis d'un objet rare, magique ou normal.
 group-item = Objet
 group-weapon = Arme
 # Les totaux que le site d'échange additionne sur plusieurs modificateurs.

@@ -1,8 +1,8 @@
 // Section Item filters (13h): the sockets, the quality and the required level, in the Item group.
 // An exceptional base is searched by what makes it exceptional, its sockets above those its base usually has
 // or its quality above 20 %: the trade site doesn't know its name. On a rare, magic item or jewel, the sockets
-// are checked above those of the base or on a corrupted item, the quality above 20 % except on a rare, and the
-// required level of a rare for leveling (75 or under, item level too) is unchecked, searched as a maximum.
+// are checked above those of the base or on a corrupted item, the quality above 20 % except on a rare (of a
+// charm from 10 %, of a flask from 20 %, checked above), and the required level of a rare for leveling (75 or under, item level too) is unchecked, searched as a maximum.
 const TARGE = { rarity: "normal", name: "Exceptional Mammoth Targe", cls: "Shields", props: [["Armour", "139"], ["Evasion", "126"], ["Block", "25%"]], summary: "Grants Skill: Raise Shield", req: "Requires Level 65 · 50 Str · 50 Dex", tags: ["Q 24%", "ilvl 82"], statsLabel: "Stats (0)", filters: "3 filters" };
 const TARGE_FILTERS = [
   // A shield usually has one socket: this one has none, its quality makes it exceptional.
@@ -37,6 +37,13 @@ const MITTS_FILTERS = [
   { group: "Suffixes", fill: "1 of 1" },
   { mod: "+20 to Dexterity", check: false, min: 18, tier: 5, range: "17–20", noBar: true },
 ];
+const CHARM = { rarity: "magic", name: "Ruby Charm of the Fox", cls: "Charms", summary: "Lasts 4 Seconds · Consumes 40 of 80 Charges on use", req: "Requires Level 40", tags: ["Q 12%", "ilvl 60"], statsLabel: "Stats (1)", filters: "3 filters" };
+const CHARM_FILTERS = [
+  // A charm: its quality checked from 10 % (a flask: from 20 %, checked above), like Exiled Exchange 2.
+  ...itemFilters({ base: "Ruby Charm", level: { value: 60, check: false }, quality: { value: 12, check: true } }),
+  { group: "Suffixes", fill: "1 of 1" },
+  { mod: "+28% to Fire Resistance", check: true, min: 25, tier: 3, range: "26–30", noBar: true },
+];
 const TREAD = { rarity: "rare", name: "Gale Tread", base: "Lattice Sandals", cls: "Boots", props: [["Energy Shield", "64"]], req: "Requires Level 52 · 41 Int", tags: ["Corrupted", "1 socket", "ilvl 80"], statsLabel: "Stats (2)", filters: "4 filters" };
 const TREAD_FILTERS = [
   // Corrupted: no socket can be added any more, so the one it has counts.
@@ -54,6 +61,7 @@ SECTIONS.push(["Item filters (13h): the sockets, the quality and the required le
   ["Rare for leveling: sockets above the base, required level", win(topBar(), item({ ...JACKET, stats: jacketFilters() }, true), foot())],
   ["The same, the required level hovered", win(topBar(), item({ ...JACKET, stats: jacketFilters(true) }, true), foot())],
   ["Magic item: exceptional quality, usual sockets", win(topBar(), item({ ...MITTS, stats: MITTS_FILTERS }, true), foot())],
+  ["Magic charm: its quality from 10 %", win(topBar(), item({ ...CHARM, stats: CHARM_FILTERS }, true), foot())],
   ["Corrupted rare: its sockets checked", win(topBar(), item({ ...TREAD, stats: TREAD_FILTERS }, true), foot())],
   ["Rare bow: usual sockets, quality 20 %", win(topBar(), item({ ...BOW_RARE, stats: BOW_FILTERS }, true), foot())],
 ]]);

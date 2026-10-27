@@ -328,7 +328,8 @@ fn reduce_stat(stat: SourceStat) -> Result<Stat> {
 
 /// The bases of an `items.ndjson`, of the categories the application searches, each name
 /// once: a base listed in several categories takes the one most of its entries have
-/// (`Runemastered Venerable Defender`, three times a shield and once a buckler).
+/// (`Runemastered Venerable Defender`, three times a shield and once a buckler), the first in
+/// alphabetical order on a tie.
 fn reduce_bases(source: &str) -> Result<Vec<Base>> {
     let mut categories: BTreeMap<String, BTreeMap<String, usize>> = BTreeMap::new();
     for (index, line) in source.lines().enumerate() {
@@ -360,7 +361,11 @@ fn reduce_bases(source: &str) -> Result<Vec<Base>> {
         }
         let category = counts
             .into_iter()
-            .max_by_key(|(_, count)| *count)
+            .max_by(|(first, first_count), (second, second_count)| {
+                first_count
+                    .cmp(second_count)
+                    .then_with(|| second.cmp(first))
+            })
             .map(|(category, _)| category)
             .ok_or("a base without category")?;
         bases.push(Base { name, category });
@@ -416,4 +421,65 @@ This product isn't affiliated with or endorsed by Grinding Gear Games in any way
 ",
         license.trim_end()
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The bases of `lines`, as name and category.
+    fn bases(lines: &[&str]) -> Result<Vec<(String, String)>> {
+        Ok(reduce_bases(&lines.join("\n"))?
+            .into_iter()
+            .map(|base| (base.name, base.category))
+            .collect())
+    }
+
+    fn base(name: &str, category: &str) -> (String, String) {
+        (name.to_owned(), category.to_owned())
+    }
+
+    #[test]
+    fn the_bases_of_the_searched_categories_are_kept_each_name_once() {
+        let kept = bases(&[
+            r#"{"name": "Mammoth Targe", "namespace": "ITEM", "craftable": {"category": "Shield"}}"#,
+            r#"{"name": "Mammoth Targe", "namespace": "ITEM", "craftable": {"category": "Shield"}}"#,
+            // Another category, another namespace, no category, no name.
+            r#"{"name": "Exalted Orb", "namespace": "ITEM", "craftable": {"category": "Currency"}}"#,
+            r#"{"name": "Headhunter", "namespace": "UNIQUE", "craftable": {"category": "Belt"}}"#,
+            r#"{"name": "Gold", "namespace": "ITEM"}"#,
+            r#"{"namespace": "UNIQUE", "unique": {"base": "Ring"}}"#,
+            "",
+        ])
+        .expect("read");
+
+        assert_eq!(kept, [base("Mammoth Targe", "Shield")]);
+    }
+
+    #[test]
+    fn a_base_in_several_categories_takes_the_one_most_of_its_entries_have() {
+        let defender = |category: &str| {
+            format!(
+                r#"{{"name": "Venerable Defender", "namespace": "ITEM", "craftable": {{"category": "{category}"}}}}"#
+            )
+        };
+        let most = bases(&[
+            &defender("Shield"),
+            &defender("Buckler"),
+            &defender("Shield"),
+        ]);
+        // On a tie, the first in alphabetical order.
+        let tie = bases(&[&defender("Shield"), &defender("Buckler")]);
+
+        assert_eq!(most.expect("read"), [base("Venerable Defender", "Shield")]);
+        assert_eq!(tie.expect("read"), [base("Venerable Defender", "Buckler")]);
+    }
+
+    #[test]
+    fn a_new_category_stops_the_generator() {
+        let new =
+            bases(&[r#"{"name": "Idol", "namespace": "ITEM", "craftable": {"category": "Idol"}}"#]);
+
+        assert!(new.is_err());
+    }
 }
