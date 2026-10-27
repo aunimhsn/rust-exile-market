@@ -1,5 +1,6 @@
 //! The bases of the game, from Exiled Exchange 2 (`assets/game-data/bases-<language>.ndjson`):
-//! the category of each base of equipment, jewel, flask or charm, by its name in each language.
+//! the category of each base of equipment, jewel, flask or charm, by its name in each language,
+//! and its tags from RePoE, which tell the modifiers that roll on it.
 
 use std::collections::HashMap;
 use std::sync::LazyLock;
@@ -95,33 +96,63 @@ impl Category {
 #[derive(Deserialize)]
 struct Base {
     name: String,
-    category: Category,
+    #[serde(flatten)]
+    data: BaseData,
 }
 
-static ENGLISH: LazyLock<HashMap<String, Category>> =
+#[derive(Deserialize)]
+struct BaseData {
+    category: Category,
+    /// E.g. `crossbow`, `two_hand_weapon`: only those that tell where a modifier rolls.
+    #[serde(default)]
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "read by the roll bar of step 13j2")
+    )]
+    tags: Vec<String>,
+}
+
+static ENGLISH: LazyLock<HashMap<String, BaseData>> =
     LazyLock::new(|| read(include_str!("../../assets/game-data/bases-en.ndjson")));
-static FRENCH: LazyLock<HashMap<String, Category>> =
+static FRENCH: LazyLock<HashMap<String, BaseData>> =
     LazyLock::new(|| read(include_str!("../../assets/game-data/bases-fr.ndjson")));
+
+/// The base type `name` in `language`, without "Exceptional" nor "Superior".
+fn base(language: Language, name: &str) -> Option<&'static BaseData> {
+    let bases = match language {
+        Language::English => &ENGLISH,
+        Language::French => &FRENCH,
+    };
+    bases.get(name)
+}
 
 /// The category of the base type `name` in `language` (`Mammoth Targe`, `Targe de mammouth`),
 /// without "Exceptional" nor "Superior"; none for a base the data doesn't know.
 #[must_use]
 pub fn category(language: Language, name: &str) -> Option<Category> {
-    let bases = match language {
-        Language::English => &ENGLISH,
-        Language::French => &FRENCH,
-    };
-    bases.get(name).copied()
+    base(language, name).map(|base| base.category)
+}
+
+/// The tags of the base type `name` in `language` that tell where a modifier rolls; none for a
+/// base the data doesn't know, or doesn't know the tags of.
+#[cfg_attr(
+    not(test),
+    expect(dead_code, reason = "read by the roll bar of step 13j2")
+)]
+pub(super) fn tags(language: Language, name: &str) -> Option<&'static [String]> {
+    base(language, name)
+        .map(|base| base.tags.as_slice())
+        .filter(|tags| !tags.is_empty())
 }
 
 /// Reads one base per line; a line that can't be read is logged and left out (the tests read
 /// every line of the embedded files).
-fn read(text: &str) -> HashMap<String, Category> {
+fn read(text: &str) -> HashMap<String, BaseData> {
     let mut bases = HashMap::new();
     for (index, line) in text.lines().enumerate() {
         match serde_json::from_str::<Base>(line) {
             Ok(base) => {
-                bases.insert(base.name, base.category);
+                bases.insert(base.name, base.data);
             }
             Err(error) => log::error!("Game data, base {} unreadable: {error}", index + 1),
         }

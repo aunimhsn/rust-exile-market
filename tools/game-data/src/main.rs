@@ -1,12 +1,15 @@
 //! Generates the game data embedded in the application, in `assets/game-data/`, from the
-//! stats and the items of Exiled Exchange 2 (see `docs/game-data.md`). Run it again after each
-//! patch of the game:
+//! stats and the items of Exiled Exchange 2 and the modifiers of the RePoE fork (see
+//! `docs/game-data.md`). Run it again after each patch of the game:
 //!
-//! - `cargo run -p game-data` reads the latest commit of Exiled Exchange 2;
-//! - `cargo run -p game-data -- <commit>` reads a given one.
+//! - `cargo run -p game-data` reads the latest commit of each;
+//! - `cargo run -p game-data -- <commit of Exiled Exchange 2> [<commit of RePoE>]` reads given
+//!   ones.
 //!
-//! The files it writes have one stat or one base per line, so that the changes of a patch read
-//! well in a diff.
+//! The files it writes have one stat, one base or one modifier per line, so that the changes
+//! of a patch read well in a diff.
+
+mod modifiers;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
@@ -16,6 +19,10 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 const REPOSITORY: &str = "Kvan7/Exiled-Exchange-2";
+/// The data of Path of Exile 2 exported by the RePoE fork, in `data/`.
+const REPOE: &str = "repoe-fork/poe2";
+/// The code of the RePoE fork, with its license.
+const REPOE_CODE: &str = "repoe-fork/repoe";
 const LANGUAGES: [&str; 2] = ["en", "fr"];
 /// The groups of the trade site that the application can search.
 const GROUPS: [&str; 9] = [
@@ -86,7 +93,7 @@ const LEFT_OUT_CATEGORIES: [&str; 16] = [
     "VaultKey",
 ];
 
-type Result<T> = std::result::Result<T, Box<dyn Error>>;
+pub(crate) type Result<T> = std::result::Result<T, Box<dyn Error>>;
 
 /// A stat of `renderer/public/data/<language>/stats.ndjson`, with the fields the application
 /// reads; the others (`oils`, `dp`, `fromAreaMods`) are left out.
@@ -159,6 +166,9 @@ fn is_false(value: &bool) -> bool {
 struct SourceItem {
     /// None for a few uniques without data.
     name: Option<String>,
+    /// The English name.
+    #[serde(rename = "refName")]
+    ref_name: Option<String>,
     namespace: String,
     craftable: Option<SourceCraftable>,
 }
@@ -169,11 +179,13 @@ struct SourceCraftable {
 }
 
 /// A base as the application reads it (`src/game_data/bases.rs`): its name in the language
-/// of the file, and its category.
+/// of the file, its category, and the tags that tell the modifiers it rolls.
 #[derive(Serialize)]
 struct Base {
     name: String,
     category: String,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    tags: Vec<String>,
 }
 
 #[derive(Deserialize)]
@@ -193,28 +205,62 @@ struct Committer {
 }
 
 fn main() -> Result<()> {
-    let reference = std::env::args()
-        .nth(1)
-        .unwrap_or_else(|| "master".to_owned());
+    let mut arguments = std::env::args().skip(1);
+    let reference = arguments.next().unwrap_or_else(|| "master".to_owned());
+    let repoe_reference = arguments.next().unwrap_or_else(|| "master".to_owned());
     let agent = ureq::Agent::new_with_defaults();
-    let commit: Commit = serde_json::from_str(&get(
-        &agent,
-        &format!("https://api.github.com/repos/{REPOSITORY}/commits/{reference}"),
-    )?)?;
+    let commit = latest_commit(&agent, REPOSITORY, &reference)?;
     println!("Exiled Exchange 2, commit {}", commit.sha);
+    let repoe_commit = latest_commit(&agent, REPOE, &repoe_reference)?;
+    let repoe_version = get(
+        &agent,
+        &raw_url(REPOE, &repoe_commit.sha, "exported-version.txt"),
+    )?;
+    println!(
+        "RePoE, commit {}, version {}",
+        repoe_commit.sha,
+        repoe_version.trim()
+    );
 
     let output = output_directory();
     fs::create_dir_all(&output)?;
-    let mut ids_by_language = Vec::new();
+    let mut sources = Vec::new();
     for language in LANGUAGES {
         let source = get(
             &agent,
             &raw_url(
+                REPOSITORY,
                 &commit.sha,
                 &format!("renderer/public/data/{language}/stats.ndjson"),
             ),
         )?;
-        let stats = reduce(&source).map_err(|error| format!("{language}: {error}"))?;
+        sources.push((
+            language,
+            reduce(&source).map_err(|error| format!("{language}: {error}"))?,
+        ));
+    }
+    let references: BTreeSet<String> = sources
+        .iter()
+        .filter(|(language, _)| *language == "en")
+        .flat_map(|(_, stats)| stats.iter().map(|stat| stat.reference.clone()))
+        .collect();
+    let repoe = |path: &str| {
+        get(
+            &agent,
+            &raw_url(REPOE, &repoe_commit.sha, &format!("data/{path}")),
+        )
+    };
+    let (tables, base_tags) = modifiers::reduce(
+        &serde_json::from_str(&repoe("mods.json")?)?,
+        &serde_json::from_str(&repoe("base_items.json")?)?,
+        &serde_json::from_str::<Vec<_>>(&repoe("stat_translations/stat_descriptions.json")?)?,
+        &references,
+    )?;
+    println!("{} modifier tables", tables.len());
+    write_lines(&output.join("modifiers.ndjson"), &tables)?;
+
+    let mut ids_by_language = Vec::new();
+    for (language, stats) in sources {
         println!("{language}: {} stats", stats.len());
         ids_by_language.push(
             stats
@@ -227,11 +273,13 @@ fn main() -> Result<()> {
         let source = get(
             &agent,
             &raw_url(
+                REPOSITORY,
                 &commit.sha,
                 &format!("renderer/public/data/{language}/items.ndjson"),
             ),
         )?;
-        let bases = reduce_bases(&source).map_err(|error| format!("{language}: {error}"))?;
+        let bases =
+            reduce_bases(&source, &base_tags).map_err(|error| format!("{language}: {error}"))?;
         println!("{language}: {} bases", bases.len());
         write_lines(&output.join(format!("bases-{language}.ndjson")), &bases)?;
     }
@@ -239,10 +287,23 @@ fn main() -> Result<()> {
         report_differences(english, french);
     }
 
-    let license = get(&agent, &raw_url(&commit.sha, "LICENSE"))?;
+    let license = get(&agent, &raw_url(REPOSITORY, &commit.sha, "LICENSE"))?;
+    let repoe_license = get(&agent, &raw_url(REPOE_CODE, "master", "LICENSE.md"))?;
     fs::write(
         output.join("NOTICE.md"),
-        notice(&commit.sha, &commit.commit.committer.date, &license),
+        notice(
+            &Source {
+                commit: &commit.sha,
+                date: &commit.commit.committer.date,
+                license: &license,
+            },
+            &Source {
+                commit: &repoe_commit.sha,
+                date: &repoe_commit.commit.committer.date,
+                license: &repoe_license,
+            },
+            repoe_version.trim(),
+        ),
     )?;
     println!("Written to {}", output.canonicalize()?.display());
     Ok(())
@@ -253,8 +314,16 @@ fn output_directory() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets/game-data")
 }
 
-fn raw_url(commit: &str, path: &str) -> String {
-    format!("https://raw.githubusercontent.com/{REPOSITORY}/{commit}/{path}")
+/// The commit `reference` (a branch or a commit) of the GitHub `repository`.
+fn latest_commit(agent: &ureq::Agent, repository: &str, reference: &str) -> Result<Commit> {
+    Ok(serde_json::from_str(&get(
+        agent,
+        &format!("https://api.github.com/repos/{repository}/commits/{reference}"),
+    )?)?)
+}
+
+fn raw_url(repository: &str, commit: &str, path: &str) -> String {
+    format!("https://raw.githubusercontent.com/{repository}/{commit}/{path}")
 }
 
 fn get(agent: &ureq::Agent, url: &str) -> Result<String> {
@@ -329,9 +398,10 @@ fn reduce_stat(stat: SourceStat) -> Result<Stat> {
 /// The bases of an `items.ndjson`, of the categories the application searches, each name
 /// once: a base listed in several categories takes the one most of its entries have
 /// (`Runemastered Venerable Defender`, three times a shield and once a buckler), the first in
-/// alphabetical order on a tie.
-fn reduce_bases(source: &str) -> Result<Vec<Base>> {
+/// alphabetical order on a tie. Each takes the tags of its English name in `tags`.
+fn reduce_bases(source: &str, tags: &modifiers::BaseTags) -> Result<Vec<Base>> {
     let mut categories: BTreeMap<String, BTreeMap<String, usize>> = BTreeMap::new();
+    let mut english_names = BTreeMap::new();
     for (index, line) in source.lines().enumerate() {
         if line.trim().is_empty() {
             continue;
@@ -341,6 +411,9 @@ fn reduce_bases(source: &str) -> Result<Vec<Base>> {
         let (Some(name), Some(craftable)) = (item.name, item.craftable) else {
             continue;
         };
+        if let Some(english) = item.ref_name {
+            english_names.insert(name.clone(), english);
+        }
         if item.namespace != "ITEM" || LEFT_OUT_CATEGORIES.contains(&craftable.category.as_str()) {
             continue;
         }
@@ -368,7 +441,16 @@ fn reduce_bases(source: &str) -> Result<Vec<Base>> {
             })
             .map(|(category, _)| category)
             .ok_or("a base without category")?;
-        bases.push(Base { name, category });
+        let english = english_names.get(&name).unwrap_or(&name);
+        let tags = tags.get(english).cloned().unwrap_or_default();
+        if tags.is_empty() {
+            println!("Without tags: {name}");
+        }
+        bases.push(Base {
+            name,
+            category,
+            tags,
+        });
     }
     Ok(bases)
 }
@@ -403,15 +485,30 @@ fn report_differences(
     }
 }
 
-fn notice(commit: &str, date: &str, license: &str) -> String {
+/// A source of the data: its commit, the date of the commit, and its license.
+struct Source<'a> {
+    commit: &'a str,
+    date: &'a str,
+    license: &'a str,
+}
+
+fn notice(exiled_exchange: &Source, repoe: &Source, repoe_version: &str) -> String {
     format!(
         "# Game data notice
 
 Generated by `tools/game-data` (`cargo run -p game-data`, see `docs/game-data.md`): don't edit these files by hand, generate them again.
 
-`stats-en.ndjson` and `stats-fr.ndjson` are the stats of [Exiled Exchange 2](https://github.com/{REPOSITORY}) (`renderer/public/data/<language>/stats.ndjson`), commit `{commit}` of {date}, reduced to the fields the application reads and without the groups of the Sanctum. `bases-en.ndjson` and `bases-fr.ndjson` are the bases of its items (`renderer/public/data/<language>/items.ndjson`), of the same commit: the name and the category of each base of equipment, jewel, flask or charm.
+`stats-en.ndjson` and `stats-fr.ndjson` are the stats of [Exiled Exchange 2](https://github.com/{REPOSITORY}) (`renderer/public/data/<language>/stats.ndjson`), commit `{}` of {}, reduced to the fields the application reads and without the groups of the Sanctum. `bases-en.ndjson` and `bases-fr.ndjson` are the bases of its items (`renderer/public/data/<language>/items.ndjson`), of the same commit: the name and the category of each base of equipment, jewel, flask or charm, with the tags of the base from RePoE.
 
-Their texts and ids come from the files of Path of Exile 2 and belong to Grinding Gear Games; they are used here in a free, non-commercial tool. The files of Exiled Exchange 2 are under the MIT license, whose notice follows:
+`modifiers.ndjson` holds the tiers of the prefixes and suffixes of the equipment, the jewels, the flasks and the charms, from the data of the [RePoE fork](https://github.com/{REPOE}) (`data/mods.json`, `data/base_items.json` and `data/stat_translations/stat_descriptions.json`), commit `{}` of {}, export of the version {repoe_version} of the game, their lines written as the templates of Exiled Exchange 2.
+
+Their texts, ids and values come from the files of Path of Exile 2 and belong to Grinding Gear Games; they are used here in a free, non-commercial tool. The files of Exiled Exchange 2 are under the MIT license, whose notice follows:
+
+```text
+{}
+```
+
+The code of the RePoE fork ([{REPOE_CODE}](https://github.com/{REPOE_CODE})), which exports these data, is under the MIT license, whose notice follows:
 
 ```text
 {}
@@ -419,7 +516,12 @@ Their texts and ids come from the files of Path of Exile 2 and belong to Grindin
 
 This product isn't affiliated with or endorsed by Grinding Gear Games in any way.
 ",
-        license.trim_end()
+        exiled_exchange.commit,
+        exiled_exchange.date,
+        repoe.commit,
+        repoe.date,
+        exiled_exchange.license.trim_end(),
+        repoe.license.trim_end(),
     )
 }
 
@@ -429,7 +531,7 @@ mod tests {
 
     /// The bases of `lines`, as name and category.
     fn bases(lines: &[&str]) -> Result<Vec<(String, String)>> {
-        Ok(reduce_bases(&lines.join("\n"))?
+        Ok(reduce_bases(&lines.join("\n"), &BTreeMap::new())?
             .into_iter()
             .map(|base| (base.name, base.category))
             .collect())
