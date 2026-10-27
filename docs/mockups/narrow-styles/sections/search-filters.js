@@ -7,7 +7,7 @@
 // The tooltip of a line the trade site can't search: two sentences, one per line.
 const UNSEARCHABLE = {
   en: "The trade site can't search this line.<br>The offers may not have it.",
-  fr: "Le site d'échange ne cherche pas cette ligne.<br>Les offres peuvent ne pas l'avoir.",
+  fr: "Le site d'échange ne peut pas chercher cette ligne.<br>Il se peut que les offres ne l'aient pas.",
 };
 const unsearchableRow = (language, text, range, share, hovered = false) =>
   ({ mod: text, warning: UNSEARCHABLE[language], hover: hovered, range, share });

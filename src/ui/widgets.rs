@@ -33,6 +33,12 @@ mod choice {
     pub const CHECK_SIZE: f32 = MARK_SIZE;
     pub const CHECK_STROKE: f32 = 1.5;
     pub const CHECK_MARK_WIDTH: f32 = 9.0;
+    /// The "not allowed" sign, drawn on the 16 px grid of its icon in the mock-up.
+    pub const SIGN_GRID: f32 = 16.0;
+    pub const SIGN_RADIUS: f32 = 5.8;
+    pub const SIGN_STROKE: f32 = 2.2;
+    /// How far the bar of the sign reaches from its center, across and down.
+    pub const SIGN_BAR: f32 = 4.1;
 }
 
 impl Mark {
@@ -126,6 +132,22 @@ pub fn check_box(ui: &mut Ui, checked: bool, size: Vec2, label: &str) -> Respons
         response.hovered() || response.has_focus(),
     );
     response.on_hover_cursor(CursorIcon::PointingHand)
+}
+
+/// The "not allowed" sign, a circle struck through in the warning color, in place of a
+/// checkbox: at the left of a zone of `size`, centered across its height.
+pub fn not_allowed_sign(ui: &mut Ui, size: Vec2) -> Response {
+    use choice::{MARK_SIZE, SIGN_BAR, SIGN_GRID, SIGN_RADIUS, SIGN_STROKE};
+
+    let (rect, response) = ui.allocate_exact_size(size, Sense::hover());
+    let center = pos2(rect.left() + MARK_SIZE / 2.0, rect.center().y);
+    let scale = MARK_SIZE / SIGN_GRID;
+    let stroke = Stroke::new(SIGN_STROKE * scale, color::WARNING);
+    let painter = ui.painter();
+    painter.circle_stroke(center, SIGN_RADIUS * scale, stroke);
+    let bar = SIGN_BAR * scale;
+    painter.line_segment([center + vec2(-bar, bar), center + vec2(bar, -bar)], stroke);
+    response
 }
 
 /// A line of text.

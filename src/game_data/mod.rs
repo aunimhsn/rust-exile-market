@@ -25,7 +25,7 @@ mod trade_site;
 
 #[cfg(test)]
 pub use lines::equipment_strings;
-pub use lines::{StatSource, english_string, modifier_stats};
+pub use lines::{LineMatch, StatMatch, StatSource, english_string, modifier_stats};
 pub use stats::TradeGroup;
 pub use trade_site::TradeStats;
 #[cfg(test)]

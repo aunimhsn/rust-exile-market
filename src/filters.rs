@@ -60,6 +60,20 @@ impl Filter {
         Some(self.bounds.map_or(value, |bounds| bounds.clamp(value)))
     }
 
+    /// The minimum and the maximum searched, within the range of the stat; a minimum above
+    /// the maximum brings the maximum to it, even while the player is still in a half
+    /// ([`Filter::settle`] runs only when they leave it), so that a search never asks for
+    /// nothing.
+    #[must_use]
+    pub fn limits(&self) -> (Option<f64>, Option<f64>) {
+        let minimum = self.searched(Half::Minimum);
+        let maximum = self.searched(Half::Maximum);
+        match (minimum, maximum) {
+            (Some(low), Some(high)) if low > high => (minimum, minimum),
+            _ => (minimum, maximum),
+        }
+    }
+
     #[must_use]
     pub fn text(&self, half: Half) -> &str {
         match half {
@@ -192,6 +206,20 @@ mod tests {
         assert_eq!(settled("50", "50", Half::Maximum), texts("50", "50"));
         // An empty half has no limit.
         assert_eq!(settled("55", "", Half::Minimum), texts("55", ""));
+    }
+
+    #[test]
+    fn a_minimum_above_the_maximum_is_never_searched() {
+        let limits = |minimum: &str, maximum: &str| filter(minimum, maximum, RANGE).limits();
+
+        assert_eq!(limits("45", "55"), (Some(45.0), Some(55.0)));
+        assert_eq!(limits("50", "50"), (Some(50.0), Some(50.0)));
+        // The player is still typing in a half: the maximum is brought to the minimum.
+        assert_eq!(limits("55", "45"), (Some(55.0), Some(55.0)));
+        // Brought within the range first: 70 is searched at 60, 5 at 40.
+        assert_eq!(limits("70", "5"), (Some(60.0), Some(60.0)));
+        assert_eq!(limits("", "45"), (None, Some(45.0)));
+        assert_eq!(limits("-", ""), (None, None));
     }
 
     #[test]
