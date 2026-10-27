@@ -259,7 +259,7 @@ impl ExileMarketApp {
         let to_top = std::mem::take(&mut self.scroll_to_top);
         let mut offers_action = None;
         let action = ui::content(ui, to_top, |ui| {
-            let action = ItemBlock::new(item, &mut self.filters, &self.i18n)
+            let action = ItemBlock::new(item, shown.lines(), &mut self.filters, &self.i18n)
                 .tradable(url.is_some())
                 .stats(self.stats_open, unique_modifiers)
                 .show(ui);

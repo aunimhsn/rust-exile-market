@@ -151,8 +151,11 @@ active-filters = { $count ->
     [one] { $count } filtre
    *[other] { $count } filtres
 }
-# À droite du premier petit titre, au-dessus des minimums des filtres.
-filter-minimum = min
+# À droite du premier petit titre, au-dessus des champs des filtres.
+filter-range = min – max
+# L'infobulle du champ d'un filtre : les jets qu'il accepte, puis pour une ligne meilleure basse, en gris.
+filter-rolls = Jets de { $low } à { $high }
+filter-lower-better = Plus c'est bas, mieux c'est
 # Sous les stats d'un objet corrompu : la recherche ne le compare qu'aux offres corrompues.
 corrupted-offers-only = Offres corrompues seulement, comme cet objet.
 

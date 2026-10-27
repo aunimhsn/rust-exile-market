@@ -204,6 +204,9 @@ fn same_place(offer: OfferKind, kind: ModifierKind) -> bool {
 /// A modifier line of the copied item, as the offer lines are compared with it.
 #[derive(Debug)]
 struct CopiedLine {
+    /// The index of its modifier among the modifiers of the item, and of the line in it.
+    modifier: usize,
+    line: usize,
     kind: ModifierKind,
     template: String,
     /// The numbers of the line as the item parser read them.
@@ -221,20 +224,37 @@ impl CopiedLines {
     /// site, once it gave them.
     #[must_use]
     pub fn new(language: Language, modifiers: &[Modifier], trade: Option<&TradeStats>) -> Self {
-        let lines = modifiers.iter().flat_map(|modifier| {
+        let lines = modifiers.iter().enumerate().flat_map(|(index, modifier)| {
             let group = TradeGroup::of(modifier);
-            modifier.lines.iter().map(move |line| {
-                let template = Template::of(&line.text).text;
-                let words = game_data::english_string(language, &line.text, group, trade);
-                CopiedLine {
-                    kind: modifier.kind,
-                    direction: direction(words.unwrap_or(&template)),
-                    template,
-                    rolls: line.rolls.iter().map(|roll| roll.value).collect(),
-                }
-            })
+            modifier
+                .lines
+                .iter()
+                .enumerate()
+                .map(move |(line_index, line)| {
+                    let template = Template::of(&line.text).text;
+                    let words = game_data::english_string(language, &line.text, group, trade);
+                    CopiedLine {
+                        modifier: index,
+                        line: line_index,
+                        kind: modifier.kind,
+                        direction: direction(words.unwrap_or(&template)),
+                        template,
+                        rolls: line.rolls.iter().map(|roll| roll.value).collect(),
+                    }
+                })
         });
         Self(lines.collect())
+    }
+
+    /// Whether the line `line` of the modifier `modifier` of the copied item is better lower,
+    /// as "18% reduced Movement Speed"; not when its better side is unknown.
+    #[must_use]
+    pub fn better_lower(&self, modifier: usize, line: usize) -> bool {
+        self.0.iter().any(|copied| {
+            copied.modifier == modifier
+                && copied.line == line
+                && copied.direction == Direction::Lower
+        })
     }
 
     /// The difference of the offer `line`, listed as `kind`, from the same line of the
@@ -434,6 +454,27 @@ mod tests {
             verdict("20% reduced Mana Cost of Skills", &copied),
             Some(Verdict::Better)
         );
+    }
+
+    #[test]
+    fn a_line_of_the_copied_item_tells_whether_it_is_better_lower() {
+        let mut hybrid = explicit("+20 to Evasion Rating");
+        hybrid
+            .lines
+            .push(StatLine::parse("10% increased Mana Cost of Skills"));
+        let copied = [
+            explicit("10% reduced Movement Speed"),
+            hybrid,
+            explicit("15% reduced Life of nearby Enemies"),
+        ];
+        let lines = CopiedLines::new(Language::English, &copied, None);
+
+        assert!(lines.better_lower(0, 0));
+        assert!(!lines.better_lower(1, 0));
+        assert!(lines.better_lower(1, 1));
+        // Its better side unknown: searched with a minimum, as any line.
+        assert!(!lines.better_lower(2, 0));
+        assert!(!lines.better_lower(3, 0));
     }
 
     #[test]
