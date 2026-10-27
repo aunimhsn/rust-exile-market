@@ -5,6 +5,7 @@
 
 mod app;
 mod clipboard;
+mod estimate;
 mod files;
 mod filters;
 mod format;

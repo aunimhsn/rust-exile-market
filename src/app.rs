@@ -8,12 +8,13 @@ use eframe::{App, CreationContext, Frame};
 use egui::{Context, Key, OpenUrl, Ui, ViewportCommand};
 
 use crate::clipboard::{ClipboardEvent, ClipboardWatch};
+use crate::estimate::{self, Estimate, Reference};
 use crate::filters::Filters;
 use crate::i18n::{DOWNLOAD_QUOTE_COUNT, Message, Translator};
 use crate::item::Item;
 use crate::league::League;
 use crate::market::MarketWatch;
-use crate::offers::{LONG_WAIT, Offers};
+use crate::offers::{LONG_WAIT, Offers, OffersState};
 use crate::prices::Rates;
 use crate::pricing::{FixedPrice, NoFixedPrice};
 use crate::session::{self, LeagueChange, PricesState, Session, ShownItem};
@@ -23,7 +24,7 @@ use crate::trade::query::{SearchFilters, SearchKind};
 use crate::trade::search::{OfferSearch, Search};
 use crate::ui::{
     self, BubbleAction, EmptyState, ItemBlock, ItemBlockAction, LeagueList, LeagueListAction,
-    NewLeagueBubble, OffersAction, OffersBlock, PriceBlock, PriceDownload, Reference, ResizeEdges,
+    NewLeagueBubble, OffersAction, OffersBlock, PriceBlock, PriceDownload, ResizeEdges,
     SettingsPanel, Stats, StatusBar, TitleBar, TitleBarAction, TradeStatus, UnreadableItem,
     WarningBand,
 };
@@ -257,7 +258,9 @@ impl ExileMarketApp {
         let must_identify = self.session.must_identify(item);
         let fixed_price = self.session.fixed_price(item);
         let unique_modifiers = session::unique_modifiers(item, &fixed_price);
-        let reference = reference(&fixed_price);
+        let estimate = shown_estimate(&self.offers, &fixed_price, self.session.rates());
+        // Without a fixed price, the estimate tells the suspicious offers.
+        let reference = reference(&fixed_price).or(estimate.map(|estimate| estimate.reference));
         let to_top = std::mem::take(&mut self.scroll_to_top);
         let mut offers_action = None;
         let action = ui::content(ui, to_top, |ui| {
@@ -283,7 +286,9 @@ impl ExileMarketApp {
                 }
             }
             let league = self.session.league().map(League::name);
-            PriceBlock::new(item, fixed_price, prices, league, &self.i18n).show(ui);
+            PriceBlock::new(item, fixed_price, prices, league, &self.i18n)
+                .estimate(estimate)
+                .show(ui);
             if let Some(kind) = kind {
                 offers_action = OffersBlock::new(
                     &self.offers,
@@ -467,6 +472,29 @@ fn reference(fixed_price: &Result<(FixedPrice, Rates), NoFixedPrice>) -> Option<
     Some(Reference { exalted, rates })
 }
 
+/// The estimated price of the item shown, without a fixed price, from the `offers` of its
+/// search and the `rates` of the prices of the league.
+fn shown_estimate(
+    offers: &Offers,
+    fixed_price: &Result<(FixedPrice, Rates), NoFixedPrice>,
+    rates: Option<Rates>,
+) -> Option<Estimate> {
+    let Err(NoFixedPrice::NotFixedName) = fixed_price else {
+        return None;
+    };
+    let OffersState::Items {
+        offers,
+        total,
+        first_page,
+        ..
+    } = offers.state()
+    else {
+        return None;
+    };
+    // The next offers loaded don't move it.
+    estimate::estimate(&offers[..*first_page], *total, rates?)
+}
+
 /// The state of the trade site in the status bar, at `now`: the long wait before the next
 /// search of `kind`, or else the age of the last search.
 fn trade_status(offers: &Offers, kind: SearchKind, now: Instant, clock: SystemTime) -> TradeStatus {
@@ -548,6 +576,102 @@ mod tests {
             trade_status(&offers, SearchKind::Exchange, now, clock),
             TradeStatus::Searched(Duration::from_secs(120)),
             "the usual 10 s aren't told"
+        );
+    }
+
+    #[test]
+    fn the_estimate_counts_the_answer_to_the_search_of_an_item_without_a_fixed_price() {
+        use crate::trade::offers::{ItemOffer, OfferItem, Price, SellerStatus};
+        use crate::trade::query::{ItemQuery, Query};
+        use crate::trade::search::{Answer, NextSearch, Outcome};
+
+        let rates = Rates {
+            chaos: 70.0,
+            divine: 700.0,
+        };
+        let divines = |amounts: &[f64]| -> Vec<ItemOffer> {
+            amounts
+                .iter()
+                .map(|&amount| ItemOffer {
+                    id: "a".to_owned(),
+                    price: Some(Price {
+                        amount,
+                        currency: "divine".to_owned(),
+                    }),
+                    seller: SellerStatus::Online,
+                    listed: None,
+                    whisper: String::new(),
+                    item: OfferItem {
+                        rarity: None,
+                        name: None,
+                        base_type: "Gemini Bow".to_owned(),
+                        item_level: None,
+                        corrupted: false,
+                        modifiers: Vec::new(),
+                    },
+                })
+                .collect()
+        };
+        let now = Instant::now();
+        let next_search = NextSearch {
+            items: now,
+            exchange: now,
+        };
+        let search = || Search {
+            language: crate::language::Language::English,
+            league: League::new("Standard"),
+            query: Query::Items(ItemQuery {
+                name: None,
+                base_type: Some("Gemini Bow".to_owned()),
+                properties: Vec::new(),
+                rarity: None,
+                corrupted: Some(false),
+                stats: Vec::new(),
+            }),
+        };
+        let rare = Err(NoFixedPrice::NotFixedName);
+        let mut offers = Offers::default();
+        let _ = offers.search(search(), now);
+        // One offer of the first ten was gone since the search.
+        offers.apply(
+            Answer {
+                outcome: Outcome::Items {
+                    offers: divines(&[1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8]),
+                    total: 30,
+                    more: true,
+                },
+                next_search,
+            },
+            SystemTime::now(),
+        );
+        let first = shown_estimate(&offers, &rare, Some(rates)).unwrap();
+        let _ = offers.more();
+        // Counted, the first of them would lower the estimate to 1.1 div.
+        offers.apply(
+            Answer {
+                outcome: Outcome::More {
+                    offers: divines(&[0.5; 10]),
+                    more: true,
+                },
+                next_search,
+            },
+            SystemTime::now(),
+        );
+
+        assert_eq!(shown_estimate(&offers, &rare, Some(rates)), Some(first));
+        assert!((first.exalted - 1.2 * 700.0).abs() < 1e-9);
+        assert_eq!(first.total, 30);
+        assert_eq!(shown_estimate(&offers, &rare, None), None, "no rates yet");
+        assert_eq!(
+            shown_estimate(&offers, &Err(NoFixedPrice::NotPriced), Some(rates)),
+            None,
+            "a fixed-name item isn't estimated"
+        );
+        let _ = offers.search(search(), now);
+        assert_eq!(
+            shown_estimate(&offers, &rare, Some(rates)),
+            None,
+            "while searching"
         );
     }
 

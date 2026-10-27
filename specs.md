@@ -146,7 +146,9 @@ The window has a title bar, then three bands (item, price, offers), then a statu
 **Estimated price** (rare, magic and normal items, jewels):
 
 - Before the search: "No market price for rare items. Search similar offers to estimate it."
-- After the search, the title becomes **Estimated price**: the median of the 5 cheapest similar offers (suspicious offers excluded), in the three currencies, with the number of similar offers on the right ("18 similar") and "Median of the 5 cheapest similar offers." under it. With fewer than 5 similar offers, the median of all of them and the warning "Only 3 similar offers: the estimate is uncertain".
+- After the search, the title becomes **Estimated price**: the median of the 5 cheapest similar offers (suspicious offers excluded), in the three currencies, with the number of similar offers found on the right ("18 similar") and "Median of the 5 cheapest similar offers." under it. With fewer than 5 offers counted, the median of all of them, the warning "Only 3 similar offers: the estimate is uncertain" and "Median of the 3 similar offers." ("Price of the only similar offer." for one); the warning and the note count the offers of the median, the suspicious ones left out ("6 similar" on the right, "Only 4 similar offers" under it).
+- The offers are compared in Exalted Orbs, with the rates of the price database (the trade site sorts them with its own); an offer without a price, or in another currency, isn't counted. Before the rates of the league are known, and while searching, the text before the search stays.
+- The suspicious offers of an estimate: the reference price is the median of the first 10 offers, the cheapest (the answer to the search: fewer when some were withdrawn since the search); an offer under a quarter of it is suspicious. This median holds as long as fewer than half the first offers are bait, and doesn't move when the next 10 load.
 
 **Special cases:**
 
@@ -191,7 +193,7 @@ The offers search uses the stats of the copied item as filters, like the trade s
   - The waiting time lasts at least 10 seconds after a search, longer when the limits announced by the trade site require it; it applies to every item. When it is long, "Trade site limit: next search in 4min." in yellow under the title; after a refusal, it is the small line of the title row, with the countdown in the block.
 - **The list**: the first 10 offers, from the cheapest, among the sellers online or away. Each row shows the asked price with its orb and the listing time, with a dot for the seller status: green online, yellow away. Every other row is lighter.
   - Currency exchange items: the price per unit, the stock and the listing time.
-  - An offer under a quarter of the reference price (the poe2scout price, or the estimate) is struck through and marked with "?": it is usually bait or a mistake, and it isn't counted in the estimate.
+  - An offer under a quarter of the reference price (the poe2scout price, or for an estimated price the median of the first 10 offers, fewer when some were withdrawn since the search) is struck through and marked with "?": it is usually bait or a mistake, and it isn't counted in the estimate.
   - A double chevron under the list loads 10 more offers; the whole width under the list is clickable. While they come, a spinner in its place; when the trade site can't be reached, "The trade site can't be reached." in weak text above the chevron, which asks them again; refused by its limits, nothing more: the waiting block tells it.
 - **No offer**: "No offer online with these filters. Uncheck a stat or widen a range, then search again."
 - **Unidentified unique**: "Identify the item to search its offers.", without a search block: its offers are searched by its name, which it doesn't show yet.
