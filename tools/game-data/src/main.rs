@@ -1,12 +1,12 @@
 //! Generates the game data embedded in the application, in `assets/game-data/`, from the
-//! stats of Exiled Exchange 2 (see `docs/game-data.md`). Run it again after each patch of
-//! the game:
+//! stats and the items of Exiled Exchange 2 (see `docs/game-data.md`). Run it again after each
+//! patch of the game:
 //!
 //! - `cargo run -p game-data` reads the latest commit of Exiled Exchange 2;
 //! - `cargo run -p game-data -- <commit>` reads a given one.
 //!
-//! The files it writes have one stat per line, so that the changes of a patch read well in a
-//! diff.
+//! The files it writes have one stat or one base per line, so that the changes of a patch read
+//! well in a diff.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
@@ -31,6 +31,60 @@ const GROUPS: [&str; 9] = [
 ];
 /// The groups left out: the relics of the Sanctum aren't priced by the application.
 const LEFT_OUT_GROUPS: [&str; 1] = ["sanctum"];
+/// The categories of the bases the application searches by their filters: the equipment,
+/// the jewels, the flasks and the charms.
+const CATEGORIES: [&str; 30] = [
+    "Amulet",
+    "Belt",
+    "Body Armour",
+    "Boots",
+    "Bow",
+    "Buckler",
+    "Charm",
+    "Crossbow",
+    "Dagger",
+    "Flail",
+    "Flask",
+    "Focus",
+    "Gloves",
+    "Helmet",
+    "Jewel",
+    "One Hand Axe",
+    "One Hand Mace",
+    "One Hand Sword",
+    "Quiver",
+    "Ring",
+    "Sceptre",
+    "Shield",
+    "Spear",
+    "Staff",
+    "Talisman",
+    "Two Hand Axe",
+    "Two Hand Mace",
+    "Two Hand Sword",
+    "Wand",
+    "Warstaff",
+];
+/// The categories left out: the currencies, the gems, the waystones and the other items
+/// without base filters.
+const LEFT_OUT_CATEGORIES: [&str; 16] = [
+    "Breachstone",
+    "BrequelFruit",
+    "Currency",
+    "ExpeditionLogbook",
+    "Incubator",
+    "Map",
+    "MapFragment",
+    "MiscMapItem",
+    "Omen",
+    "PinnacleKey",
+    "QuestItem",
+    "Relic",
+    "SoulCore",
+    "TowerAugment",
+    "UncutSkillGem",
+    "VaultKey",
+];
 
 type Result<T> = std::result::Result<T, Box<dyn Error>>;
 
@@ -99,6 +153,29 @@ fn is_false(value: &bool) -> bool {
     !value
 }
 
+/// An item of `renderer/public/data/<language>/items.ndjson`, with the fields the generator
+/// reads.
+#[derive(Deserialize)]
+struct SourceItem {
+    /// None for a few uniques without data.
+    name: Option<String>,
+    namespace: String,
+    craftable: Option<SourceCraftable>,
+}
+
+#[derive(Deserialize)]
+struct SourceCraftable {
+    category: String,
+}
+
+/// A base as the application reads it (`src/game_data/bases.rs`): its name in the language
+/// of the file, and its category.
+#[derive(Serialize)]
+struct Base {
+    name: String,
+    category: String,
+}
+
 #[derive(Deserialize)]
 struct Commit {
     sha: String,
@@ -146,6 +223,17 @@ fn main() -> Result<()> {
                 .collect::<BTreeMap<_, _>>(),
         );
         write_lines(&output.join(format!("stats-{language}.ndjson")), &stats)?;
+
+        let source = get(
+            &agent,
+            &raw_url(
+                &commit.sha,
+                &format!("renderer/public/data/{language}/items.ndjson"),
+            ),
+        )?;
+        let bases = reduce_bases(&source).map_err(|error| format!("{language}: {error}"))?;
+        println!("{language}: {} bases", bases.len());
+        write_lines(&output.join(format!("bases-{language}.ndjson")), &bases)?;
     }
     if let [english, french] = ids_by_language.as_slice() {
         report_differences(english, french);
@@ -238,11 +326,58 @@ fn reduce_stat(stat: SourceStat) -> Result<Stat> {
     })
 }
 
-/// Writes one stat per line.
-fn write_lines(path: &Path, stats: &[Stat]) -> Result<()> {
+/// The bases of an `items.ndjson`, of the categories the application searches, each name
+/// once: a base listed in several categories takes the one most of its entries have
+/// (`Runemastered Venerable Defender`, three times a shield and once a buckler), the first in
+/// alphabetical order on a tie.
+fn reduce_bases(source: &str) -> Result<Vec<Base>> {
+    let mut categories: BTreeMap<String, BTreeMap<String, usize>> = BTreeMap::new();
+    for (index, line) in source.lines().enumerate() {
+        if line.trim().is_empty() {
+            continue;
+        }
+        let item: SourceItem =
+            serde_json::from_str(line).map_err(|error| format!("line {}: {error}", index + 1))?;
+        let (Some(name), Some(craftable)) = (item.name, item.craftable) else {
+            continue;
+        };
+        if item.namespace != "ITEM" || LEFT_OUT_CATEGORIES.contains(&craftable.category.as_str()) {
+            continue;
+        }
+        // A new category of the game is decided before it is embedded.
+        if !CATEGORIES.contains(&craftable.category.as_str()) {
+            return Err(format!("unknown category {} of {name}", craftable.category).into());
+        }
+        *categories
+            .entry(name)
+            .or_default()
+            .entry(craftable.category)
+            .or_default() += 1;
+    }
+    let mut bases = Vec::new();
+    for (name, counts) in categories {
+        if counts.len() > 1 {
+            println!("In several categories: {name} {counts:?}");
+        }
+        let category = counts
+            .into_iter()
+            .max_by(|(first, first_count), (second, second_count)| {
+                first_count
+                    .cmp(second_count)
+                    .then_with(|| second.cmp(first))
+            })
+            .map(|(category, _)| category)
+            .ok_or("a base without category")?;
+        bases.push(Base { name, category });
+    }
+    Ok(bases)
+}
+
+/// Writes one stat or one base per line.
+fn write_lines<T: Serialize>(path: &Path, lines: &[T]) -> Result<()> {
     let mut text = String::new();
-    for stat in stats {
-        text.push_str(&serde_json::to_string(stat)?);
+    for line in lines {
+        text.push_str(&serde_json::to_string(line)?);
         text.push('\n');
     }
     fs::write(path, text)?;
@@ -274,7 +409,7 @@ fn notice(commit: &str, date: &str, license: &str) -> String {
 
 Generated by `tools/game-data` (`cargo run -p game-data`, see `docs/game-data.md`): don't edit these files by hand, generate them again.
 
-`stats-en.ndjson` and `stats-fr.ndjson` are the stats of [Exiled Exchange 2](https://github.com/{REPOSITORY}) (`renderer/public/data/<language>/stats.ndjson`), commit `{commit}` of {date}, reduced to the fields the application reads and without the groups of the Sanctum.
+`stats-en.ndjson` and `stats-fr.ndjson` are the stats of [Exiled Exchange 2](https://github.com/{REPOSITORY}) (`renderer/public/data/<language>/stats.ndjson`), commit `{commit}` of {date}, reduced to the fields the application reads and without the groups of the Sanctum. `bases-en.ndjson` and `bases-fr.ndjson` are the bases of its items (`renderer/public/data/<language>/items.ndjson`), of the same commit: the name and the category of each base of equipment, jewel, flask or charm.
 
 Their texts and ids come from the files of Path of Exile 2 and belong to Grinding Gear Games; they are used here in a free, non-commercial tool. The files of Exiled Exchange 2 are under the MIT license, whose notice follows:
 
@@ -286,4 +421,68 @@ This product isn't affiliated with or endorsed by Grinding Gear Games in any way
 ",
         license.trim_end()
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The bases of `lines`, as name and category.
+    fn bases(lines: &[&str]) -> Result<Vec<(String, String)>> {
+        Ok(reduce_bases(&lines.join("\n"))?
+            .into_iter()
+            .map(|base| (base.name, base.category))
+            .collect())
+    }
+
+    fn base(name: &str, category: &str) -> (String, String) {
+        (name.to_owned(), category.to_owned())
+    }
+
+    #[test]
+    fn the_bases_of_the_searched_categories_are_kept_each_name_once() {
+        let kept = bases(&[
+            r#"{"name": "Mammoth Targe", "namespace": "ITEM", "craftable": {"category": "Shield"}}"#,
+            r#"{"name": "Mammoth Targe", "namespace": "ITEM", "craftable": {"category": "Shield"}}"#,
+            // Another category, another namespace, no category, no name.
+            r#"{"name": "Exalted Orb", "namespace": "ITEM", "craftable": {"category": "Currency"}}"#,
+            r#"{"name": "Headhunter", "namespace": "UNIQUE", "craftable": {"category": "Belt"}}"#,
+            r#"{"name": "Gold", "namespace": "ITEM"}"#,
+            r#"{"namespace": "UNIQUE", "unique": {"base": "Ring"}}"#,
+            "",
+        ])
+        .expect("read");
+
+        assert_eq!(kept, [base("Mammoth Targe", "Shield")]);
+    }
+
+    #[test]
+    fn a_base_in_several_categories_takes_the_one_most_of_its_entries_have() {
+        let defender = |category: &str| {
+            format!(
+                r#"{{"name": "Venerable Defender", "namespace": "ITEM", "craftable": {{"category": "{category}"}}}}"#
+            )
+        };
+        let most = bases(&[
+            &defender("Shield"),
+            &defender("Buckler"),
+            &defender("Shield"),
+        ]);
+        // On a tie, the first in alphabetical order.
+        let tie = bases(&[&defender("Shield"), &defender("Buckler")]);
+
+        assert_eq!(most.expect("read"), [base("Venerable Defender", "Shield")]);
+        assert_eq!(tie.expect("read"), [base("Venerable Defender", "Buckler")]);
+    }
+
+    #[test]
+    fn a_new_category_stops_the_generator() {
+        let new =
+            bases(&[r#"{"name": "Idol", "namespace": "ITEM", "craftable": {"category": "Idol"}}"#]);
+
+        assert_eq!(
+            new.expect_err("a new category").to_string(),
+            "unknown category Idol of Idol"
+        );
+    }
 }

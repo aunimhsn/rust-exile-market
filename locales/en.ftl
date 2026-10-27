@@ -137,7 +137,7 @@ group-suffixes = Suffixes
 group-explicit = Explicit
 # The modifiers of a unique, no prefix nor suffix.
 group-unique = Unique
-# The filters of the base type and the item level of a rare, magic or normal item, and of the DPS of a weapon.
+# The filters of the base type, the item level, the sockets, the quality and the required level of a rare, magic or normal item.
 group-item = Item
 group-weapon = Weapon
 # The totals the trade site adds up from several modifiers.
@@ -161,6 +161,9 @@ filter-lower-better = Lower is better
 # The filters of the properties of an item, with their value.
 filter-base-type = Base: { $base }
 filter-item-level = Item level: { $value }
+filter-sockets = Sockets: { $value }
+filter-quality = Quality: { $value }%
+filter-required-level = Required level: { $value }
 filter-physical-dps = Physical DPS: { $value }
 filter-elemental-dps = Elemental DPS: { $value }
 # The filters of the pseudo totals, with their value.

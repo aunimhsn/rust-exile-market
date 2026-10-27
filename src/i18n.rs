@@ -358,6 +358,9 @@ const ACTIVE_FILTERS: &str = "active-filters";
 const FILTER_ROLLS: &str = "filter-rolls";
 const FILTER_BASE_TYPE: &str = "filter-base-type";
 const FILTER_ITEM_LEVEL: &str = "filter-item-level";
+const FILTER_SOCKETS: &str = "filter-sockets";
+const FILTER_QUALITY: &str = "filter-quality";
+const FILTER_REQUIRED_LEVEL: &str = "filter-required-level";
 const FILTER_PHYSICAL_DPS: &str = "filter-physical-dps";
 const FILTER_ELEMENTAL_DPS: &str = "filter-elemental-dps";
 const PSEUDO_ELEMENTAL_RESISTANCE: &str = "pseudo-elemental-resistance";
@@ -536,11 +539,14 @@ impl Translator {
     }
 
     /// The filter of a property of an item, with its `value` written by
-    /// [`crate::format::number`]: "Item level: 81", "Physical DPS: 245".
+    /// [`crate::format::number`]: "Item level: 81", "Quality: 24%", "Physical DPS: 245".
     #[must_use]
     pub fn filter_property(&self, property: Property, value: &str) -> String {
         let id = match property {
             Property::ItemLevel => FILTER_ITEM_LEVEL,
+            Property::Sockets => FILTER_SOCKETS,
+            Property::Quality => FILTER_QUALITY,
+            Property::RequiredLevel => FILTER_REQUIRED_LEVEL,
             Property::PhysicalDps => FILTER_PHYSICAL_DPS,
             Property::ElementalDps => FILTER_ELEMENTAL_DPS,
         };
@@ -845,6 +851,9 @@ mod tests {
                 FILTER_ROLLS,
                 FILTER_BASE_TYPE,
                 FILTER_ITEM_LEVEL,
+                FILTER_SOCKETS,
+                FILTER_QUALITY,
+                FILTER_REQUIRED_LEVEL,
                 FILTER_PHYSICAL_DPS,
                 FILTER_ELEMENTAL_DPS,
                 PSEUDO_ELEMENTAL_RESISTANCE,
