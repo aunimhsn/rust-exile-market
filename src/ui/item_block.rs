@@ -14,6 +14,7 @@ use crate::filters::Filters;
 use crate::i18n::{Message, NumberTag, Requirement, Translator};
 use crate::item::{DamageKind, Item, ItemState, Rarity};
 use crate::prices::UniqueModifiers;
+use crate::roll_difference::CopiedLines;
 
 /// The space above and under the block.
 const PADDING_Y: f32 = 12.0;
@@ -149,6 +150,8 @@ enum Fact {
 
 pub struct ItemBlock<'a> {
     item: &'a Item,
+    /// Its modifier lines, which tell the stats better lower.
+    lines: &'a CopiedLines,
     i18n: &'a Translator,
     /// The trade site has a search for this item.
     tradable: bool,
@@ -162,9 +165,15 @@ pub struct ItemBlock<'a> {
 
 impl<'a> ItemBlock<'a> {
     #[must_use]
-    pub fn new(item: &'a Item, filters: &'a mut Filters, i18n: &'a Translator) -> Self {
+    pub fn new(
+        item: &'a Item,
+        lines: &'a CopiedLines,
+        filters: &'a mut Filters,
+        i18n: &'a Translator,
+    ) -> Self {
         Self {
             item,
+            lines,
             i18n,
             tradable: false,
             stats_open: false,
@@ -321,7 +330,7 @@ impl<'a> ItemBlock<'a> {
     /// The pill of the stats and the number of active filters, and the stats once unfolded;
     /// "Show filters" for an item without modifiers, nothing when it has no filter either.
     fn stats_section(&mut self, ui: &mut Ui) -> Option<ItemBlockAction> {
-        let stats = Stats::new(self.item, self.unique_modifiers);
+        let stats = Stats::new(self.item, self.lines, self.unique_modifiers);
         if stats.is_empty() {
             return None;
         }
@@ -533,7 +542,8 @@ mod tests {
         let item = Item::parse(&CopiedItem::from_text(text).expect("an item")).expect("read");
         let i18n = Translator::new(language);
         let mut filters = Filters::default();
-        let block = ItemBlock::new(&item, &mut filters, &i18n);
+        let lines = CopiedLines::default();
+        let block = ItemBlock::new(&item, &lines, &mut filters, &i18n);
         Texts {
             base_line: block.base_line().map(str::to_owned),
             tags: block.tags().into_iter().map(|(label, _)| label).collect(),

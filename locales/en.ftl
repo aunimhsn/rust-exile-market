@@ -148,8 +148,11 @@ active-filters = { $count ->
     [one] { $count } filter
    *[other] { $count } filters
 }
-# On the right of the first small title, above the minimums of the filters.
-filter-minimum = min
+# On the right of the first small title, above the range fields of the filters.
+filter-range = min – max
+# The tooltip of a range field: the rolls it accepts, then for a line better lower, in gray.
+filter-rolls = Rolls { $low } to { $high }
+filter-lower-better = Lower is better
 # Under the stats of a corrupted item: the search compares it with corrupted offers only.
 corrupted-offers-only = Corrupted offers only, like this item.
 

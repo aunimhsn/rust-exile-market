@@ -80,7 +80,8 @@ pub enum Message {
     GroupUnique,
     ShowFilters,
     HideFilters,
-    FilterMinimum,
+    FilterRange,
+    FilterLowerBetter,
     CorruptedOffersOnly,
     OffersLabel,
     OffersSearchHint,
@@ -108,7 +109,7 @@ pub enum Message {
 impl Message {
     /// Every message, for the tests.
     #[cfg(test)]
-    const ALL: [Self; 81] = [
+    const ALL: [Self; 82] = [
         Self::LeagueModeSoftcore,
         Self::LeagueModeHardcore,
         Self::LeagueLoading,
@@ -167,7 +168,8 @@ impl Message {
         Self::GroupUnique,
         Self::ShowFilters,
         Self::HideFilters,
-        Self::FilterMinimum,
+        Self::FilterRange,
+        Self::FilterLowerBetter,
         Self::CorruptedOffersOnly,
         Self::OffersLabel,
         Self::OffersSearchHint,
@@ -253,7 +255,8 @@ impl Message {
             Self::GroupUnique => "group-unique",
             Self::ShowFilters => "show-filters",
             Self::HideFilters => "hide-filters",
-            Self::FilterMinimum => "filter-minimum",
+            Self::FilterRange => "filter-range",
+            Self::FilterLowerBetter => "filter-lower-better",
             Self::CorruptedOffersOnly => "corrupted-offers-only",
             Self::OffersLabel => "offers-label",
             Self::OffersSearchHint => "offers-search-hint",
@@ -335,6 +338,7 @@ const SHOW_STATS: &str = "show-stats";
 const AFFIX_FILL: &str = "affix-fill";
 const AFFIX_FILL_OPEN: &str = "affix-fill-open";
 const ACTIVE_FILTERS: &str = "active-filters";
+const FILTER_ROLLS: &str = "filter-rolls";
 const STATUS_TRADE: &str = "status-trade";
 const STATUS_TRADE_WAIT: &str = "status-trade-wait";
 const OFFERS_SEARCHED: &str = "offers-searched";
@@ -482,6 +486,16 @@ impl Translator {
         }
         args.set("open", open);
         self.format(AFFIX_FILL_OPEN, Some(&args))
+    }
+
+    /// The rolls a range field accepts, in its tooltip: "Rolls 40 to 60"; `low` and `high`
+    /// written by [`crate::format::number`].
+    #[must_use]
+    pub fn filter_rolls(&self, low: &str, high: &str) -> String {
+        let mut args = FluentArgs::new();
+        args.set("low", low);
+        args.set("high", high);
+        self.format(FILTER_ROLLS, Some(&args))
     }
 
     /// The number of offers behind the price of a unique: "23 offers".
@@ -758,6 +772,7 @@ mod tests {
                 AFFIX_FILL,
                 AFFIX_FILL_OPEN,
                 ACTIVE_FILTERS,
+                FILTER_ROLLS,
                 OFFERS,
                 STACK_OF,
                 UNIT_PRICE,
@@ -818,6 +833,8 @@ mod tests {
             assert!(translator.affix_fill(2, 3).contains('1'));
             assert!(translator.active_filters(1).contains('1'));
             assert!(translator.active_filters(3).contains('3'));
+            assert!(translator.filter_rolls("-7.5", "60").contains("-7.5"));
+            assert!(translator.filter_rolls("-7.5", "60").contains("60"));
             assert!(translator.unit_price("prices").contains("prices"));
             for direction in [Direction::Rise, Direction::Fall, Direction::Stable] {
                 assert!(translator.trend(direction, 4, 7).contains('7'));

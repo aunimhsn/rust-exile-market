@@ -166,10 +166,11 @@ pub mod text {
         fonts::text(11.0, Weight::Regular)
     }
 
-    /// The minimum of a filter, in its field.
+    /// The minimum and the maximum of a filter, in its range field: 1 point smaller than the
+    /// other numbers of the stats, so that the text of the stats keeps its width.
     #[must_use]
-    pub fn minimum() -> FontId {
-        fonts::numbers(12.5)
+    pub fn range_field() -> FontId {
+        fonts::numbers(11.5)
     }
 
     /// A note under the stats, e.g. the corrupted offers only.
