@@ -24,27 +24,54 @@ function item(it, unfolded = false) {
     stats = `<div class="stats-toggle open"><span class="pill">${pill(true)}</span>${filters}</div><div class="stats">${it.stats.map(row => {
       if (row === "sep") return `<div class="sep"></div>`;
       if (row.minHeader) return `<div class="req"><span></span><span>min</span></div>`;
-      if (row.group) return `<div class="stats-group"><span>${row.group}${row.fill ? ` <em>${row.fill}</em>` : ""}</span>${row.min ? "<span>min</span>" : ""}</div>`;
+      if (row.group) return `<div class="stats-group"><span>${row.group}${row.fill ? ` <em>${row.fill}</em>` : ""}</span>${row.min ? "<span>min – max</span>" : ""}</div>`;
       if (row.prop) return `<div class="prop"><span>${row.prop[0]}:</span> ${row.prop[1]}</div>`;
-      if (row.note) return `<div class="note">${row.note}</div>`;
+      // A class of its own, e.g. the variant of an open decision it belongs to.
+      const cls = row.cls ? ` ${row.cls}` : "";
+      if (row.note) return `<div class="note${cls}">${row.note}</div>`;
       // The tier and the ranges of a hybrid modifier, under all its lines: it reads as one modifier.
       if (row.rollOnly) return `<div class="mod2 min-top"><span></span><div class="roll2" style="grid-column: 2"><span class="range"><span class="tier t${row.tier}">T${row.tier}</span>${row.range}</span></div></div>`;
       // A filter: its checkbox, its text on two lines at most (whole under the pointer), its minimum
       // on the line of the checkbox in a column kept for it, and its bar and range under the text.
       // A stat without a filter has no checkbox and starts at the left edge.
-      const box = row.check === undefined ? "" : `<span class="check ${row.check ? "on" : ""}">${row.check ? ICON.check(11) : ""}</span>`;
+      // A line the trade site can't search: a circle struck through in place of its checkbox, in the
+      // warning color, with its tooltip (`row.warning`); `row.hover` shows it open.
+      const warning = row.warning ? `<span class="app-warning${row.hover ? " is-hovered" : ""}">${ICON.forbid(15)}<span class="app-tip">${row.warning}</span></span>` : "";
+      const box = warning || (row.check === undefined ? "" : `<span class="check ${row.check ? "on" : ""}">${row.check ? ICON.check(11) : ""}</span>`);
       const tier = row.tier ? `<span class="tier ${row.tier <= 3 ? "tier-top" : ""} t${row.tier}">T${row.tier}</span>` : "";
       // No bar for the tier of a rare until the modifier tables (step 13).
+      // The bar: filled to where the roll falls in its range, also on a line better lower, so that it
+      // reads with the range written next to it.
       const bar = row.range && !row.noBar ? `<span class="bar"><i style="width:${row.share * 100}%"></i></span>` : "";
-      const input = row.min !== undefined ? `<span class="input">${row.min}</span>` : "";
+      // The range field of a filter: the minimum, a dash, the maximum, an empty half without a word
+      // (the title of the column names them). Each half holds three characters, four on the field of a
+      // stat whose range reaches them ("wide"); it never grows with what is typed. A line better lower
+      // is searched with a maximum: its minimum stays empty. Real fields, to try them: the caret in the
+      // middle of an empty half, the number written from the middle.
+      const low = row.lower ? undefined : row.min;
+      // The tooltip of the field, under the pointer (`row.hover` shows it open): the rolls the field
+      // accepts, those of a unique ("Rolls 40 to 60"), or for a rare, from the lowest roll of its worst
+      // tier to the highest of tier 1 (`row.bounds`, from the modifier tables, step 13j; nothing for a
+      // rare before them); then "Lower is better" for a line better lower. Not the name of a half nor
+      // that it is empty: the title of the column and the field show them.
+      const [boundLow, boundHigh] = (row.range || "").split("–");
+      const bounds = row.bounds ?? (row.tier || !boundHigh || row.range.includes("·") ? null : `${boundLow} ${fr ? "à" : "to"} ${boundHigh}`);
+      const rolls = bounds ? `${fr ? "Jets de" : "Rolls"} ${bounds}` : null;
+      const lowerNote = row.lower ? (fr ? "Plus c'est bas, mieux c'est" : "Lower is better") : null;
+      const fieldTip = [rolls, lowerNote].filter(Boolean).map(line => `<span>${line}</span>`).join("");
+      const half = (value, name) => `<input value="${value ?? ""}" inputmode="decimal" aria-label="${name}">`;
+      const hovered = row.hover ? " is-hovered" : "";
+      const fields = row.min === undefined ? "" : `<span class="input app-range${hovered}">${half(low, "Minimum")}<i>–</i>${half(row.max, "Maximum")}<span class="app-tip">${fieldTip}</span></span>`;
       const plain = row.mod.replace(/<br>/g, " ");
-      const text = `<span class="text" title="${plain.replace(/"/g, "&quot;")}">${row.mod}</span>`;
+      const tip = row.tip ? `${plain}\n${row.tip}` : plain;
+      const text = `<span class="text" title="${tip.replace(/"/g, "&quot;")}">${row.mod}</span>`;
       if (box) {
         const rollTop = row.range ? `<div class="roll2">${bar}<span class="range">${tier}${row.range}</span></div>` : "";
-        return `<div class="mod2 min-top">${box}${text}${input || "<span></span>"}${rollTop}</div>`;
+        return `<div class="mod2 min-top${row.wide ? " app-wide" : ""}${cls}">${box}${text}${fields || "<span></span>"}${rollTop}</div>`;
       }
+      const input = row.min === undefined ? "" : `<span class="input">${row.min}</span>`;
       const roll = row.range || input ? `<div class="roll2">${bar}<span class="range">${tier}${row.range || ""}</span>${input}</div>` : "";
-      return `<div class="mod2 ${box ? "" : "wide"}">${box}${text}${roll}</div>`;
+      return `<div class="mod2 ${box ? "" : "wide"}${cls}">${box}${text}${roll}</div>`;
     }).join("")}</div>`;
   } else if (it.statsLabel) {
     stats = `<div class="stats-toggle"><span class="pill">${pill(false)}</span>${filters}</div>`;

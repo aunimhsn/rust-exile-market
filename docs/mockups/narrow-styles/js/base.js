@@ -20,6 +20,8 @@ const svg = (size, body) => `<svg class="ico" width="${size}" height="${size}" v
 const ICON = {
   search: size => svg(size, '<circle cx="7" cy="7" r="4.6"/><path d="M10.4 10.4 14 14"/>'),
   refresh: size => svg(size, '<path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9"/><path d="M13.6 2.6v3.3h-3.3"/>'),
+  // A circle struck through, "not possible here", at the size of a checkbox.
+  forbid: size => `<svg class="ico" width="${size}" height="${size}" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="8" cy="8" r="5.8"/><path d="M3.9 12.1l8.2-8.2"/></svg>`,
   chevron: size => svg(size, '<path d="M6 4l4 4-4 4"/>'),
   down: size => svg(size, '<path d="M4 6l4 4 4-4"/>'),
   downDouble: size => svg(size, '<path d="M4 3.5l4 4 4-4"/><path d="M4 8.5l4 4 4-4"/>'),
