@@ -1,6 +1,6 @@
 # Game data
 
-The data of the game the application needs beyond the copied text: the id of each modifier line on the trade site (step 13b, to search it), and the range of every tier of a modifier (step 13j, for the roll bar and the bounds of the minimum). Studied in step 13a, on 2026-10-26, on the copied items of the parser tests.
+The data of the game the application needs beyond the copied text: the id of each modifier line on the trade site (step 13b, to search it), and the range of every tier of a modifier (step 13j, for the roll bar and the bounds of the range field). Studied in step 13a, on 2026-10-26, on the copied items of the parser tests.
 
 ## Sources compared
 
@@ -18,7 +18,7 @@ The data of the game the application needs beyond the copied text: the id of eac
    - **The `reduced` variants** are strings of the same stat marked `negate`: `20% reduced Charm Charges used` is -20 of `#% increased Charm Charges used`.
    - **A number written in the string** stays written (`retain 40% of Glory`): the strings with the most `#` are looked up first, then those that keep some numbers. A string without `#` gives its value (`Blind Enemies on Hit` is a chance of 100%), and an option stat its option (the skill of `# to Level of all Arc Skills`).
    - **A stat written on several lines** (`Spells fire # additional Projectiles` / `Spells fire Projectiles in a circle`) is looked up before its lines one by one, within one modifier: in the copy without the advanced descriptions, where each line is a modifier of its own, such a line isn't found.
-   - **A local and a global stat** with the same text (`# to Accuracy Rating` of a weapon or of a ring) keep both ids: the copied text doesn't tell them apart, and how to search them is decided with the filters of the uniques (13e).
+   - **A local and a global stat** with the same text (`# to Accuracy Rating` of a weapon or of a ring) keep both ids: the copied text doesn't tell them apart, and both are searched in a `count` group of minimum 1 (13e2), which finds the item with either of them.
    - The no-break spaces of French are read as spaces.
    - **The templates of the trade site** (`src/game_data/trade_site.rs`, step 13d) are looked up after the strings of Exiled Exchange 2, the same way, for a line they don't know or have no id for in its group (a modifier added by a patch). A template is looked up without the note at its end, and with it in case a line writes it; the templates written the same are one stat with all their ids (a local and a global stat). Once indexed, the templates leave the names kept in memory (they stay in the cache). The value of such a line is written as its template: 20 for `20% reduced Charm Charges used` and `#% reduced Charm Charges used`. In another language than English, its words are those of the English template of its id, for the better side of the tooltip (13c).
    - A line found nowhere, without an id in its group, or found on the trade site only, is written to the log.
