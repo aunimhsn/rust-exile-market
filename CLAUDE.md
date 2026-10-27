@@ -3,6 +3,7 @@
 ## Communication
 
 - Always communicate with the user in French through the Claude Code harness (chat responses, explanations, questions).
+- Address the user informally, with « tu » (tutoiement), never « vous », in every session.
 
 ## Naming conventions
 
