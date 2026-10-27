@@ -140,6 +140,8 @@ group-unique = Unique
 # Les filtres du type de base et du niveau d'objet d'un objet rare, magique ou normal, et du DPS d'une arme.
 group-item = Objet
 group-weapon = Arme
+# Les totaux que le site d'échange additionne sur plusieurs modificateurs.
+group-pseudo = Pseudo
 # À côté de Préfixes et Suffixes : combien l'objet en a, sur le maximum possible.
 affix-fill = { $filled } sur { $max }
 affix-fill-open = { $filled } sur { $max } · { $open ->
@@ -164,6 +166,15 @@ filter-base-type = Base : { $base }
 filter-item-level = Niveau de l'objet : { $value }
 filter-physical-dps = DPS physique : { $value }
 filter-elemental-dps = DPS élémentaire : { $value }
+# Les filtres des totaux pseudo, écrits comme les lignes du jeu, avec leur valeur.
+pseudo-elemental-resistance = +{ $value }% aux Résistances élémentaires au total
+pseudo-chaos-resistance = +{ $value }% à la Résistance au chaos au total
+pseudo-life = +{ $value } de Vie maximale au total
+pseudo-mana = +{ $value } de Mana maximal au total
+pseudo-strength = +{ $value } de Force au total
+pseudo-dexterity = +{ $value } de Dextérité au total
+pseudo-intelligence = +{ $value } d'Intelligence au total
+pseudo-all-attributes = +{ $value } à tous les Attributs au total
 # L'infobulle d'une ligne que le site d'échange ne peut pas chercher (un modificateur ajouté par un patch), sur deux lignes.
 filter-unsearchable = Le site d'échange ne peut pas chercher cette ligne.
 filter-unsearchable-hint = Il se peut que les offres ne l'aient pas.

@@ -11,6 +11,7 @@ use fluent_bundle::{FluentArgs, FluentBundle, FluentResource};
 use crate::filters::Property;
 use crate::language::Language;
 use crate::prices::Direction;
+use crate::trade::pseudo::Pseudo;
 
 /// The Fluent messages of a language, embedded in the executable.
 fn messages(language: Language) -> &'static str {
@@ -81,6 +82,7 @@ pub enum Message {
     GroupUnique,
     GroupItem,
     GroupWeapon,
+    GroupPseudo,
     ShowFilters,
     HideFilters,
     FilterRange,
@@ -114,7 +116,7 @@ pub enum Message {
 impl Message {
     /// Every message, for the tests.
     #[cfg(test)]
-    const ALL: [Self; 86] = [
+    const ALL: [Self; 87] = [
         Self::LeagueModeSoftcore,
         Self::LeagueModeHardcore,
         Self::LeagueLoading,
@@ -173,6 +175,7 @@ impl Message {
         Self::GroupUnique,
         Self::GroupItem,
         Self::GroupWeapon,
+        Self::GroupPseudo,
         Self::ShowFilters,
         Self::HideFilters,
         Self::FilterRange,
@@ -264,6 +267,7 @@ impl Message {
             Self::GroupUnique => "group-unique",
             Self::GroupItem => "group-item",
             Self::GroupWeapon => "group-weapon",
+            Self::GroupPseudo => "group-pseudo",
             Self::ShowFilters => "show-filters",
             Self::HideFilters => "hide-filters",
             Self::FilterRange => "filter-range",
@@ -356,6 +360,14 @@ const FILTER_BASE_TYPE: &str = "filter-base-type";
 const FILTER_ITEM_LEVEL: &str = "filter-item-level";
 const FILTER_PHYSICAL_DPS: &str = "filter-physical-dps";
 const FILTER_ELEMENTAL_DPS: &str = "filter-elemental-dps";
+const PSEUDO_ELEMENTAL_RESISTANCE: &str = "pseudo-elemental-resistance";
+const PSEUDO_CHAOS_RESISTANCE: &str = "pseudo-chaos-resistance";
+const PSEUDO_LIFE: &str = "pseudo-life";
+const PSEUDO_MANA: &str = "pseudo-mana";
+const PSEUDO_STRENGTH: &str = "pseudo-strength";
+const PSEUDO_DEXTERITY: &str = "pseudo-dexterity";
+const PSEUDO_INTELLIGENCE: &str = "pseudo-intelligence";
+const PSEUDO_ALL_ATTRIBUTES: &str = "pseudo-all-attributes";
 const STATUS_TRADE: &str = "status-trade";
 const STATUS_TRADE_WAIT: &str = "status-trade-wait";
 const OFFERS_SEARCHED: &str = "offers-searched";
@@ -531,6 +543,25 @@ impl Translator {
             Property::ItemLevel => FILTER_ITEM_LEVEL,
             Property::PhysicalDps => FILTER_PHYSICAL_DPS,
             Property::ElementalDps => FILTER_ELEMENTAL_DPS,
+        };
+        let mut args = FluentArgs::new();
+        args.set("value", value);
+        self.format(id, Some(&args))
+    }
+
+    /// The filter of a pseudo total, with its `value` written by [`crate::format::number`]:
+    /// "+83% total Elemental Resistance".
+    #[must_use]
+    pub fn filter_pseudo(&self, pseudo: Pseudo, value: &str) -> String {
+        let id = match pseudo {
+            Pseudo::ElementalResistance => PSEUDO_ELEMENTAL_RESISTANCE,
+            Pseudo::ChaosResistance => PSEUDO_CHAOS_RESISTANCE,
+            Pseudo::Life => PSEUDO_LIFE,
+            Pseudo::Mana => PSEUDO_MANA,
+            Pseudo::Strength => PSEUDO_STRENGTH,
+            Pseudo::Dexterity => PSEUDO_DEXTERITY,
+            Pseudo::Intelligence => PSEUDO_INTELLIGENCE,
+            Pseudo::AllAttributes => PSEUDO_ALL_ATTRIBUTES,
         };
         let mut args = FluentArgs::new();
         args.set("value", value);
@@ -816,6 +847,14 @@ mod tests {
                 FILTER_ITEM_LEVEL,
                 FILTER_PHYSICAL_DPS,
                 FILTER_ELEMENTAL_DPS,
+                PSEUDO_ELEMENTAL_RESISTANCE,
+                PSEUDO_CHAOS_RESISTANCE,
+                PSEUDO_LIFE,
+                PSEUDO_MANA,
+                PSEUDO_STRENGTH,
+                PSEUDO_DEXTERITY,
+                PSEUDO_INTELLIGENCE,
+                PSEUDO_ALL_ATTRIBUTES,
                 OFFERS,
                 STACK_OF,
                 UNIT_PRICE,

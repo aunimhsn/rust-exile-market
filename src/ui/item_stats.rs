@@ -1,6 +1,7 @@
 //! The stats of the item, unfolded under the item block: for a rare, magic or normal item,
-//! first the filters of its base type, item level and DPS, then its modifiers in the color of
-//! the game, grouped, the stats that vary first. A unique, or an implicit modifier of a rare,
+//! first the filters of its base type, item level and DPS, then of its pseudo totals for a
+//! rare or magic one, then its modifiers in the color of the game, grouped, the stats that
+//! vary first. A unique, or an implicit modifier of a rare,
 //! shows a bar of where its value falls in its range; a prefix or a suffix, its tier and the
 //! range of that tier (its bar over every tier comes with the modifier tables, step 13).
 //!
@@ -10,8 +11,9 @@
 //! "not allowed" sign in place of its checkbox. A line better lower is searched with a
 //! maximum, any other with a minimum. The damage and attack speed modifiers of a weapon start
 //! unchecked: its DPS counts them, the physical one checked, the elemental one when it is at
-//! least the physical one. A corrupted item ends with a note: the search compares
-//! it with corrupted offers only.
+//! least the physical one. The pseudo totals start checked, and the lines they add up
+//! unchecked. A corrupted item ends with a note: the search compares it with corrupted offers
+//! only.
 //!
 //! The rows are decided apart from the drawing ([`rows`]), and tested.
 
@@ -31,6 +33,7 @@ use crate::i18n::{Message, Translator};
 use crate::item::{Affix, Item, Modifier, ModifierKind, Range, Rarity, StatLine};
 use crate::prices::UniqueModifiers;
 use crate::roll_difference::CopiedLines;
+use crate::trade::pseudo::{Pseudo, PseudoTotal};
 use crate::trade::stat_filters::{LineStat, LineStats};
 use crate::{format, rolls};
 
@@ -80,6 +83,8 @@ enum Group {
     Item,
     /// The DPS of a weapon.
     Weapon,
+    /// The totals the trade site adds up from several lines.
+    Pseudo,
     /// The enchantments, and the modifiers added by the corruption.
     Enchant,
     Runes,
@@ -200,6 +205,7 @@ enum StatText<'a> {
     BaseType(&'a str),
     /// A property of the item, with its value.
     Property(Property, f64),
+    Pseudo(Pseudo, f64),
 }
 
 impl<'a> StatText<'a> {
@@ -209,6 +215,9 @@ impl<'a> StatText<'a> {
             Self::BaseType(base_type) => Cow::Owned(i18n.filter_base_type(base_type)),
             Self::Property(property, value) => {
                 Cow::Owned(i18n.filter_property(property, &format::number(value)))
+            }
+            Self::Pseudo(pseudo, value) => {
+                Cow::Owned(i18n.filter_pseudo(pseudo, &format::number(value)))
             }
         }
     }
@@ -335,12 +344,19 @@ fn rows<'a>(
     } else {
         Vec::new()
     };
+    let pseudo = if matches!(item.rarity(), Rarity::Magic | Rarity::Rare) {
+        stats.pseudo_totals().iter().map(pseudo_filter).collect()
+    } else {
+        Vec::new()
+    };
     let reading = Reading {
         lines,
         stats,
         dps_filters: !dps.is_empty(),
+        pseudo_filters: !pseudo.is_empty(),
     };
     push_group(&mut rows, Group::Weapon, dps);
+    push_group(&mut rows, Group::Pseudo, pseudo);
     if item.rarity() == Rarity::Unique {
         rows.extend(unique_rows(item, unique_modifiers, &reading));
     } else {
@@ -438,6 +454,25 @@ fn property_filter(property: Property, value: f64, minimum: f64, checked: bool) 
     }
 }
 
+/// The filter of a pseudo total, checked, with a minimum at 90 % of its value.
+fn pseudo_filter(total: &PseudoTotal) -> Stat<'static> {
+    let whole = total.value.fract() == 0.0;
+    Stat {
+        key: FilterKey::Pseudo(total.pseudo),
+        text: StatText::Pseudo(total.pseudo, total.value),
+        filter: Some(StatFilter {
+            checked: true,
+            limit: Some(Limit::minimum(comparable(
+                total.value,
+                whole,
+                Half::Minimum,
+            ))),
+        }),
+        unsearchable: false,
+        roll: None,
+    }
+}
+
 /// How the stats read the modifier lines of the item, beyond their text.
 struct Reading<'r> {
     /// They tell the lines better lower.
@@ -446,13 +481,17 @@ struct Reading<'r> {
     stats: &'r LineStats,
     /// The item has the filters of the DPS of a weapon.
     dps_filters: bool,
+    /// The item has the filters of its pseudo totals.
+    pseudo_filters: bool,
 }
 
 impl Reading<'_> {
     /// The line `key` starts checked: unchecked when the DPS of the weapon counts it, its
-    /// damage or its attack speed.
+    /// damage or its attack speed, or when a pseudo total adds it up.
     fn checked(&self, key: StatKey) -> bool {
-        !(self.dps_filters && self.stats.weapon_damage(key))
+        let weapon_damage = self.dps_filters && self.stats.weapon_damage(key);
+        let added_up = self.pseudo_filters && self.stats.added_up(key);
+        !weapon_damage && !added_up
     }
 
     /// The half of the range field the stat `key` fills: the maximum for a line better lower.
@@ -648,27 +687,24 @@ fn comparable_filter(
 ) -> StatFilter {
     StatFilter {
         checked,
-        limit: varies(line)
-            .then(|| value(line))
-            .flatten()
-            .map(|value| Limit::new(comparable(value, line, half), half, bounds, value, line)),
+        limit: varies(line).then(|| value(line)).flatten().map(|value| {
+            let whole = line.rolls.iter().all(|roll| roll.value.fract() == 0.0);
+            let limit = comparable(value, whole, half);
+            Limit::new(limit, half, bounds, value, line)
+        }),
     }
 }
 
-/// The limit 10 % of `value`, a value of `line`, below it for a minimum, above it for a
-/// maximum, also for a negative value (`-15` gets a minimum of `-17`, not `-14`, which the
-/// item itself wouldn't pass): rounded when the line has whole numbers only.
-fn comparable(value: f64, line: &StatLine, half: Half) -> f64 {
+/// The limit 10 % of `value` below it for a minimum, above it for a maximum, also for a
+/// negative value (`-15` gets a minimum of `-17`, not `-14`, which the item itself wouldn't
+/// pass): rounded when the numbers are `whole`.
+fn comparable(value: f64, whole: bool, half: Half) -> f64 {
     let margin = value.abs() * COMPARABLE_MARGIN;
     let limit = match half {
         Half::Minimum => value - margin,
         Half::Maximum => value + margin,
     };
-    if line.rolls.iter().all(|roll| roll.value.fract() == 0.0) {
-        limit.round()
-    } else {
-        limit
-    }
+    if whole { limit.round() } else { limit }
 }
 
 /// The number of modifiers of an affix, and their stats.
@@ -1005,6 +1041,7 @@ fn group_title(ui: &mut Ui, group: Group, range: bool, i18n: &Translator) {
     let (message, fill) = match group {
         Group::Item => (Message::GroupItem, None),
         Group::Weapon => (Message::GroupWeapon, None),
+        Group::Pseudo => (Message::GroupPseudo, None),
         Group::Enchant => (Message::GroupEnchant, None),
         Group::Runes => (Message::GroupRunes, None),
         Group::Implicit => (Message::GroupImplicit, None),
@@ -1398,6 +1435,9 @@ mod tests {
                         StatText::Property(property, value) => {
                             format!("{property:?}: {}", format::number(value))
                         }
+                        StatText::Pseudo(pseudo, value) => {
+                            format!("{pseudo:?}: {}", format::number(value))
+                        }
                     };
                     format!("{check}{text}{limit}{roll}")
                 }
@@ -1628,11 +1668,16 @@ mod tests {
                 "Item",
                 "■ Base: Prismatic Ring",
                 "□ ItemLevel: 79 ≥79",
+                // The totals in place of the lines they add up: each element of the
+                // resistances counts.
+                "Pseudo",
+                "■ ElementalResistance: 24 ≥22",
+                "■ Strength: 12 ≥11",
                 "Implicit",
-                "■ +8% to all Elemental Resistances ≥7",
+                "□ +8% to all Elemental Resistances ≥7",
                 "Explicit",
                 "■ +143 to Evasion Rating ≥129",
-                "■ +12 to Strength ≥11",
+                "□ +12 to Strength ≥11",
                 "Corrupted only",
             ]
         );
@@ -1654,17 +1699,69 @@ mod tests {
             [
                 "Item",
                 "■ Base: Lattice Sandals",
+                "Pseudo",
+                "■ Life: 86 ≥77",
+                "■ Dexterity: 12 ≥11",
                 "Implicit",
                 // 90 % of 12, within the range of the implicit.
-                "■ +12 to Dexterity ≥11 [10–15 0.40]",
+                "□ +12 to Dexterity ≥11 [10–15 0.40]",
                 // A fixed line keeps its checkbox, without a minimum.
                 "■ 5% increased Movement Speed",
                 "Prefixes 2/3",
-                "■ +86 to maximum Life ≥77 [T3 85–99]",
+                "□ +86 to maximum Life ≥77 [T3 85–99]",
                 // A hybrid modifier: its tier and the ranges of its lines under the last one,
                 // each line with its checkbox and its minimum.
                 "■ +20 to Evasion Rating ≥18",
                 "■ +10% increased Evasion Rating ≥9 [T5 15–25 · 8–12]",
+            ]
+        );
+    }
+
+    #[test]
+    fn the_pseudo_totals_are_checked_and_the_lines_they_add_up_unchecked() {
+        let ring = parse(
+            "Item Class: Rings\nRarity: Rare\nStorm Spiral\nSapphire Ring\n--------\n\
+             Item Level: 77\n--------\n+22% to Cold Resistance (implicit)\n--------\n\
+             +65 to maximum Life\n+21 to maximum Energy Shield\n+38% to Fire Resistance\n\
+             +23% to Lightning Resistance\n+12 to Dexterity",
+        );
+
+        assert_eq!(
+            texts(&ring, None),
+            [
+                "Item",
+                "■ Base: Sapphire Ring",
+                "□ ItemLevel: 77 ≥77",
+                "Pseudo",
+                "■ ElementalResistance: 83 ≥75",
+                "■ Life: 65 ≥59",
+                "■ Dexterity: 12 ≥11",
+                "Implicit",
+                "□ +22% to Cold Resistance ≥20",
+                "Explicit",
+                "□ +65 to maximum Life ≥59",
+                // Not added up by a total.
+                "■ +21 to maximum Energy Shield ≥19",
+                "□ +38% to Fire Resistance ≥34",
+                "□ +23% to Lightning Resistance ≥21",
+                "□ +12 to Dexterity ≥11",
+            ]
+        );
+    }
+
+    #[test]
+    fn a_unique_has_no_pseudo_totals() {
+        let unique = parse(
+            "Item Class: Rings\nRarity: Unique\nTest Loop\nGold Ring\n--------\n\
+             Item Level: 80\n--------\n+52 to maximum Life\n+30% to Fire Resistance",
+        );
+
+        assert_eq!(
+            texts(&unique, None),
+            [
+                "Unique",
+                "■ +52 to maximum Life ≥52",
+                "■ +30% to Fire Resistance ≥30",
             ]
         );
     }
@@ -1686,8 +1783,10 @@ mod tests {
             [
                 "Item",
                 "■ Base: Ruby",
+                "Pseudo",
+                "■ Life: 12 ≥11",
                 "Prefixes 1/2",
-                "■ +12 to maximum Life ≥11 [T2 10–14]"
+                "□ +12 to maximum Life ≥11 [T2 10–14]"
             ]
         );
         assert_eq!(
@@ -1695,8 +1794,10 @@ mod tests {
             [
                 "Item",
                 "■ Base: Rubis",
+                "Pseudo",
+                "■ Life: 12 ≥11",
                 "Prefixes 1/2",
-                "■ +12 de Vie maximale ≥11 [T2 10–14]"
+                "□ +12 de Vie maximale ≥11 [T2 10–14]"
             ]
         );
     }
@@ -1757,10 +1858,12 @@ mod tests {
                 "Weapon",
                 "■ PhysicalDps: 64 ≥57",
                 "□ ElementalDps: 31 ≥27",
+                "Pseudo",
+                "■ Strength: 8 ≥7",
                 "Prefixes 1/1",
                 "□ Adds 1 to 50 Lightning Damage ≥23 [T7 1–4 · 46–66]",
                 "Suffixes 1/1",
-                "■ +8 to Strength ≥7 [T8 5–8]",
+                "□ +8 to Strength ≥7 [T8 5–8]",
             ]
         );
     }
@@ -1796,7 +1899,7 @@ mod tests {
             max: 15.0,
         });
         assert_eq!(
-            limit(&rows(&boots, None)[3]),
+            limit(rows(&boots, None).last().expect("its implicit")),
             Limit {
                 value: 10.0,
                 half: Half::Minimum,
@@ -1876,16 +1979,14 @@ mod tests {
 
     #[test]
     fn a_rare_limit_leaves_10_percent_on_the_worse_side_also_for_a_negative_value() {
-        let whole = StatLine::parse("-15% to Fire Resistance");
-        let decimal = StatLine::parse("-7.5% to Fire Resistance");
-        let limit = |value, line, half| comparable(value, line, half);
+        let whole = |value, half| comparable(value, true, half);
 
-        assert!((limit(12.0, &whole, Half::Minimum) - 11.0).abs() < 1e-9);
-        assert!((limit(18.0, &whole, Half::Maximum) - 20.0).abs() < 1e-9);
+        assert!((whole(12.0, Half::Minimum) - 11.0).abs() < 1e-9);
+        assert!((whole(18.0, Half::Maximum) - 20.0).abs() < 1e-9);
         // The item passes its own filter.
-        assert!((limit(-15.0, &whole, Half::Minimum) - -17.0).abs() < 1e-9);
-        assert!((limit(-15.0, &whole, Half::Maximum) - -14.0).abs() < 1e-9);
-        assert!((limit(-7.5, &decimal, Half::Minimum) - -8.25).abs() < 1e-9);
+        assert!((whole(-15.0, Half::Minimum) - -17.0).abs() < 1e-9);
+        assert!((whole(-15.0, Half::Maximum) - -14.0).abs() < 1e-9);
+        assert!((comparable(-7.5, false, Half::Minimum) - -8.25).abs() < 1e-9);
     }
 
     #[test]

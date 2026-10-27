@@ -244,6 +244,12 @@ impl Stats {
         self.list.len()
     }
 
+    /// A stat has the game id `id`.
+    #[cfg(test)]
+    pub fn has_id(&self, id: &str) -> bool {
+        self.list.iter().any(|stat| stat.id.as_deref() == Some(id))
+    }
+
     /// The strings with `#` of the stats that can be on equipment, and the index of each.
     #[cfg(test)]
     pub fn equipment_strings(&self) -> impl Iterator<Item = (&Stat, usize)> {

@@ -140,6 +140,8 @@ group-unique = Unique
 # The filters of the base type and the item level of a rare, magic or normal item, and of the DPS of a weapon.
 group-item = Item
 group-weapon = Weapon
+# The totals the trade site adds up from several modifiers.
+group-pseudo = Pseudo
 # Beside Prefixes and Suffixes: how many the item has, of the most it can have.
 affix-fill = { $filled } of { $max }
 affix-fill-open = { $filled } of { $max } · { $open } open
@@ -161,6 +163,15 @@ filter-base-type = Base: { $base }
 filter-item-level = Item level: { $value }
 filter-physical-dps = Physical DPS: { $value }
 filter-elemental-dps = Elemental DPS: { $value }
+# The filters of the pseudo totals, as the trade site writes them, with their value.
+pseudo-elemental-resistance = +{ $value }% total Elemental Resistance
+pseudo-chaos-resistance = +{ $value }% total to Chaos Resistance
+pseudo-life = +{ $value } total maximum Life
+pseudo-mana = +{ $value } total maximum Mana
+pseudo-strength = +{ $value } total to Strength
+pseudo-dexterity = +{ $value } total to Dexterity
+pseudo-intelligence = +{ $value } total to Intelligence
+pseudo-all-attributes = +{ $value } total to all Attributes
 # The tooltip of a line the trade site can't search (a modifier added by a patch), on two lines.
 filter-unsearchable = The trade site can't search this line.
 filter-unsearchable-hint = The offers may not have it.

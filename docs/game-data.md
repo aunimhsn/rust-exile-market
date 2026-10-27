@@ -32,6 +32,10 @@ The data of the game the application needs beyond the copied text: the id of eac
 - **Coverage of the trade ids:** the stats of Exiled Exchange 2 hold every trade id of the modifier lines but 37 of them (checked again on 2026-10-26, an option stat counted once, without its `|option`): 29 explicit ids (the Sacrifice of the Trials of Chaos, a chance of the Expeditions, the Remembrancing and Glorifying lines of the timeless jewels), one fractured id (`Flasks gain # charges per Second`) and 7 rune ids (the levels of some skill gems, `#% increased Spirit for each Corrupted Item Equipped`). The trade site templates find them since 13d, and so would they the modifiers of a patch Exiled Exchange 2 doesn't know yet.
 - **The templates of the trade site against the strings of Exiled Exchange 2**, on 2026-10-26: each template of the modifier lines, its `#` written as a number, finds its trade id, from Exiled Exchange 2 for 7,875 English templates and from the trade site for 34; 52 lines with a note (`(Local)`…) aren't found, but the copied text never writes the note. Indexing the templates of both languages takes 6 ms in a release build, when the names of the trade site arrive.
 
+## Pseudo totals
+
+The totals the trade site adds up from the lines of an item (`pseudo.pseudo_total_life`…) are searched in place of these lines (step 13g). Their rules, in `src/trade/pseudo.rs`, are those of Exiled Exchange 2 (`renderer/src/web/price-check/filters/pseudo/index.ts`), read by the game id of each stat, the same in every language. Checked on the trade site on 2026-10-27, with a search and a fetch each: rare rings without a line of life whose total maximum life is exactly 32 all have `+16 to Strength` (each point counts twice); rare amulets without a line of mana whose total maximum mana is 30 to 40 have 15 to 20 intelligence or `+# to all Attributes`, also from an implicit modifier. The fetched offers don't give the totals.
+
 ## Generator
 
 `tools/game-data/`, a member of the Cargo workspace, writes `assets/game-data/` (step 13b):

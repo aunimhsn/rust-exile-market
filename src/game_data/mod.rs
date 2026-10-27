@@ -30,3 +30,10 @@ pub use stats::TradeGroup;
 pub use trade_site::TradeStats;
 #[cfg(test)]
 pub use trade_site::tests::trade_stats;
+
+/// A stat of the game data of `language` has the game id `id` (`base_maximum_life`).
+#[cfg(test)]
+#[must_use]
+pub fn has_stat(language: crate::language::Language, id: &str) -> bool {
+    stats::Stats::of(language).has_id(id)
+}
