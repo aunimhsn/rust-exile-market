@@ -5,3 +5,6 @@ disallowed-methods = [
     { path = "str::split_at", reason = "panics with the text in the message: use split_once or get" },
     { path = "str::split_at_mut", reason = "panics with the text in the message: use split_once or get" },
 ]
+
+# The names written in the doc comments that aren't code (the default list kept with "..").
+doc-valid-idents = ["RePoE", ".."]

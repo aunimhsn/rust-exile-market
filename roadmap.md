@@ -36,7 +36,7 @@ Path of Exile 2 leaves early access with its version 1.0 on 2026-12-11. The modi
 - [x] **10. Item stats and filters** (#20, #23, #25, #26)
 - [x] **11. Trade site client** (#28)
 - [x] **12. Offers display** (#29, #30)
-- [ ] **13. Estimated prices**, in eleven pull requests, from the [game data](docs/game-data.md):
+- [ ] **13. Estimated prices**, in fifteen pull requests, from the [game data](docs/game-data.md):
   - [x] **13a, the game data** (#31)
   - [x] **13b, the stat ids** (#32)
   - [x] **13c, the better side of a line** (#34)
@@ -47,7 +47,19 @@ Path of Exile 2 leaves early access with its version 1.0 on 2026-12-11. The modi
   - [x] **13g, the pseudo totals** (#47)
   - [x] **13h, the normal items, the sockets, the quality and the required level** (#49)
   - [x] **13i, the estimated price** (#51)
-  - [ ] **13j, the modifier tables**: the modifiers and bases of RePoE in the generator; the roll bar of the rare and magic modifiers over every tier of the base, the range field kept within the range of every tier and its tooltip with the rolls of every tier ("Rolls 10 (T11) to 174 (T1)"), the item class as a type (the category of each base type, generated in 13h, with its English name), searched in place of the base type when the player unchecks it (a bow among all the bows; until then, any base), their tier and range read from the tables when the item was copied without the advanced copy (to decide).
+  - [ ] **13j, the modifier tables**, in four pull requests:
+    - [x] **13j1, the tables** (#53): the modifiers and bases of RePoE in the generator (`modifiers.ndjson`, the tags of each base in `bases-<language>.ndjson`), and every tier of a prefix or suffix on the base of its item, read by the application (`game_data::modifier_tiers`); nothing visible yet. Checked against the tiers of the advanced copy and of the offers of the trade site.
+    - [ ] **13j2, the roll bar and the range field over every tier**: mock-up first (the bar of the rare and magic modifiers); the bar over every tier of the base, the range field kept within the range of every tier, and its tooltip with the rolls of every tier ("Rolls 10 (T11) to 174 (T1)").
+    - [ ] **13j3, the item class as a type**: the category of each base type (generated in 13h, with its English name), searched in place of the base type when the player unchecks it (a bow among all the bows; until then, any base); its id checked on the trade site.
+    - [ ] **13j4, the tier without the advanced copy**: to decide first, whether the tier and its range are read from the tables when the item was copied with Ctrl+C (tiers that overlap, the prefix and the suffix of rarity of a ring, the lines of a hybrid copied as modifiers of their own); dropped if not.
+  - [ ] **13k, the modifiers of the endgame mechanics**: every edge case of a modifier tied to a mechanic, studied first in Exiled Exchange 2, RePoE and the trade site, with copied items asked to the owner (English and French, advanced copy, with a screenshot) at the start of the step:
+    - the **desecrated** modifiers: revealed, searched by their explicit id when they have one, like Exiled Exchange 2 (to check on the trade site), or by their desecrated id; unrevealed (`Desecrated Prefix`), a filter of the number of unrevealed modifiers (`misc_filters.veiled`, `pseudo.pseudo_number_of_unrevealed_mods`) in place of their line; those of the lords of the Abyss (Amanamu, Kurgal, Ulaman), outside the modifier tables;
+    - the **fractured** modifiers, searched today by their fractured id; the **sanctified** items;
+    - the modifiers of the **Breach** (`breach_desecration` among the tags of RePoE) and its rings, and those of the other endgame mechanics found on the way;
+    - the **Time-Lost jewels**: their modifier tables, left out of the generator in 13j1 (159 tables), since the game writes their lines within `Small Passive Skills in Radius also grant …` or `Notable Passive Skills in Radius also grant …` while RePoE gives the bare line; a Time-Lost jewel copied by the owner tells which;
+    - the **domain of a modifier table**, not kept in 13j1: the 5 tables of the flask charges (`["default", 1]`) roll on any base for the application, harmless while no other item writes their lines (checked on 2026-10-28); keep the domain (or the classes of the bases) in the tables;
+    - and every other edge case found while studying them: this step is the polish of step 13;
+    - their style in the stats (a tag, a color): mock-up first.
 - [ ] **14. Responsive layout and price history**: wireframes then mock-up of the medium and wide layouts with the visual style, then these layouts in the application, with the 7-day history chart in the wide layout.
 - [ ] **15. Update notice**: at launch, ask the GitHub releases for the latest version, and when it is newer than the running one, a bubble "Version 0.2.0 available" with a link to its download page, closed for good per version (like the bubble of a new league); mock-up first. Needed before the first release: a player kept on an old version broken by a change of the game (Path of Exile 2 1.0, a new copied text format) or of the trade site wouldn't know it.
 - [ ] **16. First release**: executable name (without the `rust-` prefix) and application id from one constant, application icon from the emblem, a readable message when the window can't open (no OpenGL, no X11 / XWayland), README usage (with where the log is), Wayland help, clipboard help and services called, version 0.1.0.
