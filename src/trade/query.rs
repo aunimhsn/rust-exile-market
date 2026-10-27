@@ -81,6 +81,9 @@ impl PropertyFilter {
     fn id(&self) -> (&'static str, &'static str) {
         match self.property {
             Property::ItemLevel => ("type_filters", "ilvl"),
+            Property::Sockets => ("equipment_filters", "rune_sockets"),
+            Property::Quality => ("type_filters", "quality"),
+            Property::RequiredLevel => ("req_filters", "lvl"),
             Property::PhysicalDps => ("equipment_filters", "pdps"),
             Property::ElementalDps => ("equipment_filters", "edps"),
         }
@@ -374,6 +377,21 @@ mod tests {
                     maximum: None,
                 },
                 PropertyFilter {
+                    property: Property::Sockets,
+                    minimum: Some(3.0),
+                    maximum: None,
+                },
+                PropertyFilter {
+                    property: Property::Quality,
+                    minimum: Some(24.0),
+                    maximum: None,
+                },
+                PropertyFilter {
+                    property: Property::RequiredLevel,
+                    minimum: None,
+                    maximum: Some(40.0),
+                },
+                PropertyFilter {
                     property: Property::PhysicalDps,
                     minimum: Some(220.0),
                     maximum: Some(300.0),
@@ -395,11 +413,14 @@ mod tests {
                     "filters": {
                         "type_filters": { "filters": {
                             "rarity": { "option": "nonunique" },
-                            "ilvl": { "min": 81.0 }
+                            "ilvl": { "min": 81.0 },
+                            "quality": { "min": 24.0 }
                         } },
                         "equipment_filters": { "filters": {
+                            "rune_sockets": { "min": 3.0 },
                             "pdps": { "min": 220.0, "max": 300.0 }
                         } },
+                        "req_filters": { "filters": { "lvl": { "max": 40.0 } } },
                         "misc_filters": { "filters": { "corrupted": { "option": "false" } } }
                     }
                 },

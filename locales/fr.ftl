@@ -164,6 +164,9 @@ filter-lower-better = Plus c'est bas, mieux c'est
 # Les filtres des propriétés d'un objet, avec leur valeur.
 filter-base-type = Base : { $base }
 filter-item-level = Niveau de l'objet : { $value }
+filter-sockets = Châsses : { $value }
+filter-quality = Qualité : { $value }%
+filter-required-level = Niveau requis : { $value }
 filter-physical-dps = DPS physique : { $value }
 filter-elemental-dps = DPS élémentaire : { $value }
 # Les filtres des totaux pseudo, avec leur valeur.

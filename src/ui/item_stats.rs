@@ -1,5 +1,6 @@
 //! The stats of the item, unfolded under the item block: for a rare, magic or normal item,
-//! first the filters of its base type, item level and DPS, then of its pseudo totals for a
+//! first the filters of its base type, item level, sockets, quality, required level and DPS,
+//! then of its pseudo totals for a
 //! rare or magic one, then its modifiers in the color of the game, grouped, the stats that
 //! vary first. A unique, or an implicit modifier of a rare,
 //! shows a bar of where its value falls in its range; a prefix or a suffix, its tier and the
@@ -35,7 +36,7 @@ use crate::prices::UniqueModifiers;
 use crate::roll_difference::CopiedLines;
 use crate::trade::pseudo::{Pseudo, PseudoTotal};
 use crate::trade::stat_filters::{LineStat, LineStats};
-use crate::{format, rolls};
+use crate::{format, game_data, rolls};
 
 /// The space between two rows.
 const ROW_GAP: f32 = 6.0;
@@ -75,11 +76,16 @@ const RANGE_SEPARATOR: &str = " · ";
 /// for a minimum, above it for the maximum of a line better lower, to find comparable items
 /// and not only identical ones.
 const COMPARABLE_MARGIN: f64 = 0.1;
+/// The highest quality of an item that isn't exceptional, in percent.
+const EXCEPTIONAL_QUALITY: u32 = 20;
+/// The highest required level and item level of a rare for leveling.
+const LEVELING_LEVEL: u32 = 75;
 
 /// A small title of the stats.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Group {
-    /// The base type and the item level of a rare, magic or normal item.
+    /// The base type, item level, sockets, quality and required level of a rare, magic or
+    /// normal item.
     Item,
     /// The DPS of a weapon.
     Weapon,
@@ -150,6 +156,14 @@ impl Limit {
             half: Half::Minimum,
             bounds: None,
             rolls: None,
+        }
+    }
+
+    /// A maximum of `value`, with no range to stay in.
+    fn maximum(value: f64) -> Self {
+        Self {
+            half: Half::Maximum,
+            ..Self::minimum(value)
         }
     }
 
@@ -387,10 +401,18 @@ fn searchable(stat: &mut Stat<'_>, line: Option<&LineStat>) {
     }
 }
 
-/// The filters of the base type of a rare, magic or normal item, checked, and of its item
-/// level, unchecked, with the level of the item as its minimum.
+/// The filters of the properties of a rare, magic or normal item, each with the value of the
+/// item as its minimum, like Exiled Exchange 2: its base type, checked; its item level,
+/// checked on a normal item only (a player who checks it on another usually looks for a level
+/// of crafting); its augmentable sockets, checked on a normal item, or when the item has more
+/// than its base usually has (an exceptional base), or is corrupted (no socket can be added
+/// any more); its quality, on a normal item, or above 20 % (an exceptional quality), checked
+/// above 20 % except on a rare (whose craft is usually done); the required level of a rare for
+/// leveling (required level and item level of 75 or under), unchecked, as its maximum: the
+/// offers a character of that level can use.
 fn item_filters<'a>(item: &Item, base_type: Option<&'a str>) -> Vec<Stat<'a>> {
-    let base_type = base_type.map(|base_type| Stat {
+    let normal = item.rarity() == Rarity::Normal;
+    let base_type_filter = base_type.map(|base_type| Stat {
         key: FilterKey::BaseType,
         text: StatText::BaseType(base_type),
         filter: Some(StatFilter {
@@ -401,14 +423,45 @@ fn item_filters<'a>(item: &Item, base_type: Option<&'a str>) -> Vec<Stat<'a>> {
         roll: None,
     });
     let item_level = item.item_level().map(|level| {
-        property_filter(
-            Property::ItemLevel,
-            f64::from(level),
-            f64::from(level),
-            false,
-        )
+        let level = f64::from(level);
+        property_filter(Property::ItemLevel, level, Limit::minimum(level), normal)
     });
-    base_type.into_iter().chain(item_level).collect()
+    let sockets = item
+        .sockets()
+        .filter(|&sockets| sockets > 0)
+        .map(|sockets| {
+            let more = base_type
+                .and_then(|base_type| game_data::category(item.language(), base_type))
+                .is_some_and(|category| sockets > category.usual_sockets());
+            let sockets = f64::from(sockets);
+            let checked = normal || more || item.is_corrupted();
+            property_filter(Property::Sockets, sockets, Limit::minimum(sockets), checked)
+        });
+    let quality = item
+        .quality()
+        .filter(|&quality| quality > EXCEPTIONAL_QUALITY || (normal && quality > 0))
+        .map(|quality| {
+            let checked = quality > EXCEPTIONAL_QUALITY && item.rarity() != Rarity::Rare;
+            let quality = f64::from(quality);
+            property_filter(Property::Quality, quality, Limit::minimum(quality), checked)
+        });
+    let leveling = |level: Option<u32>| level.is_some_and(|level| level <= LEVELING_LEVEL);
+    let required_level = item
+        .requirements()
+        .level
+        .filter(|_| item.rarity() == Rarity::Rare && leveling(item.item_level()))
+        .filter(|&level| leveling(Some(level)))
+        .map(|level| {
+            let level = f64::from(level);
+            property_filter(Property::RequiredLevel, level, Limit::maximum(level), false)
+        });
+    base_type_filter
+        .into_iter()
+        .chain(item_level)
+        .chain(sockets)
+        .chain(quality)
+        .chain(required_level)
+        .collect()
 }
 
 /// The filters of the DPS of a weapon, each kind it deals, with a minimum at 90 % of its
@@ -434,20 +487,20 @@ fn dps_filters(item: &Item) -> Vec<Stat<'static>> {
         let shown = dps.round();
         (shown >= 1.0).then(|| {
             let minimum = (dps * (1.0 - COMPARABLE_MARGIN)).floor();
-            property_filter(property, shown, minimum, checked)
+            property_filter(property, shown, Limit::minimum(minimum), checked)
         })
     })
     .collect()
 }
 
-/// The filter of `property`, of the value `value`, with a minimum of `minimum`.
-fn property_filter(property: Property, value: f64, minimum: f64, checked: bool) -> Stat<'static> {
+/// The filter of `property`, of the value `value`, with the limit `limit`.
+fn property_filter(property: Property, value: f64, limit: Limit, checked: bool) -> Stat<'static> {
     Stat {
         key: FilterKey::Property(property),
         text: StatText::Property(property, value),
         filter: Some(StatFilter {
             checked,
-            limit: Some(Limit::minimum(minimum)),
+            limit: Some(limit),
         }),
         unsearchable: false,
         roll: None,
@@ -1629,6 +1682,8 @@ mod tests {
                 "Item",
                 "■ Base: Gemini Crossbow",
                 "□ ItemLevel: 80 ≥80",
+                // Corrupted: no socket can be added any more.
+                "■ Sockets: 2 ≥2",
                 // 90 % of the DPS, the elemental one unchecked.
                 "Weapon",
                 "■ PhysicalDps: 288 ≥259",
@@ -1841,6 +1896,147 @@ mod tests {
                 "■ 8% increased Attack Speed ≥7 [T4 7–9]",
             ]
         );
+    }
+
+    /// The rows of the Item group of `item`, without its title.
+    fn item_group(item: &Item) -> Vec<String> {
+        texts(item, None)
+            .into_iter()
+            .skip_while(|text| text != "Item")
+            .skip(1)
+            .take_while(|text| !matches!(text.chars().next(), Some(first) if first.is_uppercase()))
+            .collect()
+    }
+
+    #[test]
+    fn a_normal_item_is_searched_by_its_base_sockets_item_level_and_quality() {
+        let shield = parse(include_str!(
+            "../item/test-items/fr-normal-exceptional-shield.txt"
+        ));
+        let helmet = parse(include_str!("../item/test-items/en-normal-helmet.txt"));
+        let targe = parse(
+            "Item Class: Shields\nRarity: Normal\nExceptional Mammoth Targe\n--------\n\
+             Quality: +24% (augmented)\nArmour: 139 (augmented)\n--------\nItem Level: 82",
+        );
+
+        // An exceptional base by its sockets: the trade site doesn't know its name.
+        assert_eq!(
+            item_group(&shield),
+            [
+                "■ Base: Targe de mammouth",
+                "■ ItemLevel: 82 ≥82",
+                "■ Sockets: 2 ≥2",
+            ]
+        );
+        assert_eq!(
+            item_group(&helmet),
+            [
+                "■ Base: Divine Crown",
+                "■ ItemLevel: 81 ≥81",
+                "□ Quality: 9 ≥9",
+            ]
+        );
+        // An exceptional base by its quality.
+        assert_eq!(
+            item_group(&targe),
+            [
+                "■ Base: Mammoth Targe",
+                "■ ItemLevel: 82 ≥82",
+                "■ Quality: 24 ≥24",
+            ]
+        );
+    }
+
+    #[test]
+    fn the_sockets_are_checked_above_those_of_the_base_or_on_a_corrupted_item() {
+        let armour = |sockets: &str, corrupted: &str| {
+            parse(&format!(
+                "Item Class: Body Armours\nRarity: Rare\nHate Shell\nWaxed Jacket\n--------\n\
+                 Sockets: {sockets}\n--------\nItem Level: 80\n--------\n\
+                 +80 to maximum Life{corrupted}"
+            ))
+        };
+        let sockets = |item: &Item| {
+            item_group(item)
+                .into_iter()
+                .find(|text| text.contains("Sockets"))
+        };
+
+        // A body armour usually has two.
+        assert_eq!(
+            sockets(&armour("S S", "")).as_deref(),
+            Some("□ Sockets: 2 ≥2")
+        );
+        assert_eq!(
+            sockets(&armour("S S S", "")).as_deref(),
+            Some("■ Sockets: 3 ≥3")
+        );
+        assert_eq!(
+            sockets(&armour("S", "\n--------\nCorrupted")).as_deref(),
+            Some("■ Sockets: 1 ≥1")
+        );
+        let none = parse(
+            "Item Class: Body Armours\nRarity: Rare\nHate Shell\nWaxed Jacket\n--------\n\
+             Item Level: 80\n--------\n+80 to maximum Life",
+        );
+        assert_eq!(sockets(&none), None);
+    }
+
+    #[test]
+    fn an_exceptional_quality_is_checked_except_on_a_rare() {
+        let bow = parse(include_str!("../item/test-items/en-rare-bow-fractured.txt"));
+        let magic = parse(
+            "Item Class: Gloves\nRarity: Magic\nVaal Mitts of the Fox\n--------\n\
+             Quality: +23% (augmented)\n--------\nItem Level: 70\n--------\n+20 to Dexterity",
+        );
+        let twenty = parse(
+            "Item Class: Gloves\nRarity: Magic\nVaal Mitts of the Fox\n--------\n\
+             Quality: +20% (augmented)\n--------\nItem Level: 70\n--------\n+20 to Dexterity",
+        );
+
+        // Its bow usually has two sockets; its required level is above 75.
+        assert_eq!(
+            item_group(&bow),
+            [
+                "■ Base: Obliterator Bow",
+                "□ ItemLevel: 81 ≥81",
+                "□ Sockets: 2 ≥2",
+                "□ Quality: 25 ≥25",
+            ]
+        );
+        assert!(item_group(&magic).contains(&"■ Quality: 23 ≥23".to_owned()));
+        assert!(
+            !item_group(&twenty)
+                .iter()
+                .any(|text| text.contains("Quality"))
+        );
+    }
+
+    #[test]
+    fn a_rare_for_leveling_has_its_required_level_as_a_maximum() {
+        let ring = |required: u32, item_level: u32| {
+            parse(&format!(
+                "Item Class: Rings\nRarity: Rare\nHate Loop\nRuby Ring\n--------\n\
+                 Requires: Level {required}\n--------\nItem Level: {item_level}\n--------\n\
+                 +30 to maximum Life"
+            ))
+        };
+        let required = |item: &Item| {
+            item_group(item)
+                .into_iter()
+                .find(|text| text.contains("RequiredLevel"))
+        };
+
+        assert_eq!(
+            required(&ring(40, 45)).as_deref(),
+            Some("□ RequiredLevel: 40 ≤40")
+        );
+        assert_eq!(
+            required(&ring(75, 75)).as_deref(),
+            Some("□ RequiredLevel: 75 ≤75")
+        );
+        assert_eq!(required(&ring(40, 80)), None);
+        assert_eq!(required(&ring(78, 80)), None);
     }
 
     #[test]
@@ -2096,7 +2292,7 @@ mod tests {
             [
                 "Item",
                 "■ Base: Chiming Staff",
-                "□ ItemLevel: 82 ≥82",
+                "■ ItemLevel: 82 ≥82",
                 "Corrupted only"
             ]
         );
@@ -2182,18 +2378,18 @@ mod tests {
             bounds: None,
         };
 
-        // The base type, the physical DPS, the implicit and three modifiers; the item level,
-        // the elemental DPS, the enchantment, the two runes, the damage and the attack speed
-        // unchecked.
-        assert_eq!(stats.active_filters(&filters), 6);
-        // A rune checked by the player.
-        filters.set(keys[5], choice(true));
+        // The base type, the sockets, the physical DPS, the implicit and three modifiers; the
+        // item level, the elemental DPS, the enchantment, the two runes, the damage and the
+        // attack speed unchecked.
         assert_eq!(stats.active_filters(&filters), 7);
+        // A rune checked by the player.
+        filters.set(keys[6], choice(true));
+        assert_eq!(stats.active_filters(&filters), 8);
         // The implicit unchecked.
-        filters.set(keys[7], choice(false));
-        assert_eq!(stats.active_filters(&filters), 6);
+        filters.set(keys[8], choice(false));
+        assert_eq!(stats.active_filters(&filters), 7);
         filters.clear();
-        assert_eq!(stats.active_filters(&filters), 6);
+        assert_eq!(stats.active_filters(&filters), 7);
     }
 
     #[test]

@@ -161,6 +161,9 @@ filter-lower-better = Lower is better
 # The filters of the properties of an item, with their value.
 filter-base-type = Base: { $base }
 filter-item-level = Item level: { $value }
+filter-sockets = Sockets: { $value }
+filter-quality = Quality: { $value }%
+filter-required-level = Required level: { $value }
 filter-physical-dps = Physical DPS: { $value }
 filter-elemental-dps = Elemental DPS: { $value }
 # The filters of the pseudo totals, with their value.
