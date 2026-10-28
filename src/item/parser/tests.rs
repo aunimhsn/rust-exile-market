@@ -21,6 +21,7 @@ const FR_MAGIC_MANA_FLASK: &str = test_item!("fr-magic-mana-flask.txt");
 const FR_RARE_SCEPTRE_SANCTIFIED: &str = test_item!("fr-rare-sceptre-sanctified.txt");
 const EN_UNIQUE_MACE_FIXED_VALUES: &str = test_item!("en-owner-unique-mace-fixed-values.txt");
 const FR_RARE_FOCUS_UNREVEALED: &str = test_item!("fr-rare-focus-unrevealed.txt");
+const FR_UNIQUE_RING_MIRRORED: &str = test_item!("fr-unique-ring-mirrored.txt");
 const EN_RARE_SCEPTRE_SANCTIFIED: &str = test_item!("en-owner-rare-sceptre-sanctified.txt");
 const EN_RARE_FOCUS_UNREVEALED: &str = test_item!("en-owner-rare-focus-unrevealed.txt");
 const EN_RARE_CROSSBOW: &str = test_item!("en-rare-crossbow-all-modifiers.txt");
@@ -36,7 +37,7 @@ const EN_PLAIN_UNIQUE_JEWEL: &str = test_item!("en-plain-unique-jewel.txt");
 const EN_PLAIN_MAGIC_JEWEL_UNIDENTIFIED: &str = test_item!("en-plain-magic-jewel-unidentified.txt");
 const EN_PLAIN_CURRENCY_LARGE_STACK: &str = test_item!("en-plain-currency-large-stack.txt");
 
-const ALL: [&str; 24] = [
+const ALL: [&str; 25] = [
     FR_RARE_STAFF,
     FR_RARE_BODY_ARMOUR,
     FR_UNIQUE_CROSSBOW,
@@ -46,6 +47,7 @@ const ALL: [&str; 24] = [
     FR_MAGIC_MANA_FLASK,
     FR_RARE_SCEPTRE_SANCTIFIED,
     FR_RARE_FOCUS_UNREVEALED,
+    FR_UNIQUE_RING_MIRRORED,
     EN_UNIQUE_MACE_FIXED_VALUES,
     EN_RARE_SCEPTRE_SANCTIFIED,
     EN_RARE_FOCUS_UNREVEALED,
@@ -211,6 +213,13 @@ fn reads_a_sanctified_item_and_a_range_of_one_value() {
         assert_eq!(line.text, requirements);
         assert_eq!(line.rolls, [roll(29.0, 30.0, 30.0)]);
     }
+}
+
+#[test]
+fn reads_the_mirrored_state() {
+    let item = item(FR_UNIQUE_RING_MIRRORED);
+    assert_eq!(item.name(), Some("Toucher de Kalandra"));
+    assert_eq!(item.states(), [ItemState::Mirrored]);
 }
 
 #[test]
