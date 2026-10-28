@@ -21,10 +21,6 @@
 .app-unrevealed { margin: 0 -6px; padding: 3px 6px; border-radius: var(--radius); background: color-mix(in srgb, var(--desecrated) 12%, transparent); }
 .app-unrevealed .text { color: var(--desecrated); }
 
-/* A modifier of one tier only: no tier, or its T1 in gray. */
-.app-single { display: none; }
-[data-single="gray"] .app-single { display: inline-block; color: var(--faint); }
-
 /* A line of a Time-Lost jewel: the whole line, or a short tag in place of its first words. */
 .app-radius-short {
   display: none; margin-right: 6px; padding: 0 5px; border-radius: var(--radius);

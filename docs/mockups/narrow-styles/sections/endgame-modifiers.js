@@ -1,14 +1,15 @@
 // Section Endgame modifiers (13k1): the modifiers tied to a mechanic of the endgame, from the items the
-// owner copied on 2026-10-28 (English and French). Open decisions, one group of tabs each:
-// - Desecrated green: the green of the game, of the evasion, or a softer one.
-// - One tier: a modifier of one tier only (every modifier of a jewel, of a lord of the Abyss, of a
-//   waystone, of a tablet, of the Breach), whose T1 means "the only one": no tier, or T1 in gray; its bar
-//   over its own range, which the copy gives;
+// owner copied on 2026-10-28 (English and French). Open decisions, one group of tabs each, their windows
+// first:
 // - Time-Lost: the lines of a Time-Lost jewel, whole or with a short tag in place of their first words;
-// - Catalyst quality: the quality of a ring or an amulet given by a catalyst, with its kind.
-// Decided: the origin of a desecrated, fractured or crafted modifier written after its range; a desecrated
-// modifier not revealed yet, a line without filter on a green band; the item gets a filter of its number
-// of unrevealed modifiers, and its other filters start unchecked, like Exiled Exchange 2.
+// - Catalyst quality: the quality of a ring or an amulet given by a catalyst, with its kind;
+// - Desecrated green: the green of the game, of the evasion, or a softer one.
+// Decided with the owner on 2026-10-28: the origin of a desecrated, fractured or crafted modifier written
+// after its range; a desecrated modifier not revealed yet, a line without filter on a green band, the item
+// getting a filter of its number of unrevealed modifiers and its other filters unchecked, like Exiled
+// Exchange 2; a modifier of one tier only (every modifier of a jewel, of a lord of the Abyss, of a
+// waystone, of a tablet, of the Breach), whose T1 means "the only one", without tier, its bar over its
+// own range, which the copy gives.
 // A sanctified item has values outside the range of their tier (`+74(80-89) to maximum Mana`), shown as
 // they are. The bars over every tier are approximate here.
 
@@ -201,14 +202,14 @@ const ringCatalystStats = [
 ];
 
 SECTIONS.push(["Endgame modifiers (13k1): desecrated, fractured, unrevealed, one tier, catalysts", [
+  ["Time-Lost jewel: one tier only", win(topBar(), item({ ...TIME_LOST, stats: timeLostStats }, true), price(RARE_ESTIMATE_BEFORE), foot())],
+  ["Time-Lost jewel, French", win(topBar(), item({ ...TIME_LOST_FR, stats: timeLostStatsFr }, true), price(RARE_ESTIMATE_BEFORE), foot())],
   ["Desecrated amulet, catalyst quality", win(topBar(), item({ ...AMULET_DESECRATED, stats: amuletDesecratedStats }, true), price(RARE_ESTIMATE_BEFORE), foot())],
+  ["Catalyst quality, twice corrupted", win(topBar(), item({ ...RING_CATALYST, stats: ringCatalystStats }, true), price(RARE_ESTIMATE_BEFORE), foot())],
   ["Fractured suffix", win(topBar(), item({ ...MACE_FRACTURED, stats: maceFracturedStats }, true), price(RARE_ESTIMATE_BEFORE), foot())],
   ["Unrevealed prefix", win(topBar(), item({ ...FOCUS_UNREVEALED, stats: focusUnrevealedStats }, true), price(RARE_ESTIMATE_BEFORE), foot())],
   ["Unrevealed prefix, French", win(topBar(), item({ ...FOCUS_UNREVEALED_FR, stats: focusUnrevealedStatsFr }, true), price(RARE_ESTIMATE_BEFORE), foot())],
   ["Sanctified: values outside their tier, crafted, unrevealed", win(topBar(), item({ ...SCEPTRE_SANCTIFIED, stats: sceptreSanctifiedStats }, true), price(RARE_ESTIMATE_BEFORE), foot())],
   ["A lord of the Abyss: one tier only", win(topBar(), item({ ...FOCUS_KURGAL, stats: focusKurgalStats }, true), price(RARE_ESTIMATE_BEFORE), foot())],
-  ["Time-Lost jewel: one tier only", win(topBar(), item({ ...TIME_LOST, stats: timeLostStats }, true), price(RARE_ESTIMATE_BEFORE), foot())],
-  ["Time-Lost jewel, French", win(topBar(), item({ ...TIME_LOST_FR, stats: timeLostStatsFr }, true), price(RARE_ESTIMATE_BEFORE), foot())],
   ["Breach ring: a modifier without tier", win(topBar(), item({ ...BREACH_RING, stats: breachRingStats }, true), price(RARE_ESTIMATE_BEFORE), foot())],
-  ["Catalyst quality, twice corrupted", win(topBar(), item({ ...RING_CATALYST, stats: ringCatalystStats }, true), price(RARE_ESTIMATE_BEFORE), foot())],
 ]]);

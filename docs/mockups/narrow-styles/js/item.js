@@ -49,9 +49,9 @@ function item(it, unfolded = false) {
       // warning color, with its tooltip (`row.warning`); `row.hover` shows it open.
       const warning = row.warning ? `<span class="app-warning${row.hover ? " is-hovered" : ""}">${ICON.forbid(15)}<span class="app-tip">${row.warning}</span></span>` : "";
       const box = warning || (row.check === undefined ? "" : `<span class="check ${row.check ? "on" : ""}">${row.check ? ICON.check(11) : ""}</span>`);
-      // A modifier of one tier only (`row.single`, 13k1: jewels, lords of the Abyss, waystones): its T1 says
-      // "the only one", not "the best"; shown or not as the variant `single` says.
-      const tier = row.single ? `<span class="tier app-single">T1</span>`
+      // A modifier of one tier only (`row.single`, 13k1: jewels, lords of the Abyss, waystones) has no tier:
+      // its T1 would say "the best" while it is "the only one" (decided with the owner on 2026-10-28).
+      const tier = row.single ? ""
         : row.tier ? `<span class="tier ${row.tier <= 3 ? "tier-top" : ""} t${row.tier}">T${row.tier}</span>` : "";
       // The origin in words after the range.
       const origin = row.origin ? `<span class="app-origin">${row.originLabel || ORIGIN_LABEL[row.origin]}</span>` : "";
