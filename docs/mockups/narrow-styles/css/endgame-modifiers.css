@@ -20,6 +20,9 @@
 .app-unrevealed .text { font-style: italic; }
 [data-unrevealed="faint"] .app-unrevealed .text { color: var(--faint); }
 [data-unrevealed="colored"] .app-unrevealed .text { color: var(--desecrated); }
+/* "Green band": the line on a faint band of the desecrated green, like the row of the game. */
+[data-unrevealed="band"] .app-unrevealed { margin: 0 -6px; padding: 3px 6px; border-radius: var(--radius); background: color-mix(in srgb, var(--desecrated) 12%, transparent); }
+[data-unrevealed="band"] .app-unrevealed .text { color: var(--desecrated); font-style: normal; font-weight: 600; }
 
 /* A modifier of one tier only: no tier, or its T1 in gray. */
 .app-single { display: none; }
