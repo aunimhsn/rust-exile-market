@@ -73,15 +73,16 @@ const MAGIC = { rarity: "magic", name: "Glimmering Sapphire Ring of the Lynx", c
 const STAFF = { rarity: "normal", name: "Exceptional Chiming Staff", cls: "Staves", tags: ["3 sockets", "ilvl 82"], summary: "Grants Skill: Level 18 Sigil of Power", req: "Requires Level 78 · 137 Int", statsLabel: "Stats (0)", filters: "3 filters" };
 // Exceptional by its sockets: a staff usually has two. The trade site doesn't know its name.
 const STAFF_FILTERS = itemFilters({ base: "Chiming Staff", level: { value: 82, check: true }, sockets: { value: 3, check: true } });
+// Every modifier of a jewel has one tier only: no tier, its bar over its own range (13k1).
 const JEWEL = { rarity: "rare", name: "Brood Ember", base: "Ruby", cls: "Jewels", tags: ["ilvl 81"], statsLabel: "Stats (4)", filters: "5 filters" };
 const JEWEL_FILTERS = [
   { group: "Item", min: true },
   { mod: "Base: Ruby", check: true },
   { mod: "Item level: 81", check: false, min: 81 },
   { group: "Prefixes", fill: "2 of 2" },
-  { mod: "12% increased Projectile Damage", check: true, min: 10, tier: 1, range: "11–13", share: .9 },
-  { mod: "10% increased Damage with Bows", check: true, min: 9, tier: 2, range: "8–11", share: .7 },
+  { mod: "12% increased Projectile Damage", check: true, min: 10, single: true, range: "11–13", share: .5 },
+  { mod: "10% increased Damage with Bows", check: true, min: 9, single: true, range: "8–11", share: .67 },
   { group: "Suffixes", fill: "2 of 2" },
-  { mod: "14% increased Critical Damage Bonus", check: true, min: 12, tier: 1, range: "13–15", share: .9 },
-  { mod: "8% increased Attack Speed", check: true, min: 7, tier: 1, range: "7–8", share: 1 },
+  { mod: "14% increased Critical Damage Bonus", check: true, min: 12, single: true, range: "13–15", share: .5 },
+  { mod: "8% increased Attack Speed", check: true, min: 7, single: true, range: "7–8", share: 1 },
 ];

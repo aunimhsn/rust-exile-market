@@ -1,7 +1,5 @@
 // Section Endgame modifiers (13k1): the modifiers tied to a mechanic of the endgame, from the items the
-// owner copied on 2026-10-28 (English and French). Open decision, a group of tabs, its windows first:
-// - Catalyst quality: the quality of a ring or an amulet given by a catalyst, with its kind.
-// Decided with the owner on 2026-10-28:
+// owner copied on 2026-10-28 (English and French). Decided with the owner on 2026-10-28:
 // - the origin of a desecrated, fractured or crafted modifier written after its range;
 // - the green of the evasion for the desecrated modifiers;
 // - a desecrated modifier not revealed yet, a line without filter on a green band, the item getting a
@@ -12,16 +10,15 @@
 // - a line whose only value is the one of the copy (`1% of Damage taken Recouped as Life`, written
 //   without range) has neither bar nor range field, only its checkbox, as the specifications say;
 // - the lines of a Time-Lost jewel without their first words, a tag "Small" or "Notable" after their
-//   range.
+//   range;
+// - the quality of a catalyst with its kind, short: "Mana quality: 40%".
 // A sanctified item has values outside the range of their tier (`+74(80-89) to maximum Mana`), shown as
 // they are. The bars over every tier are approximate here.
 
-// The quality of a catalyst, in words or short, `fr` for a French item; `plain` for the tooltip.
+// The quality of a catalyst, with its kind, short (decided with the owner on 2026-10-28, against
+// "Quality (Mana modifiers): 40%"); `fr` for a French item.
 const catalyst = (kind, value, fr) => ({
-  mod: fr
-    ? `<span class="app-cat-full">Qualité (modificateurs de ${kind}) : ${value} %</span><span class="app-cat-short">Qualité de ${kind.toLowerCase()} : ${value} %</span>`
-    : `<span class="app-cat-full">Quality (${kind} modifiers): ${value}%</span><span class="app-cat-short">${kind} quality: ${value}%</span>`,
-  plain: fr ? `Qualité (modificateurs de ${kind}) : ${value} %` : `Quality (${kind} modifiers): ${value}%`,
+  mod: fr ? `Qualité de ${kind.toLowerCase()} : ${value} %` : `${kind} quality: ${value}%`,
 });
 
 // Desecrated amulet: every explicit modifier desecrated, the quality of a catalyst, an anointment.

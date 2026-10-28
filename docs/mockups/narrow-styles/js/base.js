@@ -7,8 +7,6 @@ const THEMES = {
 const VARIANTS = {
   theme: { label: "Style", options: Object.fromEntries(Object.entries(THEMES).map(([k, v]) => [k, v.title])), fallback: "slate" },
   league: { label: "League", options: { softcore: "Softcore", hardcore: "Hardcore" }, fallback: "softcore" },
-  // The open decisions of step 13k1 (section Endgame modifiers), one group each.
-  catalyst: { label: "Catalyst quality", options: { full: "Quality (Mana modifiers)", short: "Mana quality" }, fallback: "full" },
 };
 const params = new URLSearchParams(location.search);
 const chosen = Object.fromEntries(Object.entries(VARIANTS).map(([key, v]) => [key, params.get(key) in v.options ? params.get(key) : v.fallback]));
