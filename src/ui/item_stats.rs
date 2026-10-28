@@ -95,6 +95,15 @@ const MAX_USUAL_QUALITY: u32 = 20;
 const CHARM_QUALITY: u32 = 10;
 /// The highest required level and item level of a rare for leveling.
 const LEVELING_LEVEL: u32 = 75;
+/// The item levels: the field of the item level stays within them. Checked on the trade site
+/// on 2026-10-28: 262 offers of item level 100 in Forbidden Rites, none above.
+const ITEM_LEVELS: Range = Range {
+    min: 1.0,
+    max: 100.0,
+};
+/// The augmentable sockets an item can have: the field of the sockets stays within them. No
+/// offer had 7 or more on the trade site on 2026-10-28.
+const SOCKETS: Range = Range { min: 0.0, max: 6.0 };
 
 /// A small title of the stats.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -210,6 +219,15 @@ impl Limit {
             bounds,
             rolls: range.filter(|_| line.rolls.len() == 1),
             tiers: None,
+        }
+    }
+
+    /// The limit kept within `bounds`, all the values its property can take.
+    fn within(self, bounds: Range) -> Self {
+        Self {
+            value: bounds.clamp(self.value),
+            bounds: Some(bounds),
+            ..self
         }
     }
 
@@ -457,7 +475,8 @@ fn item_filters<'a>(item: &Item, base_type: Option<&'a str>) -> Vec<Stat<'a>> {
     let item_level = item.item_level().map(|level| {
         let level = f64::from(level);
         let checked = item.rarity() == Rarity::Normal;
-        property_filter(Property::ItemLevel, level, Limit::minimum(level), checked)
+        let limit = Limit::minimum(level).within(ITEM_LEVELS);
+        property_filter(Property::ItemLevel, level, limit, checked)
     });
     let category = base_type.and_then(|base_type| game_data::category(item.language(), base_type));
     base_type_filter
@@ -481,7 +500,7 @@ fn sockets_filter(item: &Item, category: Option<Category>) -> Option<Stat<'stati
     Some(property_filter(
         Property::Sockets,
         sockets,
-        Limit::minimum(sockets),
+        Limit::minimum(sockets).within(SOCKETS),
         checked,
     ))
 }
@@ -2248,6 +2267,24 @@ mod tests {
                 "■ Quality: 24 ≥24",
             ]
         );
+    }
+
+    #[test]
+    fn the_item_level_and_the_sockets_stay_within_the_values_of_the_game() {
+        let crossbow = parse(include_str!(
+            "../item/test-items/en-rare-crossbow-all-modifiers.txt"
+        ));
+        let rows = rows(&crossbow, None);
+        let bounds_of = |property| {
+            rows.iter().find_map(|row| match row {
+                Row::Stat(stat) if stat.key == FilterKey::Property(property) => limit(row).bounds,
+                _ => None,
+            })
+        };
+
+        // A minimum of 5000 is brought back to 100 when the player leaves the field.
+        assert_eq!(bounds_of(Property::ItemLevel), Some(ITEM_LEVELS));
+        assert_eq!(bounds_of(Property::Sockets), Some(SOCKETS));
     }
 
     #[test]
