@@ -27,16 +27,19 @@ pub enum TradeGroup {
 }
 
 impl TradeGroup {
-    /// The group where the trade site lists the lines of `modifier`.
+    /// The group where the lines of `modifier` are searched on the trade site. A desecrated or
+    /// a fractured line is searched by its explicit id, like Exiled Exchange 2: it finds the
+    /// offers where the line is desecrated, fractured or plain (checked on the trade site on
+    /// 2026-10-28), and every desecrated and fractured stat of the game data has one.
     #[must_use]
     pub fn of(modifier: &Modifier) -> Self {
         match modifier.kind {
             ModifierKind::Implicit => Self::Implicit,
             ModifierKind::Explicit(_) => match modifier.origin {
-                Some(ModifierOrigin::Fractured) => Self::Fractured,
-                Some(ModifierOrigin::Desecrated) => Self::Desecrated,
                 Some(ModifierOrigin::Crafted) => Self::Crafted,
-                None => Self::Explicit,
+                Some(ModifierOrigin::Fractured | ModifierOrigin::Desecrated) | None => {
+                    Self::Explicit
+                }
             },
             // The trade site lists the modifiers of the corruption with the enchantments.
             ModifierKind::Enchant | ModifierKind::Corruption => Self::Enchant,
@@ -308,6 +311,30 @@ mod tests {
                 text.lines().count(),
                 "{language:?}"
             );
+        }
+    }
+
+    /// A desecrated or a fractured line is searched by its explicit id ([`TradeGroup::of`]):
+    /// without one, it couldn't be searched at all.
+    #[test]
+    fn every_desecrated_or_fractured_stat_has_an_explicit_id() {
+        for language in [Language::English, Language::French] {
+            let checked: Vec<&Stat> = Stats::of(language)
+                .list
+                .iter()
+                .filter(|stat| {
+                    [TradeGroup::Desecrated, TradeGroup::Fractured]
+                        .into_iter()
+                        .any(|group| !stat.trade_ids(group).is_empty())
+                })
+                .collect();
+            assert!(!checked.is_empty(), "{language:?}: no stat to check");
+            let missing: Vec<&str> = checked
+                .iter()
+                .filter(|stat| stat.trade_ids(TradeGroup::Explicit).is_empty())
+                .map(|stat| stat.reference.as_str())
+                .collect();
+            assert!(missing.is_empty(), "{language:?}: {missing:#?}");
         }
     }
 

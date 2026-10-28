@@ -51,6 +51,11 @@ pub mod color {
     pub const INTELLIGENCE: Color32 = Color32::from_rgb(0x5a, 0xa7, 0xf0);
     /// A modifier at its best tier: a vivid orange that stands out.
     pub const TIER_1: Color32 = Color32::from_rgb(0xff, 0x8c, 0x1a);
+    /// The origin of a modifier, close to the colors of the game: the green of the dexterity
+    /// for a desecrated one, a gold for a fractured one, a cyan for a crafted one.
+    pub const DESECRATED: Color32 = DEXTERITY;
+    pub const FRACTURED: Color32 = Color32::from_rgb(0xc9, 0xad, 0x7a);
+    pub const CRAFTED: Color32 = Color32::from_rgb(0x7c, 0xc7, 0xd9);
     /// The background of the hardcore leagues, also behind the Corrupted tag.
     pub const HARDCORE: Color32 = Color32::from_rgb(0x35, 0x14, 0x17);
     /// The Corrupted tag: white on the background of the hardcore leagues.
@@ -184,6 +189,12 @@ pub mod text {
     #[must_use]
     pub fn tier() -> FontId {
         fonts::text(11.0, Weight::ExtraBold)
+    }
+
+    /// The origin of a modifier, after the range of its tier.
+    #[must_use]
+    pub fn origin() -> FontId {
+        fonts::text(11.0, Weight::SemiBold)
     }
 
     /// An amount of the price block, beside its orb.

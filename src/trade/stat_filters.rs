@@ -361,7 +361,7 @@ impl LineStats {
 mod tests {
     use super::*;
     use crate::filters::Property;
-    use crate::item::{CopiedItem, Item, Range};
+    use crate::item::{CopiedItem, Item, ModifierOrigin, Range};
     use crate::trade::pseudo::Pseudo;
 
     fn parse(text: &str) -> Item {
@@ -438,6 +438,41 @@ mod tests {
         assert_eq!(
             searched("+52 to maximum Life", "", ""),
             stat("explicit.stat_3299347043", None, None)
+        );
+    }
+
+    #[test]
+    fn a_desecrated_or_fractured_line_is_searched_by_its_explicit_id() {
+        let ids_of = |text: &str| -> Vec<Vec<String>> {
+            let item = parse(text);
+            let stats = line_stats(&item);
+            item.modifiers()
+                .iter()
+                .enumerate()
+                .filter(|(_, modifier)| {
+                    matches!(
+                        modifier.origin,
+                        Some(ModifierOrigin::Desecrated | ModifierOrigin::Fractured)
+                    )
+                })
+                .map(|(index, _)| match stats.get(key(index, 0)) {
+                    Some(LineStat::Searched(stat)) => stat.ids.clone(),
+                    other => panic!("searched: {other:?}"),
+                })
+                .collect()
+        };
+
+        assert_eq!(
+            ids_of(include_str!(
+                "../item/test-items/en-rare-crossbow-all-modifiers.txt"
+            )),
+            [["explicit.stat_3336890334"], ["explicit.stat_1368271171"]],
+            "a fractured, then a desecrated line"
+        );
+        assert_eq!(
+            ids_of(include_str!("../item/test-items/fr-rare-body-armour.txt")),
+            [["explicit.stat_378817135"]],
+            "a desecrated line written in French"
         );
     }
 
