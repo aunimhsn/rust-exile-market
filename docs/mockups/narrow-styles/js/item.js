@@ -3,19 +3,35 @@
 const colorAttributes = text => text.replace(/(\d+ )(Str|For)\b/g, '<span class="attr-str">$1$2</span>')
   .replace(/(\d+ )(Dex)\b/g, '<span class="attr-dex">$1$2</span>')
   .replace(/(\d+ )(Int)\b/g, '<span class="attr-int">$1$2</span>');
-const propClass = name => ({ Armour: "attr-str", Evasion: "attr-dex", "Energy Shield": "attr-int" })[name] || "";
+const propClass = name => ({ Armour: "attr-str", Evasion: "attr-dex", "Energy Shield": "attr-int", "Runic Ward": "app-ward", "Sauvegarde runique": "app-ward" })[name] || "";
 
 // The bar of a rare or magic modifier over every tier of its base (13j2): filled to where the roll
 // falls between the lowest roll of its worst tier and the highest of tier 1 (`overTiers` of the section
 // Roll bar), so that a full bar means close to the best possible.
 // The origin of a modifier in words (13k1), in English; `row.originLabel` for another language.
-const ORIGIN_LABEL = { desecrated: "Desecrated", fractured: "Fractured", crafted: "Crafted" };
+// The Vaal modifier of a corrupted unique (13k2d), mutated for the trade site, says "Vaal" in every
+// language, the word of the game (owner's choice, 2026-10-28).
+const ORIGIN_LABEL = { desecrated: "Desecrated", fractured: "Fractured", crafted: "Crafted", mutated: "Vaal" };
+
+// A state tag that is a filter (13k2d): `{ label, state, on, hover, tips }`, lit for the offers of that state
+// only, gray for the offers with or without it; its tooltip says which.
+// A click toggles it, with its tooltip (`tips`: lit, gray), so that the owner can try it.
+const stateTag = t => `<span class="tag app-state-tag app-state-${t.state}${t.on ? " is-on" : ""}${t.hover ? " is-hovered" : ""}"`
+  + ` data-tip-on="${t.tips[0]}" data-tip-off="${t.tips[1]}">`
+  + t.label
+  + `<span class="app-tip">${t.tips[t.on ? 0 : 1]}</span></span>`;
+document.addEventListener("click", event => {
+  const tag = event.target.closest(".app-state-tag");
+  if (!tag) return;
+  const on = tag.classList.toggle("is-on");
+  tag.querySelector(".app-tip").textContent = tag.dataset[on ? "tipOn" : "tipOff"];
+});
 const rareBar = o => `<span class="bar"><i style="width:${(o.share * 100).toFixed(1)}%"></i></span>`;
 
 function item(it, unfolded = false) {
   // Corrupted once or twice, as in the application.
   const tagClass = t => /Corrupt|Corrompu|Double corruption/.test(t) ? "corrupted" : /^\d+ T1$/.test(t) ? "t1" : "";
-  const tags = (it.tags || []).map(t => `<span class="tag ${tagClass(t)}">${t}</span>`).join("");
+  const tags = (it.tags || []).map(t => typeof t === "object" ? stateTag(t) : `<span class="tag ${tagClass(t)}">${t}</span>`).join("");
   const filters = it.filters ? `<span class="filters">${it.filters}</span>` : "";
   // "Show 6 stats" when folded, "Hide stats" when unfolded; French when the label is French.
   const count = Number((it.statsLabel || "").match(/\d+/)?.[0] || 0);
