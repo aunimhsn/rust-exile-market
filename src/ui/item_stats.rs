@@ -95,6 +95,28 @@ const MAX_USUAL_QUALITY: u32 = 20;
 const CHARM_QUALITY: u32 = 10;
 /// The highest required level and item level of a rare for leveling.
 const LEVELING_LEVEL: u32 = 75;
+/// The item levels: the field of the item level stays within them. Checked on the trade site
+/// on 2026-10-28: 262 offers of item level 100 in Forbidden Rites, none above.
+const ITEM_LEVELS: Range = Range {
+    min: 1.0,
+    max: 100.0,
+};
+/// The augmentable sockets an item can have: the field of the sockets stays within them. No
+/// offer had 7 or more on the trade site on 2026-10-28.
+const SOCKETS: Range = Range { min: 0.0, max: 6.0 };
+/// The qualities, of any item: the field of the quality stays within them. Checked on the trade
+/// site on 2026-10-28: Breach rings of 75 % (the quality of a catalyst), none above; the
+/// quality of each kind of item (20 %, an exceptional base, a catalyst) is left to step 13k.
+const QUALITIES: Range = Range {
+    min: 0.0,
+    max: 75.0,
+};
+/// The required levels: the field of the required level stays within them. Checked on the
+/// trade site on 2026-10-28: offers requiring level 90, none above.
+const REQUIRED_LEVELS: Range = Range {
+    min: 1.0,
+    max: 90.0,
+};
 
 /// A small title of the stats.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -210,6 +232,15 @@ impl Limit {
             bounds,
             rolls: range.filter(|_| line.rolls.len() == 1),
             tiers: None,
+        }
+    }
+
+    /// The limit kept within `bounds`, all the values its property can take, widened to hold
+    /// its value: an item the checks didn't meet, or of a patch that raised them, keeps it.
+    fn within(self, bounds: Range) -> Self {
+        Self {
+            bounds: Some(bounds.holding(self.value)),
+            ..self
         }
     }
 
@@ -457,7 +488,8 @@ fn item_filters<'a>(item: &Item, base_type: Option<&'a str>) -> Vec<Stat<'a>> {
     let item_level = item.item_level().map(|level| {
         let level = f64::from(level);
         let checked = item.rarity() == Rarity::Normal;
-        property_filter(Property::ItemLevel, level, Limit::minimum(level), checked)
+        let limit = Limit::minimum(level).within(ITEM_LEVELS);
+        property_filter(Property::ItemLevel, level, limit, checked)
     });
     let category = base_type.and_then(|base_type| game_data::category(item.language(), base_type));
     base_type_filter
@@ -481,7 +513,7 @@ fn sockets_filter(item: &Item, category: Option<Category>) -> Option<Stat<'stati
     Some(property_filter(
         Property::Sockets,
         sockets,
-        Limit::minimum(sockets),
+        Limit::minimum(sockets).within(SOCKETS),
         checked,
     ))
 }
@@ -503,7 +535,7 @@ fn quality_filter(item: &Item, category: Option<Category>) -> Option<Stat<'stati
     Some(property_filter(
         Property::Quality,
         quality,
-        Limit::minimum(quality),
+        Limit::minimum(quality).within(QUALITIES),
         checked,
     ))
 }
@@ -520,7 +552,7 @@ fn required_level_filter(item: &Item) -> Option<Stat<'static>> {
     Some(property_filter(
         Property::RequiredLevel,
         level,
-        Limit::maximum(level),
+        Limit::maximum(level).within(REQUIRED_LEVELS),
         false,
     ))
 }
@@ -2247,6 +2279,81 @@ mod tests {
                 "■ ItemLevel: 82 ≥82",
                 "■ Quality: 24 ≥24",
             ]
+        );
+    }
+
+    /// The filter of `property` among the filters of `item`.
+    fn property_filter_of(item: &Item, property: Property) -> StatFilter {
+        rows(item, None)
+            .into_iter()
+            .find_map(|row| match row {
+                Row::Stat(Stat {
+                    key: FilterKey::Property(key),
+                    filter: Some(filter),
+                    ..
+                }) if key == property => Some(filter),
+                _ => None,
+            })
+            .expect("the filter of the property")
+    }
+
+    /// The value the player types in `half` of the field of `property`, as it is when they
+    /// leave it.
+    fn settled(item: &Item, property: Property, half: Half, typed: &str) -> String {
+        let mut choice = property_filter_of(item, property).default_choice();
+        *choice.text_mut(half) = typed.to_owned();
+        choice.settle(half);
+        choice.text(half).to_owned()
+    }
+
+    #[test]
+    fn the_fields_of_the_properties_stay_within_the_values_of_the_game() {
+        let crossbow = parse(include_str!(
+            "../item/test-items/en-rare-crossbow-all-modifiers.txt"
+        ));
+        let leveling = parse(
+            "Item Class: Body Armours\nRarity: Rare\nHate Shell\nWaxed Jacket\n--------\n\
+             Quality: +23% (augmented)\nEvasion Rating: 120\n--------\n\
+             Requires: Level 40, 30 Dex\n--------\nItem Level: 45",
+        );
+
+        assert_eq!(
+            settled(&crossbow, Property::ItemLevel, Half::Minimum, "5000"),
+            "100"
+        );
+        assert_eq!(
+            settled(&crossbow, Property::ItemLevel, Half::Minimum, "0"),
+            "1"
+        );
+        assert_eq!(
+            settled(&crossbow, Property::Sockets, Half::Minimum, "9"),
+            "6"
+        );
+        assert_eq!(
+            settled(&leveling, Property::Quality, Half::Minimum, "80"),
+            "75"
+        );
+        assert_eq!(
+            settled(&leveling, Property::RequiredLevel, Half::Maximum, "95"),
+            "90"
+        );
+    }
+
+    #[test]
+    fn a_property_out_of_the_values_of_the_game_widens_its_field() {
+        let item = parse(
+            "Item Class: Rings\nRarity: Rare\nStorm Loop\nGold Ring\n--------\n\
+             Item Level: 101",
+        );
+
+        // Its own value stays; a higher one is brought back to it.
+        assert_eq!(
+            settled(&item, Property::ItemLevel, Half::Minimum, "101"),
+            "101"
+        );
+        assert_eq!(
+            settled(&item, Property::ItemLevel, Half::Minimum, "5000"),
+            "101"
         );
     }
 
