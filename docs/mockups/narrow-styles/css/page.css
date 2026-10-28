@@ -1,9 +1,11 @@
 /* The page around the windows: the variant tabs, the sections and their slots. */
 * { box-sizing: border-box; }
-body { margin: 0; background: var(--page); color: var(--page-text); font: 14px/1.4 system-ui, sans-serif; }
+/* The body as wide as the sheet, so that the tabs can stick to the left while the page scrolls sideways. */
+body { margin: 0; width: max-content; min-width: 100vw; background: var(--page); color: var(--page-text); font: 14px/1.4 system-ui, sans-serif; }
 .sheet { padding: 32px 40px 48px; display: grid; gap: 36px; width: max-content; }
 .styles {
-  position: sticky; top: 0; z-index: 1; display: flex; gap: 6px; padding: 12px 40px;
+  /* They follow the scroll, down and sideways, as wide as the window (their groups wrap). */
+  position: sticky; top: 0; left: 0; width: 100vw; z-index: 1; display: flex; flex-wrap: wrap; gap: 6px 0; padding: 12px 40px;
   background: rgba(8, 9, 10, .92); border-bottom: 1px solid #1d1f22; backdrop-filter: blur(6px);
 }
 .styles button {
