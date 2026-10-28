@@ -2282,6 +2282,30 @@ mod tests {
         );
     }
 
+    /// The filter of `property` among the filters of `item`.
+    fn property_filter_of(item: &Item, property: Property) -> StatFilter {
+        rows(item, None)
+            .into_iter()
+            .find_map(|row| match row {
+                Row::Stat(Stat {
+                    key: FilterKey::Property(key),
+                    filter: Some(filter),
+                    ..
+                }) if key == property => Some(filter),
+                _ => None,
+            })
+            .expect("the filter of the property")
+    }
+
+    /// The value the player types in `half` of the field of `property`, as it is when they
+    /// leave it.
+    fn settled(item: &Item, property: Property, half: Half, typed: &str) -> String {
+        let mut choice = property_filter_of(item, property).default_choice();
+        *choice.text_mut(half) = typed.to_owned();
+        choice.settle(half);
+        choice.text(half).to_owned()
+    }
+
     #[test]
     fn the_fields_of_the_properties_stay_within_the_values_of_the_game() {
         let crossbow = parse(include_str!(
@@ -2292,24 +2316,6 @@ mod tests {
              Quality: +23% (augmented)\nEvasion Rating: 120\n--------\n\
              Requires: Level 40, 30 Dex\n--------\nItem Level: 45",
         );
-        // The value the player types, brought back when they leave the half of the field.
-        let settled = |item: &Item, property, half, typed: &str| {
-            let row = rows(item, None)
-                .into_iter()
-                .find(|row| matches!(row, Row::Stat(stat) if stat.key == FilterKey::Property(property)))
-                .expect("the filter");
-            let Row::Stat(Stat {
-                filter: Some(filter),
-                ..
-            }) = row
-            else {
-                panic!("{row:?}");
-            };
-            let mut choice = filter.default_choice();
-            *choice.text_mut(half) = typed.to_owned();
-            choice.settle(half);
-            choice.text(half).to_owned()
-        };
 
         assert_eq!(
             settled(&crossbow, Property::ItemLevel, Half::Minimum, "5000"),
@@ -2339,17 +2345,15 @@ mod tests {
             "Item Class: Rings\nRarity: Rare\nStorm Loop\nGold Ring\n--------\n\
              Item Level: 101",
         );
-        let level = rows(&item, None)
-            .into_iter()
-            .find(|row| matches!(row, Row::Stat(stat) if stat.key == FilterKey::Property(Property::ItemLevel)))
-            .expect("the filter of its item level");
 
+        // Its own value stays; a higher one is brought back to it.
         assert_eq!(
-            limit(&level).bounds,
-            Some(Range {
-                min: 1.0,
-                max: 101.0
-            })
+            settled(&item, Property::ItemLevel, Half::Minimum, "101"),
+            "101"
+        );
+        assert_eq!(
+            settled(&item, Property::ItemLevel, Half::Minimum, "5000"),
+            "101"
         );
     }
 
