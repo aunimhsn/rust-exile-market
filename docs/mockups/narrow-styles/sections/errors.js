@@ -10,6 +10,4 @@ SECTIONS.push(["Errors", [
   ["First launch offline, no prices", win(topBar(), banner("Prices unavailable, retrying…"), empty, foot("poe2scout: no prices yet"))],
   ["Before the first item", win(topBar(), empty, foot("poe2scout 12min ago"))],
   ["Item couldn't be read", win(topBar(), `<div class="band b"><div class="msg">This item couldn't be read.</div><div class="line muted">Copy it again, or copy another item.</div></div>`, foot())],
-  // An item with modifiers copied without their details (no "{ … }" header): nothing priced or searched.
-  ["Item copied without its details", win(topBar(), `<div class="band b"><div class="msg">This item was copied without its details.</div><div class="line muted">Copy it again with Ctrl + Alt + C.</div></div>`, foot())],
 ]]);

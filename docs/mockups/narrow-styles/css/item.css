@@ -150,3 +150,25 @@
 /* A stat without filter but with a roll: its bar and range under its text, from the left edge. */
 .mod2.wide .roll2 { grid-column: 1; }
 .app-sub { color: var(--faint); font-size: 11px; }
+
+/* The endgame modifiers (13k1). */
+/* The origin of a desecrated, fractured or crafted modifier: written after the range of its tier, in its
+   color (decided with the owner on 2026-10-28, against the color of its text and a stripe in the margin). */
+.app-origin-desecrated { --origin: var(--desecrated); }
+.app-origin-fractured { --origin: var(--fractured); }
+.app-origin-crafted { --origin: var(--crafted); }
+.app-origin { margin-left: 6px; font-weight: 600; color: var(--origin); }
+
+/* A modifier not revealed yet: a line without filter, on a faint band of the desecrated green, like the
+   row of the game, its text in the face, size and weight of the modifier lines, from the left edge since
+   it has no checkbox (decided with the owner on 2026-10-28, against green squares like the scrambled
+   letters of the game, the text in green only, and faint). */
+.app-unrevealed { margin: 0 -6px; padding: 3px 6px; border-radius: var(--radius); background: color-mix(in srgb, var(--desecrated) 12%, transparent); }
+.app-unrevealed .text { color: var(--desecrated); }
+
+/* The tag of a line of a Time-Lost jewel, "Small" or "Notable", after its range, in place of the words the
+   game writes before the line (decided with the owner on 2026-10-28, against the whole line). */
+.app-radius {
+  padding: 0 5px; border-radius: var(--radius); background: var(--control); color: var(--weak);
+  font-size: 11px; font-weight: 600;
+}

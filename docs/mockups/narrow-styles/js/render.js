@@ -7,9 +7,15 @@ function render() {
   document.getElementById("styles").innerHTML = Object.entries(VARIANTS).map(([key, v]) =>
     `<div class="group"><span>${v.label}</span>${Object.entries(v.options).map(([value, label]) =>
       `<button type="button" data-variant="${key}" data-value="${value}" aria-pressed="${chosen[key] === value}">${label}</button>`).join("")}</div>`).join("");
+  // Past ten sections, a table of contents under the header links to each, so that the owner sees them
+  // all at once: the title of each section up to its colon.
+  const contents = SECTIONS.length > 10
+    ? `<nav class="contents" aria-label="Sections">${SECTIONS.map(([title], index) =>
+      `<a href="#section-${index + 1}">${title.split(":")[0]}</a>`).join("")}</nav>`
+    : "";
   document.getElementById("sheet").innerHTML = `
-    <header><h1>Style ${t.title}</h1><p>${t.text} Narrow layout, 420 px. Sample data.</p></header>
-    ${SECTIONS.map(([title, slots]) => `<section class="section"><h2>${title}</h2><div class="row">${slots.map(([label, html]) => `<div class="slot"><span>${label}</span>${html}</div>`).join("")}</div></section>`).join("")}`;
+    <header><h1>Style ${t.title}</h1><p>${t.text} Narrow layout, 420 px. Sample data.</p>${contents}</header>
+    ${SECTIONS.map(([title, slots], index) => `<section class="section" id="section-${index + 1}"><h2>${title}</h2><div class="row">${slots.map(([label, html]) => `<div class="slot"><span>${label}</span>${html}</div>`).join("")}</div></section>`).join("")}`;
 }
 
 document.getElementById("styles").addEventListener("click", event => {

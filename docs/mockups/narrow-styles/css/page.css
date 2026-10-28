@@ -1,9 +1,11 @@
 /* The page around the windows: the variant tabs, the sections and their slots. */
 * { box-sizing: border-box; }
-body { margin: 0; background: var(--page); color: var(--page-text); font: 14px/1.4 system-ui, sans-serif; }
+/* The body as wide as the sheet, so that the tabs can stick to the left while the page scrolls sideways. */
+body { margin: 0; width: max-content; min-width: 100vw; background: var(--page); color: var(--page-text); font: 14px/1.4 system-ui, sans-serif; }
 .sheet { padding: 32px 40px 48px; display: grid; gap: 36px; width: max-content; }
 .styles {
-  position: sticky; top: 0; z-index: 1; display: flex; gap: 6px; padding: 12px 40px;
+  /* They follow the scroll, down and sideways, as wide as the window (their groups wrap). */
+  position: sticky; top: 0; left: 0; width: 100vw; z-index: 1; display: flex; flex-wrap: wrap; gap: 6px 0; padding: 12px 40px;
   background: rgba(8, 9, 10, .92); border-bottom: 1px solid #1d1f22; backdrop-filter: blur(6px);
 }
 .styles button {
@@ -19,6 +21,12 @@ body { margin: 0; background: var(--page); color: var(--page-text); font: 14px/1
 .file-warning code { color: #fff; }
 .sheet > header h1 { margin: 0; color: #e8e8e8; font: 600 28px/1.2 system-ui, sans-serif; }
 .sheet > header p { margin: 6px 0 0; max-width: 90ch; }
+/* The table of contents, past ten sections: one link per section, in columns. */
+.contents { margin-top: 14px; display: grid; grid-template-columns: repeat(4, max-content); gap: 4px 28px; font-size: 13px; }
+.contents a { color: #aab0b6; text-decoration: none; }
+.contents a:hover { color: #fff; text-decoration: underline; }
+/* A section reached from the table of contents stops under the tabs, which stay on top. */
+.section { scroll-margin-top: 80px; }
 .section h2 { margin: 0 0 14px; color: #c8c8c8; font: 600 16px/1.2 system-ui, sans-serif; text-transform: uppercase; letter-spacing: .08em; }
 .row { display: flex; gap: 40px; align-items: flex-start; }
 .slot { display: grid; gap: 8px; width: 420px; }
