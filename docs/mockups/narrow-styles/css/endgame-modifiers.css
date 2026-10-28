@@ -25,9 +25,8 @@
 [data-unrevealed="faint"] .app-unrevealed .text { color: var(--faint); }
 [data-unrevealed="colored"] .app-unrevealed .text { color: var(--desecrated); }
 /* "Green band": the line on a faint band of the desecrated green, like the row of the game. */
-/* Its text starts where the text of the other lines starts, after the column of the checkboxes (20 px
-   and a gap of 8 px). */
-[data-unrevealed="band"] .app-unrevealed { margin: 0 -6px; padding: 3px 6px 3px 34px; border-radius: var(--radius); background: color-mix(in srgb, var(--desecrated) 12%, transparent); }
+/* Its text starts at the left edge, like the lines without filter: it has no checkbox. */
+[data-unrevealed="band"] .app-unrevealed { margin: 0 -6px; padding: 3px 6px; border-radius: var(--radius); background: color-mix(in srgb, var(--desecrated) 12%, transparent); }
 /* Its text in the face, size and weight of the modifier lines, only its color changes. */
 [data-unrevealed="band"] .app-unrevealed .text { color: var(--desecrated); font-style: normal; }
 
