@@ -177,6 +177,8 @@ pseudo-strength = +{ $value } total to Strength
 pseudo-dexterity = +{ $value } total to Dexterity
 pseudo-intelligence = +{ $value } total to Intelligence
 pseudo-all-attributes = +{ $value } total to all Attributes
+# In the Item group: the number of unrevealed modifiers searched.
+pseudo-unrevealed-modifiers = Unrevealed modifiers: { $value }
 # The tooltip of a line the trade site can't search (a modifier added by a patch), on two lines.
 filter-unsearchable = The trade site can't search this line.
 filter-unsearchable-hint = The offers may not have it.
@@ -186,6 +188,10 @@ origin-fractured = Fractured
 origin-crafted = Crafted
 # Under the stats of a corrupted item: the search compares it with corrupted offers only.
 corrupted-offers-only = Corrupted offers only, like this item.
+# A desecrated modifier not revealed yet, in its group; and the note under the stats of its item.
+unrevealed-prefix = Unrevealed prefix
+unrevealed-suffix = Unrevealed suffix
+unrevealed-note = An unrevealed modifier can change the item: its other filters start unchecked.
 
 ## Price block
 

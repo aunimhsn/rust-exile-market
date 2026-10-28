@@ -180,6 +180,8 @@ pseudo-strength = +{ $value } de Force au total
 pseudo-dexterity = +{ $value } de Dextérité au total
 pseudo-intelligence = +{ $value } d'Intelligence au total
 pseudo-all-attributes = +{ $value } à tous les Attributs au total
+# Dans le groupe Objet : le nombre de modificateurs non révélés cherché.
+pseudo-unrevealed-modifiers = Modificateurs non révélés : { $value }
 # L'infobulle d'une ligne que le site d'échange ne peut pas chercher (un modificateur ajouté par un patch), sur deux lignes.
 filter-unsearchable = Le site d'échange ne peut pas chercher cette ligne.
 filter-unsearchable-hint = Il se peut que les offres ne l'aient pas.
@@ -189,6 +191,10 @@ origin-fractured = Fissuré
 origin-crafted = Artisanat
 # Sous les stats d'un objet corrompu : la recherche ne le compare qu'aux offres corrompues.
 corrupted-offers-only = Offres corrompues seulement, comme cet objet.
+# Un modificateur profané pas encore révélé, dans son groupe ; et la note sous les stats de son objet.
+unrevealed-prefix = Préfixe non révélé
+unrevealed-suffix = Suffixe non révélé
+unrevealed-note = Un modificateur non révélé peut changer l'objet : ses autres filtres partent décochés.
 
 ## Bloc prix
 

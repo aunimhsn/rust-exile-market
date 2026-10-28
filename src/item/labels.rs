@@ -51,6 +51,9 @@ pub(super) struct Labels {
     pub modifier_kinds: &'static [(&'static str, ModifierKind)],
     /// The words before the kind in a modifier header.
     pub modifier_origins: &'static [(&'static str, ModifierOrigin)],
+    /// The only line of a desecrated modifier not revealed yet, for each affix, under its
+    /// header without tier (`{ Prefix Modifier "Veiled" }`).
+    pub unrevealed: &'static [(&'static str, Affix)],
 }
 
 /// A word written before or after a name, e.g. "Superior" in "Superior Divine Crown".
@@ -145,6 +148,10 @@ static ENGLISH: Labels = Labels {
         ("Desecrated", ModifierOrigin::Desecrated),
         ("Fractured", ModifierOrigin::Fractured),
     ],
+    unrevealed: &[
+        ("Desecrated Prefix", Affix::Prefix),
+        ("Desecrated Suffix", Affix::Suffix),
+    ],
 };
 
 static FRENCH: Labels = Labels {
@@ -206,6 +213,10 @@ static FRENCH: Labels = Labels {
         ("Profané", ModifierOrigin::Desecrated),
         ("Fissuré", ModifierOrigin::Fractured),
     ],
+    unrevealed: &[
+        ("Préfixe profané", Affix::Prefix),
+        ("Suffixe profané", Affix::Suffix),
+    ],
 };
 
 #[cfg(test)]
@@ -254,7 +265,7 @@ mod tests {
     }
 
     #[test]
-    fn every_language_names_every_rarity_state_and_origin() {
+    fn every_language_names_every_rarity_state_origin_and_unrevealed_affix() {
         for language in Language::ALL {
             let labels = Labels::of(language);
             for rarity in every_rarity() {
@@ -273,6 +284,12 @@ mod tests {
                 assert!(
                     labels.modifier_origins.iter().any(|&(_, o)| o == origin),
                     "{language:?} {origin:?}"
+                );
+            }
+            for affix in [Affix::Prefix, Affix::Suffix] {
+                assert!(
+                    labels.unrevealed.iter().any(|&(_, a)| a == affix),
+                    "{language:?} {affix:?}"
                 );
             }
         }

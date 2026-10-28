@@ -375,7 +375,7 @@ fn read_headed(item: &mut Item, lines: &[&str], labels: &Labels) {
                     Modifier::unknown()
                 })
                 // The marker of a fixed value is too long for the narrow layout.
-                .push_line(&line.replacen(labels.fixed_value, "", 1)),
+                .push_line(&line.replacen(labels.fixed_value, "", 1), labels),
         }
     }
     item.modifiers.extend(current);

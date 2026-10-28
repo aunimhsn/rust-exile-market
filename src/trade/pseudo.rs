@@ -10,7 +10,8 @@
 
 use crate::filters::StatKey;
 
-/// A pseudo total.
+/// A pseudo stat of the trade site: a total it adds up, or the number of unrevealed
+/// modifiers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Pseudo {
     /// Fire, cold and lightning, each element of a line counted.
@@ -23,6 +24,8 @@ pub enum Pseudo {
     Intelligence,
     /// The `+# to all Attributes` lines alone.
     AllAttributes,
+    /// The desecrated modifiers not revealed yet; no rule adds it up.
+    UnrevealedModifiers,
 }
 
 impl Pseudo {
@@ -38,6 +41,7 @@ impl Pseudo {
             Self::Dexterity => "pseudo.pseudo_total_dexterity",
             Self::Intelligence => "pseudo.pseudo_total_intelligence",
             Self::AllAttributes => "pseudo.pseudo_total_all_attributes",
+            Self::UnrevealedModifiers => "pseudo.pseudo_number_of_unrevealed_mods",
         }
     }
 }

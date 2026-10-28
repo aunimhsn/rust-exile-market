@@ -372,6 +372,7 @@ mod tests {
             name: None,
             tier: None,
             tags: Vec::new(),
+            unrevealed: false,
             lines: lines.iter().map(|line| StatLine::parse(line)).collect(),
         }
     }

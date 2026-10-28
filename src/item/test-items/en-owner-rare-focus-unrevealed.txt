@@ -1,0 +1,21 @@
+Item Class: Foci
+Rarity: Rare
+Foe Ward
+Plumed Focus
+--------
+Energy Shield: 72 (augmented)
+--------
+Requires: Level 36, 52 Int
+--------
+Item Level: 39
+--------
+{ Prefix Modifier "Scholar's" (Tier: 4) — Damage, Caster }
+52(45-54)% increased Spell Damage
+{ Prefix Modifier "Radiating" (Tier: 6) — Energy Shield }
++36(36-41) to maximum Energy Shield
+{ Suffix Modifier "of the Yeti" (Tier: 5) — Elemental, Cold, Resistance }
++24(21-25)% to Cold Resistance
+{ Suffix Modifier "of the Drake" (Tier: 6) — Elemental, Fire, Resistance }
++18(16-20)% to Fire Resistance
+{ Prefix Modifier "Veiled" }
+Desecrated Prefix
