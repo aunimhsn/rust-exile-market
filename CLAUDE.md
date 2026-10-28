@@ -23,6 +23,7 @@
 
 - Before writing code, describe the expected behavior of the application in `specs.md`, then split the work into steps in `roadmap.md`, and write the technical choices and their reasons in `docs/technical-choices.md`.
 - At the start of each session, read `roadmap.md` to know the progress; when asked to continue, resume at the first unchecked step.
+- At the start of each step, before writing any code, check whether it can be split into small sub-steps (13j1, 13j2…), and propose the split to the owner: each sub-step is one pull request with one coherent change that can be reviewed in one pass and tested on its own, without leaving the application broken in between. Don't split below that: each pull request also costs a review, the checks and an archive. Write the agreed split in `roadmap.md`.
 - Each step is delivered in its own pull request, which checks the step's box in `roadmap.md`.
 - Keep `roadmap.md` consistent with `specs.md` when the specifications change.
 - Keep `roadmap.md` short, since it is read at every session: the steps to come in detail, one line per step done with its pull requests. When the pull request of a step (or of a sub-step) is merged, move the detail of the step to `docs/roadmap-archive.md`. Reference notes (technical choices, rules of the external services) live in `docs/`, linked from `roadmap.md`, and are read only by the steps that need them.
