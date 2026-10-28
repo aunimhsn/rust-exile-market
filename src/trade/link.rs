@@ -112,9 +112,10 @@ impl<'a> TradeTarget<'a> {
 /// corrupted item is compared with corrupted offers only, and a clean one with clean ones; a
 /// clean normal, magic or rare item, which can still be crafted, with offers neither
 /// sanctified nor mirrored either, like Exiled Exchange 2; a unique is searched with the stats
-/// of its `filters` the player checked, the other items with all their filters, the category of their base type when the player unchecked it (a
-/// bow among all the bows); any base type for a base the game data doesn't know, when another
-/// filter narrows the search (never a search of every item of the league).
+/// of its `filters` the player checked, the other items with all their filters, the category
+/// of their base type when the player unchecked it (a bow among all the bows); any base type
+/// for a base the game data doesn't know, when another filter narrows the search (never a
+/// search of every item of the league).
 #[must_use]
 pub fn query(item: &Item, target: &TradeTarget, filters: SearchFilters) -> Query {
     let mut query = target.query();

@@ -194,7 +194,7 @@ corrupted-offers-only = Offres corrompues seulement, comme cet objet.
 # Un modificateur profané pas encore révélé, dans son groupe ; et la note sous les stats de son objet.
 unrevealed-prefix = Préfixe non révélé
 unrevealed-suffix = Suffixe non révélé
-unrevealed-note = Un modificateur non révélé peut changer l'objet : ses autres filtres partent décochés.
+unrevealed-note = Un modificateur non révélé peut changer l'objet : ses autres stats partent décochées.
 
 ## Bloc prix
 

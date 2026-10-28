@@ -3,7 +3,7 @@
 // - the origin of a desecrated, fractured or crafted modifier written after its range;
 // - the green of the evasion for the desecrated modifiers;
 // - a desecrated modifier not revealed yet, a line without filter on a green band, the item getting a
-//   filter of its number of unrevealed modifiers and its other filters unchecked, like Exiled Exchange 2;
+//   filter of its number of unrevealed modifiers and its other stats unchecked, like Exiled Exchange 2;
 // - a modifier of one tier only (every modifier of a jewel, of a lord of the Abyss, of a waystone, of a
 //   tablet, of the Breach), whose T1 means "the only one", without tier, its bar over its own range,
 //   which the copy gives;
@@ -78,7 +78,7 @@ const sceptreSanctifiedStats = [
   { mod: "29% reduced Attribute Requirements", check: false, min: 26, tier: 2, range: "30", over: { share: .7 } },
   { mod: "50% increased Presence Area of Effect", check: false, min: 45, tier: 3, range: "46–55", over: { share: .6 } },
   { unrevealed: "Unrevealed suffix" },
-  { note: "An unrevealed modifier can change the item: its other filters start unchecked." },
+  { note: "An unrevealed modifier can change the item: its other stats start unchecked." },
 ];
 
 // Focus with an unrevealed prefix, in French too.
@@ -97,7 +97,7 @@ const focusUnrevealedStats = [
   { group: "Suffixes", fill: "2 of 3 · 1 open" },
   { mod: "+24% to Cold Resistance", check: false, min: 21, tier: 5, range: "21–25", over: { share: .45 } },
   { mod: "+18% to Fire Resistance", check: false, min: 16, tier: 6, range: "16–20", over: { share: .3 } },
-  { note: "An unrevealed modifier can change the item: its other filters start unchecked." },
+  { note: "An unrevealed modifier can change the item: its other stats start unchecked." },
 ];
 const FOCUS_UNREVEALED_FR = { rarity: "rare", name: "Protecteur ennemi", base: "Focus à plumes", cls: "Foci", tags: ["niv. 39"], props: [["Bouclier d'énergie", "72"]], req: "Niveau requis 36 · 52 Int", statsLabel: "Statistiques (5)", filters: "2 filtres", tradeLabel: "Voir sur l'échange", tradeTitle: "Ouvrir la recherche sur le site d'échange" };
 const focusUnrevealedStatsFr = [
@@ -112,7 +112,7 @@ const focusUnrevealedStatsFr = [
   { group: "Suffixes", fill: "2 sur 3 · 1 libre" },
   { mod: "+24% à la Résistance au froid", check: false, min: 21, tier: 5, range: "21–25", over: { share: .45 } },
   { mod: "+18% à la Résistance au feu", check: false, min: 16, tier: 6, range: "16–20", over: { share: .3 } },
-  { note: "Un modificateur non révélé peut changer l'objet : ses autres filtres partent décochés." },
+  { note: "Un modificateur non révélé peut changer l'objet : ses autres stats partent décochées." },
 ];
 
 // A lord of the Abyss: Kurgal, one tier only, on two lines.

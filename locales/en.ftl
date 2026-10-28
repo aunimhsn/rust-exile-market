@@ -191,7 +191,7 @@ corrupted-offers-only = Corrupted offers only, like this item.
 # A desecrated modifier not revealed yet, in its group; and the note under the stats of its item.
 unrevealed-prefix = Unrevealed prefix
 unrevealed-suffix = Unrevealed suffix
-unrevealed-note = An unrevealed modifier can change the item: its other filters start unchecked.
+unrevealed-note = An unrevealed modifier can change the item: its other stats start unchecked.
 
 ## Price block
 
