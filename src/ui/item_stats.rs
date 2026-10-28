@@ -280,7 +280,12 @@ impl StatFilter {
 enum StatText<'a> {
     /// A line of a modifier.
     Line(&'a str),
-    BaseType(&'a str),
+    /// The base type, with the item class searched in its place when it is unchecked; none
+    /// for a base the game data doesn't know, searched among any base instead.
+    BaseType {
+        base_type: &'a str,
+        class: Option<&'a str>,
+    },
     /// A property of the item, with its value.
     Property(Property, f64),
     Pseudo(Pseudo, f64),
@@ -290,7 +295,7 @@ impl<'a> StatText<'a> {
     fn text(self, i18n: &Translator) -> Cow<'a, str> {
         match self {
             Self::Line(text) => Cow::Borrowed(text),
-            Self::BaseType(base_type) => Cow::Owned(i18n.filter_base_type(base_type)),
+            Self::BaseType { base_type, .. } => Cow::Owned(i18n.filter_base_type(base_type)),
             Self::Property(property, value) => {
                 Cow::Owned(i18n.filter_property(property, &format::number(value)))
             }
@@ -471,13 +476,16 @@ fn searchable(stat: &mut Stat<'_>, line: Option<&LineStat>) {
 }
 
 /// The filters of the properties of a rare, magic or normal item, like Exiled Exchange 2: its
-/// base type, checked; its item level, checked on a normal item only (a player who checks it on
+/// base type, checked, and unchecked its item class searched in its place; its item level, checked on a normal item only (a player who checks it on
 /// another usually looks for a level of crafting), with the level of the item as its minimum;
 /// then its sockets, its quality and its required level when they are filters.
-fn item_filters<'a>(item: &Item, base_type: Option<&'a str>) -> Vec<Stat<'a>> {
+fn item_filters<'a>(item: &'a Item, base_type: Option<&'a str>) -> Vec<Stat<'a>> {
     let base_type_filter = base_type.map(|base_type| Stat {
         key: FilterKey::BaseType,
-        text: StatText::BaseType(base_type),
+        text: StatText::BaseType {
+            base_type,
+            class: game_data::trade_category(item.language(), base_type).map(|_| item.class()),
+        },
         filter: Some(StatFilter {
             checked: true,
             limit: None,
@@ -1318,13 +1326,14 @@ fn stat_row(ui: &mut Ui, stat: &Stat<'_>, filters: &mut Filters, i18n: &Translat
                 ui,
                 &text,
                 stat.roll.as_ref(),
+                None,
                 (width - GUTTER - GAP - GAP - RANGE_COLUMN).max(0.0),
                 bar,
             );
             return;
         }
         let Some(filter) = stat.filter else {
-            stat_text(ui, &text, stat.roll.as_ref(), width, bar);
+            stat_text(ui, &text, stat.roll.as_ref(), None, width, bar);
             return;
         };
         let mut choice = filters.get(stat.key, || filter.default_choice());
@@ -1339,10 +1348,17 @@ fn stat_row(ui: &mut Ui, stat: &Stat<'_>, filters: &mut Filters, i18n: &Translat
         } else {
             RANGE_COLUMN
         };
+        let note = match stat.text {
+            StatText::BaseType {
+                class: Some(class), ..
+            } if !choice.checked => Some(i18n.filter_item_class(class)),
+            _ => None,
+        };
         stat_text(
             ui,
             &text,
             stat.roll.as_ref(),
+            note.as_deref(),
             (width - GUTTER - GAP - GAP - column).max(0.0),
             bar,
         );
@@ -1356,14 +1372,27 @@ fn stat_row(ui: &mut Ui, stat: &Stat<'_>, filters: &mut Filters, i18n: &Translat
     });
 }
 
-/// The text of a stat and its roll, `width` across.
-fn stat_text(ui: &mut Ui, text: &str, roll: Option<&Roll>, width: f32, bar: RollBar) {
+/// The text of a stat and its roll, or a `note` in faint text under it, `width` across.
+fn stat_text(
+    ui: &mut Ui,
+    text: &str,
+    roll: Option<&Roll>,
+    note: Option<&str>,
+    width: f32,
+    bar: RollBar,
+) {
     ui.allocate_ui_with_layout(vec2(width, 0.0), Layout::top_down(Align::Min), |ui| {
         ui.set_width(width);
         ui.add(Label::new(clamped(text)).wrap());
         if let Some(roll) = roll {
             ui.add_space(ROLL_GAP);
             roll_line(ui, roll, bar);
+        }
+        if let Some(note) = note {
+            ui.add_space(ROLL_GAP);
+            let galley = widgets::text_line(ui, note, text::roll());
+            let (rect, _) = ui.allocate_exact_size(galley.size(), Sense::hover());
+            ui.painter().galley(rect.min, galley, color::FAINT);
         }
     });
 }
@@ -1724,7 +1753,7 @@ mod tests {
                     };
                     let text = match text {
                         StatText::Line(text) => text.to_owned(),
-                        StatText::BaseType(base_type) => format!("Base: {base_type}"),
+                        StatText::BaseType { base_type, .. } => format!("Base: {base_type}"),
                         StatText::Property(property, value) => {
                             format!("{property:?}: {}", format::number(value))
                         }
@@ -2279,6 +2308,31 @@ mod tests {
                 "■ ItemLevel: 82 ≥82",
                 "■ Quality: 24 ≥24",
             ]
+        );
+    }
+
+    #[test]
+    fn the_base_type_tells_the_item_class_searched_when_it_is_unchecked() {
+        let class_of = |text: &str| {
+            let item = parse(text);
+            rows(&item, None).into_iter().find_map(|row| match row {
+                Row::Stat(Stat {
+                    text: StatText::BaseType { class, .. },
+                    ..
+                }) => Some(class.map(str::to_owned)),
+                _ => None,
+            })
+        };
+
+        // The item class of the copied text, in its language.
+        assert_eq!(
+            class_of(include_str!("../item/test-items/fr-rare-body-armour.txt")),
+            Some(Some("Armures".to_owned()))
+        );
+        // A base the game data doesn't know is searched among any base instead.
+        assert_eq!(
+            class_of("Item Class: Rings\nRarity: Rare\nWoe Loop\nMystery Ring"),
+            Some(None)
         );
     }
 

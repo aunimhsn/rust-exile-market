@@ -389,6 +389,7 @@ pub(super) mod tests {
         ItemQuery {
             name: Some("Andvarius".to_owned()),
             base_type: Some("Gold Ring".to_owned()),
+            category: None,
             properties: Vec::new(),
             rarity: Some(RarityFilter::Unique),
             corrupted: None,

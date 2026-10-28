@@ -90,6 +90,47 @@ impl Category {
             | Self::Ring => 0,
         }
     }
+
+    /// The id of the category on the trade site (`weapon.bow`), as Exiled Exchange 2 maps it
+    /// (`CATEGORY_TO_TRADE_ID`); a flask by the `tags` of its base, since the trade site tells
+    /// the life flasks from the mana flasks. Checked on the trade site on 2026-10-28.
+    fn trade_id(self, tags: &[String]) -> &'static str {
+        let tagged = |tag: &str| tags.iter().any(|candidate| candidate == tag);
+        match self {
+            Self::Amulet => "accessory.amulet",
+            Self::Belt => "accessory.belt",
+            Self::Ring => "accessory.ring",
+            Self::BodyArmour => "armour.chest",
+            Self::Boots => "armour.boots",
+            Self::Buckler => "armour.buckler",
+            Self::Focus => "armour.focus",
+            Self::Gloves => "armour.gloves",
+            Self::Helmet => "armour.helmet",
+            Self::Quiver => "armour.quiver",
+            Self::Shield => "armour.shield",
+            Self::Charm => "flask.charm",
+            Self::Flask if tagged("life_flask") => "flask.life",
+            Self::Flask if tagged("mana_flask") => "flask.mana",
+            Self::Flask => "flask",
+            Self::Jewel => "jewel",
+            Self::Bow => "weapon.bow",
+            Self::Crossbow => "weapon.crossbow",
+            Self::Dagger => "weapon.dagger",
+            Self::Flail => "weapon.flail",
+            Self::OneHandAxe => "weapon.oneaxe",
+            Self::OneHandMace => "weapon.onemace",
+            Self::OneHandSword => "weapon.onesword",
+            Self::Sceptre => "weapon.sceptre",
+            Self::Spear => "weapon.spear",
+            Self::Staff => "weapon.staff",
+            Self::Talisman => "weapon.talisman",
+            Self::TwoHandAxe => "weapon.twoaxe",
+            Self::TwoHandMace => "weapon.twomace",
+            Self::TwoHandSword => "weapon.twosword",
+            Self::Wand => "weapon.wand",
+            Self::Warstaff => "weapon.warstaff",
+        }
+    }
 }
 
 /// A base, as the generator writes it.
@@ -127,6 +168,14 @@ fn base(language: Language, name: &str) -> Option<&'static BaseData> {
 #[must_use]
 pub fn category(language: Language, name: &str) -> Option<Category> {
     base(language, name).map(|base| base.category)
+}
+
+/// The id on the trade site of the category of the base type `name` in `language`, without
+/// "Exceptional" nor "Superior" (`weapon.bow` for `Gemini Bow`); none for a base the data
+/// doesn't know.
+#[must_use]
+pub fn trade_category(language: Language, name: &str) -> Option<&'static str> {
+    base(language, name).map(|base| base.category.trade_id(&base.tags))
 }
 
 /// The tags of the base type `name` in `language` that tell where a modifier rolls; none for a
@@ -171,6 +220,37 @@ mod tests {
         ] {
             // The generator writes each name once.
             assert_eq!(read.len(), text.lines().count());
+        }
+    }
+
+    #[test]
+    fn a_base_has_the_category_of_the_trade_site_and_a_flask_its_kind() {
+        assert_eq!(
+            trade_category(Language::English, "Gemini Bow"),
+            Some("weapon.bow")
+        );
+        assert_eq!(
+            trade_category(Language::French, "Targe de mammouth"),
+            Some("armour.shield")
+        );
+        assert_eq!(
+            trade_category(Language::English, "Aegis Quarterstaff"),
+            Some("weapon.warstaff")
+        );
+        assert_eq!(
+            trade_category(Language::English, "Ultimate Life Flask"),
+            Some("flask.life")
+        );
+        assert_eq!(
+            trade_category(Language::English, "Ultimate Mana Flask"),
+            Some("flask.mana")
+        );
+        assert_eq!(trade_category(Language::English, "Mystery Ring"), None);
+        // Every flask of the data is a life or a mana flask.
+        for bases in [&ENGLISH, &FRENCH] {
+            for base in bases.values() {
+                assert_ne!(base.category.trade_id(&base.tags), "flask");
+            }
         }
     }
 

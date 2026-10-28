@@ -625,6 +625,7 @@ mod tests {
             query: Query::Items(ItemQuery {
                 name: None,
                 base_type: Some("Gemini Bow".to_owned()),
+                category: None,
                 properties: Vec::new(),
                 rarity: None,
                 corrupted: Some(false),

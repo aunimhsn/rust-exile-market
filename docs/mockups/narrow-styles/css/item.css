@@ -149,3 +149,4 @@
 .app-warning:hover .app-tip, .app-warning.is-hovered .app-tip { display: block; }
 /* A stat without filter but with a roll: its bar and range under its text, from the left edge. */
 .mod2.wide .roll2 { grid-column: 1; }
+.app-sub { color: var(--faint); font-size: 11px; }

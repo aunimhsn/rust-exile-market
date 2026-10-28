@@ -7,6 +7,7 @@ use serde_json::json;
 
 use super::host;
 use super::query::{self, ItemQuery, Query, RarityFilter, SearchFilters};
+use crate::game_data;
 use crate::http;
 use crate::item::{Item, Rarity};
 use crate::item_names::ItemNames;
@@ -85,6 +86,7 @@ impl<'a> TradeTarget<'a> {
             Query::Items(ItemQuery {
                 name: name.map(str::to_owned),
                 base_type: Some(base_type.to_owned()),
+                category: None,
                 rarity,
                 corrupted: None,
                 properties: Vec::new(),
@@ -107,18 +109,26 @@ impl<'a> TradeTarget<'a> {
 /// The search of `item` for `target`: its corrupted state is always a filter, so that a
 /// corrupted item is compared with corrupted offers only, and a clean one with clean ones; a
 /// unique is searched with the stats of its `filters` the player checked, the other items
-/// with all their filters, any base type when the player unchecked it and another filter
-/// narrows the search (never a search of every item of the league).
+/// with all their filters, the category of their base type when the player unchecked it (a
+/// bow among all the bows); any base type for a base the game data doesn't know, when another
+/// filter narrows the search (never a search of every item of the league).
 #[must_use]
 pub fn query(item: &Item, target: &TradeTarget, filters: SearchFilters) -> Query {
     let mut query = target.query();
     if let Query::Items(items) = &mut query {
         items.corrupted = Some(item.is_corrupted());
-        match target {
+        match *target {
             TradeTarget::Unique { .. } => items.stats = filters.stats,
-            TradeTarget::Base { .. } => {
-                if filters.any_base && filters.narrows() {
-                    items.base_type = None;
+            TradeTarget::Base { base_type } => {
+                if filters.any_base {
+                    match game_data::trade_category(item.language(), base_type) {
+                        Some(category) => {
+                            items.base_type = None;
+                            items.category = Some(category);
+                        }
+                        None if filters.narrows() => items.base_type = None,
+                        None => {}
+                    }
                 }
                 items.properties = filters.properties;
                 items.stats = filters.stats;
@@ -357,46 +367,66 @@ mod tests {
         assert_eq!(searched(&rare, true).base_type, None);
     }
 
-    #[test]
-    fn the_base_type_is_searched_when_nothing_else_narrows_the_search() {
-        let rare = parse("Item Class: Rings\nRarity: Rare\nWoe Loop\nRuby Ring");
-        let target = target(&rare, None, None).expect("a target");
-        let base_type = |filters| match super::query(&rare, &target, filters) {
-            Query::Items(items) => items.base_type,
+    /// The base type and the category `item` is searched with, its base type unchecked when
+    /// `any_base`, with a minimum item level when `narrowed`.
+    fn searched_base(
+        item: &Item,
+        any_base: bool,
+        narrowed: bool,
+    ) -> (Option<String>, Option<&str>) {
+        let target = target(item, None, None).expect("a target");
+        let filters = SearchFilters {
+            any_base,
+            properties: vec![PropertyFilter {
+                property: Property::ItemLevel,
+                minimum: narrowed.then_some(81.0),
+                maximum: None,
+            }],
+            stats: Vec::new(),
+        };
+        match super::query(item, &target, filters) {
+            Query::Items(items) => (items.base_type, items.category),
             Query::Exchange(_) => panic!("a search of items"),
-        };
-        let item_level = |minimum| PropertyFilter {
-            property: Property::ItemLevel,
-            minimum,
-            maximum: None,
-        };
+        }
+    }
+
+    #[test]
+    fn the_base_type_unchecked_searches_its_category() {
+        let rare = parse("Item Class: Rings\nRarity: Rare\nWoe Loop\nRuby Ring");
+        assert_eq!(
+            searched_base(&rare, false, true),
+            (Some("Ruby Ring".to_owned()), None)
+        );
+        // A ring among all the rings, also when nothing else narrows the search.
+        for narrowed in [false, true] {
+            assert_eq!(
+                searched_base(&rare, true, narrowed),
+                (None, Some("accessory.ring"))
+            );
+        }
+        // In French, and a flask by its kind: the trade site tells the life flasks from the
+        // mana flasks.
+        let french = parse(include_str!("../item/test-items/fr-rare-body-armour.txt"));
+        assert_eq!(
+            searched_base(&french, true, false),
+            (None, Some("armour.chest"))
+        );
+        let flask = parse("Item Class: Mana Flasks\nRarity: Normal\nUltimate Mana Flask");
+        assert_eq!(
+            searched_base(&flask, true, false),
+            (None, Some("flask.mana"))
+        );
+    }
+
+    #[test]
+    fn a_base_the_game_data_doesnt_know_is_searched_when_nothing_else_narrows_the_search() {
+        let rare = parse("Item Class: Rings\nRarity: Rare\nWoe Loop\nMystery Ring");
 
         assert_eq!(
-            base_type(SearchFilters {
-                any_base: true,
-                ..SearchFilters::default()
-            })
-            .as_deref(),
-            Some("Ruby Ring")
+            searched_base(&rare, true, false),
+            (Some("Mystery Ring".to_owned()), None)
         );
-        // A property without limit narrows nothing.
-        assert_eq!(
-            base_type(SearchFilters {
-                any_base: true,
-                properties: vec![item_level(None)],
-                stats: Vec::new(),
-            })
-            .as_deref(),
-            Some("Ruby Ring")
-        );
-        assert_eq!(
-            base_type(SearchFilters {
-                any_base: true,
-                properties: vec![item_level(Some(81.0))],
-                stats: Vec::new(),
-            }),
-            None
-        );
+        assert_eq!(searched_base(&rare, true, true), (None, None));
     }
 
     #[test]

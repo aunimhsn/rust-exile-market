@@ -160,6 +160,8 @@ filter-rolls = Rolls { $low } to { $high }
 filter-lower-better = Lower is better
 # The filters of the properties of an item, with their value.
 filter-base-type = Base: { $base }
+# Under the base type unchecked: the item class of the copied item, searched in its place.
+filter-item-class = Class searched: { $class }
 filter-item-level = Item level: { $value }
 filter-sockets = Sockets: { $value }
 filter-quality = Quality: { $value }%
