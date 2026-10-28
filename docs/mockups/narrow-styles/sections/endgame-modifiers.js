@@ -9,6 +9,8 @@
 // - a modifier of one tier only (every modifier of a jewel, of a lord of the Abyss, of a waystone, of a
 //   tablet, of the Breach), whose T1 means "the only one", without tier, its bar over its own range,
 //   which the copy gives;
+// - a line whose only value is the one of the copy (`1% of Damage taken Recouped as Life`, written
+//   without range) has neither bar nor range field, only its checkbox, as the specifications say;
 // - the lines of a Time-Lost jewel without their first words, a tag "Small" or "Notable" after their
 //   range.
 // A sanctified item has values outside the range of their tier (`+74(80-89) to maximum Mana`), shown as
@@ -147,7 +149,7 @@ const timeLostStats = [
   { radius: NOTABLE, mod: "7% faster start of Energy Shield Recharge", check: true, min: 6, single: true, range: "5–7", share: 1 },
   { group: "Suffixes", fill: "2 of 2" },
   { radius: SMALL, mod: "1% increased Mana Regeneration Rate", check: true, min: 1, single: true, range: "1–2", share: 0 },
-  { radius: NOTABLE, mod: "1% of Damage taken Recouped as Life", check: true, min: 1 },
+  { radius: NOTABLE, mod: "1% of Damage taken Recouped as Life", check: true },
 ];
 const SMALL_FR = ["Les Talents Mineurs dans le Rayon octroient également", "Mineurs"];
 const NOTABLE_FR = ["Les Talents éminents dans le Rayon octroient également", "Éminents"];
@@ -161,7 +163,7 @@ const timeLostStatsFr = [
   { radius: NOTABLE_FR, mod: "Le Démarrage de la Recharge du Bouclier d'énergie est 7% plus rapide", check: true, min: 6, single: true, range: "5–7", share: 1 },
   { group: "Suffixes", fill: "2 sur 2" },
   { radius: SMALL_FR, mod: "1% d'Augmentation du Taux de Régénération de Mana", check: true, min: 1, single: true, range: "1–2", share: 0 },
-  { radius: NOTABLE_FR, mod: "1% des Dégâts subis sont Recouvrés sous forme de Vie", check: true, min: 1 },
+  { radius: NOTABLE_FR, mod: "1% des Dégâts subis sont Recouvrés sous forme de Vie", check: true },
 ];
 
 // Breach ring: a modifier of the Genesis tree written without tier (one tier only), a catalyst quality of
