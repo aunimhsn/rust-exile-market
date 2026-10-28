@@ -56,6 +56,11 @@ pub mod color {
     pub const DESECRATED: Color32 = DEXTERITY;
     pub const FRACTURED: Color32 = Color32::from_rgb(0xc9, 0xad, 0x7a);
     pub const CRAFTED: Color32 = Color32::from_rgb(0x7c, 0xc7, 0xd9);
+    /// The Vaal modifier of a corrupted unique, in the corrupted red of the game.
+    pub const VAAL: Color32 = Color32::from_rgb(0xe0, 0x42, 0x3a);
+    /// The label of the Runic Ward of a runeforged base, a defence without attribute: a sky
+    /// blue lighter than the energy shield blue, written next to it.
+    pub const RUNIC_WARD: Color32 = Color32::from_rgb(0x8a, 0xcb, 0xf6);
     /// The band of an unrevealed modifier: 12 % of the desecrated green (`#3fbf4f`),
     /// premultiplied, as in the mock-up.
     pub const UNREVEALED_BAND: Color32 = Color32::from_rgba_premultiplied(8, 23, 9, 31);

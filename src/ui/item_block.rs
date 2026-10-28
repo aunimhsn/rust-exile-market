@@ -140,6 +140,8 @@ enum BaseValue {
     EnergyShield(u32),
     /// The chance to block, in percent.
     Block(u32),
+    /// The defence of a runeforged base, without attribute.
+    RunicWard(u32),
 }
 
 impl BaseValue {
@@ -152,16 +154,18 @@ impl BaseValue {
             Self::Evasion(_) => Message::DefenceEvasion,
             Self::EnergyShield(_) => Message::DefenceEnergyShield,
             Self::Block(_) => Message::DefenceBlock,
+            Self::RunicWard(_) => Message::DefenceRunicWard,
         }
     }
 
     /// The color of the label: the one of the attribute a defence comes from, as in the
-    /// game.
+    /// game; a sky blue of its own for the Runic Ward, which comes from none.
     fn label_color(self) -> Color32 {
         match self {
             Self::Armour(_) => color::STRENGTH,
             Self::Evasion(_) => color::DEXTERITY,
             Self::EnergyShield(_) => color::INTELLIGENCE,
+            Self::RunicWard(_) => color::RUNIC_WARD,
             Self::Dps(..) | Self::Block(_) => color::WEAK,
         }
     }
@@ -172,7 +176,8 @@ impl BaseValue {
             Self::Dps(_, value)
             | Self::Armour(value)
             | Self::Evasion(value)
-            | Self::EnergyShield(value) => value.to_string(),
+            | Self::EnergyShield(value)
+            | Self::RunicWard(value) => value.to_string(),
         }
     }
 }
@@ -519,6 +524,7 @@ impl<'a> ItemBlock<'a> {
             defences.evasion.map(BaseValue::Evasion),
             defences.energy_shield.map(BaseValue::EnergyShield),
             defences.block.map(BaseValue::Block),
+            defences.runic_ward.map(BaseValue::RunicWard),
         ]
         .into_iter()
         .flatten()
@@ -700,6 +706,31 @@ mod tests {
             shield.base_values,
             ["Armure 112", "Évasion 102", "Blocage 25%"]
         );
+    }
+
+    #[test]
+    fn a_runeforged_base_ends_its_defences_with_its_runic_ward_in_sky_blue() {
+        let english = english(include_str!(
+            "../item/test-items/en-owner-rare-helmet-runeforged.txt"
+        ));
+        let french = texts(
+            include_str!("../item/test-items/fr-rare-helmet-runeforged.txt"),
+            Language::French,
+        );
+
+        assert_eq!(
+            english.base_values,
+            ["Armour 314", "Energy Shield 88", "Runic Ward 56"]
+        );
+        assert_eq!(
+            french.base_values,
+            [
+                "Armure 314",
+                "Bouclier d'énergie 88",
+                "Sauvegarde runique 56"
+            ]
+        );
+        assert_eq!(BaseValue::RunicWard(56).label_color(), color::RUNIC_WARD);
     }
 
     #[test]

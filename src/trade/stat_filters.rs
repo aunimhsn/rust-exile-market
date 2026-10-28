@@ -444,7 +444,7 @@ mod tests {
     }
 
     #[test]
-    fn a_desecrated_or_fractured_line_is_searched_by_its_explicit_id() {
+    fn a_desecrated_fractured_or_vaal_line_is_searched_by_its_explicit_id() {
         let ids_of = |text: &str| -> Vec<Vec<String>> {
             let item = parse(text);
             let stats = line_stats(&item);
@@ -454,7 +454,11 @@ mod tests {
                 .filter(|(_, modifier)| {
                     matches!(
                         modifier.origin,
-                        Some(ModifierOrigin::Desecrated | ModifierOrigin::Fractured)
+                        Some(
+                            ModifierOrigin::Desecrated
+                                | ModifierOrigin::Fractured
+                                | ModifierOrigin::Vaal
+                        )
                     )
                 })
                 .map(|(index, _)| match stats.get(key(index, 0)) {
@@ -475,6 +479,11 @@ mod tests {
             ids_of(include_str!("../item/test-items/fr-rare-body-armour.txt")),
             [["explicit.stat_378817135"]],
             "a desecrated line written in French"
+        );
+        assert_eq!(
+            ids_of(include_str!("../item/test-items/fr-unique-belt-vaal.txt")),
+            [["explicit.stat_3470876581"]],
+            "the Vaal modifier of a corrupted unique"
         );
     }
 

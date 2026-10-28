@@ -22,6 +22,9 @@ const FR_RARE_SCEPTRE_SANCTIFIED: &str = test_item!("fr-rare-sceptre-sanctified.
 const EN_UNIQUE_MACE_FIXED_VALUES: &str = test_item!("en-owner-unique-mace-fixed-values.txt");
 const FR_RARE_FOCUS_UNREVEALED: &str = test_item!("fr-rare-focus-unrevealed.txt");
 const FR_UNIQUE_RING_MIRRORED: &str = test_item!("fr-unique-ring-mirrored.txt");
+const FR_UNIQUE_BELT_VAAL: &str = test_item!("fr-unique-belt-vaal.txt");
+const FR_RARE_HELMET_RUNEFORGED: &str = test_item!("fr-rare-helmet-runeforged.txt");
+const EN_RARE_HELMET_RUNEFORGED: &str = test_item!("en-owner-rare-helmet-runeforged.txt");
 const EN_RARE_SCEPTRE_SANCTIFIED: &str = test_item!("en-owner-rare-sceptre-sanctified.txt");
 const EN_RARE_FOCUS_UNREVEALED: &str = test_item!("en-owner-rare-focus-unrevealed.txt");
 const EN_RARE_CROSSBOW: &str = test_item!("en-rare-crossbow-all-modifiers.txt");
@@ -37,7 +40,7 @@ const EN_PLAIN_UNIQUE_JEWEL: &str = test_item!("en-plain-unique-jewel.txt");
 const EN_PLAIN_MAGIC_JEWEL_UNIDENTIFIED: &str = test_item!("en-plain-magic-jewel-unidentified.txt");
 const EN_PLAIN_CURRENCY_LARGE_STACK: &str = test_item!("en-plain-currency-large-stack.txt");
 
-const ALL: [&str; 25] = [
+const ALL: [&str; 28] = [
     FR_RARE_STAFF,
     FR_RARE_BODY_ARMOUR,
     FR_UNIQUE_CROSSBOW,
@@ -48,6 +51,9 @@ const ALL: [&str; 25] = [
     FR_RARE_SCEPTRE_SANCTIFIED,
     FR_RARE_FOCUS_UNREVEALED,
     FR_UNIQUE_RING_MIRRORED,
+    FR_UNIQUE_BELT_VAAL,
+    FR_RARE_HELMET_RUNEFORGED,
+    EN_RARE_HELMET_RUNEFORGED,
     EN_UNIQUE_MACE_FIXED_VALUES,
     EN_RARE_SCEPTRE_SANCTIFIED,
     EN_RARE_FOCUS_UNREVEALED,
@@ -752,6 +758,7 @@ fn reads_the_defences_of_an_armour_piece_or_a_shield() {
             evasion: Some(102),
             energy_shield: None,
             block: Some(25),
+            runic_ward: None,
         }
     );
     assert_eq!(
@@ -759,4 +766,117 @@ fn reads_the_defences_of_an_armour_piece_or_a_shield() {
         Some(567)
     );
     assert_eq!(item(EN_RARE_CROSSBOW).defences(), Defences::default());
+}
+
+#[test]
+fn reads_the_runic_ward_of_a_runeforged_base() {
+    for text in [EN_RARE_HELMET_RUNEFORGED, FR_RARE_HELMET_RUNEFORGED] {
+        assert_eq!(
+            item(text).defences(),
+            Defences {
+                armour: Some(314),
+                energy_shield: Some(88),
+                runic_ward: Some(56),
+                ..Defences::default()
+            }
+        );
+    }
+}
+
+#[test]
+fn reads_the_vaal_modifier_of_a_corrupted_unique_from_its_header() {
+    let belt = item(FR_UNIQUE_BELT_VAAL);
+    let origins: Vec<_> = explicit(&belt)
+        .into_iter()
+        .map(|modifier| (modifier.kind, modifier.origin))
+        .collect();
+    let unique = ModifierKind::Explicit(None);
+    assert_eq!(
+        origins,
+        [
+            (unique, None),
+            (unique, None),
+            (unique, Some(ModifierOrigin::Vaal)),
+            (unique, None)
+        ]
+    );
+    let vaal = explicit(&belt)[2];
+    assert_eq!(
+        first_line(vaal).text,
+        "+112 au Score d'Évasion tant que votre Vie est Basse"
+    );
+    assert_eq!(vaal.tags, ["Évasion"]);
+
+    let english = item(
+        "Item Class: Belts\nRarity: Unique\nCoward's Legacy\nPlate Belt\n--------\n\
+         Item Level: 79\n--------\n{ Vaal Unique Modifier — Evasion }\n\
+         +112(100-150) to Evasion Rating while on Low Life\n--------\nCorrupted",
+    );
+    assert_eq!(
+        explicit(&english)
+            .into_iter()
+            .map(|modifier| (modifier.kind, modifier.origin))
+            .collect::<Vec<_>>(),
+        [(unique, Some(ModifierOrigin::Vaal))]
+    );
+}
+
+#[test]
+fn reads_the_line_of_a_unique_written_without_header() {
+    let ring = item(FR_UNIQUE_RING_MIRRORED);
+    let modifiers = explicit(&ring);
+    assert_eq!(modifiers.len(), 1);
+    let line = modifiers[0];
+    assert_eq!(
+        (line.kind, line.origin, line.tier),
+        (ModifierKind::Explicit(None), None, None)
+    );
+    assert_eq!(
+        line.lines,
+        [StatLine {
+            text: "Reflète la Bague opposée".to_owned(),
+            rolls: Vec::new(),
+        }]
+    );
+    // Its flavour text, after it, isn't read.
+    assert_eq!(ring.modifiers().len(), 1);
+}
+
+#[test]
+fn reads_no_flavour_text_nor_description_as_a_line_without_header() {
+    let explicit_lines = |text: &str| -> Vec<String> {
+        let item = try_parse(text).expect("the item is read");
+        explicit(&item)
+            .into_iter()
+            .flat_map(|modifier| modifier.lines.iter().map(|line| line.text.clone()))
+            .collect()
+    };
+    // A unique whose modifiers have headers: its flavour text and its description.
+    assert_eq!(
+        explicit_lines(
+            "Item Class: Rings\nRarity: Unique\nTest Loop\nGold Ring\n--------\n\
+             Item Level: 80\n--------\n{ Unique Modifier }\n+52 to maximum Life\n--------\n\
+             Flavour text.\n--------\nA description."
+        ),
+        ["+52 to maximum Life"]
+    );
+    // A flavour text alone, unidentified, or on another rarity.
+    for text in [
+        "Item Class: Rings\nRarity: Unique\nTest Loop\nGold Ring\n--------\nItem Level: 80\n\
+         --------\nFlavour text.",
+        "Item Class: Rings\nRarity: Unique\nGold Ring\n--------\nItem Level: 80\n--------\n\
+         Unidentified\n--------\nFlavour text.\n--------\nA description.",
+        "Item Class: Rings\nRarity: Normal\nGold Ring\n--------\nItem Level: 80\n--------\n\
+         A description.\n--------\nAnother description.",
+    ] {
+        assert_eq!(explicit_lines(text), Vec::<String>::new(), "{text}");
+    }
+    // Before the item level: the properties and the requirements.
+    assert_eq!(
+        explicit_lines(
+            "Item Class: Rings\nRarity: Unique\nTest Loop\nGold Ring\n--------\nA property\n\
+             --------\nAnother text\n--------\nItem Level: 80"
+        ),
+        Vec::<String>::new()
+    );
 }

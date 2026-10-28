@@ -122,6 +122,7 @@ defence-armour = Armure
 defence-evasion = Évasion
 defence-energy-shield = Bouclier d'énergie
 defence-block = Blocage
+defence-runic-ward = Sauvegarde runique
 # Le résumé d'un objet qui octroie des aptitudes, par exemple « Niveau 18 Sceau de puissance », jointes par « · ».
 granted-skill = Octroie l'aptitude : { $skill }
 # La ligne des prérequis, ses parties jointes par « · » : « Requiert niveau 65 · 145 Dex ».
@@ -200,6 +201,8 @@ filter-unsearchable-hint = Il se peut que les offres ne l'aient pas.
 origin-desecrated = Profané
 origin-fractured = Fissuré
 origin-crafted = Artisanat
+# Le modificateur vaal d'un unique corrompu : le mot du jeu, le même dans toutes les langues.
+origin-vaal = Vaal
 # Un modificateur profané pas encore révélé, dans son groupe ; et la note sous les stats de son objet.
 unrevealed-prefix = Préfixe non révélé
 unrevealed-suffix = Suffixe non révélé

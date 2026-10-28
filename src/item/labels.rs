@@ -35,6 +35,8 @@ pub(super) struct Labels {
     pub evasion: &'static str,
     pub energy_shield: &'static str,
     pub block: &'static str,
+    /// The defence of a runeforged base, without attribute.
+    pub runic_ward: &'static str,
     /// The note of a priced item; unknown in some languages.
     pub note: Option<&'static str>,
     /// The state lines at the end of the item; "Unidentified" may be followed by a tier.
@@ -46,9 +48,10 @@ pub(super) struct Labels {
     /// The marker of the advanced copy after a line whose value never changes, e.g.
     /// ` — Unscalable Value`.
     pub fixed_value: &'static str,
-    /// The kinds of the modifier headers. A label never ends with an earlier one, so that
-    /// "Corruption Enhancement" is not taken for "Enhancement" (checked by the tests).
-    pub modifier_kinds: &'static [(&'static str, ModifierKind)],
+    /// The kinds of the modifier headers, and the origin a kind tells (the Vaal modifier of a
+    /// unique). A label never ends with an earlier one, so that "Corruption Enhancement" is not
+    /// taken for "Enhancement" (checked by the tests).
+    pub modifier_kinds: &'static [(&'static str, ModifierKind, Option<ModifierOrigin>)],
     /// The words before the kind in a modifier header.
     pub modifier_origins: &'static [(&'static str, ModifierOrigin)],
     /// The only line of a desecrated modifier not revealed yet, for each affix, under its
@@ -121,6 +124,7 @@ static ENGLISH: Labels = Labels {
     evasion: "Evasion Rating",
     energy_shield: "Energy Shield",
     block: "Block chance",
+    runic_ward: "Runic Ward",
     note: Some("Note: "),
     states: &[
         ("Corrupted", ItemState::Corrupted),
@@ -135,13 +139,13 @@ static ENGLISH: Labels = Labels {
     tier: "Tier: ",
     fixed_value: " — Unscalable Value",
     modifier_kinds: &[
-        ("Prefix Modifier", PREFIX),
-        ("Suffix Modifier", SUFFIX),
-        ("Vaal Unique Modifier", UNIQUE),
-        ("Unique Modifier", UNIQUE),
-        ("Implicit Modifier", ModifierKind::Implicit),
-        ("Corruption Enhancement", ModifierKind::Corruption),
-        ("Enhancement", ModifierKind::Enchant),
+        ("Prefix Modifier", PREFIX, None),
+        ("Suffix Modifier", SUFFIX, None),
+        ("Vaal Unique Modifier", UNIQUE, Some(ModifierOrigin::Vaal)),
+        ("Unique Modifier", UNIQUE, None),
+        ("Implicit Modifier", ModifierKind::Implicit, None),
+        ("Corruption Enhancement", ModifierKind::Corruption, None),
+        ("Enhancement", ModifierKind::Enchant, None),
     ],
     modifier_origins: &[
         ("Crafted", ModifierOrigin::Crafted),
@@ -182,6 +186,7 @@ static FRENCH: Labels = Labels {
     evasion: "Score d'Évasion",
     energy_shield: "Bouclier d'énergie",
     block: "Chances de Blocage",
+    runic_ward: "Sauvegarde runique",
     note: None,
     states: &[
         ("Corrompu", ItemState::Corrupted),
@@ -200,13 +205,17 @@ static FRENCH: Labels = Labels {
     tier: "Palier : ",
     fixed_value: " — Valeur fixe",
     modifier_kinds: &[
-        ("Préfixe", PREFIX),
-        ("Suffixe", SUFFIX),
-        ("Modificateur vaal unique", UNIQUE),
-        ("Modificateur d'Objet unique", UNIQUE),
-        ("Modificateur Implicite", ModifierKind::Implicit),
-        ("Amélioration de Corruption", ModifierKind::Corruption),
-        ("Amélioration", ModifierKind::Enchant),
+        ("Préfixe", PREFIX, None),
+        ("Suffixe", SUFFIX, None),
+        (
+            "Modificateur vaal unique",
+            UNIQUE,
+            Some(ModifierOrigin::Vaal),
+        ),
+        ("Modificateur d'Objet unique", UNIQUE, None),
+        ("Modificateur Implicite", ModifierKind::Implicit, None),
+        ("Amélioration de Corruption", ModifierKind::Corruption, None),
+        ("Amélioration", ModifierKind::Enchant, None),
     ],
     modifier_origins: &[
         ("Artisanat", ModifierOrigin::Crafted),
@@ -253,12 +262,12 @@ mod tests {
         all
     }
 
-    fn every_origin() -> [ModifierOrigin; 3] {
-        use ModifierOrigin::{Crafted, Desecrated, Fractured};
-        let all = [Crafted, Desecrated, Fractured];
+    fn every_origin() -> [ModifierOrigin; 4] {
+        use ModifierOrigin::{Crafted, Desecrated, Fractured, Vaal};
+        let all = [Crafted, Desecrated, Fractured, Vaal];
         for origin in all {
             match origin {
-                Crafted | Desecrated | Fractured => {}
+                Crafted | Desecrated | Fractured | Vaal => {}
             }
         }
         all
@@ -280,9 +289,14 @@ mod tests {
                     "{language:?} {state:?}"
                 );
             }
+            // By the words before the kind of the header, or by the kind itself.
             for origin in every_origin() {
                 assert!(
-                    labels.modifier_origins.iter().any(|&(_, o)| o == origin),
+                    labels.modifier_origins.iter().any(|&(_, o)| o == origin)
+                        || labels
+                            .modifier_kinds
+                            .iter()
+                            .any(|&(.., o)| o == Some(origin)),
                     "{language:?} {origin:?}"
                 );
             }
@@ -299,8 +313,8 @@ mod tests {
     fn no_modifier_kind_is_hidden_by_an_earlier_one() {
         for language in Language::ALL {
             let kinds = Labels::of(language).modifier_kinds;
-            for (index, (earlier, _)) in kinds.iter().enumerate() {
-                for (later, _) in kinds.iter().skip(index + 1) {
+            for (index, (earlier, ..)) in kinds.iter().enumerate() {
+                for (later, ..) in kinds.iter().skip(index + 1) {
                     assert!(
                         !later.ends_with(earlier),
                         "{language:?}: {later} after {earlier}"

@@ -82,6 +82,8 @@ pub struct Defences {
     pub energy_shield: Option<u32>,
     /// The chance to block, in percent.
     pub block: Option<u32>,
+    /// The Runic Ward of a runeforged base, a defence without attribute.
+    pub runic_ward: Option<u32>,
 }
 
 /// What a character needs to use the item.
@@ -194,6 +196,7 @@ impl Item {
             evasion: value(labels.evasion),
             energy_shield: value(labels.energy_shield),
             block: value(labels.block),
+            runic_ward: value(labels.runic_ward),
         }
     }
 }

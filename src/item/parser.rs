@@ -120,7 +120,7 @@ pub(super) fn parse(copied: &CopiedItem) -> Result<Item, ParseError> {
     let mut item = read_header(&header, copied.language(), labels)?;
 
     let recognized: Vec<Recognized<'_>> = sections.map(|lines| recognize(lines, labels)).collect();
-    for section in resolve_plain_sections(recognized, item.rarity)? {
+    for section in resolve_plain_sections(recognized, item.rarity, labels)? {
         fill(&mut item, section, labels);
     }
     Ok(item)
@@ -262,16 +262,18 @@ fn state(line: &str, labels: &Labels) -> Option<ItemState> {
 }
 
 /// Phase 2: the first plain section, right after the header, is the properties; the other
-/// plain sections (flavour text, descriptions) aren't read.
+/// plain sections (flavour text, descriptions) aren't read, but for the lines of a unique
+/// written without header ([`unheaded_section`]).
 ///
 /// The advanced copy writes a `{ … }` header before each implicit and explicit modifier: an
 /// item with implicit lines without one, or without any header but with a plain section after
 /// the item level that reads as the explicit modifiers of an identified item, was copied
 /// without the details.
-fn resolve_plain_sections(
-    recognized: Vec<Recognized<'_>>,
+fn resolve_plain_sections<'a>(
+    recognized: Vec<Recognized<'a>>,
     rarity: Rarity,
-) -> Result<Vec<Section<'_>>, ParseError> {
+    labels: &Labels,
+) -> Result<Vec<Section<'a>>, ParseError> {
     let is_section = |recognized: &Recognized<'_>, test: fn(&Section<'_>) -> bool| matches!(recognized, Recognized::Section(section) if test(section));
     let headed = recognized
         .iter()
@@ -283,6 +285,9 @@ fn resolve_plain_sections(
         )
     });
     let explicit_expected = !headed && rarity.has_explicit_modifiers() && !unidentified;
+    let unheaded = (rarity == Rarity::Unique && !unidentified)
+        .then(|| unheaded_section(&recognized, labels))
+        .flatten();
     let mut after_item_level = false;
 
     recognized
@@ -307,9 +312,40 @@ fn resolve_plain_sections(
             {
                 Err(ParseError::WithoutDetails)
             }
+            Recognized::Plain(lines) if Some(index) == unheaded => {
+                Ok(Section::Marked(lines, ModifierKind::Explicit(None)))
+            }
             Recognized::Plain(_) => Ok(Section::Unread),
         })
         .collect()
+}
+
+/// The index of the lines of an identified unique written without header, the same on every
+/// copy (`Reflects opposite Ring` of Kalandra's Touch): when no explicit modifier has a
+/// header, its first plain section after the item level, if another plain section, its
+/// flavour text, follows it; a description or a flavour text alone is never taken for it.
+fn unheaded_section(recognized: &[Recognized<'_>], labels: &Labels) -> Option<usize> {
+    let explicit_header = |line: &&str| match Header::parse(line, labels) {
+        Some(Header::Known(modifier)) => matches!(modifier.kind, ModifierKind::Explicit(_)),
+        Some(Header::Unknown) => true,
+        None => false,
+    };
+    if recognized.iter().any(|recognized| {
+        matches!(recognized, Recognized::Section(Section::Headed(lines)) if lines.iter().any(explicit_header))
+    }) {
+        return None;
+    }
+    let item_level = recognized
+        .iter()
+        .position(|recognized| matches!(recognized, Recognized::Section(Section::ItemLevel(_))))?;
+    let mut plain = recognized
+        .iter()
+        .enumerate()
+        .skip(item_level + 1)
+        .filter(|(_, recognized)| matches!(recognized, Recognized::Plain(_)))
+        .map(|(index, _)| index);
+    let first = plain.next()?;
+    plain.next().map(|_| first)
 }
 
 /// Phase 3: what a section adds to the item.

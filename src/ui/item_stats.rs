@@ -160,8 +160,13 @@ enum Group {
 /// The roll of a stat.
 #[derive(Debug, Clone, PartialEq)]
 enum Roll {
-    /// Where its value falls in its ranges, from 0 to 1, and the ranges.
-    Bar { share: f32, ranges: Vec<Range> },
+    /// Where its value falls in its ranges, from 0 to 1, and the ranges; then, under the last
+    /// line of a Vaal modifier of a unique, its origin.
+    Bar {
+        share: f32,
+        ranges: Vec<Range>,
+        origin: Option<ModifierOrigin>,
+    },
     /// A line of a prefix or a suffix: where its value falls over every tier of its modifier
     /// on the base, from 0 to 1, when the modifier tables know them; under the last line of the
     /// modifier, its tier and the ranges of that tier, of all its lines for a hybrid, so that it
@@ -739,15 +744,19 @@ fn unique_rows<'a>(item: &'a Item, reading: &Reading<'_>) -> Vec<Row<'a>> {
         Group::Runes,
         stats(item, is_rune, added_stat, varies),
     );
+    // The origin of a modifier under its last line.
+    let unique_stat = |key: StatKey, line| {
+        let origin = item
+            .modifiers()
+            .get(key.modifier)
+            .filter(|modifier| key.line + 1 == modifier.lines.len())
+            .and_then(|modifier| modifier.origin);
+        unique_stat(key, line, origin, reading)
+    };
     push_group(
         &mut rows,
         Group::Implicit,
-        stats(
-            item,
-            is_implicit,
-            |key, line| unique_stat(key, line, reading),
-            varies,
-        ),
+        stats(item, is_implicit, unique_stat, varies),
     );
     push_group(
         &mut rows,
@@ -755,7 +764,7 @@ fn unique_rows<'a>(item: &'a Item, reading: &Reading<'_>) -> Vec<Row<'a>> {
         stats(
             item,
             |kind| matches!(kind, ModifierKind::Explicit(_)),
-            |key, line| unique_stat(key, line, reading),
+            unique_stat,
             varies,
         ),
     );
@@ -852,7 +861,7 @@ fn implicit_stat<'a>(key: StatKey, line: &'a StatLine, reading: &Reading<'_>) ->
             reading.checked(key),
         )),
         unsearchable: false,
-        roll: bar(magnitudes(&counted, &ranges)),
+        roll: bar(magnitudes(&counted, &ranges), None),
     }
 }
 
@@ -1101,7 +1110,13 @@ fn is_implicit(kind: ModifierKind) -> bool {
 
 /// A line of a unique: a filter checked with its value filling its half and its bar when it
 /// varies, a fixed line otherwise; a line without a range in the advanced copy never varies.
-fn unique_stat<'a>(key: StatKey, whole: &'a StatLine, reading: &Reading<'_>) -> Stat<'a> {
+/// The `origin` of its modifier (Vaal) follows its range, or stands alone under a fixed line.
+fn unique_stat<'a>(
+    key: StatKey,
+    whole: &'a StatLine,
+    origin: Option<ModifierOrigin>,
+    reading: &Reading<'_>,
+) -> Stat<'a> {
     let line = &reading.counted(key, whole);
     let ranges = copied_ranges(line);
     let fixed = Stat {
@@ -1109,10 +1124,14 @@ fn unique_stat<'a>(key: StatKey, whole: &'a StatLine, reading: &Reading<'_>) -> 
         text: StatText::Line(&whole.text),
         filter: None,
         unsearchable: false,
-        roll: None,
+        roll: origin.map(|origin| Roll::Affix {
+            share: None,
+            tier: None,
+            origin: Some(origin),
+        }),
     };
     // A filter when one of its ranges is wider than one value.
-    let Some(roll) = bar(magnitudes(line, &ranges)) else {
+    let Some(roll) = bar(magnitudes(line, &ranges), origin) else {
         return fixed;
     };
     let Some(value) = value(line) else {
@@ -1203,9 +1222,9 @@ fn average(values: impl Iterator<Item = f64>) -> Option<f64> {
     (count > 0).then(|| sum / f64::from(count))
 }
 
-/// The bar of `rolls`, those whose range is wider than one value ([`varying_share`]), and
-/// their ranges; none when no roll varies.
-fn bar(rolls: Vec<(f64, Range)>) -> Option<Roll> {
+/// The bar of `rolls`, those whose range is wider than one value ([`varying_share`]), their
+/// ranges and the `origin` of their modifier; none when no roll varies.
+fn bar(rolls: Vec<(f64, Range)>, origin: Option<ModifierOrigin>) -> Option<Roll> {
     let share = varying_share(&rolls)?;
     Some(Roll::Bar {
         share,
@@ -1214,6 +1233,7 @@ fn bar(rolls: Vec<(f64, Range)>) -> Option<Roll> {
             .map(|(_, range)| range)
             .filter(|range| range.max > range.min)
             .collect(),
+        origin,
     })
 }
 
@@ -1664,9 +1684,16 @@ fn roll_line(ui: &mut Ui, roll: &Roll, bar: RollBar, i18n: &Translator) {
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = GAP;
         match roll {
-            Roll::Bar { share, ranges } => {
+            Roll::Bar {
+                share,
+                ranges,
+                origin,
+            } => {
                 roll_bar(ui, *share, bar);
                 range_label(ui, ranges);
+                if let Some(origin) = origin {
+                    origin_word(ui, *origin, i18n);
+                }
             }
             Roll::Affix {
                 share,
@@ -1687,18 +1714,23 @@ fn roll_line(ui: &mut Ui, roll: &Roll, bar: RollBar, i18n: &Translator) {
                     }
                 }
                 if let Some(origin) = origin {
-                    // The last item of the line: the space before it only.
-                    ui.spacing_mut().item_spacing.x = ORIGIN_GAP;
-                    let (message, tint) = origin_label(*origin);
-                    ui.label(
-                        RichText::new(i18n.text(message))
-                            .font(text::origin())
-                            .color(tint),
-                    );
+                    origin_word(ui, *origin, i18n);
                 }
             }
         }
     });
+}
+
+/// The word of an origin, small, in its color: the last item of the line of a roll.
+fn origin_word(ui: &mut Ui, origin: ModifierOrigin, i18n: &Translator) {
+    // The space before it only.
+    ui.spacing_mut().item_spacing.x = ORIGIN_GAP;
+    let (message, tint) = origin_label(origin);
+    ui.label(
+        RichText::new(i18n.text(message))
+            .font(text::origin())
+            .color(tint),
+    );
 }
 
 /// The word of an origin, and its color.
@@ -1707,6 +1739,7 @@ fn origin_label(origin: ModifierOrigin) -> (Message, Color32) {
         ModifierOrigin::Desecrated => (Message::OriginDesecrated, color::DESECRATED),
         ModifierOrigin::Fractured => (Message::OriginFractured, color::FRACTURED),
         ModifierOrigin::Crafted => (Message::OriginCrafted, color::CRAFTED),
+        ModifierOrigin::Vaal => (Message::OriginVaal, color::VAAL),
     }
 }
 
@@ -1804,8 +1837,15 @@ mod tests {
                         .unwrap_or_default();
                     let roll = match roll {
                         None => String::new(),
-                        Some(Roll::Bar { share, ranges }) => {
-                            format!(" [{} {share:.2}]", ranges_text(&ranges))
+                        Some(Roll::Bar {
+                            share,
+                            ranges,
+                            origin,
+                        }) => {
+                            let origin = origin
+                                .map(|origin| format!(" {origin:?}"))
+                                .unwrap_or_default();
+                            format!(" [{} {share:.2}{origin}]", ranges_text(&ranges))
                         }
                         Some(Roll::Affix {
                             share,
@@ -1865,6 +1905,43 @@ mod tests {
                 "When you kill a Rare monster, you gain its Modifiers for 60 seconds",
             ]
         );
+    }
+
+    #[test]
+    fn the_vaal_modifier_of_a_unique_says_vaal_after_its_range() {
+        let belt = parse(include_str!("../item/test-items/fr-unique-belt-vaal.txt"));
+
+        let texts = texts(&belt);
+        let vaal: Vec<&String> = texts.iter().filter(|text| text.contains("Vaal")).collect();
+        // A filter like the other modifiers of the unique, its origin after its range.
+        assert_eq!(
+            vaal,
+            ["■ +112 au Score d'Évasion tant que votre Vie est Basse ≥112 [100–150 0.24 Vaal]"]
+        );
+    }
+
+    #[test]
+    fn the_vaal_modifier_of_a_unique_says_vaal_under_a_fixed_line() {
+        let unique = parse(
+            "Item Class: Rings\nRarity: Unique\nTest Loop\nGold Ring\n--------\n\
+             Item Level: 80\n--------\n{ Vaal Unique Modifier }\n\
+             +5% to Maximum Lightning Resistance\n--------\nCorrupted",
+        );
+
+        assert_eq!(
+            texts(&unique),
+            ["Unique", "+5% to Maximum Lightning Resistance [Vaal]"]
+        );
+    }
+
+    #[test]
+    fn the_line_of_a_unique_without_header_never_varies() {
+        let ring = parse(include_str!(
+            "../item/test-items/fr-unique-ring-mirrored.txt"
+        ));
+
+        // Like a stat that never varies: no checkbox, from the left edge.
+        assert_eq!(texts(&ring), ["Unique", "Reflète la Bague opposée"]);
     }
 
     #[test]
@@ -3227,6 +3304,7 @@ mod tests {
                         min: 40.0,
                         max: 60.0
                     }],
+                    origin: None,
                 }),
             })
         );
