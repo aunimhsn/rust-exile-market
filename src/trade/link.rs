@@ -124,14 +124,17 @@ pub fn query(item: &Item, target: &TradeTarget, filters: SearchFilters) -> Query
                     if let Some(category) = searched_category(item, base_type) {
                         items.base_type = None;
                         items.category = Some(category);
-                    } else {
+                    } else if filters.narrows() {
                         log::info!(
                             "No trade site category for the base type {base_type}: \
                              searched among any base"
                         );
-                        if filters.narrows() {
-                            items.base_type = None;
-                        }
+                        items.base_type = None;
+                    } else {
+                        log::info!(
+                            "No trade site category for the base type {base_type}, \
+                             and nothing else narrows the search: searched by its base type"
+                        );
                     }
                 }
                 items.properties = filters.properties;
@@ -145,7 +148,7 @@ pub fn query(item: &Item, target: &TradeTarget, filters: SearchFilters) -> Query
 
 /// The category of the trade site searched in place of `base_type`, the base type of `item`
 /// its search looks for, when the player unchecks it (`weapon.bow`): a bow among all the bows;
-/// none for a base the game data doesn't know, searched among any base instead.
+/// none for a base the game data doesn't know (see [`query`] for its search).
 #[must_use]
 pub fn searched_category(item: &Item, base_type: &str) -> Option<&'static str> {
     game_data::trade_category(item.language(), base_type)
