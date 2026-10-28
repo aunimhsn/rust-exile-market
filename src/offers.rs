@@ -307,6 +307,7 @@ mod tests {
             query: Query::Items(ItemQuery {
                 name: Some("Andvarius".to_owned()),
                 base_type: Some("Gold Ring".to_owned()),
+                category: None,
                 properties: Vec::new(),
                 rarity: None,
                 corrupted: Some(false),

@@ -25,7 +25,7 @@ mod modifiers;
 mod stats;
 mod trade_site;
 
-pub use bases::{Category, category};
+pub use bases::{Category, category, trade_category};
 #[cfg(test)]
 pub use lines::equipment_strings;
 pub use lines::{LineMatch, StatMatch, StatSource, english_string, modifier_stats};

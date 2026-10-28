@@ -163,6 +163,8 @@ filter-rolls = Jets de { $low } à { $high }
 filter-lower-better = Plus c'est bas, mieux c'est
 # Les filtres des propriétés d'un objet, avec leur valeur.
 filter-base-type = Base : { $base }
+# Sous le type de base décoché : la classe de l'objet copié, cherchée à sa place.
+filter-item-class = Classe cherchée : { $class }
 filter-item-level = Niveau de l'objet : { $value }
 filter-sockets = Châsses : { $value }
 filter-quality = Qualité : { $value }%

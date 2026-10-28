@@ -230,7 +230,7 @@ pub mod tests {
                     ("Orbe divin", "divine"),
                     ("Orbe de transmutation", "transmute"),
                 ],
-                &["Maillet", "Maillet du temple", "Bague de rubis", "Émeraude"],
+                &["Massue", "Massue du temple", "Bague de rubis", "Émeraude"],
             ),
             vec![
                 UniqueNames {
@@ -310,8 +310,8 @@ pub mod tests {
             Some("Temple Maul")
         );
         assert_eq!(
-            names.magic_base_type(Language::French, "Maillet du temple crépitant de la Brute"),
-            Some("Maillet du temple")
+            names.magic_base_type(Language::French, "Massue du temple crépitante de la Brute"),
+            Some("Massue du temple")
         );
         assert_eq!(
             names.magic_base_type(Language::English, "Mauling Ring of the Bear"),

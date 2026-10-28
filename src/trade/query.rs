@@ -39,6 +39,9 @@ pub struct ItemQuery {
     pub name: Option<String>,
     /// Any base type when `None`.
     pub base_type: Option<String>,
+    /// The id of a category of the trade site (`weapon.bow`), searched in place of the base
+    /// type: a bow among all the bows.
+    pub category: Option<&'static str>,
     pub rarity: Option<RarityFilter>,
     /// Corrupted offers only, or clean ones only; either when `None`.
     pub corrupted: Option<bool>,
@@ -49,7 +52,8 @@ pub struct ItemQuery {
 /// The filters of the search of an item, as the player left them.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct SearchFilters {
-    /// The base type unchecked: the offers may have any base.
+    /// The base type unchecked: the offers may have any base of its category, or any base at
+    /// all for a base the game data doesn't know.
     pub any_base: bool,
     pub properties: Vec<PropertyFilter>,
     pub stats: Vec<StatFilter>,
@@ -154,6 +158,9 @@ impl ItemQuery {
                 .or_insert_with(|| json!({ "filters": {} }));
             filters["filters"][id] = filter;
         };
+        if let Some(category) = self.category {
+            add("type_filters", "category", json!({ "option": category }));
+        }
         if let Some(rarity) = self.rarity {
             let option = match rarity {
                 RarityFilter::Unique => "unique",
@@ -235,10 +242,32 @@ mod tests {
     use super::*;
 
     #[test]
+    fn a_category_is_searched_among_the_type_filters() {
+        let query = ItemQuery {
+            name: None,
+            base_type: None,
+            category: Some("weapon.bow"),
+            rarity: Some(RarityFilter::NotUnique),
+            corrupted: None,
+            properties: Vec::new(),
+            stats: Vec::new(),
+        };
+
+        assert_eq!(
+            query.to_json()["query"]["filters"]["type_filters"],
+            json!({ "filters": {
+                "category": { "option": "weapon.bow" },
+                "rarity": { "option": "nonunique" },
+            } })
+        );
+    }
+
+    #[test]
     fn a_search_writes_only_its_filters() {
         let query = ItemQuery {
             name: None,
             base_type: Some("Ruby Ring".to_owned()),
+            category: None,
             rarity: None,
             corrupted: None,
             properties: Vec::new(),
@@ -259,6 +288,7 @@ mod tests {
         let query = ItemQuery {
             name: Some("Andvarius".to_owned()),
             base_type: Some("Gold Ring".to_owned()),
+            category: None,
             rarity: Some(RarityFilter::Unique),
             corrupted: Some(false),
             properties: Vec::new(),
@@ -302,6 +332,7 @@ mod tests {
         let query = ItemQuery {
             name: Some("Bloodthirst".to_owned()),
             base_type: Some("Gold Ring".to_owned()),
+            category: None,
             rarity: None,
             corrupted: None,
             properties: Vec::new(),
@@ -341,6 +372,7 @@ mod tests {
         let query = ItemQuery {
             name: None,
             base_type: Some("Gold Ring".to_owned()),
+            category: None,
             rarity: None,
             corrupted: None,
             properties: Vec::new(),
@@ -368,6 +400,7 @@ mod tests {
         let query = ItemQuery {
             name: None,
             base_type: None,
+            category: None,
             rarity: Some(RarityFilter::NotUnique),
             corrupted: Some(false),
             properties: vec![

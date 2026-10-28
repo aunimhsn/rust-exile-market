@@ -72,7 +72,7 @@ function item(it, unfolded = false) {
       const half = (value, name) => `<input value="${value ?? ""}" inputmode="decimal" aria-label="${name}">`;
       const hovered = row.hover ? " is-hovered" : "";
       const fields = row.min === undefined ? "" : `<span class="input app-range${hovered}">${half(low, "Minimum")}<i>–</i>${half(row.max, "Maximum")}<span class="app-tip">${fieldTip}</span></span>`;
-      const plain = row.mod.replace(/<br>/g, " ");
+      const plain = row.mod.replace(/<br>/g, " ").replace(/<[^>]+>/g, "");
       const tip = row.tip ? `${plain}\n${row.tip}` : plain;
       const text = `<span class="text" title="${tip.replace(/"/g, "&quot;")}">${row.mod}</span>`;
       if (box) {

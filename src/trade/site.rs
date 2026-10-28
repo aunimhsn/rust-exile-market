@@ -354,7 +354,7 @@ mod tests {
             {"type": "Bague en or", "text": "Andvarius Bague en or", "name": "Andvarius", "flags": {"unique": true}}
         ]},
         {"id": "weapon", "label": "Armes", "entries": [
-            {"type": "Maillet du temple"},
+            {"type": "Massue du temple"},
             {"type": "Arbalète de fortune", "text": "Murmure des brumes Arbalète de fortune", "name": "Murmure des brumes", "flags": {"unique": true}},
             {"type": "Sceptre sanctuaire", "text": "Paume directrice Sceptre sanctuaire (Legacy)", "name": "Paume directrice", "disc": "legacy", "flags": {"unique": true}}
         ]},
@@ -647,8 +647,8 @@ mod tests {
             Some("Temple Maul")
         );
         assert_eq!(
-            names.magic_base_type(Language::French, "Maillet du temple crépitant"),
-            Some("Maillet du temple")
+            names.magic_base_type(Language::French, "Massue du temple crépitante"),
+            Some("Massue du temple")
         );
         assert_eq!(
             names.magic_base_type(Language::English, "Preserved Rib"),

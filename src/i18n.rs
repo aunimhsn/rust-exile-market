@@ -364,6 +364,7 @@ const AFFIX_FILL_OPEN: &str = "affix-fill-open";
 const ACTIVE_FILTERS: &str = "active-filters";
 const FILTER_ROLLS: &str = "filter-rolls";
 const FILTER_BASE_TYPE: &str = "filter-base-type";
+const FILTER_ITEM_CLASS: &str = "filter-item-class";
 const FILTER_ITEM_LEVEL: &str = "filter-item-level";
 const FILTER_SOCKETS: &str = "filter-sockets";
 const FILTER_QUALITY: &str = "filter-quality";
@@ -543,6 +544,15 @@ impl Translator {
         let mut args = FluentArgs::new();
         args.set("base", base_type);
         self.format(FILTER_BASE_TYPE, Some(&args))
+    }
+
+    /// Under the filter of the base type unchecked, the item class searched in its place:
+    /// "Class searched: Bows".
+    #[must_use]
+    pub fn filter_item_class(&self, class: &str) -> String {
+        let mut args = FluentArgs::new();
+        args.set("class", class);
+        self.format(FILTER_ITEM_CLASS, Some(&args))
     }
 
     /// The filter of a property of an item, with its `value` written by
@@ -886,6 +896,7 @@ mod tests {
                 ACTIVE_FILTERS,
                 FILTER_ROLLS,
                 FILTER_BASE_TYPE,
+                FILTER_ITEM_CLASS,
                 FILTER_ITEM_LEVEL,
                 FILTER_SOCKETS,
                 FILTER_QUALITY,
