@@ -26,7 +26,8 @@
 [data-unrevealed="colored"] .app-unrevealed .text { color: var(--desecrated); }
 /* "Green band": the line on a faint band of the desecrated green, like the row of the game. */
 [data-unrevealed="band"] .app-unrevealed { margin: 0 -6px; padding: 3px 6px; border-radius: var(--radius); background: color-mix(in srgb, var(--desecrated) 12%, transparent); }
-[data-unrevealed="band"] .app-unrevealed .text { color: var(--desecrated); font-style: normal; font-weight: 600; }
+/* Its text in the face, size and weight of the modifier lines, only its color changes. */
+[data-unrevealed="band"] .app-unrevealed .text { color: var(--desecrated); font-style: normal; }
 
 /* "Green squares": a row of small green squares, like the scrambled letters of the game, and under it
    the word Desecrated, small like the line of the range; the other variants write "Unrevealed prefix". */
