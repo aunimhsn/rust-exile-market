@@ -1,0 +1,19 @@
+Classe d'objet: Flacons de Mana
+Rareté: Magique
+Flacon de mana ultime Corsé de l'Opulant
+--------
+Qualité: +20% (augmented)
+Rend 569 (augmented) Mana sur 3 secondes
+Consomme 10 charges sur 116 (augmented) par utilisation
+Contient actuellement 0 charges
+--------
+Prérequis : Niveau 60
+--------
+Niveau de l'objet: 66
+--------
+{ Préfixe : « Corsé » (Palier : 6) }
+53(51-55)% d'Augmentation du Montant Récupéré
+{ Suffixe : « de l'Opulant » (Palier : 2) }
+55(55-62)% d'Augmentation de Charges
+--------
+Clic droit pour boire ce Flacon. Il doit être équipé à votre ceinture pour pouvoir contenir des charges, et se remplit lorsque vous tuez des monstres ou utilisez un Puits.

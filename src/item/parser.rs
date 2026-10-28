@@ -22,6 +22,10 @@ pub enum ParseError {
     MissingRarity,
     UnknownRarity,
     MissingBaseType,
+    /// An item with modifiers copied without the advanced description. Never returned by
+    /// [`Item::parse`](super::Item::parse), which reads such an item: the session refuses it
+    /// when [`Item::copied_without_details`](super::Item::copied_without_details).
+    WithoutDetails,
 }
 
 impl fmt::Display for ParseError {
@@ -30,6 +34,7 @@ impl fmt::Display for ParseError {
             Self::MissingRarity => "no rarity line",
             Self::UnknownRarity => "unknown rarity",
             Self::MissingBaseType => "no base type",
+            Self::WithoutDetails => "modifiers copied without the advanced description",
         })
     }
 }
@@ -126,7 +131,16 @@ pub(super) fn parse(copied: &CopiedItem) -> Result<Item, ParseError> {
     let mut item = read_header(&header, copied.language(), labels)?;
 
     let recognized: Vec<Recognized<'_>> = sections.map(|lines| recognize(lines, labels)).collect();
-    for section in resolve_plain_sections(recognized, item.rarity) {
+    let sections = resolve_plain_sections(recognized, item.rarity);
+    // The advanced copy writes a header before each implicit and explicit modifier: such
+    // lines without one were copied without the details.
+    item.without_details = sections.iter().any(|section| {
+        matches!(
+            section,
+            Section::Explicit(_) | Section::Marked(_, ModifierKind::Implicit)
+        )
+    });
+    for section in sections {
         fill(&mut item, section, labels);
     }
     Ok(item)
@@ -190,6 +204,7 @@ fn read_header(lines: &[&str], language: Language, labels: &Labels) -> Result<It
         properties: Vec::new(),
         weapon: None,
         modifiers: Vec::new(),
+        without_details: false,
         warnings: Vec::new(),
     })
 }
@@ -251,6 +266,10 @@ fn recognize<'a>(lines: Vec<&'a str>, labels: &Labels) -> Recognized<'a> {
     Recognized::Section(section)
 }
 
+fn has_digit(line: &str) -> bool {
+    line.chars().any(|c| c.is_ascii_digit())
+}
+
 fn state(line: &str, labels: &Labels) -> Option<ItemState> {
     labels.states.iter().find_map(|&(label, state)| {
         let matches = if state == ItemState::Unidentified {
@@ -264,8 +283,9 @@ fn state(line: &str, labels: &Labels) -> Option<ItemState> {
 }
 
 /// Phase 2: the first plain section, right after the header, is the properties. In the
-/// plain copy, the first plain section after the item level is the explicit modifiers of an
-/// identified item; the other plain sections (flavour text, descriptions) aren't read.
+/// plain copy, the first plain section after the item level with a number is the explicit
+/// modifiers of an identified item; the other plain sections (flavour text, descriptions)
+/// aren't read.
 fn resolve_plain_sections(recognized: Vec<Recognized<'_>>, rarity: Rarity) -> Vec<Section<'_>> {
     let is_section = |recognized: &Recognized<'_>, test: fn(&Section<'_>) -> bool| matches!(recognized, Recognized::Section(section) if test(section));
     let format = if recognized
@@ -295,7 +315,14 @@ fn resolve_plain_sections(recognized: Vec<Recognized<'_>>, rarity: Rarity) -> Ve
                 section
             }
             Recognized::Plain(lines) if index == 0 => Section::Properties(lines),
-            Recognized::Plain(lines) if explicit_expected && after_item_level => {
+            // A modifier has a number in nearly every line, unlike a description: a magic
+            // item whose only modifier was removed keeps its description, read with both
+            // copies, and isn't taken for a plain copy.
+            Recognized::Plain(lines)
+                if explicit_expected
+                    && after_item_level
+                    && lines.iter().any(|line| has_digit(line)) =>
+            {
                 explicit_expected = false;
                 Section::Explicit(lines)
             }

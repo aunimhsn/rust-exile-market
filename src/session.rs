@@ -35,13 +35,24 @@ impl ShownItem {
     /// The item `copied`; `trade` holds the stats of the trade site and `names` the names of
     /// its items, once it gave them.
     fn new(copied: &CopiedItem, trade: Option<&TradeStats>, names: Option<&ItemNames>) -> Self {
-        let parsed = Item::parse(copied);
+        // An item without the details is read, then refused: the tiers of its modifiers are
+        // missing, and the window asks to copy it again.
+        let parsed = Item::parse(copied).and_then(|item| {
+            if item.copied_without_details() {
+                Err(ParseError::WithoutDetails)
+            } else {
+                Ok(item)
+            }
+        });
         match &parsed {
             Ok(item) => {
                 log::debug!("{item:#?}");
                 for warning in item.warnings() {
                     log::warn!("A part of a copied item couldn't be read: {warning}");
                 }
+            }
+            Err(ParseError::WithoutDetails) => {
+                log::info!("A copied item has no advanced description: it is asked again");
             }
             Err(error) => log::warn!("A copied item couldn't be read: {error}"),
         }
@@ -531,6 +542,21 @@ mod tests {
     }
 
     #[test]
+    fn refuses_an_item_copied_without_its_details() {
+        let mut session = session();
+
+        copy(
+            &mut session,
+            include_str!("item/test-items/en-plain-rare-ring.txt"),
+        );
+
+        assert_eq!(
+            session.item().map(|item| item.parsed().err()),
+            Some(Some(ParseError::WithoutDetails))
+        );
+    }
+
+    #[test]
     fn keeps_the_item_while_the_clipboard_is_unreadable() {
         let mut session = session();
         copy(&mut session, RING);
@@ -818,7 +844,7 @@ mod tests {
         copy(
             &mut session,
             "Item Class: Rings\nRarity: Unique\nAndvarius\nGold Ring\n--------\n\
-             Item Level: 80\n--------\n20% reduced Damage per Patch",
+             Item Level: 80\n--------\n{ Unique Modifier }\n20% reduced Damage per Patch",
         );
         let line = StatKey {
             modifier: 0,

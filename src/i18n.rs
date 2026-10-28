@@ -41,6 +41,8 @@ pub enum Message {
     PricesUnavailable,
     ItemUnreadable,
     ItemUnreadableHint,
+    ItemWithoutDetails,
+    ItemWithoutDetailsHint,
     SettingsTitle,
     SettingsLanguage,
     LanguageSystem,
@@ -117,7 +119,7 @@ pub enum Message {
 impl Message {
     /// Every message, for the tests.
     #[cfg(test)]
-    const ALL: [Self; 88] = [
+    const ALL: [Self; 90] = [
         Self::LeagueModeSoftcore,
         Self::LeagueModeHardcore,
         Self::LeagueLoading,
@@ -135,6 +137,8 @@ impl Message {
         Self::PricesUnavailable,
         Self::ItemUnreadable,
         Self::ItemUnreadableHint,
+        Self::ItemWithoutDetails,
+        Self::ItemWithoutDetailsHint,
         Self::SettingsTitle,
         Self::SettingsLanguage,
         Self::LanguageSystem,
@@ -228,6 +232,8 @@ impl Message {
             Self::PricesUnavailable => "prices-unavailable",
             Self::ItemUnreadable => "item-unreadable",
             Self::ItemUnreadableHint => "item-unreadable-hint",
+            Self::ItemWithoutDetails => "item-without-details",
+            Self::ItemWithoutDetailsHint => "item-without-details-hint",
             Self::SettingsTitle => "settings-title",
             Self::SettingsLanguage => "settings-language",
             Self::LanguageSystem => "language-system",

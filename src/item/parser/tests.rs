@@ -17,6 +17,7 @@ const FR_UNIQUE_CROSSBOW: &str = test_item!("fr-unique-crossbow.txt");
 const FR_CURRENCY_STACK: &str = test_item!("fr-currency-stack.txt");
 const FR_NORMAL_EXCEPTIONAL_SHIELD: &str = test_item!("fr-normal-exceptional-shield.txt");
 const FR_UNIQUE_MACE_FIXED_VALUES: &str = test_item!("fr-unique-mace-fixed-values.txt");
+const FR_MAGIC_MANA_FLASK: &str = test_item!("fr-magic-mana-flask.txt");
 const EN_UNIQUE_MACE_FIXED_VALUES: &str = test_item!("en-owner-unique-mace-fixed-values.txt");
 const EN_RARE_CROSSBOW: &str = test_item!("en-rare-crossbow-all-modifiers.txt");
 const EN_RARE_BOW_FRACTURED: &str = test_item!("en-rare-bow-fractured.txt");
@@ -31,13 +32,14 @@ const EN_PLAIN_UNIQUE_JEWEL: &str = test_item!("en-plain-unique-jewel.txt");
 const EN_PLAIN_MAGIC_JEWEL_UNIDENTIFIED: &str = test_item!("en-plain-magic-jewel-unidentified.txt");
 const EN_PLAIN_CURRENCY_LARGE_STACK: &str = test_item!("en-plain-currency-large-stack.txt");
 
-const ALL: [&str; 19] = [
+const ALL: [&str; 20] = [
     FR_RARE_STAFF,
     FR_RARE_BODY_ARMOUR,
     FR_UNIQUE_CROSSBOW,
     FR_CURRENCY_STACK,
     FR_NORMAL_EXCEPTIONAL_SHIELD,
     FR_UNIQUE_MACE_FIXED_VALUES,
+    FR_MAGIC_MANA_FLASK,
     EN_UNIQUE_MACE_FIXED_VALUES,
     EN_RARE_CROSSBOW,
     EN_RARE_BOW_FRACTURED,
@@ -438,6 +440,47 @@ fn reads_no_description_as_a_modifier_on_a_plain_unidentified_item() {
 
     assert!(item.has_state(ItemState::Unidentified));
     assert_eq!(item.modifiers(), []);
+}
+
+/// The copies without the `{ … }` headers of the advanced copy, among [`ALL`].
+const WITHOUT_DETAILS: [&str; 3] = [
+    EN_PLAIN_RARE_RING,
+    EN_PLAIN_UNIQUE_JEWEL,
+    EN_PLAIN_RARE_RING_UNIDENTIFIED,
+];
+
+#[test]
+fn tells_the_items_whose_modifiers_were_copied_without_their_details() {
+    // Implicit or explicit lines without the `{ … }` header of the advanced copy.
+    let normal_ring = "Item Class: Rings\nRarity: Normal\nRuby Ring\n--------\nItem Level: 70\n\
+                       --------\n+25% to Fire Resistance (implicit)";
+    for text in WITHOUT_DETAILS.into_iter().chain([normal_ring]) {
+        assert!(item(text).copied_without_details(), "{text}");
+    }
+}
+
+#[test]
+fn tells_no_item_the_same_with_both_copies_copied_without_its_details() {
+    // The advanced copies, and the items the same with both copies: without modifiers, or
+    // with runes and enchantments only, which have no header in either copy.
+    let runes_and_enchantment = "Item Class: Body Armours\nRarity: Normal\nVile Robe\n--------\n\
+                                 Item Level: 81\n--------\n+12% to Fire Resistance (rune)\n\
+                                 --------\n45% increased Armour (enchant)";
+    // A magic flask whose only modifier was removed: its description is no modifier.
+    let (before, modifiers) = FR_MAGIC_MANA_FLASK.split_once("--------\n{").unwrap();
+    let description = modifiers.split_once("--------\n").unwrap().1;
+    let flask_without_modifier = format!("{before}--------\n{description}");
+    for text in ALL
+        .into_iter()
+        .filter(|text| !WITHOUT_DETAILS.contains(text))
+        .chain([runes_and_enchantment, &flask_without_modifier])
+    {
+        let item = item(text);
+        assert!(!item.copied_without_details(), "{text}");
+        if text == flask_without_modifier {
+            assert_eq!(item.modifiers(), []);
+        }
+    }
 }
 
 #[test]
