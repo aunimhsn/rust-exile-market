@@ -107,7 +107,7 @@ const focusUnrevealedStatsFr = [
   { group: "Préfixes", fill: "3 sur 3" },
   { mod: "52% d'Augmentation des Dégâts des Sorts", check: false, min: 46, tier: 4, range: "45–54", over: { share: .55 } },
   { mod: "+36 de Bouclier d'énergie maximal", check: false, min: 32, tier: 6, range: "36–41", over: { share: .3 } },
-  { unrevealed: "Préfixe non révélé" },
+  { unrevealed: "Préfixe non révélé", desecrated: "Profané" },
   { group: "Suffixes", fill: "2 sur 3 · 1 libre" },
   { mod: "+24% à la Résistance au froid", check: false, min: 21, tier: 5, range: "21–25", over: { share: .45 } },
   { mod: "+18% à la Résistance au feu", check: false, min: 16, tier: 6, range: "16–20", over: { share: .3 } },
