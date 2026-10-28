@@ -249,8 +249,9 @@ mod tests {
     }
 
     #[test]
-    fn a_line_has_no_rolls_without_its_affix_nor_base() {
-        // A header the parser doesn't know tells neither the affix nor the tier.
+    fn a_line_has_no_rolls_without_its_tier_nor_base() {
+        // A header the parser doesn't know gives no tier: its modifier isn't looked for in the
+        // tables.
         let unknown = "Item Class: Body Armours\nRarity: Rare\nDoom Shell\nAncestral Mail\n\
                        --------\nItem Level: 82\n--------\n{ Strange Modifier }\n\
                        +86(85-99) to maximum Life";

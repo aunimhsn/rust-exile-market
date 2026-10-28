@@ -393,6 +393,20 @@ fn reads_a_currency_without_stack_nor_description() {
 }
 
 #[test]
+fn reads_the_implicit_of_an_unidentified_item_twice_corrupted() {
+    let item = item(
+        "Item Class: Rings\nRarity: Rare\nRuby Ring\n--------\nRequires: Level 12\n--------\n\
+         Item Level: 70\n--------\n{ Implicit Modifier — Elemental, Fire, Resistance }\n\
+         +25(20-30)% to Fire Resistance\n--------\nUnidentified\n--------\nTwice Corrupted",
+    );
+
+    assert_eq!(item.modifiers().len(), 1);
+    assert_eq!(item.modifiers()[0].kind, ModifierKind::Implicit);
+    assert!(item.has_state(ItemState::Unidentified));
+    assert!(item.has_state(ItemState::TwiceCorrupted));
+}
+
+#[test]
 fn reads_no_description_as_a_modifier_on_a_plain_unidentified_item() {
     let item = item(EN_PLAIN_MAGIC_JEWEL_UNIDENTIFIED);
 
@@ -413,7 +427,16 @@ fn tells_the_items_whose_modifiers_were_copied_without_their_details() {
     // Implicit or explicit lines without the `{ … }` header of the advanced copy.
     let normal_ring = "Item Class: Rings\nRarity: Normal\nRuby Ring\n--------\nItem Level: 70\n\
                        --------\n+25% to Fire Resistance (implicit)";
-    for text in WITHOUT_DETAILS.into_iter().chain([normal_ring]) {
+    // The magic flask of the owner, in French, without its headers.
+    let french_flask = FR_MAGIC_MANA_FLASK
+        .lines()
+        .filter(|line| !line.starts_with('{'))
+        .collect::<Vec<_>>()
+        .join("\n");
+    for text in WITHOUT_DETAILS
+        .into_iter()
+        .chain([normal_ring, french_flask.as_str()])
+    {
         assert_eq!(
             try_parse(text).err(),
             Some(ParseError::WithoutDetails),

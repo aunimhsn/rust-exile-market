@@ -1104,8 +1104,8 @@ fn bounds(line: &StatLine, ranges: &[Option<Range>]) -> Option<Range> {
     })
 }
 
-/// `range`, from its lowest to its highest value, with the sign of `value`: the price
-/// database may write the range of a negative number without its sign.
+/// `range`, from its lowest to its highest value, with the sign of `value`: the game writes
+/// the range of a negative number without its sign.
 fn signed(range: Range, value: f64) -> Range {
     let (low, high) = (range.min.min(range.max), range.min.max(range.max));
     if value < 0.0 && low >= 0.0 {
@@ -1729,6 +1729,25 @@ mod tests {
                 "■ +55 to maximum Life ≥55 [40–60 0.75]",
                 // The string of its stat writes the 60: it never varies.
                 "When you kill a Rare monster, you gain its Modifiers for 60 seconds",
+            ]
+        );
+    }
+
+    #[test]
+    fn a_unique_copied_without_any_range_has_only_fixed_lines() {
+        let unique = parse(
+            "Item Class: Rings\nRarity: Unique\nTest Loop\nGold Ring\n--------\n\
+             Item Level: 80\n--------\n{ Unique Modifier }\n\
+             +5% to Maximum Lightning Resistance\n{ Unique Modifier }\n+52 to maximum Life",
+        );
+
+        // The advanced copy writes a range for every number that rolls.
+        assert_eq!(
+            texts(&unique),
+            [
+                "Unique",
+                "+5% to Maximum Lightning Resistance",
+                "+52 to maximum Life"
             ]
         );
     }
@@ -2704,7 +2723,7 @@ mod tests {
                 max: 10.0
             })
         ));
-        // The price database may write a negative range without its sign.
+        // The game writes a negative range without its sign.
         assert_eq!(
             signed(
                 Range {

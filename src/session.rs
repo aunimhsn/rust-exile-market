@@ -34,7 +34,7 @@ impl ShownItem {
     /// The item `copied`; `trade` holds the stats of the trade site and `names` the names of
     /// its items, once it gave them.
     fn new(copied: &CopiedItem, trade: Option<&TradeStats>, names: Option<&ItemNames>) -> Self {
-        // An item without the details is refused: the tiers of its modifiers are missing, and
+        // The parser refuses an item without the details, the tiers of its modifiers missing:
         // the window asks to copy it again.
         let parsed = Item::parse(copied);
         match &parsed {
