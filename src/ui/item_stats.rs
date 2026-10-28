@@ -37,6 +37,7 @@ use crate::item::{Affix, Item, Modifier, ModifierKind, Range, Rarity, StatLine};
 use crate::prices::UniqueModifiers;
 use crate::roll_difference::CopiedLines;
 use crate::tier_rolls::{LineRolls, TierRolls, TierSpan};
+use crate::trade::link;
 use crate::trade::pseudo::{Pseudo, PseudoTotal};
 use crate::trade::stat_filters::{LineStat, LineStats};
 use crate::{format, rolls};
@@ -476,7 +477,7 @@ fn searchable(stat: &mut Stat<'_>, line: Option<&LineStat>) {
 }
 
 /// The filters of the properties of a rare, magic or normal item, like Exiled Exchange 2: its
-/// base type, checked, and unchecked its item class searched in its place; its item level, checked on a normal item only (a player who checks it on
+/// base type, checked (unchecked, its item class is searched in its place); its item level, checked on a normal item only (a player who checks it on
 /// another usually looks for a level of crafting), with the level of the item as its minimum;
 /// then its sockets, its quality and its required level when they are filters.
 fn item_filters<'a>(item: &'a Item, base_type: Option<&'a str>) -> Vec<Stat<'a>> {
@@ -484,7 +485,9 @@ fn item_filters<'a>(item: &'a Item, base_type: Option<&'a str>) -> Vec<Stat<'a>>
         key: FilterKey::BaseType,
         text: StatText::BaseType {
             base_type,
-            class: game_data::trade_category(item.language(), base_type).map(|_| item.class()),
+            class: link::searched_category(item, base_type)
+                .is_some()
+                .then(|| item.class()),
         },
         filter: Some(StatFilter {
             checked: true,
@@ -1390,7 +1393,7 @@ fn stat_text(
         }
         if let Some(note) = note {
             ui.add_space(ROLL_GAP);
-            let galley = widgets::text_line(ui, note, text::roll());
+            let galley = widgets::truncated_line(ui, note, text::roll(), width);
             let (rect, _) = ui.allocate_exact_size(galley.size(), Sense::hover());
             ui.painter().galley(rect.min, galley, color::FAINT);
         }
@@ -2313,27 +2316,37 @@ mod tests {
 
     #[test]
     fn the_base_type_tells_the_item_class_searched_when_it_is_unchecked() {
-        let class_of = |text: &str| {
-            let item = parse(text);
-            rows(&item, None).into_iter().find_map(|row| match row {
-                Row::Stat(Stat {
-                    text: StatText::BaseType { class, .. },
-                    ..
-                }) => Some(class.map(str::to_owned)),
-                _ => None,
-            })
+        // The class under the base type `base_type` of `item`, when it is unchecked.
+        let class_of = |item: &Item, base_type: &str| {
+            let lines = CopiedLines::default();
+            let stats = LineStats::new(item.language(), item.modifiers(), None);
+            let tiers = TierRolls::default();
+            super::rows(item, &lines, &stats, &tiers, None, Some(base_type))
+                .into_iter()
+                .find_map(|row| match row {
+                    Row::Stat(Stat {
+                        text: StatText::BaseType { class, .. },
+                        ..
+                    }) => Some(class.map(str::to_owned)),
+                    _ => None,
+                })
         };
 
         // The item class of the copied text, in its language.
+        let armour = parse(include_str!("../item/test-items/fr-rare-body-armour.txt"));
         assert_eq!(
-            class_of(include_str!("../item/test-items/fr-rare-body-armour.txt")),
+            class_of(&armour, armour.base_type()),
             Some(Some("Armures".to_owned()))
         );
-        // A base the game data doesn't know is searched among any base instead.
+        // A magic item, by the base type its name holds.
+        let mace = parse(include_str!("../item/test-items/en-magic-mace.txt"));
         assert_eq!(
-            class_of("Item Class: Rings\nRarity: Rare\nWoe Loop\nMystery Ring"),
-            Some(None)
+            class_of(&mace, "Temple Maul"),
+            Some(Some("Two Hand Maces".to_owned()))
         );
+        // A base the game data doesn't know is searched among any base instead.
+        let ring = parse("Item Class: Rings\nRarity: Rare\nWoe Loop\nMystery Ring");
+        assert_eq!(class_of(&ring, ring.base_type()), Some(None));
     }
 
     /// The filter of `property` among the filters of `item`.

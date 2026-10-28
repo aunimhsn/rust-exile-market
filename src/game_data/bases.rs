@@ -144,7 +144,8 @@ struct Base {
 #[derive(Deserialize)]
 struct BaseData {
     category: Category,
-    /// E.g. `crossbow`, `two_hand_weapon`: only those that tell where a modifier rolls.
+    /// E.g. `crossbow`, `two_hand_weapon`: only those that tell where a modifier rolls, also
+    /// the kind of a flask (`life_flask`, `mana_flask`), its category on the trade site.
     #[serde(default)]
     tags: Vec<String>,
 }

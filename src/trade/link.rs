@@ -121,13 +121,17 @@ pub fn query(item: &Item, target: &TradeTarget, filters: SearchFilters) -> Query
             TradeTarget::Unique { .. } => items.stats = filters.stats,
             TradeTarget::Base { base_type } => {
                 if filters.any_base {
-                    match game_data::trade_category(item.language(), base_type) {
-                        Some(category) => {
+                    if let Some(category) = searched_category(item, base_type) {
+                        items.base_type = None;
+                        items.category = Some(category);
+                    } else {
+                        log::info!(
+                            "No trade site category for the base type {base_type}: \
+                             searched among any base"
+                        );
+                        if filters.narrows() {
                             items.base_type = None;
-                            items.category = Some(category);
                         }
-                        None if filters.narrows() => items.base_type = None,
-                        None => {}
                     }
                 }
                 items.properties = filters.properties;
@@ -137,6 +141,14 @@ pub fn query(item: &Item, target: &TradeTarget, filters: SearchFilters) -> Query
         }
     }
     query
+}
+
+/// The category of the trade site searched in place of `base_type`, the base type of `item`
+/// its search looks for, when the player unchecks it (`weapon.bow`): a bow among all the bows;
+/// none for a base the game data doesn't know, searched among any base instead.
+#[must_use]
+pub fn searched_category(item: &Item, base_type: &str) -> Option<&'static str> {
+    game_data::trade_category(item.language(), base_type)
 }
 
 /// The link of the search `query` in `league`, on the trade site of `language`.
@@ -416,6 +428,25 @@ mod tests {
             searched_base(&flask, true, false),
             (None, Some("flask.mana"))
         );
+    }
+
+    #[test]
+    fn a_magic_item_is_searched_by_the_category_of_the_base_its_name_holds() {
+        let names = item_names();
+        let mace = parse(include_str!("../item/test-items/en-magic-mace.txt"));
+        let target = target(&mace, Some(&names), None).expect("a target");
+        let filters = SearchFilters {
+            any_base: true,
+            ..SearchFilters::default()
+        };
+
+        match super::query(&mace, &target, filters) {
+            Query::Items(items) => assert_eq!(
+                (items.base_type, items.category),
+                (None, Some("weapon.twomace"))
+            ),
+            Query::Exchange(_) => panic!("a search of items"),
+        }
     }
 
     #[test]

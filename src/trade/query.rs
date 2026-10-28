@@ -52,7 +52,8 @@ pub struct ItemQuery {
 /// The filters of the search of an item, as the player left them.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct SearchFilters {
-    /// The base type unchecked: the offers may have any base of its category.
+    /// The base type unchecked: the offers may have any base of its category, or any base at
+    /// all for a base the game data doesn't know.
     pub any_base: bool,
     pub properties: Vec<PropertyFilter>,
     pub stats: Vec<StatFilter>,
