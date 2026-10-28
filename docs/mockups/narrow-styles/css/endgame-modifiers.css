@@ -24,17 +24,16 @@
 [data-unrevealed="band"] .app-unrevealed { margin: 0 -6px; padding: 3px 6px; border-radius: var(--radius); background: color-mix(in srgb, var(--desecrated) 12%, transparent); }
 [data-unrevealed="band"] .app-unrevealed .text { color: var(--desecrated); font-style: normal; font-weight: 600; }
 
-/* "Green squares": a row of small green squares, like the scrambled letters of the game, then the word
-   Desecrated; the other variants write "Unrevealed prefix". */
+/* "Green squares": a row of small green squares, like the scrambled letters of the game, and under it
+   the word Desecrated, small like the line of the range; the other variants write "Unrevealed prefix". */
 .app-squares, .app-unrevealed-word { display: none; }
 [data-unrevealed="squares"] .app-unrevealed-words { display: none; }
-[data-unrevealed="squares"] .app-unrevealed .text { font-style: normal; color: var(--desecrated); font-weight: 600; }
+[data-unrevealed="squares"] .app-unrevealed .text { font-style: normal; }
 [data-unrevealed="squares"] .app-squares {
-  display: inline-block; width: 137px; height: 7px; margin-right: 8px; vertical-align: 1px;
+  display: block; width: 137px; height: 7px; margin: 5px 0 4px;
   background: repeating-linear-gradient(90deg, var(--desecrated) 0 7px, transparent 7px 10px);
-  filter: drop-shadow(0 0 3px color-mix(in srgb, var(--desecrated) 60%, transparent));
 }
-[data-unrevealed="squares"] .app-unrevealed-word { display: inline; }
+[data-unrevealed="squares"] .app-unrevealed-word { display: block; font-size: 11px; font-weight: 600; color: var(--desecrated); }
 
 /* A modifier of one tier only: no tier, or its T1 in gray. */
 .app-single { display: none; }
