@@ -9,6 +9,9 @@ const propClass = name => ({ Armour: "attr-str", Evasion: "attr-dex", "Energy Sh
 // falls between the lowest roll of its worst tier and the highest of tier 1 (`overTiers` of the section
 // Roll bar), so that a full bar means close to the best possible.
 const rareBar = o => `<span class="bar"><i style="width:${(o.share * 100).toFixed(1)}%"></i></span>`;
+// A tier in the tooltip of a range field, without parentheses, in the color of its tier as under the
+// stats: "Rolls 9 T8 to 170 T1" (13j2, asked by the owner for consistency).
+const tierTag = number => `<b class="tier${number <= 3 ? " tier-top" : ""} t${number}">T${number}</b>`;
 
 function item(it, unfolded = false) {
   const tagClass = t => /^Corrupt|^Corrompu/.test(t) ? "corrupted" : /^\d+ T1$/.test(t) ? "t1" : "";

@@ -17,8 +17,8 @@ function overTiers(values, tiers) {
 }
 // One value per line: its tiers as the ranges of one value.
 const one = tiers => tiers.map(range => [range]);
-// The text of the tooltip of the range field: "10 (T13) to 214 (T1)".
-const rollsOver = tiers => `${tiers[tiers.length - 1][0]} (T${tiers.length}) to ${tiers[0][1]} (T1)`;
+// The text of the tooltip of the range field: "10 T13 to 214 T1", each tier in its color.
+const rollsOver = tiers => `${tiers[tiers.length - 1][0]} ${tierTag(tiers.length)} to ${tiers[0][1]} ${tierTag(1)}`;
 // The tiers of Ancestral Mail, a body armour of strength and dexterity.
 const BODY_LIFE = [[200, 214], [190, 199], [175, 189], [150, 174], [120, 149], [100, 119], [85, 99], [70, 84], [60, 69], [40, 59], [30, 39], [20, 29], [10, 19]];
 const BODY_ARMOUR = [[150, 170], [128, 149], [103, 127], [86, 102], [72, 85], [47, 71], [17, 46], [9, 16]];

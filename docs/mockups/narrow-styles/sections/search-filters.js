@@ -50,10 +50,10 @@ SECTIONS.push(["Rare: its range field tooltip (13j), a line without trade id und
     item({ rarity: "rare", name: "Doom Shell", base: "Wanderer Coat", cls: "Body Armours", tags: ["ilvl 82"], props: [["Armour", "412"], ["Evasion", "380"]], req: "Requires Level 65 · 59 Str · 59 Dex", filters: "3 filters", statsLabel: "Stats (3)",
       stats: [
         { group: "Prefixes", fill: "1 of 3 · 2 open", min: true },
-        { mod: "+86 to maximum Life", check: true, min: 77, tier: 3, range: "85–99", share: .1, noBar: true, bounds: "10 (T11) to 174 (T1)", hover: "min" },
+        { mod: "+86 to maximum Life", check: true, min: 77, tier: 3, range: "85–99", share: .1, noBar: true, bounds: `10 ${tierTag(13)} to 214 ${tierTag(1)}`, hover: "min" },
         { group: "Suffixes", fill: "2 of 3 · 1 open" },
-        { mod: "+41% to Cold Resistance", check: true, min: 37, tier: 1, range: "41–45", share: .1, noBar: true, bounds: "6 (T8) to 45 (T1)" },
-        { mod: "+23% to Lightning Resistance", check: true, min: 21, tier: 4, range: "21–25", share: .5, noBar: true, bounds: "6 (T8) to 45 (T1)" },
+        { mod: "+41% to Cold Resistance", check: true, min: 37, tier: 1, range: "41–45", share: .1, noBar: true, bounds: `6 ${tierTag(8)} to 45 ${tierTag(1)}` },
+        { mod: "+23% to Lightning Resistance", check: true, min: 21, tier: 4, range: "21–25", share: .5, noBar: true, bounds: `6 ${tierTag(8)} to 45 ${tierTag(1)}` },
       ] }, true), price(RARE_ESTIMATE_BEFORE), foot())],
   ["A line without trade id under a tier 1", win(topBar(),
     item({ rarity: "rare", name: "Storm Loop", base: "Sapphire Ring", cls: "Rings", tags: ["ilvl 81"], req: "Requires Level 60", filters: "3 filters", statsLabel: "Stats (4)",
