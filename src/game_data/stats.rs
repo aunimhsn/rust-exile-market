@@ -319,7 +319,7 @@ mod tests {
     #[test]
     fn every_desecrated_or_fractured_stat_has_an_explicit_id() {
         for language in [Language::English, Language::French] {
-            let missing: Vec<&str> = Stats::of(language)
+            let checked: Vec<&Stat> = Stats::of(language)
                 .list
                 .iter()
                 .filter(|stat| {
@@ -327,6 +327,10 @@ mod tests {
                         .into_iter()
                         .any(|group| !stat.trade_ids(group).is_empty())
                 })
+                .collect();
+            assert!(!checked.is_empty(), "{language:?}: no stat to check");
+            let missing: Vec<&str> = checked
+                .iter()
                 .filter(|stat| stat.trade_ids(TradeGroup::Explicit).is_empty())
                 .map(|stat| stat.reference.as_str())
                 .collect();
