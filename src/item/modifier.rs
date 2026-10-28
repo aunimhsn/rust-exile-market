@@ -325,8 +325,9 @@ fn text_before_sign_is_word(text: &str, number: &str) -> bool {
         .is_some_and(char::is_alphanumeric)
 }
 
-/// Reads `(min-max)` after a value, if it is a range; the characters are only consumed
-/// when it is one.
+/// Reads `(min-max)` after a value, if it is a range, or `(value)`, a range of one value
+/// (`29(30)% reduced Attribute Requirements` of a sanctified item); the characters are only
+/// consumed when it is one.
 fn read_range(chars: &mut std::iter::Peekable<std::str::Chars<'_>>) -> Option<Range> {
     let mut lookahead = chars.clone();
     lookahead.next(); // (
@@ -337,7 +338,7 @@ fn read_range(chars: &mut std::iter::Peekable<std::str::Chars<'_>>) -> Option<Ra
         }
         inside.push(c);
     }
-    let (low, high) = split_range(&inside)?;
+    let (low, high) = split_range(&inside).unwrap_or((&inside, &inside));
     let (low, high) = (low.parse::<f64>().ok()?, high.parse::<f64>().ok()?);
     *chars = lookahead;
     Some(Range {
@@ -412,11 +413,30 @@ mod tests {
     }
 
     #[test]
-    fn keeps_the_parentheses_that_are_not_ranges() {
-        let line = StatLine::parse("Adds 5 (cold) and 3(a-b)");
+    fn reads_a_range_of_one_value() {
+        let line = StatLine::parse("29(30)% reduced Attribute Requirements");
+        assert_eq!(line.text, "29% reduced Attribute Requirements");
+        assert_eq!(line.rolls, [roll(29.0, Some((30.0, 30.0)))]);
 
-        assert_eq!(line.text, "Adds 5 (cold) and 3(a-b)");
-        assert_eq!(line.rolls, [roll(5.0, None), roll(3.0, None)]);
+        let line = StatLine::parse("-3(-2)% to Cold Resistance");
+        assert_eq!(line.text, "-3% to Cold Resistance");
+        assert_eq!(line.rolls, [roll(-3.0, Some((-2.0, -2.0)))]);
+    }
+
+    #[test]
+    fn keeps_the_parentheses_that_are_not_ranges() {
+        let line = StatLine::parse("Adds 5 (cold) and 3(a-b) or 4() or 6(x)");
+
+        assert_eq!(line.text, "Adds 5 (cold) and 3(a-b) or 4() or 6(x)");
+        assert_eq!(
+            line.rolls,
+            [
+                roll(5.0, None),
+                roll(3.0, None),
+                roll(4.0, None),
+                roll(6.0, None)
+            ]
+        );
     }
 
     #[test]

@@ -123,7 +123,8 @@ impl ModifierTiers {
 /// None for a modifier the tables don't hold: an implicit, a rune, an enchantment, a modifier
 /// whose header doesn't tell its affix, a line without stat, a base without tags; or whose
 /// values and ranges are in no tier: a modifier of the lords of the Abyss is desecrated, like
-/// some ordinary ones, and rolls its own range.
+/// some ordinary ones, and rolls its own range. A tier with the ranges the advanced copy wrote
+/// holds the values of a sanctified item, out of them.
 ///
 /// When several tiers hold the copied values (a line without number has no range), the best
 /// one is taken; when several modifiers hold them, the first of the file.
@@ -248,6 +249,9 @@ enum Fit {
     Within,
     /// Its values are within the ranges of the tier, give or take the rounding of the game.
     Rounded,
+    /// Its values are out of the ranges of the tier, which are those the advanced copy wrote: a
+    /// sanctified item, whose values leave their tier (`+74(80-89) to maximum Mana`).
+    Written,
 }
 
 /// A copied line of a modifier, the lines of a stat written on several lines counting as one.
@@ -355,8 +359,8 @@ impl<'a> Copied<'a> {
         values
     }
 
-    /// How well `tier` holds the copied `values`; none when it doesn't hold them, or its ranges
-    /// aren't those the advanced copy gave.
+    /// How well `tier` holds the copied `values`; none when its ranges aren't those the advanced
+    /// copy gave, or when it doesn't hold them and the copy gave no range.
     fn fit(&self, values: &[f64], tier: &Tier) -> Option<Fit> {
         if values.len() != tier.ranges.len() {
             return None;
@@ -383,7 +387,7 @@ impl<'a> Copied<'a> {
         } else if within(ROUNDING) {
             Some(Fit::Rounded)
         } else {
-            None
+            self.ranges.as_ref().map(|_| Fit::Written)
         }
     }
 }
@@ -484,6 +488,14 @@ mod tests {
                 include_str!("../item/test-items/fr-rare-body-armour.txt"),
                 None,
             ),
+            (
+                include_str!("../item/test-items/en-owner-rare-sceptre-sanctified.txt"),
+                None,
+            ),
+            (
+                include_str!("../item/test-items/fr-rare-sceptre-sanctified.txt"),
+                None,
+            ),
         ] {
             for (tier, (number, ranges)) in tiers_of(text, base_type) {
                 // The crossbow was copied before a patch added a tier above its leech, `of
@@ -502,7 +514,7 @@ mod tests {
                 }
             }
         }
-        assert_eq!(found, 21);
+        assert_eq!(found, 31);
         // A line whose stat the tables have under another tier is a mistake; a line the tables
         // don't have isn't: the lightning damage of the mace, copied before a patch changed
         // its ranges, and the two modifiers of Amanamu, a lord of the Abyss, desecrated with
@@ -515,6 +527,32 @@ mod tests {
                 vec![range(13.0, 17.0)],
             ]
         );
+    }
+
+    #[test]
+    fn a_sanctified_value_out_of_its_tier_finds_it_by_the_copied_ranges() {
+        for text in [
+            include_str!("../item/test-items/en-owner-rare-sceptre-sanctified.txt"),
+            include_str!("../item/test-items/fr-rare-sceptre-sanctified.txt"),
+        ] {
+            let found: Vec<_> = tiers_of(text, None)
+                .into_iter()
+                .filter_map(|(found, _)| found)
+                .collect();
+            // `+74(80-89) to maximum Mana` and `29(30)% reduced Attribute Requirements`.
+            assert!(found.contains(&(5, vec![range(80.0, 89.0)])), "{found:?}");
+            assert!(found.contains(&(2, vec![range(30.0, 30.0)])), "{found:?}");
+        }
+
+        // Without the ranges of the advanced copy, a value out of every tier finds none.
+        let mana = modifier(Some(Affix::Prefix), &["+74 to maximum Mana"]);
+        assert_eq!(
+            tiers("Rattling Sceptre", &mana).and_then(|tiers| Some(tiers.tier()?.number)),
+            Some(6),
+            "74 is in the range of tier 6"
+        );
+        let mana = modifier(Some(Affix::Prefix), &["+400 to maximum Mana"]);
+        assert_eq!(tiers("Rattling Sceptre", &mana), None);
     }
 
     /// A modifier of `affix` with `lines`, without the ranges of the advanced copy: found by

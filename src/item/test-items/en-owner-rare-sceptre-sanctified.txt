@@ -1,0 +1,27 @@
+Item Class: Sceptres
+Rarity: Rare
+Entropy Knell
+Rattling Sceptre
+--------
+Spirit: 100
+--------
+Requires: Level 60
+--------
+Item Level: 79
+--------
+Grants Skill: Level 17 Skeletal Warrior Minion
+--------
+{ Prefix Modifier "Electrocuting" (Tier: 1) — Damage, Elemental, Lightning, Attack }
+Allies in your Presence deal 4(1-4) to 60(60-71) added Attack Lightning Damage
+{ Prefix Modifier "Opalescent" (Tier: 5) — Mana }
++74(80-89) to maximum Mana
+{ Crafted Prefix Modifier "Motivating" (Tier: 3) — Damage }
+Allies in your Presence deal 82(75-89)% increased Damage
+{ Suffix Modifier "of the Skilled" (Tier: 2) }
+29(30)% reduced Attribute Requirements
+{ Suffix Modifier "of Outreach" (Tier: 3) — Aura }
+50(46-55)% increased Presence Area of Effect
+{ Suffix Modifier "of the Veil" }
+Desecrated Suffix
+--------
+Sanctified

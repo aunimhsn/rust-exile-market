@@ -1,10 +1,10 @@
-//! What the window shows when a copied item can't be read, or was copied without its details.
+//! What the window shows when a copied item can't be read, also when it was copied without
+//! its details: the owner's game always gives them (step 13k).
 
 use egui::{CentralPanel, Frame, Label, RichText, Ui, vec2};
 
 use super::theme::{color, size, text};
 use crate::i18n::{Message, Translator};
-use crate::item::ParseError;
 
 /// The space above and under the messages.
 const PADDING_Y: f32 = 12.0;
@@ -13,24 +13,15 @@ const HINT_GAP: f32 = 9.0;
 
 pub struct UnreadableItem<'a> {
     i18n: &'a Translator,
-    error: ParseError,
 }
 
 impl<'a> UnreadableItem<'a> {
     #[must_use]
-    pub fn new(i18n: &'a Translator, error: ParseError) -> Self {
-        Self { i18n, error }
+    pub fn new(i18n: &'a Translator) -> Self {
+        Self { i18n }
     }
 
     pub fn show(self, ui: &mut Ui) {
-        let (message, hint) = match self.error {
-            ParseError::WithoutDetails => {
-                (Message::ItemWithoutDetails, Message::ItemWithoutDetailsHint)
-            }
-            ParseError::MissingRarity | ParseError::UnknownRarity | ParseError::MissingBaseType => {
-                (Message::ItemUnreadable, Message::ItemUnreadableHint)
-            }
-        };
         CentralPanel::no_frame()
             .frame(
                 Frame::NONE
@@ -40,7 +31,7 @@ impl<'a> UnreadableItem<'a> {
             .show(ui, |ui| {
                 ui.add(
                     Label::new(
-                        RichText::new(self.i18n.text(message))
+                        RichText::new(self.i18n.text(Message::ItemUnreadable))
                             .font(text::message())
                             .color(color::TEXT),
                     )
@@ -49,7 +40,7 @@ impl<'a> UnreadableItem<'a> {
                 ui.add_space(HINT_GAP);
                 ui.add(
                     Label::new(
-                        RichText::new(self.i18n.text(hint))
+                        RichText::new(self.i18n.text(Message::ItemUnreadableHint))
                             .font(text::body())
                             .color(color::WEAK),
                     )

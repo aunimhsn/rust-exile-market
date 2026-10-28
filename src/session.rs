@@ -45,7 +45,7 @@ impl ShownItem {
                 }
             }
             Err(ParseError::WithoutDetails) => {
-                log::info!("A copied item has no advanced description: it is asked again");
+                log::info!("A copied item has no advanced description: it can't be read");
             }
             Err(error) => log::warn!("A copied item couldn't be read: {error}"),
         }
