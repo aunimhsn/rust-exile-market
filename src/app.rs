@@ -268,6 +268,7 @@ impl ExileMarketApp {
                 item,
                 shown.lines(),
                 shown.stats(),
+                shown.tiers(),
                 &mut self.filters,
                 &self.i18n,
             )
@@ -343,6 +344,7 @@ fn search_filters(
         item,
         shown.lines(),
         shown.stats(),
+        shown.tiers(),
         unique_modifiers,
         session.filtered_base_type(item),
     );

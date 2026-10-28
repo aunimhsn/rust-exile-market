@@ -95,11 +95,21 @@ pub struct ModifierTiers {
     pub tiers: Vec<Tier>,
     /// The index in `tiers` of the tier of the copied modifier.
     pub found: usize,
+    /// The number of values of each line match given, in their order: the ranges of a tier
+    /// follow them (two for `Adds # to # Physical Damage`; one for a line without number).
+    pub counts: Vec<usize>,
 }
 
 impl ModifierTiers {
     /// The tier of the copied modifier.
     #[must_use]
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "checked by the tests: the application shows the tier the advanced copy writes"
+        )
+    )]
     pub fn tier(&self) -> Option<&Tier> {
         self.tiers.get(self.found)
     }
@@ -172,7 +182,15 @@ fn find(
         if let Some((fit, found)) = found
             && best.as_ref().is_none_or(|(best, _)| fit < *best)
         {
-            best = Some((fit, ModifierTiers { tiers, found }));
+            let counts = copied.lines.iter().map(CopiedLine::count).collect();
+            best = Some((
+                fit,
+                ModifierTiers {
+                    tiers,
+                    found,
+                    counts,
+                },
+            ));
         }
     }
     best.map(|(_, tiers)| tiers)

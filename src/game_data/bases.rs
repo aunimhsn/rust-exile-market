@@ -105,10 +105,6 @@ struct BaseData {
     category: Category,
     /// E.g. `crossbow`, `two_hand_weapon`: only those that tell where a modifier rolls.
     #[serde(default)]
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "read by the roll bar of step 13j2")
-    )]
     tags: Vec<String>,
 }
 
@@ -135,10 +131,6 @@ pub fn category(language: Language, name: &str) -> Option<Category> {
 
 /// The tags of the base type `name` in `language` that tell where a modifier rolls; none for a
 /// base the data doesn't know, or doesn't know the tags of.
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "read by the roll bar of step 13j2")
-)]
 pub(super) fn tags(language: Language, name: &str) -> Option<&'static [String]> {
     base(language, name)
         .map(|base| base.tags.as_slice())
