@@ -13,6 +13,7 @@ use crate::market::{MarketEvent, Source};
 use crate::prices::{PriceList, Rates, UniqueModifiers};
 use crate::pricing::{self, FixedPrice, NoFixedPrice};
 use crate::roll_difference::CopiedLines;
+use crate::tier_rolls::TierRolls;
 use crate::trade::link::{self, TradeTarget};
 use crate::trade::query::{SearchFilters, SearchKind};
 use crate::trade::search::Search;
@@ -26,11 +27,14 @@ pub struct ShownItem {
     lines: CopiedLines,
     /// The stat of each modifier line on the trade site, which searches it.
     stats: LineStats,
+    /// The rolls of each line of a prefix or suffix over every tier of its modifier.
+    tiers: TierRolls,
 }
 
 impl ShownItem {
-    /// The item `copied`; `trade` holds the stats of the trade site, once it gave them.
-    fn new(copied: &CopiedItem, trade: Option<&TradeStats>) -> Self {
+    /// The item `copied`; `trade` holds the stats of the trade site and `names` the names of
+    /// its items, once it gave them.
+    fn new(copied: &CopiedItem, trade: Option<&TradeStats>, names: Option<&ItemNames>) -> Self {
         let parsed = Item::parse(copied);
         match &parsed {
             Ok(item) => {
@@ -45,16 +49,20 @@ impl ShownItem {
             parsed,
             lines: CopiedLines::default(),
             stats: LineStats::default(),
+            tiers: TierRolls::default(),
         };
-        shown.read_lines(trade);
+        shown.read_lines(trade, names);
         shown
     }
 
-    /// Reads the modifier lines of the item, with the stats of the trade site `trade`.
-    fn read_lines(&mut self, trade: Option<&TradeStats>) {
+    /// Reads the modifier lines of the item, with the stats of the trade site `trade`, and
+    /// their tiers on its base, found among the `names` of the trade site for a magic item.
+    fn read_lines(&mut self, trade: Option<&TradeStats>, names: Option<&ItemNames>) {
         if let Ok(item) = &self.parsed {
             self.stats = LineStats::new(item.language(), item.modifiers(), trade);
             self.lines = CopiedLines::new(item.language(), item.modifiers(), &self.stats, trade);
+            let base_type = link::target(item, names, None).and_then(|target| target.base_type());
+            self.tiers = TierRolls::new(item.language(), item.modifiers(), base_type);
         }
     }
 
@@ -70,6 +78,11 @@ impl ShownItem {
     #[must_use]
     pub fn stats(&self) -> &LineStats {
         &self.stats
+    }
+
+    #[must_use]
+    pub fn tiers(&self) -> &TierRolls {
+        &self.tiers
     }
 }
 
@@ -234,19 +247,20 @@ impl Session {
         // The names are already in the cache, with their templates.
         let (english, french) = names.take_stat_templates();
         let trade = TradeStats::new(&english, &french);
-        // An item copied before them may have a line only the trade site knows.
+        self.item_names = Some(names);
+        // An item copied before them may have a line only the trade site knows, or be a
+        // magic item whose base type they tell.
         if let Some(shown) = &mut self.item {
-            shown.read_lines(Some(&trade));
+            shown.read_lines(Some(&trade), self.item_names.as_ref());
         }
         self.trade_stats = Some(trade);
-        self.item_names = Some(names);
     }
 
     pub fn apply(&mut self, event: ClipboardEvent) {
         match event {
             ClipboardEvent::Copied(copied) => {
                 let trade = self.trade_stats.as_ref();
-                let shown = ShownItem::new(&copied, trade);
+                let shown = ShownItem::new(&copied, trade, self.item_names.as_ref());
                 if let Ok(item) = shown.parsed() {
                     self.log_price(item);
                     log_unknown_stats(item, trade);
@@ -337,12 +351,7 @@ impl Session {
         if !item.rarity().has_item_filters() {
             return None;
         }
-        match self.trade_target(item)? {
-            TradeTarget::Base { base_type } => Some(base_type),
-            TradeTarget::Unique { .. }
-            | TradeTarget::UnidentifiedUnique { .. }
-            | TradeTarget::Exchange { .. } => None,
-        }
+        self.trade_target(item)?.base_type()
     }
 
     /// The search for `item` on the trade site with its `filters`, in the league shown; none
@@ -862,6 +871,29 @@ mod tests {
             "Item Class: Rings\nRarity: Unique\nAndvarius\nGold Ring",
         );
         assert_eq!(base_type(&session), None);
+    }
+
+    #[test]
+    fn a_magic_item_gets_the_rolls_of_every_tier_once_the_names_tell_its_base() {
+        const MACE: &str = include_str!("item/test-items/en-magic-mace.txt");
+        let mut session = session();
+        // The line of its strength suffix: its added lightning damage was copied before a
+        // patch changed its ranges, and no tier rolls them any more.
+        let strength = |session: &Session| {
+            let key = crate::filters::StatKey {
+                modifier: 1,
+                line: 0,
+            };
+            session.item()?.tiers().get(key).cloned()
+        };
+
+        copy(&mut session, MACE);
+        assert_eq!(strength(&session), None, "the names aren't known yet");
+        session.apply_item_names(crate::item_names::tests::item_names());
+        assert!(strength(&session).is_some_and(|rolls| rolls.tiers.is_some()));
+        // Copied once the names are known: at once.
+        copy(&mut session, MACE);
+        assert!(strength(&session).is_some_and(|rolls| rolls.tiers.is_some()));
     }
 
     #[test]

@@ -15,6 +15,7 @@ use crate::i18n::{Message, NumberTag, Requirement, Translator};
 use crate::item::{DamageKind, Item, ItemState, Rarity};
 use crate::prices::UniqueModifiers;
 use crate::roll_difference::CopiedLines;
+use crate::tier_rolls::TierRolls;
 use crate::trade::stat_filters::LineStats;
 
 /// The space above and under the block.
@@ -155,6 +156,8 @@ pub struct ItemBlock<'a> {
     lines: &'a CopiedLines,
     /// The stats of its modifier lines, which tell those the trade site can search.
     stats: &'a LineStats,
+    /// The rolls of every tier of a line of a prefix or suffix.
+    tiers: &'a TierRolls,
     i18n: &'a Translator,
     /// The trade site has a search for this item.
     tradable: bool,
@@ -174,6 +177,7 @@ impl<'a> ItemBlock<'a> {
         item: &'a Item,
         lines: &'a CopiedLines,
         stats: &'a LineStats,
+        tiers: &'a TierRolls,
         filters: &'a mut Filters,
         i18n: &'a Translator,
     ) -> Self {
@@ -181,6 +185,7 @@ impl<'a> ItemBlock<'a> {
             item,
             lines,
             stats,
+            tiers,
             i18n,
             tradable: false,
             stats_open: false,
@@ -348,6 +353,7 @@ impl<'a> ItemBlock<'a> {
             self.item,
             self.lines,
             self.stats,
+            self.tiers,
             self.unique_modifiers,
             self.base_type,
         );
@@ -564,7 +570,8 @@ mod tests {
         let mut filters = Filters::default();
         let lines = CopiedLines::default();
         let stats = LineStats::default();
-        let block = ItemBlock::new(&item, &lines, &stats, &mut filters, &i18n);
+        let tiers = TierRolls::default();
+        let block = ItemBlock::new(&item, &lines, &stats, &tiers, &mut filters, &i18n);
         Texts {
             base_line: block.base_line().map(str::to_owned),
             tags: block.tags().into_iter().map(|(label, _)| label).collect(),

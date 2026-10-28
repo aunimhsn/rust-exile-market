@@ -146,7 +146,8 @@ fn trade_value(
 
 /// For each line of `found`, a line of `modifier`, the indexes of its numbers the stat counts;
 /// all of them when the numbers of the lines don't line up with those the stat read.
-fn counted_numbers(found: &game_data::LineMatch, modifier: &Modifier) -> Vec<Vec<usize>> {
+#[must_use]
+pub fn counted_numbers(found: &game_data::LineMatch, modifier: &Modifier) -> Vec<Vec<usize>> {
     let counts: Vec<usize> = found
         .lines
         .clone()

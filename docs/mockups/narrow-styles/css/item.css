@@ -137,6 +137,9 @@
 /* "Lower is better" under the rolls, in gray. */
 .app-tip span { display: block; }
 .app-tip span + span { margin-top: 3px; color: var(--weak); }
+/* The tiers of the rolls a field accepts, right under them, small and gray like the ranges under
+   the stats. */
+.app-tip .app-tip-tiers { margin-top: 1px; font-size: 11px; color: var(--faint); }
 .app-range:hover .app-tip, .app-range.is-hovered .app-tip { display: block; }
 /* A line the trade site can't search: a circle struck through in place of its checkbox, in the
    warning color, its tooltip under the pointer, opening to the right since the sign is on the left

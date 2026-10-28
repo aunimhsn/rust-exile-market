@@ -25,6 +25,7 @@ mod roll_difference;
 mod rolls;
 mod session;
 mod settings;
+mod tier_rolls;
 mod trade;
 mod ui;
 mod worker;

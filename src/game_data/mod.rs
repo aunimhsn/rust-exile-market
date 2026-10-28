@@ -21,10 +21,6 @@
 
 mod bases;
 mod lines;
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "read by the roll bar of step 13j2")
-)]
 mod modifiers;
 mod stats;
 mod trade_site;
@@ -33,8 +29,7 @@ pub use bases::{Category, category};
 #[cfg(test)]
 pub use lines::equipment_strings;
 pub use lines::{LineMatch, StatMatch, StatSource, english_string, modifier_stats};
-#[expect(unused_imports, reason = "read by the roll bar of step 13j2")]
-pub use modifiers::{ModifierTiers, Tier, modifier_tiers};
+pub use modifiers::{Tier, modifier_tiers};
 pub use stats::TradeGroup;
 pub use trade_site::TradeStats;
 #[cfg(test)]

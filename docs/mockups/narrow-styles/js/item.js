@@ -5,6 +5,11 @@ const colorAttributes = text => text.replace(/(\d+ )(Str|For)\b/g, '<span class=
   .replace(/(\d+ )(Int)\b/g, '<span class="attr-int">$1$2</span>');
 const propClass = name => ({ Armour: "attr-str", Evasion: "attr-dex", "Energy Shield": "attr-int" })[name] || "";
 
+// The bar of a rare or magic modifier over every tier of its base (13j2): filled to where the roll
+// falls between the lowest roll of its worst tier and the highest of tier 1 (`overTiers` of the section
+// Roll bar), so that a full bar means close to the best possible.
+const rareBar = o => `<span class="bar"><i style="width:${(o.share * 100).toFixed(1)}%"></i></span>`;
+
 function item(it, unfolded = false) {
   const tagClass = t => /^Corrupt|^Corrompu/.test(t) ? "corrupted" : /^\d+ T1$/.test(t) ? "t1" : "";
   const tags = (it.tags || []).map(t => `<span class="tag ${tagClass(t)}">${t}</span>`).join("");
@@ -39,10 +44,12 @@ function item(it, unfolded = false) {
       const warning = row.warning ? `<span class="app-warning${row.hover ? " is-hovered" : ""}">${ICON.forbid(15)}<span class="app-tip">${row.warning}</span></span>` : "";
       const box = warning || (row.check === undefined ? "" : `<span class="check ${row.check ? "on" : ""}">${row.check ? ICON.check(11) : ""}</span>`);
       const tier = row.tier ? `<span class="tier ${row.tier <= 3 ? "tier-top" : ""} t${row.tier}">T${row.tier}</span>` : "";
-      // No bar for the tier of a rare until the modifier tables (step 13).
       // The bar: filled to where the roll falls in its range, also on a line better lower, so that it
       // reads with the range written next to it.
-      const bar = row.range && !row.noBar ? `<span class="bar"><i style="width:${row.share * 100}%"></i></span>` : "";
+      // A rare or magic modifier with the modifier tables (`row.over`, 13j2): its bar over every tier of
+      // its base, also on each line of a hybrid (no range of its own: its tier and ranges go under the last).
+      const bar = row.over ? rareBar(row.over)
+        : row.range && !row.noBar ? `<span class="bar"><i style="width:${row.share * 100}%"></i></span>` : "";
       // The range field of a filter: the minimum, a dash, the maximum, an empty half without a word
       // (the title of the column names them). Each half holds three characters, four on the field of a
       // stat whose range reaches them ("wide"); it never grows with what is typed. A line better lower
@@ -57,8 +64,11 @@ function item(it, unfolded = false) {
       const [boundLow, boundHigh] = (row.range || "").split("–");
       const bounds = row.bounds ?? (row.tier || !boundHigh || row.range.includes("·") ? null : `${boundLow} ${fr ? "à" : "to"} ${boundHigh}`);
       const rolls = bounds ? `${fr ? "Jets de" : "Rolls"} ${bounds}` : null;
+      // For a rare, the tiers of these rolls right under them, small and gray: "T13–T1" (13j2; in
+      // the line of the rolls, "Rolls 10 T13 to 214 T1" read badly, the owner found).
+      const tiers = row.boundTiers ? `<span class="app-tip-tiers">T${row.boundTiers[0]}–T${row.boundTiers[1]}</span>` : "";
       const lowerNote = row.lower ? (fr ? "Plus c'est bas, mieux c'est" : "Lower is better") : null;
-      const fieldTip = [rolls, lowerNote].filter(Boolean).map(line => `<span>${line}</span>`).join("");
+      const fieldTip = [rolls && `<span>${rolls}</span>${tiers}`, lowerNote && `<span>${lowerNote}</span>`].filter(Boolean).join("");
       const half = (value, name) => `<input value="${value ?? ""}" inputmode="decimal" aria-label="${name}">`;
       const hovered = row.hover ? " is-hovered" : "";
       const fields = row.min === undefined ? "" : `<span class="input app-range${hovered}">${half(low, "Minimum")}<i>–</i>${half(row.max, "Maximum")}<span class="app-tip">${fieldTip}</span></span>`;
@@ -66,7 +76,8 @@ function item(it, unfolded = false) {
       const tip = row.tip ? `${plain}\n${row.tip}` : plain;
       const text = `<span class="text" title="${tip.replace(/"/g, "&quot;")}">${row.mod}</span>`;
       if (box) {
-        const rollTop = row.range ? `<div class="roll2">${bar}<span class="range">${tier}${row.range}</span></div>` : "";
+        const rollTop = row.range ? `<div class="roll2">${bar}<span class="range">${tier}${row.range}</span></div>`
+          : bar ? `<div class="roll2">${bar}</div>` : "";
         return `<div class="mod2 min-top${row.wide ? " app-wide" : ""}${cls}">${box}${text}${fields || "<span></span>"}${rollTop}</div>`;
       }
       const input = row.min === undefined ? "" : `<span class="input">${row.min}</span>`;
