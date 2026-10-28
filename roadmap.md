@@ -61,6 +61,7 @@ Path of Exile 2 leaves early access with its version 1.0 on 2026-12-11. The modi
     - the modifiers of the **Breach** (`breach_desecration` among the tags of RePoE) and its rings, and those of the other endgame mechanics found on the way;
     - the **Time-Lost jewels**: their modifier tables, left out of the generator in 13j1 (159 tables), since the game writes their lines within `Small Passive Skills in Radius also grant …` or `Notable Passive Skills in Radius also grant …` while RePoE gives the bare line; a Time-Lost jewel copied by the owner tells which;
     - the **domain of a modifier table**, not kept in 13j1: the 5 tables of the flask charges (`["default", 1]`) roll on any base for the application, harmless while no other item writes their lines (checked on 2026-10-28); keep the domain (or the classes of the bases) in the tables;
+    - the **copy without details** checked on real copies (code review of 13j4a, 2026-10-28): a normal ring with its implicit, a charm, a waystone, a skill gem and a normal item with a rune, each copied with Ctrl+C and Ctrl+Alt+C, added to the test items, so that none of them shows the message by mistake;
     - and every other edge case found while studying them: this step is the polish of step 13;
     - their style in the stats (a tag, a color): mock-up first.
 - [ ] **14. Responsive layout and price history**: wireframes then mock-up of the medium and wide layouts with the visual style, then these layouts in the application, with the 7-day history chart in the wide layout.

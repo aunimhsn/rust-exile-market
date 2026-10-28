@@ -51,6 +51,9 @@ impl ShownItem {
                     log::warn!("A part of a copied item couldn't be read: {warning}");
                 }
             }
+            Err(ParseError::WithoutDetails) => {
+                log::info!("A copied item has no advanced description: it is asked again");
+            }
             Err(error) => log::warn!("A copied item couldn't be read: {error}"),
         }
         let mut shown = Self {

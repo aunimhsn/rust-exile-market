@@ -146,7 +146,7 @@ impl Item {
     }
 
     /// Whether its implicit or explicit modifiers were copied without the `{ … }` headers of
-    /// the advanced copy (Ctrl+Alt+C): without their tiers, the window asks to copy it again. The runes and the enchantments
+    /// the advanced copy (Ctrl+Alt+C), which give their tiers. The runes and the enchantments
     /// have no header in either copy.
     #[must_use]
     pub fn copied_without_details(&self) -> bool {
