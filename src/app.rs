@@ -340,7 +340,10 @@ fn search_filters(
         shown.tiers(),
         session.filtered_base_type(item),
     );
-    shown.stats().search_filters(&stats.filters(filters))
+    SearchFilters {
+        states: filters.lit_states_of(item).collect(),
+        ..shown.stats().search_filters(&stats.filters(filters))
+    }
 }
 
 impl App for ExileMarketApp {
@@ -514,6 +517,37 @@ mod tests {
     use crate::item::CopiedItem;
 
     #[test]
+    fn a_lit_state_tag_reaches_the_search() {
+        use crate::item::ItemState;
+        use crate::trade::query::Query;
+
+        let mut session = Session::new(Some(League::new("Standard")));
+        session.apply(ClipboardEvent::Copied(
+            CopiedItem::from_text(
+                "Item Class: Rings\nRarity: Rare\nWoe Loop\nRuby Ring\n--------\n\
+                 Item Level: 80\n--------\nCorrupted",
+            )
+            .unwrap(),
+        ));
+        let shown = session.item().expect("an item");
+        let item = shown.parsed().expect("read");
+        let corrupted = |filters: &Filters| {
+            let search = session
+                .trade_search(item, search_filters(&session, shown, item, filters))
+                .expect("a search");
+            let Query::Items(items) = search.query else {
+                panic!("a search of items");
+            };
+            items.states.corrupted
+        };
+        let mut filters = Filters::default();
+
+        assert_eq!(corrupted(&filters), None);
+        filters.toggle_state(ItemState::Corrupted);
+        assert_eq!(corrupted(&filters), Some(true));
+    }
+
+    #[test]
     fn the_gear_opens_the_settings_then_closes_them() {
         assert_eq!(View::Item.toggled(), View::Settings);
         assert_eq!(View::Settings.toggled(), View::Item);
@@ -576,7 +610,7 @@ mod tests {
     #[test]
     fn the_estimate_counts_the_answer_to_the_search_of_an_item_without_a_fixed_price() {
         use crate::trade::offers::{ItemOffer, OfferItem, Price, SellerStatus};
-        use crate::trade::query::{ItemQuery, Query};
+        use crate::trade::query::{ItemQuery, Query, StateFilters};
         use crate::trade::search::{Answer, NextSearch, Outcome};
 
         let rates = Rates {
@@ -620,9 +654,10 @@ mod tests {
                 category: None,
                 properties: Vec::new(),
                 rarity: None,
-                corrupted: Some(false),
-                sanctified: None,
-                mirrored: None,
+                states: StateFilters {
+                    corrupted: Some(false),
+                    ..StateFilters::default()
+                },
                 stats: Vec::new(),
             }),
         };

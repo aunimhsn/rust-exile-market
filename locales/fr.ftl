@@ -95,6 +95,17 @@ tag-sanctified = Sanctifié
 tag-fractured = Fissuré
 tag-mirrored = Reflété
 tag-unidentified = Non identifié
+# L'infobulle d'un tag d'état, un filtre de la recherche : gris, les offres avec ou sans cet état ;
+# allumé par un clic, les offres de cet état seulement. Double corruption gris dit « Corrompues ou non ».
+state-corrupted-or-not = Corrompues ou non
+state-corrupted-only = Offres corrompues seulement
+state-twice-corrupted-only = Offres doublement corrompues seulement
+state-sanctified-or-not = Sanctifiées ou non
+state-sanctified-only = Offres sanctifiées seulement
+state-fractured-or-not = Fissurées ou non
+state-fractured-only = Offres fissurées seulement
+state-mirrored-or-not = Reflétées ou non
+state-mirrored-only = Offres reflétées seulement
 tag-quality = Q { $value }%
 tag-sockets = { $value ->
     [one] { $value } châsse
@@ -189,8 +200,6 @@ filter-unsearchable-hint = Il se peut que les offres ne l'aient pas.
 origin-desecrated = Profané
 origin-fractured = Fissuré
 origin-crafted = Artisanat
-# Sous les stats d'un objet corrompu : la recherche ne le compare qu'aux offres corrompues.
-corrupted-offers-only = Offres corrompues seulement, comme cet objet.
 # Un modificateur profané pas encore révélé, dans son groupe ; et la note sous les stats de son objet.
 unrevealed-prefix = Préfixe non révélé
 unrevealed-suffix = Suffixe non révélé

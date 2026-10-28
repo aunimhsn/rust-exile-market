@@ -55,6 +55,16 @@ pub enum Message {
     TagFractured,
     TagMirrored,
     TagUnidentified,
+    /// The tooltip of a state tag, gray or lit.
+    StateCorruptedOrNot,
+    StateCorruptedOnly,
+    StateTwiceCorruptedOnly,
+    StateSanctifiedOrNot,
+    StateSanctifiedOnly,
+    StateFracturedOrNot,
+    StateFracturedOnly,
+    StateMirroredOrNot,
+    StateMirroredOnly,
     PriceLabel,
     EstimatedPriceLabel,
     PossibleUniques,
@@ -93,7 +103,6 @@ pub enum Message {
     OriginDesecrated,
     OriginFractured,
     OriginCrafted,
-    CorruptedOffersOnly,
     /// The line of a modifier not revealed yet, and the note under the stats of its item.
     UnrevealedPrefix,
     UnrevealedSuffix,
@@ -124,7 +133,7 @@ pub enum Message {
 impl Message {
     /// Every message, for the tests.
     #[cfg(test)]
-    const ALL: [Self; 94] = [
+    const ALL: [Self; 102] = [
         Self::LeagueModeSoftcore,
         Self::LeagueModeHardcore,
         Self::LeagueLoading,
@@ -156,6 +165,15 @@ impl Message {
         Self::TagFractured,
         Self::TagMirrored,
         Self::TagUnidentified,
+        Self::StateCorruptedOrNot,
+        Self::StateCorruptedOnly,
+        Self::StateTwiceCorruptedOnly,
+        Self::StateSanctifiedOrNot,
+        Self::StateSanctifiedOnly,
+        Self::StateFracturedOrNot,
+        Self::StateFracturedOnly,
+        Self::StateMirroredOrNot,
+        Self::StateMirroredOnly,
         Self::PriceLabel,
         Self::EstimatedPriceLabel,
         Self::PossibleUniques,
@@ -194,7 +212,6 @@ impl Message {
         Self::OriginDesecrated,
         Self::OriginFractured,
         Self::OriginCrafted,
-        Self::CorruptedOffersOnly,
         Self::UnrevealedPrefix,
         Self::UnrevealedSuffix,
         Self::UnrevealedNote,
@@ -222,6 +239,7 @@ impl Message {
     ];
 
     /// Its identifier in the `.ftl` files.
+    #[expect(clippy::too_many_lines, reason = "one line per message")]
     fn id(self) -> &'static str {
         match self {
             Self::LeagueModeSoftcore => "league-mode-softcore",
@@ -255,6 +273,15 @@ impl Message {
             Self::TagFractured => "tag-fractured",
             Self::TagMirrored => "tag-mirrored",
             Self::TagUnidentified => "tag-unidentified",
+            Self::StateCorruptedOrNot => "state-corrupted-or-not",
+            Self::StateCorruptedOnly => "state-corrupted-only",
+            Self::StateTwiceCorruptedOnly => "state-twice-corrupted-only",
+            Self::StateSanctifiedOrNot => "state-sanctified-or-not",
+            Self::StateSanctifiedOnly => "state-sanctified-only",
+            Self::StateFracturedOrNot => "state-fractured-or-not",
+            Self::StateFracturedOnly => "state-fractured-only",
+            Self::StateMirroredOrNot => "state-mirrored-or-not",
+            Self::StateMirroredOnly => "state-mirrored-only",
             Self::PriceLabel => "price-label",
             Self::EstimatedPriceLabel => "estimated-price-label",
             Self::PossibleUniques => "possible-uniques",
@@ -293,7 +320,6 @@ impl Message {
             Self::OriginDesecrated => "origin-desecrated",
             Self::OriginFractured => "origin-fractured",
             Self::OriginCrafted => "origin-crafted",
-            Self::CorruptedOffersOnly => "corrupted-offers-only",
             Self::UnrevealedPrefix => "unrevealed-prefix",
             Self::UnrevealedSuffix => "unrevealed-suffix",
             Self::UnrevealedNote => "unrevealed-note",

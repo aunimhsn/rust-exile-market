@@ -1,8 +1,8 @@
 //! The filters of the offers search, as the player sets them: whether each stat of the item,
 //! or its base type, item level, sockets, quality, required level, DPS or pseudo totals, is
-//! searched, its minimum and its maximum. They are kept for the item shown, until an item is
-//! copied, even the same one after another text; a stat the player didn't touch keeps the
-//! choice made for it by default.
+//! searched, its minimum and its maximum, and the state tags the player lit. They are kept for
+//! the item shown, until an item is copied, even the same one after another text; a stat the
+//! player didn't touch keeps the choice made for it by default.
 //!
 //! The minimum and the maximum searched stay within the range of the stat, whatever the
 //! player is typing ([`Filter::searched`]).
@@ -10,7 +10,7 @@
 use std::collections::HashMap;
 
 use crate::format;
-use crate::item::Range;
+use crate::item::{Item, ItemState, Range};
 use crate::trade::pseudo::Pseudo;
 
 /// A line of a modifier of the item: the index of its modifier among the modifiers of the
@@ -140,6 +140,8 @@ impl Filter {
 #[derive(Debug, Default)]
 pub struct Filters {
     changed: HashMap<FilterKey, Filter>,
+    /// The state tags lit: the offers of these states only.
+    lit: Vec<ItemState>,
 }
 
 impl Filters {
@@ -153,9 +155,33 @@ impl Filters {
         self.changed.insert(key, filter);
     }
 
+    /// The states of `item` whose tag the player lit: those searched, and counted among the
+    /// active filters.
+    pub fn lit_states_of<'a>(&'a self, item: &'a Item) -> impl Iterator<Item = ItemState> + 'a {
+        self.lit
+            .iter()
+            .copied()
+            .filter(|&state| item.has_state(state))
+    }
+
+    #[must_use]
+    pub fn is_lit(&self, state: ItemState) -> bool {
+        self.lit.contains(&state)
+    }
+
+    /// Lights the tag of `state`, or turns it gray again.
+    pub fn toggle_state(&mut self, state: ItemState) {
+        if self.is_lit(state) {
+            self.lit.retain(|&lit| lit != state);
+        } else {
+            self.lit.push(state);
+        }
+    }
+
     /// Forgets the choices of the player: an item is copied.
     pub fn clear(&mut self) {
         self.changed.clear();
+        self.lit.clear();
     }
 }
 
@@ -193,6 +219,41 @@ mod tests {
 
     fn texts(minimum: &str, maximum: &str) -> (String, String) {
         (minimum.to_owned(), maximum.to_owned())
+    }
+
+    #[test]
+    fn a_click_lights_a_state_tag_and_another_turns_it_gray() {
+        let mut filters = Filters::default();
+
+        filters.toggle_state(ItemState::Corrupted);
+        filters.toggle_state(ItemState::Fractured);
+        assert!(filters.is_lit(ItemState::Corrupted));
+        assert!(filters.is_lit(ItemState::Fractured));
+        filters.toggle_state(ItemState::Corrupted);
+        assert!(!filters.is_lit(ItemState::Corrupted));
+        assert!(filters.is_lit(ItemState::Fractured));
+        // A copied item starts gray.
+        filters.clear();
+        assert!(!filters.is_lit(ItemState::Fractured));
+    }
+
+    #[test]
+    fn only_the_states_of_the_item_are_lit_for_it() {
+        let ring = Item::parse(
+            &crate::item::CopiedItem::from_text(
+                "Item Class: Rings\nRarity: Rare\nWoe Loop\nRuby Ring\n--------\nCorrupted",
+            )
+            .expect("an item"),
+        )
+        .expect("read");
+        let mut filters = Filters::default();
+
+        filters.toggle_state(ItemState::Mirrored);
+        filters.toggle_state(ItemState::Corrupted);
+        assert_eq!(
+            filters.lit_states_of(&ring).collect::<Vec<_>>(),
+            [ItemState::Corrupted]
+        );
     }
 
     #[test]

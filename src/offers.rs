@@ -298,7 +298,7 @@ mod tests {
     use crate::language::Language;
     use crate::league::League;
     use crate::trade::offers::{OfferItem, Price, SellerStatus};
-    use crate::trade::query::{ItemQuery, Query};
+    use crate::trade::query::{ItemQuery, Query, StateFilters};
 
     fn item_search() -> Search {
         Search {
@@ -310,9 +310,10 @@ mod tests {
                 category: None,
                 properties: Vec::new(),
                 rarity: None,
-                corrupted: Some(false),
-                sanctified: None,
-                mirrored: None,
+                states: StateFilters {
+                    corrupted: Some(false),
+                    ..StateFilters::default()
+                },
                 stats: Vec::new(),
             }),
         }

@@ -27,7 +27,7 @@ const state = (label, kind, on, { hover = false, fr = false } = {}) => ({
 // Mirrored and fractured bow (the owner's copy, English), as copied: both gray, Mirrored under the pointer.
 const BOW_MIRRORED = { rarity: "rare", name: "Storm Volley", base: "Warmonger Bow", cls: "Bows",
   tags: [state("Mirrored", "mirrored", false, { hover: true }), state("Fractured", "fractured", false), "Q 30%", "3 sockets", "ilvl 82"],
-  props: [["Physical DPS", "720"]], req: "Requires Level 77 · 163 Dex", statsLabel: "Stats (7)", filters: "4 filters" };
+  props: [["Physical DPS", "720"]], req: "Requires Level 77 · 163 Dex", statsLabel: "Stats (7)", filters: "5 filters" };
 const bowMirroredStats = [
   ...itemFilters({ base: "Warmonger Bow", level: { value: 82, check: false }, sockets: { value: 3, check: true }, quality: { value: 30, check: false } }),
   { group: "Weapon" },
@@ -58,10 +58,11 @@ const beltVaalStatsFr = [
   { mod: "Votre Vie est désormais considérée comme Basse tant que vous avez 75% de votre Vie maximale ou moins" },
 ];
 
-// Twice corrupted and sanctified ring, after a click on each: both lit, Sanctified under the pointer.
+// Corrupted and fractured ring, after a click on each: both lit, Fractured under the pointer; the lit
+// tags count among the active filters (4 checked filters and 2 tags).
 const RING_STATES = { rarity: "rare", name: "Vortex Coil", base: "Prismatic Ring", cls: "Rings",
-  tags: [state("Twice Corrupted", "twice", true), state("Sanctified", "sanctified", true, { hover: true }), "ilvl 81"],
-  req: "Requires Level 64", statsLabel: "Stats (5)", filters: "3 filters" };
+  tags: [state("Corrupted", "corrupted", true), state("Fractured", "fractured", true, { hover: true }), "ilvl 81"],
+  req: "Requires Level 64", statsLabel: "Stats (5)", filters: "6 filters" };
 const ringStatesStats = [
   ...itemFilters({ base: "Prismatic Ring", level: { value: 81, check: false } }),
   { group: "Implicit" },
@@ -70,14 +71,14 @@ const ringStatesStats = [
   { mod: "+94 to maximum Mana", check: true, min: 85, tier: 3, range: "90–104", over: { share: .6 } },
   { mod: "+31 to maximum Life", check: true, min: 28, tier: 6, range: "25–34", over: { share: .4 } },
   { group: "Suffixes", fill: "2 of 3" },
-  { mod: "+38% to Fire Resistance", check: true, min: 34, tier: 2, range: "36–40", over: { share: .8 } },
+  { mod: "+38% to Fire Resistance", check: true, min: 34, tier: 2, range: "36–40", over: { share: .8 }, origin: "fractured" },
   { mod: "+22 to Intelligence", check: false, min: 20, tier: 4, range: "21–24", over: { share: .5 } },
 ];
 
 // Runeforged helmet (the owner's copy, English): the Runic Ward among the defences.
 const HELMET_RUNEFORGED = { rarity: "rare", name: "Carrion Glance", base: "Runeforged Divine Crown", cls: "Helmets", tags: ["ilvl 80"],
   props: [["Armour", "314"], ["Energy Shield", "88"], ["Runic Ward", "56"]], req: "Requires Level 75 · 59 Str · 59 Int",
-  statsLabel: "Stats (5)", filters: "3 filters" };
+  statsLabel: "Stats (5)", filters: "5 filters" };
 const helmetRuneforgedStats = [
   ...itemFilters({ base: "Runeforged Divine Crown", level: { value: 80, check: false } }),
   { group: "Prefixes", fill: "2 of 3" },
@@ -92,7 +93,7 @@ const helmetRuneforgedStats = [
 // Kalandra's Touch (the owner's copy, French), after a click: Reflété lit; its only line shown without
 // filter.
 const KALANDRA_FR = { rarity: "unique", name: "Toucher de Kalandra", base: "Bague", cls: "Bagues",
-  tags: [state("Reflété", "mirrored", true, { fr: true }), "niv. 80"], statsLabel: "Statistiques (1)",
+  tags: [state("Reflété", "mirrored", true, { fr: true }), "niv. 80"], statsLabel: "Statistiques (1)", filters: "1 filtre",
   tradeLabel: "Voir sur l'échange", tradeTitle: "Ouvrir la recherche sur le site d'échange" };
 const kalandraStatsFr = [
   { group: "Unique" },
@@ -102,7 +103,7 @@ const kalandraStatsFr = [
 SECTIONS.push(["State tags (13k2d): the states as filters, the Vaal modifier, the Runic Ward", [
   ["Mirrored and fractured, as copied: every state gray", win(topBar(), item({ ...BOW_MIRRORED, stats: bowMirroredStats }, true), price(RARE_ESTIMATE_BEFORE), foot())],
   ["Corrupted unique with a Vaal modifier, French: Corrompu clicked", win(topBar(), item({ ...BELT_VAAL_FR, stats: beltVaalStatsFr }, true), price(HH_PRICE), foot())],
-  ["Twice corrupted and sanctified: both clicked", win(topBar(), item({ ...RING_STATES, stats: ringStatesStats }, true), price(RARE_ESTIMATE_BEFORE), foot())],
+  ["Corrupted and fractured: both clicked", win(topBar(), item({ ...RING_STATES, stats: ringStatesStats }, true), price(RARE_ESTIMATE_BEFORE), foot())],
   ["Runeforged base: the Runic Ward", win(topBar(), item({ ...HELMET_RUNEFORGED, stats: helmetRuneforgedStats }, true), price(RARE_ESTIMATE_BEFORE), foot())],
   ["Mirrored unique, French: Reflété clicked, a line without filter", win(topBar(), item({ ...KALANDRA_FR, stats: kalandraStatsFr }, true), price(HH_PRICE), foot())],
 ]]);
