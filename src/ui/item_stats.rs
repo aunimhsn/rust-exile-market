@@ -34,7 +34,7 @@ use crate::filters::{self, Filter, FilterKey, Filters, Half, Property, StatKey};
 use crate::format;
 use crate::game_data::{self, Category};
 use crate::i18n::{Message, Translator};
-use crate::item::{Affix, Item, Modifier, ModifierKind, Range, Rarity, StatLine};
+use crate::item::{Affix, Item, Modifier, ModifierKind, ModifierOrigin, Range, Rarity, StatLine};
 use crate::roll_difference::CopiedLines;
 use crate::tier_rolls::{LineRolls, TierRolls, TierSpan};
 use crate::trade::link;
@@ -83,6 +83,8 @@ const MAX_LINES: usize = 2;
 const BAR_SIZE: Vec2 = vec2(96.0, 4.0);
 /// The space above the roll of a stat.
 const ROLL_GAP: f32 = 3.0;
+/// The space between the range of a tier and the origin of its modifier.
+const ORIGIN_GAP: f32 = 6.0;
 /// The separator of the ranges of a stat with several rolls.
 const RANGE_SEPARATOR: &str = " · ";
 /// The share of the copied value the limit of a rare, magic or normal item leaves below it
@@ -155,10 +157,11 @@ enum Roll {
     /// A line of a prefix or a suffix: where its value falls over every tier of its modifier
     /// on the base, from 0 to 1, when the modifier tables know them; under the last line of the
     /// modifier, its tier and the ranges of that tier, of all its lines for a hybrid, so that it
-    /// reads as one modifier.
+    /// reads as one modifier, then its origin when it is desecrated, fractured or crafted.
     Affix {
         share: Option<f32>,
         tier: Option<ModifierTier>,
+        origin: Option<ModifierOrigin>,
     },
 }
 
@@ -883,7 +886,8 @@ fn affix_stats<'a>(item: &'a Item, affix: Option<Affix>, reading: &Reading<'_>) 
                             .collect();
                         ModifierTier { number, ranges }
                     });
-                    affix_stat(key, line, tier, reading)
+                    let origin = modifier.origin.filter(|_| line_index == last);
+                    affix_stat(key, line, tier, origin, reading)
                 })
         })
         .collect();
@@ -894,12 +898,13 @@ fn affix_stats<'a>(item: &'a Item, affix: Option<Affix>, reading: &Reading<'_>) 
 }
 
 /// The line `key` of a prefix or suffix, `line`: a filter that stays within the rolls of every
-/// tier of its modifier, its bar over them, and `tier`, the tier of the modifier and the ranges
-/// of that tier, under its last line.
+/// tier of its modifier, its bar over them, and under its last line the tier of the modifier
+/// and the ranges of that tier, then its origin.
 fn affix_stat<'a>(
     key: StatKey,
     line: &'a StatLine,
     tier: Option<ModifierTier>,
+    origin: Option<ModifierOrigin>,
     reading: &Reading<'_>,
 ) -> Stat<'a> {
     let counted = reading.counted(key, line);
@@ -926,7 +931,11 @@ fn affix_stat<'a>(
         text: StatText::Line(&line.text),
         filter: Some(filter),
         unsearchable: false,
-        roll: (share.is_some() || tier.is_some()).then_some(Roll::Affix { share, tier }),
+        roll: (share.is_some() || tier.is_some() || origin.is_some()).then_some(Roll::Affix {
+            share,
+            tier,
+            origin,
+        }),
     }
 }
 
@@ -1288,11 +1297,12 @@ fn stat_row(ui: &mut Ui, stat: &Stat<'_>, filters: &mut Filters, i18n: &Translat
                 None,
                 (width - GUTTER - GAP - GAP - RANGE_COLUMN).max(0.0),
                 bar,
+                i18n,
             );
             return;
         }
         let Some(filter) = stat.filter else {
-            stat_text(ui, &text, stat.roll.as_ref(), None, width, bar);
+            stat_text(ui, &text, stat.roll.as_ref(), None, width, bar, i18n);
             return;
         };
         let mut choice = filters.get(stat.key, || filter.default_choice());
@@ -1320,6 +1330,7 @@ fn stat_row(ui: &mut Ui, stat: &Stat<'_>, filters: &mut Filters, i18n: &Translat
             note.as_deref(),
             (width - GUTTER - GAP - GAP - column).max(0.0),
             bar,
+            i18n,
         );
         ui.add_space(GAP);
         if let Some(limit) = filter.limit {
@@ -1339,13 +1350,14 @@ fn stat_text(
     note: Option<&str>,
     width: f32,
     bar: RollBar,
+    i18n: &Translator,
 ) {
     ui.allocate_ui_with_layout(vec2(width, 0.0), Layout::top_down(Align::Min), |ui| {
         ui.set_width(width);
         ui.add(Label::new(clamped(text)).wrap());
         if let Some(roll) = roll {
             ui.add_space(ROLL_GAP);
-            roll_line(ui, roll, bar);
+            roll_line(ui, roll, bar, i18n);
         }
         if let Some(note) = note {
             ui.add_space(ROLL_GAP);
@@ -1556,9 +1568,9 @@ fn clamped(text: &str) -> LayoutJob {
 }
 
 /// The bar of a roll drawn in the style `bar`, and its ranges; for a line of a prefix or
-/// suffix, its bar over every tier, then under the last line of its modifier its tier and the
-/// ranges of that tier.
-fn roll_line(ui: &mut Ui, roll: &Roll, bar: RollBar) {
+/// suffix, its bar over every tier, then under the last line of its modifier its tier, the
+/// ranges of that tier and its origin.
+fn roll_line(ui: &mut Ui, roll: &Roll, bar: RollBar, i18n: &Translator) {
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = GAP;
         match roll {
@@ -1566,7 +1578,11 @@ fn roll_line(ui: &mut Ui, roll: &Roll, bar: RollBar) {
                 roll_bar(ui, *share, bar);
                 range_label(ui, ranges);
             }
-            Roll::Affix { share, tier } => {
+            Roll::Affix {
+                share,
+                tier,
+                origin,
+            } => {
                 if let Some(share) = share {
                     roll_bar(ui, *share, bar);
                 }
@@ -1580,9 +1596,28 @@ fn roll_line(ui: &mut Ui, roll: &Roll, bar: RollBar) {
                         range_label(ui, &tier.ranges);
                     }
                 }
+                if let Some(origin) = origin {
+                    // The last item of the line: the space before it only.
+                    ui.spacing_mut().item_spacing.x = ORIGIN_GAP;
+                    let (message, tint) = origin_label(*origin);
+                    ui.label(
+                        RichText::new(i18n.text(message))
+                            .font(text::origin())
+                            .color(tint),
+                    );
+                }
             }
         }
     });
+}
+
+/// The word of an origin, and its color.
+fn origin_label(origin: ModifierOrigin) -> (Message, Color32) {
+    match origin {
+        ModifierOrigin::Desecrated => (Message::OriginDesecrated, color::DESECRATED),
+        ModifierOrigin::Fractured => (Message::OriginFractured, color::FRACTURED),
+        ModifierOrigin::Crafted => (Message::OriginCrafted, color::CRAFTED),
+    }
 }
 
 /// The bar of a roll, filled to `share` in the style `bar`.
@@ -1645,8 +1680,8 @@ mod tests {
     /// first `■ ` for a checked filter, `□ ` for an unchecked one or `⊘ ` for a line the trade
     /// site can't search, then its minimum or its maximum and its roll (`■ +55 to maximum Life
     /// ≥55 [40–60 0.75]`, `■ 18% reduced Movement Speed ≤18`, a line of a prefix or suffix
-    /// with its bar over every tier and, under its last line, its tier and its ranges: `■ +86
-    /// to maximum Life ≥77 [0.37 T7 85–99]`).
+    /// with its bar over every tier and, under its last line, its tier, its ranges and its
+    /// origin: `■ +86 to maximum Life ≥77 [0.37 T7 85–99]`, `[0.80 T2 71–79 Desecrated]`).
     fn row_texts<'a>(rows: impl IntoIterator<Item = Row<'a>>) -> Vec<String> {
         rows.into_iter()
             .map(|row| match row {
@@ -1682,7 +1717,11 @@ mod tests {
                         Some(Roll::Bar { share, ranges }) => {
                             format!(" [{} {share:.2}]", ranges_text(&ranges))
                         }
-                        Some(Roll::Affix { share, tier }) => {
+                        Some(Roll::Affix {
+                            share,
+                            tier,
+                            origin,
+                        }) => {
                             let share = share.map(|share| format!("{share:.2}"));
                             let tier = tier.map(|tier| {
                                 [format!("T{}", tier.number), ranges_text(&tier.ranges)]
@@ -1691,7 +1730,9 @@ mod tests {
                                     .collect::<Vec<_>>()
                                     .join(" ")
                             });
-                            let parts: Vec<String> = [share, tier].into_iter().flatten().collect();
+                            let origin = origin.map(|origin| format!("{origin:?}"));
+                            let parts: Vec<String> =
+                                [share, tier, origin].into_iter().flatten().collect();
                             format!(" [{}]", parts.join(" "))
                         }
                     };
@@ -1864,19 +1905,45 @@ mod tests {
                 // 90 % of the copied value, of the average of two numbers; the damage and
                 // the attack speed of the weapon unchecked, since its DPS counts them. The bar
                 // over every tier of the crossbow: of two numbers, the average of where each
-                // falls (10 in 1–19, 273 in 7–358).
-                "□ Adds 10 to 273 Lightning Damage ≥127 [0.63 T2 1–16 · 239–300]",
+                // falls (10 in 1–19, 273 in 7–358). Its origin after the range of its tier.
+                "□ Adds 10 to 273 Lightning Damage ≥127 [0.63 T2 1–16 · 239–300 Fractured]",
                 "□ Adds 24 to 51 Physical Damage ≥34 [0.47 T3 23–35 · 39–59]",
                 // Not a damage of the weapon: its attacks get it from any item.
                 "■ 109% increased Elemental Damage with Attacks ≥98 [0.71 T2 100–119]",
                 "Suffixes 3/3",
                 // Copied before a tier was added above it: tier 1 then, 7.59 in 5–8.9 now.
                 "■ Leeches 7.59% of Physical Damage as Mana ≥6.83 [0.66 T1 7–7.9]",
-                "■ Gain 21 Mana per enemy killed ≥19 [0.44 T3 21–27]",
+                "■ Gain 21 Mana per enemy killed ≥19 [0.44 T3 21–27 Desecrated]",
                 "□ 18% increased Attack Speed ≥16 [0.93 T1 17–19]",
                 "Corrupted only",
             ]
         );
+    }
+
+    #[test]
+    fn the_origin_of_a_modifier_follows_the_range_of_its_tier_under_its_last_line() {
+        let armour = parse(include_str!("../item/test-items/fr-rare-body-armour.txt"));
+        let origins: Vec<String> = texts(&armour)
+            .into_iter()
+            .filter(|text| text.ends_with("Crafted]") || text.ends_with("Desecrated]"))
+            .collect();
+        assert_eq!(origins.len(), 2, "{origins:?}");
+        assert!(origins[0].contains("76% d'Augmentation du Bouclier d'énergie"));
+        assert!(origins[1].contains("+14% aux Résistances au feu et au chaos"));
+
+        let ring = parse(
+            "Item Class: Rings\nRarity: Rare\nRune Loop\nGold Ring\n--------\n\
+             Item Level: 79\n--------\n\
+             { Fractured Prefix Modifier \"Hale\" (Tier: 9) — Life, Mana }\n\
+             +12(10-14) to maximum Life\n+10(9-13) to maximum Mana",
+        );
+        let lines: Vec<String> = texts(&ring)
+            .into_iter()
+            .filter(|text| text.contains("to maximum"))
+            .collect();
+        assert_eq!(lines.len(), 2, "{lines:?}");
+        assert!(!lines[0].contains("Fractured"), "{lines:?}");
+        assert!(lines[1].ends_with("Fractured]"), "{lines:?}");
     }
 
     #[test]

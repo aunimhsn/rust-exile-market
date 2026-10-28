@@ -363,7 +363,7 @@ pub fn equipment_strings(language: Language) -> Vec<(&'static str, Option<&'stat
 mod tests {
     use super::*;
     use crate::game_data::trade_stats;
-    use crate::item::{CopiedItem, Item, ModifierKind, ModifierOrigin, StatLine};
+    use crate::item::{Affix, CopiedItem, Item, ModifierKind, ModifierOrigin, StatLine};
 
     fn modifier(kind: ModifierKind, origin: Option<ModifierOrigin>, lines: &[&str]) -> Modifier {
         Modifier {
@@ -568,8 +568,21 @@ mod tests {
         let found = stat(Language::English, &fractured);
         assert_eq!(
             found.stat.trade_ids(TradeGroup::of(&fractured)),
-            ["fractured.stat_3299347043"]
+            ["explicit.stat_3299347043"],
+            "a fractured line is searched by its explicit id: it finds the plain lines too"
         );
+        let desecrated = modifier(
+            ModifierKind::Explicit(Some(Affix::Suffix)),
+            Some(ModifierOrigin::Desecrated),
+            &["+22% to Chaos Resistance"],
+        );
+        assert_eq!(TradeGroup::of(&desecrated), TradeGroup::Explicit);
+        let crafted = modifier(
+            ModifierKind::Explicit(Some(Affix::Prefix)),
+            Some(ModifierOrigin::Crafted),
+            &["+42 to maximum Life"],
+        );
+        assert_eq!(TradeGroup::of(&crafted), TradeGroup::Crafted);
 
         let rune = modifier(ModifierKind::Rune, None, &["+12% to Fire Resistance"]);
         assert_eq!(TradeGroup::of(&rune), TradeGroup::Rune);

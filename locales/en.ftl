@@ -180,6 +180,10 @@ pseudo-all-attributes = +{ $value } total to all Attributes
 # The tooltip of a line the trade site can't search (a modifier added by a patch), on two lines.
 filter-unsearchable = The trade site can't search this line.
 filter-unsearchable-hint = The offers may not have it.
+# After the range of the tier of a modifier: how it was added to the item, in its color.
+origin-desecrated = Desecrated
+origin-fractured = Fractured
+origin-crafted = Crafted
 # Under the stats of a corrupted item: the search compares it with corrupted offers only.
 corrupted-offers-only = Corrupted offers only, like this item.
 

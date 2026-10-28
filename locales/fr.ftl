@@ -183,6 +183,10 @@ pseudo-all-attributes = +{ $value } à tous les Attributs au total
 # L'infobulle d'une ligne que le site d'échange ne peut pas chercher (un modificateur ajouté par un patch), sur deux lignes.
 filter-unsearchable = Le site d'échange ne peut pas chercher cette ligne.
 filter-unsearchable-hint = Il se peut que les offres ne l'aient pas.
+# Après la plage du palier d'un modificateur : comment il a été ajouté à l'objet, dans sa couleur.
+origin-desecrated = Profané
+origin-fractured = Fissuré
+origin-crafted = Artisanat
 # Sous les stats d'un objet corrompu : la recherche ne le compare qu'aux offres corrompues.
 corrupted-offers-only = Offres corrompues seulement, comme cet objet.
 

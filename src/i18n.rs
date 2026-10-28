@@ -90,6 +90,9 @@ pub enum Message {
     FilterLowerBetter,
     FilterUnsearchable,
     FilterUnsearchableHint,
+    OriginDesecrated,
+    OriginFractured,
+    OriginCrafted,
     CorruptedOffersOnly,
     OffersLabel,
     OffersSearchHint,
@@ -117,7 +120,7 @@ pub enum Message {
 impl Message {
     /// Every message, for the tests.
     #[cfg(test)]
-    const ALL: [Self; 88] = [
+    const ALL: [Self; 91] = [
         Self::LeagueModeSoftcore,
         Self::LeagueModeHardcore,
         Self::LeagueLoading,
@@ -184,6 +187,9 @@ impl Message {
         Self::FilterLowerBetter,
         Self::FilterUnsearchable,
         Self::FilterUnsearchableHint,
+        Self::OriginDesecrated,
+        Self::OriginFractured,
+        Self::OriginCrafted,
         Self::CorruptedOffersOnly,
         Self::OffersLabel,
         Self::OffersSearchHint,
@@ -277,6 +283,9 @@ impl Message {
             Self::FilterLowerBetter => "filter-lower-better",
             Self::FilterUnsearchable => "filter-unsearchable",
             Self::FilterUnsearchableHint => "filter-unsearchable-hint",
+            Self::OriginDesecrated => "origin-desecrated",
+            Self::OriginFractured => "origin-fractured",
+            Self::OriginCrafted => "origin-crafted",
             Self::CorruptedOffersOnly => "corrupted-offers-only",
             Self::OffersLabel => "offers-label",
             Self::OffersSearchHint => "offers-search-hint",

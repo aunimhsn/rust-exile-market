@@ -27,16 +27,19 @@ pub enum TradeGroup {
 }
 
 impl TradeGroup {
-    /// The group where the trade site lists the lines of `modifier`.
+    /// The group where the lines of `modifier` are searched on the trade site. A desecrated or
+    /// a fractured line is searched by its explicit id, like Exiled Exchange 2: it finds the
+    /// offers where the line is desecrated, fractured or plain (checked on the trade site on
+    /// 2026-10-28), and every desecrated and fractured stat of the game data has one.
     #[must_use]
     pub fn of(modifier: &Modifier) -> Self {
         match modifier.kind {
             ModifierKind::Implicit => Self::Implicit,
             ModifierKind::Explicit(_) => match modifier.origin {
-                Some(ModifierOrigin::Fractured) => Self::Fractured,
-                Some(ModifierOrigin::Desecrated) => Self::Desecrated,
                 Some(ModifierOrigin::Crafted) => Self::Crafted,
-                None => Self::Explicit,
+                Some(ModifierOrigin::Fractured | ModifierOrigin::Desecrated) | None => {
+                    Self::Explicit
+                }
             },
             // The trade site lists the modifiers of the corruption with the enchantments.
             ModifierKind::Enchant | ModifierKind::Corruption => Self::Enchant,
