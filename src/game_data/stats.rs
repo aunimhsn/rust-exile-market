@@ -314,6 +314,26 @@ mod tests {
         }
     }
 
+    /// A desecrated or a fractured line is searched by its explicit id ([`TradeGroup::of`]):
+    /// without one, it couldn't be searched at all.
+    #[test]
+    fn every_desecrated_or_fractured_stat_has_an_explicit_id() {
+        for language in [Language::English, Language::French] {
+            let missing: Vec<&str> = Stats::of(language)
+                .list
+                .iter()
+                .filter(|stat| {
+                    [TradeGroup::Desecrated, TradeGroup::Fractured]
+                        .into_iter()
+                        .any(|group| !stat.trade_ids(group).is_empty())
+                })
+                .filter(|stat| stat.trade_ids(TradeGroup::Explicit).is_empty())
+                .map(|stat| stat.reference.as_str())
+                .collect();
+            assert!(missing.is_empty(), "{language:?}: {missing:#?}");
+        }
+    }
+
     #[test]
     fn a_stat_has_its_ids_in_each_group() {
         let (stat, matcher_index) = Stats::of(Language::English)
