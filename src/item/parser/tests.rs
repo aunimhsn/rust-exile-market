@@ -20,7 +20,10 @@ const FR_UNIQUE_MACE_FIXED_VALUES: &str = test_item!("fr-unique-mace-fixed-value
 const FR_MAGIC_MANA_FLASK: &str = test_item!("fr-magic-mana-flask.txt");
 const FR_RARE_SCEPTRE_SANCTIFIED: &str = test_item!("fr-rare-sceptre-sanctified.txt");
 const EN_UNIQUE_MACE_FIXED_VALUES: &str = test_item!("en-owner-unique-mace-fixed-values.txt");
+const FR_RARE_FOCUS_UNREVEALED: &str = test_item!("fr-rare-focus-unrevealed.txt");
+const FR_UNIQUE_RING_MIRRORED: &str = test_item!("fr-unique-ring-mirrored.txt");
 const EN_RARE_SCEPTRE_SANCTIFIED: &str = test_item!("en-owner-rare-sceptre-sanctified.txt");
+const EN_RARE_FOCUS_UNREVEALED: &str = test_item!("en-owner-rare-focus-unrevealed.txt");
 const EN_RARE_CROSSBOW: &str = test_item!("en-rare-crossbow-all-modifiers.txt");
 const EN_RARE_BOW_FRACTURED: &str = test_item!("en-rare-bow-fractured.txt");
 const EN_RARE_WAND_UNIDENTIFIED: &str = test_item!("en-rare-wand-unidentified.txt");
@@ -34,7 +37,7 @@ const EN_PLAIN_UNIQUE_JEWEL: &str = test_item!("en-plain-unique-jewel.txt");
 const EN_PLAIN_MAGIC_JEWEL_UNIDENTIFIED: &str = test_item!("en-plain-magic-jewel-unidentified.txt");
 const EN_PLAIN_CURRENCY_LARGE_STACK: &str = test_item!("en-plain-currency-large-stack.txt");
 
-const ALL: [&str; 22] = [
+const ALL: [&str; 25] = [
     FR_RARE_STAFF,
     FR_RARE_BODY_ARMOUR,
     FR_UNIQUE_CROSSBOW,
@@ -43,8 +46,11 @@ const ALL: [&str; 22] = [
     FR_UNIQUE_MACE_FIXED_VALUES,
     FR_MAGIC_MANA_FLASK,
     FR_RARE_SCEPTRE_SANCTIFIED,
+    FR_RARE_FOCUS_UNREVEALED,
+    FR_UNIQUE_RING_MIRRORED,
     EN_UNIQUE_MACE_FIXED_VALUES,
     EN_RARE_SCEPTRE_SANCTIFIED,
+    EN_RARE_FOCUS_UNREVEALED,
     EN_RARE_CROSSBOW,
     EN_RARE_BOW_FRACTURED,
     EN_RARE_WAND_UNIDENTIFIED,
@@ -207,6 +213,62 @@ fn reads_a_sanctified_item_and_a_range_of_one_value() {
         assert_eq!(line.text, requirements);
         assert_eq!(line.rolls, [roll(29.0, 30.0, 30.0)]);
     }
+}
+
+#[test]
+fn reads_the_mirrored_state() {
+    let item = item(FR_UNIQUE_RING_MIRRORED);
+    assert_eq!(item.name(), Some("Toucher de Kalandra"));
+    assert_eq!(item.states(), [ItemState::Mirrored]);
+}
+
+#[test]
+fn reads_an_unrevealed_modifier_from_its_header_and_its_only_line() {
+    for (text, affix) in [
+        (EN_RARE_FOCUS_UNREVEALED, Affix::Prefix),
+        (FR_RARE_FOCUS_UNREVEALED, Affix::Prefix),
+        (EN_RARE_SCEPTRE_SANCTIFIED, Affix::Suffix),
+        (FR_RARE_SCEPTRE_SANCTIFIED, Affix::Suffix),
+    ] {
+        let item = item(text);
+        assert_eq!(item.unrevealed_modifiers(), 1);
+        let unrevealed = explicit(&item)
+            .into_iter()
+            .find(|modifier| modifier.unrevealed)
+            .expect("an unrevealed modifier");
+        assert_eq!(unrevealed.kind, ModifierKind::Explicit(Some(affix)));
+        // `Desecrated Prefix` isn't a line of a stat.
+        assert_eq!(unrevealed.lines, []);
+        assert_eq!(unrevealed.tier, None);
+    }
+    // The other modifiers are revealed.
+    assert_eq!(item(FR_RARE_STAFF).unrevealed_modifiers(), 0);
+}
+
+#[test]
+fn an_unrevealed_line_under_a_header_without_affix_stays_a_line() {
+    // An unknown header gives no affix: `Desecrated Prefix` can't mark it unrevealed.
+    let item = try_parse(
+        "Item Class: Rings\nRarity: Rare\nWoe Loop\nRuby Ring\n--------\nItem Level: 80\n\
+         --------\n{ Unknown Modifier }\nDesecrated Prefix",
+    )
+    .expect("the item is read");
+    assert_eq!(item.warnings(), [ParseWarning::UnknownModifierHeader]);
+    assert_eq!(item.unrevealed_modifiers(), 0);
+    let modifier = &item.modifiers()[0];
+    assert_eq!(modifier.kind, ModifierKind::Explicit(None));
+    assert_eq!(first_line(modifier).text, "Desecrated Prefix");
+}
+
+#[test]
+fn an_unrevealed_modifier_keeps_no_line_after_its_marker() {
+    let item = item(
+        "Item Class: Rings\nRarity: Rare\nWoe Loop\nRuby Ring\n--------\nItem Level: 80\n\
+         --------\n{ Prefix Modifier \"Veiled\" }\nDesecrated Prefix\n+10 to maximum Life",
+    );
+    let unrevealed = &explicit(&item)[0];
+    assert!(unrevealed.unrevealed);
+    assert_eq!(unrevealed.lines, []);
 }
 
 #[test]

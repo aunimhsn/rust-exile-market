@@ -1,8 +1,8 @@
-//! The pseudo totals of the trade site: a stat it adds up from the modifier lines of an item
+//! The pseudo stats of the trade site: a total it adds up from the modifier lines of an item
 //! of every group (implicit, explicit, rune, enchantment…), such as the total elemental
-//! resistance. A rare or magic item is searched by its totals in place of the lines they add
-//! up, so that the offers found have the same total from other modifiers, like Exiled
-//! Exchange 2.
+//! resistance, or a count, such as the number of unrevealed modifiers. A rare or magic item is
+//! searched by its totals in place of the lines they add up, so that the offers found have the
+//! same total from other modifiers, like Exiled Exchange 2.
 //!
 //! The rules are those of Exiled Exchange 2, checked on the trade site on 2026-10-27: its
 //! total maximum life counts each point of strength twice, its total maximum mana each point
@@ -10,7 +10,8 @@
 
 use crate::filters::StatKey;
 
-/// A pseudo total.
+/// A pseudo stat of the trade site: a total it adds up, or the number of unrevealed
+/// modifiers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Pseudo {
     /// Fire, cold and lightning, each element of a line counted.
@@ -23,6 +24,8 @@ pub enum Pseudo {
     Intelligence,
     /// The `+# to all Attributes` lines alone.
     AllAttributes,
+    /// The desecrated modifiers not revealed yet; no rule adds it up.
+    UnrevealedModifiers,
 }
 
 impl Pseudo {
@@ -38,6 +41,7 @@ impl Pseudo {
             Self::Dexterity => "pseudo.pseudo_total_dexterity",
             Self::Intelligence => "pseudo.pseudo_total_intelligence",
             Self::AllAttributes => "pseudo.pseudo_total_all_attributes",
+            Self::UnrevealedModifiers => "pseudo.pseudo_number_of_unrevealed_mods",
         }
     }
 }

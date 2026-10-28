@@ -330,6 +330,7 @@ mod tests {
             name: None,
             tier: None,
             tags: Vec::new(),
+            unrevealed: false,
             lines: vec![StatLine::parse(line)],
         }
     }

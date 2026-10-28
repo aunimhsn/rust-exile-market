@@ -790,7 +790,7 @@ mod tests {
     }
 
     #[test]
-    fn a_pseudo_total_is_searched_by_its_id_before_the_lines() {
+    fn a_pseudo_stat_is_searched_by_its_id_before_the_lines() {
         let item = rare_ring(Language::English);
         let stats = line_stats(&item);
         let filters = [
@@ -800,6 +800,10 @@ mod tests {
                 filter("90", "120"),
             ),
             (FilterKey::Pseudo(Pseudo::Life), filter("", "")),
+            (
+                FilterKey::Pseudo(Pseudo::UnrevealedModifiers),
+                filter("1", ""),
+            ),
             (
                 FilterKey::Pseudo(Pseudo::Strength),
                 Filter {
@@ -818,6 +822,7 @@ mod tests {
                     Some(120.0)
                 ),
                 stat("pseudo.pseudo_total_life", None, None),
+                stat("pseudo.pseudo_number_of_unrevealed_mods", Some(1.0), None),
                 stat("explicit.stat_3299347043", Some(60.0), None),
             ]
         );

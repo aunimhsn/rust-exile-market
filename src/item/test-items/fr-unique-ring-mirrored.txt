@@ -1,0 +1,12 @@
+Classe d'objet: Bagues
+Rareté: Unique
+Toucher de Kalandra
+Bague
+--------
+Niveau de l'objet: 80
+--------
+Reflète la Bague opposée
+--------
+Le pouvoir n'est qu'affaire de perception.
+--------
+Reflété

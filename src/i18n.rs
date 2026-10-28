@@ -94,6 +94,10 @@ pub enum Message {
     OriginFractured,
     OriginCrafted,
     CorruptedOffersOnly,
+    /// The line of a modifier not revealed yet, and the note under the stats of its item.
+    UnrevealedPrefix,
+    UnrevealedSuffix,
+    UnrevealedNote,
     OffersLabel,
     OffersSearchHint,
     OffersSearchTooltip,
@@ -120,7 +124,7 @@ pub enum Message {
 impl Message {
     /// Every message, for the tests.
     #[cfg(test)]
-    const ALL: [Self; 91] = [
+    const ALL: [Self; 94] = [
         Self::LeagueModeSoftcore,
         Self::LeagueModeHardcore,
         Self::LeagueLoading,
@@ -191,6 +195,9 @@ impl Message {
         Self::OriginFractured,
         Self::OriginCrafted,
         Self::CorruptedOffersOnly,
+        Self::UnrevealedPrefix,
+        Self::UnrevealedSuffix,
+        Self::UnrevealedNote,
         Self::OffersLabel,
         Self::OffersSearchHint,
         Self::OffersSearchTooltip,
@@ -287,6 +294,9 @@ impl Message {
             Self::OriginFractured => "origin-fractured",
             Self::OriginCrafted => "origin-crafted",
             Self::CorruptedOffersOnly => "corrupted-offers-only",
+            Self::UnrevealedPrefix => "unrevealed-prefix",
+            Self::UnrevealedSuffix => "unrevealed-suffix",
+            Self::UnrevealedNote => "unrevealed-note",
             Self::OffersLabel => "offers-label",
             Self::OffersSearchHint => "offers-search-hint",
             Self::OffersSearchTooltip => "offers-search-tooltip",
@@ -388,6 +398,7 @@ const PSEUDO_STRENGTH: &str = "pseudo-strength";
 const PSEUDO_DEXTERITY: &str = "pseudo-dexterity";
 const PSEUDO_INTELLIGENCE: &str = "pseudo-intelligence";
 const PSEUDO_ALL_ATTRIBUTES: &str = "pseudo-all-attributes";
+const PSEUDO_UNREVEALED_MODIFIERS: &str = "pseudo-unrevealed-modifiers";
 const STATUS_TRADE: &str = "status-trade";
 const STATUS_TRADE_WAIT: &str = "status-trade-wait";
 const OFFERS_SEARCHED: &str = "offers-searched";
@@ -581,8 +592,8 @@ impl Translator {
         self.format(id, Some(&args))
     }
 
-    /// The filter of a pseudo total, with its `value` written by [`crate::format::number`]:
-    /// "+83% total Elemental Resistance".
+    /// The filter of a pseudo stat, with its `value` written by [`crate::format::number`]:
+    /// "+83% total Elemental Resistance", "Unrevealed modifiers: 1".
     #[must_use]
     pub fn filter_pseudo(&self, pseudo: Pseudo, value: &str) -> String {
         let id = match pseudo {
@@ -594,6 +605,7 @@ impl Translator {
             Pseudo::Dexterity => PSEUDO_DEXTERITY,
             Pseudo::Intelligence => PSEUDO_INTELLIGENCE,
             Pseudo::AllAttributes => PSEUDO_ALL_ATTRIBUTES,
+            Pseudo::UnrevealedModifiers => PSEUDO_UNREVEALED_MODIFIERS,
         };
         let mut args = FluentArgs::new();
         args.set("value", value);
@@ -920,6 +932,7 @@ mod tests {
                 PSEUDO_DEXTERITY,
                 PSEUDO_INTELLIGENCE,
                 PSEUDO_ALL_ATTRIBUTES,
+                PSEUDO_UNREVEALED_MODIFIERS,
                 OFFERS,
                 STACK_OF,
                 UNIT_PRICE,

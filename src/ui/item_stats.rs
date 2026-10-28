@@ -15,7 +15,9 @@
 //! unchecked: its DPS counts them, the physical one checked, the elemental one when it is at
 //! least the physical one. The pseudo totals start checked, and the lines they add up
 //! unchecked. A corrupted item ends with a note: the search compares it with corrupted offers
-//! only.
+//! only. A desecrated modifier not revealed yet is a line of its group without filter, on a
+//! band of the desecrated green; its item gets a filter of its number of unrevealed modifiers,
+//! and its other stats start unchecked, with a note under them.
 //!
 //! The rows are decided apart from the drawing ([`rows`]), and tested.
 
@@ -119,6 +121,13 @@ const REQUIRED_LEVELS: Range = Range {
     min: 1.0,
     max: 90.0,
 };
+/// The unrevealed modifiers an item can have: three prefixes and three suffixes.
+const UNREVEALED_MODIFIERS: Range = Range { min: 0.0, max: 6.0 };
+/// The inner margin of the band of an unrevealed modifier, around its words.
+const UNREVEALED_PADDING: Margin = Margin::symmetric(6, 3);
+/// The band of an unrevealed modifier reaches 6 px out of the column of the stats, so that its
+/// words stay at the left edge.
+const UNREVEALED_OUTSET: Margin = Margin::symmetric(-6, 0);
 
 /// A small title of the stats.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -293,6 +302,8 @@ enum StatText<'a> {
     /// A property of the item, with its value.
     Property(Property, f64),
     Pseudo(Pseudo, f64),
+    /// A desecrated modifier not revealed yet, of its affix.
+    Unrevealed(Affix),
 }
 
 impl<'a> StatText<'a> {
@@ -306,6 +317,8 @@ impl<'a> StatText<'a> {
             Self::Pseudo(pseudo, value) => {
                 Cow::Owned(i18n.filter_pseudo(pseudo, &format::number(value)))
             }
+            Self::Unrevealed(Affix::Prefix) => i18n.text(Message::UnrevealedPrefix).into(),
+            Self::Unrevealed(Affix::Suffix) => i18n.text(Message::UnrevealedSuffix).into(),
         }
     }
 }
@@ -328,6 +341,8 @@ struct Stat<'a> {
 enum Row<'a> {
     Group(Group),
     Stat(Stat<'a>),
+    /// Under the stats of an item with an unrevealed modifier.
+    UnrevealedNote,
     /// Under the stats of a corrupted item.
     CorruptedOnly,
 }
@@ -412,14 +427,20 @@ fn rows<'a>(
     base_type: Option<&'a str>,
 ) -> Vec<Row<'a>> {
     let mut rows = Vec::new();
+    // An unrevealed modifier can change the item: its other stats start unchecked.
+    let unrevealed = item.unrevealed_modifiers() > 0;
     let dps = if item.rarity().has_item_filters() {
         push_group(&mut rows, Group::Item, item_filters(item, base_type));
-        dps_filters(item)
+        dps_filters(item, !unrevealed)
     } else {
         Vec::new()
     };
     let pseudo = if matches!(item.rarity(), Rarity::Magic | Rarity::Rare) {
-        stats.pseudo_totals().iter().map(pseudo_filter).collect()
+        stats
+            .pseudo_totals()
+            .iter()
+            .map(|total| pseudo_filter(total, !unrevealed))
+            .collect()
     } else {
         Vec::new()
     };
@@ -429,6 +450,7 @@ fn rows<'a>(
         tiers,
         dps_filters: !dps.is_empty(),
         pseudo_filters: !pseudo.is_empty(),
+        unrevealed,
     };
     push_group(&mut rows, Group::Weapon, dps);
     push_group(&mut rows, Group::Pseudo, pseudo);
@@ -443,6 +465,9 @@ fn rows<'a>(
         {
             searchable(stat, stats.get(key));
         }
+    }
+    if unrevealed {
+        rows.push(Row::UnrevealedNote);
     }
     // The corrupted state is always a filter; a currency is never corrupted.
     if item.is_corrupted() && item.rarity() != Rarity::Currency {
@@ -466,7 +491,8 @@ fn searchable(stat: &mut Stat<'_>, line: Option<&LineStat>) {
 /// base type, checked (unchecked, its item class is searched in its place); its item level,
 /// checked on a normal item only (a player who checks it on another usually looks for a level
 /// of crafting), with the level of the item as its minimum; then its sockets, its quality and
-/// its required level when they are filters.
+/// its required level when they are filters, and the number of its unrevealed modifiers, checked
+/// with that number as its minimum.
 fn item_filters<'a>(item: &'a Item, base_type: Option<&'a str>) -> Vec<Stat<'a>> {
     let base_type_filter = base_type.map(|base_type| Stat {
         key: FilterKey::BaseType,
@@ -496,7 +522,27 @@ fn item_filters<'a>(item: &'a Item, base_type: Option<&'a str>) -> Vec<Stat<'a>>
         .chain(sockets_filter(item, category))
         .chain(quality_filter(item, category))
         .chain(required_level_filter(item))
+        .chain(unrevealed_filter(item))
         .collect()
+}
+
+/// The filter of the number of unrevealed modifiers of an item that has some, checked with
+/// that number as its minimum.
+fn unrevealed_filter(item: &Item) -> Option<Stat<'static>> {
+    let count = item.unrevealed_modifiers();
+    (count > 0).then(|| {
+        let count = f64::from(count);
+        Stat {
+            key: FilterKey::Pseudo(Pseudo::UnrevealedModifiers),
+            text: StatText::Pseudo(Pseudo::UnrevealedModifiers, count),
+            filter: Some(StatFilter {
+                checked: true,
+                limit: Some(Limit::minimum(count).within(UNREVEALED_MODIFIERS)),
+            }),
+            unsearchable: false,
+            roll: None,
+        }
+    })
 }
 
 /// The filter of the augmentable sockets of an item that has some, with their number as its
@@ -556,10 +602,10 @@ fn required_level_filter(item: &Item) -> Option<Stat<'static>> {
 }
 
 /// The filters of the DPS of a weapon, each kind it deals, with a minimum at 90 % of its
-/// DPS, rounded down so that the weapon passes it: the physical one checked, the elemental
-/// one when it is at least the physical one, so that a weapon mostly elemental is compared
-/// with elemental ones.
-fn dps_filters(item: &Item) -> Vec<Stat<'static>> {
+/// DPS, rounded down so that the weapon passes it: when `checkable`, the physical one checked,
+/// the elemental one when it is at least the physical one, so that a weapon mostly elemental is
+/// compared with elemental ones.
+fn dps_filters(item: &Item, checkable: bool) -> Vec<Stat<'static>> {
     let Some(weapon) = item.weapon() else {
         return Vec::new();
     };
@@ -578,7 +624,12 @@ fn dps_filters(item: &Item) -> Vec<Stat<'static>> {
         let shown = dps.round();
         (shown >= 1.0).then(|| {
             let minimum = (dps * (1.0 - COMPARABLE_MARGIN)).floor();
-            property_filter(property, shown, Limit::minimum(minimum), checked)
+            property_filter(
+                property,
+                shown,
+                Limit::minimum(minimum),
+                checkable && checked,
+            )
         })
     })
     .collect()
@@ -598,14 +649,14 @@ fn property_filter(property: Property, value: f64, limit: Limit, checked: bool) 
     }
 }
 
-/// The filter of a pseudo total, checked, with a minimum at 90 % of its value.
-fn pseudo_filter(total: &PseudoTotal) -> Stat<'static> {
+/// The filter of a pseudo total, with a minimum at 90 % of its value.
+fn pseudo_filter(total: &PseudoTotal, checked: bool) -> Stat<'static> {
     let whole = total.value.fract() == 0.0;
     Stat {
         key: FilterKey::Pseudo(total.pseudo),
         text: StatText::Pseudo(total.pseudo, total.value),
         filter: Some(StatFilter {
-            checked: true,
+            checked,
             limit: Some(Limit::minimum(comparable(
                 total.value,
                 whole,
@@ -629,15 +680,18 @@ struct Reading<'r> {
     dps_filters: bool,
     /// The item has the filters of its pseudo totals.
     pseudo_filters: bool,
+    /// The item has an unrevealed modifier, which can change it.
+    unrevealed: bool,
 }
 
 impl Reading<'_> {
     /// The line `key` starts checked: unchecked when the DPS of the weapon counts it, its
-    /// damage or its attack speed, or when a pseudo total adds it up.
+    /// damage or its attack speed, when a pseudo total adds it up, or on an item with an
+    /// unrevealed modifier.
     fn checked(&self, key: StatKey) -> bool {
         let weapon_damage = self.dps_filters && self.stats.weapon_damage(key);
         let added_up = self.pseudo_filters && self.stats.added_up(key);
-        !weapon_damage && !added_up
+        !weapon_damage && !added_up && !self.unrevealed
     }
 
     /// The half of the range field the stat `key` fills: the maximum for a line better lower.
@@ -843,8 +897,8 @@ struct AffixStats<'a> {
 }
 
 /// The explicit modifiers of `affix` (`None`: a header that doesn't tell it), those with a
-/// line that varies first: each line with its bar over every tier of its modifier, and its tier
-/// and the ranges of that tier under its last line.
+/// line that varies first and those not revealed yet last: each line with its bar over every
+/// tier of its modifier, and its tier and the ranges of that tier under its last line.
 fn affix_stats<'a>(item: &'a Item, affix: Option<Affix>, reading: &Reading<'_>) -> AffixStats<'a> {
     let mut modifiers: Vec<(usize, &Modifier)> = item
         .modifiers()
@@ -858,15 +912,31 @@ fn affix_stats<'a>(item: &'a Item, affix: Option<Affix>, reading: &Reading<'_>) 
         affix_varies(&counted, over_tiers(key, reading).as_ref())
     };
     modifiers.sort_by_key(|&(index, modifier)| {
-        !modifier
+        let fixed = !modifier
             .lines
             .iter()
             .enumerate()
-            .any(|line| line_varies(index, line))
+            .any(|line| line_varies(index, line));
+        (modifier.unrevealed, fixed)
     });
     let stats = modifiers
         .iter()
-        .flat_map(|&(index, modifier)| {
+        .flat_map(|&(index, modifier)| -> Vec<Stat<'a>> {
+            if modifier.unrevealed
+                && let ModifierKind::Explicit(Some(affix)) = modifier.kind
+            {
+                // No line yet: the key of its first one, which no filter has.
+                return vec![Stat {
+                    key: FilterKey::Stat(StatKey {
+                        modifier: index,
+                        line: 0,
+                    }),
+                    text: StatText::Unrevealed(affix),
+                    filter: None,
+                    unsearchable: false,
+                    roll: None,
+                }];
+            }
             let last = modifier.lines.len().saturating_sub(1);
             modifier
                 .lines
@@ -889,6 +959,7 @@ fn affix_stats<'a>(item: &'a Item, affix: Option<Affix>, reading: &Reading<'_>) 
                     let origin = modifier.origin.filter(|_| line_index == last);
                     affix_stat(key, line, tier, origin, reading)
                 })
+                .collect()
         })
         .collect();
     AffixStats {
@@ -1219,14 +1290,15 @@ fn show(ui: &mut Ui, rows: Vec<Row<'_>>, filters: &mut Filters, i18n: &Translato
                 group_title(ui, group, std::mem::take(&mut range_title), i18n);
             }
             Row::Stat(stat) => stat_row(ui, &stat, filters, i18n, bar),
-            Row::CorruptedOnly => {
-                let galley =
-                    widgets::text_line(ui, i18n.text(Message::CorruptedOffersOnly), text::note());
-                let (rect, _) = ui.allocate_exact_size(galley.size(), Sense::hover());
-                ui.painter().galley(rect.min, galley, color::FAINT);
-            }
+            Row::UnrevealedNote => note(ui, i18n.text(Message::UnrevealedNote)),
+            Row::CorruptedOnly => note(ui, i18n.text(Message::CorruptedOffersOnly)),
         }
     }
+}
+
+/// A note under the stats, in faint text, wrapped.
+fn note(ui: &mut Ui, words: String) {
+    ui.label(RichText::new(words).font(text::note()).color(color::FAINT));
 }
 
 /// A small title, with the fill of the prefixes and suffixes: lighter while one is open; and
@@ -1281,6 +1353,10 @@ fn group_title(ui: &mut Ui, group: Group, range: bool, i18n: &Translator) {
 /// filter between its checkbox and the column of its range field.
 fn stat_row(ui: &mut Ui, stat: &Stat<'_>, filters: &mut Filters, i18n: &Translator, bar: RollBar) {
     let text = stat.text.text(i18n);
+    if let StatText::Unrevealed(_) = stat.text {
+        unrevealed_row(ui, &text);
+        return;
+    }
     ui.horizontal_top(|ui| {
         let width = ui.available_width();
         let line_height = ui.fonts_mut(|fonts| fonts.row_height(&text::body()));
@@ -1340,6 +1416,24 @@ fn stat_row(ui: &mut Ui, stat: &Stat<'_>, filters: &mut Filters, i18n: &Translat
             filters.set(stat.key, choice);
         }
     });
+}
+
+/// A modifier not revealed yet: its words in the desecrated green, in the face of the modifier
+/// lines, from the left edge, on a faint band of that green, like the row of the game.
+fn unrevealed_row(ui: &mut Ui, words: &str) {
+    Frame::new()
+        .fill(color::UNREVEALED_BAND)
+        .corner_radius(size::RADIUS)
+        .inner_margin(UNREVEALED_PADDING)
+        .outer_margin(UNREVEALED_OUTSET)
+        .show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.label(
+                RichText::new(words)
+                    .font(text::body())
+                    .color(color::DESECRATED),
+            );
+        });
 }
 
 /// The text of a stat and its roll, or a `note` in faint text under it, `width` across.
@@ -1676,7 +1770,7 @@ mod tests {
         row_texts(rows(item))
     }
 
-    /// The rows as texts: a title (`Prefixes 2/3`), the note of a corrupted item, or a stat,
+    /// The rows as texts: a title (`Prefixes 2/3`), a note, or a stat,
     /// first `■ ` for a checked filter, `□ ` for an unchecked one or `⊘ ` for a line the trade
     /// site can't search, then its minimum or its maximum and its roll (`■ +55 to maximum Life
     /// ≥55 [40–60 0.75]`, `■ 18% reduced Movement Speed ≤18`, a line of a prefix or suffix
@@ -1688,6 +1782,7 @@ mod tests {
                 Row::Group(Group::Prefixes { filled, max }) => format!("Prefixes {filled}/{max}"),
                 Row::Group(Group::Suffixes { filled, max }) => format!("Suffixes {filled}/{max}"),
                 Row::Group(group) => format!("{group:?}"),
+                Row::UnrevealedNote => "Unrevealed note".to_owned(),
                 Row::CorruptedOnly => "Corrupted only".to_owned(),
                 Row::Stat(Stat {
                     text,
@@ -1745,6 +1840,7 @@ mod tests {
                         StatText::Pseudo(pseudo, value) => {
                             format!("{pseudo:?}: {}", format::number(value))
                         }
+                        StatText::Unrevealed(affix) => format!("Unrevealed {affix:?}"),
                     };
                     format!("{check}{text}{limit}{roll}")
                 }
@@ -2215,6 +2311,93 @@ mod tests {
     }
 
     #[test]
+    fn an_unrevealed_modifier_is_a_line_of_its_group_and_unchecks_the_other_stats() {
+        let english = parse(include_str!(
+            "../item/test-items/en-owner-rare-focus-unrevealed.txt"
+        ));
+        let french = parse(include_str!(
+            "../item/test-items/fr-rare-focus-unrevealed.txt"
+        ));
+        assert_eq!(
+            texts(&english),
+            [
+                "Item",
+                "■ Base: Plumed Focus",
+                "□ ItemLevel: 39 ≥39",
+                "□ RequiredLevel: 36 ≤36",
+                // Searched with its number as minimum.
+                "■ UnrevealedModifiers: 1 ≥1",
+                "Pseudo",
+                "□ ElementalResistance: 42 ≥38",
+                // Counted in the fill, last of its group, without filter.
+                "Prefixes 3/3",
+                "□ 52% increased Spell Damage ≥47 [0.42 T4 45–54]",
+                "□ +36 to maximum Energy Shield ≥32 [0.32 T6 36–41]",
+                "Unrevealed Prefix",
+                "Suffixes 2/3",
+                "□ +24% to Cold Resistance ≥22 [0.46 T5 21–25]",
+                "□ +18% to Fire Resistance ≥16 [0.31 T6 16–20]",
+                "Unrevealed note",
+            ]
+        );
+        let french = texts(&french);
+        assert_eq!(french[4], "■ UnrevealedModifiers: 1 ≥1");
+        assert_eq!(french[10], "Unrevealed Prefix");
+        assert_eq!(french.last().map(String::as_str), Some("Unrevealed note"));
+    }
+
+    #[test]
+    fn a_corrupted_item_counts_each_unrevealed_modifier_and_shows_both_notes() {
+        let ring = parse(
+            "Item Class: Rings\nRarity: Rare\nWoe Loop\nRuby Ring\n--------\n\
+             Item Level: 80\n--------\n\
+             { Prefix Modifier \"Veiled\" }\nDesecrated Prefix\n\
+             { Suffix Modifier \"of the Veil\" }\nDesecrated Suffix\n--------\nCorrupted",
+        );
+        assert_eq!(
+            texts(&ring),
+            [
+                "Item",
+                "■ Base: Ruby Ring",
+                "□ ItemLevel: 80 ≥80",
+                "■ UnrevealedModifiers: 2 ≥2",
+                "Prefixes 1/3",
+                "Unrevealed Prefix",
+                "Suffixes 1/3",
+                "Unrevealed Suffix",
+                "Unrevealed note",
+                "Corrupted only",
+            ]
+        );
+    }
+
+    #[test]
+    fn a_weapon_with_an_unrevealed_modifier_starts_with_its_dps_unchecked() {
+        let weapon = parse(
+            "Item Class: Two Hand Maces\nRarity: Rare\nStorm Fall\nTemple Maul\n--------\n\
+             Physical Damage: 10-20\nLightning Damage: 1-59 (lightning)\n\
+             Attacks per Second: 1.00\n--------\nItem Level: 80\n--------\n\
+             { Prefix Modifier \"Veiled\" }\nDesecrated Prefix",
+        );
+        assert_eq!(
+            texts(&weapon),
+            [
+                "Item",
+                "■ Base: Temple Maul",
+                "□ ItemLevel: 80 ≥80",
+                "■ UnrevealedModifiers: 1 ≥1",
+                "Weapon",
+                // An unrevealed prefix can add damage.
+                "□ PhysicalDps: 15 ≥13",
+                "□ ElementalDps: 30 ≥27",
+                "Prefixes 1/3",
+                "Unrevealed Prefix",
+                "Unrevealed note",
+            ]
+        );
+    }
+
+    #[test]
     fn the_attack_speed_of_an_item_that_isnt_a_weapon_stays_checked() {
         let quiver = parse(
             "Item Class: Quivers\nRarity: Magic\nQuick Broadhead Quiver\n--------\n\
@@ -2451,8 +2634,9 @@ mod tests {
 
             // `+74(80-89) to maximum Mana`: its tier, its value under its range.
             assert!(line(" ≥67 [0.42 T5 80–89]").starts_with("□ +74 "));
-            // `29(30)% reduced Attribute Requirements`, a range of one value.
-            assert!(line(" ≥26 [0.70 T2 30]").starts_with("■ 29% "));
+            // `29(30)% reduced Attribute Requirements`, a range of one value; unchecked, as
+            // every stat of an item with an unrevealed modifier.
+            assert!(line(" ≥26 [0.70 T2 30]").starts_with("□ 29% "));
         }
     }
 

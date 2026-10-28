@@ -311,6 +311,8 @@ mod tests {
                 properties: Vec::new(),
                 rarity: None,
                 corrupted: Some(false),
+                sanctified: None,
+                mirrored: None,
                 stats: Vec::new(),
             }),
         }

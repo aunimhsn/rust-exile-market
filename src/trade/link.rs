@@ -9,7 +9,7 @@ use super::host;
 use super::query::{self, ItemQuery, Query, RarityFilter, SearchFilters};
 use crate::game_data;
 use crate::http;
-use crate::item::{Item, Rarity};
+use crate::item::{Item, ItemState, Rarity};
 use crate::item_names::ItemNames;
 use crate::language::Language;
 use crate::league::League;
@@ -89,6 +89,8 @@ impl<'a> TradeTarget<'a> {
                 category: None,
                 rarity,
                 corrupted: None,
+                sanctified: None,
+                mirrored: None,
                 properties: Vec::new(),
                 stats: Vec::new(),
             })
@@ -108,10 +110,12 @@ impl<'a> TradeTarget<'a> {
 
 /// The search of `item` for `target`: its corrupted state is always a filter, so that a
 /// corrupted item is compared with corrupted offers only, and a clean one with clean ones; a
-/// unique is searched with the stats of its `filters` the player checked, the other items
-/// with all their filters, the category of their base type when the player unchecked it (a
-/// bow among all the bows); any base type for a base the game data doesn't know, when another
-/// filter narrows the search (never a search of every item of the league).
+/// clean normal, magic or rare item, which can still be crafted, with offers neither
+/// sanctified nor mirrored either, like Exiled Exchange 2; a unique is searched with the stats
+/// of its `filters` the player checked, the other items with all their filters, the category
+/// of their base type when the player unchecked it (a bow among all the bows); any base type
+/// for a base the game data doesn't know, when another filter narrows the search (never a
+/// search of every item of the league).
 #[must_use]
 pub fn query(item: &Item, target: &TradeTarget, filters: SearchFilters) -> Query {
     let mut query = target.query();
@@ -137,6 +141,10 @@ pub fn query(item: &Item, target: &TradeTarget, filters: SearchFilters) -> Query
                         );
                     }
                 }
+                if craftable(item) {
+                    items.sanctified = Some(false);
+                    items.mirrored = Some(false);
+                }
                 items.properties = filters.properties;
                 items.stats = filters.stats;
             }
@@ -144,6 +152,15 @@ pub fn query(item: &Item, target: &TradeTarget, filters: SearchFilters) -> Query
         }
     }
     query
+}
+
+/// `item` is a normal, magic or rare item that can still be crafted: neither corrupted,
+/// sanctified nor mirrored.
+fn craftable(item: &Item) -> bool {
+    matches!(item.rarity(), Rarity::Normal | Rarity::Magic | Rarity::Rare)
+        && !item.is_corrupted()
+        && !item.has_state(ItemState::Sanctified)
+        && !item.has_state(ItemState::Mirrored)
 }
 
 /// The category of the trade site searched in place of `base_type`, the base type of `item`
@@ -340,6 +357,44 @@ mod tests {
             };
             assert_eq!(items.corrupted, Some(true), "{state}");
         }
+    }
+
+    #[test]
+    fn a_clean_item_is_compared_with_offers_neither_sanctified_nor_mirrored() {
+        // The states searched: corrupted, sanctified, mirrored.
+        let names = item_names();
+        let states = |text: &str| {
+            let item = parse(text);
+            let target = target(&item, Some(&names), None).expect("a target");
+            let Query::Items(items) = super::query(&item, &target, SearchFilters::default()) else {
+                panic!("a search of items");
+            };
+            (items.corrupted, items.sanctified, items.mirrored)
+        };
+        let ring = |rarity: &str, state: &str| {
+            states(&format!(
+                "Item Class: Rings\nRarity: {rarity}\nWoe Loop\nRuby Ring\n--------\n{state}"
+            ))
+        };
+
+        let clean = [
+            states("Item Class: Rings\nRarity: Normal\nRuby Ring\n--------\nItem Level: 1"),
+            states(include_str!("../item/test-items/en-magic-mace.txt")),
+            ring("Rare", "Item Level: 1"),
+        ];
+        for states in clean {
+            assert_eq!(states, (Some(false), Some(false), Some(false)));
+        }
+        // An item that can't be crafted any more is searched among the offers sanctified,
+        // mirrored or not.
+        assert_eq!(ring("Rare", "Corrupted"), (Some(true), None, None));
+        assert_eq!(ring("Rare", "Sanctified"), (Some(false), None, None));
+        assert_eq!(ring("Rare", "Mirrored"), (Some(false), None, None));
+        // A unique is searched by its name.
+        assert_eq!(
+            states("Item Class: Rings\nRarity: Unique\nAndvarius\nGold Ring"),
+            (Some(false), None, None)
+        );
     }
 
     #[test]

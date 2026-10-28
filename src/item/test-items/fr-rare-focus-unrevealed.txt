@@ -1,0 +1,21 @@
+Classe d'objet: Foci
+Rareté: Rare
+ Protecteur ennemi
+Focus à plumes
+--------
+Bouclier d'énergie: 72 (augmented)
+--------
+Prérequis : Niveau 36, 52 Int
+--------
+Niveau de l'objet: 39
+--------
+{ Préfixe : « de l'Érudit » (Palier : 4) — Dégâts, Lanceur de sorts }
+52(45-54)% d'Augmentation des Dégâts des Sorts
+{ Préfixe : « Rayonnant » (Palier : 6) — Bouclier d'énergie }
++36(36-41) de Bouclier d'énergie maximal
+{ Suffixe : « du Yéti » (Palier : 5) — Élémentaire, Froid, Résistance }
++24(21-25)% à la Résistance au froid
+{ Suffixe : « du Drake » (Palier : 6) — Élémentaire, Feu, Résistance }
++18(16-20)% à la Résistance au feu
+{ Préfixe : « Crypté » }
+Préfixe profané

@@ -158,6 +158,9 @@ pub struct Modifier {
     pub tier: Option<u32>,
     /// The tags of the advanced copy, e.g. `Damage`, `Elemental`.
     pub tags: Vec<String>,
+    /// A desecrated modifier not revealed yet: its affix is known, not its lines, so it has
+    /// none.
+    pub unrevealed: bool,
     pub lines: Vec<StatLine>,
 }
 
@@ -178,6 +181,7 @@ impl Modifier {
             name: None,
             tier: None,
             tags: Vec::new(),
+            unrevealed: false,
             lines: Vec::new(),
         }
     }
@@ -195,8 +199,20 @@ impl Modifier {
         Self::new(ModifierKind::Explicit(None), None)
     }
 
-    /// Adds a line under the header; its marker tells the origin when the header doesn't.
-    pub(super) fn push_line(&mut self, line: &str) {
+    /// Adds a line under the header; its marker tells the origin when the header doesn't. The
+    /// only line of a prefix or suffix not revealed yet (`Desecrated Prefix`, in `labels`)
+    /// marks it unrevealed instead, and no line follows it.
+    pub(super) fn push_line(&mut self, line: &str, labels: &Labels) {
+        if self.unrevealed {
+            return;
+        }
+        if let ModifierKind::Explicit(Some(affix)) = self.kind
+            && self.lines.is_empty()
+            && labels.unrevealed.contains(&(line.trim(), affix))
+        {
+            self.unrevealed = true;
+            return;
+        }
         let (text, marker) = Marker::take(line);
         if self.origin.is_none() {
             self.origin = marker.and_then(Marker::origin);
@@ -507,8 +523,29 @@ mod tests {
     #[test]
     fn a_marker_tells_the_origin_of_a_line_under_a_header() {
         let mut crafted = Modifier::unknown();
-        crafted.push_line("+12 to Strength (crafted)");
+        crafted.push_line("+12 to Strength (crafted)", Labels::of(Language::English));
         assert_eq!(crafted.origin, Some(ModifierOrigin::Crafted));
         assert_eq!(crafted.lines[0].text, "+12 to Strength");
+    }
+
+    #[test]
+    fn the_only_line_of_an_unrevealed_modifier_matches_its_affix() {
+        let labels = Labels::of(Language::English);
+        let mut prefix = header(r#"{ Prefix Modifier "Veiled" }"#, Language::English);
+        prefix.push_line("Desecrated Prefix", labels);
+        assert!(prefix.unrevealed && prefix.lines.is_empty());
+        // The words of the other affix, or under a line, are a line.
+        let mut suffix = header(r#"{ Suffix Modifier "of the Veil" }"#, Language::English);
+        suffix.push_line("Desecrated Prefix", labels);
+        let mut after = header(r#"{ Prefix Modifier "Veiled" }"#, Language::English);
+        after.push_line("+12 to Strength", labels);
+        after.push_line("Desecrated Prefix", labels);
+        for modifier in [suffix, after] {
+            assert!(!modifier.unrevealed);
+            assert_eq!(
+                modifier.lines.last().map(|line| line.text.as_str()),
+                Some("Desecrated Prefix")
+            );
+        }
     }
 }

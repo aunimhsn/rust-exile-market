@@ -45,6 +45,10 @@ pub struct ItemQuery {
     pub rarity: Option<RarityFilter>,
     /// Corrupted offers only, or clean ones only; either when `None`.
     pub corrupted: Option<bool>,
+    /// Sanctified offers only, or the others only; either when `None`.
+    pub sanctified: Option<bool>,
+    /// Mirrored offers only, or the others only; either when `None`.
+    pub mirrored: Option<bool>,
     pub properties: Vec<PropertyFilter>,
     pub stats: Vec<StatFilter>,
 }
@@ -176,12 +180,14 @@ impl ItemQuery {
                 add(group, id, Value::Object(value));
             }
         }
-        if let Some(corrupted) = self.corrupted {
-            add(
-                "misc_filters",
-                "corrupted",
-                json!({ "option": corrupted.to_string() }),
-            );
+        for (id, state) in [
+            ("corrupted", self.corrupted),
+            ("sanctified", self.sanctified),
+            ("mirrored", self.mirrored),
+        ] {
+            if let Some(state) = state {
+                add("misc_filters", id, json!({ "option": state.to_string() }));
+            }
         }
         if !groups.is_empty() {
             query.insert("filters".to_owned(), Value::Object(groups));
@@ -249,6 +255,8 @@ mod tests {
             category: Some("weapon.bow"),
             rarity: Some(RarityFilter::NotUnique),
             corrupted: None,
+            sanctified: None,
+            mirrored: None,
             properties: Vec::new(),
             stats: Vec::new(),
         };
@@ -270,6 +278,8 @@ mod tests {
             category: None,
             rarity: None,
             corrupted: None,
+            sanctified: None,
+            mirrored: None,
             properties: Vec::new(),
             stats: Vec::new(),
         };
@@ -284,6 +294,40 @@ mod tests {
     }
 
     #[test]
+    fn the_corrupted_sanctified_and_mirrored_states_share_the_misc_filters() {
+        let query = ItemQuery {
+            name: None,
+            base_type: Some("Ruby Ring".to_owned()),
+            category: None,
+            rarity: Some(RarityFilter::NotUnique),
+            corrupted: Some(false),
+            sanctified: Some(false),
+            mirrored: Some(false),
+            properties: Vec::new(),
+            stats: Vec::new(),
+        };
+
+        assert_eq!(
+            query.to_json(),
+            json!({
+                "query": {
+                    "status": { "option": "online" },
+                    "type": "Ruby Ring",
+                    "filters": {
+                        "type_filters": { "filters": { "rarity": { "option": "nonunique" } } },
+                        "misc_filters": { "filters": {
+                            "corrupted": { "option": "false" },
+                            "sanctified": { "option": "false" },
+                            "mirrored": { "option": "false" }
+                        } }
+                    }
+                },
+                "sort": { "price": "asc" }
+            })
+        );
+    }
+
+    #[test]
     fn the_stats_and_the_corrupted_state_are_filters() {
         let query = ItemQuery {
             name: Some("Andvarius".to_owned()),
@@ -291,6 +335,8 @@ mod tests {
             category: None,
             rarity: Some(RarityFilter::Unique),
             corrupted: Some(false),
+            sanctified: None,
+            mirrored: None,
             properties: Vec::new(),
             stats: vec![
                 StatFilter {
@@ -335,6 +381,8 @@ mod tests {
             category: None,
             rarity: None,
             corrupted: None,
+            sanctified: None,
+            mirrored: None,
             properties: Vec::new(),
             stats: vec![
                 StatFilter {
@@ -375,6 +423,8 @@ mod tests {
             category: None,
             rarity: None,
             corrupted: None,
+            sanctified: None,
+            mirrored: None,
             properties: Vec::new(),
             stats: vec![StatFilter {
                 ids: vec![
@@ -403,6 +453,8 @@ mod tests {
             category: None,
             rarity: Some(RarityFilter::NotUnique),
             corrupted: Some(false),
+            sanctified: None,
+            mirrored: None,
             properties: vec![
                 PropertyFilter {
                     property: Property::ItemLevel,

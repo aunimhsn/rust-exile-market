@@ -311,4 +311,15 @@ impl Item {
     pub fn modifiers(&self) -> &[Modifier] {
         &self.modifiers
     }
+
+    /// The number of desecrated modifiers not revealed yet.
+    #[must_use]
+    pub fn unrevealed_modifiers(&self) -> u32 {
+        let count = self
+            .modifiers
+            .iter()
+            .filter(|modifier| modifier.unrevealed)
+            .count();
+        u32::try_from(count).unwrap_or(u32::MAX)
+    }
 }

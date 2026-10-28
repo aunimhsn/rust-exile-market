@@ -393,6 +393,8 @@ pub(super) mod tests {
             properties: Vec::new(),
             rarity: Some(RarityFilter::Unique),
             corrupted: None,
+            sanctified: None,
+            mirrored: None,
             stats: Vec::new(),
         }
     }
