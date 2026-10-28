@@ -122,12 +122,14 @@ impl ModifierTiers {
 ///
 /// None for a modifier the tables don't hold: an implicit, a rune, an enchantment, a modifier
 /// whose header doesn't tell its affix, a line without stat, a base without tags; or whose
-/// values and ranges are in no tier: a modifier of the lords of the Abyss is desecrated, like
-/// some ordinary ones, and rolls its own range. A tier with the ranges the advanced copy wrote
-/// holds the values of a sanctified item, out of them.
+/// ranges are in no tier: a modifier of the lords of the Abyss is desecrated, like some
+/// ordinary ones, and rolls its own range.
 ///
-/// When several tiers hold the copied values (a line without number has no range), the best
-/// one is taken; when several modifiers hold them, the first of the file.
+/// With the ranges of the advanced copy, only a tier with those ranges: the tier that holds the
+/// copied values first, then the one that holds them give or take the rounding of the game, then
+/// the one whose values left it (any value out of its tier, e.g. on a sanctified item). Without
+/// them (a line without number has no range), only a tier that holds the values. When several
+/// tiers fit as well, the best one is taken; when several modifiers do, the first of the file.
 #[must_use]
 pub fn modifier_tiers(
     language: Language,
@@ -543,6 +545,13 @@ mod tests {
             assert!(found.contains(&(5, vec![range(80.0, 89.0)])), "{found:?}");
             assert!(found.contains(&(2, vec![range(30.0, 30.0)])), "{found:?}");
         }
+
+        // A line of two values, one of them out of its tier: `4(1-4) to 75(60-71)`.
+        let text = include_str!("../item/test-items/en-owner-rare-sceptre-sanctified.txt")
+            .replace("60(60-71)", "75(60-71)");
+        let (found, written) = tiers_of(&text, None).swap_remove(0);
+        assert_eq!(written, (1, vec![range(1.0, 4.0), range(60.0, 71.0)]));
+        assert_eq!(found, Some(written));
 
         // Without the ranges of the advanced copy, a value out of every tier finds none.
         let mana = modifier(Some(Affix::Prefix), &["+74 to maximum Mana"]);
