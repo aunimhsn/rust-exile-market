@@ -117,18 +117,17 @@ const QUALITIES: Range = Range {
 };
 /// The required levels: the field of the required level stays within them. Checked on the
 /// trade site on 2026-10-28: offers requiring level 90, none above.
-/// The unrevealed modifiers an item can have: three prefixes and three suffixes.
-const UNREVEALED_MODIFIERS: Range = Range { min: 0.0, max: 6.0 };
-/// The band of an unrevealed modifier: 12 % of the desecrated green, as in the mock-up.
-const UNREVEALED_BAND: Color32 = Color32::from_rgba_premultiplied(8, 23, 9, 31);
-/// The band of an unrevealed modifier reaches 6 px out of the column of the stats, so that its
-/// words stay at the left edge.
-const UNREVEALED_PADDING: Margin = Margin::symmetric(6, 3);
-const UNREVEALED_OUTSET: Margin = Margin::symmetric(-6, 0);
 const REQUIRED_LEVELS: Range = Range {
     min: 1.0,
     max: 90.0,
 };
+/// The unrevealed modifiers an item can have: three prefixes and three suffixes.
+const UNREVEALED_MODIFIERS: Range = Range { min: 0.0, max: 6.0 };
+/// The inner margin of the band of an unrevealed modifier, around its words.
+const UNREVEALED_PADDING: Margin = Margin::symmetric(6, 3);
+/// The band of an unrevealed modifier reaches 6 px out of the column of the stats, so that its
+/// words stay at the left edge.
+const UNREVEALED_OUTSET: Margin = Margin::symmetric(-6, 0);
 
 /// A small title of the stats.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -923,8 +922,8 @@ fn affix_stats<'a>(item: &'a Item, affix: Option<Affix>, reading: &Reading<'_>) 
     let stats = modifiers
         .iter()
         .flat_map(|&(index, modifier)| -> Vec<Stat<'a>> {
-            if let (true, ModifierKind::Explicit(Some(affix))) =
-                (modifier.unrevealed, modifier.kind)
+            if modifier.unrevealed
+                && let ModifierKind::Explicit(Some(affix)) = modifier.kind
             {
                 // No line yet: the key of its first one, which no filter has.
                 return vec![Stat {
@@ -1423,7 +1422,7 @@ fn stat_row(ui: &mut Ui, stat: &Stat<'_>, filters: &mut Filters, i18n: &Translat
 /// lines, from the left edge, on a faint band of that green, like the row of the game.
 fn unrevealed_row(ui: &mut Ui, words: &str) {
     Frame::new()
-        .fill(UNREVEALED_BAND)
+        .fill(color::UNREVEALED_BAND)
         .corner_radius(size::RADIUS)
         .inner_margin(UNREVEALED_PADDING)
         .outer_margin(UNREVEALED_OUTSET)
@@ -2345,6 +2344,31 @@ mod tests {
         assert_eq!(french[4], "■ UnrevealedModifiers: 1 ≥1");
         assert_eq!(french[10], "Unrevealed Prefix");
         assert_eq!(french.last().map(String::as_str), Some("Unrevealed note"));
+    }
+
+    #[test]
+    fn a_corrupted_item_counts_each_unrevealed_modifier_and_shows_both_notes() {
+        let ring = parse(
+            "Item Class: Rings\nRarity: Rare\nWoe Loop\nRuby Ring\n--------\n\
+             Item Level: 80\n--------\n\
+             { Prefix Modifier \"Veiled\" }\nDesecrated Prefix\n\
+             { Suffix Modifier \"of the Veil\" }\nDesecrated Suffix\n--------\nCorrupted",
+        );
+        assert_eq!(
+            texts(&ring),
+            [
+                "Item",
+                "■ Base: Ruby Ring",
+                "□ ItemLevel: 80 ≥80",
+                "■ UnrevealedModifiers: 2 ≥2",
+                "Prefixes 1/3",
+                "Unrevealed Prefix",
+                "Suffixes 1/3",
+                "Unrevealed Suffix",
+                "Unrevealed note",
+                "Corrupted only",
+            ]
+        );
     }
 
     #[test]

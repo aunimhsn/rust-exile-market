@@ -110,9 +110,9 @@ impl<'a> TradeTarget<'a> {
 
 /// The search of `item` for `target`: its corrupted state is always a filter, so that a
 /// corrupted item is compared with corrupted offers only, and a clean one with clean ones; a
-/// clean normal, magic or rare item, which can still be crafted, with offers neither sanctified
-/// nor mirrored either, like Exiled Exchange 2; a unique is searched with the stats of its `filters` the player checked, the other items
-/// with all their filters, the category of their base type when the player unchecked it (a
+/// clean normal, magic or rare item, which can still be crafted, with offers neither
+/// sanctified nor mirrored either, like Exiled Exchange 2; a unique is searched with the stats
+/// of its `filters` the player checked, the other items with all their filters, the category of their base type when the player unchecked it (a
 /// bow among all the bows); any base type for a base the game data doesn't know, when another
 /// filter narrows the search (never a search of every item of the league).
 #[must_use]
@@ -140,7 +140,7 @@ pub fn query(item: &Item, target: &TradeTarget, filters: SearchFilters) -> Query
                         );
                     }
                 }
-                if crafted(item) {
+                if craftable(item) {
                     items.sanctified = Some(false);
                     items.mirrored = Some(false);
                 }
@@ -155,7 +155,7 @@ pub fn query(item: &Item, target: &TradeTarget, filters: SearchFilters) -> Query
 
 /// `item` is a normal, magic or rare item that can still be crafted: neither corrupted,
 /// sanctified nor mirrored.
-fn crafted(item: &Item) -> bool {
+fn craftable(item: &Item) -> bool {
     matches!(item.rarity(), Rarity::Normal | Rarity::Magic | Rarity::Rare)
         && !item.is_corrupted()
         && !item.has_state(ItemState::Sanctified)
@@ -359,7 +359,7 @@ mod tests {
     }
 
     #[test]
-    fn a_clean_rare_is_compared_with_offers_neither_sanctified_nor_mirrored() {
+    fn a_clean_item_is_compared_with_offers_neither_sanctified_nor_mirrored() {
         // The states searched: corrupted, sanctified, mirrored.
         let names = item_names();
         let states = |text: &str| {
@@ -376,15 +376,16 @@ mod tests {
             ))
         };
 
-        for rarity in ["Normal", "Magic", "Rare"] {
-            let clean = if rarity == "Magic" {
-                states(include_str!("../item/test-items/en-magic-mace.txt"))
-            } else {
-                ring(rarity, "Item Level: 1")
-            };
-            assert_eq!(clean, (Some(false), Some(false), Some(false)), "{rarity}");
+        let clean = [
+            states("Item Class: Rings\nRarity: Normal\nRuby Ring\n--------\nItem Level: 1"),
+            states(include_str!("../item/test-items/en-magic-mace.txt")),
+            ring("Rare", "Item Level: 1"),
+        ];
+        for states in clean {
+            assert_eq!(states, (Some(false), Some(false), Some(false)));
         }
-        // Not crafted any more: the other states are either.
+        // An item that can't be crafted any more is searched among the offers sanctified,
+        // mirrored or not.
         assert_eq!(ring("Rare", "Corrupted"), (Some(true), None, None));
         assert_eq!(ring("Rare", "Sanctified"), (Some(false), None, None));
         assert_eq!(ring("Rare", "Mirrored"), (Some(false), None, None));

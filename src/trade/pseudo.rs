@@ -1,8 +1,8 @@
-//! The pseudo totals of the trade site: a stat it adds up from the modifier lines of an item
+//! The pseudo stats of the trade site: a total it adds up from the modifier lines of an item
 //! of every group (implicit, explicit, rune, enchantment…), such as the total elemental
-//! resistance. A rare or magic item is searched by its totals in place of the lines they add
-//! up, so that the offers found have the same total from other modifiers, like Exiled
-//! Exchange 2.
+//! resistance, or a count, such as the number of unrevealed modifiers. A rare or magic item is
+//! searched by its totals in place of the lines they add up, so that the offers found have the
+//! same total from other modifiers, like Exiled Exchange 2.
 //!
 //! The rules are those of Exiled Exchange 2, checked on the trade site on 2026-10-27: its
 //! total maximum life counts each point of strength twice, its total maximum mana each point

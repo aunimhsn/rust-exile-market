@@ -294,6 +294,40 @@ mod tests {
     }
 
     #[test]
+    fn the_corrupted_sanctified_and_mirrored_states_share_the_misc_filters() {
+        let query = ItemQuery {
+            name: None,
+            base_type: Some("Ruby Ring".to_owned()),
+            category: None,
+            rarity: Some(RarityFilter::NotUnique),
+            corrupted: Some(false),
+            sanctified: Some(false),
+            mirrored: Some(false),
+            properties: Vec::new(),
+            stats: Vec::new(),
+        };
+
+        assert_eq!(
+            query.to_json(),
+            json!({
+                "query": {
+                    "status": { "option": "online" },
+                    "type": "Ruby Ring",
+                    "filters": {
+                        "type_filters": { "filters": { "rarity": { "option": "nonunique" } } },
+                        "misc_filters": { "filters": {
+                            "corrupted": { "option": "false" },
+                            "sanctified": { "option": "false" },
+                            "mirrored": { "option": "false" }
+                        } }
+                    }
+                },
+                "sort": { "price": "asc" }
+            })
+        );
+    }
+
+    #[test]
     fn the_stats_and_the_corrupted_state_are_filters() {
         let query = ItemQuery {
             name: Some("Andvarius".to_owned()),

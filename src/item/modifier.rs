@@ -158,7 +158,8 @@ pub struct Modifier {
     pub tier: Option<u32>,
     /// The tags of the advanced copy, e.g. `Damage`, `Elemental`.
     pub tags: Vec<String>,
-    /// A desecrated modifier not revealed yet: its affix is known, not its lines.
+    /// A desecrated modifier not revealed yet: its affix is known, not its lines, so it has
+    /// none.
     pub unrevealed: bool,
     pub lines: Vec<StatLine>,
 }
@@ -200,8 +201,11 @@ impl Modifier {
 
     /// Adds a line under the header; its marker tells the origin when the header doesn't. The
     /// only line of a prefix or suffix not revealed yet (`Desecrated Prefix`, in `labels`)
-    /// marks it unrevealed instead.
+    /// marks it unrevealed instead, and no line follows it.
     pub(super) fn push_line(&mut self, line: &str, labels: &Labels) {
+        if self.unrevealed {
+            return;
+        }
         if let ModifierKind::Explicit(Some(affix)) = self.kind
             && self.lines.is_empty()
             && labels.unrevealed.contains(&(line.trim(), affix))

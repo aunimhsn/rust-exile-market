@@ -246,6 +246,32 @@ fn reads_an_unrevealed_modifier_from_its_header_and_its_only_line() {
 }
 
 #[test]
+fn an_unrevealed_line_under_a_header_without_affix_stays_a_line() {
+    // An unknown header gives no affix: `Desecrated Prefix` can't mark it unrevealed.
+    let item = try_parse(
+        "Item Class: Rings\nRarity: Rare\nWoe Loop\nRuby Ring\n--------\nItem Level: 80\n\
+         --------\n{ Unknown Modifier }\nDesecrated Prefix",
+    )
+    .expect("the item is read");
+    assert_eq!(item.warnings(), [ParseWarning::UnknownModifierHeader]);
+    assert_eq!(item.unrevealed_modifiers(), 0);
+    let modifier = &item.modifiers()[0];
+    assert_eq!(modifier.kind, ModifierKind::Explicit(None));
+    assert_eq!(first_line(modifier).text, "Desecrated Prefix");
+}
+
+#[test]
+fn an_unrevealed_modifier_keeps_no_line_after_its_marker() {
+    let item = item(
+        "Item Class: Rings\nRarity: Rare\nWoe Loop\nRuby Ring\n--------\nItem Level: 80\n\
+         --------\n{ Prefix Modifier \"Veiled\" }\nDesecrated Prefix\n+10 to maximum Life",
+    );
+    let unrevealed = &explicit(&item)[0];
+    assert!(unrevealed.unrevealed);
+    assert_eq!(unrevealed.lines, []);
+}
+
+#[test]
 fn reads_a_french_unique_without_its_flavour_text() {
     let item = item(FR_UNIQUE_CROSSBOW);
 
