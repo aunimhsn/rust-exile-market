@@ -1,10 +1,12 @@
 //! The item block: the name of the copied item in its rarity color, the Check on trade pill,
 //! its base type and class, then its facts (the main values of its base, the skills it
-//! grants, its requirements, its tags), and the pill of its stats.
+//! grants, its requirements, its tags), and the pill of its stats. A click on a state tag
+//! (Corrupted, Fractured…) lights it: the offers of that state only.
 
 use egui::text::{LayoutJob, TextFormat};
 use egui::{
-    Align, Color32, CornerRadius, FontId, Frame, Label, Layout, RichText, Sense, Ui, Vec2, vec2,
+    Align, Color32, CornerRadius, CursorIcon, FontId, Frame, Label, Layout, Response, RichText,
+    Sense, Ui, Vec2, vec2,
 };
 
 use super::item_stats::{self, Stats};
@@ -59,38 +61,74 @@ pub enum ItemBlockAction {
     ToggleStats,
 }
 
-/// The style of a tag.
+/// What a tag is.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum TagStyle {
+enum TagKind {
     Plain,
-    Corrupted,
+    /// A state of the item, a filter of the search: gray, the offers with or without that
+    /// state; lit by a click, the offers of that state only.
+    State(ItemState, StateTag),
+}
+
+/// A state tag: its tooltips, and its colors once lit.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct StateTag {
+    /// Gray: the offers with or without that state.
+    or_not: Message,
+    /// Lit: the offers of that state only.
+    only: Message,
+    /// Lit: its text, its background, and its background under the pointer.
+    text: Color32,
+    fill: Color32,
+    hovered: Color32,
 }
 
 /// The state tags, in the order of the specifications.
-const STATE_TAGS: [(ItemState, Message, TagStyle); 6] = [
-    (
-        ItemState::Corrupted,
-        Message::TagCorrupted,
-        TagStyle::Corrupted,
-    ),
-    (
-        ItemState::TwiceCorrupted,
-        Message::TagTwiceCorrupted,
-        TagStyle::Corrupted,
-    ),
-    (
-        ItemState::Sanctified,
-        Message::TagSanctified,
-        TagStyle::Plain,
-    ),
-    (ItemState::Fractured, Message::TagFractured, TagStyle::Plain),
-    (ItemState::Mirrored, Message::TagMirrored, TagStyle::Plain),
-    (
-        ItemState::Unidentified,
-        Message::TagUnidentified,
-        TagStyle::Plain,
-    ),
+const STATE_TAGS: [(ItemState, Message); 6] = [
+    (ItemState::Corrupted, Message::TagCorrupted),
+    (ItemState::TwiceCorrupted, Message::TagTwiceCorrupted),
+    (ItemState::Sanctified, Message::TagSanctified),
+    (ItemState::Fractured, Message::TagFractured),
+    (ItemState::Mirrored, Message::TagMirrored),
+    (ItemState::Unidentified, Message::TagUnidentified),
 ];
+
+/// The tag of `state`, when it is a filter of the search: every state but Unidentified.
+fn state_tag(state: ItemState) -> Option<StateTag> {
+    let corrupted = |only| StateTag {
+        or_not: Message::StateCorruptedOrNot,
+        only,
+        text: color::CORRUPTED_STATE,
+        fill: color::CORRUPTED_STATE_BG,
+        hovered: color::CORRUPTED_STATE_HOVER,
+    };
+    match state {
+        ItemState::Corrupted => Some(corrupted(Message::StateCorruptedOnly)),
+        ItemState::TwiceCorrupted => Some(corrupted(Message::StateTwiceCorruptedOnly)),
+        ItemState::Sanctified => Some(StateTag {
+            or_not: Message::StateSanctifiedOrNot,
+            only: Message::StateSanctifiedOnly,
+            text: color::SANCTIFIED_STATE,
+            fill: color::SANCTIFIED_STATE_BG,
+            hovered: color::SANCTIFIED_STATE_HOVER,
+        }),
+        ItemState::Fractured => Some(StateTag {
+            or_not: Message::StateFracturedOrNot,
+            only: Message::StateFracturedOnly,
+            text: color::FRACTURED_STATE,
+            fill: color::FRACTURED_STATE_BG,
+            hovered: color::FRACTURED_STATE_HOVER,
+        }),
+        ItemState::Mirrored => Some(StateTag {
+            or_not: Message::StateMirroredOrNot,
+            only: Message::StateMirroredOnly,
+            text: color::MIRRORED_STATE,
+            fill: color::MIRRORED_STATE_BG,
+            hovered: color::MIRRORED_STATE_HOVER,
+        }),
+        ItemState::Unidentified => None,
+    }
+}
 
 /// A main value of the base: the DPS of a weapon, of each kind it deals, or a defence of an
 /// armour piece or a shield.
@@ -146,7 +184,7 @@ enum Fact {
     Skills(String),
     /// Each part with its color.
     Requirements(Vec<(String, Color32)>),
-    Tags(Vec<(String, TagStyle)>),
+    Tags(Vec<(String, TagKind)>),
 }
 
 pub struct ItemBlock<'a> {
@@ -217,7 +255,9 @@ impl<'a> ItemBlock<'a> {
                 let trade_action = self.name_row(ui);
                 ui.add_space(BASE_GAP);
                 ui.add(Label::new(self.base_and_class()).wrap());
-                self.facts(ui);
+                if let Some(state) = self.facts(ui) {
+                    self.filters.toggle_state(state);
+                }
                 let stats_action = self.stats_section(ui);
                 trade_action.or(stats_action)
             })
@@ -267,8 +307,10 @@ impl<'a> ItemBlock<'a> {
         job
     }
 
-    /// The facts of the item, those it has, 6 px apart.
-    fn facts(&self, ui: &mut Ui) {
+    /// The facts of the item, those it has, 6 px apart; the state whose tag the player
+    /// clicked.
+    fn facts(&self, ui: &mut Ui) -> Option<ItemState> {
+        let mut clicked = None;
         let mut previous = None;
         for fact in self.fact_list() {
             ui.add_space(match (&previous, &fact) {
@@ -291,10 +333,51 @@ impl<'a> ItemBlock<'a> {
                 Fact::Requirements(parts) => {
                     ui.add(Label::new(self.requirements_line(parts)).wrap());
                 }
-                Fact::Tags(tags) => tags_line(ui, tags),
+                Fact::Tags(tags) => clicked = self.tags_line(ui, tags),
             }
             previous = Some(fact);
         }
+        clicked
+    }
+
+    /// The tags, wrapped when needed; the state whose tag the player clicked.
+    fn tags_line(&self, ui: &mut Ui, tags: &[(String, TagKind)]) -> Option<ItemState> {
+        ui.horizontal_wrapped(|ui| {
+            ui.spacing_mut().item_spacing = TAG_SPACING;
+            let mut clicked = None;
+            for (label, kind) in tags {
+                match *kind {
+                    TagKind::Plain => {
+                        tag(ui, label, Sense::hover(), |_| (color::CONTROL, color::TEXT));
+                    }
+                    TagKind::State(state, state_tag) => {
+                        let lit = self.filters.is_lit(state);
+                        let response = tag(ui, label, Sense::click(), |response| {
+                            match (lit, response.hovered()) {
+                                (false, false) => (color::CONTROL, color::WEAK),
+                                (false, true) => (color::CONTROL_LINE, color::TEXT),
+                                (true, false) => (state_tag.fill, state_tag.text),
+                                (true, true) => (state_tag.hovered, state_tag.text),
+                            }
+                        });
+                        let tooltip = if lit {
+                            state_tag.only
+                        } else {
+                            state_tag.or_not
+                        };
+                        if response
+                            .on_hover_cursor(CursorIcon::PointingHand)
+                            .on_hover_text(self.i18n.text(tooltip))
+                            .clicked()
+                        {
+                            clicked = Some(state);
+                        }
+                    }
+                }
+            }
+            clicked
+        })
+        .inner
     }
 
     /// The facts the item has, in their order.
@@ -385,13 +468,17 @@ impl<'a> ItemBlock<'a> {
     }
 
     /// The tags, in the order of the specifications: the states, then the numbers.
-    fn tags(&self) -> Vec<(String, TagStyle)> {
+    fn tags(&self) -> Vec<(String, TagKind)> {
         let item = self.item;
         let i18n = self.i18n;
-        let mut tags: Vec<(String, TagStyle)> = STATE_TAGS
+        let mut tags: Vec<(String, TagKind)> = STATE_TAGS
             .into_iter()
-            .filter(|&(state, ..)| item.has_state(state))
-            .map(|(_, message, style)| (i18n.text(message), style))
+            .filter(|&(state, _)| item.has_state(state))
+            .map(|(state, message)| {
+                let kind =
+                    state_tag(state).map_or(TagKind::Plain, |tag| TagKind::State(state, tag));
+                (i18n.text(message), kind)
+            })
             .collect();
         let numbers = [
             (NumberTag::Quality, item.quality()),
@@ -400,11 +487,11 @@ impl<'a> ItemBlock<'a> {
         ];
         for (number, value) in numbers {
             if let Some(value) = value {
-                tags.push((i18n.tag(number, value), TagStyle::Plain));
+                tags.push((i18n.tag(number, value), TagKind::Plain));
             }
         }
         if let Some(stack) = item.stack() {
-            tags.push((i18n.stack_tag(stack.size, stack.max), TagStyle::Plain));
+            tags.push((i18n.stack_tag(stack.size, stack.max), TagKind::Plain));
         }
         tags
     }
@@ -491,27 +578,21 @@ fn append(job: &mut LayoutJob, text: &str, font: &FontId, tint: Color32) {
     job.append(text, 0.0, TextFormat::simple(font.clone(), tint));
 }
 
-/// The tags, wrapped when needed.
-fn tags_line(ui: &mut Ui, tags: &[(String, TagStyle)]) {
-    ui.horizontal_wrapped(|ui| {
-        ui.spacing_mut().item_spacing = TAG_SPACING;
-        for (label, style) in tags {
-            tag(ui, label, *style);
-        }
-    });
-}
-
-/// A tag: its label on a small block.
-fn tag(ui: &mut Ui, label: &str, style: TagStyle) {
-    let (fill, tint) = match style {
-        TagStyle::Plain => (color::CONTROL, color::TEXT),
-        TagStyle::Corrupted => (color::CORRUPTED_TAG, color::CORRUPTED_TAG_TEXT),
-    };
+/// A tag: its label on a small block, sensing `sense`, its background and its text in the
+/// `colors` chosen from its response (under the pointer or not).
+fn tag(
+    ui: &mut Ui,
+    label: &str,
+    sense: Sense,
+    colors: impl FnOnce(&Response) -> (Color32, Color32),
+) -> Response {
     let galley = widgets::text_line(ui, label, text::tag());
-    let (rect, _) = ui.allocate_exact_size(galley.size() + 2.0 * TAG_PADDING, Sense::hover());
+    let (rect, response) = ui.allocate_exact_size(galley.size() + 2.0 * TAG_PADDING, sense);
+    let (fill, tint) = colors(&response);
     let painter = ui.painter();
     painter.rect_filled(rect, CornerRadius::same(size::RADIUS), fill);
     painter.galley(rect.min + TAG_PADDING, galley, tint);
+    response
 }
 
 /// The color of the name of an item of `rarity`, as in the game.
@@ -662,6 +743,73 @@ mod tests {
             staff.requirements.as_deref(),
             Some("Requiert niveau 64 · 87 Int")
         );
+    }
+
+    #[test]
+    fn the_state_tags_but_unidentified_are_filters() {
+        let ring = Item::parse(
+            &CopiedItem::from_text(
+                "Item Class: Rings\nRarity: Rare\nRuby Ring\n--------\nItem Level: 81\n\
+                 --------\nUnidentified\n--------\nTwice Corrupted",
+            )
+            .expect("an item"),
+        )
+        .expect("read");
+        let i18n = Translator::new(Language::English);
+        let mut filters = Filters::default();
+        let (lines, line_stats, tiers) = (
+            CopiedLines::default(),
+            LineStats::default(),
+            TierRolls::default(),
+        );
+        let block = ItemBlock::new(&ring, &lines, &line_stats, &tiers, &mut filters, &i18n);
+
+        let kinds: Vec<(String, Option<ItemState>)> = block
+            .tags()
+            .into_iter()
+            .map(|(label, kind)| match kind {
+                TagKind::Plain => (label, None),
+                TagKind::State(state, _) => (label, Some(state)),
+            })
+            .collect();
+        assert_eq!(
+            kinds[..2],
+            [
+                (
+                    "Twice Corrupted".to_owned(),
+                    Some(ItemState::TwiceCorrupted)
+                ),
+                ("Unidentified".to_owned(), None),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_state_tag_says_what_it_searches_gray_and_lit() {
+        let tooltips = |language, state| {
+            let i18n = Translator::new(language);
+            let tag = state_tag(state).expect("a filter");
+            (i18n.text(tag.or_not), i18n.text(tag.only))
+        };
+        let pair = |gray: &str, lit: &str| (gray.to_owned(), lit.to_owned());
+
+        assert_eq!(
+            tooltips(Language::English, ItemState::Corrupted),
+            pair("Corrupted or not", "Corrupted offers only")
+        );
+        assert_eq!(
+            tooltips(Language::English, ItemState::TwiceCorrupted),
+            pair("Corrupted or not", "Twice corrupted offers only")
+        );
+        assert_eq!(
+            tooltips(Language::French, ItemState::Mirrored),
+            pair("Reflétées ou non", "Offres reflétées seulement")
+        );
+        assert_eq!(
+            state_tag(ItemState::Fractured).map(|tag| tag.text),
+            Some(color::FRACTURED)
+        );
+        assert_eq!(state_tag(ItemState::Unidentified), None);
     }
 
     #[test]

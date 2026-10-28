@@ -95,6 +95,17 @@ tag-sanctified = Sanctified
 tag-fractured = Fractured
 tag-mirrored = Mirrored
 tag-unidentified = Unidentified
+# The tooltip of a state tag, a filter of the search: gray, the offers with or without that state;
+# lit by a click, the offers of that state only. Twice Corrupted gray reads "Corrupted or not".
+state-corrupted-or-not = Corrupted or not
+state-corrupted-only = Corrupted offers only
+state-twice-corrupted-only = Twice corrupted offers only
+state-sanctified-or-not = Sanctified or not
+state-sanctified-only = Sanctified offers only
+state-fractured-or-not = Fractured or not
+state-fractured-only = Fractured offers only
+state-mirrored-or-not = Mirrored or not
+state-mirrored-only = Mirrored offers only
 tag-quality = Q { $value }%
 tag-sockets = { $value ->
     [one] { $value } socket
@@ -186,8 +197,6 @@ filter-unsearchable-hint = The offers may not have it.
 origin-desecrated = Desecrated
 origin-fractured = Fractured
 origin-crafted = Crafted
-# Under the stats of a corrupted item: the search compares it with corrupted offers only.
-corrupted-offers-only = Corrupted offers only, like this item.
 # A desecrated modifier not revealed yet, in its group; and the note under the stats of its item.
 unrevealed-prefix = Unrevealed prefix
 unrevealed-suffix = Unrevealed suffix

@@ -340,7 +340,10 @@ fn search_filters(
         shown.tiers(),
         session.filtered_base_type(item),
     );
-    shown.stats().search_filters(&stats.filters(filters))
+    SearchFilters {
+        states: filters.lit_states().to_vec(),
+        ..shown.stats().search_filters(&stats.filters(filters))
+    }
 }
 
 impl App for ExileMarketApp {
@@ -576,7 +579,7 @@ mod tests {
     #[test]
     fn the_estimate_counts_the_answer_to_the_search_of_an_item_without_a_fixed_price() {
         use crate::trade::offers::{ItemOffer, OfferItem, Price, SellerStatus};
-        use crate::trade::query::{ItemQuery, Query};
+        use crate::trade::query::{ItemQuery, Query, StateFilters};
         use crate::trade::search::{Answer, NextSearch, Outcome};
 
         let rates = Rates {
@@ -620,9 +623,10 @@ mod tests {
                 category: None,
                 properties: Vec::new(),
                 rarity: None,
-                corrupted: Some(false),
-                sanctified: None,
-                mirrored: None,
+                states: StateFilters {
+                    corrupted: Some(false),
+                    ..StateFilters::default()
+                },
                 stats: Vec::new(),
             }),
         };

@@ -338,6 +338,8 @@ impl LineStats {
                 })
                 .collect(),
             stats: pseudo.chain(self.stat_filters(stats)).collect(),
+            // The state tags aren't lines: the item block lights them.
+            states: Vec::new(),
         }
     }
 

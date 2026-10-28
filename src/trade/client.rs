@@ -345,7 +345,7 @@ impl<T: Transport> TradeClient<T> {
 #[cfg(test)]
 pub(super) mod tests {
     use super::*;
-    use crate::trade::query::RarityFilter;
+    use crate::trade::query::{RarityFilter, StateFilters};
     use std::collections::VecDeque;
     use std::sync::{Arc, Mutex};
 
@@ -392,9 +392,7 @@ pub(super) mod tests {
             category: None,
             properties: Vec::new(),
             rarity: Some(RarityFilter::Unique),
-            corrupted: None,
-            sanctified: None,
-            mirrored: None,
+            states: StateFilters::default(),
             stats: Vec::new(),
         }
     }

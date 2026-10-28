@@ -14,8 +14,7 @@
 //! maximum, any other with a minimum. The damage and attack speed modifiers of a weapon start
 //! unchecked: its DPS counts them, the physical one checked, the elemental one when it is at
 //! least the physical one. The pseudo totals start checked, and the lines they add up
-//! unchecked. A corrupted item ends with a note: the search compares it with corrupted offers
-//! only. A desecrated modifier not revealed yet is a line of its group without filter, on a
+//! unchecked. A desecrated modifier not revealed yet is a line of its group without filter, on a
 //! band of the desecrated green; its item gets a filter of its number of unrevealed modifiers,
 //! and its other stats start unchecked, with a note under them.
 //!
@@ -343,8 +342,6 @@ enum Row<'a> {
     Stat(Stat<'a>),
     /// Under the stats of an item with an unrevealed modifier.
     UnrevealedNote,
-    /// Under the stats of a corrupted item.
-    CorruptedOnly,
 }
 
 /// The number of stats of `item`, for the pill that unfolds them.
@@ -355,6 +352,7 @@ pub fn count(item: &Item) -> u32 {
 
 /// The stats and filters of an item, decided once for a frame.
 pub struct Stats<'a> {
+    item: &'a Item,
     rows: Vec<Row<'a>>,
 }
 
@@ -371,6 +369,7 @@ impl<'a> Stats<'a> {
         base_type: Option<&'a str>,
     ) -> Self {
         Self {
+            item,
             rows: rows(item, lines, stats, tiers, base_type),
         }
     }
@@ -381,10 +380,16 @@ impl<'a> Stats<'a> {
         self.rows.is_empty()
     }
 
-    /// The number of filters checked for the search, beside the pill of the stats.
+    /// The number of filters checked for the search, beside the pill of the stats, with the
+    /// state tags of the item lit.
     #[must_use]
     pub fn active_filters(&self, filters: &Filters) -> u32 {
-        len(&self.checked(filters))
+        let lit = filters
+            .lit_states()
+            .iter()
+            .filter(|&&state| self.item.has_state(state))
+            .count();
+        len(&self.checked(filters)).saturating_add(u32::try_from(lit).unwrap_or(u32::MAX))
     }
 
     /// The filters of the search, checked or not, as the player set them or else by default.
@@ -468,10 +473,6 @@ fn rows<'a>(
     }
     if unrevealed {
         rows.push(Row::UnrevealedNote);
-    }
-    // The corrupted state is always a filter; a currency is never corrupted.
-    if item.is_corrupted() && item.rarity() != Rarity::Currency {
-        rows.push(Row::CorruptedOnly);
     }
     rows
 }
@@ -1291,7 +1292,6 @@ fn show(ui: &mut Ui, rows: Vec<Row<'_>>, filters: &mut Filters, i18n: &Translato
             }
             Row::Stat(stat) => stat_row(ui, &stat, filters, i18n, bar),
             Row::UnrevealedNote => note(ui, i18n.text(Message::UnrevealedNote)),
-            Row::CorruptedOnly => note(ui, i18n.text(Message::CorruptedOffersOnly)),
         }
     }
 }
@@ -1741,7 +1741,7 @@ fn range_label(ui: &mut Ui, ranges: &[Range]) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::item::CopiedItem;
+    use crate::item::{CopiedItem, ItemState};
 
     fn parse(text: &str) -> Item {
         Item::parse(&CopiedItem::from_text(text).expect("an item")).expect("read")
@@ -1783,7 +1783,6 @@ mod tests {
                 Row::Group(Group::Suffixes { filled, max }) => format!("Suffixes {filled}/{max}"),
                 Row::Group(group) => format!("{group:?}"),
                 Row::UnrevealedNote => "Unrevealed note".to_owned(),
-                Row::CorruptedOnly => "Corrupted only".to_owned(),
                 Row::Stat(Stat {
                     text,
                     filter,
@@ -2011,7 +2010,6 @@ mod tests {
                 "■ Leeches 7.59% of Physical Damage as Mana ≥6.83 [0.66 T1 7–7.9]",
                 "■ Gain 21 Mana per enemy killed ≥19 [0.44 T3 21–27 Desecrated]",
                 "□ 18% increased Attack Speed ≥16 [0.93 T1 17–19]",
-                "Corrupted only",
             ]
         );
     }
@@ -2072,7 +2070,6 @@ mod tests {
                 // know.
                 "Explicit",
                 "■ +143 to Evasion Rating ≥129",
-                "Corrupted only",
             ]
         );
     }
@@ -2347,7 +2344,7 @@ mod tests {
     }
 
     #[test]
-    fn a_corrupted_item_counts_each_unrevealed_modifier_and_shows_both_notes() {
+    fn a_corrupted_item_counts_each_unrevealed_modifier() {
         let ring = parse(
             "Item Class: Rings\nRarity: Rare\nWoe Loop\nRuby Ring\n--------\n\
              Item Level: 80\n--------\n\
@@ -2366,7 +2363,6 @@ mod tests {
                 "Suffixes 1/3",
                 "Unrevealed Suffix",
                 "Unrevealed note",
-                "Corrupted only",
             ]
         );
     }
@@ -3053,7 +3049,7 @@ mod tests {
     }
 
     #[test]
-    fn a_corrupted_item_is_compared_with_corrupted_offers_only() {
+    fn a_corrupted_item_has_no_note_and_a_lit_state_tag_counts_among_the_active_filters() {
         let headhunter = parse(
             "Item Class: Belts\nRarity: Unique\nHeadhunter\nHeavy Belt\n--------\n\
              Item Level: 80\n--------\n{ Unique Modifier }\n+55(40-60) to maximum Life\n\
@@ -3063,16 +3059,6 @@ mod tests {
             "Item Class: Staves\nRarity: Normal\nChiming Staff\n--------\n\
              Item Level: 82\n--------\nCorrupted",
         );
-
-        assert_eq!(
-            texts(&headhunter),
-            [
-                "Unique",
-                "■ +55 to maximum Life ≥55 [40–60 0.75]",
-                "Corrupted only"
-            ]
-        );
-        // An item without modifiers has its filters to show.
         let stats = |item| {
             Stats::new(
                 item,
@@ -3082,15 +3068,28 @@ mod tests {
                 base_type(item),
             )
         };
+
+        // The Corrupted tag says what is searched.
+        assert_eq!(
+            texts(&headhunter),
+            ["Unique", "■ +55 to maximum Life ≥55 [40–60 0.75]"]
+        );
+        let headhunter_stats = Stats {
+            item: &headhunter,
+            rows: rows(&headhunter),
+        };
+        let mut filters = Filters::default();
+        assert_eq!(headhunter_stats.active_filters(&filters), 1);
+        filters.toggle_state(ItemState::Corrupted);
+        assert_eq!(headhunter_stats.active_filters(&filters), 2);
+        // A state the item doesn't have isn't counted.
+        filters.toggle_state(ItemState::Mirrored);
+        assert_eq!(headhunter_stats.active_filters(&filters), 2);
+        // An item without modifiers has its filters to show.
         assert!(!stats(&staff).is_empty());
         assert_eq!(
             texts(&staff),
-            [
-                "Item",
-                "■ Base: Chiming Staff",
-                "■ ItemLevel: 82 ≥82",
-                "Corrupted only"
-            ]
+            ["Item", "■ Base: Chiming Staff", "■ ItemLevel: 82 ≥82"]
         );
         let orb = parse("Item Class: Stackable Currency\nRarity: Currency\nExalted Orb");
         assert!(stats(&orb).is_empty());

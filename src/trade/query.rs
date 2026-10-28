@@ -5,6 +5,7 @@
 use serde_json::{Map, Value, json};
 
 use crate::filters::Property;
+use crate::item::ItemState;
 
 /// What a search looks for.
 #[derive(Debug, Clone, PartialEq)]
@@ -43,14 +44,20 @@ pub struct ItemQuery {
     /// type: a bow among all the bows.
     pub category: Option<&'static str>,
     pub rarity: Option<RarityFilter>,
-    /// Corrupted offers only, or clean ones only; either when `None`.
-    pub corrupted: Option<bool>,
-    /// Sanctified offers only, or the others only; either when `None`.
-    pub sanctified: Option<bool>,
-    /// Mirrored offers only, or the others only; either when `None`.
-    pub mirrored: Option<bool>,
+    pub states: StateFilters,
     pub properties: Vec<PropertyFilter>,
     pub stats: Vec<StatFilter>,
+}
+
+/// The states of the offers (`misc_filters` of the trade site): for each, the offers of that
+/// state only, or the others only; either when `None`.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct StateFilters {
+    pub corrupted: Option<bool>,
+    pub twice_corrupted: Option<bool>,
+    pub sanctified: Option<bool>,
+    pub fractured: Option<bool>,
+    pub mirrored: Option<bool>,
 }
 
 /// The filters of the search of an item, as the player left them.
@@ -59,6 +66,8 @@ pub struct SearchFilters {
     /// The base type unchecked: the offers may have any base of its category, or any base at
     /// all for a base the game data doesn't know.
     pub any_base: bool,
+    /// The states the offers must have: the state tags the player lit.
+    pub states: Vec<ItemState>,
     pub properties: Vec<PropertyFilter>,
     pub stats: Vec<StatFilter>,
 }
@@ -180,10 +189,13 @@ impl ItemQuery {
                 add(group, id, Value::Object(value));
             }
         }
+        let states = self.states;
         for (id, state) in [
-            ("corrupted", self.corrupted),
-            ("sanctified", self.sanctified),
-            ("mirrored", self.mirrored),
+            ("corrupted", states.corrupted),
+            ("twice_corrupted", states.twice_corrupted),
+            ("sanctified", states.sanctified),
+            ("fractured_item", states.fractured),
+            ("mirrored", states.mirrored),
         ] {
             if let Some(state) = state {
                 add("misc_filters", id, json!({ "option": state.to_string() }));
@@ -254,9 +266,7 @@ mod tests {
             base_type: None,
             category: Some("weapon.bow"),
             rarity: Some(RarityFilter::NotUnique),
-            corrupted: None,
-            sanctified: None,
-            mirrored: None,
+            states: StateFilters::default(),
             properties: Vec::new(),
             stats: Vec::new(),
         };
@@ -277,9 +287,7 @@ mod tests {
             base_type: Some("Ruby Ring".to_owned()),
             category: None,
             rarity: None,
-            corrupted: None,
-            sanctified: None,
-            mirrored: None,
+            states: StateFilters::default(),
             properties: Vec::new(),
             stats: Vec::new(),
         };
@@ -300,9 +308,12 @@ mod tests {
             base_type: Some("Ruby Ring".to_owned()),
             category: None,
             rarity: Some(RarityFilter::NotUnique),
-            corrupted: Some(false),
-            sanctified: Some(false),
-            mirrored: Some(false),
+            states: StateFilters {
+                corrupted: Some(false),
+                sanctified: Some(false),
+                mirrored: Some(false),
+                ..StateFilters::default()
+            },
             properties: Vec::new(),
             stats: Vec::new(),
         };
@@ -328,15 +339,41 @@ mod tests {
     }
 
     #[test]
+    fn the_twice_corrupted_and_fractured_states_have_their_own_ids() {
+        let query = ItemQuery {
+            name: None,
+            base_type: Some("Ruby Ring".to_owned()),
+            category: None,
+            rarity: None,
+            states: StateFilters {
+                twice_corrupted: Some(true),
+                fractured: Some(true),
+                ..StateFilters::default()
+            },
+            properties: Vec::new(),
+            stats: Vec::new(),
+        };
+
+        assert_eq!(
+            query.to_json()["query"]["filters"]["misc_filters"],
+            json!({ "filters": {
+                "twice_corrupted": { "option": "true" },
+                "fractured_item": { "option": "true" }
+            } })
+        );
+    }
+
+    #[test]
     fn the_stats_and_the_corrupted_state_are_filters() {
         let query = ItemQuery {
             name: Some("Andvarius".to_owned()),
             base_type: Some("Gold Ring".to_owned()),
             category: None,
             rarity: Some(RarityFilter::Unique),
-            corrupted: Some(false),
-            sanctified: None,
-            mirrored: None,
+            states: StateFilters {
+                corrupted: Some(false),
+                ..StateFilters::default()
+            },
             properties: Vec::new(),
             stats: vec![
                 StatFilter {
@@ -380,9 +417,7 @@ mod tests {
             base_type: Some("Gold Ring".to_owned()),
             category: None,
             rarity: None,
-            corrupted: None,
-            sanctified: None,
-            mirrored: None,
+            states: StateFilters::default(),
             properties: Vec::new(),
             stats: vec![
                 StatFilter {
@@ -422,9 +457,7 @@ mod tests {
             base_type: Some("Gold Ring".to_owned()),
             category: None,
             rarity: None,
-            corrupted: None,
-            sanctified: None,
-            mirrored: None,
+            states: StateFilters::default(),
             properties: Vec::new(),
             stats: vec![StatFilter {
                 ids: vec![
@@ -452,9 +485,10 @@ mod tests {
             base_type: None,
             category: None,
             rarity: Some(RarityFilter::NotUnique),
-            corrupted: Some(false),
-            sanctified: None,
-            mirrored: None,
+            states: StateFilters {
+                corrupted: Some(false),
+                ..StateFilters::default()
+            },
             properties: vec![
                 PropertyFilter {
                     property: Property::ItemLevel,

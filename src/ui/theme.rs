@@ -59,11 +59,23 @@ pub mod color {
     /// The band of an unrevealed modifier: 12 % of the desecrated green (`#3fbf4f`),
     /// premultiplied, as in the mock-up.
     pub const UNREVEALED_BAND: Color32 = Color32::from_rgba_premultiplied(8, 23, 9, 31);
-    /// The background of the hardcore leagues, also behind the Corrupted tag.
+    /// The background of the hardcore leagues, also behind the lit Corrupted tag.
     pub const HARDCORE: Color32 = Color32::from_rgb(0x35, 0x14, 0x17);
-    /// The Corrupted tag: white on the background of the hardcore leagues.
-    pub const CORRUPTED_TAG: Color32 = HARDCORE;
-    pub const CORRUPTED_TAG_TEXT: Color32 = Color32::WHITE;
+    /// A state tag lit as a filter: its text in a light color of its state on a dark
+    /// background of the same hue, of the lightness and saturation of the hardcore red, and
+    /// that background lighter under the pointer.
+    pub const CORRUPTED_STATE: Color32 = Color32::from_rgb(0xff, 0x6b, 0x5e);
+    pub const CORRUPTED_STATE_BG: Color32 = HARDCORE;
+    pub const CORRUPTED_STATE_HOVER: Color32 = Color32::from_rgb(0x4a, 0x1b, 0x20);
+    pub const FRACTURED_STATE: Color32 = FRACTURED;
+    pub const FRACTURED_STATE_BG: Color32 = Color32::from_rgb(0x35, 0x29, 0x14);
+    pub const FRACTURED_STATE_HOVER: Color32 = Color32::from_rgb(0x4a, 0x39, 0x1b);
+    pub const SANCTIFIED_STATE: Color32 = Color32::from_rgb(0xec, 0xd9, 0x8a);
+    pub const SANCTIFIED_STATE_BG: Color32 = Color32::from_rgb(0x35, 0x2f, 0x14);
+    pub const SANCTIFIED_STATE_HOVER: Color32 = Color32::from_rgb(0x4a, 0x41, 0x1b);
+    pub const MIRRORED_STATE: Color32 = Color32::from_rgb(0xa9, 0xc6, 0xff);
+    pub const MIRRORED_STATE_BG: Color32 = Color32::from_rgb(0x14, 0x1f, 0x35);
+    pub const MIRRORED_STATE_HOVER: Color32 = Color32::from_rgb(0x1b, 0x2b, 0x4a);
     /// A price that rises or falls.
     pub const RISE: Color32 = Color32::from_rgb(0x5f, 0xcf, 0x80);
     pub const FALL: Color32 = Color32::from_rgb(0xe6, 0x6a, 0x5c);
@@ -182,7 +194,7 @@ pub mod text {
         fonts::numbers(11.5)
     }
 
-    /// A note under the stats, e.g. the corrupted offers only.
+    /// A note under the stats, e.g. an unrevealed modifier.
     #[must_use]
     pub fn note() -> FontId {
         fonts::text(12.0, Weight::Regular)
