@@ -101,18 +101,11 @@ fn share_values(
     if total != count {
         return None;
     }
-    let mut value = start;
+    let mut values = start..;
     Some(
         numbers
             .iter()
-            .map(|line| {
-                line.iter()
-                    .map(|&number| {
-                        value += 1;
-                        (number, value - 1)
-                    })
-                    .collect()
-            })
+            .map(|line| line.iter().copied().zip(&mut values).collect())
             .collect(),
     )
 }
@@ -244,16 +237,14 @@ mod tests {
     fn a_french_line_rolls_over_the_tiers_of_its_english_modifier() {
         let rolls = rolls_of(include_str!("item/test-items/fr-rare-body-armour.txt"));
 
-        // `+64(61-73) au Bouclier d'énergie maximal`, the energy shield T4 among 11.
-        assert!(
-            (0..8).any(
-                |modifier| rolls.get(key(modifier, 0)).is_some_and(|rolls| rolls.tiers
-                    == Some(TierSpan {
-                        lowest: 11,
-                        highest: 1
-                    }))
-            ),
-            "{rolls:?}"
+        // After its rune and its implicit, `+70(61-73) de Bouclier d'énergie maximal`, the
+        // energy shield T4 among 11.
+        assert_eq!(
+            rolls.get(key(2, 0)).and_then(|rolls| rolls.tiers),
+            Some(TierSpan {
+                lowest: 11,
+                highest: 1
+            })
         );
     }
 
@@ -279,7 +270,7 @@ mod tests {
             share_values(3, 2, &[vec![0], vec![0]]),
             Some(vec![vec![(0, 3)], vec![(0, 4)]])
         );
-        // A number its stat doesn't count: the 3 of `for 3 seconds`.
+        // A stat on two lines, its number on the first only: the other line has no roll.
         assert_eq!(
             share_values(0, 1, &[vec![0], vec![]]),
             Some(vec![vec![(0, 0)], vec![]])
@@ -313,5 +304,16 @@ mod tests {
         );
         // A value no tier has.
         assert_eq!(line_rolls(&[tier(1, 5.0, 10.0)], &[(0, 1)], 1), None);
+        // A line of two numbers whose stat counts the first only: the 3 of `for 3 seconds`.
+        assert_eq!(
+            line_rolls(&[tier(1, 5.0, 10.0), tier(2, 1.0, 4.0)], &[(0, 0)], 2),
+            Some(LineRolls {
+                ranges: vec![Some(range(1.0, 10.0)), None],
+                tiers: Some(TierSpan {
+                    lowest: 2,
+                    highest: 1
+                }),
+            })
+        );
     }
 }

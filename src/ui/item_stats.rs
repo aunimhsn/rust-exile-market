@@ -36,7 +36,7 @@ use crate::i18n::{Message, Translator};
 use crate::item::{Affix, Item, Modifier, ModifierKind, Range, Rarity, StatLine};
 use crate::prices::UniqueModifiers;
 use crate::roll_difference::CopiedLines;
-use crate::tier_rolls::{TierRolls, TierSpan};
+use crate::tier_rolls::{LineRolls, TierRolls, TierSpan};
 use crate::trade::pseudo::{Pseudo, PseudoTotal};
 use crate::trade::stat_filters::{LineStat, LineStats};
 use crate::{format, rolls};
@@ -844,7 +844,7 @@ fn affix_stats<'a>(item: &'a Item, affix: Option<Affix>, reading: &Reading<'_>) 
     let line_varies = |modifier: usize, (line, text): (usize, &StatLine)| {
         let key = StatKey { modifier, line };
         let counted = reading.counted(key, text);
-        affix_varies(&counted, over_tiers(key, &counted, reading).as_ref())
+        affix_varies(&counted, over_tiers(key, reading).as_ref())
     };
     modifiers.sort_by_key(|&(index, modifier)| {
         !modifier
@@ -895,7 +895,7 @@ fn affix_stat<'a>(
     reading: &Reading<'_>,
 ) -> Stat<'a> {
     let counted = reading.counted(key, line);
-    let over = over_tiers(key, &counted, reading);
+    let over = over_tiers(key, reading);
     let mut filter = comparable_filter(
         &counted,
         over.as_ref()
@@ -922,30 +922,21 @@ fn affix_stat<'a>(
     }
 }
 
-/// The rolls of a line over every tier of its modifier, for the numbers its stat counts.
-struct OverTiers {
-    /// For each number of the line its stat counts, its range over every tier.
-    ranges: Vec<Option<Range>>,
-    tiers: Option<TierSpan>,
-}
-
-/// The rolls over every tier of the line `key`, `counted` the numbers its stat counts; none
-/// when the modifier tables don't know them.
-fn over_tiers(key: StatKey, counted: &StatLine, reading: &Reading<'_>) -> Option<OverTiers> {
+/// The rolls over every tier of the line `key`, for the numbers its stat counts; none when
+/// the modifier tables don't know them.
+fn over_tiers(key: StatKey, reading: &Reading<'_>) -> Option<LineRolls> {
     let rolls = reading.tiers.get(key)?;
     let ranges = reading.pick(key, &rolls.ranges);
-    (ranges.len() == counted.rolls.len() && ranges.iter().any(Option::is_some)).then_some(
-        OverTiers {
-            ranges,
-            tiers: rolls.tiers,
-        },
-    )
+    ranges.iter().any(Option::is_some).then_some(LineRolls {
+        ranges,
+        tiers: rolls.tiers,
+    })
 }
 
 /// A line of a prefix or suffix varies over the tiers of its modifier when they are known (a
 /// line fixed in its tier, `+3 to Level of all Projectile Skills` of tier 2, varies when the
 /// other tiers roll other values), or else in its range.
-fn affix_varies(counted: &StatLine, over: Option<&OverTiers>) -> bool {
+fn affix_varies(counted: &StatLine, over: Option<&LineRolls>) -> bool {
     over.map_or_else(
         || varies(counted),
         |over| {

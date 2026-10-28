@@ -877,7 +877,8 @@ mod tests {
     fn a_magic_item_gets_the_rolls_of_every_tier_once_the_names_tell_its_base() {
         const MACE: &str = include_str!("item/test-items/en-magic-mace.txt");
         let mut session = session();
-        // Its strength: its added lightning damage rolls a range no tier has since a patch.
+        // The line of its strength suffix: its added lightning damage was copied before a
+        // patch changed its ranges, and no tier rolls them any more.
         let strength = |session: &Session| {
             let key = crate::filters::StatKey {
                 modifier: 1,
@@ -889,6 +890,9 @@ mod tests {
         copy(&mut session, MACE);
         assert_eq!(strength(&session), None, "the names aren't known yet");
         session.apply_item_names(crate::item_names::tests::item_names());
+        assert!(strength(&session).is_some_and(|rolls| rolls.tiers.is_some()));
+        // Copied once the names are known: at once.
+        copy(&mut session, MACE);
         assert!(strength(&session).is_some_and(|rolls| rolls.tiers.is_some()));
     }
 
