@@ -597,7 +597,7 @@ mod tests {
     /// with both ids in English (either of them), one in French, and finds the same offers,
     /// since no equipment rolls the rarity of a map.
     #[test]
-    fn the_rarity_of_the_items_found_finds_the_same_offers_in_both_languages() {
+    fn the_rarity_of_the_items_found_has_the_id_of_a_map_too_in_english() {
         let ids = |language, line| {
             stat(language, &explicit(&[line]))
                 .stat

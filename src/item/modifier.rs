@@ -326,17 +326,18 @@ fn text_before_sign_is_word(text: &str, number: &str) -> bool {
 }
 
 /// Reads `(min-max)` after a value, if it is a range, or `(value)`, a range of one value
-/// (`29(30)% reduced Attribute Requirements` of a sanctified item); the characters are only
-/// consumed when it is one.
+/// (`29(30)% reduced Attribute Requirements` of a sanctified item): closed, with digits, points
+/// and minus signs only. The characters are only consumed when it is one.
 fn read_range(chars: &mut std::iter::Peekable<std::str::Chars<'_>>) -> Option<Range> {
     let mut lookahead = chars.clone();
     lookahead.next(); // (
     let mut inside = String::new();
-    for c in lookahead.by_ref() {
-        if c == ')' {
-            break;
+    loop {
+        match lookahead.next()? {
+            ')' => break,
+            c if c.is_ascii_digit() || c == '.' || c == '-' => inside.push(c),
+            _ => return None,
         }
-        inside.push(c);
     }
     let (low, high) = split_range(&inside).unwrap_or((&inside, &inside));
     let (low, high) = (low.parse::<f64>().ok()?, high.parse::<f64>().ok()?);
@@ -418,25 +419,37 @@ mod tests {
         assert_eq!(line.text, "29% reduced Attribute Requirements");
         assert_eq!(line.rolls, [roll(29.0, Some((30.0, 30.0)))]);
 
-        let line = StatLine::parse("-3(-2)% to Cold Resistance");
-        assert_eq!(line.text, "-3% to Cold Resistance");
-        assert_eq!(line.rolls, [roll(-3.0, Some((-2.0, -2.0)))]);
+        let line = StatLine::parse("0.5(0.6)% of Physical Attack Damage Leeched as Life");
+        assert_eq!(line.text, "0.5% of Physical Attack Damage Leeched as Life");
+        assert_eq!(line.rolls, [roll(0.5, Some((0.6, 0.6)))]);
     }
 
     #[test]
     fn keeps_the_parentheses_that_are_not_ranges() {
-        let line = StatLine::parse("Adds 5 (cold) and 3(a-b) or 4() or 6(x)");
+        let line = StatLine::parse("Adds 5 (cold) and 3(a-b)");
+        assert_eq!(line.text, "Adds 5 (cold) and 3(a-b)");
+        assert_eq!(line.rolls, [roll(5.0, None), roll(3.0, None)]);
 
-        assert_eq!(line.text, "Adds 5 (cold) and 3(a-b) or 4() or 6(x)");
-        assert_eq!(
-            line.rolls,
-            [
-                roll(5.0, None),
-                roll(3.0, None),
-                roll(4.0, None),
-                roll(6.0, None)
-            ]
-        );
+        // Only a closed range of digits, points and minus signs: what `f64` reads besides
+        // (`nan`, `1e3`, `+5`) stays in the text.
+        for text in [
+            "4() a",
+            "6(x) a",
+            "7(nan) a",
+            "8(inf) a",
+            "9(1e3) a",
+            "1(+5) a",
+            "2(5 - 6) a",
+            "3(10",
+        ] {
+            let line = StatLine::parse(text);
+            assert_eq!(line.text, text);
+            assert_eq!(
+                line.rolls.first().and_then(|roll| roll.range),
+                None,
+                "{text}"
+            );
+        }
     }
 
     #[test]

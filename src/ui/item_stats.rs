@@ -2390,6 +2390,45 @@ mod tests {
     }
 
     #[test]
+    fn a_sanctified_value_above_every_tier_keeps_its_field_and_a_full_bar() {
+        let text = include_str!("../item/test-items/en-owner-rare-sceptre-sanctified.txt")
+            .replace("+74(80-89)", "+250(80-89)");
+        let item = parse(&text);
+
+        assert!(
+            texts(&item).contains(&"□ +250 to maximum Mana ≥225 [1.00 T5 80–89]".to_owned()),
+            "{:#?}",
+            texts(&item)
+        );
+        let limit = rows(&item)
+            .into_iter()
+            .find_map(|row| match row {
+                Row::Stat(Stat {
+                    text: StatText::Line("+250 to maximum Mana"),
+                    filter,
+                    ..
+                }) => filter?.limit,
+                _ => None,
+            })
+            .expect("its limit");
+        // The field holds the value, above the 164 of tier 1; the tooltip tells the rolls.
+        assert_eq!(
+            limit.bounds,
+            Some(Range {
+                min: 10.0,
+                max: 250.0
+            })
+        );
+        assert_eq!(
+            limit.rolls,
+            Some(Range {
+                min: 10.0,
+                max: 164.0
+            })
+        );
+    }
+
+    #[test]
     fn an_exceptional_quality_is_checked_except_on_a_rare() {
         let bow = parse(include_str!("../item/test-items/en-rare-bow-fractured.txt"));
         let magic = parse(

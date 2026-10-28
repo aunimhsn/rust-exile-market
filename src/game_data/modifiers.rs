@@ -249,8 +249,8 @@ enum Fit {
     Within,
     /// Its values are within the ranges of the tier, give or take the rounding of the game.
     Rounded,
-    /// Its values are out of the ranges of the tier, which are those the advanced copy wrote: a
-    /// sanctified item, whose values leave their tier (`+74(80-89) to maximum Mana`).
+    /// Its values are out of the ranges of the tier, which are those the advanced copy wrote:
+    /// any value that left its tier, e.g. on a sanctified item (`+74(80-89) to maximum Mana`).
     Written,
 }
 
