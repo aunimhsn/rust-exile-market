@@ -1,14 +1,16 @@
 // Section Endgame modifiers (13k1): the modifiers tied to a mechanic of the endgame, from the items the
-// owner copied on 2026-10-28 (English and French). Open decisions, one group of tabs each, their windows
-// first:
-// - Time-Lost: the lines of a Time-Lost jewel, whole or with a short tag in place of their first words;
+// owner copied on 2026-10-28 (English and French). Open decision, a group of tabs, its windows first:
 // - Catalyst quality: the quality of a ring or an amulet given by a catalyst, with its kind.
-// Decided with the owner on 2026-10-28: the green of the evasion for the desecrated modifiers; the origin of a desecrated, fractured or crafted modifier written
-// after its range; a desecrated modifier not revealed yet, a line without filter on a green band, the item
-// getting a filter of its number of unrevealed modifiers and its other filters unchecked, like Exiled
-// Exchange 2; a modifier of one tier only (every modifier of a jewel, of a lord of the Abyss, of a
-// waystone, of a tablet, of the Breach), whose T1 means "the only one", without tier, its bar over its
-// own range, which the copy gives.
+// Decided with the owner on 2026-10-28:
+// - the origin of a desecrated, fractured or crafted modifier written after its range;
+// - the green of the evasion for the desecrated modifiers;
+// - a desecrated modifier not revealed yet, a line without filter on a green band, the item getting a
+//   filter of its number of unrevealed modifiers and its other filters unchecked, like Exiled Exchange 2;
+// - a modifier of one tier only (every modifier of a jewel, of a lord of the Abyss, of a waystone, of a
+//   tablet, of the Breach), whose T1 means "the only one", without tier, its bar over its own range,
+//   which the copy gives;
+// - the lines of a Time-Lost jewel without their first words, a tag "Small" or "Notable" after their
+//   range.
 // A sanctified item has values outside the range of their tier (`+74(80-89) to maximum Mana`), shown as
 // they are. The bars over every tier are approximate here.
 

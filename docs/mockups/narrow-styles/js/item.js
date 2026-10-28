@@ -55,9 +55,11 @@ function item(it, unfolded = false) {
         : row.tier ? `<span class="tier ${row.tier <= 3 ? "tier-top" : ""} t${row.tier}">T${row.tier}</span>` : "";
       // The origin in words after the range.
       const origin = row.origin ? `<span class="app-origin">${row.originLabel || ORIGIN_LABEL[row.origin]}</span>` : "";
-      // A line of a Time-Lost jewel (`row.radius`: the words before it, and its short tag), as the
-      // variant `radius` says.
-      const mod = row.radius ? `<span class="app-radius-full">${row.radius[0]} </span><span class="app-radius-short">${row.radius[1]}</span>${row.mod}` : row.mod;
+      // A line of a Time-Lost jewel (`row.radius`: the words the game writes before it, and its short tag):
+      // the words left out, the tag on the line under it, after its range (decided with the owner on
+      // 2026-10-28, against the whole line, cut by the narrow width in French).
+      const radius = row.radius ? `<span class="app-radius">${row.radius[1]}</span>` : "";
+      const mod = row.mod;
       // The bar: filled to where the roll falls in its range, also on a line better lower, so that it
       // reads with the range written next to it.
       // A rare or magic modifier with the modifier tables (`row.over`, 13j2): its bar over every tier of
@@ -90,8 +92,8 @@ function item(it, unfolded = false) {
       const tip = row.tip ? `${plain}\n${row.tip}` : plain;
       const text = `<span class="text" title="${tip.replace(/"/g, "&quot;")}">${mod}</span>`;
       if (box) {
-        const rollTop = row.range ? `<div class="roll2">${bar}<span class="range">${tier}${row.range}${origin}</span></div>`
-          : bar ? `<div class="roll2">${bar}</div>` : "";
+        const rollTop = row.range ? `<div class="roll2">${bar}<span class="range">${tier}${row.range}${origin}</span>${radius}</div>`
+          : bar || radius ? `<div class="roll2">${bar}${radius}</div>` : "";
         return `<div class="mod2 min-top${row.wide ? " app-wide" : ""}${cls}">${box}${text}${fields || "<span></span>"}${rollTop}</div>`;
       }
       const input = row.min === undefined ? "" : `<span class="input">${row.min}</span>`;
