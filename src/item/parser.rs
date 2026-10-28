@@ -22,9 +22,8 @@ pub enum ParseError {
     MissingRarity,
     UnknownRarity,
     MissingBaseType,
-    /// An item with modifiers copied without the advanced description. Never returned by
-    /// [`Item::parse`](super::Item::parse), which reads such an item: the session refuses it
-    /// when [`Item::copied_without_details`](super::Item::copied_without_details).
+    /// An item whose implicit or explicit modifiers were copied without the `{ … }` headers of
+    /// the advanced description, which give their tiers and ranges.
     WithoutDetails,
 }
 
@@ -86,14 +85,6 @@ impl fmt::Display for ParseWarning {
     }
 }
 
-/// The two formats of a copy: with the advanced description (`{ … }` headers before the
-/// modifiers), or without, the modifiers then being plain lines.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Format {
-    Advanced,
-    Plain,
-}
-
 /// A section after phase 1: recognized from its lines, or plain lines without label nor
 /// marker, which phase 2 resolves.
 enum Recognized<'a> {
@@ -115,8 +106,6 @@ enum Section<'a> {
     Headed(Vec<&'a str>),
     /// Modifiers without header, all of the kind their marker tells (` (rune)`…).
     Marked(Vec<&'a str>, ModifierKind),
-    /// Explicit modifiers without header, in the plain copy.
-    Explicit(Vec<&'a str>),
     /// Flavour text, descriptions or note.
     Unread,
 }
@@ -131,16 +120,7 @@ pub(super) fn parse(copied: &CopiedItem) -> Result<Item, ParseError> {
     let mut item = read_header(&header, copied.language(), labels)?;
 
     let recognized: Vec<Recognized<'_>> = sections.map(|lines| recognize(lines, labels)).collect();
-    let sections = resolve_plain_sections(recognized, item.rarity);
-    // The advanced copy writes a header before each implicit and explicit modifier: such
-    // lines without one were copied without the details.
-    item.without_details = sections.iter().any(|section| {
-        matches!(
-            section,
-            Section::Explicit(_) | Section::Marked(_, ModifierKind::Implicit)
-        )
-    });
-    for section in sections {
+    for section in resolve_plain_sections(recognized, item.rarity)? {
         fill(&mut item, section, labels);
     }
     Ok(item)
@@ -204,7 +184,6 @@ fn read_header(lines: &[&str], language: Language, labels: &Labels) -> Result<It
         properties: Vec::new(),
         weapon: None,
         modifiers: Vec::new(),
-        without_details: false,
         warnings: Vec::new(),
     })
 }
@@ -282,39 +261,42 @@ fn state(line: &str, labels: &Labels) -> Option<ItemState> {
     })
 }
 
-/// Phase 2: the first plain section, right after the header, is the properties. In the
-/// plain copy, the first plain section after the item level with a number is the explicit
-/// modifiers of an identified item; the other plain sections (flavour text, descriptions)
-/// aren't read.
-fn resolve_plain_sections(recognized: Vec<Recognized<'_>>, rarity: Rarity) -> Vec<Section<'_>> {
+/// Phase 2: the first plain section, right after the header, is the properties; the other
+/// plain sections (flavour text, descriptions) aren't read.
+///
+/// The advanced copy writes a `{ … }` header before each implicit and explicit modifier: an
+/// item with implicit lines without one, or without any header but with a plain section after
+/// the item level that reads as the explicit modifiers of an identified item, was copied
+/// without the details.
+fn resolve_plain_sections(
+    recognized: Vec<Recognized<'_>>,
+    rarity: Rarity,
+) -> Result<Vec<Section<'_>>, ParseError> {
     let is_section = |recognized: &Recognized<'_>, test: fn(&Section<'_>) -> bool| matches!(recognized, Recognized::Section(section) if test(section));
-    let format = if recognized
+    let headed = recognized
         .iter()
-        .any(|r| is_section(r, |s| matches!(s, Section::Headed(_))))
-    {
-        Format::Advanced
-    } else {
-        Format::Plain
-    };
+        .any(|r| is_section(r, |s| matches!(s, Section::Headed(_))));
     let unidentified = recognized.iter().any(|r| {
         is_section(
             r,
             |s| matches!(s, Section::States(states) if states.contains(&ItemState::Unidentified)),
         )
     });
-    let mut explicit_expected =
-        format == Format::Plain && rarity.has_explicit_modifiers() && !unidentified;
+    let explicit_expected = !headed && rarity.has_explicit_modifiers() && !unidentified;
     let mut after_item_level = false;
 
     recognized
         .into_iter()
         .enumerate()
         .map(|(index, recognized)| match recognized {
+            Recognized::Section(Section::Marked(_, ModifierKind::Implicit)) => {
+                Err(ParseError::WithoutDetails)
+            }
             Recognized::Section(section) => {
                 after_item_level |= matches!(section, Section::ItemLevel(_));
-                section
+                Ok(section)
             }
-            Recognized::Plain(lines) if index == 0 => Section::Properties(lines),
+            Recognized::Plain(lines) if index == 0 => Ok(Section::Properties(lines)),
             // A modifier has a number in nearly every line, unlike a description: a magic
             // item whose only modifier was removed keeps its description, read with both
             // copies, and isn't taken for a plain copy.
@@ -323,10 +305,9 @@ fn resolve_plain_sections(recognized: Vec<Recognized<'_>>, rarity: Rarity) -> Ve
                     && after_item_level
                     && lines.iter().any(|line| has_digit(line)) =>
             {
-                explicit_expected = false;
-                Section::Explicit(lines)
+                Err(ParseError::WithoutDetails)
             }
-            Recognized::Plain(_) => Section::Unread,
+            Recognized::Plain(_) => Ok(Section::Unread),
         })
         .collect()
 }
@@ -367,12 +348,7 @@ fn fill(item: &mut Item, section: Section<'_>, labels: &Labels) {
         Section::Headed(lines) => read_headed(item, &lines, labels),
         Section::Marked(lines, kind) => item
             .modifiers
-            .extend(lines.iter().map(|line| Modifier::plain(line, kind))),
-        Section::Explicit(lines) => item.modifiers.extend(
-            lines
-                .iter()
-                .map(|line| Modifier::plain(line, ModifierKind::Explicit(None))),
-        ),
+            .extend(lines.iter().map(|line| Modifier::marked(line, kind))),
         Section::Unread => {}
     }
 }

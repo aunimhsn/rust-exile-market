@@ -17,7 +17,7 @@ use crate::market::MarketWatch;
 use crate::offers::{LONG_WAIT, Offers, OffersState};
 use crate::prices::Rates;
 use crate::pricing::{FixedPrice, NoFixedPrice};
-use crate::session::{self, LeagueChange, PricesState, Session, ShownItem};
+use crate::session::{LeagueChange, PricesState, Session, ShownItem};
 use crate::settings::{SettingChange, Settings, SettingsFile};
 use crate::trade::ItemNamesWatch;
 use crate::trade::query::{SearchFilters, SearchKind};
@@ -260,7 +260,6 @@ impl ExileMarketApp {
         let tradable = self.session.tradable(item);
         let must_identify = self.session.must_identify(item);
         let fixed_price = self.session.fixed_price(item);
-        let unique_modifiers = session::unique_modifiers(item, &fixed_price);
         let estimate = shown_estimate(&self.offers, &fixed_price, self.session.rates());
         // Without a fixed price, the estimate tells the suspicious offers.
         let reference = reference(&fixed_price).or(estimate.map(|estimate| estimate.reference));
@@ -276,11 +275,7 @@ impl ExileMarketApp {
                 &self.i18n,
             )
             .tradable(tradable)
-            .stats(
-                self.stats_open,
-                unique_modifiers,
-                self.session.filtered_base_type(item),
-            )
+            .stats(self.stats_open, self.session.filtered_base_type(item))
             .show(ui);
             if action == Some(ItemBlockAction::CheckOnTrade) {
                 // With the filters as the player just left them.
@@ -341,14 +336,11 @@ fn search_filters(
     item: &Item,
     filters: &Filters,
 ) -> SearchFilters {
-    let fixed_price = session.fixed_price(item);
-    let unique_modifiers = session::unique_modifiers(item, &fixed_price);
     let stats = Stats::new(
         item,
         shown.lines(),
         shown.stats(),
         shown.tiers(),
-        unique_modifiers,
         session.filtered_base_type(item),
     );
     shown.stats().search_filters(&stats.filters(filters))

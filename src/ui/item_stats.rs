@@ -31,16 +31,15 @@ use super::number_field::NumberField;
 use super::theme::{self, color, size, text};
 use super::widgets;
 use crate::filters::{self, Filter, FilterKey, Filters, Half, Property, StatKey};
+use crate::format;
 use crate::game_data::{self, Category};
 use crate::i18n::{Message, Translator};
 use crate::item::{Affix, Item, Modifier, ModifierKind, Range, Rarity, StatLine};
-use crate::prices::UniqueModifiers;
 use crate::roll_difference::CopiedLines;
 use crate::tier_rolls::{LineRolls, TierRolls, TierSpan};
 use crate::trade::link;
 use crate::trade::pseudo::{Pseudo, PseudoTotal};
 use crate::trade::stat_filters::{LineStat, LineStats};
-use crate::{format, rolls};
 
 /// The space between two rows.
 const ROW_GAP: f32 = 6.0;
@@ -141,7 +140,8 @@ enum Group {
         filled: u32,
         max: u32,
     },
-    /// The explicit modifiers of a magic or rare item copied without their affixes.
+    /// The explicit modifiers of a magic or rare item whose header doesn't tell their affix:
+    /// a header the parser doesn't know, or lines before the first header.
     Explicit,
     /// The modifiers of a unique, no prefix nor suffix.
     Unique,
@@ -329,17 +329,6 @@ enum Row<'a> {
     CorruptedOnly,
 }
 
-/// Where the ranges of the rolls of a unique come from.
-#[derive(Debug, Clone, Copy)]
-enum RangeSource<'a> {
-    /// The advanced copy: a line without a range never varies.
-    Copied,
-    /// The modifiers of the unique in the price database, of the kind of the line.
-    Database(&'a [String]),
-    /// Unknown, e.g. an item copied in French with Ctrl+C: a line with a number may vary.
-    Unknown,
-}
-
 /// The number of stats of `item`, for the pill that unfolds them.
 #[must_use]
 pub fn count(item: &Item) -> u32 {
@@ -354,20 +343,17 @@ pub struct Stats<'a> {
 impl<'a> Stats<'a> {
     /// The stats of `item`, whose modifier `lines` tell which are better lower, their
     /// `stats` which the trade site can search, and their `tiers` the rolls of every tier of
-    /// a prefix or suffix; `unique_modifiers` are the modifiers of its unique in the price
-    /// database, the ranges of a unique copied without them; `base_type` is the base type its
-    /// search looks for, a filter.
+    /// a prefix or suffix; `base_type` is the base type its search looks for, a filter.
     #[must_use]
     pub fn new(
         item: &'a Item,
         lines: &CopiedLines,
         stats: &LineStats,
         tiers: &TierRolls,
-        unique_modifiers: Option<&UniqueModifiers>,
         base_type: Option<&'a str>,
     ) -> Self {
         Self {
-            rows: rows(item, lines, stats, tiers, unique_modifiers, base_type),
+            rows: rows(item, lines, stats, tiers, base_type),
         }
     }
 
@@ -414,15 +400,12 @@ fn len<T>(list: &[T]) -> u32 {
 
 /// The rows of the stats of `item`, whose modifier `lines` tell which are better lower, their
 /// `stats` which the trade site can search, and their `tiers` the rolls of every tier of a
-/// prefix or suffix; `unique_modifiers` are the modifiers of its unique in the price database,
-/// the ranges of a unique copied without them; `base_type` is the base type its search looks
-/// for, a filter.
+/// prefix or suffix; `base_type` is the base type its search looks for, a filter.
 fn rows<'a>(
     item: &'a Item,
     lines: &CopiedLines,
     stats: &LineStats,
     tiers: &TierRolls,
-    unique_modifiers: Option<&UniqueModifiers>,
     base_type: Option<&'a str>,
 ) -> Vec<Row<'a>> {
     let mut rows = Vec::new();
@@ -447,7 +430,7 @@ fn rows<'a>(
     push_group(&mut rows, Group::Weapon, dps);
     push_group(&mut rows, Group::Pseudo, pseudo);
     if item.rarity() == Rarity::Unique {
-        rows.extend(unique_rows(item, unique_modifiers, &reading));
+        rows.extend(unique_rows(item, &reading));
     } else {
         rows.extend(affix_rows(item, &reading));
     }
@@ -687,26 +670,7 @@ impl Reading<'_> {
 
 /// The rows of a unique: its enchantments, its runes, the implicit modifiers of its base,
 /// then its own modifiers.
-fn unique_rows<'a>(
-    item: &'a Item,
-    unique_modifiers: Option<&UniqueModifiers>,
-    reading: &Reading<'_>,
-) -> Vec<Row<'a>> {
-    let copied = item
-        .modifiers()
-        .iter()
-        .flat_map(|modifier| &modifier.lines)
-        .any(|line| line.rolls.iter().any(|roll| roll.range.is_some()));
-    let (implicit, explicit) = if copied {
-        (RangeSource::Copied, RangeSource::Copied)
-    } else if let Some(modifiers) = unique_modifiers {
-        (
-            RangeSource::Database(&modifiers.implicit),
-            RangeSource::Database(&modifiers.explicit),
-        )
-    } else {
-        (RangeSource::Unknown, RangeSource::Unknown)
-    };
+fn unique_rows<'a>(item: &'a Item, reading: &Reading<'_>) -> Vec<Row<'a>> {
     // A stat of a unique varies when it is a filter.
     let varies = |_: &StatLine, stat: &Stat<'_>| stat.filter.is_some();
     let mut rows = Vec::new();
@@ -727,7 +691,7 @@ fn unique_rows<'a>(
         stats(
             item,
             is_implicit,
-            |key, line| unique_stat(key, line, implicit, reading),
+            |key, line| unique_stat(key, line, reading),
             varies,
         ),
     );
@@ -737,7 +701,7 @@ fn unique_rows<'a>(
         stats(
             item,
             |kind| matches!(kind, ModifierKind::Explicit(_)),
-            |key, line| unique_stat(key, line, explicit, reading),
+            |key, line| unique_stat(key, line, reading),
             varies,
         ),
     );
@@ -875,7 +839,7 @@ struct AffixStats<'a> {
     stats: Vec<Stat<'a>>,
 }
 
-/// The explicit modifiers of `affix` (`None`: copied without their affixes), those with a
+/// The explicit modifiers of `affix` (`None`: a header that doesn't tell it), those with a
 /// line that varies first: each line with its bar over every tier of its modifier, and its tier
 /// and the ranges of that tier under its last line.
 fn affix_stats<'a>(item: &'a Item, affix: Option<Affix>, reading: &Reading<'_>) -> AffixStats<'a> {
@@ -1059,22 +1023,10 @@ fn is_implicit(kind: ModifierKind) -> bool {
 }
 
 /// A line of a unique: a filter checked with its value filling its half and its bar when it
-/// varies, at the left edge otherwise.
-fn unique_stat<'a>(
-    key: StatKey,
-    whole: &'a StatLine,
-    source: RangeSource<'_>,
-    reading: &Reading<'_>,
-) -> Stat<'a> {
+/// varies, a fixed line otherwise; a line without a range in the advanced copy never varies.
+fn unique_stat<'a>(key: StatKey, whole: &'a StatLine, reading: &Reading<'_>) -> Stat<'a> {
     let line = &reading.counted(key, whole);
-    let ranges = match source {
-        RangeSource::Copied => Some(copied_ranges(line)),
-        RangeSource::Database(modifiers) => rolls::unique_ranges(&whole.text, modifiers)
-            // One range or none for each number of the line.
-            .filter(|ranges| ranges.len() == whole.rolls.len())
-            .map(|ranges| reading.pick(key, &ranges)),
-        RangeSource::Unknown => None,
-    };
+    let ranges = copied_ranges(line);
     let fixed = Stat {
         key: FilterKey::Stat(key),
         text: StatText::Line(&whole.text),
@@ -1082,14 +1034,9 @@ fn unique_stat<'a>(
         unsearchable: false,
         roll: None,
     };
-    let (roll, bounds) = match &ranges {
-        // Its ranges are known: a filter when one of them is wider than one value.
-        Some(ranges) => match bar(magnitudes(line, ranges)) {
-            Some(roll) => (Some(roll), bounds(line, ranges)),
-            None => return fixed,
-        },
-        // Unknown: a line with a number may vary.
-        None => (None, None),
+    // A filter when one of its ranges is wider than one value.
+    let Some(roll) = bar(magnitudes(line, &ranges)) else {
+        return fixed;
     };
     let Some(value) = value(line) else {
         return fixed;
@@ -1098,9 +1045,15 @@ fn unique_stat<'a>(
         filter: Some(StatFilter {
             checked: true,
             // A legacy unique keeps its value, out of the range of today.
-            limit: Some(Limit::new(value, reading.half(key), bounds, value, line)),
+            limit: Some(Limit::new(
+                value,
+                reading.half(key),
+                bounds(line, &ranges),
+                value,
+                line,
+            )),
         }),
-        roll,
+        roll: Some(roll),
         ..fixed
     }
 }
@@ -1663,16 +1616,8 @@ mod tests {
         Item::parse(&CopiedItem::from_text(text).expect("an item")).expect("read")
     }
 
-    fn database(implicit: &[&str], explicit: &[&str]) -> UniqueModifiers {
-        let owned = |lines: &[&str]| lines.iter().map(|&line| line.to_owned()).collect();
-        UniqueModifiers {
-            implicit: owned(implicit),
-            explicit: owned(explicit),
-        }
-    }
-
     /// The rows of `item`, its lines read in English.
-    fn rows<'a>(item: &'a Item, unique_modifiers: Option<&UniqueModifiers>) -> Vec<Row<'a>> {
+    fn rows(item: &Item) -> Vec<Row<'_>> {
         let lines = CopiedLines::new(
             item.language(),
             item.modifiers(),
@@ -1681,14 +1626,7 @@ mod tests {
         );
         let stats = LineStats::new(item.language(), item.modifiers(), None);
         let tiers = TierRolls::new(item.language(), item.modifiers(), base_type(item));
-        super::rows(
-            item,
-            &lines,
-            &stats,
-            &tiers,
-            unique_modifiers,
-            base_type(item),
-        )
+        super::rows(item, &lines, &stats, &tiers, base_type(item))
     }
 
     /// The base type the search of `item` looks for, among its filters: none for a unique.
@@ -1697,8 +1635,8 @@ mod tests {
     }
 
     /// The rows of `item` as texts, as [`row_texts`] writes them.
-    fn texts(item: &Item, unique_modifiers: Option<&UniqueModifiers>) -> Vec<String> {
-        row_texts(rows(item, unique_modifiers))
+    fn texts(item: &Item) -> Vec<String> {
+        row_texts(rows(item))
     }
 
     /// The rows as texts: a title (`Prefixes 2/3`), the note of a corrupted item, or a stat,
@@ -1772,85 +1710,40 @@ mod tests {
     }
 
     #[test]
-    fn a_unique_copied_with_ctrl_c_gets_its_ranges_from_the_price_database() {
+    fn a_line_of_a_unique_without_range_never_varies() {
         let headhunter = parse(
             "Item Class: Belts\nRarity: Unique\nHeadhunter\nHeavy Belt\n--------\n\
-             Item Level: 80\n--------\n26% increased Stun Threshold (implicit)\n--------\n\
+             Item Level: 80\n--------\n{ Implicit Modifier }\n\
+             26(20-30)% increased Stun Threshold\n--------\n{ Unique Modifier }\n\
              When you kill a Rare monster, you gain its Modifiers for 60 seconds\n\
-             +55 to maximum Life",
-        );
-        let modifiers = database(
-            &["(20-30)% increased Stun Threshold"],
-            &[
-                "+(40-60) to maximum Life",
-                "When you kill a Rare monster, you gain its Modifiers for 60 seconds",
-            ],
+             { Unique Modifier }\n+55(40-60) to maximum Life",
         );
 
         assert_eq!(
-            texts(&headhunter, Some(&modifiers)),
+            texts(&headhunter),
             [
                 "Implicit",
                 "■ 26% increased Stun Threshold ≥26 [20–30 0.60]",
                 "Unique",
                 // The stats that vary first.
                 "■ +55 to maximum Life ≥55 [40–60 0.75]",
+                // The string of its stat writes the 60: it never varies.
                 "When you kill a Rare monster, you gain its Modifiers for 60 seconds",
             ]
         );
     }
 
     #[test]
-    fn a_line_missing_from_the_price_database_may_vary_like_an_unknown_one() {
-        let headhunter = parse(
-            "Item Class: Belts\nRarity: Unique\nHeadhunter\nHeavy Belt\n--------\n\
-             Item Level: 80\n--------\n26% increased Stun Threshold (implicit)\n--------\n\
-             When you kill a Rare monster, you gain its Modifiers for 60 seconds\n\
-             +55 to maximum Life",
-        );
-        let unknown = [
-            "Implicit",
-            "■ 26% increased Stun Threshold ≥26",
-            "Unique",
-            "■ +55 to maximum Life ≥55",
-            // The string of its stat writes the 60: it never varies.
-            "When you kill a Rare monster, you gain its Modifiers for 60 seconds",
-        ];
-        let partial = database(
-            &["26% increased Stun Threshold"],
-            &["When you kill a Rare monster, you gain its Modifiers for 60 seconds"],
-        );
-
-        // A unique without modifiers in the price database.
-        assert_eq!(
-            texts(&headhunter, Some(&UniqueModifiers::default())),
-            unknown
-        );
-        assert_eq!(texts(&headhunter, None), unknown);
-        // A line found without range never varies; a line not found may.
-        assert_eq!(
-            texts(&headhunter, Some(&partial)),
-            [
-                "Implicit",
-                "26% increased Stun Threshold",
-                "Unique",
-                "■ +55 to maximum Life ≥55",
-                "When you kill a Rare monster, you gain its Modifiers for 60 seconds",
-            ]
-        );
-    }
-
-    #[test]
-    fn a_number_written_by_the_string_of_a_stat_has_no_range_from_the_price_database() {
+    fn a_number_written_by_the_string_of_a_stat_has_no_range() {
         let unique = parse(
             "Item Class: Gloves\nRarity: Unique\nTest Grip\nSuede Bracers\n--------\n\
-             Item Level: 80\n--------\n1% more Unarmed Damage per 5 Strength",
+             Item Level: 80\n--------\n{ Unique Modifier }\n\
+             1% more Unarmed Damage per 5(4-6) Strength",
         );
-        let modifiers = database(&[], &["1% more Unarmed Damage per (4-6) Strength"]);
 
         // The 1 is written by the string of the stat: the field holds the 5, in its range.
         assert_eq!(
-            texts(&unique, Some(&modifiers)),
+            texts(&unique),
             [
                 "Unique",
                 "■ 1% more Unarmed Damage per 5 Strength ≥5 [4–6 0.50]"
@@ -1862,20 +1755,14 @@ mod tests {
     fn an_implicit_and_an_explicit_of_the_same_stat_keep_their_own_ranges() {
         let ring = parse(
             "Item Class: Rings\nRarity: Unique\nVenom Loop\nAmethyst Ring\n--------\n\
-             Item Level: 80\n--------\n\
-             +10% to Chaos Resistance (implicit)\n--------\n+20% to Chaos Resistance\n\
-             Adds 1 to 55 Lightning damage to Attacks",
-        );
-        let modifiers = database(
-            &["+(7-13)% to Chaos Resistance"],
-            &[
-                "+(17-23)% to Chaos Resistance",
-                "Adds 1 to (50-60) Lightning damage to Attacks",
-            ],
+             Item Level: 80\n--------\n{ Implicit Modifier }\n\
+             +10(7-13)% to Chaos Resistance\n--------\n{ Unique Modifier }\n\
+             +20(17-23)% to Chaos Resistance\n{ Unique Modifier }\n\
+             Adds 1 to 55(50-60) Lightning damage to Attacks",
         );
 
         assert_eq!(
-            texts(&ring, Some(&modifiers)),
+            texts(&ring),
             [
                 "Implicit",
                 "■ +10% to Chaos Resistance ≥10 [7–13 0.50]",
@@ -1893,7 +1780,7 @@ mod tests {
         let focus = parse(include_str!("../item/test-items/en-unique-focus.txt"));
 
         assert_eq!(
-            texts(&focus, None),
+            texts(&focus),
             [
                 "Unique",
                 "■ 56% increased Energy Shield ≥56 [50–70 0.30]",
@@ -1914,30 +1801,12 @@ mod tests {
         );
 
         assert_eq!(
-            texts(&ring, None),
+            texts(&ring),
             [
                 "Unique",
                 "■ -15% to Fire Resistance ≥-15 [10–20 0.50]",
                 // A range across zero needs its sign: no bar.
                 "2% to Cold Resistance",
-            ]
-        );
-    }
-
-    #[test]
-    fn a_french_unique_copied_with_ctrl_c_has_its_numbers_as_filters_without_bar() {
-        let crossbow = parse(
-            "Classe d'objet: Arbalètes\nRareté: Unique\nMurmure des brumes\nArbalète de fortune\n\
-             --------\nNiveau de l'objet: 78\n--------\nLes Attaques Ricochent sur les ennemis\n\
-             36% d'Augmentation d'Accumulation de Gel",
-        );
-
-        assert_eq!(
-            texts(&crossbow, None),
-            [
-                "Unique",
-                "■ 36% d'Augmentation d'Accumulation de Gel ≥36",
-                "Les Attaques Ricochent sur les ennemis",
             ]
         );
     }
@@ -1949,7 +1818,7 @@ mod tests {
         ));
 
         assert_eq!(
-            texts(&crossbow, None),
+            texts(&crossbow),
             [
                 // The base type checked, the item level unchecked at the level of the item.
                 "Item",
@@ -1990,11 +1859,18 @@ mod tests {
     }
 
     #[test]
-    fn a_rare_copied_with_ctrl_c_has_its_explicit_modifiers_together() {
-        let ring = parse(include_str!("../item/test-items/en-plain-rare-ring.txt"));
+    fn a_modifier_whose_header_is_unknown_is_explicit_without_tier() {
+        let ring = parse(
+            "Item Class: Rings\nRarity: Rare\nRune Loop\nPrismatic Ring\n--------\n\
+             Item Level: 79\n--------\n{ Implicit Modifier }\n\
+             +8(7-10)% to all Elemental Resistances\n--------\n{ Strange Modifier }\n\
+             +143(120-150) to Evasion Rating\n\
+             { Suffix Modifier \"of the Brute\" (Tier: 7) — Attribute }\n+12(9-12) to Strength\n\
+             --------\nCorrupted",
+        );
 
         assert_eq!(
-            texts(&ring, None),
+            texts(&ring),
             [
                 "Item",
                 "■ Base: Prismatic Ring",
@@ -2005,10 +1881,13 @@ mod tests {
                 "■ ElementalResistance: 24 ≥22",
                 "■ Strength: 12 ≥11",
                 "Implicit",
-                "□ +8% to all Elemental Resistances ≥7",
+                "□ +8% to all Elemental Resistances ≥7 [7–10 0.33]",
+                "Suffixes 1/3",
+                "□ +12 to Strength ≥11 [0.25 T7 9–12]",
+                // Neither a prefix nor a suffix: no tier, like a modifier the tables don't
+                // know.
                 "Explicit",
                 "■ +143 to Evasion Rating ≥129",
-                "□ +12 to Strength ≥11",
                 "Corrupted only",
             ]
         );
@@ -2026,7 +1905,7 @@ mod tests {
         );
 
         assert_eq!(
-            texts(&boots, None),
+            texts(&boots),
             [
                 "Item",
                 "■ Base: Lattice Sandals",
@@ -2061,7 +1940,7 @@ mod tests {
              { Suffix Modifier \"of the Penguin\" (Tier: 1) — Elemental, Cold, Resistance }\n\
              +41(41-45)% to Cold Resistance",
         );
-        let rows = rows(&mail, None);
+        let rows = rows(&mail);
         let texts = row_texts(rows.iter().cloned());
         let prefixes = texts
             .iter()
@@ -2126,7 +2005,7 @@ mod tests {
 
         // A bar and a range field: the other tiers roll 1, 2 and 4.
         assert_eq!(
-            texts(&bow, None).last().map(String::as_str),
+            texts(&bow).last().map(String::as_str),
             Some("■ +3 to Level of all Projectile Skills ≥3 [0.67 T2]")
         );
     }
@@ -2135,13 +2014,19 @@ mod tests {
     fn the_pseudo_totals_are_checked_and_the_lines_they_add_up_unchecked() {
         let ring = parse(
             "Item Class: Rings\nRarity: Rare\nStorm Spiral\nSapphire Ring\n--------\n\
-             Item Level: 77\n--------\n+22% to Cold Resistance (implicit)\n--------\n\
-             +65 to maximum Life\n+21 to maximum Energy Shield\n+38% to Fire Resistance\n\
-             +23% to Lightning Resistance\n+12 to Dexterity",
+             Item Level: 77\n--------\n{ Implicit Modifier }\n\
+             +22(20-30)% to Cold Resistance\n--------\n\
+             { Prefix Modifier \"Rotund\" (Tier: 4) — Life }\n+65(60-69) to maximum Life\n\
+             { Prefix Modifier \"Agile\" (Tier: 6) — Defences }\n+60(52-79) to Evasion Rating\n\
+             { Suffix Modifier \"of the Furnace\" (Tier: 2) — Elemental, Fire, Resistance }\n\
+             +38(36-40)% to Fire Resistance\n\
+             { Suffix Modifier \"of the Squall\" (Tier: 5) — Elemental, Lightning, Resistance }\n\
+             +23(21-25)% to Lightning Resistance\n\
+             { Suffix Modifier \"of the Lynx\" (Tier: 7) — Attribute }\n+12(9-12) to Dexterity",
         );
 
         assert_eq!(
-            texts(&ring, None),
+            texts(&ring),
             [
                 "Item",
                 "■ Base: Sapphire Ring",
@@ -2151,14 +2036,15 @@ mod tests {
                 "■ Life: 65 ≥59",
                 "■ Dexterity: 12 ≥11",
                 "Implicit",
-                "□ +22% to Cold Resistance ≥20",
-                "Explicit",
-                "□ +65 to maximum Life ≥59",
+                "□ +22% to Cold Resistance ≥20 [20–30 0.20]",
+                "Prefixes 2/3",
+                "□ +65 to maximum Life ≥59 [0.50 T4 60–69]",
                 // Not added up by a total.
-                "■ +21 to maximum Energy Shield ≥19",
-                "□ +38% to Fire Resistance ≥34",
-                "□ +23% to Lightning Resistance ≥21",
-                "□ +12 to Dexterity ≥11",
+                "■ +60 to Evasion Rating ≥54 [0.23 T6 52–79]",
+                "Suffixes 3/3",
+                "□ +38% to Fire Resistance ≥34 [0.82 T2 36–40]",
+                "□ +23% to Lightning Resistance ≥21 [0.44 T5 21–25]",
+                "□ +12 to Dexterity ≥11 [0.25 T7 9–12]",
             ]
         );
     }
@@ -2167,15 +2053,16 @@ mod tests {
     fn a_unique_has_no_pseudo_totals() {
         let unique = parse(
             "Item Class: Rings\nRarity: Unique\nTest Loop\nGold Ring\n--------\n\
-             Item Level: 80\n--------\n+52 to maximum Life\n+30% to Fire Resistance",
+             Item Level: 80\n--------\n{ Unique Modifier }\n+52(40-60) to maximum Life\n\
+             { Unique Modifier }\n+30(25-35)% to Fire Resistance",
         );
 
         assert_eq!(
-            texts(&unique, None),
+            texts(&unique),
             [
                 "Unique",
-                "■ +52 to maximum Life ≥52",
-                "■ +30% to Fire Resistance ≥30",
+                "■ +52 to maximum Life ≥52 [40–60 0.60]",
+                "■ +30% to Fire Resistance ≥30 [25–35 0.50]",
             ]
         );
     }
@@ -2193,7 +2080,7 @@ mod tests {
 
         assert!(english.is_jewel());
         assert_eq!(
-            texts(&english, None),
+            texts(&english),
             [
                 "Item",
                 "■ Base: Ruby",
@@ -2204,7 +2091,7 @@ mod tests {
             ]
         );
         assert_eq!(
-            texts(&french, None),
+            texts(&french),
             [
                 "Item",
                 "■ Base: Rubis",
@@ -2225,7 +2112,7 @@ mod tests {
                  Attacks per Second: 1.00\n--------\nItem Level: 80"
             ))
         };
-        let dps = |item: &Item| texts(item, None)[4..6].to_vec();
+        let dps = |item: &Item| texts(item)[4..6].to_vec();
 
         assert_eq!(
             dps(&weapon("10-20", "1-59")),
@@ -2247,7 +2134,7 @@ mod tests {
         );
 
         assert_eq!(
-            texts(&quiver, None),
+            texts(&quiver),
             [
                 "Item",
                 "■ Base: Quick Broadhead Quiver",
@@ -2267,7 +2154,7 @@ mod tests {
     fn item_group_of<'a>(item: &'a Item, base_type: Option<&'a str>) -> Vec<String> {
         let lines = CopiedLines::default();
         let stats = LineStats::new(item.language(), item.modifiers(), None);
-        let rows = super::rows(item, &lines, &stats, &TierRolls::default(), None, base_type);
+        let rows = super::rows(item, &lines, &stats, &TierRolls::default(), base_type);
         row_texts(
             rows.into_iter()
                 .skip_while(|row| *row != Row::Group(Group::Item))
@@ -2322,7 +2209,7 @@ mod tests {
             let lines = CopiedLines::default();
             let stats = LineStats::new(item.language(), item.modifiers(), None);
             let tiers = TierRolls::default();
-            super::rows(item, &lines, &stats, &tiers, None, Some(base_type))
+            super::rows(item, &lines, &stats, &tiers, Some(base_type))
                 .into_iter()
                 .find_map(|row| match row {
                     Row::Stat(Stat {
@@ -2352,7 +2239,7 @@ mod tests {
 
     /// The filter of `property` among the filters of `item`.
     fn property_filter_of(item: &Item, property: Property) -> StatFilter {
-        rows(item, None)
+        rows(item)
             .into_iter()
             .find_map(|row| match row {
                 Row::Stat(Stat {
@@ -2431,7 +2318,7 @@ mod tests {
             parse(&format!(
                 "Item Class: Body Armours\nRarity: Rare\nHate Shell\nWaxed Jacket\n--------\n\
                  Sockets: {sockets}\n--------\nItem Level: 80\n--------\n\
-                 +80 to maximum Life{corrupted}"
+                 {{ Prefix Modifier }}\n+80 to maximum Life{corrupted}"
             ))
         };
         let sockets = |item: &Item| {
@@ -2455,7 +2342,7 @@ mod tests {
         );
         let none = parse(
             "Item Class: Body Armours\nRarity: Rare\nHate Shell\nWaxed Jacket\n--------\n\
-             Item Level: 80\n--------\n+80 to maximum Life",
+             Item Level: 80\n--------\n{ Prefix Modifier }\n+80 to maximum Life",
         );
         assert_eq!(sockets(&none), None);
     }
@@ -2465,11 +2352,13 @@ mod tests {
         let bow = parse(include_str!("../item/test-items/en-rare-bow-fractured.txt"));
         let magic = parse(
             "Item Class: Gloves\nRarity: Magic\nVaal Mitts of the Fox\n--------\n\
-             Quality: +23% (augmented)\n--------\nItem Level: 70\n--------\n+20 to Dexterity",
+             Quality: +23% (augmented)\n--------\nItem Level: 70\n--------\n\
+             { Suffix Modifier }\n+20 to Dexterity",
         );
         let twenty = parse(
             "Item Class: Gloves\nRarity: Magic\nVaal Mitts of the Fox\n--------\n\
-             Quality: +20% (augmented)\n--------\nItem Level: 70\n--------\n+20 to Dexterity",
+             Quality: +20% (augmented)\n--------\nItem Level: 70\n--------\n\
+             { Suffix Modifier }\n+20 to Dexterity",
         );
 
         // Its bow usually has two sockets; its required level is above 75.
@@ -2496,7 +2385,7 @@ mod tests {
             parse(&format!(
                 "Item Class: Rings\nRarity: Rare\nHate Loop\nRuby Ring\n--------\n\
                  Requires: Level {required}\n--------\nItem Level: {item_level}\n--------\n\
-                 +30 to maximum Life"
+                 {{ Prefix Modifier }}\n+30 to maximum Life"
             ))
         };
         let required = |item: &Item| {
@@ -2518,7 +2407,8 @@ mod tests {
         // A magic item, even for leveling.
         let magic = parse(
             "Item Class: Rings\nRarity: Magic\nVital Ruby Ring\n--------\n\
-             Requires: Level 40\n--------\nItem Level: 45\n--------\n+30 to maximum Life",
+             Requires: Level 40\n--------\nItem Level: 45\n--------\n\
+             { Prefix Modifier }\n+30 to maximum Life",
         );
         assert_eq!(required(&magic), None);
     }
@@ -2529,7 +2419,7 @@ mod tests {
             parse(&format!(
                 "Item Class: Body Armours\nRarity: Rare\nHate Shell\nPatch Jacket\n--------\n\
                  Sockets: S S S\n--------\nItem Level: 80\n--------\n\
-                 +80 to maximum Life{corrupted}"
+                 {{ Prefix Modifier }}\n+80 to maximum Life{corrupted}"
             ))
         };
         let sockets = |item: &Item| {
@@ -2551,7 +2441,7 @@ mod tests {
             let item = parse(&format!(
                 "Item Class: {class}\nRarity: Magic\n{name}\n--------\n\
                  Quality: +{quality}% (augmented)\n--------\nItem Level: 60\n--------\n\
-                 +10% to Fire Resistance"
+                 {{ Suffix Modifier }}\n+10% to Fire Resistance"
             ));
             item_group_of(&item, Some(base))
                 .into_iter()
@@ -2579,7 +2469,7 @@ mod tests {
         let mace = parse(include_str!("../item/test-items/en-magic-mace.txt"));
 
         assert_eq!(
-            texts(&mace, None),
+            texts(&mace),
             [
                 // Its whole name here: the application finds its base type among the names of
                 // the trade site.
@@ -2603,9 +2493,9 @@ mod tests {
     fn a_limit_stays_within_the_range_of_its_stat() {
         let ring = parse(
             "Item Class: Rings\nRarity: Unique\nVenom Loop\nAmethyst Ring\n--------\n\
-             Item Level: 80\n--------\nAdds 1 to 55 Lightning damage to Attacks",
+             Item Level: 80\n--------\n{ Unique Modifier }\n\
+             Adds 1 to 55(50-60) Lightning damage to Attacks",
         );
-        let modifiers = database(&[], &["Adds 1 to (50-60) Lightning damage to Attacks"]);
         let boots = parse(
             "Item Class: Boots\nRarity: Rare\nGale Tread\nLattice Sandals\n--------\n\
              { Implicit Modifier }\n+10(10-15) to Dexterity",
@@ -2613,7 +2503,7 @@ mod tests {
         // The fixed number counts in the range of the average; the tooltip doesn't tell it,
         // since it isn't a roll.
         assert_eq!(
-            limit(&rows(&ring, Some(&modifiers))[1]),
+            limit(&rows(&ring)[1]),
             Limit {
                 value: 28.0,
                 half: Half::Minimum,
@@ -2631,7 +2521,7 @@ mod tests {
             max: 15.0,
         });
         assert_eq!(
-            limit(rows(&boots, None).last().expect("its implicit")),
+            limit(rows(&boots).last().expect("its implicit")),
             Limit {
                 value: 10.0,
                 half: Half::Minimum,
@@ -2670,7 +2560,7 @@ mod tests {
         );
 
         assert_eq!(
-            texts(&unique, None),
+            texts(&unique),
             [
                 "Unique",
                 "■ +52 to maximum Life ≥52 [40–60 0.60]",
@@ -2680,7 +2570,7 @@ mod tests {
         );
         // 110 % of the copied value, within the range of the implicit.
         assert_eq!(
-            texts(&rare, None),
+            texts(&rare),
             [
                 "Item",
                 "■ Base: Ruby Ring",
@@ -2690,7 +2580,7 @@ mod tests {
                 "■ 18% reduced Movement Speed ≤20 [T2 15–25]",
             ]
         );
-        let lower = limit(&rows(&unique, None)[2]);
+        let lower = limit(&rows(&unique)[2]);
         assert_eq!(lower.half, Half::Maximum);
         assert_eq!(
             StatFilter {
@@ -2834,7 +2724,8 @@ mod tests {
     fn a_corrupted_item_is_compared_with_corrupted_offers_only() {
         let headhunter = parse(
             "Item Class: Belts\nRarity: Unique\nHeadhunter\nHeavy Belt\n--------\n\
-             Item Level: 80\n--------\n+55 to maximum Life\n--------\nCorrupted",
+             Item Level: 80\n--------\n{ Unique Modifier }\n+55(40-60) to maximum Life\n\
+             --------\nCorrupted",
         );
         let staff = parse(
             "Item Class: Staves\nRarity: Normal\nChiming Staff\n--------\n\
@@ -2842,8 +2733,12 @@ mod tests {
         );
 
         assert_eq!(
-            texts(&headhunter, None),
-            ["Unique", "■ +55 to maximum Life ≥55", "Corrupted only"]
+            texts(&headhunter),
+            [
+                "Unique",
+                "■ +55 to maximum Life ≥55 [40–60 0.75]",
+                "Corrupted only"
+            ]
         );
         // An item without modifiers has its filters to show.
         let stats = |item| {
@@ -2852,13 +2747,12 @@ mod tests {
                 &CopiedLines::default(),
                 &LineStats::default(),
                 &TierRolls::default(),
-                None,
                 base_type(item),
             )
         };
         assert!(!stats(&staff).is_empty());
         assert_eq!(
-            texts(&staff, None),
+            texts(&staff),
             [
                 "Item",
                 "■ Base: Chiming Staff",
@@ -2889,17 +2783,10 @@ mod tests {
             None,
         );
         let line_stats = LineStats::new(unique.language(), unique.modifiers(), None);
-        let stats = Stats::new(
-            &unique,
-            &lines,
-            &line_stats,
-            &TierRolls::default(),
-            None,
-            None,
-        );
+        let stats = Stats::new(&unique, &lines, &line_stats, &TierRolls::default(), None);
 
         assert_eq!(
-            texts(&unique, None),
+            texts(&unique),
             [
                 "Unique",
                 "■ +52 to maximum Life ≥52 [40–60 0.60]",
@@ -2944,14 +2831,7 @@ mod tests {
             crossbow.modifiers(),
             base_type(&crossbow),
         );
-        let stats = Stats::new(
-            &crossbow,
-            &lines,
-            &line_stats,
-            &tiers,
-            None,
-            base_type(&crossbow),
-        );
+        let stats = Stats::new(&crossbow, &lines, &line_stats, &tiers, base_type(&crossbow));
         let keys: Vec<FilterKey> = stats
             .rows
             .iter()
@@ -2985,10 +2865,9 @@ mod tests {
     fn a_legacy_unique_keeps_its_value_out_of_the_range_of_today() {
         let belt = parse(
             "Item Class: Belts\nRarity: Unique\nHeadhunter\nHeavy Belt\n--------\n\
-             Item Level: 80\n--------\n+65 to maximum Life",
+             Item Level: 80\n--------\n{ Unique Modifier }\n+65(40-60) to maximum Life",
         );
-        let modifiers = database(&[], &["+(40-60) to maximum Life"]);
-        let rows = rows(&belt, Some(&modifiers));
+        let rows = rows(&belt);
 
         assert_eq!(
             rows[1],

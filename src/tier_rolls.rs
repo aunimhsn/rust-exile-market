@@ -1,7 +1,7 @@
 //! The rolls of each line of a prefix or suffix of the copied item over every tier of its
 //! modifier on the base of the item, from the modifier tables: its bar, the range its field
-//! stays in and the rolls its tooltip tells. Read once when the item is copied, with the
-//! advanced copy only: the plain copy tells neither the affix nor the tier of a modifier.
+//! stays in and the rolls its tooltip tells. Read once when the item is copied, for a modifier
+//! whose header tells its affix and its tier.
 //!
 //! The ranges of a tier follow the values of each line match of the modifier, and the values
 //! of a match the numbers its stat counts on its lines, in their order: the numbers are read
@@ -249,10 +249,12 @@ mod tests {
     }
 
     #[test]
-    fn a_line_has_no_rolls_without_the_advanced_copy_nor_base() {
-        let plain = "Item Class: Body Armours\nRarity: Rare\nDoom Shell\nAncestral Mail\n\
-                     --------\nItem Level: 82\n--------\n+86 to maximum Life";
-        assert_eq!(rolls_of(plain).get(key(0, 0)), None);
+    fn a_line_has_no_rolls_without_its_affix_nor_base() {
+        // A header the parser doesn't know tells neither the affix nor the tier.
+        let unknown = "Item Class: Body Armours\nRarity: Rare\nDoom Shell\nAncestral Mail\n\
+                       --------\nItem Level: 82\n--------\n{ Strange Modifier }\n\
+                       +86(85-99) to maximum Life";
+        assert_eq!(rolls_of(unknown).get(key(0, 0)), None);
 
         let advanced = "Item Class: Body Armours\nRarity: Rare\nDoom Shell\nAncestral Mail\n\
                         --------\nItem Level: 82\n--------\n\

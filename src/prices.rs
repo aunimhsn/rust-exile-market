@@ -85,17 +85,6 @@ pub struct UniquePrice {
     pub name: String,
     pub base_type: String,
     pub price: Price,
-    /// Its modifiers with their ranges, in English: the rolls of an item copied without them.
-    pub modifiers: UniqueModifiers,
-}
-
-/// The modifiers of a unique with their ranges, e.g. `+(17-23)% to Chaos Resistance`: those
-/// of its base (implicit), and its own (explicit), apart so that a line is only matched with
-/// the modifiers of its kind.
-#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
-pub struct UniqueModifiers {
-    pub implicit: Vec<String>,
-    pub explicit: Vec<String>,
 }
 
 /// An item of the currency exchange: currency, fragments, essences, runes…

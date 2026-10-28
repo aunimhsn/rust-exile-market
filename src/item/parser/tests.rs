@@ -393,48 +393,6 @@ fn reads_a_currency_without_stack_nor_description() {
 }
 
 #[test]
-fn reads_the_modifiers_without_the_advanced_description() {
-    let item = item(EN_PLAIN_RARE_RING);
-
-    let implicit = of_kind(&item, ModifierKind::Implicit);
-    assert_eq!(
-        first_line(implicit[0]).text,
-        "+8% to all Elemental Resistances"
-    );
-    let explicit = explicit(&item);
-    assert_eq!(explicit.len(), 2);
-    assert_eq!(explicit[1].origin, Some(ModifierOrigin::Crafted));
-    assert_eq!(first_line(explicit[1]).text, "+12 to Strength");
-    assert!(item.has_state(ItemState::Corrupted));
-}
-
-#[test]
-fn reads_only_the_modifiers_of_a_plain_unique_not_its_texts() {
-    let item = item(EN_PLAIN_UNIQUE_JEWEL);
-
-    assert_eq!(
-        explicit(&item)
-            .iter()
-            .map(|modifier| first_line(modifier).text.as_str())
-            .collect::<Vec<_>>(),
-        [
-            "+12% to all Elemental Resistances",
-            "4% increased maximum Life"
-        ]
-    );
-}
-
-#[test]
-fn reads_no_explicit_modifier_on_a_plain_unidentified_item() {
-    let item = item(EN_PLAIN_RARE_RING_UNIDENTIFIED);
-
-    assert_eq!(item.modifiers().len(), 1);
-    assert_eq!(item.modifiers()[0].kind, ModifierKind::Implicit);
-    assert!(item.has_state(ItemState::Unidentified));
-    assert!(item.has_state(ItemState::TwiceCorrupted));
-}
-
-#[test]
 fn reads_no_description_as_a_modifier_on_a_plain_unidentified_item() {
     let item = item(EN_PLAIN_MAGIC_JEWEL_UNIDENTIFIED);
 
@@ -442,7 +400,8 @@ fn reads_no_description_as_a_modifier_on_a_plain_unidentified_item() {
     assert_eq!(item.modifiers(), []);
 }
 
-/// The copies without the `{ … }` headers of the advanced copy, among [`ALL`].
+/// The copies without the `{ … }` headers of the advanced copy, among [`ALL`]: an implicit
+/// line, or the explicit lines of an identified item.
 const WITHOUT_DETAILS: [&str; 3] = [
     EN_PLAIN_RARE_RING,
     EN_PLAIN_UNIQUE_JEWEL,
@@ -455,7 +414,11 @@ fn tells_the_items_whose_modifiers_were_copied_without_their_details() {
     let normal_ring = "Item Class: Rings\nRarity: Normal\nRuby Ring\n--------\nItem Level: 70\n\
                        --------\n+25% to Fire Resistance (implicit)";
     for text in WITHOUT_DETAILS.into_iter().chain([normal_ring]) {
-        assert!(item(text).copied_without_details(), "{text}");
+        assert_eq!(
+            try_parse(text).err(),
+            Some(ParseError::WithoutDetails),
+            "{text}"
+        );
     }
 }
 
@@ -476,7 +439,6 @@ fn tells_no_item_the_same_with_both_copies_copied_without_its_details() {
         .chain([runes_and_enchantment, &flask_without_modifier])
     {
         let item = item(text);
-        assert!(!item.copied_without_details(), "{text}");
         if text == flask_without_modifier {
             assert_eq!(item.modifiers(), []);
         }

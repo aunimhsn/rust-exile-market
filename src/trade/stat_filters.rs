@@ -368,11 +368,26 @@ mod tests {
         Item::parse(&CopiedItem::from_text(text).expect("an item")).expect("read")
     }
 
-    /// A unique with the explicit modifier `lines`.
+    /// `lines`, each under the `header` of the advanced copy: a modifier of one line each.
+    fn headed(header: &str, lines: &str) -> String {
+        lines
+            .lines()
+            .map(|line| format!("{{ {header} }}\n{line}"))
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    /// A unique with the explicit modifier `lines`: one modifier each, or as their own
+    /// `{ … }` headers group them.
     fn unique(lines: &str) -> Item {
+        let modifiers = if lines.starts_with('{') {
+            lines.to_owned()
+        } else {
+            headed("Unique Modifier", lines)
+        };
         parse(&format!(
             "Item Class: Rings\nRarity: Unique\nTest Loop\nGold Ring\n--------\n\
-             Item Level: 80\n--------\n{lines}"
+             Item Level: 80\n--------\n{modifiers}"
         ))
     }
 
@@ -466,7 +481,7 @@ mod tests {
     fn a_line_of_several_numbers_is_searched_at_their_average() {
         let item = parse(
             "Item Class: One Hand Maces\nRarity: Unique\nTest Mace\nWooden Club\n--------\n\
-             Item Level: 80\n--------\nAdds 24 to 51 Physical Damage",
+             Item Level: 80\n--------\n{ Unique Modifier }\nAdds 24 to 51 Physical Damage",
         );
         let stats = line_stats(&item);
 
@@ -620,19 +635,21 @@ mod tests {
         );
     }
 
-    /// The modifier `lines` of a rare weapon, the prefixes and suffixes copied without their
-    /// affixes, in `language`.
+    /// The modifier `lines` of a rare weapon, one prefix each (the stats don't depend on the
+    /// affix), in `language`.
     fn weapon(language: Language, lines: &str) -> Item {
-        let header = match language {
-            Language::English => {
-                "Item Class: Bows\nRarity: Rare\nDoom Song\nGemini Bow\n--------\nItem Level: 80"
-            }
-            Language::French => {
+        let (item, prefix) = match language {
+            Language::English => (
+                "Item Class: Bows\nRarity: Rare\nDoom Song\nGemini Bow\n--------\nItem Level: 80",
+                "Prefix Modifier",
+            ),
+            Language::French => (
                 "Classe d'objet: Arcs\nRareté: Rare\nChant funeste\nArc jumelé\n--------\n\
-                 Niveau de l'objet: 80"
-            }
+                 Niveau de l'objet: 80",
+                "Préfixe",
+            ),
         };
-        parse(&format!("{header}\n--------\n{lines}"))
+        parse(&format!("{item}\n--------\n{}", headed(prefix, lines)))
     }
 
     #[test]
@@ -666,17 +683,22 @@ mod tests {
             Language::English => {
                 "Item Class: Rings\nRarity: Rare\nStorm Spiral\nSapphire Ring\n--------\n\
                  Item Level: 77\n--------\n+10% to Lightning Resistance (rune)\n--------\n\
-                 +22% to Cold Resistance (implicit)\n--------\n+65 to maximum Life\n\
-                 +38% to Fire Resistance\n+10% to all Elemental Resistances\n+12 to Strength\n\
-                 +23% to Chaos Resistance"
+                 { Implicit Modifier }\n+22% to Cold Resistance\n--------\n\
+                 { Prefix Modifier }\n+65 to maximum Life\n\
+                 { Suffix Modifier }\n+38% to Fire Resistance\n\
+                 { Suffix Modifier }\n+10% to all Elemental Resistances\n\
+                 { Suffix Modifier }\n+12 to Strength\n\
+                 { Suffix Modifier }\n+23% to Chaos Resistance"
             }
             Language::French => {
                 "Classe d'objet: Anneaux\nRareté: Rare\nSpirale\nAnneau de saphir\n--------\n\
                  Niveau de l'objet: 77\n--------\n+10% à la Résistance à la foudre (rune)\n\
-                 --------\n+22% à la Résistance au froid (implicit)\n--------\n\
-                 +65 de Vie maximale\n+38% à la Résistance au feu\n\
-                 +10% à toutes les Résistances Élémentaires\n+12 de Force\n\
-                 +23% à la Résistance au chaos"
+                 --------\n{ Modificateur Implicite }\n+22% à la Résistance au froid\n\
+                 --------\n{ Préfixe }\n+65 de Vie maximale\n\
+                 { Suffixe }\n+38% à la Résistance au feu\n\
+                 { Suffixe }\n+10% à toutes les Résistances Élémentaires\n\
+                 { Suffixe }\n+12 de Force\n\
+                 { Suffixe }\n+23% à la Résistance au chaos"
             }
         })
     }
@@ -714,8 +736,8 @@ mod tests {
     fn a_negative_line_counts_against_its_total() {
         let item = parse(
             "Item Class: Rings\nRarity: Rare\nVile Loop\nAmethyst Ring\n--------\n\
-             Item Level: 77\n--------\n-13% to Chaos Resistance (implicit)\n--------\n\
-             +17% to Fire and Chaos Resistances",
+             Item Level: 77\n--------\n{ Implicit Modifier }\n-13% to Chaos Resistance\n\
+             --------\n{ Suffix Modifier }\n+17% to Fire and Chaos Resistances",
         );
         let totals: Vec<(Pseudo, f64)> = line_stats(&item)
             .pseudo_totals()

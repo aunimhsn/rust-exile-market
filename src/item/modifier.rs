@@ -1,5 +1,5 @@
-//! The modifiers of an item: their header in the advanced copy, their marker in the plain
-//! copy, and the values of their lines.
+//! The modifiers of an item: their header in the advanced copy, the marker of a line without
+//! header (a rune, an enchantment), and the values of their lines.
 
 use super::labels::Labels;
 
@@ -182,15 +182,11 @@ impl Modifier {
         }
     }
 
-    /// A modifier of one line without header, e.g. `+15% to Fire Resistance (crafted)`; its
-    /// marker tells its kind, or else `kind`.
-    pub(super) fn plain(line: &str, kind: ModifierKind) -> Self {
-        let (text, marker) = Marker::take(line);
-        let mut modifier = Self::new(
-            marker.and_then(Marker::kind).unwrap_or(kind),
-            marker.and_then(Marker::origin),
-        );
-        modifier.lines.push(StatLine::parse(text));
+    /// A modifier of one line without header, of the `kind` its marker tells, e.g.
+    /// `18% increased Physical Damage (rune)`.
+    pub(super) fn marked(line: &str, kind: ModifierKind) -> Self {
+        let mut modifier = Self::new(kind, None);
+        modifier.lines.push(StatLine::parse(Marker::take(line).0));
         modifier
     }
 
@@ -469,18 +465,17 @@ mod tests {
     }
 
     #[test]
-    fn a_marker_tells_the_kind_or_the_origin_of_a_plain_line() {
-        let rune = Modifier::plain(
-            "18% increased Physical Damage (rune)",
-            ModifierKind::Implicit,
-        );
-        assert_eq!(rune.kind, ModifierKind::Rune);
+    fn a_marked_line_is_read_without_its_marker() {
+        let rune = Modifier::marked("18% increased Physical Damage (rune)", ModifierKind::Rune);
+        assert_eq!((rune.kind, rune.origin), (ModifierKind::Rune, None));
         assert_eq!(rune.lines[0].text, "18% increased Physical Damage");
+    }
 
-        let crafted = Modifier::plain("+12 to Strength (crafted)", ModifierKind::Explicit(None));
-        assert_eq!(
-            (crafted.kind, crafted.origin),
-            (ModifierKind::Explicit(None), Some(ModifierOrigin::Crafted))
-        );
+    #[test]
+    fn a_marker_tells_the_origin_of_a_line_under_a_header() {
+        let mut crafted = Modifier::unknown();
+        crafted.push_line("+12 to Strength (crafted)");
+        assert_eq!(crafted.origin, Some(ModifierOrigin::Crafted));
+        assert_eq!(crafted.lines[0].text, "+12 to Strength");
     }
 }
