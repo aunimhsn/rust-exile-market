@@ -384,12 +384,8 @@ impl<'a> Stats<'a> {
     /// state tags of the item lit.
     #[must_use]
     pub fn active_filters(&self, filters: &Filters) -> u32 {
-        let lit = filters
-            .lit_states()
-            .iter()
-            .filter(|&&state| self.item.has_state(state))
-            .count();
-        len(&self.checked(filters)).saturating_add(u32::try_from(lit).unwrap_or(u32::MAX))
+        let lit: Vec<_> = filters.lit_states_of(self.item).collect();
+        len(&self.checked(filters)).saturating_add(len(&lit))
     }
 
     /// The filters of the search, checked or not, as the player set them or else by default.

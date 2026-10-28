@@ -6,7 +6,7 @@
 use egui::text::{LayoutJob, TextFormat};
 use egui::{
     Align, Color32, CornerRadius, CursorIcon, FontId, Frame, Label, Layout, Response, RichText,
-    Sense, Ui, Vec2, vec2,
+    Role, Sense, Ui, Vec2, WidgetInfo, vec2,
 };
 
 use super::item_stats::{self, Stats};
@@ -353,13 +353,16 @@ impl<'a> ItemBlock<'a> {
                     TagKind::State(state, state_tag) => {
                         let lit = self.filters.is_lit(state);
                         let response = tag(ui, label, Sense::click(), |response| {
-                            match (lit, response.hovered()) {
+                            // The keyboard focus looks like the pointer, as on the pills.
+                            match (lit, response.hovered() || response.has_focus()) {
                                 (false, false) => (color::CONTROL, color::WEAK),
                                 (false, true) => (color::CONTROL_LINE, color::TEXT),
                                 (true, false) => (state_tag.fill, state_tag.text),
                                 (true, true) => (state_tag.hovered, state_tag.text),
                             }
                         });
+                        response
+                            .widget_info(|| WidgetInfo::selected(Role::CheckBox, true, lit, label));
                         let tooltip = if lit {
                             state_tag.only
                         } else {

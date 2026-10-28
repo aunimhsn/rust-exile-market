@@ -145,19 +145,20 @@ pub fn query(item: &Item, target: &TradeTarget, filters: SearchFilters) -> Query
     query
 }
 
-/// The states searched for `item`, whose state tags the player `lit`: a lit tag, the offers of
-/// that state only; a tag left gray, the offers with or without it. A clean item is compared
-/// with offers that aren't corrupted, and a clean normal, magic or rare item, which can still
-/// be crafted, with offers neither sanctified nor mirrored either, like Exiled Exchange 2.
-fn states(item: &Item, lit: &[ItemState]) -> StateFilters {
-    let lit = |state| (item.has_state(state) && lit.contains(&state)).then_some(true);
+/// The states searched for `item`, whose state tags the player lit (`lit_tags`): a lit tag,
+/// the offers of that state only; a tag left gray, the offers with or without it. A clean item
+/// is compared with offers that aren't corrupted, and a clean normal, magic or rare item, which
+/// can still be crafted, with offers neither sanctified nor mirrored either, like Exiled
+/// Exchange 2.
+fn states(item: &Item, lit_tags: &[ItemState]) -> StateFilters {
+    let only = |state| (item.has_state(state) && lit_tags.contains(&state)).then_some(true);
     let crafted = craftable(item).then_some(false);
     StateFilters {
-        corrupted: lit(ItemState::Corrupted).or((!item.is_corrupted()).then_some(false)),
-        twice_corrupted: lit(ItemState::TwiceCorrupted),
-        sanctified: lit(ItemState::Sanctified).or(crafted),
-        fractured: lit(ItemState::Fractured),
-        mirrored: lit(ItemState::Mirrored).or(crafted),
+        corrupted: only(ItemState::Corrupted).or((!item.is_corrupted()).then_some(false)),
+        twice_corrupted: only(ItemState::TwiceCorrupted),
+        sanctified: only(ItemState::Sanctified).or(crafted),
+        fractured: only(ItemState::Fractured),
+        mirrored: only(ItemState::Mirrored).or(crafted),
     }
 }
 
@@ -371,26 +372,51 @@ mod tests {
 
     #[test]
     fn a_corrupted_item_is_compared_with_offers_corrupted_or_not_until_its_tag_is_lit() {
-        for (state, tag) in [
-            ("Corrupted", ItemState::Corrupted),
-            ("Twice Corrupted", ItemState::TwiceCorrupted),
+        let corrupted = StateFilters {
+            corrupted: Some(true),
+            ..StateFilters::default()
+        };
+        let twice_corrupted = StateFilters {
+            twice_corrupted: Some(true),
+            ..StateFilters::default()
+        };
+        for (rarity, state, tag, lit) in [
+            ("Rare", "Corrupted", ItemState::Corrupted, corrupted),
+            ("Unique", "Corrupted", ItemState::Corrupted, corrupted),
+            (
+                "Rare",
+                "Twice Corrupted",
+                ItemState::TwiceCorrupted,
+                twice_corrupted,
+            ),
         ] {
             assert_eq!(
-                searched_states("Rare", state, &[]),
+                searched_states(rarity, state, &[]),
                 StateFilters::default(),
-                "{state}"
+                "{rarity} {state}"
             );
-            let lit = searched_states("Rare", state, &[tag]);
             assert_eq!(
-                (lit.corrupted, lit.twice_corrupted),
-                if tag == ItemState::Corrupted {
-                    (Some(true), None)
-                } else {
-                    (None, Some(true))
-                },
-                "{state}"
+                searched_states(rarity, state, &[tag]),
+                lit,
+                "{rarity} {state}"
             );
         }
+    }
+
+    #[test]
+    fn two_lit_state_tags_search_the_offers_of_both_states() {
+        assert_eq!(
+            searched_states(
+                "Rare",
+                "Corrupted\n--------\nFractured Item",
+                &[ItemState::Corrupted, ItemState::Fractured]
+            ),
+            StateFilters {
+                corrupted: Some(true),
+                fractured: Some(true),
+                ..StateFilters::default()
+            }
+        );
     }
 
     #[test]

@@ -341,7 +341,7 @@ fn search_filters(
         session.filtered_base_type(item),
     );
     SearchFilters {
-        states: filters.lit_states().to_vec(),
+        states: filters.lit_states_of(item).collect(),
         ..shown.stats().search_filters(&stats.filters(filters))
     }
 }
@@ -515,6 +515,37 @@ fn random_quote() -> usize {
 mod tests {
     use super::*;
     use crate::item::CopiedItem;
+
+    #[test]
+    fn a_lit_state_tag_reaches_the_search() {
+        use crate::item::ItemState;
+        use crate::trade::query::Query;
+
+        let mut session = Session::new(Some(League::new("Standard")));
+        session.apply(ClipboardEvent::Copied(
+            CopiedItem::from_text(
+                "Item Class: Rings\nRarity: Rare\nWoe Loop\nRuby Ring\n--------\n\
+                 Item Level: 80\n--------\nCorrupted",
+            )
+            .unwrap(),
+        ));
+        let shown = session.item().expect("an item");
+        let item = shown.parsed().expect("read");
+        let corrupted = |filters: &Filters| {
+            let search = session
+                .trade_search(item, search_filters(&session, shown, item, filters))
+                .expect("a search");
+            let Query::Items(items) = search.query else {
+                panic!("a search of items");
+            };
+            items.states.corrupted
+        };
+        let mut filters = Filters::default();
+
+        assert_eq!(corrupted(&filters), None);
+        filters.toggle_state(ItemState::Corrupted);
+        assert_eq!(corrupted(&filters), Some(true));
+    }
 
     #[test]
     fn the_gear_opens_the_settings_then_closes_them() {

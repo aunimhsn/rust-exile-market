@@ -10,7 +10,7 @@
 use std::collections::HashMap;
 
 use crate::format;
-use crate::item::{ItemState, Range};
+use crate::item::{Item, ItemState, Range};
 use crate::trade::pseudo::Pseudo;
 
 /// A line of a modifier of the item: the index of its modifier among the modifiers of the
@@ -155,10 +155,13 @@ impl Filters {
         self.changed.insert(key, filter);
     }
 
-    /// The state tags the player lit, in the order of their clicks.
-    #[must_use]
-    pub fn lit_states(&self) -> &[ItemState] {
-        &self.lit
+    /// The states of `item` whose tag the player lit: those searched, and counted among the
+    /// active filters.
+    pub fn lit_states_of<'a>(&'a self, item: &'a Item) -> impl Iterator<Item = ItemState> + 'a {
+        self.lit
+            .iter()
+            .copied()
+            .filter(|&state| item.has_state(state))
     }
 
     #[must_use]
@@ -224,16 +227,33 @@ mod tests {
 
         filters.toggle_state(ItemState::Corrupted);
         filters.toggle_state(ItemState::Fractured);
-        assert_eq!(
-            filters.lit_states(),
-            [ItemState::Corrupted, ItemState::Fractured]
-        );
+        assert!(filters.is_lit(ItemState::Corrupted));
+        assert!(filters.is_lit(ItemState::Fractured));
         filters.toggle_state(ItemState::Corrupted);
         assert!(!filters.is_lit(ItemState::Corrupted));
         assert!(filters.is_lit(ItemState::Fractured));
         // A copied item starts gray.
         filters.clear();
-        assert_eq!(filters.lit_states(), []);
+        assert!(!filters.is_lit(ItemState::Fractured));
+    }
+
+    #[test]
+    fn only_the_states_of_the_item_are_lit_for_it() {
+        let ring = Item::parse(
+            &crate::item::CopiedItem::from_text(
+                "Item Class: Rings\nRarity: Rare\nWoe Loop\nRuby Ring\n--------\nCorrupted",
+            )
+            .expect("an item"),
+        )
+        .expect("read");
+        let mut filters = Filters::default();
+
+        filters.toggle_state(ItemState::Mirrored);
+        filters.toggle_state(ItemState::Corrupted);
+        assert_eq!(
+            filters.lit_states_of(&ring).collect::<Vec<_>>(),
+            [ItemState::Corrupted]
+        );
     }
 
     #[test]
