@@ -36,7 +36,7 @@
 - For a desktop application, decide in the first wireframes whether the window keeps the title bar of the system or draws its own, and draw its buttons from the start.
 - The VS Code Excalidraw extension doesn't reload a file changed on disk: before rewriting a wireframe the owner has open, ask them to save it and close its tab, and commit their version first.
 - A mock-up is split into small files (the shared styles and scripts, one style sheet and one script per block, one script per section), so that a change reads only what it needs.
-- A new section of the mock-up goes at the top of the page, so that the owner finds it at once.
+- A new section of the mock-up goes at the top of the page, so that the owner finds it at once. Past ten sections, a table of contents under the header links to each, so that the owner sees them all at once.
 - Once approved, the mock-up (its page and its folder) is the single source of truth of the interface. A design change goes into the mock-up first, then into `specs.md` and into the code when that part is already coded. The wireframe only fixed the first layout and isn't kept up to date.
 - Check a visual change with a few screenshots, of the window concerned only, and delete them once looked at: they are for this check, not for the owner, who looks at the mock-up and the application themselves.
 
@@ -58,6 +58,7 @@ Two folders are the exchange area between the owner and Claude Code. They are ig
 - Never commit or push directly to `main`.
 - For each task, create a dedicated branch from `main`, commit and push only on that branch.
 - Every change must go through a pull request targeting `main`.
+- Each time a pull request is opened or updated, give the owner its full link (`https://github.com/<owner>/<repository>/pull/<number>`), not only its number.
 - Name branches `<type>/<short-description>` in kebab-case, using the commit types below (e.g. `feat/dark-mode`, `fix/settings-save`).
 - Never switch branches in the main project directory while the owner may be testing a branch there (for example with `cargo run`): it would change the code they run. Work on any other branch in a separate Git worktree outside the project (`git worktree add <directory> -b <branch> origin/main`), and remove it with `git worktree remove <directory>` once the work is pushed.
 - When the owner says they aren't running or testing anything, work on the task branch in the main project directory instead, so that they can follow the files changing in their editor; switch it back to `main` once the pull request is merged.
