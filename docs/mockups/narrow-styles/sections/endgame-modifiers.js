@@ -1,14 +1,14 @@
 // Section Endgame modifiers (13k1): the modifiers tied to a mechanic of the endgame, from the items the
 // owner copied on 2026-10-28 (English and French). Open decisions, one group of tabs each:
-// - Origin: how a desecrated, fractured or crafted modifier shows (a word after its range, the color of
-//   its text, a stripe in the margin, close to the colors of the game);
-// - Unrevealed: a desecrated modifier not revealed yet, a line without filter; the item gets a filter of
-//   its number of unrevealed modifiers, and its other filters start unchecked, like Exiled Exchange 2;
+// - Desecrated green: the green of the game, of the evasion, or a softer one.
 // - One tier: a modifier of one tier only (every modifier of a jewel, of a lord of the Abyss, of a
 //   waystone, of a tablet, of the Breach), whose T1 means "the only one": no tier, or T1 in gray; its bar
 //   over its own range, which the copy gives;
 // - Time-Lost: the lines of a Time-Lost jewel, whole or with a short tag in place of their first words;
 // - Catalyst quality: the quality of a ring or an amulet given by a catalyst, with its kind.
+// Decided: the origin of a desecrated, fractured or crafted modifier written after its range; a desecrated
+// modifier not revealed yet, a line without filter on a green band; the item gets a filter of its number
+// of unrevealed modifiers, and its other filters start unchecked, like Exiled Exchange 2.
 // A sanctified item has values outside the range of their tier (`+74(80-89) to maximum Mana`), shown as
 // they are. The bars over every tier are approximate here.
 
@@ -107,7 +107,7 @@ const focusUnrevealedStatsFr = [
   { group: "Préfixes", fill: "3 sur 3" },
   { mod: "52% d'Augmentation des Dégâts des Sorts", check: false, min: 46, tier: 4, range: "45–54", over: { share: .55 } },
   { mod: "+36 de Bouclier d'énergie maximal", check: false, min: 32, tier: 6, range: "36–41", over: { share: .3 } },
-  { unrevealed: "Préfixe non révélé", desecrated: "Profané" },
+  { unrevealed: "Préfixe non révélé" },
   { group: "Suffixes", fill: "2 sur 3 · 1 libre" },
   { mod: "+24% à la Résistance au froid", check: false, min: 21, tier: 5, range: "21–25", over: { share: .45 } },
   { mod: "+18% à la Résistance au feu", check: false, min: 16, tier: 6, range: "16–20", over: { share: .3 } },

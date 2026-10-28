@@ -35,12 +35,10 @@ function item(it, unfolded = false) {
       if (row.group) return `<div class="stats-group"><span>${row.group}${row.fill ? ` <em>${row.fill}</em>` : ""}</span>${row.min ? "<span>min – max</span>" : ""}</div>`;
       if (row.prop) return `<div class="prop"><span>${row.prop[0]}:</span> ${row.prop[1]}</div>`;
       // A class of its own, e.g. the variant of an open decision it belongs to.
-      // `row.origin`: a desecrated, fractured or crafted modifier (13k1), drawn as the variant `origin` says.
+      // `row.origin`: a desecrated, fractured or crafted modifier (13k1).
       const cls = (row.cls ? ` ${row.cls}` : "") + (row.origin ? ` app-origin-${row.origin}` : "");
-      // A modifier not revealed yet (13k1): a line without filter, drawn as the variant `unrevealed` says.
-      // The variant "squares": small green squares, like the scrambled letters of the game, then the word
-      // Desecrated (`row.desecrated` in another language); the group already tells prefix or suffix.
-      if (row.unrevealed) return `<div class="mod2 wide app-unrevealed${cls}"><span class="text"><span class="app-unrevealed-words">${row.unrevealed}</span><span class="app-squares" aria-hidden="true"></span><span class="app-unrevealed-word">${row.desecrated || "Desecrated"}</span></span></div>`;
+      // A modifier not revealed yet (13k1): a line without filter, on a green band.
+      if (row.unrevealed) return `<div class="mod2 wide app-unrevealed${cls}"><span class="text">${row.unrevealed}</span></div>`;
       if (row.note) return `<div class="note${cls}">${row.note}</div>`;
       // The tier and the ranges of a hybrid modifier, under all its lines: it reads as one modifier.
       if (row.rollOnly) return `<div class="mod2 min-top"><span></span><div class="roll2" style="grid-column: 2"><span class="range"><span class="tier t${row.tier}">T${row.tier}</span>${row.range}</span></div></div>`;
@@ -55,7 +53,7 @@ function item(it, unfolded = false) {
       // "the only one", not "the best"; shown or not as the variant `single` says.
       const tier = row.single ? `<span class="tier app-single">T1</span>`
         : row.tier ? `<span class="tier ${row.tier <= 3 ? "tier-top" : ""} t${row.tier}">T${row.tier}</span>` : "";
-      // The origin in words after the range (variant `origin` "word"); hidden in the other variants.
+      // The origin in words after the range.
       const origin = row.origin ? `<span class="app-origin">${row.originLabel || ORIGIN_LABEL[row.origin]}</span>` : "";
       // A line of a Time-Lost jewel (`row.radius`: the words before it, and its short tag), as the
       // variant `radius` says.

@@ -2,44 +2,24 @@
    (js/base.js); once decided, the choice moves to item.css and the other variants go. */
 
 /* The green of the desecrated modifiers: the one of the scrambled letters of the game, measured on the
-   owner's screenshot (the brighter half of their pixels), or the softer green of the tokens. */
+   owner's screenshot (the brighter half of their pixels), the green of the evasion, or the softer green
+   of the tokens. */
 [data-green="game"] { --desecrated: #acde06; }
+[data-green="evasion"] { --desecrated: var(--attr-dex); }
 
-/* The origin of a desecrated, fractured or crafted modifier. */
+/* The origin of a desecrated, fractured or crafted modifier: written after the range of its tier, in its
+   color (decided with the owner on 2026-10-28, against the color of its text and a stripe in the margin). */
 .app-origin-desecrated { --origin: var(--desecrated); }
 .app-origin-fractured { --origin: var(--fractured); }
 .app-origin-crafted { --origin: var(--crafted); }
-/* "Word": its origin written after the range of its tier, in its color. */
-.app-origin { display: none; margin-left: 6px; font-weight: 600; color: var(--origin); }
-[data-origin="word"] .app-origin { display: inline; }
-/* "Color": its text in its color, in place of the blue of the modifiers. */
-[data-origin="color"] [class*="app-origin-"] .text { color: var(--origin); }
-/* "Stripe": a thin line of its color in the left margin, like the colored row of the game. */
-[data-origin="stripe"] [class*="app-origin-"] { position: relative; }
-[data-origin="stripe"] [class*="app-origin-"]::before {
-  content: ""; position: absolute; left: -9px; top: 2px; bottom: 2px; width: 2px; border-radius: 1px; background: var(--origin);
-}
+.app-origin { margin-left: 6px; font-weight: 600; color: var(--origin); }
 
-/* A modifier not revealed yet: a line without filter. */
-.app-unrevealed .text { font-style: italic; }
-[data-unrevealed="faint"] .app-unrevealed .text { color: var(--faint); }
-[data-unrevealed="colored"] .app-unrevealed .text { color: var(--desecrated); }
-/* "Green band": the line on a faint band of the desecrated green, like the row of the game. */
-/* Its text starts at the left edge, like the lines without filter: it has no checkbox. */
-[data-unrevealed="band"] .app-unrevealed { margin: 0 -6px; padding: 3px 6px; border-radius: var(--radius); background: color-mix(in srgb, var(--desecrated) 12%, transparent); }
-/* Its text in the face, size and weight of the modifier lines, only its color changes. */
-[data-unrevealed="band"] .app-unrevealed .text { color: var(--desecrated); font-style: normal; }
-
-/* "Green squares": a row of small green squares, like the scrambled letters of the game, and under it
-   the word Desecrated, small like the line of the range; the other variants write "Unrevealed prefix". */
-.app-squares, .app-unrevealed-word { display: none; }
-[data-unrevealed="squares"] .app-unrevealed-words { display: none; }
-[data-unrevealed="squares"] .app-unrevealed .text { font-style: normal; }
-[data-unrevealed="squares"] .app-squares {
-  display: block; width: 137px; height: 7px; margin: 5px 0 4px;
-  background: repeating-linear-gradient(90deg, var(--desecrated) 0 7px, transparent 7px 10px);
-}
-[data-unrevealed="squares"] .app-unrevealed-word { display: block; font-size: 11px; font-weight: 600; color: var(--desecrated); }
+/* A modifier not revealed yet: a line without filter, on a faint band of the desecrated green, like the
+   row of the game, its text in the face, size and weight of the modifier lines, from the left edge since
+   it has no checkbox (decided with the owner on 2026-10-28, against green squares like the scrambled
+   letters of the game, the text in green only, and faint). */
+.app-unrevealed { margin: 0 -6px; padding: 3px 6px; border-radius: var(--radius); background: color-mix(in srgb, var(--desecrated) 12%, transparent); }
+.app-unrevealed .text { color: var(--desecrated); }
 
 /* A modifier of one tier only: no tier, or its T1 in gray. */
 .app-single { display: none; }

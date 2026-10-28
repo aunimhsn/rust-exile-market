@@ -8,9 +8,7 @@ const VARIANTS = {
   theme: { label: "Style", options: Object.fromEntries(Object.entries(THEMES).map(([k, v]) => [k, v.title])), fallback: "slate" },
   league: { label: "League", options: { softcore: "Softcore", hardcore: "Hardcore" }, fallback: "softcore" },
   // The open decisions of step 13k1 (section Endgame modifiers), one group each.
-  origin: { label: "Origin", options: { word: "Word", color: "Color", stripe: "Stripe" }, fallback: "word" },
-  green: { label: "Desecrated green", options: { game: "Game (screenshot)", soft: "Soft" }, fallback: "game" },
-  unrevealed: { label: "Unrevealed", options: { squares: "Green squares", band: "Green band", colored: "Desecrated color", faint: "Faint" }, fallback: "squares" },
+  green: { label: "Desecrated green", options: { game: "Game (screenshot)", evasion: "Evasion", soft: "Soft" }, fallback: "game" },
   single: { label: "One tier", options: { none: "No tier", gray: "T1 in gray" }, fallback: "none" },
   radius: { label: "Time-Lost", options: { full: "Whole line", short: "Short tag" }, fallback: "full" },
   catalyst: { label: "Catalyst quality", options: { full: "Quality (Mana modifiers)", short: "Mana quality" }, fallback: "full" },
