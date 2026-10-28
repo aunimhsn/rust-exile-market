@@ -17,6 +17,7 @@ const FR_UNIQUE_CROSSBOW: &str = test_item!("fr-unique-crossbow.txt");
 const FR_CURRENCY_STACK: &str = test_item!("fr-currency-stack.txt");
 const FR_NORMAL_EXCEPTIONAL_SHIELD: &str = test_item!("fr-normal-exceptional-shield.txt");
 const FR_UNIQUE_MACE_FIXED_VALUES: &str = test_item!("fr-unique-mace-fixed-values.txt");
+const FR_MAGIC_MANA_FLASK: &str = test_item!("fr-magic-mana-flask.txt");
 const EN_UNIQUE_MACE_FIXED_VALUES: &str = test_item!("en-owner-unique-mace-fixed-values.txt");
 const EN_RARE_CROSSBOW: &str = test_item!("en-rare-crossbow-all-modifiers.txt");
 const EN_RARE_BOW_FRACTURED: &str = test_item!("en-rare-bow-fractured.txt");
@@ -31,13 +32,14 @@ const EN_PLAIN_UNIQUE_JEWEL: &str = test_item!("en-plain-unique-jewel.txt");
 const EN_PLAIN_MAGIC_JEWEL_UNIDENTIFIED: &str = test_item!("en-plain-magic-jewel-unidentified.txt");
 const EN_PLAIN_CURRENCY_LARGE_STACK: &str = test_item!("en-plain-currency-large-stack.txt");
 
-const ALL: [&str; 19] = [
+const ALL: [&str; 20] = [
     FR_RARE_STAFF,
     FR_RARE_BODY_ARMOUR,
     FR_UNIQUE_CROSSBOW,
     FR_CURRENCY_STACK,
     FR_NORMAL_EXCEPTIONAL_SHIELD,
     FR_UNIQUE_MACE_FIXED_VALUES,
+    FR_MAGIC_MANA_FLASK,
     EN_UNIQUE_MACE_FIXED_VALUES,
     EN_RARE_CROSSBOW,
     EN_RARE_BOW_FRACTURED,
@@ -438,6 +440,40 @@ fn reads_no_description_as_a_modifier_on_a_plain_unidentified_item() {
 
     assert!(item.has_state(ItemState::Unidentified));
     assert_eq!(item.modifiers(), []);
+}
+
+#[test]
+fn tells_the_items_whose_modifiers_were_copied_without_their_details() {
+    // Implicit or explicit lines without the `{ … }` header of the advanced copy.
+    for text in [
+        EN_PLAIN_RARE_RING,
+        EN_PLAIN_UNIQUE_JEWEL,
+        EN_PLAIN_RARE_RING_UNIDENTIFIED,
+        "Item Class: Rings\nRarity: Normal\nRuby Ring\n--------\nItem Level: 70\n--------\n\
+         +25% to Fire Resistance (implicit)",
+    ] {
+        assert!(item(text).copied_without_details(), "{text}");
+    }
+    // The advanced copy, and the items the same with both copies: without modifiers, or with
+    // runes and enchantments only, which have no header in either copy.
+    for text in [
+        FR_MAGIC_MANA_FLASK,
+        FR_RARE_STAFF,
+        FR_UNIQUE_CROSSBOW,
+        FR_CURRENCY_STACK,
+        FR_NORMAL_EXCEPTIONAL_SHIELD,
+        EN_RARE_CROSSBOW,
+        EN_RARE_WAND_UNIDENTIFIED,
+        EN_UNIQUE_FOCUS,
+        EN_NORMAL_HELMET,
+        EN_CURRENCY_UNCUT_GEM,
+        EN_PLAIN_MAGIC_JEWEL_UNIDENTIFIED,
+        EN_PLAIN_CURRENCY_LARGE_STACK,
+        "Item Class: Body Armours\nRarity: Normal\nVile Robe\n--------\nItem Level: 81\n--------\n\
+         +12% to Fire Resistance (rune)\n--------\n45% increased Armour (enchant)",
+    ] {
+        assert!(!item(text).copied_without_details(), "{text}");
+    }
 }
 
 #[test]

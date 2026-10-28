@@ -22,6 +22,9 @@ pub enum ParseError {
     MissingRarity,
     UnknownRarity,
     MissingBaseType,
+    /// An item with modifiers copied without the advanced description: read, but neither
+    /// priced nor searched (see [`Item::copied_without_details`](super::Item::copied_without_details)).
+    WithoutDetails,
 }
 
 impl fmt::Display for ParseError {
@@ -30,6 +33,7 @@ impl fmt::Display for ParseError {
             Self::MissingRarity => "no rarity line",
             Self::UnknownRarity => "unknown rarity",
             Self::MissingBaseType => "no base type",
+            Self::WithoutDetails => "modifiers copied without the advanced description",
         })
     }
 }
@@ -126,7 +130,16 @@ pub(super) fn parse(copied: &CopiedItem) -> Result<Item, ParseError> {
     let mut item = read_header(&header, copied.language(), labels)?;
 
     let recognized: Vec<Recognized<'_>> = sections.map(|lines| recognize(lines, labels)).collect();
-    for section in resolve_plain_sections(recognized, item.rarity) {
+    let sections = resolve_plain_sections(recognized, item.rarity);
+    // The advanced copy writes a header before each implicit and explicit modifier: such
+    // lines without one were copied without the details.
+    item.without_details = sections.iter().any(|section| {
+        matches!(
+            section,
+            Section::Explicit(_) | Section::Marked(_, ModifierKind::Implicit)
+        )
+    });
+    for section in sections {
         fill(&mut item, section, labels);
     }
     Ok(item)
@@ -190,6 +203,7 @@ fn read_header(lines: &[&str], language: Language, labels: &Labels) -> Result<It
         properties: Vec::new(),
         weapon: None,
         modifiers: Vec::new(),
+        without_details: false,
         warnings: Vec::new(),
     })
 }

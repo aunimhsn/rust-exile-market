@@ -48,6 +48,11 @@ empty-price = Son prix s'affichera ici.
 item-unreadable = Cet objet n'a pas pu être lu.
 item-unreadable-hint = Copiez-le de nouveau, ou copiez un autre objet.
 
+## Objet à modificateurs copié sans ses détails (les en-têtes « { … } » de la copie avancée)
+
+item-without-details = Cet objet a été copié sans ses détails.
+item-without-details-hint = Copiez-le de nouveau avec Ctrl + Alt + C.
+
 ## Téléchargement des prix
 
 # À la place de l'invitation à copier un objet, tant qu'aucun prix de la ligue n'est connu.

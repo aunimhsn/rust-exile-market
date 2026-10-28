@@ -249,9 +249,12 @@ impl ExileMarketApp {
             }
             return;
         };
-        let Ok(item) = shown.parsed() else {
-            UnreadableItem::new(&self.i18n).show(ui);
-            return;
+        let item = match shown.parsed() {
+            Ok(item) => item,
+            Err(error) => {
+                UnreadableItem::new(&self.i18n, error).show(ui);
+                return;
+            }
         };
         // The pill shows only when its link can be opened: the league and the search known.
         let tradable = self.session.tradable(item);
