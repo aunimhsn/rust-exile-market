@@ -725,17 +725,15 @@ mod tests {
         };
     }
 
-    /// The copied items of the parser tests (`src/item/test-items/`).
-    const TEST_ITEMS: [(&str, &str); 19] = [
+    /// The copied items of the parser tests (`src/item/test-items/`), but those it refuses,
+    /// copied without the advanced description.
+    const TEST_ITEMS: [(&str, &str); 16] = [
         test_item!("en-currency-uncut-gem.txt"),
         test_item!("en-magic-mace.txt"),
         test_item!("en-normal-helmet.txt"),
         test_item!("en-owner-unique-mace-fixed-values.txt"),
         test_item!("en-plain-currency-large-stack.txt"),
         test_item!("en-plain-magic-jewel-unidentified.txt"),
-        test_item!("en-plain-rare-ring-unidentified.txt"),
-        test_item!("en-plain-rare-ring.txt"),
-        test_item!("en-plain-unique-jewel.txt"),
         test_item!("en-rare-bow-fractured.txt"),
         test_item!("en-rare-crossbow-all-modifiers.txt"),
         test_item!("en-rare-wand-unidentified.txt"),
@@ -773,6 +771,6 @@ mod tests {
         }
 
         assert!(missing.is_empty(), "{missing:#?}");
-        assert!(found >= 65, "{found} lines");
+        assert!(found >= 59, "{found} lines");
     }
 }

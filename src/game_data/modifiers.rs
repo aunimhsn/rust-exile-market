@@ -120,14 +120,13 @@ impl ModifierTiers {
 /// `language` (the name its search looks for), its lines matched with their stats in
 /// `matches` ([`super::modifier_stats`]).
 ///
-/// None for a modifier the tables don't hold: an implicit, a rune, an enchantment, a line
-/// without stat, a base without tags; or whose values (and ranges, with the advanced copy) are
-/// in no tier: a modifier of the lords of the Abyss is desecrated, like some ordinary ones,
-/// and rolls its own range.
+/// None for a modifier the tables don't hold: an implicit, a rune, an enchantment, a modifier
+/// whose header doesn't tell its affix, a line without stat, a base without tags; or whose
+/// values and ranges are in no tier: a modifier of the lords of the Abyss is desecrated, like
+/// some ordinary ones, and rolls its own range.
 ///
-/// When several tiers hold the copied values (the plain copy gives no range), the best one is
-/// taken; when several modifiers hold them (a prefix and a suffix of rarity on a ring, in the
-/// plain copy), the first of the file.
+/// When several tiers hold the copied values (a line without number has no range), the best
+/// one is taken; when several modifiers hold them, the first of the file.
 #[must_use]
 pub fn modifier_tiers(
     language: Language,
@@ -135,29 +134,27 @@ pub fn modifier_tiers(
     modifier: &Modifier,
     matches: &[LineMatch<'_>],
 ) -> Option<ModifierTiers> {
-    let affixes: &[TableAffix] = match modifier.kind {
-        ModifierKind::Explicit(Some(Affix::Prefix)) => &[TableAffix::Prefix],
-        ModifierKind::Explicit(Some(Affix::Suffix)) => &[TableAffix::Suffix],
-        // The plain copy doesn't tell a prefix from a suffix.
-        ModifierKind::Explicit(None) => &[TableAffix::Prefix, TableAffix::Suffix],
+    let affix = match modifier.kind {
+        ModifierKind::Explicit(Some(Affix::Prefix)) => TableAffix::Prefix,
+        ModifierKind::Explicit(Some(Affix::Suffix)) => TableAffix::Suffix,
         _ => return None,
     };
     let tags = bases::tags(language, base_type)?;
     let copied = Copied::of(modifier, matches)?;
-    find(&TABLES, affixes, tags, &copied)
+    find(&TABLES, affix, tags, &copied)
 }
 
-/// The tiers of `copied` among `tables`, on a base with `tags`: those of the modifier, among
-/// `affixes`, that holds it best.
+/// The tiers of `copied` among `tables`, on a base with `tags`: those of the modifier of
+/// `affix` that holds it best.
 fn find(
     tables: &[Table],
-    affixes: &[TableAffix],
+    affix: TableAffix,
     tags: &[String],
     copied: &Copied<'_>,
 ) -> Option<ModifierTiers> {
     let mut best: Option<(Fit, ModifierTiers)> = None;
     for (index, table) in tables.iter().enumerate() {
-        if !affixes.contains(&table.affix) {
+        if table.affix != affix {
             continue;
         }
         let Some(order) = copied.order(&table.lines) else {
@@ -520,8 +517,8 @@ mod tests {
         );
     }
 
-    /// A modifier of `affix` with `lines`, copied without the advanced copy: the stats read the
-    /// numbers of the text, and the ranges of the advanced copy are in the rolls.
+    /// A modifier of `affix` with `lines`, without the ranges of the advanced copy: found by
+    /// the values the stats read in the text.
     fn modifier(affix: Option<Affix>, lines: &[&str]) -> Modifier {
         Modifier {
             kind: ModifierKind::Explicit(affix),
@@ -592,10 +589,13 @@ mod tests {
     fn a_modifier_outside_the_prefixes_and_suffixes_has_no_tiers() {
         let mut implicit = modifier(None, &["Loads an additional bolt"]);
         implicit.kind = ModifierKind::Implicit;
+        // A header the parser doesn't know tells no affix.
+        let unknown = modifier(None, &["Adds 10 to 273 Lightning Damage"]);
         let mut desecrated = modifier(Some(Affix::Prefix), &["Adds 10 to 273 Lightning Damage"]);
         desecrated.origin = Some(ModifierOrigin::Desecrated);
 
         assert_eq!(tiers("Gemini Crossbow", &implicit), None);
+        assert_eq!(tiers("Gemini Crossbow", &unknown), None);
         // A base the data doesn't know.
         assert_eq!(tiers("Unknown Crossbow", &desecrated), None);
         // An ordinary modifier desecrated is in the tables.
@@ -617,13 +617,8 @@ mod tests {
             ranges: None,
         };
         let number = |copied| {
-            find(
-                &tables,
-                &[TableAffix::Suffix],
-                &["weapon".to_owned()],
-                &copied,
-            )
-            .and_then(|tiers| Some(tiers.tier()?.number))
+            find(&tables, TableAffix::Suffix, &["weapon".to_owned()], &copied)
+                .and_then(|tiers| Some(tiers.tier()?.number))
         };
 
         // `Inherent Rage loss starts 1 second later` gives the 1000 milliseconds of the stat.
@@ -689,13 +684,8 @@ mod tests {
             ranges: None,
         };
 
-        let tiers = find(
-            &tables,
-            &[TableAffix::Prefix],
-            &["weapon".to_owned()],
-            &copied,
-        )
-        .expect("its tiers");
+        let tiers =
+            find(&tables, TableAffix::Prefix, &["weapon".to_owned()], &copied).expect("its tiers");
 
         // The first table holds the copied values, its lines put in the copied order; the
         // second, its own lines in the copied order, holds neither 15 in 1–5 nor 3 in 10–20.

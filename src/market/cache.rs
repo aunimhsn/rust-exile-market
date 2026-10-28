@@ -9,7 +9,7 @@ use crate::logging;
 use crate::prices::PriceList;
 
 /// Changed with the shape of [`PriceList`]: a file of another version is downloaded again.
-const VERSION: u32 = 4;
+const VERSION: u32 = 5;
 
 /// The files of the cache.
 pub struct PriceCache {

@@ -13,7 +13,6 @@ use super::widgets;
 use crate::filters::Filters;
 use crate::i18n::{Message, NumberTag, Requirement, Translator};
 use crate::item::{DamageKind, Item, ItemState, Rarity};
-use crate::prices::UniqueModifiers;
 use crate::roll_difference::CopiedLines;
 use crate::tier_rolls::TierRolls;
 use crate::trade::stat_filters::LineStats;
@@ -163,8 +162,6 @@ pub struct ItemBlock<'a> {
     tradable: bool,
     /// The stats are unfolded.
     stats_open: bool,
-    /// The modifiers of the unique in the price database, the ranges of its rolls.
-    unique_modifiers: Option<&'a UniqueModifiers>,
     /// The base type its search looks for, a filter.
     base_type: Option<&'a str>,
     /// The filters of the search, as the player set them.
@@ -189,23 +186,15 @@ impl<'a> ItemBlock<'a> {
             i18n,
             tradable: false,
             stats_open: false,
-            unique_modifiers: None,
             base_type: None,
             filters,
         }
     }
 
-    /// Unfolds the stats, with the modifiers of the unique in the price database for the
-    /// ranges of an item copied without them, and the base type its search looks for.
+    /// Unfolds the stats, with the base type its search looks for.
     #[must_use]
-    pub fn stats(
-        mut self,
-        open: bool,
-        unique_modifiers: Option<&'a UniqueModifiers>,
-        base_type: Option<&'a str>,
-    ) -> Self {
+    pub fn stats(mut self, open: bool, base_type: Option<&'a str>) -> Self {
         self.stats_open = open;
-        self.unique_modifiers = unique_modifiers;
         self.base_type = base_type;
         self
     }
@@ -354,7 +343,6 @@ impl<'a> ItemBlock<'a> {
             self.lines,
             self.stats,
             self.tiers,
-            self.unique_modifiers,
             self.base_type,
         );
         if stats.is_empty() {

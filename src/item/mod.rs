@@ -129,8 +129,6 @@ pub struct Item {
     /// The damage and the speed of a weapon.
     weapon: Option<Weapon>,
     modifiers: Vec<Modifier>,
-    /// Whether its modifiers were copied without the advanced description.
-    without_details: bool,
     warnings: Vec<ParseWarning>,
 }
 
@@ -139,18 +137,13 @@ impl Item {
     ///
     /// # Errors
     ///
-    /// When the header of the item (rarity, base type) can't be read: the window then asks
-    /// to copy it again. The other parts that can't be read are [`Item::warnings`].
+    /// When the header of the item (rarity, base type) can't be read, or when its implicit or
+    /// explicit modifiers were copied without the `{ … }` headers of the advanced copy
+    /// (Ctrl+Alt+C), which give their tiers ([`ParseError::WithoutDetails`]; the runes and the
+    /// enchantments have no header in either copy): the window then asks to copy it again. The
+    /// other parts that can't be read are [`Item::warnings`].
     pub fn parse(copied: &CopiedItem) -> Result<Self, ParseError> {
         parser::parse(copied)
-    }
-
-    /// Whether its implicit or explicit modifiers were copied without the `{ … }` headers of
-    /// the advanced copy (Ctrl+Alt+C), which give their tiers. The runes and the enchantments
-    /// have no header in either copy.
-    #[must_use]
-    pub fn copied_without_details(&self) -> bool {
-        self.without_details
     }
 
     /// The parts of the item that couldn't be read, and that are missing from it.
