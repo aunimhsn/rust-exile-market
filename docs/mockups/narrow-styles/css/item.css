@@ -172,3 +172,26 @@
   padding: 0 5px; border-radius: var(--radius); background: var(--control); color: var(--weak);
   font-size: 11px; font-weight: 600;
 }
+
+/* A state tag that is a filter (13k2d): it can be clicked, and says so under the pointer, without any
+   border. Gray at start, like a plain tag in weak gray: the offers with or without that state. Lit
+   (`is-on`, after a click): the offers of that state only, its text in the light color of the state on
+   a dark background of the same hue. */
+.app-state-tag { position: relative; display: inline-flex; align-items: center; cursor: pointer; color: var(--weak); transition: background .15s, color .15s; }
+.app-state-corrupted { --state: var(--state-corrupted); --state-bg: var(--state-corrupted-bg); --state-bg-hover: var(--state-corrupted-bg-hover); }
+.app-state-fractured { --state: var(--state-fractured); --state-bg: var(--state-fractured-bg); --state-bg-hover: var(--state-fractured-bg-hover); }
+.app-state-sanctified { --state: var(--state-sanctified); --state-bg: var(--state-sanctified-bg); --state-bg-hover: var(--state-sanctified-bg-hover); }
+.app-state-mirrored { --state: var(--state-mirrored); --state-bg: var(--state-mirrored-bg); --state-bg-hover: var(--state-mirrored-bg-hover); }
+.app-state-tag.is-on { color: var(--state); background: var(--state-bg); }
+.app-state-tag .app-tip { top: calc(100% + 6px); left: 0; right: auto; }
+.app-state-tag:hover .app-tip, .app-state-tag.is-hovered .app-tip { display: block; }
+
+/* Under the pointer (owner's choice, 2026-10-28): a gray tag takes the background of the pills and offer
+   rows and its text one step brighter; a lit one its lighter background. */
+.app-state-tag:is(:hover, .is-hovered) { background: var(--control-line); color: var(--text); }
+.app-state-tag.is-on:is(:hover, .is-hovered) { background: var(--state-bg-hover); color: var(--state); }
+
+/* The Vaal modifier of a corrupted unique (mutated), its origin in the corrupted red. */
+.app-origin-mutated { --origin: var(--mutated); }
+/* The Runic Ward of a runeforged base, its label in a sky blue of its own. */
+.props span.app-ward { color: var(--ward); }

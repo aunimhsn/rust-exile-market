@@ -20,6 +20,29 @@
   --desecrated: #3fbf4f;
   --fractured: #c9ad7a;
   --crafted: #7cc7d9;
+  /* The states of an item as filters (13k2d), lit: the text in a light color of the state on a dark
+     background of the same hue (owner, 2026-10-28), like the Corrupted tag of today, whose background
+     is that of the hardcore leagues; each background a little lighter under the pointer. The light red
+     of Corrupted, the gold of the fractured lines, a pale gold for the sanctified items and a silver blue
+     for the mirrored ones; the backgrounds of the other states take the lightness and the saturation of
+     the red one; to tune by eye. */
+  --state-corrupted: #ff6b5e;
+  --state-corrupted-bg: #351417;
+  --state-corrupted-bg-hover: #4a1b20;
+  --state-fractured: var(--fractured);
+  --state-fractured-bg: #352914;
+  --state-fractured-bg-hover: #4a391b;
+  --state-sanctified: #ecd98a;
+  --state-sanctified-bg: #352f14;
+  --state-sanctified-bg-hover: #4a411b;
+  --state-mirrored: #a9c6ff;
+  --state-mirrored-bg: #141f35;
+  --state-mirrored-bg-hover: #1b2b4a;
+  /* The Vaal modifier of a unique (mutated) in the corrupted red. */
+  --mutated: #e0423a;
+  /* The Runic Ward of a runeforged base: a defence without attribute, in a sky blue of its own (owner,
+     2026-10-28); to tune by eye. */
+  --ward: #8acbf6;
   --rise: #5fcf80;
   --fall: #e66a5c;
 }
