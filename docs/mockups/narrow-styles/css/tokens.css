@@ -14,6 +14,11 @@
   --rarity-gem: #1ba29b;
   --mod: #8f8fff;
   --corrupted: #e0423a;
+  /* The origin of a modifier (13k1): the green of the desecrated lines, the gold of the fractured ones,
+     a cyan for the crafted ones, close to the game. */
+  --desecrated: #7fd68a;
+  --fractured: #c9ad7a;
+  --crafted: #7cc7d9;
   --rise: #5fcf80;
   --fall: #e66a5c;
 }

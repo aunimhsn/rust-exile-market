@@ -1,0 +1,39 @@
+/* The open decisions of step 13k1 (section Endgame modifiers), one variant group each in VARIANTS
+   (js/base.js); once decided, the choice moves to item.css and the other variants go. */
+
+/* The origin of a desecrated, fractured or crafted modifier. */
+.app-origin-desecrated { --origin: var(--desecrated); }
+.app-origin-fractured { --origin: var(--fractured); }
+.app-origin-crafted { --origin: var(--crafted); }
+/* "Word": its origin written after the range of its tier, in its color. */
+.app-origin { display: none; margin-left: 6px; font-weight: 600; color: var(--origin); }
+[data-origin="word"] .app-origin { display: inline; }
+/* "Color": its text in its color, in place of the blue of the modifiers. */
+[data-origin="color"] [class*="app-origin-"] .text { color: var(--origin); }
+/* "Stripe": a thin line of its color in the left margin, like the colored row of the game. */
+[data-origin="stripe"] [class*="app-origin-"] { position: relative; }
+[data-origin="stripe"] [class*="app-origin-"]::before {
+  content: ""; position: absolute; left: -9px; top: 2px; bottom: 2px; width: 2px; border-radius: 1px; background: var(--origin);
+}
+
+/* A modifier not revealed yet: a line without filter. */
+.app-unrevealed .text { font-style: italic; }
+[data-unrevealed="faint"] .app-unrevealed .text { color: var(--faint); }
+[data-unrevealed="colored"] .app-unrevealed .text { color: var(--desecrated); }
+
+/* A modifier of one tier only: no tier, or its T1 in gray. */
+.app-single { display: none; }
+[data-single="gray"] .app-single { display: inline-block; color: var(--faint); }
+
+/* A line of a Time-Lost jewel: the whole line, or a short tag in place of its first words. */
+.app-radius-short {
+  display: none; margin-right: 6px; padding: 0 5px; border-radius: var(--radius);
+  background: var(--control); color: var(--weak); font-size: 11px; font-weight: 600;
+}
+[data-radius="short"] .app-radius-short { display: inline-block; }
+[data-radius="short"] .app-radius-full { display: none; }
+
+/* The quality of a catalyst: its kind in words, or short. */
+.app-cat-short { display: none; }
+[data-catalyst="short"] .app-cat-short { display: inline; }
+[data-catalyst="short"] .app-cat-full { display: none; }

@@ -36,6 +36,7 @@
 - For a desktop application, decide in the first wireframes whether the window keeps the title bar of the system or draws its own, and draw its buttons from the start.
 - The VS Code Excalidraw extension doesn't reload a file changed on disk: before rewriting a wireframe the owner has open, ask them to save it and close its tab, and commit their version first.
 - A mock-up is split into small files (the shared styles and scripts, one style sheet and one script per block, one script per section), so that a change reads only what it needs.
+- A new section of the mock-up goes at the top of the page, so that the owner finds it at once.
 - Once approved, the mock-up (its page and its folder) is the single source of truth of the interface. A design change goes into the mock-up first, then into `specs.md` and into the code when that part is already coded. The wireframe only fixed the first layout and isn't kept up to date.
 - Check a visual change with a few screenshots, of the window concerned only, and delete them once looked at: they are for this check, not for the owner, who looks at the mock-up and the application themselves.
 

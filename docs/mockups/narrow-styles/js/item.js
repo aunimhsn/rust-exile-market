@@ -8,10 +8,13 @@ const propClass = name => ({ Armour: "attr-str", Evasion: "attr-dex", "Energy Sh
 // The bar of a rare or magic modifier over every tier of its base (13j2): filled to where the roll
 // falls between the lowest roll of its worst tier and the highest of tier 1 (`overTiers` of the section
 // Roll bar), so that a full bar means close to the best possible.
+// The origin of a modifier in words (13k1), in English; `row.originLabel` for another language.
+const ORIGIN_LABEL = { desecrated: "Desecrated", fractured: "Fractured", crafted: "Crafted" };
 const rareBar = o => `<span class="bar"><i style="width:${(o.share * 100).toFixed(1)}%"></i></span>`;
 
 function item(it, unfolded = false) {
-  const tagClass = t => /^Corrupt|^Corrompu/.test(t) ? "corrupted" : /^\d+ T1$/.test(t) ? "t1" : "";
+  // Corrupted once or twice, as in the application.
+  const tagClass = t => /Corrupt|Corrompu|Double corruption/.test(t) ? "corrupted" : /^\d+ T1$/.test(t) ? "t1" : "";
   const tags = (it.tags || []).map(t => `<span class="tag ${tagClass(t)}">${t}</span>`).join("");
   const filters = it.filters ? `<span class="filters">${it.filters}</span>` : "";
   // "Show 6 stats" when folded, "Hide stats" when unfolded; French when the label is French.
@@ -32,7 +35,10 @@ function item(it, unfolded = false) {
       if (row.group) return `<div class="stats-group"><span>${row.group}${row.fill ? ` <em>${row.fill}</em>` : ""}</span>${row.min ? "<span>min – max</span>" : ""}</div>`;
       if (row.prop) return `<div class="prop"><span>${row.prop[0]}:</span> ${row.prop[1]}</div>`;
       // A class of its own, e.g. the variant of an open decision it belongs to.
-      const cls = row.cls ? ` ${row.cls}` : "";
+      // `row.origin`: a desecrated, fractured or crafted modifier (13k1), drawn as the variant `origin` says.
+      const cls = (row.cls ? ` ${row.cls}` : "") + (row.origin ? ` app-origin-${row.origin}` : "");
+      // A modifier not revealed yet (13k1): a line without filter, drawn as the variant `unrevealed` says.
+      if (row.unrevealed) return `<div class="mod2 wide app-unrevealed${cls}"><span class="text">${row.unrevealed}</span></div>`;
       if (row.note) return `<div class="note${cls}">${row.note}</div>`;
       // The tier and the ranges of a hybrid modifier, under all its lines: it reads as one modifier.
       if (row.rollOnly) return `<div class="mod2 min-top"><span></span><div class="roll2" style="grid-column: 2"><span class="range"><span class="tier t${row.tier}">T${row.tier}</span>${row.range}</span></div></div>`;
@@ -43,7 +49,15 @@ function item(it, unfolded = false) {
       // warning color, with its tooltip (`row.warning`); `row.hover` shows it open.
       const warning = row.warning ? `<span class="app-warning${row.hover ? " is-hovered" : ""}">${ICON.forbid(15)}<span class="app-tip">${row.warning}</span></span>` : "";
       const box = warning || (row.check === undefined ? "" : `<span class="check ${row.check ? "on" : ""}">${row.check ? ICON.check(11) : ""}</span>`);
-      const tier = row.tier ? `<span class="tier ${row.tier <= 3 ? "tier-top" : ""} t${row.tier}">T${row.tier}</span>` : "";
+      // A modifier of one tier only (`row.single`, 13k1: jewels, lords of the Abyss, waystones): its T1 says
+      // "the only one", not "the best"; shown or not as the variant `single` says.
+      const tier = row.single ? `<span class="tier app-single">T1</span>`
+        : row.tier ? `<span class="tier ${row.tier <= 3 ? "tier-top" : ""} t${row.tier}">T${row.tier}</span>` : "";
+      // The origin in words after the range (variant `origin` "word"); hidden in the other variants.
+      const origin = row.origin ? `<span class="app-origin">${row.originLabel || ORIGIN_LABEL[row.origin]}</span>` : "";
+      // A line of a Time-Lost jewel (`row.radius`: the words before it, and its short tag), as the
+      // variant `radius` says.
+      const mod = row.radius ? `<span class="app-radius-full">${row.radius[0]} </span><span class="app-radius-short">${row.radius[1]}</span>${row.mod}` : row.mod;
       // The bar: filled to where the roll falls in its range, also on a line better lower, so that it
       // reads with the range written next to it.
       // A rare or magic modifier with the modifier tables (`row.over`, 13j2): its bar over every tier of
@@ -72,11 +86,11 @@ function item(it, unfolded = false) {
       const half = (value, name) => `<input value="${value ?? ""}" inputmode="decimal" aria-label="${name}">`;
       const hovered = row.hover ? " is-hovered" : "";
       const fields = row.min === undefined ? "" : `<span class="input app-range${hovered}">${half(low, "Minimum")}<i>–</i>${half(row.max, "Maximum")}<span class="app-tip">${fieldTip}</span></span>`;
-      const plain = row.mod.replace(/<br>/g, " ").replace(/<[^>]+>/g, "");
+      const plain = row.plain ?? mod.replace(/<br>/g, " ").replace(/<[^>]+>/g, "");
       const tip = row.tip ? `${plain}\n${row.tip}` : plain;
-      const text = `<span class="text" title="${tip.replace(/"/g, "&quot;")}">${row.mod}</span>`;
+      const text = `<span class="text" title="${tip.replace(/"/g, "&quot;")}">${mod}</span>`;
       if (box) {
-        const rollTop = row.range ? `<div class="roll2">${bar}<span class="range">${tier}${row.range}</span></div>`
+        const rollTop = row.range ? `<div class="roll2">${bar}<span class="range">${tier}${row.range}${origin}</span></div>`
           : bar ? `<div class="roll2">${bar}</div>` : "";
         return `<div class="mod2 min-top${row.wide ? " app-wide" : ""}${cls}">${box}${text}${fields || "<span></span>"}${rollTop}</div>`;
       }
