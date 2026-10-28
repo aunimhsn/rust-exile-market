@@ -2,9 +2,8 @@
 // owner copied on 2026-10-28 (English and French). Open decisions, one group of tabs each, their windows
 // first:
 // - Time-Lost: the lines of a Time-Lost jewel, whole or with a short tag in place of their first words;
-// - Catalyst quality: the quality of a ring or an amulet given by a catalyst, with its kind;
-// - Desecrated green: the green of the game, of the evasion, or a softer one.
-// Decided with the owner on 2026-10-28: the origin of a desecrated, fractured or crafted modifier written
+// - Catalyst quality: the quality of a ring or an amulet given by a catalyst, with its kind.
+// Decided with the owner on 2026-10-28: the green of the evasion for the desecrated modifiers; the origin of a desecrated, fractured or crafted modifier written
 // after its range; a desecrated modifier not revealed yet, a line without filter on a green band, the item
 // getting a filter of its number of unrevealed modifiers and its other filters unchecked, like Exiled
 // Exchange 2; a modifier of one tier only (every modifier of a jewel, of a lord of the Abyss, of a

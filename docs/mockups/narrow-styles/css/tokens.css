@@ -14,9 +14,10 @@
   --rarity-gem: #1ba29b;
   --mod: #8f8fff;
   --corrupted: #e0423a;
-  /* The origin of a modifier (13k1): the green of the desecrated lines, the gold of the fractured ones,
-     a cyan for the crafted ones, close to the game. */
-  --desecrated: #7fd68a;
+  /* The origin of a modifier (13k1): for the desecrated lines, the green of the evasion and the
+     dexterity (chosen by the owner on 2026-10-28, against the green of the game and a softer one); the
+     gold of the fractured ones and a cyan for the crafted ones, close to the game. */
+  --desecrated: #3fbf4f;
   --fractured: #c9ad7a;
   --crafted: #7cc7d9;
   --rise: #5fcf80;
