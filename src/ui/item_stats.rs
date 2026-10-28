@@ -1161,16 +1161,18 @@ fn share(value: f64, range: Range) -> f64 {
     ((value - range.min) / (range.max - range.min)).clamp(0.0, 1.0)
 }
 
-/// The ranges of a stat, e.g. `40–60`, or `8–12 · 16–22` for several rolls.
+/// The ranges of a stat, e.g. `40–60`, or `8–12 · 16–22` for several rolls; a range of one
+/// value as one number, as the game writes it (`29(30)%` of a sanctified item).
 fn ranges_text(ranges: &[Range]) -> String {
     ranges
         .iter()
         .map(|range| {
-            format!(
-                "{}–{}",
-                format::number(range.min),
-                format::number(range.max)
-            )
+            let (min, max) = (format::number(range.min), format::number(range.max));
+            if min == max {
+                min
+            } else {
+                format!("{min}–{max}")
+            }
         })
         .collect::<Vec<_>>()
         .join(RANGE_SEPARATOR)
@@ -2364,6 +2366,66 @@ mod tests {
              Item Level: 80\n--------\n{ Prefix Modifier }\n+80 to maximum Life",
         );
         assert_eq!(sockets(&none), None);
+    }
+
+    #[test]
+    fn a_sanctified_item_keeps_its_values_out_of_their_tier() {
+        for text in [
+            include_str!("../item/test-items/en-owner-rare-sceptre-sanctified.txt"),
+            include_str!("../item/test-items/fr-rare-sceptre-sanctified.txt"),
+        ] {
+            let rows = texts(&parse(text));
+            let line = |end: &str| {
+                rows.iter()
+                    .find(|row| row.ends_with(end))
+                    .unwrap_or_else(|| panic!("{end}: {rows:#?}"))
+                    .clone()
+            };
+
+            // `+74(80-89) to maximum Mana`: its tier, its value under its range.
+            assert!(line(" ≥67 [0.42 T5 80–89]").starts_with("□ +74 "));
+            // `29(30)% reduced Attribute Requirements`, a range of one value.
+            assert!(line(" ≥26 [0.70 T2 30]").starts_with("■ 29% "));
+        }
+    }
+
+    #[test]
+    fn a_sanctified_value_above_every_tier_keeps_its_field_and_a_full_bar() {
+        let text = include_str!("../item/test-items/en-owner-rare-sceptre-sanctified.txt")
+            .replace("+74(80-89)", "+250(80-89)");
+        let item = parse(&text);
+
+        assert!(
+            texts(&item).contains(&"□ +250 to maximum Mana ≥225 [1.00 T5 80–89]".to_owned()),
+            "{:#?}",
+            texts(&item)
+        );
+        let limit = rows(&item)
+            .into_iter()
+            .find_map(|row| match row {
+                Row::Stat(Stat {
+                    text: StatText::Line("+250 to maximum Mana"),
+                    filter,
+                    ..
+                }) => filter?.limit,
+                _ => None,
+            })
+            .expect("its limit");
+        // The field holds the value, above the 164 of tier 1; the tooltip tells the rolls.
+        assert_eq!(
+            limit.bounds,
+            Some(Range {
+                min: 10.0,
+                max: 250.0
+            })
+        );
+        assert_eq!(
+            limit.rolls,
+            Some(Range {
+                min: 10.0,
+                max: 164.0
+            })
+        );
     }
 
     #[test]

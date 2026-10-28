@@ -591,6 +591,40 @@ mod tests {
         assert_eq!(found.stat.trade_ids(TradeGroup::Explicit).len(), 2);
     }
 
+    /// The English stats of Exiled Exchange 2 hold the rarity of the items found with that of
+    /// a map (`explicit.stat_2306002879`, "#% increased Rarity of Items found in Map" on the
+    /// trade site, checked on 2026-10-28), the French ones apart: an equipment searches its line
+    /// with both ids in English (either of them), one in French, and finds the same offers,
+    /// since no equipment rolls the rarity of a map.
+    #[test]
+    fn the_rarity_of_the_items_found_has_the_id_of_a_map_too_in_english() {
+        let ids = |language, line| {
+            stat(language, &explicit(&[line]))
+                .stat
+                .trade_ids(TradeGroup::Explicit)
+                .to_vec()
+        };
+
+        assert_eq!(
+            ids(Language::English, "16% increased Rarity of Items found"),
+            ["explicit.stat_3917489142", "explicit.stat_2306002879"]
+        );
+        assert_eq!(
+            ids(
+                Language::French,
+                "16% d'Augmentation de la Rareté des Objets cédés"
+            ),
+            ["explicit.stat_3917489142"]
+        );
+        assert_eq!(
+            ids(
+                Language::French,
+                "30% d'Augmentation de la Rareté des Objets trouvés dans la Carte"
+            ),
+            ["explicit.stat_2306002879"]
+        );
+    }
+
     #[test]
     fn a_line_the_game_data_doesnt_know_is_found_on_the_trade_site() {
         let trade = trade_stats();

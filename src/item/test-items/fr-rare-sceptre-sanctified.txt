@@ -1,0 +1,27 @@
+Classe d'objet: Sceptres
+Rareté: Rare
+ Glas entropique
+Sceptre cliquetant
+--------
+Esprit: 100
+--------
+Prérequis : Niveau 60
+--------
+Niveau de l'objet: 79
+--------
+Octroie l'Aptitude: Niveau 17 Invocation de Guerriers squlettiques
+--------
+{ Préfixe : « Électrocutant » (Palier : 1) — Dégâts, Élémentaire, Foudre, Attaque }
+Les Attaques des Alliés en votre Présence infligent 4(1-4) à 60(60-71) Dégâts de Foudre supplémentaires
+{ Préfixe : « Opalescent » (Palier : 5) — Mana }
++74(80-89) de Mana maximal
+{ Artisanat Préfixe : « Motivant » (Palier : 3) — Dégâts }
+Les Alliés en votre Présence ont 82(75-89)% d'Augmentation de Dégâts
+{ Suffixe : « du Qualifié » (Palier : 2) }
+29(30)% de Réduction du prérequis d'Attributs
+{ Suffixe : « de l'Envergure » (Palier : 3) — Aura }
+Votre Présence a 50(46-55)% d'Augmentation de Zone d'effet
+{ Suffixe : « du Cryptage » }
+Suffixe profané
+--------
+Sanctifié

@@ -48,11 +48,6 @@ empty-price = The price shows up here.
 item-unreadable = This item couldn't be read.
 item-unreadable-hint = Copy it again, or copy another item.
 
-## Item with modifiers copied without their details (the "{ … }" headers of the advanced copy)
-
-item-without-details = This item was copied without its details.
-item-without-details-hint = Copy it again with Ctrl + Alt + C.
-
 ## Download of the prices
 
 # In place of the invitation to copy an item, while no price of the league is known.

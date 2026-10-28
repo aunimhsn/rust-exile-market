@@ -35,7 +35,7 @@ impl ShownItem {
     /// its items, once it gave them.
     fn new(copied: &CopiedItem, trade: Option<&TradeStats>, names: Option<&ItemNames>) -> Self {
         // The parser refuses an item without the details, the tiers of its modifiers missing:
-        // the window asks to copy it again.
+        // the window shows the message of an item that can't be read.
         let parsed = Item::parse(copied);
         match &parsed {
             Ok(item) => {
@@ -45,7 +45,7 @@ impl ShownItem {
                 }
             }
             Err(ParseError::WithoutDetails) => {
-                log::info!("A copied item has no advanced description: it is asked again");
+                log::info!("A copied item has no advanced description: it can't be read");
             }
             Err(error) => log::warn!("A copied item couldn't be read: {error}"),
         }

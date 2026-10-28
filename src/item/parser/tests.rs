@@ -18,7 +18,9 @@ const FR_CURRENCY_STACK: &str = test_item!("fr-currency-stack.txt");
 const FR_NORMAL_EXCEPTIONAL_SHIELD: &str = test_item!("fr-normal-exceptional-shield.txt");
 const FR_UNIQUE_MACE_FIXED_VALUES: &str = test_item!("fr-unique-mace-fixed-values.txt");
 const FR_MAGIC_MANA_FLASK: &str = test_item!("fr-magic-mana-flask.txt");
+const FR_RARE_SCEPTRE_SANCTIFIED: &str = test_item!("fr-rare-sceptre-sanctified.txt");
 const EN_UNIQUE_MACE_FIXED_VALUES: &str = test_item!("en-owner-unique-mace-fixed-values.txt");
+const EN_RARE_SCEPTRE_SANCTIFIED: &str = test_item!("en-owner-rare-sceptre-sanctified.txt");
 const EN_RARE_CROSSBOW: &str = test_item!("en-rare-crossbow-all-modifiers.txt");
 const EN_RARE_BOW_FRACTURED: &str = test_item!("en-rare-bow-fractured.txt");
 const EN_RARE_WAND_UNIDENTIFIED: &str = test_item!("en-rare-wand-unidentified.txt");
@@ -32,7 +34,7 @@ const EN_PLAIN_UNIQUE_JEWEL: &str = test_item!("en-plain-unique-jewel.txt");
 const EN_PLAIN_MAGIC_JEWEL_UNIDENTIFIED: &str = test_item!("en-plain-magic-jewel-unidentified.txt");
 const EN_PLAIN_CURRENCY_LARGE_STACK: &str = test_item!("en-plain-currency-large-stack.txt");
 
-const ALL: [&str; 20] = [
+const ALL: [&str; 22] = [
     FR_RARE_STAFF,
     FR_RARE_BODY_ARMOUR,
     FR_UNIQUE_CROSSBOW,
@@ -40,7 +42,9 @@ const ALL: [&str; 20] = [
     FR_NORMAL_EXCEPTIONAL_SHIELD,
     FR_UNIQUE_MACE_FIXED_VALUES,
     FR_MAGIC_MANA_FLASK,
+    FR_RARE_SCEPTRE_SANCTIFIED,
     EN_UNIQUE_MACE_FIXED_VALUES,
+    EN_RARE_SCEPTRE_SANCTIFIED,
     EN_RARE_CROSSBOW,
     EN_RARE_BOW_FRACTURED,
     EN_RARE_WAND_UNIDENTIFIED,
@@ -178,6 +182,31 @@ fn reads_a_french_rare_body_armour() {
     assert_eq!(regeneration.rolls, [roll(24.7, 23.1, 29.0)]);
     // A range written from the best value: the lowest comes first.
     assert_eq!(first_line(explicit[4]).rolls, [roll(41.0, 41.0, 45.0)]);
+}
+
+#[test]
+fn reads_a_sanctified_item_and_a_range_of_one_value() {
+    for (text, requirements) in [
+        (
+            EN_RARE_SCEPTRE_SANCTIFIED,
+            "29% reduced Attribute Requirements",
+        ),
+        (
+            FR_RARE_SCEPTRE_SANCTIFIED,
+            "29% de Réduction du prérequis d'Attributs",
+        ),
+    ] {
+        let item = item(text);
+        assert!(item.has_state(ItemState::Sanctified));
+
+        let explicit = explicit(&item);
+        // A value out of the range of its tier, as the game writes it.
+        assert_eq!(first_line(explicit[1]).rolls, [roll(74.0, 80.0, 89.0)]);
+        // `29(30)%`: the range of one value is taken out of the text.
+        let line = first_line(explicit[3]);
+        assert_eq!(line.text, requirements);
+        assert_eq!(line.rolls, [roll(29.0, 30.0, 30.0)]);
+    }
 }
 
 #[test]
