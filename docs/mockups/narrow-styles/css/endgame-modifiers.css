@@ -1,6 +1,10 @@
 /* The open decisions of step 13k1 (section Endgame modifiers), one variant group each in VARIANTS
    (js/base.js); once decided, the choice moves to item.css and the other variants go. */
 
+/* The green of the desecrated modifiers: the one of the scrambled letters of the game, measured on the
+   owner's screenshot (the brighter half of their pixels), or the softer green of the tokens. */
+[data-green="game"] { --desecrated: #acde06; }
+
 /* The origin of a desecrated, fractured or crafted modifier. */
 .app-origin-desecrated { --origin: var(--desecrated); }
 .app-origin-fractured { --origin: var(--fractured); }
