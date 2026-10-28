@@ -61,11 +61,8 @@ impl ShownItem {
         if let Ok(item) = &self.parsed {
             self.stats = LineStats::new(item.language(), item.modifiers(), trade);
             self.lines = CopiedLines::new(item.language(), item.modifiers(), &self.stats, trade);
-            let base_type = match link::target(item, names, None) {
-                Some(TradeTarget::Base { base_type }) => Some(base_type),
-                _ => None,
-            };
-            self.tiers = TierRolls::new(item.language(), item.modifiers(), &self.stats, base_type);
+            let base_type = link::target(item, names, None).and_then(|target| target.base_type());
+            self.tiers = TierRolls::new(item.language(), item.modifiers(), base_type);
         }
     }
 
@@ -354,12 +351,7 @@ impl Session {
         if !item.rarity().has_item_filters() {
             return None;
         }
-        match self.trade_target(item)? {
-            TradeTarget::Base { base_type } => Some(base_type),
-            TradeTarget::Unique { .. }
-            | TradeTarget::UnidentifiedUnique { .. }
-            | TradeTarget::Exchange { .. } => None,
-        }
+        self.trade_target(item)?.base_type()
     }
 
     /// The search for `item` on the trade site with its `filters`, in the league shown; none
@@ -879,6 +871,25 @@ mod tests {
             "Item Class: Rings\nRarity: Unique\nAndvarius\nGold Ring",
         );
         assert_eq!(base_type(&session), None);
+    }
+
+    #[test]
+    fn a_magic_item_gets_the_rolls_of_every_tier_once_the_names_tell_its_base() {
+        const MACE: &str = include_str!("item/test-items/en-magic-mace.txt");
+        let mut session = session();
+        // Its strength: its added lightning damage rolls a range no tier has since a patch.
+        let strength = |session: &Session| {
+            let key = crate::filters::StatKey {
+                modifier: 1,
+                line: 0,
+            };
+            session.item()?.tiers().get(key).cloned()
+        };
+
+        copy(&mut session, MACE);
+        assert_eq!(strength(&session), None, "the names aren't known yet");
+        session.apply_item_names(crate::item_names::tests::item_names());
+        assert!(strength(&session).is_some_and(|rolls| rolls.tiers.is_some()));
     }
 
     #[test]

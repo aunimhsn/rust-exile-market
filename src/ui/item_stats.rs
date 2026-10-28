@@ -36,7 +36,7 @@ use crate::i18n::{Message, Translator};
 use crate::item::{Affix, Item, Modifier, ModifierKind, Range, Rarity, StatLine};
 use crate::prices::UniqueModifiers;
 use crate::roll_difference::CopiedLines;
-use crate::tier_rolls::{LineRolls, TierRolls};
+use crate::tier_rolls::{TierRolls, TierSpan};
 use crate::trade::pseudo::{Pseudo, PseudoTotal};
 use crate::trade::stat_filters::{LineStat, LineStats};
 use crate::{format, rolls};
@@ -135,8 +135,16 @@ enum Roll {
     /// reads as one modifier.
     Affix {
         share: Option<f32>,
-        tier: Option<(u32, Vec<Range>)>,
+        tier: Option<ModifierTier>,
     },
+}
+
+/// The tier of a prefix or suffix, written by the advanced copy, and the ranges of that tier.
+#[derive(Debug, Clone, PartialEq)]
+struct ModifierTier {
+    /// 1 is the best.
+    number: u32,
+    ranges: Vec<Range>,
 }
 
 /// How the bar of a roll is drawn: a setting from step 18, which adds the zone searched.
@@ -166,9 +174,9 @@ struct Limit {
     /// The rolls the tooltip of the field tells: the range of today of a line with one
     /// number; the field of a line with several holds their average, not a roll.
     rolls: Option<Range>,
-    /// The tiers of the lowest and of the highest of `rolls`, for a prefix or a suffix:
-    /// "Rolls 10 T13 to 214 T1".
-    tiers: Option<(u32, u32)>,
+    /// The tiers of the lowest and of the highest of `rolls`, for a prefix or a suffix, which
+    /// the tooltip writes under them: "T13–T1".
+    tiers: Option<TierSpan>,
 }
 
 impl Limit {
@@ -836,7 +844,7 @@ fn affix_stats<'a>(item: &'a Item, affix: Option<Affix>, reading: &Reading<'_>) 
     let line_varies = |modifier: usize, (line, text): (usize, &StatLine)| {
         let key = StatKey { modifier, line };
         let counted = reading.counted(key, text);
-        affix_varies(&counted, over_tiers(key, &counted, reading))
+        affix_varies(&counted, over_tiers(key, &counted, reading).as_ref())
     };
     modifiers.sort_by_key(|&(index, modifier)| {
         !modifier
@@ -858,14 +866,14 @@ fn affix_stats<'a>(item: &'a Item, affix: Option<Affix>, reading: &Reading<'_>) 
                         modifier: index,
                         line: line_index,
                     };
-                    let tier = modifier.tier.filter(|_| line_index == last).map(|tier| {
+                    let tier = modifier.tier.filter(|_| line_index == last).map(|number| {
                         let ranges = modifier
                             .lines
                             .iter()
                             .flat_map(|line| magnitudes(line, &copied_ranges(line)))
                             .map(|(_, range)| range)
                             .collect();
-                        (tier, ranges)
+                        ModifierTier { number, ranges }
                     });
                     affix_stat(key, line, tier, reading)
                 })
@@ -883,30 +891,28 @@ fn affix_stats<'a>(item: &'a Item, affix: Option<Affix>, reading: &Reading<'_>) 
 fn affix_stat<'a>(
     key: StatKey,
     line: &'a StatLine,
-    tier: Option<(u32, Vec<Range>)>,
+    tier: Option<ModifierTier>,
     reading: &Reading<'_>,
 ) -> Stat<'a> {
     let counted = reading.counted(key, line);
     let over = over_tiers(key, &counted, reading);
-    let ranges: Option<Vec<Option<Range>>> =
-        over.map(|over| over.ranges.iter().copied().map(Some).collect());
     let mut filter = comparable_filter(
         &counted,
-        ranges
-            .as_deref()
-            .and_then(|ranges| bounds(&counted, ranges)),
-        affix_varies(&counted, over),
+        over.as_ref()
+            .and_then(|over| bounds(&counted, &over.ranges)),
+        affix_varies(&counted, over.as_ref()),
         reading.half(key),
         reading.checked(key),
     );
     if let Some(limit) = &mut filter.limit {
         limit.tiers = over
+            .as_ref()
             .and_then(|over| over.tiers)
             .filter(|_| limit.rolls.is_some());
     }
-    let share = ranges
-        .as_deref()
-        .and_then(|ranges| varying_share(&magnitudes(&counted, ranges)));
+    let share = over
+        .as_ref()
+        .and_then(|over| varying_share(&magnitudes(&counted, &over.ranges)));
     Stat {
         key: FilterKey::Stat(key),
         text: StatText::Line(&line.text),
@@ -916,26 +922,38 @@ fn affix_stat<'a>(
     }
 }
 
+/// The rolls of a line over every tier of its modifier, for the numbers its stat counts.
+struct OverTiers {
+    /// For each number of the line its stat counts, its range over every tier.
+    ranges: Vec<Option<Range>>,
+    tiers: Option<TierSpan>,
+}
+
 /// The rolls over every tier of the line `key`, `counted` the numbers its stat counts; none
 /// when the modifier tables don't know them.
-fn over_tiers<'r>(
-    key: StatKey,
-    counted: &StatLine,
-    reading: &Reading<'r>,
-) -> Option<&'r LineRolls> {
-    reading
-        .tiers
-        .get(key)
-        .filter(|over| over.ranges.len() == counted.rolls.len())
+fn over_tiers(key: StatKey, counted: &StatLine, reading: &Reading<'_>) -> Option<OverTiers> {
+    let rolls = reading.tiers.get(key)?;
+    let ranges = reading.pick(key, &rolls.ranges);
+    (ranges.len() == counted.rolls.len() && ranges.iter().any(Option::is_some)).then_some(
+        OverTiers {
+            ranges,
+            tiers: rolls.tiers,
+        },
+    )
 }
 
 /// A line of a prefix or suffix varies over the tiers of its modifier when they are known (a
 /// line fixed in its tier, `+3 to Level of all Projectile Skills` of tier 2, varies when the
 /// other tiers roll other values), or else in its range.
-fn affix_varies(counted: &StatLine, over: Option<&LineRolls>) -> bool {
+fn affix_varies(counted: &StatLine, over: Option<&OverTiers>) -> bool {
     over.map_or_else(
         || varies(counted),
-        |over| over.ranges.iter().any(|range| range.max > range.min),
+        |over| {
+            over.ranges
+                .iter()
+                .flatten()
+                .any(|range| range.max > range.min)
+        },
     )
 }
 
@@ -1421,8 +1439,8 @@ fn tooltip_lines(limit: Limit, i18n: &Translator) -> Vec<TooltipLine> {
             color::TEXT,
         )
     });
-    let tiers = limit.rolls.and(limit.tiers).map(|(low, high)| TooltipLine {
-        text: format!("T{low}–T{high}"),
+    let tiers = limit.rolls.and(limit.tiers).map(|tiers| TooltipLine {
+        text: format!("T{}–T{}", tiers.lowest, tiers.highest),
         tint: color::FAINT,
         small: true,
     });
@@ -1541,14 +1559,14 @@ fn roll_line(ui: &mut Ui, roll: &Roll, bar: RollBar) {
                 if let Some(share) = share {
                     roll_bar(ui, *share, bar);
                 }
-                if let Some((tier, ranges)) = tier {
+                if let Some(tier) = tier {
                     ui.label(
-                        RichText::new(format!("T{tier}"))
+                        RichText::new(format!("T{}", tier.number))
                             .font(text::tier())
-                            .color(tier_color(*tier)),
+                            .color(tier_color(tier.number)),
                     );
-                    if !ranges.is_empty() {
-                        range_label(ui, ranges);
+                    if !tier.ranges.is_empty() {
+                        range_label(ui, &tier.ranges);
                     }
                 }
             }
@@ -1606,7 +1624,7 @@ mod tests {
             None,
         );
         let stats = LineStats::new(item.language(), item.modifiers(), None);
-        let tiers = TierRolls::new(item.language(), item.modifiers(), &stats, base_type(item));
+        let tiers = TierRolls::new(item.language(), item.modifiers(), base_type(item));
         super::rows(
             item,
             &lines,
@@ -1670,8 +1688,8 @@ mod tests {
                         }
                         Some(Roll::Affix { share, tier }) => {
                             let share = share.map(|share| format!("{share:.2}"));
-                            let tier = tier.map(|(tier, ranges)| {
-                                [format!("T{tier}"), ranges_text(&ranges)]
+                            let tier = tier.map(|tier| {
+                                [format!("T{}", tier.number), ranges_text(&tier.ranges)]
                                     .into_iter()
                                     .filter(|part| !part.is_empty())
                                     .collect::<Vec<_>>()
@@ -2026,10 +2044,19 @@ mod tests {
                 half: Half::Minimum,
                 bounds: Some(life),
                 rolls: Some(life),
-                tiers: Some((13, 1)),
+                tiers: Some(TierSpan {
+                    lowest: 13,
+                    highest: 1,
+                }),
             }
         );
-        assert_eq!(limit_of("+88 to Evasion Rating").tiers, Some((8, 1)));
+        assert_eq!(
+            limit_of("+88 to Evasion Rating").tiers,
+            Some(TierSpan {
+                lowest: 8,
+                highest: 1,
+            })
+        );
     }
 
     #[test]
@@ -2575,7 +2602,14 @@ mod tests {
             small: true,
         };
         assert_eq!(
-            tooltip(Half::Maximum, range, Some((5, 1))),
+            tooltip(
+                Half::Maximum,
+                range,
+                Some(TierSpan {
+                    lowest: 5,
+                    highest: 1,
+                })
+            ),
             [rolls, tiers, lower]
         );
     }
@@ -2742,7 +2776,6 @@ mod tests {
         let tiers = TierRolls::new(
             crossbow.language(),
             crossbow.modifiers(),
-            &line_stats,
             base_type(&crossbow),
         );
         let stats = Stats::new(

@@ -67,7 +67,17 @@ pub fn target<'a>(
     })
 }
 
-impl TradeTarget<'_> {
+impl<'a> TradeTarget<'a> {
+    /// The base type the search of another item looks for, among its filters; none for a
+    /// unique, searched by its name, and an item of the currency exchange.
+    #[must_use]
+    pub fn base_type(&self) -> Option<&'a str> {
+        match *self {
+            Self::Base { base_type } => Some(base_type),
+            Self::Unique { .. } | Self::UnidentifiedUnique { .. } | Self::Exchange { .. } => None,
+        }
+    }
+
     /// The search of the target, without filters.
     #[must_use]
     pub fn query(&self) -> Query {

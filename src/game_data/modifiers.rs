@@ -96,7 +96,8 @@ pub struct ModifierTiers {
     /// The index in `tiers` of the tier of the copied modifier.
     pub found: usize,
     /// The number of values of each line match given, in their order: the ranges of a tier
-    /// follow them (two for `Adds # to # Physical Damage`; one for a line without number).
+    /// follow them (two for `Adds # to # Physical Damage`; for a line without number, one
+    /// when its string gives the value, `Loads an additional bolt`, none otherwise).
     pub counts: Vec<usize>,
 }
 
