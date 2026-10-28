@@ -9,9 +9,6 @@ const propClass = name => ({ Armour: "attr-str", Evasion: "attr-dex", "Energy Sh
 // falls between the lowest roll of its worst tier and the highest of tier 1 (`overTiers` of the section
 // Roll bar), so that a full bar means close to the best possible.
 const rareBar = o => `<span class="bar"><i style="width:${(o.share * 100).toFixed(1)}%"></i></span>`;
-// A tier in the tooltip of a range field, without parentheses, in the color of its tier as under the
-// stats: "Rolls 9 T8 to 170 T1" (13j2, asked by the owner for consistency).
-const tierTag = number => `<b class="tier${number <= 3 ? " tier-top" : ""} t${number}">T${number}</b>`;
 
 function item(it, unfolded = false) {
   const tagClass = t => /^Corrupt|^Corrompu/.test(t) ? "corrupted" : /^\d+ T1$/.test(t) ? "t1" : "";
@@ -67,8 +64,11 @@ function item(it, unfolded = false) {
       const [boundLow, boundHigh] = (row.range || "").split("–");
       const bounds = row.bounds ?? (row.tier || !boundHigh || row.range.includes("·") ? null : `${boundLow} ${fr ? "à" : "to"} ${boundHigh}`);
       const rolls = bounds ? `${fr ? "Jets de" : "Rolls"} ${bounds}` : null;
+      // For a rare, the tiers of these rolls right under them, small and gray: "T13–T1" (13j2; in
+      // the line of the rolls, "Rolls 10 T13 to 214 T1" read badly, the owner found).
+      const tiers = row.boundTiers ? `<span class="app-tip-tiers">T${row.boundTiers[0]}–T${row.boundTiers[1]}</span>` : "";
       const lowerNote = row.lower ? (fr ? "Plus c'est bas, mieux c'est" : "Lower is better") : null;
-      const fieldTip = [rolls, lowerNote].filter(Boolean).map(line => `<span>${line}</span>`).join("");
+      const fieldTip = [rolls && `<span>${rolls}</span>${tiers}`, lowerNote && `<span>${lowerNote}</span>`].filter(Boolean).join("");
       const half = (value, name) => `<input value="${value ?? ""}" inputmode="decimal" aria-label="${name}">`;
       const hovered = row.hover ? " is-hovered" : "";
       const fields = row.min === undefined ? "" : `<span class="input app-range${hovered}">${half(low, "Minimum")}<i>–</i>${half(row.max, "Maximum")}<span class="app-tip">${fieldTip}</span></span>`;

@@ -137,11 +137,9 @@
 /* "Lower is better" under the rolls, in gray. */
 .app-tip span { display: block; }
 .app-tip span + span { margin-top: 3px; color: var(--weak); }
-/* The tiers of the rolls a field accepts, in the colors of the tiers under the stats: tier 1 orange,
-   tiers 2 and 3 white, the others gray. */
-.app-tip .tier { margin-right: 0; color: var(--faint); }
-.app-tip .tier.tier-top { color: var(--accent); }
-.app-tip .tier.t1 { color: var(--tier-1); }
+/* The tiers of the rolls a field accepts, right under them, small and gray like the ranges under
+   the stats. */
+.app-tip .app-tip-tiers { margin-top: 1px; font-size: 11px; color: var(--faint); }
 .app-range:hover .app-tip, .app-range.is-hovered .app-tip { display: block; }
 /* A line the trade site can't search: a circle struck through in place of its checkbox, in the
    warning color, its tooltip under the pointer, opening to the right since the sign is on the left
