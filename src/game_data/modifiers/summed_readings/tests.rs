@@ -304,8 +304,14 @@ fn a_modifier_is_added_once_per_type_in_the_room_and_never_on_a_line_without_val
 
 /// The lines `texts` of an item of `base_type` of item level 82, with 3 prefixes and 3
 /// suffixes open: what the search of the other readings finds after the best one, within
-/// `max_steps`.
-fn doubts_of(base_type: &str, texts: &[&str], max_steps: usize) -> Doubts {
+/// `max_steps`, in the room and with the fit of `searched` instead of those of the best reading
+/// when given.
+fn doubts_of(
+    base_type: &str,
+    texts: &[&str],
+    max_steps: usize,
+    searched: Option<(Room, bool)>,
+) -> Doubts {
     let modifiers: Vec<Modifier> = texts
         .iter()
         .map(|text| Modifier {
@@ -335,32 +341,105 @@ fn doubts_of(base_type: &str, texts: &[&str], max_steps: usize) -> Doubts {
     let mut search = super::super::Search::new(&candidates, modifiers.len(), room, 0);
     search.walk(0, &mut Vec::new());
     let (key, reading) = search.best.expect("a reading");
+    let (room, fits_room) = searched.unwrap_or((room, key.room));
     let best = Best {
         candidates: &candidates,
         reading: &reading,
         room,
-        fits_room: key.room,
+        fits_room,
     };
     doubts_within(tags, Some(82), &modifiers, &copied, &best, max_steps)
 }
 
+/// The lines of a bow with three prefixes, read one way only.
+const BOW: [&str; 3] = [
+    "Adds 36 to 56 Physical Damage",
+    "217% increased Physical Damage",
+    "+200 to Accuracy Rating",
+];
+
 #[test]
 fn a_search_that_cant_look_at_every_reading_leaves_every_line_in_doubt() {
-    let texts = [
-        "Adds 36 to 56 Physical Damage",
-        "217% increased Physical Damage",
-        "+200 to Accuracy Rating",
-    ];
-
     // Every reading looked at: the best one is the only one, three prefixes.
-    let doubts = doubts_of("Warmonger Bow", &texts, MAX_STEPS);
-    assert!(doubts.concluded);
+    let doubts = doubts_of("Warmonger Bow", &BOW, MAX_STEPS, None);
+    assert_eq!(doubts.outcome, Outcome::Concluded);
     assert_eq!(doubts.lines, [] as [usize; 0]);
-    assert!(!doubts.room);
+    assert!(!doubts.other_room);
 
     // Cut short, the best reading not met: no line keeps its tier.
-    let doubts = doubts_of("Warmonger Bow", &texts, 1);
-    assert!(!doubts.concluded);
+    let doubts = doubts_of("Warmonger Bow", &BOW, 1, None);
+    assert_eq!(doubts.outcome, Outcome::Cut);
     assert_eq!(doubts.lines, [0, 1, 2]);
-    assert!(doubts.room);
+    assert!(doubts.other_room);
+}
+
+#[test]
+fn a_search_that_doesnt_meet_the_best_reading_leaves_every_line_in_doubt() {
+    let two = Room {
+        prefixes: 2,
+        suffixes: 3,
+    };
+
+    // The best reading said to fit two prefixes, which no reading of the search does.
+    let doubts = doubts_of("Warmonger Bow", &BOW, MAX_STEPS, Some((two, true)));
+    assert_eq!(doubts.outcome, Outcome::BestNotMet);
+    assert_eq!(doubts.lines, [0, 1, 2]);
+
+    // A best reading that doesn't fit the room isn't among those of the search, which fit it.
+    let doubts = doubts_of("Warmonger Bow", &BOW, MAX_STEPS, Some((two, false)));
+    assert_eq!(doubts.outcome, Outcome::Concluded);
+    assert_eq!(doubts.lines, [] as [usize; 0]);
+}
+
+#[test]
+fn a_reading_leaves_the_same_room_to_a_prefix_or_suffix_with_as_many_of_each_elsewhere() {
+    use Affix::{Prefix, Suffix};
+    let lines = [
+        line(0, "#% increased Rarity of Items found", 0..1, None),
+        line(1, "+# to maximum Life", 1..2, None),
+        line(2, "+# to Accuracy Rating", 2..3, None),
+    ];
+    let values = [16.0, 50.0, 50.0];
+    let on =
+        |line: usize, affix| placement("Kind", affix, &[line], &[(line, range(1.0, 100.0))], false);
+    let ground = Ground {
+        lines: &lines,
+        values: &values,
+        placements: &[],
+        starting: Vec::new(),
+        room: Room {
+            prefixes: 3,
+            suffixes: 3,
+        },
+        fractured: 1,
+        rising: Vec::new(),
+        falling: Vec::new(),
+        best: Vec::new(),
+        // The rarity a prefix or a suffix, the life a prefix, the accuracy a suffix.
+        best_candidates: vec![
+            BestCandidate {
+                modifiers: 0..1,
+                sets: vec![AffixSet::Both],
+            },
+            BestCandidate {
+                modifiers: 1..2,
+                sets: vec![AffixSet::Only(Prefix)],
+            },
+            BestCandidate {
+                modifiers: 2..3,
+                sets: vec![AffixSet::Only(Suffix)],
+            },
+        ],
+        max_steps: MAX_STEPS,
+    };
+    let same =
+        |placements: &[Placement<'_>]| ground.same_room(&placements.iter().collect::<Vec<_>>());
+
+    // The rarity either affix, the others as the best reading.
+    assert!(same(&[on(0, Prefix), on(1, Prefix), on(2, Suffix)]));
+    assert!(same(&[on(0, Suffix), on(1, Prefix), on(2, Suffix)]));
+    // The same totals, a prefix of the others moved to a suffix.
+    assert!(!same(&[on(0, Prefix), on(1, Suffix), on(2, Suffix)]));
+    // A prefix less on the others.
+    assert!(!same(&[on(0, Prefix), on(2, Suffix)]));
 }

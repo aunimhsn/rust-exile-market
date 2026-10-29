@@ -228,13 +228,13 @@ pub struct AddedTiers {
 /// `sanctified` item is split: its values can leave their tiers.
 ///
 /// A line stays without tier too, with the other lines of its hybrids, when another reading
-/// with a line adding up several modifiers, whichever, fits the item as well
-/// ([`summed_readings::doubts`]): the `47% d'Augmentation de l'Armure et de l'Évasion` of the
+/// fits the item as well ([`summed_readings::doubts`]), with a line adding up several
+/// modifiers, whichever, or any reading where the best one splits a line: the `47% d'Augmentation de l'Armure et de l'Évasion` of the
 /// owner's body armour adds up two hybrids, one with `+23 à l'Armure` and `+19 au Score
 /// d'Évasion`, the other with the life; a line split with its neighbour may be summed with
 /// another line's hybrid, the copy sorting its lines by stat, not by modifier. Such a reading
-/// that takes another room keeps both affixes of a line that can be either; a search that can't
-/// conclude leaves every line it reads without tier.
+/// that leaves another room to a line that can be a prefix or a suffix keeps both its affixes;
+/// a search that can't conclude leaves every line it reads without tier.
 ///
 /// A hybrid whose other line is read on its own (a sanctified value out of its tier, or two
 /// lines apart) counts twice and may rule out an affix wrongly: a rare case, left as it is.
@@ -297,12 +297,8 @@ pub fn trade_tiers(
             fits_room: key.room,
         };
         let doubts = summed_readings::doubts(tags, item_level, modifiers, &copied, &best);
-        if !doubts.concluded {
-            log::warn!(
-                "Game data, {base_type} copied from the in-game trade: the other readings of its lines couldn't all be looked at, its lines left without tier"
-            );
-        }
-        room_in_doubt = doubts.room;
+        doubts.outcome.log(base_type);
+        room_in_doubt = doubts.other_room;
         for line in doubts.lines {
             if !ambiguous.contains(&line) {
                 ambiguous.push(line);

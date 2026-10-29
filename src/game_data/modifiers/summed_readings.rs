@@ -29,12 +29,40 @@ pub(super) struct Best<'b> {
 pub(super) struct Doubts {
     /// The indexes among the modifiers of the item of the lines in doubt.
     pub(super) lines: Vec<usize>,
-    /// Whether a reading that leaves lines in doubt takes another room than the best one: an
-    /// affix the full prefixes or suffixes seemed to rule out may then be the one.
-    pub(super) room: bool,
-    /// Whether every other reading was looked at, the best one met among them; otherwise every
-    /// line read is in doubt.
-    pub(super) concluded: bool,
+    /// Whether a reading that leaves lines in doubt leaves another room to the modifiers that
+    /// can be a prefix or a suffix: an affix the full prefixes or suffixes seemed to rule out
+    /// may then be the one.
+    pub(super) other_room: bool,
+    /// How the search ended; unless it concluded, every line read is in doubt.
+    pub(super) outcome: Outcome,
+}
+
+/// How the search of the other readings ended.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Outcome {
+    /// Every other reading looked at, the best one met among them (or the best one doesn't fit
+    /// the room, which every other reading does).
+    Concluded,
+    /// Stopped at the most steps, some readings not looked at.
+    Cut,
+    /// Every reading looked at, none the same as the best one: a line the search can't read,
+    /// or a best reading the game can't roll (two modifiers of one type).
+    BestNotMet,
+}
+
+impl Outcome {
+    /// Logs why the lines of an item of `base_type` are left without tier, unless it concluded.
+    pub(super) fn log(self, base_type: &str) {
+        match self {
+            Self::Concluded => {}
+            Self::Cut => log::warn!(
+                "Game data, {base_type} copied from the in-game trade: the other readings of its lines couldn't all be looked at, its lines left without tier"
+            ),
+            Self::BestNotMet => log::warn!(
+                "Game data, {base_type} copied from the in-game trade: the other readings of its lines don't hold its best one, its lines left without tier"
+            ),
+        }
+    }
 }
 
 /// A line of the item that the best reading reads.
@@ -70,10 +98,10 @@ struct Placement<'a> {
     ranges: Vec<(usize, Range)>,
 }
 
-/// The indexes among `modifiers` of the lines that another reading, with a line adding up several
-/// modifiers, reads otherwise than the `best` one: on a base with `tags`, among the tiers
-/// `item_level` allows, `copied` giving the lines of each modifier (those of
-/// [`super::trade_tiers`]).
+/// The indexes among `modifiers` of the lines that another reading of the item reads otherwise
+/// than the `best` one, where the best one splits a line, or with a line adding up several
+/// modifiers: on a base with `tags`, among the tiers `item_level` allows, `copied` giving the
+/// lines of each modifier (those of [`super::trade_tiers`]).
 ///
 /// Another reading covers the lines the best one reads, each within the sum of the ranges of its
 /// modifiers, in the room of the item, as many fractured modifiers as the best reading or one,
@@ -84,7 +112,8 @@ struct Placement<'a> {
 /// when the best reading splits a line there (the `217% increased Physical Damage` and `+200 to
 /// Accuracy Rating` of a bow with a prefix open: the hybrid T1 and a pure T3, or a pure T1, the
 /// hybrid T5 and a pure accuracy, three prefixes; a `119% increased Armour` split with its
-/// neighbour, while it may be summed with the hybrid of another line), or when it adds up several
+/// neighbour, while it may be summed with the hybrid of another line: any other reading there,
+/// with a sum or not), or when it adds up several
 /// modifiers on a line there and makes no more modifiers there than the best one (the two
 /// hybrids of the owner's body armour, three prefixes either way, while the best reading splits
 /// no line): the best reading prefers fewer split lines, a modifier holding a line alone being
@@ -144,25 +173,33 @@ fn doubts_within(
         &placements,
         best,
         &chosen,
-        (modifiers.len(), max_steps),
+        modifiers.len(),
+        max_steps,
     );
     let mut state = State::new(&ground);
     state.walk(&ground, 0);
-    if !state.cut && (state.met_best || !best.fits_room) {
+    let outcome = if state.cut {
+        Outcome::Cut
+    } else if state.met_best || !best.fits_room {
+        Outcome::Concluded
+    } else {
+        Outcome::BestNotMet
+    };
+    if outcome == Outcome::Concluded {
         return Doubts {
             lines: state.doubts,
-            room: state.other_room,
-            concluded: true,
+            other_room: state.other_room,
+            outcome,
         };
     }
-    // Without every reading, or without the best one among them (a line the search can't read,
-    // the tables out of step with it): no line keeps a tier the search couldn't vouch for.
+    // Without every reading, or without the best one among them: no line keeps a tier the
+    // search couldn't vouch for.
     let mut every: Vec<usize> = lines.iter().map(|line| line.modifier).collect();
     every.dedup();
     Doubts {
         lines: every,
-        room: true,
-        concluded: false,
+        other_room: true,
+        outcome,
     }
 }
 
@@ -459,14 +496,16 @@ struct Ground<'s, 'a> {
 }
 
 impl<'s, 'a> Ground<'s, 'a> {
-    /// `count` is the number of modifiers of the item.
+    /// `count` is the number of modifiers of the item, `max_steps` the most steps the search
+    /// takes.
     fn new(
         lines: &'s [Line<'a>],
         values: &'s [f64],
         placements: &'s [Placement<'a>],
         best: &Best<'_>,
         chosen: &[&Candidate],
-        (count, max_steps): (usize, usize),
+        count: usize,
+        max_steps: usize,
     ) -> Self {
         let mut starting = vec![Vec::new(); lines.len()];
         for (index, placement) in placements.iter().enumerate() {
@@ -522,26 +561,40 @@ impl<'s, 'a> Ground<'s, 'a> {
         otherwise
     }
 
-    /// Whether the placements `chosen` take as many prefixes and suffixes as the best reading,
-    /// the modifiers that can be both counted either way.
+    /// Whether the placements `chosen` leave the modifiers that can be a prefix or a suffix the
+    /// room the best reading leaves them: as many prefixes, and as many suffixes, on the other
+    /// lines.
     fn same_room(&self, chosen: &[&Placement<'_>]) -> bool {
-        let (mut prefixes, mut suffixes, mut both) = (0, 0, 0);
-        for set in self
+        let free: Vec<&std::ops::Range<usize>> = self
             .best_candidates
             .iter()
-            .flat_map(|candidate| &candidate.sets)
-        {
-            match set {
-                AffixSet::Only(Affix::Prefix) => prefixes += 1,
-                AffixSet::Only(Affix::Suffix) => suffixes += 1,
-                AffixSet::Both => both += 1,
-            }
-        }
-        let taken = chosen
-            .iter()
-            .filter(|placement| placement.shown.affix == Affix::Prefix)
-            .count();
-        chosen.len() == prefixes + suffixes + both && (prefixes..=prefixes + both).contains(&taken)
+            .filter(|candidate| candidate.sets == [AffixSet::Both])
+            .map(|candidate| &candidate.modifiers)
+            .collect();
+        let same = |affix| {
+            let best = self
+                .best_candidates
+                .iter()
+                .flat_map(|candidate| &candidate.sets)
+                .filter(|&&set| set == AffixSet::Only(affix))
+                .count();
+            let other = chosen
+                .iter()
+                .filter(|placement| placement.shown.affix == affix)
+                .filter(|placement| {
+                    !free.iter().any(|&modifiers| {
+                        placement
+                            .shown
+                            .modifiers
+                            .iter()
+                            .copied()
+                            .eq(modifiers.clone())
+                    })
+                })
+                .count();
+            best == other
+        };
+        same(Affix::Prefix) && same(Affix::Suffix)
     }
 }
 
