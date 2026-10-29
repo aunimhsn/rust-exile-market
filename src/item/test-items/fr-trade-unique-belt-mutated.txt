@@ -1,0 +1,24 @@
+Classe d'objet: Ceintures
+Rareté: Unique
+Lanière animique
+Ceinture longue
+--------
+Prérequis : Niveau 20
+--------
+Niveau de l'objet: 80
+--------
+15% d'Augmentation de l'Armure (enchant)
+--------
+16% d'Augmentation de la Durée de l'Effet des Charmes (implicit)
+Possède 2 Emplacements de Charme (implicit)
+--------
++40 de Bouclier d'énergie maximal
++20 d'Intelligence
+Vous perdez 5% de Bouclier d'énergie par seconde
+14% d'Augmentation de la Récupération de Bouclier d'énergie (mutated)
+--------
+Les prêtres de sang Vaal ont été parmi les premiers intellectuels à avoir enregistré leurs expériences.
+Ce sont eux qui ont découvert qu'une âme nouvellement libérée
+s'accrochait désespérément à toute autre source de vie.
+--------
+Corrompu

@@ -34,8 +34,7 @@ impl ShownItem {
     /// The item `copied`; `trade` holds the stats of the trade site and `names` the names of
     /// its items, once it gave them.
     fn new(copied: &CopiedItem, trade: Option<&TradeStats>, names: Option<&ItemNames>) -> Self {
-        // The parser refuses an item without the details, the tiers of its modifiers missing:
-        // the window shows the message of an item that can't be read.
+        // An item that can't be read shows its message in the window.
         let parsed = Item::parse(copied);
         match &parsed {
             Ok(item) => {
@@ -43,9 +42,6 @@ impl ShownItem {
                 for warning in item.warnings() {
                     log::warn!("A part of a copied item couldn't be read: {warning}");
                 }
-            }
-            Err(ParseError::WithoutDetails) => {
-                log::info!("A copied item has no advanced description: it can't be read");
             }
             Err(error) => log::warn!("A copied item couldn't be read: {error}"),
         }
@@ -521,18 +517,20 @@ mod tests {
     }
 
     #[test]
-    fn refuses_an_item_copied_without_its_details() {
+    fn shows_an_item_copied_from_the_in_game_trade() {
         let mut session = session();
 
         copy(
             &mut session,
-            include_str!("item/test-items/en-plain-rare-ring.txt"),
+            include_str!("item/test-items/en-owner-trade-rare-bow-mirrored.txt"),
         );
 
-        assert_eq!(
-            session.item().map(|item| item.parsed().err()),
-            Some(Some(ParseError::WithoutDetails))
-        );
+        assert_eq!(shown_base(&session), Some("Warmonger Bow"));
+        let modifiers = session
+            .item()
+            .and_then(|item| item.parsed().ok())
+            .map(|item| item.modifiers().len());
+        assert_eq!(modifiers, Some(10), "3 runes and 7 explicit lines");
     }
 
     #[test]

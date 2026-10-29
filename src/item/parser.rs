@@ -22,9 +22,6 @@ pub enum ParseError {
     MissingRarity,
     UnknownRarity,
     MissingBaseType,
-    /// An item whose implicit or explicit modifiers were copied without the `{ … }` headers of
-    /// the advanced description, which give their tiers and ranges.
-    WithoutDetails,
 }
 
 impl fmt::Display for ParseError {
@@ -33,7 +30,6 @@ impl fmt::Display for ParseError {
             Self::MissingRarity => "no rarity line",
             Self::UnknownRarity => "unknown rarity",
             Self::MissingBaseType => "no base type",
-            Self::WithoutDetails => "modifiers copied without the advanced description",
         })
     }
 }
@@ -104,7 +100,8 @@ enum Section<'a> {
     States(Vec<ItemState>),
     /// Modifiers with the headers of the advanced copy.
     Headed(Vec<&'a str>),
-    /// Modifiers without header, all of the kind their marker tells (` (rune)`…).
+    /// Modifiers without header, all of one kind, which their marker tells (` (rune)`…) or
+    /// phase 2 finds; each line of the origin its own marker tells (` (fractured)`…).
     Marked(Vec<&'a str>, ModifierKind),
     /// Flavour text, descriptions or note.
     Unread,
@@ -120,7 +117,7 @@ pub(super) fn parse(copied: &CopiedItem) -> Result<Item, ParseError> {
     let mut item = read_header(&header, copied.language(), labels)?;
 
     let recognized: Vec<Recognized<'_>> = sections.map(|lines| recognize(lines, labels)).collect();
-    for section in resolve_plain_sections(recognized, item.rarity)? {
+    for section in resolve_plain_sections(recognized, item.rarity) {
         fill(&mut item, section, labels);
     }
     Ok(item)
@@ -262,52 +259,20 @@ fn state(line: &str, labels: &Labels) -> Option<ItemState> {
 }
 
 /// Phase 2: the first plain section, right after the header, is the properties; the other
-/// plain sections (flavour text, descriptions) aren't read, but for the lines of a unique
-/// written without header ([`unheaded_section`]).
-///
-/// The advanced copy writes a `{ … }` header before each implicit and explicit modifier: an
-/// item with implicit lines without one, or without any header but with a plain section after
-/// the item level that reads as the explicit modifiers of an identified item, was copied
-/// without the details.
-fn resolve_plain_sections(
-    recognized: Vec<Recognized<'_>>,
-    rarity: Rarity,
-) -> Result<Vec<Section<'_>>, ParseError> {
-    let headed = is_headed(&recognized);
-    let explicit_expected =
-        !headed && rarity.has_explicit_modifiers() && !is_unidentified(&recognized);
-    let unheaded = unheaded_section(&recognized, rarity);
-    let mut after_item_level = false;
-
+/// plain sections (flavour text, descriptions) aren't read, but for the explicit modifiers of
+/// an item copied without any header ([`explicit_section`]).
+fn resolve_plain_sections(recognized: Vec<Recognized<'_>>, rarity: Rarity) -> Vec<Section<'_>> {
+    let explicit = explicit_section(&recognized, rarity);
     recognized
         .into_iter()
         .enumerate()
         .map(|(index, recognized)| match recognized {
-            Recognized::Section(Section::Marked(_, ModifierKind::Implicit)) => {
-                Err(ParseError::WithoutDetails)
+            Recognized::Section(section) => section,
+            Recognized::Plain(lines) if index == 0 => Section::Properties(lines),
+            Recognized::Plain(lines) if Some(index) == explicit => {
+                Section::Marked(lines, ModifierKind::Explicit(None))
             }
-            Recognized::Section(section) => {
-                after_item_level |= matches!(section, Section::ItemLevel(_));
-                Ok(section)
-            }
-            Recognized::Plain(lines) if index == 0 => Ok(Section::Properties(lines)),
-            // A modifier has a number in nearly every line, unlike a description: a magic
-            // item whose only modifier was removed keeps its description, read with both
-            // copies, and isn't taken for a plain copy.
-            Recognized::Plain(lines)
-                if explicit_expected
-                    && after_item_level
-                    && lines.iter().any(|line| has_digit(line)) =>
-            {
-                Err(ParseError::WithoutDetails)
-            }
-            // After the arm above: a unique copied without the details (from the trade of the
-            // game, step 13k2e) has the shape of the lines without header, and its lines with
-            // numbers must be refused, not read as lines that never vary.
-            Recognized::Plain(lines) if Some(index) == unheaded => {
-                Ok(Section::Marked(lines, ModifierKind::Explicit(None)))
-            }
-            Recognized::Plain(_) => Ok(Section::Unread),
+            Recognized::Plain(_) => Section::Unread,
         })
         .collect()
 }
@@ -326,12 +291,19 @@ fn is_unidentified(recognized: &[Recognized<'_>]) -> bool {
     })
 }
 
-/// The index of the lines of an identified unique written without header, the same on every
-/// copy (`Reflects opposite Ring` of Kalandra's Touch): when the copy has no `{ … }` header
-/// at all, its first plain section after the item level, if another plain section, its
-/// flavour text, follows it; a description or a flavour text alone is never taken for it.
-fn unheaded_section(recognized: &[Recognized<'_>], rarity: Rarity) -> Option<usize> {
-    if rarity != Rarity::Unique || is_headed(recognized) || is_unidentified(recognized) {
+/// The index of the explicit modifiers of an identified item copied without any `{ … }`
+/// header, its first plain section after the item level. Two copies have none: an item copied
+/// from the trade of the game (another player's listing), its lines without affix, tier nor
+/// range, those of a fractured, desecrated or Vaal modifier marked (` (fractured)`), and a
+/// unique whose lines have no header in either copy, the same on every copy (`Reflects
+/// opposite Ring` of Kalandra's Touch).
+///
+/// A modifier has a number in nearly every line, unlike a description: a magic item whose only
+/// modifier was removed keeps its description, which isn't taken for it. The lines without
+/// number of a unique are taken when another plain section, its flavour text, follows them; a
+/// flavour text alone never is.
+fn explicit_section(recognized: &[Recognized<'_>], rarity: Rarity) -> Option<usize> {
+    if !rarity.has_explicit_modifiers() || is_headed(recognized) || is_unidentified(recognized) {
         return None;
     }
     let item_level = recognized
@@ -341,10 +313,13 @@ fn unheaded_section(recognized: &[Recognized<'_>], rarity: Rarity) -> Option<usi
         .iter()
         .enumerate()
         .skip(item_level + 1)
-        .filter(|(_, r)| matches!(r, Recognized::Plain(_)))
-        .map(|(index, _)| index);
-    let first = plain.next()?;
-    plain.next().map(|_| first)
+        .filter_map(|(index, r)| match r {
+            Recognized::Plain(lines) => Some((index, lines)),
+            Recognized::Section(_) => None,
+        });
+    let (first, lines) = plain.next()?;
+    let numbered = lines.iter().any(|line| has_digit(line));
+    (numbered || (rarity == Rarity::Unique && plain.next().is_some())).then_some(first)
 }
 
 /// Phase 3: what a section adds to the item.

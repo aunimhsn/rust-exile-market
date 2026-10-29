@@ -1,5 +1,4 @@
-//! What the window shows when a copied item can't be read, also when it was copied without
-//! its details: the owner's game always gives them (step 13k).
+//! What the window shows when a copied item can't be read.
 
 use egui::{CentralPanel, Frame, Label, RichText, Ui, vec2};
 

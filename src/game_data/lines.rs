@@ -773,15 +773,20 @@ mod tests {
         };
     }
 
-    /// The copied items of the parser tests (`src/item/test-items/`), but those it refuses,
-    /// copied without the advanced description.
-    const TEST_ITEMS: [(&str, &str); 16] = [
+    /// Copied items of the parser tests (`src/item/test-items/`).
+    const TEST_ITEMS: [(&str, &str); 25] = [
         test_item!("en-currency-uncut-gem.txt"),
         test_item!("en-magic-mace.txt"),
         test_item!("en-normal-helmet.txt"),
+        test_item!("en-owner-trade-rare-bow-mirrored.txt"),
+        test_item!("en-owner-trade-rare-helmet-fractured.txt"),
+        test_item!("en-owner-trade-unique-belt-mutated.txt"),
         test_item!("en-owner-unique-mace-fixed-values.txt"),
         test_item!("en-plain-currency-large-stack.txt"),
         test_item!("en-plain-magic-jewel-unidentified.txt"),
+        test_item!("en-plain-rare-ring.txt"),
+        test_item!("en-plain-rare-ring-unidentified.txt"),
+        test_item!("en-plain-unique-jewel.txt"),
         test_item!("en-rare-bow-fractured.txt"),
         test_item!("en-rare-crossbow-all-modifiers.txt"),
         test_item!("en-rare-wand-unidentified.txt"),
@@ -790,12 +795,19 @@ mod tests {
         test_item!("fr-normal-exceptional-shield.txt"),
         test_item!("fr-rare-body-armour.txt"),
         test_item!("fr-rare-staff.txt"),
+        test_item!("fr-trade-rare-bow-mirrored.txt"),
+        test_item!("fr-trade-rare-helmet-fractured.txt"),
+        test_item!("fr-trade-unique-belt-mutated.txt"),
         test_item!("fr-unique-crossbow.txt"),
         test_item!("fr-unique-mace-fixed-values.txt"),
     ];
 
+    /// The lines the game data doesn't know yet: the French data of Exiled Exchange 2 writes
+    /// the notable with its English name, `Attribue Paragon` (step 20).
+    const UNKNOWN_LINES: [&str; 1] = ["Attribue Parangon"];
+
     /// Every modifier line of the copied items of the parser tests finds its stat, and an
-    /// id in its group.
+    /// id in its group, but the [`UNKNOWN_LINES`].
     #[test]
     fn every_line_of_the_copied_items_finds_its_stat() {
         let mut missing = Vec::new();
@@ -812,6 +824,7 @@ mod tests {
                     match line.stat {
                         Some(stat) if !stat.stat.trade_ids(group).is_empty() => found += 1,
                         Some(_) => missing.push(format!("{name}: no {group:?} id: {texts:?}")),
+                        None if texts.iter().all(|text| UNKNOWN_LINES.contains(text)) => {}
                         None => missing.push(format!("{name}: {texts:?}")),
                     }
                 }
@@ -819,6 +832,6 @@ mod tests {
         }
 
         assert!(missing.is_empty(), "{missing:#?}");
-        assert!(found >= 59, "{found} lines");
+        assert!(found >= 125, "{found} lines");
     }
 }
