@@ -193,8 +193,8 @@ pub struct FoundTiers {
 ///
 /// Only the explicit modifiers without header are read, one line each, as the parser reads
 /// such a copy: a modifier whose header the parser doesn't know isn't a line of the in-game
-/// trade, the caller leaves it out. Each line is read alone, unless the item has more
-/// prefixes or suffixes than `limits` that way, or two fractured modifiers (a Fracturing Orb
+/// trade, the caller leaves it out. Each line is read alone, unless a line has no tier that
+/// way, or the item more prefixes or suffixes than `limits`, or two fractured modifiers (a Fracturing Orb
 /// fractures one modifier of an item not fractured yet): the consecutive lines of one origin
 /// are then read as one modifier when they fit a hybrid of the tables (the fractured `41%
 /// increased Energy Shield` and `+34 to maximum Mana` of a tiara), as the lines of the hybrids
@@ -409,11 +409,14 @@ impl Room {
 }
 
 /// How good a reading is, the better the greater: one fractured modifier at most, then the
-/// room of the item, then the lines read alone.
+/// room of the item, then the lines read with a tier, then the lines read alone.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 struct ReadingKey {
     fractured: bool,
     room: bool,
+    /// How many lines are read with a tier: a line only a hybrid holds is read in it
+    /// (`30% increased Physical Damage` of a weapon, the pure modifier starting at 40%).
+    read: usize,
     /// How many modifiers the lines make, those without tier counted.
     modifiers: usize,
 }
@@ -482,11 +485,12 @@ impl<'a> Search<'a> {
     }
 
     fn keep(&mut self, chosen: &[usize]) {
-        let (mut joined, mut fractured_joined) = (0, 0);
+        let (mut read, mut joined, mut fractured_joined) = (0, 0, 0);
         for candidate in chosen
             .iter()
             .filter_map(|&index| self.candidates.get(index))
         {
+            read += candidate.modifiers.len();
             let lines = candidate.modifiers.len() - 1;
             joined += lines;
             if candidate.fractured {
@@ -496,6 +500,7 @@ impl<'a> Search<'a> {
         let key = ReadingKey {
             fractured: self.fractured.saturating_sub(fractured_joined) <= 1,
             room: self.room.bounds(chosen, self.candidates).is_some(),
+            read,
             modifiers: self.starting.len() - joined,
         };
         if self.best.as_ref().is_none_or(|(best, _)| key > *best) {
@@ -1680,6 +1685,21 @@ mod tests {
         // With room for one prefix only, the hybrid.
         let found = found_tiers(&item, &modifiers, (1, 3));
         assert_eq!(summary(&modifiers, &found), [(2, vec![(Prefix, 3)])]);
+    }
+
+    #[test]
+    fn a_line_only_a_hybrid_holds_is_read_in_it() {
+        let item = parse(BOW_EN);
+        // The pure `#% increased Physical Damage` starts at 40%, the hybrid with the accuracy
+        // at 15%: read alone, the physical damage would have no tier.
+        let modifiers = [
+            modifier(None, &["30% increased Physical Damage"]),
+            modifier(None, &["+60 to Accuracy Rating"]),
+        ];
+
+        let found = found_tiers(&item, &modifiers, (3, 3));
+
+        assert_eq!(summary(&modifiers, &found), [(2, vec![(Affix::Prefix, 6)])]);
     }
 
     #[test]
