@@ -79,8 +79,9 @@ const TOOLTIP_PADDING: Margin = Margin::symmetric(8, 5);
 const TOOLTIP_LINE_GAP: f32 = 3.0;
 /// The space above a small line of a tooltip, the tiers of the rolls right under them.
 const TOOLTIP_SMALL_LINE_GAP: f32 = 1.0;
-/// How far the tooltip of the "not allowed" sign starts left of the sign.
-const UNSEARCHABLE_TOOLTIP_SHIFT: f32 = 4.0;
+/// How far a tooltip opening to the right starts left of what it tells about: the "not
+/// allowed" sign, a tier.
+const LEFT_TOOLTIP_SHIFT: f32 = 4.0;
 /// The width a tooltip of a long sentence wraps at: the tooltip of a tier found from the values.
 const WRAPPED_TOOLTIP_WIDTH: f32 = 230.0;
 /// The space between the rows of several tiers under a line.
@@ -527,8 +528,10 @@ fn rows<'a>(
     // names of the trade site tell the base of a magic item, nor on a base the game data
     // doesn't know.
     let found = item.modifiers().iter().any(|modifier| {
-        matches!(modifier.kind, ModifierKind::Explicit(Some(_))) && modifier.tier.is_some()
-            || matches!(modifier.doubt, Some(TierDoubt::EitherAffix(_)))
+        let with_tier =
+            matches!(modifier.kind, ModifierKind::Explicit(Some(_))) && modifier.tier.is_some();
+        let in_doubt = matches!(modifier.doubt, Some(TierDoubt::EitherAffix { .. }));
+        with_tier || in_doubt
     });
     if item.has_tiers_from_values() && found {
         rows.push(Row::TradeCopyNote);
@@ -1029,10 +1032,10 @@ fn affix_stats<'a>(item: &'a Item, affix: Option<Affix>, reading: &Reading<'_>) 
                     let origin = modifier.origin.filter(|_| line_index == last);
                     let mut stat = affix_stat(key, line, tier, origin, reading);
                     if line_index == last
-                        && let Some(TierDoubt::EitherAffix(found)) = &modifier.doubt
+                        && let Some(TierDoubt::EitherAffix { prefix, suffix }) = &modifier.doubt
                     {
                         stat.roll = Some(Roll::Tiers {
-                            rows: found.iter().map(TierRow::affix).collect(),
+                            rows: vec![TierRow::affix(prefix), TierRow::affix(suffix)],
                             origin,
                         });
                     }
@@ -1695,7 +1698,7 @@ fn unsearchable_tooltip(ui: &Ui, key: FilterKey, sign: Rect, i18n: &Translator) 
     let lines = [Message::FilterUnsearchable, Message::FilterUnsearchableHint]
         .map(|message| TooltipLine::new(i18n.text(message), color::TEXT));
     let at = pos2(
-        sign.left() - UNSEARCHABLE_TOOLTIP_SHIFT,
+        sign.left() - LEFT_TOOLTIP_SHIFT,
         sign.bottom() + TOOLTIP_GAP,
     );
     tooltip(
@@ -1792,17 +1795,19 @@ fn roll_line(ui: &mut Ui, roll: &Roll, bar: RollBar, i18n: &Translator) {
             }
         }),
         Roll::Tiers { rows, origin } => {
-            ui.spacing_mut().item_spacing.y = TIER_ROW_GAP;
-            let last = rows.len().saturating_sub(1);
-            for (index, row) in rows.iter().enumerate() {
-                roll_row(ui, |ui| {
-                    tier_label(ui, &row.tier, i18n);
-                    after_word(ui, row.word, i18n);
-                    if let Some(origin) = origin.filter(|_| index == last) {
-                        origin_word(ui, origin, i18n);
-                    }
-                });
-            }
+            ui.vertical(|ui| {
+                ui.spacing_mut().item_spacing.y = TIER_ROW_GAP;
+                let last = rows.len().saturating_sub(1);
+                for (index, row) in rows.iter().enumerate() {
+                    roll_row(ui, |ui| {
+                        tier_label(ui, &row.tier, i18n);
+                        small_word(ui, i18n.text(row.word), color::WEAK);
+                        if let Some(origin) = origin.filter(|_| index == last) {
+                            origin_word(ui, origin, i18n);
+                        }
+                    });
+                }
+            });
         }
     }
 }
@@ -1837,7 +1842,7 @@ fn tier_label(ui: &mut Ui, tier: &ModifierTier, i18n: &Translator) {
         };
         // Opening to the right, since the tier is on the left.
         let at = pos2(
-            label.rect.left() - UNSEARCHABLE_TOOLTIP_SHIFT,
+            label.rect.left() - LEFT_TOOLTIP_SHIFT,
             label.rect.bottom() + TOOLTIP_GAP,
         );
         tooltip(
@@ -1853,27 +1858,18 @@ fn tier_label(ui: &mut Ui, tier: &ModifierTier, i18n: &Translator) {
     }
 }
 
-/// The word after the ranges of a tier among several ("Prefix"), small, in gray, like an
-/// origin.
-fn after_word(ui: &mut Ui, word: Message, i18n: &Translator) {
-    ui.spacing_mut().item_spacing.x = ORIGIN_GAP;
-    ui.label(
-        RichText::new(i18n.text(word))
-            .font(text::origin())
-            .color(color::WEAK),
-    );
-}
-
 /// The word of an origin, small, in its color: the last item of the line of a roll.
 fn origin_word(ui: &mut Ui, origin: ModifierOrigin, i18n: &Translator) {
+    let (message, tint) = origin_label(origin);
+    small_word(ui, i18n.text(message), tint);
+}
+
+/// A small word after the ranges of a tier, in `tint`: its origin, or the affix of a tier among
+/// several ("Prefix") in gray.
+fn small_word(ui: &mut Ui, word: String, tint: Color32) {
     // The space before it only.
     ui.spacing_mut().item_spacing.x = ORIGIN_GAP;
-    let (message, tint) = origin_label(origin);
-    ui.label(
-        RichText::new(i18n.text(message))
-            .font(text::origin())
-            .color(tint),
-    );
+    ui.label(RichText::new(word).font(text::origin()).color(tint));
 }
 
 /// The word of an origin, and its color.
@@ -2124,6 +2120,51 @@ mod tests {
     }
 
     #[test]
+    fn the_origin_of_a_line_in_doubt_follows_its_last_tier() {
+        let tiara = include_str!("../item/test-items/en-owner-trade-rare-helmet-fractured.txt");
+        // A prefix open, and the rarity desecrated.
+        let open = read_again(parse(
+            &tiara
+                .replace("+69 to maximum Energy Shield (desecrated)\n", "")
+                .replace(
+                    "18% increased Rarity of Items found\n",
+                    "18% increased Rarity of Items found (desecrated)\n",
+                ),
+        ));
+
+        assert!(texts(&open).contains(
+            &"■ 18% increased Rarity of Items found ≥16 [T1 16–19 AffixPrefix / T1 15–18 AffixSuffix Desecrated]"
+                .to_owned()
+        ));
+    }
+
+    #[test]
+    fn a_prefix_chosen_since_the_suffixes_are_full_names_the_suffix_ruled_out() {
+        let tiara = include_str!("../item/test-items/en-owner-trade-rare-helmet-fractured.txt");
+        // A third resistance in place of the desecrated line: the suffixes full, a prefix open.
+        let resistances = read_again(parse(&tiara.replace(
+            "+69 to maximum Energy Shield (desecrated)",
+            "+30% to Lightning Resistance",
+        )));
+
+        let texts = texts(&resistances);
+        let rarity = texts
+            .iter()
+            .position(|text| text.contains("Rarity"))
+            .expect("the rarity");
+        let suffixes = texts
+            .iter()
+            .position(|text| text.starts_with("Suffixes"))
+            .expect("its suffixes");
+        assert!(rarity < suffixes, "a prefix: {texts:?}");
+        assert!(
+            texts[rarity].ends_with("T1 16–19 ≠ Suffix T1 15–18]"),
+            "{}",
+            texts[rarity]
+        );
+    }
+
+    #[test]
     fn the_note_shows_also_when_the_only_tiers_found_are_those_of_a_line_in_doubt() {
         // A helmet with one modifier, which a prefix and a suffix both roll.
         let helmet = read_again(parse(
@@ -2131,8 +2172,9 @@ mod tests {
              Item Level: 82\n--------\n18% increased Rarity of Items found",
         ));
 
+        let texts = texts(&helmet);
         assert_eq!(
-            texts(&helmet)[texts(&helmet).len() - 3..],
+            texts[texts.len() - 3..],
             [
                 "Explicit",
                 "■ 18% increased Rarity of Items found ≥16 [T1 16–19 AffixPrefix / T1 15–18 AffixSuffix]",

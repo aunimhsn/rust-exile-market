@@ -1149,6 +1149,20 @@ mod tests {
     }
 
     #[test]
+    fn a_french_punctuation_mark_follows_a_non_breaking_space() {
+        // egui breaks a line at an ordinary space only: a wrapped text never starts a line with
+        // ":".
+        for line in messages(Language::French)
+            .lines()
+            .filter(|line| !line.trim_start().starts_with('#'))
+        {
+            for mark in [':', ';', '?', '!'] {
+                assert!(!line.contains(&format!(" {mark}")), "{line}");
+            }
+        }
+    }
+
+    #[test]
     fn the_tooltip_of_a_tier_tells_the_affix_ruled_out() {
         assert_eq!(
             Translator::new(Language::English).tier_ruled_out(Affix::Prefix, "T1", "16–19"),

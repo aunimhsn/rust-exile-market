@@ -174,15 +174,15 @@ filter-range = min – max
 filter-rolls = Jets de { $low } à { $high }
 filter-lower-better = Plus c'est bas, mieux c'est
 # Les filtres des propriétés d'un objet, avec leur valeur.
-filter-base-type = Base : { $base }
+filter-base-type = Base : { $base }
 # Sous le type de base décoché : la classe de l'objet copié, cherchée à sa place.
-filter-item-class = Classe cherchée : { $class }
-filter-item-level = Niveau de l'objet : { $value }
-filter-sockets = Châsses : { $value }
-filter-quality = Qualité : { $value }%
-filter-required-level = Niveau requis : { $value }
-filter-physical-dps = DPS physique : { $value }
-filter-elemental-dps = DPS élémentaire : { $value }
+filter-item-class = Classe cherchée : { $class }
+filter-item-level = Niveau de l'objet : { $value }
+filter-sockets = Châsses : { $value }
+filter-quality = Qualité : { $value }%
+filter-required-level = Niveau requis : { $value }
+filter-physical-dps = DPS physique : { $value }
+filter-elemental-dps = DPS élémentaire : { $value }
 # Les filtres des totaux pseudo, avec leur valeur.
 pseudo-elemental-resistance = +{ $value }% aux Résistances Élémentaires au total
 pseudo-chaos-resistance = +{ $value }% à la Résistance au chaos au total
@@ -208,13 +208,13 @@ unrevealed-prefix = Préfixe non révélé
 unrevealed-suffix = Suffixe non révélé
 unrevealed-note = Un modificateur non révélé peut changer l'objet : ses autres stats partent décochées.
 # Sous les stats d'un objet rare ou magique copié depuis l'échange du jeu, sans les affixes ni les paliers de la copie avancée.
-trade-copy-note = Copié depuis l'échange du jeu : les paliers sont trouvés d'après les valeurs.
+trade-copy-note = Copié depuis l'échange du jeu : les paliers sont trouvés d'après les valeurs.
 # Après la plage d'un palier trouvé d'après les valeurs, quand la ligne peut être un préfixe ou un suffixe : l'affixe de ce palier, en gris.
 affix-prefix = Préfixe
 affix-suffix = Suffixe
 # L'infobulle d'un palier trouvé d'après les valeurs, quand l'autre affixe donne aussi la valeur mais que l'objet n'a plus de place pour lui ; $tier et $ranges sont ceux de l'autre affixe (« T1 », « 16–19 »).
-tier-ruled-out-prefix = Un suffixe, puisque les préfixes sont pleins : un préfixe { $tier } ({ $ranges }) donne aussi cette valeur
-tier-ruled-out-suffix = Un préfixe, puisque les suffixes sont pleins : un suffixe { $tier } ({ $ranges }) donne aussi cette valeur
+tier-ruled-out-prefix = Un suffixe, puisque les préfixes sont pleins : un préfixe { $tier } ({ $ranges }) donne aussi cette valeur
+tier-ruled-out-suffix = Un préfixe, puisque les suffixes sont pleins : un suffixe { $tier } ({ $ranges }) donne aussi cette valeur
 
 ## Bloc prix
 
@@ -245,8 +245,8 @@ similar = { $count ->
 }
 # Sous un prix estimé d'après moins de 5 offres, les offres suspectes mises à part.
 estimate-uncertain = { $count ->
-    [one] Une seule offre similaire : l'estimation est incertaine
-   *[other] Seulement { $count } offres similaires : l'estimation est incertaine
+    [one] Une seule offre similaire : l'estimation est incertaine
+   *[other] Seulement { $count } offres similaires : l'estimation est incertaine
 }
 # Sous un prix estimé : comment il est calculé.
 estimate-median = { $count ->

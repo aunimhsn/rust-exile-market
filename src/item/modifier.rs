@@ -178,7 +178,10 @@ pub enum TierDoubt {
     RuledOut(AffixTier),
     /// The tier of each affix, the item having room for either: the modifier stays explicit,
     /// without affix nor tier.
-    EitherAffix(Vec<AffixTier>),
+    EitherAffix {
+        prefix: AffixTier,
+        suffix: AffixTier,
+    },
 }
 
 /// A modifier, with one line or more.
