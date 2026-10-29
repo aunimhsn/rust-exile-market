@@ -59,6 +59,7 @@ Two folders are the exchange area between the owner and Claude Code. They are ig
 - For each task, create a dedicated branch from `main`, commit and push only on that branch.
 - Every change must go through a pull request targeting `main`.
 - Each time a pull request is opened or updated, give the owner its full link (`https://github.com/<owner>/<repository>/pull/<number>`), not only its number.
+- When the owner must merge a pull request, end the message with the sentence they will send once it is merged, alone on the last line: `J'ai fusionné la PR #<number>` (`J'ai fusionné les PR #86 et #87` for several). Claude Code then tends to suggest it in the owner's input field, ready to send with Tab.
 - Name branches `<type>/<short-description>` in kebab-case, using the commit types below (e.g. `feat/dark-mode`, `fix/settings-save`).
 - Never switch branches in the main project directory while the owner may be testing a branch there (for example with `cargo run`): it would change the code they run. Work on any other branch in a separate Git worktree outside the project (`git worktree add <directory> -b <branch> origin/main`), and remove it with `git worktree remove <directory>` once the work is pushed.
 - When the owner says they aren't running or testing anything, work on the task branch in the main project directory instead, so that they can follow the files changing in their editor; switch it back to `main` once the pull request is merged.
