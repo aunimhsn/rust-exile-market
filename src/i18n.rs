@@ -111,6 +111,9 @@ pub enum Message {
     UnrevealedNote,
     /// The note under the stats of a rare or magic item copied from the in-game trade.
     TradeCopyNote,
+    /// After the range of a tier found from the values, the affix it is the tier of.
+    AffixPrefix,
+    AffixSuffix,
     OffersLabel,
     OffersSearchHint,
     OffersSearchTooltip,
@@ -137,7 +140,7 @@ pub enum Message {
 impl Message {
     /// Every message, for the tests.
     #[cfg(test)]
-    const ALL: [Self; 105] = [
+    const ALL: [Self; 107] = [
         Self::LeagueModeSoftcore,
         Self::LeagueModeHardcore,
         Self::LeagueLoading,
@@ -222,6 +225,8 @@ impl Message {
         Self::UnrevealedSuffix,
         Self::UnrevealedNote,
         Self::TradeCopyNote,
+        Self::AffixPrefix,
+        Self::AffixSuffix,
         Self::OffersLabel,
         Self::OffersSearchHint,
         Self::OffersSearchTooltip,
@@ -333,6 +338,8 @@ impl Message {
             Self::UnrevealedSuffix => "unrevealed-suffix",
             Self::UnrevealedNote => "unrevealed-note",
             Self::TradeCopyNote => "trade-copy-note",
+            Self::AffixPrefix => "affix-prefix",
+            Self::AffixSuffix => "affix-suffix",
             Self::OffersLabel => "offers-label",
             Self::OffersSearchHint => "offers-search-hint",
             Self::OffersSearchTooltip => "offers-search-tooltip",
@@ -1115,6 +1122,20 @@ mod tests {
 
         assert_eq!(english.affix_fill(3, 3), "3 of 3");
         assert_eq!(english.affix_fill(2, 3), "2 of 3 · 1 open");
+    }
+
+    #[test]
+    fn a_french_punctuation_mark_follows_a_non_breaking_space() {
+        // egui breaks a line at an ordinary space only: a wrapped text never starts a line with
+        // ":".
+        for line in messages(Language::French)
+            .lines()
+            .filter(|line| !line.trim_start().starts_with('#'))
+        {
+            for mark in [':', ';', '?', '!'] {
+                assert!(!line.contains(&format!(" {mark}")), "{line}");
+            }
+        }
     }
 
     #[test]

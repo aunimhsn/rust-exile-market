@@ -196,17 +196,17 @@
 /* The Runic Ward of a runeforged base, its label in a sky blue of its own. */
 .props span.app-ward { color: var(--ward); }
 
-/* The copies from the in-game trade (13k2e): the tooltip of a tier chosen among several, or of the word
-   "Hybrid", wrapped since it can be long (owner, 2026-10-29), opening to the right since it is on the left. */
-.app-tier-tip { position: relative; cursor: default; }
-.app-tier-tip .app-tip, .app-after .app-tip {
+/* The copies from the in-game trade (13k2e): the tooltip of the word "Hybrid", wrapped since it can be long
+   (owner, 2026-10-29), opening to the right since it is on the left. */
+.app-after .app-tip {
   left: -4px; right: auto; width: max-content; max-width: 230px; white-space: normal; font-weight: 400; line-height: 1.35;
 }
-.app-tier-tip:is(:hover, .is-hovered) .app-tip { display: block; }
 /* A line whose affix stays unknown, or that adds up two modifiers: the tier and range of each, one under
    the other. */
 .roll2.app-affixes { flex-direction: column; align-items: flex-start; gap: 1px; }
-/* A word after the range, like the origin, in gray: "Hybrid", "Prefix", "Suffix"; with its tooltip under the
-   pointer, wrapped like the one of a tier. */
+/* The origin of such a line on a line of its own, under its tiers: the line has it whichever affix it is. */
+.app-origin-alone .app-origin { margin-left: 0; }
+/* A word after the range, like the origin, in gray: "Hybrid", "Prefix", "Suffix"; the tooltip of "Hybrid"
+   under the pointer, wrapped (above). */
 .app-after { position: relative; margin-left: 6px; font-weight: 600; color: var(--weak); cursor: default; }
 .app-after.app-has-tip:is(:hover, .is-hovered) .app-tip { display: block; }

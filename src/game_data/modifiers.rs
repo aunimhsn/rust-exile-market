@@ -8,7 +8,7 @@ use serde::Deserialize;
 
 use super::bases;
 use super::lines::{LineMatch, StatSource, modifier_stats};
-use crate::item::{Affix, Modifier, ModifierKind, ModifierOrigin, Range};
+use crate::item::{Affix, AffixTier, Modifier, ModifierKind, ModifierOrigin, Range, TierDoubt};
 use crate::language::Language;
 
 /// How far a copied value can be from a tier: the game rounds the values it scales, e.g. a
@@ -161,13 +161,11 @@ pub struct FoundTiers {
     pub modifiers: std::ops::Range<usize>,
     /// Each affix the modifier can be, with its tiers on the base, the copied one the worst
     /// that holds its values: a prefix or a suffix, or both when the item has room for either
-    /// (the `18% increased Rarity of Items found` of a helmet). The ranges of a tier, and
+    /// (the `18% increased Rarity of Items found` of a helmet), the prefix first, as
+    /// [`TierDoubt::EitherAffix`] reads them. The ranges of a tier, and
     /// `counts`, follow the line matches of [`modifier_stats`] for each of these modifiers in
     /// their order.
     pub affixes: Vec<(Affix, ModifierTiers)>,
-    /// The other affix, whose tables hold the values too, left out since the item has no room
-    /// for it: a suffix, the prefixes being full.
-    pub ruled_out: Option<Affix>,
 }
 
 /// The tiers of the explicit modifiers of a rare or magic item copied from the in-game trade,
@@ -256,15 +254,16 @@ pub fn trade_tiers(
                 (AffixSet::Both, Affix::Prefix) => both.0,
                 (AffixSet::Both, Affix::Suffix) => both.1,
             };
-            let (affixes, ruled_out): (Vec<_>, Vec<_>) = candidate
-                .affixes
-                .iter()
-                .cloned()
-                .partition(|(affix, _)| kept(*affix));
             Some(FoundTiers {
                 modifiers: candidate.modifiers.clone(),
-                affixes,
-                ruled_out: ruled_out.first().map(|(affix, _)| *affix),
+                // Without the affix the item has no room for, whose tables hold the values
+                // too: a prefix, the prefixes being full.
+                affixes: candidate
+                    .affixes
+                    .iter()
+                    .filter(|(affix, _)| kept(*affix))
+                    .cloned()
+                    .collect(),
             })
         })
         .collect()
@@ -274,7 +273,8 @@ pub fn trade_tiers(
 /// tiers found from their values ([`trade_tiers`], with the same arguments), as the advanced
 /// copy writes them: the lines of a hybrid made one modifier, a prefix or a suffix, its tier,
 /// and on each value its stat counts the range of that tier. A modifier that can be a prefix
-/// or a suffix, or that no tier holds, stays as it was: explicit, without affix nor tier.
+/// or a suffix stays explicit, without affix nor tier, with the tier of each
+/// ([`TierDoubt::EitherAffix`]); one that no tier holds stays as it was.
 #[must_use]
 pub fn with_trade_tiers(
     language: Language,
@@ -292,7 +292,7 @@ pub fn with_trade_tiers(
             .filter(|found| found.modifiers.start == next)
             .find_map(|found| {
                 let parts = modifiers.get(found.modifiers.clone())?;
-                Some((found.modifiers.end, with_tier(language, parts, found)?))
+                Some((found.modifiers.end, read_found(language, parts, found)?))
             });
         if let Some((end, joined)) = joined {
             read.push(joined);
@@ -305,26 +305,76 @@ pub fn with_trade_tiers(
     read
 }
 
-/// The modifiers `parts`, read as one modifier of one affix in `found`, joined with its tier
-/// and the ranges of that tier on the values their stats count, in their order; none when
-/// `found` has both affixes. A line whose counted values aren't as many as those of its stat in
-/// the tables (none for `Loads an additional bolt`, whose string gives the value) keeps them
-/// without range.
-fn with_tier(language: Language, parts: &[Modifier], found: &FoundTiers) -> Option<Modifier> {
-    let [(affix, tiers)] = found.affixes.as_slice() else {
-        return None;
-    };
-    let tier = tiers.tier()?;
-    let first = parts.first()?;
-    let mut joined = Modifier {
-        kind: ModifierKind::Explicit(Some(*affix)),
-        tier: Some(tier.number),
+/// The modifiers `parts`, read as one modifier in `found`: of its affix with its tier; or, when
+/// `found` has both affixes, explicit with the tier of each.
+fn read_found(language: Language, parts: &[Modifier], found: &FoundTiers) -> Option<Modifier> {
+    match found.affixes.as_slice() {
+        [(affix, tiers)] => with_tier(language, parts, *affix, tiers),
+        [(Affix::Prefix, prefix), (Affix::Suffix, suffix)] => Some(Modifier {
+            doubt: Some(TierDoubt::EitherAffix {
+                prefix: affix_tier(language, parts, Affix::Prefix, prefix)?,
+                suffix: affix_tier(language, parts, Affix::Suffix, suffix)?,
+            }),
+            ..joined(parts)?
+        }),
+        _ => None,
+    }
+}
+
+/// The modifiers `parts` made one, with the lines of each in their order.
+fn joined(parts: &[Modifier]) -> Option<Modifier> {
+    Some(Modifier {
         lines: parts
             .iter()
             .flat_map(|part| part.lines.iter().cloned())
             .collect(),
-        ..first.clone()
-    };
+        ..parts.first()?.clone()
+    })
+}
+
+/// The modifiers `parts` made one modifier of `affix`, with the tier of `tiers` and the ranges
+/// of that tier on its values ([`with_ranges`]).
+fn with_tier(
+    language: Language,
+    parts: &[Modifier],
+    affix: Affix,
+    tiers: &ModifierTiers,
+) -> Option<Modifier> {
+    Some(Modifier {
+        kind: ModifierKind::Explicit(Some(affix)),
+        tier: Some(tiers.tier()?.number),
+        ..with_ranges(language, parts, tiers)?
+    })
+}
+
+/// The tier of `tiers` that holds the values of the modifiers `parts`, as `affix`, with the
+/// ranges [`with_ranges`] puts on their values, in their order, as the game writes them.
+fn affix_tier(
+    language: Language,
+    parts: &[Modifier],
+    affix: Affix,
+    tiers: &ModifierTiers,
+) -> Option<AffixTier> {
+    let ranged = with_ranges(language, parts, tiers)?;
+    Some(AffixTier {
+        affix,
+        tier: tiers.tier()?.number,
+        ranges: ranged
+            .lines
+            .iter()
+            .flat_map(|line| &line.rolls)
+            .filter_map(|roll| roll.range)
+            .collect(),
+    })
+}
+
+/// The modifiers `parts` made one, with the ranges of the tier of `tiers` on the values their
+/// stats count, in their order, without their sign. A line whose counted values aren't as many
+/// as those of its stat in the tables (none for `Loads an additional bolt`, whose string gives
+/// the value) keeps them without range, as does a range across zero, which needs its sign.
+fn with_ranges(language: Language, parts: &[Modifier], tiers: &ModifierTiers) -> Option<Modifier> {
+    let tier = tiers.tier()?;
+    let mut joined = joined(parts)?;
     // The ranges and `counts` follow the line matches of each part, in their order.
     let mut ranges = tier.ranges.iter();
     let mut counts = tiers.counts.iter();
@@ -1031,6 +1081,7 @@ mod tests {
                     rolls: Vec::new(),
                 })
                 .collect(),
+            doubt: None,
         }
     }
 
@@ -1312,8 +1363,6 @@ mod tests {
                     (1, vec![(Prefix, 1)]),
                 ]
             );
-            let rarity = found.get(2).expect("the rarity");
-            assert_eq!(rarity.ruled_out, Some(Prefix), "the prefixes are full");
             let hybrid = found.first().and_then(|found| found.affixes.first());
             assert_eq!(
                 hybrid.and_then(|(_, tiers)| Some(tiers.tier()?.ranges.clone())),
@@ -1555,6 +1604,7 @@ mod tests {
                     tags: Vec::new(),
                     unrevealed: false,
                     lines,
+                    doubt: None,
                 });
             }
             written.push(Written {
@@ -1794,6 +1844,67 @@ mod tests {
                 (line("+40% to Cold Resistance"), suffix, Some(2)),
             ]
         );
+    }
+
+    #[test]
+    fn the_lines_of_a_tiara_read_again_keep_the_tiers_of_the_affix_in_doubt() {
+        let item = parse(TIARA_EN);
+        let limits = AffixLimits {
+            prefixes: 3,
+            suffixes: 3,
+        };
+        let read = |modifiers: &[Modifier]| {
+            with_trade_tiers(
+                item.language(),
+                item.base_type(),
+                item.item_level(),
+                modifiers,
+                limits,
+            )
+        };
+        let find = |modifiers: &[Modifier], words: &str| {
+            modifiers
+                .iter()
+                .find(|modifier| modifier.lines[0].text.contains(words))
+                .cloned()
+                .expect(words)
+        };
+        let tier = |affix, min, max| AffixTier {
+            affix,
+            tier: 1,
+            ranges: vec![range(min, max)],
+        };
+        let desecrated = item.modifiers().len() - 1;
+        // A third resistance in place of the desecrated `+69 to maximum Energy Shield`: the
+        // suffixes full, a prefix open.
+        let mut resistances = item.modifiers().to_vec();
+        resistances[desecrated].lines = vec![StatLine::parse("+30% to Lightning Resistance")];
+        resistances[desecrated].origin = None;
+
+        let full = read(item.modifiers());
+        // Without the desecrated `+69 to maximum Energy Shield`, a prefix is open.
+        let open = find(&read(&item.modifiers()[..desecrated]), "Rarity");
+        let rarity_prefix = find(&read(&resistances), "Rarity");
+
+        // A suffix, since the prefixes are full; a prefix, since the suffixes are full: nothing
+        // left in doubt.
+        let rarity = find(&full, "Rarity");
+        assert_eq!(rarity.kind, ModifierKind::Explicit(Some(Affix::Suffix)));
+        assert_eq!(rarity.doubt, None);
+        assert_eq!(
+            rarity_prefix.kind,
+            ModifierKind::Explicit(Some(Affix::Prefix))
+        );
+        assert_eq!(rarity_prefix.doubt, None);
+        // A prefix or a suffix: the tier of each, the line without range.
+        assert_eq!(
+            open.doubt,
+            Some(TierDoubt::EitherAffix {
+                prefix: tier(Affix::Prefix, 16.0, 19.0),
+                suffix: tier(Affix::Suffix, 15.0, 18.0),
+            })
+        );
+        assert_eq!(written_ranges(&open), [None]);
     }
 
     #[test]

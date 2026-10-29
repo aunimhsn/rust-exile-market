@@ -70,14 +70,9 @@ function item(it, unfolded = false) {
       if (row.note) return `<div class="note${cls}">${row.note}</div>`;
       // A tier found from the value (13k2e, a copy from the in-game trade) looks like any other, a note
       // under the stats saying so (decided with the owner on 2026-10-29, against a dashed outline and "≈");
-      // a tier chosen among several has a tooltip saying why (`row.tierTip`, `row.tierHover` open).
-      const tierBadge = number => {
-        const text = row.tierTip;
-        const hover = row.tierHover;
-        const found = text ? ` app-tier-tip${hover ? " is-hovered" : ""}` : "";
-        const tip = text ? `<span class="app-tip">${text}</span>` : "";
-        return `<span class="tier ${number <= 3 ? "tier-top" : ""} t${number}${found}">T${number}${tip}</span>`;
-      };
+      // without tooltip, also when the room of the item rules out the other affix: it is then certain
+      // (owner, 2026-10-29, step 13k2e3c2).
+      const tierBadge = number => `<span class="tier ${number <= 3 ? "tier-top" : ""} t${number}">T${number}</span>`;
       // The tier and the ranges of a hybrid modifier, under all its lines: it reads as one modifier.
       if (row.rollOnly) {
         const rollOrigin = row.origin ? `<span class="app-origin">${row.originLabel || ORIGIN_LABEL[row.origin]}</span>` : "";
@@ -93,12 +88,17 @@ function item(it, unfolded = false) {
         return `<span class="app-after${word.tip ? " app-has-tip" : ""}${word.hover ? " is-hovered" : ""}">${word.label}${tip}</span>`;
       };
       // A line whose affix stays unknown (13k2e), or a line that adds up two modifiers (13k2e4): the tier and
-      // range of each, one under the other (`row.affixes`: [tier, range, word after the range]).
+      // range of each, one under the other (`row.affixes`: [tier, range, word after the range]); its origin
+      // on a line of its own under them, since the line has it whichever affix it is (owner, 2026-10-29,
+      // step 13k2e3c2, against after the last tier, which read as the origin of the suffix only, and after
+      // the text of the line, which wraps it more and is unlike every other line).
       if (row.affixes) {
         const check = `<span class="check ${row.check ? "on" : ""}">${row.check ? ICON.check(11) : ""}</span>`;
         const field = `<span class="input app-range"><input value="${row.min ?? ""}" inputmode="decimal" aria-label="Minimum"><i>–</i><input value="" inputmode="decimal" aria-label="Maximum"><span class="app-tip"></span></span>`;
+        const affixOrigin = row.origin ? `<span class="app-origin">${row.originLabel || ORIGIN_LABEL[row.origin]}</span>` : "";
         const lines = row.affixes.map(([number, range, word]) =>
-          `<span class="range">${tierBadge(number)}${range}${after(word)}</span>`).join("");
+          `<span class="range">${tierBadge(number)}${range}${after(word)}</span>`).join("")
+          + (affixOrigin ? `<span class="range app-origin-alone">${affixOrigin}</span>` : "");
         return `<div class="mod2 min-top${cls}">${check}<span class="text">${row.mod}</span>${field}<div class="roll2 app-affixes">${lines}</div></div>`;
       }
       // A filter: its checkbox, its text on two lines at most (whole under the pointer), its minimum

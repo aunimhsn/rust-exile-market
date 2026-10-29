@@ -35,7 +35,10 @@ use crate::filters::{self, Filter, FilterKey, Filters, Half, Property, StatKey};
 use crate::format;
 use crate::game_data::{self, Category};
 use crate::i18n::{Message, Translator};
-use crate::item::{Affix, Item, Modifier, ModifierKind, ModifierOrigin, Range, Rarity, StatLine};
+use crate::item::{
+    Affix, AffixTier, Item, Modifier, ModifierKind, ModifierOrigin, Range, Rarity, StatLine,
+    TierDoubt,
+};
 use crate::roll_difference::CopiedLines;
 use crate::tier_rolls::{LineRolls, TierRolls, TierSpan};
 use crate::trade::link;
@@ -78,6 +81,8 @@ const TOOLTIP_LINE_GAP: f32 = 3.0;
 const TOOLTIP_SMALL_LINE_GAP: f32 = 1.0;
 /// How far the tooltip of the "not allowed" sign starts left of the sign.
 const UNSEARCHABLE_TOOLTIP_SHIFT: f32 = 4.0;
+/// The space between the rows of several tiers under a line.
+const TIER_ROW_GAP: f32 = 1.0;
 /// The lines of the text of a stat, at most; the whole text is in its tooltip.
 const MAX_LINES: usize = 2;
 /// The bar of a roll.
@@ -178,14 +183,46 @@ enum Roll {
         tier: Option<ModifierTier>,
         origin: Option<ModifierOrigin>,
     },
+    /// Under the last line of a modifier copied from the in-game trade that can be a prefix or
+    /// a suffix: the tier of each and its ranges, one under the other, a word after the ranges
+    /// ("Prefix"), without bar; then its origin on a line of its own, since the line has it
+    /// whichever affix it is.
+    Tiers {
+        rows: Vec<TierRow>,
+        origin: Option<ModifierOrigin>,
+    },
 }
 
-/// The tier of a prefix or suffix, written by the advanced copy, and the ranges of that tier.
+/// The tier of a prefix or suffix, written by the advanced copy or found from the values, and
+/// the ranges of that tier.
 #[derive(Debug, Clone, PartialEq)]
 struct ModifierTier {
     /// 1 is the best.
     number: u32,
     ranges: Vec<Range>,
+}
+
+/// A tier among several under a line, and the word after its ranges.
+#[derive(Debug, Clone, PartialEq)]
+struct TierRow {
+    tier: ModifierTier,
+    word: Message,
+}
+
+impl TierRow {
+    /// The tier `found` for one affix of a line that can be either, "Prefix" after its ranges.
+    fn affix(found: &AffixTier) -> Self {
+        Self {
+            tier: ModifierTier {
+                number: found.tier,
+                ranges: found.ranges.clone(),
+            },
+            word: match found.affix {
+                Affix::Prefix => Message::AffixPrefix,
+                Affix::Suffix => Message::AffixSuffix,
+            },
+        }
+    }
 }
 
 /// How the bar of a roll is drawn: a setting from step 18, which adds the zone searched.
@@ -480,10 +517,14 @@ fn rows<'a>(
     if unrevealed {
         rows.push(Row::UnrevealedNote);
     }
-    // Once a tier is found: none before the names of the trade site tell the base of a magic
-    // item, nor on a base the game data doesn't know.
+    // Once a tier is found, also for a line that can be a prefix or a suffix: none before the
+    // names of the trade site tell the base of a magic item, nor on a base the game data
+    // doesn't know.
     let found = item.modifiers().iter().any(|modifier| {
-        matches!(modifier.kind, ModifierKind::Explicit(Some(_))) && modifier.tier.is_some()
+        let with_tier =
+            matches!(modifier.kind, ModifierKind::Explicit(Some(_))) && modifier.tier.is_some();
+        let in_doubt = matches!(modifier.doubt, Some(TierDoubt::EitherAffix { .. }));
+        with_tier || in_doubt
     });
     if item.has_tiers_from_values() && found {
         rows.push(Row::TradeCopyNote);
@@ -914,7 +955,8 @@ struct AffixStats<'a> {
 
 /// The explicit modifiers of `affix` (`None`: a header that doesn't tell it), those with a
 /// line that varies first and those not revealed yet last: each line with its bar over every
-/// tier of its modifier, and its tier and the ranges of that tier under its last line.
+/// tier of its modifier, and its tier and the ranges of that tier under its last line; the
+/// tier of each affix for a modifier copied from the in-game trade that can be either.
 fn affix_stats<'a>(item: &'a Item, affix: Option<Affix>, reading: &Reading<'_>) -> AffixStats<'a> {
     let mut modifiers: Vec<(usize, &Modifier)> = item
         .modifiers()
@@ -973,7 +1015,16 @@ fn affix_stats<'a>(item: &'a Item, affix: Option<Affix>, reading: &Reading<'_>) 
                         ModifierTier { number, ranges }
                     });
                     let origin = modifier.origin.filter(|_| line_index == last);
-                    affix_stat(key, line, tier, origin, reading)
+                    let mut stat = affix_stat(key, line, tier, origin, reading);
+                    if line_index == last
+                        && let Some(TierDoubt::EitherAffix { prefix, suffix }) = &modifier.doubt
+                    {
+                        stat.roll = Some(Roll::Tiers {
+                            rows: vec![TierRow::affix(prefix), TierRow::affix(suffix)],
+                            origin,
+                        });
+                    }
+                    stat
                 })
                 .collect()
         })
@@ -1690,58 +1741,86 @@ fn clamped(text: &str) -> LayoutJob {
 
 /// The bar of a roll drawn in the style `bar`, and its ranges; for a line of a prefix or
 /// suffix, its bar over every tier, then under the last line of its modifier its tier, the
-/// ranges of that tier and its origin.
+/// ranges of that tier and its origin; or the tiers of a line that can be a prefix or a
+/// suffix, one under the other, then its origin on a row of its own.
 fn roll_line(ui: &mut Ui, roll: &Roll, bar: RollBar, i18n: &Translator) {
+    match roll {
+        Roll::Bar {
+            share,
+            ranges,
+            origin,
+        } => roll_row(ui, |ui| {
+            roll_bar(ui, *share, bar);
+            range_label(ui, ranges);
+            if let Some(origin) = origin {
+                origin_word(ui, *origin, i18n);
+            }
+        }),
+        Roll::Affix {
+            share,
+            tier,
+            origin,
+        } => roll_row(ui, |ui| {
+            if let Some(share) = share {
+                roll_bar(ui, *share, bar);
+            }
+            if let Some(tier) = tier {
+                tier_label(ui, tier);
+            }
+            if let Some(origin) = origin {
+                origin_word(ui, *origin, i18n);
+            }
+        }),
+        Roll::Tiers { rows, origin } => {
+            ui.vertical(|ui| {
+                ui.spacing_mut().item_spacing.y = TIER_ROW_GAP;
+                for row in rows {
+                    roll_row(ui, |ui| {
+                        tier_label(ui, &row.tier);
+                        small_word(ui, i18n.text(row.word), color::WEAK);
+                    });
+                }
+                // On a line of its own: the line has it whichever affix it is.
+                if let Some(origin) = origin {
+                    roll_row(ui, |ui| origin_word(ui, *origin, i18n));
+                }
+            });
+        }
+    }
+}
+
+/// One row of a roll, its parts `GAP` apart.
+fn roll_row(ui: &mut Ui, parts: impl FnOnce(&mut Ui)) {
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = GAP;
-        match roll {
-            Roll::Bar {
-                share,
-                ranges,
-                origin,
-            } => {
-                roll_bar(ui, *share, bar);
-                range_label(ui, ranges);
-                if let Some(origin) = origin {
-                    origin_word(ui, *origin, i18n);
-                }
-            }
-            Roll::Affix {
-                share,
-                tier,
-                origin,
-            } => {
-                if let Some(share) = share {
-                    roll_bar(ui, *share, bar);
-                }
-                if let Some(tier) = tier {
-                    ui.label(
-                        RichText::new(format!("T{}", tier.number))
-                            .font(text::tier())
-                            .color(tier_color(tier.number)),
-                    );
-                    if !tier.ranges.is_empty() {
-                        range_label(ui, &tier.ranges);
-                    }
-                }
-                if let Some(origin) = origin {
-                    origin_word(ui, *origin, i18n);
-                }
-            }
-        }
+        parts(ui);
     });
+}
+
+/// A tier, `T1` in its color, and its ranges.
+fn tier_label(ui: &mut Ui, tier: &ModifierTier) {
+    ui.label(
+        RichText::new(format!("T{}", tier.number))
+            .font(text::tier())
+            .color(tier_color(tier.number)),
+    );
+    if !tier.ranges.is_empty() {
+        range_label(ui, &tier.ranges);
+    }
 }
 
 /// The word of an origin, small, in its color: the last item of the line of a roll.
 fn origin_word(ui: &mut Ui, origin: ModifierOrigin, i18n: &Translator) {
+    let (message, tint) = origin_label(origin);
+    small_word(ui, i18n.text(message), tint);
+}
+
+/// A small word in `tint`: an origin, after the ranges of a tier or on a row of its own, or the
+/// affix of a tier among several ("Prefix") in gray, after its ranges.
+fn small_word(ui: &mut Ui, word: String, tint: Color32) {
     // The space before it only.
     ui.spacing_mut().item_spacing.x = ORIGIN_GAP;
-    let (message, tint) = origin_label(origin);
-    ui.label(
-        RichText::new(i18n.text(message))
-            .font(text::origin())
-            .color(tint),
-    );
+    ui.label(RichText::new(word).font(text::origin()).color(tint));
 }
 
 /// The word of an origin, and its color.
@@ -1815,7 +1894,9 @@ mod tests {
     /// site can't search, then its minimum or its maximum and its roll (`■ +55 to maximum Life
     /// ≥55 [40–60 0.75]`, `■ 18% reduced Movement Speed ≤18`, a line of a prefix or suffix
     /// with its bar over every tier and, under its last line, its tier, its ranges and its
-    /// origin: `■ +86 to maximum Life ≥77 [0.37 T7 85–99]`, `[0.80 T2 71–79 Desecrated]`).
+    /// origin: `■ +86 to maximum Life ≥77 [0.37 T7 85–99]`, `[0.80 T2 71–79 Desecrated]`; the
+    /// tiers of a line that can be a prefix or a suffix, each row after a ` / `, its origin a
+    /// row of its own: `[T1 16–19 AffixPrefix / T1 15–18 AffixSuffix / Desecrated]`).
     fn row_texts<'a>(rows: impl IntoIterator<Item = Row<'a>>) -> Vec<String> {
         rows.into_iter()
             .map(|row| match row {
@@ -1865,17 +1946,20 @@ mod tests {
                             origin,
                         }) => {
                             let share = share.map(|share| format!("{share:.2}"));
-                            let tier = tier.map(|tier| {
-                                [format!("T{}", tier.number), ranges_text(&tier.ranges)]
-                                    .into_iter()
-                                    .filter(|part| !part.is_empty())
-                                    .collect::<Vec<_>>()
-                                    .join(" ")
-                            });
+                            let tier = tier.as_ref().map(tier_text);
                             let origin = origin.map(|origin| format!("{origin:?}"));
                             let parts: Vec<String> =
                                 [share, tier, origin].into_iter().flatten().collect();
                             format!(" [{}]", parts.join(" "))
+                        }
+                        Some(Roll::Tiers { rows, origin }) => {
+                            // The origin on a line of its own, after the tiers.
+                            let rows: Vec<String> = rows
+                                .iter()
+                                .map(|row| format!("{} {:?}", tier_text(&row.tier), row.word))
+                                .chain(origin.map(|origin| format!("{origin:?}")))
+                                .collect();
+                            format!(" [{}]", rows.join(" / "))
                         }
                     };
                     let text = match text {
@@ -1893,6 +1977,15 @@ mod tests {
                 }
             })
             .collect()
+    }
+
+    /// A tier as [`row_texts`] writes it: `T1 15–18`.
+    fn tier_text(tier: &ModifierTier) -> String {
+        [format!("T{}", tier.number), ranges_text(&tier.ranges)]
+            .into_iter()
+            .filter(|part| !part.is_empty())
+            .collect::<Vec<_>>()
+            .join(" ")
     }
 
     /// `item`, copied from the in-game trade, read again with the tiers found from its values,
@@ -1935,6 +2028,92 @@ mod tests {
                 "■ 18% increased Rarity of Items found ≥16 [1.00 T1 15–18]",
                 "□ +43% to Fire Resistance ≥39 [0.95 T1 41–45]",
                 "□ +40% to Cold Resistance ≥36 [0.87 T2 36–40]",
+                "Trade copy note",
+            ]
+        );
+    }
+
+    #[test]
+    fn a_line_of_the_in_game_trade_that_can_be_a_prefix_or_a_suffix_shows_the_tier_of_each() {
+        let tiara = include_str!("../item/test-items/en-owner-trade-rare-helmet-fractured.txt");
+        // Without the desecrated `+69 to maximum Energy Shield`, a prefix is open.
+        let open = read_again(parse(
+            &tiara.replace("+69 to maximum Energy Shield (desecrated)\n", ""),
+        ));
+
+        let texts = texts(&open);
+        let explicit = texts
+            .iter()
+            .position(|text| text == "Explicit")
+            .expect("its explicit modifiers");
+        assert_eq!(
+            texts[explicit..],
+            [
+                "Explicit",
+                // Without bar, the tier and range of each affix one under the other.
+                "■ 18% increased Rarity of Items found ≥16 [T1 16–19 AffixPrefix / T1 15–18 AffixSuffix]",
+                "Trade copy note",
+            ]
+        );
+    }
+
+    #[test]
+    fn the_origin_of_a_line_in_doubt_comes_after_its_tiers() {
+        let tiara = include_str!("../item/test-items/en-owner-trade-rare-helmet-fractured.txt");
+        // A prefix open, and the rarity desecrated.
+        let open = read_again(parse(
+            &tiara
+                .replace("+69 to maximum Energy Shield (desecrated)\n", "")
+                .replace(
+                    "18% increased Rarity of Items found\n",
+                    "18% increased Rarity of Items found (desecrated)\n",
+                ),
+        ));
+
+        // The origin after the rows of the tiers: `roll_line` draws it on a row of its own,
+        // since the line has it whichever affix it is (checked on a screenshot).
+        assert!(texts(&open).contains(
+            &"■ 18% increased Rarity of Items found ≥16 [T1 16–19 AffixPrefix / T1 15–18 AffixSuffix / Desecrated]"
+                .to_owned()
+        ));
+    }
+
+    #[test]
+    fn a_line_that_can_be_a_prefix_is_one_once_the_suffixes_are_full() {
+        let tiara = include_str!("../item/test-items/en-owner-trade-rare-helmet-fractured.txt");
+        // A third resistance in place of the desecrated line: the suffixes full, a prefix open.
+        let resistances = read_again(parse(&tiara.replace(
+            "+69 to maximum Energy Shield (desecrated)",
+            "+30% to Lightning Resistance",
+        )));
+
+        let texts = texts(&resistances);
+        let rarity = texts
+            .iter()
+            .position(|text| text.contains("Rarity"))
+            .expect("the rarity");
+        let suffixes = texts
+            .iter()
+            .position(|text| text.starts_with("Suffixes"))
+            .expect("its suffixes");
+        assert!(rarity < suffixes, "a prefix: {texts:?}");
+        assert!(texts[rarity].ends_with("T1 16–19]"), "{}", texts[rarity]);
+    }
+
+    #[test]
+    fn the_note_shows_also_when_the_only_tiers_found_are_those_of_a_line_in_doubt() {
+        // A helmet with one modifier, which a prefix and a suffix both roll.
+        let helmet = read_again(parse(
+            "Item Class: Helmets\nRarity: Rare\nChimeric Visage\nAncestral Tiara\n--------\n\
+             Item Level: 82\n--------\n18% increased Rarity of Items found",
+        ));
+
+        let texts = texts(&helmet);
+        assert_eq!(
+            texts[texts.len() - 3..],
+            [
+                "Explicit",
+                "■ 18% increased Rarity of Items found ≥16 [T1 16–19 AffixPrefix / T1 15–18 AffixSuffix]",
                 "Trade copy note",
             ]
         );
