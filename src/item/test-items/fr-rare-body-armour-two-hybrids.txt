@@ -1,0 +1,30 @@
+Classe d'objet: Armures
+Rareté: Rare
+ Tenue démoniaque
+Armure de lâche
+--------
+Armure: 479 (augmented)
+Score d'Évasion: 434 (augmented)
+--------
+Prérequis : Niveau 65, 67 (unmet) For, 67 Dex
+--------
+Niveau de l'objet: 67
+--------
+{ Modificateur Implicite — Vie }
++65(60-80) de Vie maximale
+--------
+{ Préfixe : « Robuste » (Palier : 8) — Vie }
++70(70-84) de Vie maximale
+{ Préfixe : « du Vétéran » (Palier : 4) — Armure, Évasion }
++23(17-23) à l'Armure
++19(15-21) au Score d'Évasion
+23(21-26)% d'Augmentation de l'Armure et de l'Évasion
+{ Préfixe : « de la Brute » (Palier : 4) — Vie, Armure, Évasion }
+24(21-26)% d'Augmentation de l'Armure et de l'Évasion
++23(20-25) de Vie maximale
+{ Suffixe : « de l'Ours polaire » (Palier : 3) — Élémentaire, Froid, Résistance }
++31(31-35)% à la Résistance au froid
+{ Suffixe : « du Goliath » (Palier : 3) — Attribut }
++26(25-27) de Force
+{ Suffixe : « du Troll » (Palier : 6) — Vie }
+12.2(9.1-13) de Vie Régénérée par seconde

@@ -11,6 +11,8 @@ use super::lines::{LineMatch, StatSource, modifier_stats};
 use crate::item::{Affix, AffixTier, Modifier, ModifierKind, ModifierOrigin, Range, TierDoubt};
 use crate::language::Language;
 
+mod summed_readings;
+
 /// How far a copied value can be from a tier: the game rounds the values it scales, e.g. a
 /// regeneration stored per minute shown per second with one decimal.
 const ROUNDING: f64 = 0.051;
@@ -216,6 +218,13 @@ pub struct AddedTiers {
 /// modifiers are read as the best of these readings does, with its room. No line of a
 /// `sanctified` item is split: its values can leave their tiers.
 ///
+/// A line stays without tier too, with the other lines of its hybrids, when another reading
+/// with a line adding up several modifiers, whichever, fits the item as well
+/// ([`summed_readings::doubts`]): the `47% d'Augmentation de l'Armure et de l'Évasion` of the
+/// owner's body armour adds up two hybrids, one with `+23 à l'Armure` and `+19 au Score
+/// d'Évasion`, the other with the life; a line split with its neighbour may be summed with
+/// another line's hybrid, the copy sorting its lines by stat, not by modifier.
+///
 /// A hybrid whose other line is read on its own (a sanctified value out of its tier, or two
 /// lines apart) counts twice and may rule out an affix wrongly: a rare case, left as it is.
 #[must_use]
@@ -266,7 +275,23 @@ pub fn trade_tiers(
     let Some((key, reading)) = search.best else {
         return Vec::new();
     };
-    let ambiguous = search.ambiguous;
+    let mut ambiguous = search.ambiguous;
+    if !sanctified {
+        let doubts = summed_readings::doubts(
+            tags,
+            item_level,
+            modifiers,
+            &copied,
+            &candidates,
+            &reading,
+            room,
+        );
+        for line in doubts {
+            if !ambiguous.contains(&line) {
+                ambiguous.push(line);
+            }
+        }
+    }
     // A modifier that can be both, when the others leave room for one affix only: the lines
     // split in two ways as good take their room too.
     let both = if key.room {

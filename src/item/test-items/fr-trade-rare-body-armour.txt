@@ -1,0 +1,23 @@
+Classe d'objet: Armures
+Rareté: Rare
+ Tenue démoniaque
+Armure de lâche
+--------
+Armure: 479 (augmented)
+Score d'Évasion: 434 (augmented)
+--------
+Prérequis : Niveau 65, 67 For, 67 Dex
+--------
+Niveau de l'objet: 67
+--------
++65 de Vie maximale (implicit)
+--------
++23 à l'Armure
++19 au Score d'Évasion
+47% d'Augmentation de l'Armure et de l'Évasion
++93 de Vie maximale
++26 de Force
++31% à la Résistance au froid
+12.2 de Vie Régénérée par seconde
+--------
+Commentaire: ~b/o 1 aug

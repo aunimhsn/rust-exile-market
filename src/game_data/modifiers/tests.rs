@@ -83,6 +83,10 @@ fn the_tables_find_the_tier_written_by_the_advanced_copy() {
             None,
         ),
         (
+            include_str!("../../item/test-items/fr-rare-body-armour-two-hybrids.txt"),
+            None,
+        ),
+        (
             include_str!("../../item/test-items/en-owner-rare-sceptre-sanctified.txt"),
             None,
         ),
@@ -108,7 +112,7 @@ fn the_tables_find_the_tier_written_by_the_advanced_copy() {
             }
         }
     }
-    assert_eq!(found, 31);
+    assert_eq!(found, 37);
     // A line whose stat the tables have under another tier is a mistake; a line the tables
     // don't have isn't: the lightning damage of the mace, copied before a patch changed
     // its ranges, and the two modifiers of Amanamu, a lord of the Abyss, desecrated with
@@ -1426,15 +1430,15 @@ fn a_line_split_in_two_ways_as_good_takes_its_room_from_a_line_in_doubt() {
     };
 
     // The hybrid T6 (6–13 · 7–10) with a pure T3 or T2, two prefixes either way, without
-    // tier: with the mana, the prefixes are full, the rarity a suffix.
+    // tier: with the mana, the prefixes are full, the rarity a suffix. The mana has no tier
+    // either: the energy shield may be the hybrid with the mana, whose line adds up a pure
+    // mana, the life a pure modifier, three prefixes too.
     let modifiers = lines(true);
     let found = found_tiers(&item, &modifiers, (3, 3));
-    assert_eq!(
-        summary(&modifiers, &found),
-        [(1, vec![(Prefix, 8)]), (1, vec![(Suffix, 1)])]
-    );
+    assert_eq!(summary(&modifiers, &found), [(1, vec![(Suffix, 1)])]);
 
-    // Without the mana, a prefix is open.
+    // Without the mana, a prefix is open: the rarity could be a prefix and a suffix added up
+    // too, one more modifier than either alone, which leaves it as it is.
     let modifiers = lines(false);
     let found = found_tiers(&item, &modifiers, (3, 3));
     assert_eq!(
@@ -1451,7 +1455,8 @@ fn a_line_after_the_other_line_of_its_hybrid_is_split() {
         modifier(None, &["258% increased Physical Damage"]),
     ];
 
-    let found = found_tiers(&item, &modifiers, (3, 3));
+    // With a prefix open, the accuracy could add up a pure modifier too.
+    let found = found_tiers(&item, &modifiers, (2, 3));
 
     assert_eq!(summary(&modifiers, &found), [(2, vec![(Affix::Prefix, 1)])]);
     assert_eq!(
@@ -1470,8 +1475,9 @@ fn the_tiers_of_a_split_are_those_the_item_level_allows() {
         modifier(None, &["258% increased Physical Damage"]),
         modifier(None, &["+195 to Accuracy Rating"]),
     ];
+    // With a prefix open, the accuracy could add up a pure modifier too.
     let limits = AffixLimits {
-        prefixes: 3,
+        prefixes: 2,
         suffixes: 3,
     };
     let read = |item_level| {
@@ -1524,6 +1530,120 @@ fn no_line_of_a_sanctified_item_is_split() {
         vec![(Affix::Prefix, 5)],
     );
     assert!(lines_read(item.modifiers(), &found).contains(&accuracy));
+}
+
+#[test]
+fn both_lines_of_a_hybrid_that_may_add_up_another_modifier_have_no_tier() {
+    let item = parse(BOW_EN);
+    let lines = |adds: bool| {
+        let mut lines = Vec::new();
+        lines.extend(adds.then_some("Adds 36 to 56 Physical Damage"));
+        lines.extend(["217% increased Physical Damage", "+200 to Accuracy Rating"]);
+        lines
+            .iter()
+            .map(|line| modifier(None, &[*line]))
+            .collect::<Vec<_>>()
+    };
+
+    // The hybrid T1 (75–79 · 175–200) and a pure T3 (135–154), two prefixes; or a pure T1
+    // (170–179), the hybrid T5 (45–54 · 98–123) and a pure accuracy T8 (61–84), three.
+    let modifiers = lines(false);
+    assert_eq!(found_tiers(&item, &modifiers, (3, 3)), []);
+
+    // With a third prefix, the first reading is the only one.
+    let modifiers = lines(true);
+    let found = found_tiers(&item, &modifiers, (3, 3));
+    assert_eq!(
+        summary(&modifiers, &found),
+        [(1, vec![(Affix::Prefix, 1)]), (2, vec![(Affix::Prefix, 1)])]
+    );
+    assert_eq!(
+        added(&modifiers, &found),
+        [(
+            "217% increased Physical Damage".to_owned(),
+            Affix::Prefix,
+            3
+        )]
+    );
+}
+
+#[test]
+fn the_lines_of_two_hybrids_sharing_a_line_have_no_tier() {
+    let item = parse(BOW_EN);
+    let modifiers = [
+        modifier(None, &["10% increased Light Radius"]),
+        modifier(None, &["+235 to Accuracy Rating"]),
+        modifier(None, &["78% increased Physical Damage"]),
+    ];
+
+    let found = found_tiers(&item, &modifiers, (3, 3));
+
+    // The light radius with the accuracy T2 (10 · 21–40), the physical damage with the
+    // accuracy T1 (75–79 · 175–200); not the light radius hybrid with a pure accuracy T5
+    // (168–236) on its line, and a pure 78% T6 (65–84), as read before.
+    assert_eq!(found, []);
+}
+
+#[test]
+fn the_lines_of_the_owners_body_armour_adding_up_two_hybrids_have_no_tier() {
+    use Affix::Suffix;
+    let item = parse(include_str!(
+        "../../item/test-items/fr-trade-rare-body-armour.txt"
+    ));
+
+    let found = found_tiers(&item, item.modifiers(), (3, 3));
+
+    // `47% d'Augmentation de l'Armure et de l'Évasion` adds up the 23 of a hybrid with `+23 à
+    // l'Armure` and `+19 au Score d'Évasion` (T4) and the 24 of a hybrid with the life (T4),
+    // whose line `+93 de Vie maximale` adds up a pure T8 (the advanced copy of the same
+    // item): three prefixes, as many as the hybrid of the armour and the evasion T7, a pure
+    // 47% T6 and a pure life T7, read before. The suffixes are sure.
+    let line = |text: &str| vec![text.to_owned()];
+    assert_eq!(
+        lines_read(item.modifiers(), &found),
+        [
+            (line("+26 de Force"), vec![(Suffix, 3)]),
+            (line("+31% à la Résistance au froid"), vec![(Suffix, 3)]),
+            (line("12.2 de Vie Régénérée par seconde"), vec![(Suffix, 6)]),
+        ]
+    );
+}
+
+#[test]
+fn a_line_split_with_a_neighbour_its_hybrid_may_not_have_is_in_doubt() {
+    let read = |lines: &[&str]| {
+        let modifiers: Vec<_> = lines.iter().map(|line| modifier(None, &[*line])).collect();
+        let limits = AffixLimits {
+            prefixes: 3,
+            suffixes: 3,
+        };
+        trade_tiers(
+            Language::English,
+            "Soldier Cuirass",
+            Some(82),
+            &modifiers,
+            limits,
+            false,
+        )
+    };
+
+    // 119% is above every pure tier: the pure T2 (92–100) with the hybrid with the life T4
+    // (21–26 · 20–25), the `+74` a pure T9 (57–77); or the hybrid with the `+74` T2 (33–38 ·
+    // 58–75) with a pure T3, the life a pure modifier. The copy sorts its lines by stat: the
+    // lines of a hybrid needn't follow each other, so that the neighbour of the summed line
+    // isn't more likely.
+    let armour = [
+        "119% increased Armour",
+        "+74 to Armour",
+        "+23 to maximum Life",
+    ];
+    assert_eq!(read(&armour), []);
+    let armour = [
+        "+74 to Armour",
+        "119% increased Armour",
+        "+23 to maximum Life",
+    ];
+    assert_eq!(read(&armour), []);
 }
 
 #[test]
