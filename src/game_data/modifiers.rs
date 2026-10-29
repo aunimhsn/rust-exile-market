@@ -266,8 +266,8 @@ pub fn trade_tiers(
         if search.ambiguous.is_empty() {
             break best;
         }
-        // A line split in two ways as good: without tier, also alone or in a hybrid, which
-        // the room had ruled out; the others read again.
+        // A line split in two ways as good, and the other lines of its hybrids: without tier,
+        // also alone or in a hybrid, which the room had ruled out; the others read again.
         let ambiguous = search.ambiguous;
         candidates.retain(|candidate| {
             !ambiguous
@@ -506,14 +506,14 @@ static MOST_LINES: LazyLock<usize> = LazyLock::new(|| {
 /// `tags` hold, the tier the worst among those `item_level` allows, `copied` giving the lines
 /// of each modifier to read (none for a modifier that isn't, or whose lines have no stat of the
 /// game data): one modifier, or up to as many as the lines of a hybrid, of the same origin;
-/// then, when they may `split`, each way one of their lines adds up two modifiers
+/// then, when they `may_split`, each way one of their lines adds up two modifiers
 /// ([`splits`]). The shorter first at each start.
 fn candidates(
     modifiers: &[Modifier],
     copied: &[Option<Copied<'_>>],
     tags: &[String],
     item_level: Option<u32>,
-    split: bool,
+    may_split: bool,
 ) -> Vec<Candidate> {
     let tie = Tie::Worst { item_level };
     let mut candidates = Vec::new();
@@ -550,9 +550,9 @@ fn candidates(
                     added: None,
                 });
             }
-            for (summed, &owner) in owners.iter().enumerate().filter(|_| split) {
+            for (summed, &owner) in owners.iter().enumerate() {
                 // A modifier of one line only: the line the game writes for both.
-                if owners.iter().filter(|&&other| other == owner).count() != 1 {
+                if !may_split || owners.iter().filter(|&&other| other == owner).count() != 1 {
                     continue;
                 }
                 for split in splits(&TABLES, tags, &joined, (summed, owner), item_level) {
@@ -579,11 +579,11 @@ struct Split {
     fit: Fit,
 }
 
-/// Every way the line `summed` of `copied`, the lines of consecutive modifiers, the line of the
-/// modifier `owner` of the item, adds up two modifiers of its stat on a base with `tags`, the tiers of both among those `item_level`
-/// allows: the modifier of every copied line, and a pure modifier of another type of the summed
-/// line only, the values of both adding up on that line; the ways that fit best only. None for
-/// a line without number.
+/// Every way the line `summed` of `copied` (the lines of consecutive modifiers), the line of
+/// the modifier `owner` of the item, adds up two modifiers of its stat on a base with `tags`:
+/// the modifier of every copied line, and a pure modifier of another type of the summed line
+/// only, whose values add up on that line, their tiers among those `item_level` allows. Only
+/// the ways that fit best; none for a line without number.
 fn splits(
     tables: &[Table],
     tags: &[String],
@@ -810,8 +810,8 @@ struct Search<'a> {
     readings: usize,
     /// The best reading, the first one on a tie.
     best: Option<(ReadingKey, Vec<usize>)>,
-    /// The lines that readings as good as the best one split in other ways, or that one of
-    /// them only splits: the indexes among the modifiers of the item.
+    /// The lines of the splits that readings as good as the best one don't share, with the
+    /// other lines of their hybrids: the indexes among the modifiers of the item.
     ambiguous: Vec<usize>,
 }
 
@@ -907,8 +907,10 @@ impl<'a> Search<'a> {
     }
 }
 
-/// The lines that the readings `one` and `other`, as good, don't split in the same way: those
-/// one only splits, or splits into other modifiers.
+/// The lines of the splits that the readings `one` and `other`, as good, don't share: the line
+/// one only splits, or splits into other modifiers, with the other lines of its hybrid, which
+/// would otherwise be read alone (the accuracy of a bow whose `248% increased Physical Damage`
+/// is a pure T1 or T2 with the same hybrid).
 fn differently_split(candidates: &[Candidate], one: &[usize], other: &[usize]) -> Vec<usize> {
     let splits = |reading: &[usize]| -> Vec<usize> {
         reading
@@ -926,7 +928,8 @@ fn differently_split(candidates: &[Candidate], one: &[usize], other: &[usize]) -
     let only_other = other.iter().filter(|index| !one.contains(index));
     only_one
         .chain(only_other)
-        .filter_map(|&index| Some(candidates.get(index)?.added.as_ref()?.line))
+        .filter_map(|&index| candidates.get(index))
+        .flat_map(|candidate| candidate.modifiers.clone())
         .collect()
 }
 
@@ -2509,7 +2512,7 @@ mod tests {
         ];
 
         // Read alone, the armour a pure prefix, the stun threshold would be a fourth suffix:
-        // the hybrid T4 (27–32 · 41–63) and the pure T6.
+        // the hybrid T4 (21–26 · 25–40) and the pure T6.
         let modifiers = greaves(60);
         let hybrid = vec![
             "60% increased Armour".to_owned(),
@@ -2525,12 +2528,25 @@ mod tests {
             )
         );
 
-        // 50% splits in two ways as good: the armour without tier, also alone, and the
-        // stun threshold a fourth suffix, every affix kept.
+        // 50% splits in two ways as good: the armour and the stun threshold without tier,
+        // also alone.
         let modifiers = greaves(50);
-        let mut expected = vec![(line("+30 to Stun Threshold"), vec![(Suffix, 9)])];
-        expected.extend(resistances);
-        assert_eq!(greaves_read(&modifiers, 82), (expected, vec![]));
+        assert_eq!(greaves_read(&modifiers, 82), (resistances.to_vec(), vec![]));
+    }
+
+    #[test]
+    fn the_other_line_of_the_hybrid_of_a_line_split_in_two_ways_has_no_tier() {
+        let item = parse(BOW_EN);
+        // The pure part, 169–173, is a T2 at 169 or a T1, with the same hybrid T1 at 75–79.
+        let modifiers = [
+            modifier(None, &["248% increased Physical Damage"]),
+            modifier(None, &["+195 to Accuracy Rating"]),
+        ];
+
+        let found = found_tiers(&item, &modifiers, (3, 3));
+
+        // Read alone, the accuracy would be a pure prefix of tier 5.
+        assert_eq!(found, []);
     }
 
     #[test]
