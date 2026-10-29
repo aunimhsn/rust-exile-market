@@ -1,6 +1,7 @@
 //! The parser on real copied items (see `../test-items/README.md`).
 
 use super::*;
+use crate::game_data;
 use crate::item::modifier::{Range, Roll, StatLine};
 use crate::item::{Affix, Defences, ModifierOrigin};
 use crate::language::Language;
@@ -1097,4 +1098,119 @@ fn reads_no_flavour_text_nor_description_as_a_line_without_header() {
         ),
         Vec::<String>::new()
     );
+}
+
+/// The id of the stat the game data finds on all the lines of `modifier` together.
+fn stat_id(modifier: &Modifier) -> Option<&'static str> {
+    match game_data::modifier_stats(Language::English, modifier, None).as_slice() {
+        [found] => found.stat.as_ref()?.stat.id.as_deref(),
+        _ => None,
+    }
+}
+
+#[test]
+fn joins_the_lines_of_one_stat_written_without_header() {
+    let rare = item(
+        "Item Class: Gloves\nRarity: Rare\nTest Grip\nVaal Gloves\n--------\nItem Level: 80\n\
+         --------\n+40 to maximum Life\nInflict Anaemia on Hit (desecrated)\n\
+         Anaemia allows 2 Corrupted Blood debuffs to be inflicted on enemies (desecrated)\n\
+         +30% to Fire Resistance (desecrated)",
+    );
+    let lines: Vec<usize> = explicit(&rare).iter().map(|m| m.lines.len()).collect();
+    assert_eq!(lines, [1, 2, 1]);
+    let anaemia = explicit(&rare)[1];
+    assert_eq!(anaemia.origin, Some(ModifierOrigin::Desecrated));
+    assert_eq!(stat_id(anaemia), Some("apply_anaemia_magnitude_on_hit"));
+
+    // The second line alone would take the stat of every rarity.
+    let unique = item(
+        "Item Class: Gloves\nRarity: Unique\nTest Grasp\nVaal Gloves\n--------\nItem Level: 80\n\
+         --------\n50% increased Rarity of Items found\n\
+         Your other Modifiers to Rarity of Items found do not apply\n+20 to Strength\n\
+         --------\nFlavour text.",
+    );
+    let lines: Vec<usize> = explicit(&unique).iter().map(|m| m.lines.len()).collect();
+    assert_eq!(lines, [2, 1]);
+    assert_eq!(
+        stat_id(explicit(&unique)[0]),
+        Some("unique_gloves_item_rarity_only_+%")
+    );
+}
+
+#[test]
+fn keeps_apart_the_lines_of_other_modifiers() {
+    // Another origin: two modifiers.
+    let rare = item(
+        "Item Class: Gloves\nRarity: Rare\nTest Grip\nVaal Gloves\n--------\nItem Level: 80\n\
+         --------\nInflict Anaemia on Hit (desecrated)\n\
+         Anaemia allows 2 Corrupted Blood debuffs to be inflicted on enemies",
+    );
+    assert_eq!(explicit(&rare).len(), 2);
+    // Two headers: the advanced copy tells its modifiers apart.
+    let headed = item(
+        "Item Class: Gloves\nRarity: Unique\nTest Grasp\nVaal Gloves\n--------\nItem Level: 80\n\
+         --------\n{ Unique Modifier }\n50(40-50)% increased Rarity of Items found\n\
+         { Unique Modifier }\nYour other Modifiers to Rarity of Items found do not apply",
+    );
+    assert_eq!(explicit(&headed).len(), 2);
+    // The copied items keep their modifiers: none of them is written on several lines.
+    for text in [
+        FR_TRADE_RARE_BOW,
+        EN_TRADE_RARE_HELMET,
+        EN_TRADE_UNIQUE_BELT,
+    ] {
+        let item = item(text);
+        assert!(
+            item.modifiers().iter().all(|m| m.lines.len() == 1),
+            "{text}"
+        );
+    }
+}
+
+#[test]
+fn reads_a_section_of_fractured_lines_only_as_the_explicit_modifiers() {
+    let rare = item(
+        "Item Class: Rings\nRarity: Rare\nTest Loop\nGold Ring\n--------\nItem Level: 80\n\
+         --------\n+40 to maximum Life (fractured)\n+30% to Fire Resistance (fractured)",
+    );
+    let explicit_kind = ModifierKind::Explicit(None);
+    assert_eq!(
+        kinds(&rare),
+        [(explicit_kind, Some(ModifierOrigin::Fractured)); 2]
+    );
+}
+
+#[test]
+fn a_french_unique_without_header_is_read_before_a_note_with_a_number() {
+    let ring = item(
+        "Classe d'objet: Bagues\nRareté: Unique\nToucher de Kalandra\nBague\n--------\n\
+         Niveau de l'objet: 80\n--------\nReflète la Bague opposée\n--------\n\
+         Le pouvoir n'est qu'affaire de perception.\n--------\n~prix 5 divine",
+    );
+    assert_eq!(explicit_texts(&ring), ["Reflète la Bague opposée"]);
+}
+
+#[test]
+fn loses_the_explicit_lines_without_number_of_a_magic_item_without_headers() {
+    // A known limit (step 13k5): a line without number can't be told from a description.
+    let waystone = item(
+        "Item Class: Waystones\nRarity: Magic\nBurning Waystone (Tier 15)\n--------\n\
+         Item Level: 80\n--------\nArea has patches of Ignited Ground",
+    );
+    assert_eq!(waystone.modifiers(), []);
+}
+
+#[test]
+fn an_advanced_copy_never_has_its_explicit_modifiers_found_without_header() {
+    for text in ALL.into_iter().filter(|text| text.contains("\n{ ")) {
+        let copied = CopiedItem::from_text(text).expect("an item");
+        let labels = Labels::of(copied.language());
+        let text = copied.text().replace(['\u{a0}', '\u{202f}'], " ");
+        let recognized: Vec<Recognized<'_>> = split_sections(&text)
+            .skip(1)
+            .map(|lines| recognize(lines, labels))
+            .collect();
+        let rarity = item(&text).rarity();
+        assert_eq!(explicit_section(&recognized, rarity), None, "{text}");
+    }
 }

@@ -1,5 +1,6 @@
-//! Reads a copied item, in three phases: recognize each section from its first line, decide
-//! what the sections without label are, then fill the item.
+//! Reads a copied item, in four phases: recognize each section from its first line, decide
+//! what the sections without label are, fill the item, then join the lines of one stat
+//! written without header.
 //!
 //! A copied item is a list of sections separated by `--------`: the header (class, rarity,
 //! names), the properties, the requirements, the sockets, the item level, the enchantments,
@@ -12,6 +13,7 @@ use super::labels::{Labels, marker};
 use super::modifier::{Header, Marker, Modifier, ModifierKind};
 use super::weapon::{self, DamageKind, Weapon};
 use super::{CopiedItem, Item, ItemState, Property, Rarity, Requirements, Stack};
+use crate::game_data;
 use crate::language::Language;
 
 const SECTION_SEPARATOR: &str = "--------";
@@ -117,9 +119,11 @@ pub(super) fn parse(copied: &CopiedItem) -> Result<Item, ParseError> {
     let mut item = read_header(&header, copied.language(), labels)?;
 
     let recognized: Vec<Recognized<'_>> = sections.map(|lines| recognize(lines, labels)).collect();
+    let with_headers = is_headed(&recognized);
     for section in resolve_plain_sections(recognized, item.rarity) {
         fill(&mut item, section, labels);
     }
+    join_written_stats(&mut item.modifiers, copied.language(), with_headers);
     Ok(item)
 }
 
@@ -360,6 +364,53 @@ fn fill(item: &mut Item, section: Section<'_>, labels: &Labels) {
             .modifiers
             .extend(lines.iter().map(|line| Modifier::marked(line, kind))),
         Section::Unread => {}
+    }
+}
+
+/// Phase 4: the modifiers of one line written without header that make one stat written on
+/// several lines (`Inflict Anaemia on Hit` then `Anaemia allows 2 Corrupted Blood debuffs to
+/// be inflicted on enemies`, both desecrated) joined into one, as under a header of the
+/// advanced copy, when the game data finds that stat on their lines together: consecutive, of
+/// the same kind and origin. The runes and the enchantments never have a header; the implicit
+/// and explicit modifiers only in a copy without any (`with_headers` false).
+fn join_written_stats(modifiers: &mut Vec<Modifier>, language: Language, with_headers: bool) {
+    let without_header = |modifier: &Modifier| {
+        modifier.lines.len() == 1
+            && match modifier.kind {
+                ModifierKind::Rune | ModifierKind::Enchant => true,
+                ModifierKind::Implicit | ModifierKind::Explicit(_) => !with_headers,
+                ModifierKind::Corruption => false,
+            }
+    };
+    let mut first = 0;
+    while let Some(start) = modifiers.get(first) {
+        let run = modifiers
+            .iter()
+            .skip(first)
+            .take_while(|modifier| {
+                without_header(modifier)
+                    && (modifier.kind, modifier.origin) == (start.kind, start.origin)
+            })
+            .count();
+        let joined = (2..=run).rev().find_map(|count| {
+            let lines = modifiers
+                .iter()
+                .skip(first)
+                .take(count)
+                .flat_map(|modifier| modifier.lines.iter().cloned())
+                .collect();
+            let candidate = Modifier {
+                lines,
+                ..start.clone()
+            };
+            let stats = game_data::modifier_stats(language, &candidate, None);
+            matches!(stats.as_slice(), [found] if found.stat.is_some())
+                .then_some((count, candidate))
+        });
+        if let Some((count, candidate)) = joined {
+            modifiers.splice(first..first + count, [candidate]);
+        }
+        first += 1;
     }
 }
 
