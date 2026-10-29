@@ -207,6 +207,8 @@ origin-vaal = Vaal
 unrevealed-prefix = Préfixe non révélé
 unrevealed-suffix = Suffixe non révélé
 unrevealed-note = Un modificateur non révélé peut changer l'objet : ses autres stats partent décochées.
+# Sous les stats d'un objet rare ou magique copié depuis l'échange du jeu, sans les affixes ni les paliers de la copie avancée.
+trade-copy-note = Copié depuis l'échange du jeu : les paliers sont trouvés d'après les valeurs.
 
 ## Bloc prix
 

@@ -204,6 +204,8 @@ origin-vaal = Vaal
 unrevealed-prefix = Unrevealed prefix
 unrevealed-suffix = Unrevealed suffix
 unrevealed-note = An unrevealed modifier can change the item: its other stats start unchecked.
+# Under the stats of a rare or magic item copied from the trade of the game, without the affixes and tiers of the advanced copy.
+trade-copy-note = Copied from the in-game trade: the tiers are found from the values.
 
 ## Price block
 

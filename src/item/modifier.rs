@@ -141,7 +141,8 @@ impl Range {
 }
 
 /// A value of a line, with the range of its tier when the item was copied with its advanced
-/// description, e.g. `10(1-16)`.
+/// description, e.g. `10(1-16)`, or when its tier was found from the values of an item copied
+/// from the in-game trade.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Roll {
     pub value: f64,
@@ -163,7 +164,8 @@ pub struct Modifier {
     pub origin: Option<ModifierOrigin>,
     /// The name of a prefix or suffix, e.g. `Crackling`.
     pub name: Option<String>,
-    /// 1 is the best tier; only in the advanced copy.
+    /// 1 is the best tier; in the advanced copy, or found from the values of an item copied
+    /// from the in-game trade.
     pub tier: Option<u32>,
     /// The tags of the advanced copy, e.g. `Damage`, `Elemental`.
     pub tags: Vec<String>,

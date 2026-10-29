@@ -11,8 +11,8 @@
 use super::pseudo::{self, CountedLine, PseudoTotal};
 use super::query::{PropertyFilter, SearchFilters, StatFilter};
 use crate::filters::{Filter, FilterKey, StatKey};
-use crate::game_data::{self, TradeGroup, TradeStats};
-use crate::item::{Affix, Modifier, StatLine};
+use crate::game_data::{self, AffixLimits, TradeGroup, TradeStats};
+use crate::item::{Affix, Item, Modifier, Rarity, StatLine};
 use crate::language::Language;
 
 /// The game stats of the damage and the attack speed of a weapon, which its DPS counts.
@@ -344,6 +344,23 @@ impl LineStats {
         match affix {
             Affix::Prefix => self.prefixes_allowed,
             Affix::Suffix => self.suffixes_allowed,
+        }
+    }
+
+    /// How many prefixes and suffixes `item`, whose lines these are, can have: one of each
+    /// for a magic item, two for a jewel, three otherwise, with those its lines add or take
+    /// away ([`Self::affixes_allowed`]).
+    #[must_use]
+    pub fn affix_limits(&self, item: &Item) -> AffixLimits {
+        let usual = match item.rarity() {
+            Rarity::Magic => 1,
+            _ if item.is_jewel() => 2,
+            _ => 3,
+        };
+        let limit = |affix| u32::saturating_add_signed(usual, self.affixes_allowed(affix));
+        AffixLimits {
+            prefixes: limit(Affix::Prefix),
+            suffixes: limit(Affix::Suffix),
         }
     }
 

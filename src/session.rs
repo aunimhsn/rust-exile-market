@@ -5,7 +5,7 @@ use std::time::{Duration, SystemTime};
 
 use crate::clipboard::ClipboardEvent;
 use crate::game_data::{self, StatSource, TradeGroup, TradeStats};
-use crate::item::{CopiedItem, Item, ParseError, Rarity};
+use crate::item::{CopiedItem, Item, Modifier, ParseError, Rarity};
 use crate::item_names::ItemNames;
 use crate::league::{League, Leagues};
 use crate::market::{MarketEvent, Source};
@@ -21,7 +21,14 @@ use crate::trade::stat_filters::LineStats;
 /// What the parser read from the last item copied in the game.
 #[derive(Debug)]
 pub struct ShownItem {
+    /// For a rare or magic item copied from the in-game trade, with the affixes and tiers found
+    /// from the values of its lines once its base is known.
     parsed: Result<Item, ParseError>,
+    /// The modifiers of a rare or magic item copied from the in-game trade as the parser read
+    /// them, without affix nor tier: each reading starts from them, when the item is copied and
+    /// each time the names of the trade site arrive (they tell the base of a magic item, and
+    /// their stats the affixes a rune or an implicit allows).
+    trade_copy: Option<Vec<Modifier>>,
     /// Its modifier lines, which the offers are compared with; none for an unreadable item.
     lines: CopiedLines,
     /// The stat of each modifier line on the trade site, which searches it.
@@ -45,8 +52,14 @@ impl ShownItem {
             }
             Err(error) => log::warn!("A copied item couldn't be read: {error}"),
         }
+        let trade_copy = parsed
+            .as_ref()
+            .ok()
+            .filter(|item| item.has_tiers_from_values())
+            .map(|item| item.modifiers().to_vec());
         let mut shown = Self {
             parsed,
+            trade_copy,
             lines: CopiedLines::default(),
             stats: LineStats::default(),
             tiers: TierRolls::default(),
@@ -56,14 +69,40 @@ impl ShownItem {
     }
 
     /// Reads the modifier lines of the item, with the stats of the trade site `trade`, and
-    /// their tiers on its base, found among the `names` of the trade site for a magic item.
-    fn read_lines(&mut self, trade: Option<&TradeStats>, names: Option<&ItemNames>) {
-        if let Ok(item) = &self.parsed {
-            self.stats = LineStats::new(item.language(), item.modifiers(), trade);
-            self.lines = CopiedLines::new(item.language(), item.modifiers(), &self.stats, trade);
-            let base_type = link::target(item, names, None).and_then(|target| target.base_type());
-            self.tiers = TierRolls::new(item.language(), item.modifiers(), base_type);
+    /// their tiers on its base, found among the `names` of the trade site for a magic item;
+    /// from their values for an item copied from the in-game trade, from its modifiers as the
+    /// parser read them. True when its modifiers changed shape (the lines of a hybrid joined
+    /// once the names tell the base of a magic item): the keys of their filters moved.
+    fn read_lines(&mut self, trade: Option<&TradeStats>, names: Option<&ItemNames>) -> bool {
+        let Ok(item) = &mut self.parsed else {
+            return false;
+        };
+        let base_type = link::target(item, names, None)
+            .and_then(|target| target.base_type())
+            .map(str::to_owned);
+        let mut reshaped = false;
+        if let Some(copied) = &self.trade_copy {
+            let modifiers = match &base_type {
+                Some(base_type) => {
+                    // The runes and the implicits, which tell the room, are never read again.
+                    let stats = LineStats::new(item.language(), copied, trade);
+                    game_data::with_trade_tiers(
+                        item.language(),
+                        base_type,
+                        item.item_level(),
+                        copied,
+                        stats.affix_limits(item),
+                    )
+                }
+                None => copied.clone(),
+            };
+            reshaped = shape(item.modifiers()) != shape(&modifiers);
+            item.set_modifiers(modifiers);
         }
+        self.stats = LineStats::new(item.language(), item.modifiers(), trade);
+        self.lines = CopiedLines::new(item.language(), item.modifiers(), &self.stats, trade);
+        self.tiers = TierRolls::new(item.language(), item.modifiers(), base_type.as_deref());
+        reshaped
     }
 
     pub fn parsed(&self) -> Result<&Item, ParseError> {
@@ -84,6 +123,14 @@ impl ShownItem {
     pub fn tiers(&self) -> &TierRolls {
         &self.tiers
     }
+}
+
+/// The number of lines of each modifier: the filter of a line is kept by its place.
+fn shape(modifiers: &[Modifier]) -> Vec<usize> {
+    modifiers
+        .iter()
+        .map(|modifier| modifier.lines.len())
+        .collect()
 }
 
 #[derive(Debug)]
@@ -227,18 +274,23 @@ impl Session {
         self.new_league.take()
     }
 
-    /// Takes in the names of the items given by the trade site.
-    pub fn apply_item_names(&mut self, mut names: ItemNames) {
+    /// Takes in the names of the items given by the trade site. True when the modifiers of the
+    /// item shown changed shape, read again with them: the filters the player changed on its
+    /// lines no longer fall on the same lines.
+    #[must_use]
+    pub fn apply_item_names(&mut self, mut names: ItemNames) -> bool {
         // The names are already in the cache, with their templates.
         let (english, french) = names.take_stat_templates();
         let trade = TradeStats::new(&english, &french);
         self.item_names = Some(names);
         // An item copied before them may have a line only the trade site knows, or be a
         // magic item whose base type they tell.
-        if let Some(shown) = &mut self.item {
-            shown.read_lines(Some(&trade), self.item_names.as_ref());
-        }
+        let reshaped = self
+            .item
+            .as_mut()
+            .is_some_and(|shown| shown.read_lines(Some(&trade), self.item_names.as_ref()));
         self.trade_stats = Some(trade);
+        reshaped
     }
 
     pub fn apply(&mut self, event: ClipboardEvent) {
@@ -467,6 +519,7 @@ fn log_unknown_stats(item: &Item, trade: Option<&TradeStats>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::item::{Affix, ModifierKind};
     use crate::language::Language;
     use crate::league::LeagueMode;
     use crate::prices::Rates;
@@ -805,12 +858,13 @@ mod tests {
             id: "explicit.stat_1000000001".to_owned(),
             text: "#% reduced Damage per Patch".to_owned(),
         };
-        session.apply_item_names(ItemNames::new(
+        let reshaped = session.apply_item_names(ItemNames::new(
             SystemTime::UNIX_EPOCH,
             names(vec![template]),
             names(Vec::new()),
             Vec::new(),
         ));
+        assert!(!reshaped, "a unique: its lines stay as they were");
 
         assert!(
             matches!(stat(&session), Some(LineStat::Searched(_))),
@@ -830,7 +884,7 @@ mod tests {
 
         copy(&mut session, MACE);
         assert_eq!(base_type(&session), None, "the names aren't known yet");
-        session.apply_item_names(crate::item_names::tests::item_names());
+        assert!(!session.apply_item_names(crate::item_names::tests::item_names()));
         assert_eq!(base_type(&session).as_deref(), Some("Temple Maul"));
         copy(&mut session, RING);
         assert_eq!(base_type(&session).as_deref(), Some("Ruby Ring"));
@@ -858,11 +912,161 @@ mod tests {
 
         copy(&mut session, MACE);
         assert_eq!(strength(&session), None, "the names aren't known yet");
-        session.apply_item_names(crate::item_names::tests::item_names());
+        assert!(!session.apply_item_names(crate::item_names::tests::item_names()));
         assert!(strength(&session).is_some_and(|rolls| rolls.tiers.is_some()));
         // Copied once the names are known: at once.
         copy(&mut session, MACE);
         assert!(strength(&session).is_some_and(|rolls| rolls.tiers.is_some()));
+    }
+
+    #[test]
+    fn an_item_copied_from_the_in_game_trade_gets_the_tiers_found_from_its_values() {
+        const TIARA: &str =
+            include_str!("item/test-items/en-owner-trade-rare-helmet-fractured.txt");
+        use Affix::{Prefix, Suffix};
+        let mut session = session();
+        let explicit = |session: &Session| -> Vec<(usize, Option<Affix>, Option<u32>)> {
+            let Some(Ok(item)) = session.item().map(ShownItem::parsed) else {
+                return Vec::new();
+            };
+            item.modifiers()
+                .iter()
+                .filter_map(|modifier| match modifier.kind {
+                    ModifierKind::Explicit(affix) => {
+                        Some((modifier.lines.len(), affix, modifier.tier))
+                    }
+                    _ => None,
+                })
+                .collect()
+        };
+
+        copy(&mut session, TIARA);
+
+        assert_eq!(
+            explicit(&session),
+            [
+                // The fractured hybrid of `41% increased Energy Shield` and `+34 to maximum
+                // Mana`, its lines joined.
+                (2, Some(Prefix), Some(1)),
+                (1, Some(Prefix), Some(1)),
+                (1, Some(Suffix), Some(1)),
+                (1, Some(Suffix), Some(1)),
+                (1, Some(Suffix), Some(2)),
+                (1, Some(Prefix), Some(1)),
+            ]
+        );
+        let hybrid = session.item().and_then(|item| {
+            let key = crate::filters::StatKey {
+                modifier: 5,
+                line: 1,
+            };
+            item.tiers().get(key).cloned()
+        });
+        assert!(
+            hybrid.is_some(),
+            "the rolls over every tier of its second line, after the enchantment and the runes"
+        );
+    }
+
+    #[test]
+    fn an_item_copied_from_the_in_game_trade_is_read_again_from_its_copy() {
+        const TIARA: &str =
+            include_str!("item/test-items/en-owner-trade-rare-helmet-fractured.txt");
+        let mut session = session();
+        let modifiers = |session: &Session| {
+            let item = session.item()?.parsed().ok()?;
+            Some(item.modifiers().to_vec())
+        };
+        copy(&mut session, TIARA);
+        let read = modifiers(&session);
+
+        // Read again from the copy as the parser read it, not from its tiers found: the same.
+        assert!(!session.apply_item_names(crate::item_names::tests::item_names()));
+        assert!(!session.apply_item_names(crate::item_names::tests::item_names()));
+
+        assert!(read.as_ref().is_some_and(|read| read.len() == 11));
+        assert_eq!(modifiers(&session), read);
+    }
+
+    #[test]
+    fn a_magic_hybrid_joined_once_the_names_arrive_reshapes_the_modifiers() {
+        const MACE: &str = "Item Class: Two Hand Maces\nRarity: Magic\n\
+            Crackling Temple Maul of the Brute\n--------\nItem Level: 32\n--------\n\
+            30% increased Physical Damage\n+60 to Accuracy Rating\n+8 to Strength";
+        let mut session = session();
+        let shape = |session: &Session| {
+            let item = session.item()?.parsed().ok()?;
+            Some(super::shape(item.modifiers()))
+        };
+        copy(&mut session, MACE);
+        assert_eq!(
+            shape(&session),
+            Some(vec![1, 1, 1]),
+            "its base isn't known yet"
+        );
+
+        // The filters the player changed on its lines no longer fall on the same lines.
+        assert!(session.apply_item_names(crate::item_names::tests::item_names()));
+
+        assert_eq!(shape(&session), Some(vec![2, 1]));
+        let hybrid = session
+            .item()
+            .and_then(|item| item.parsed().ok())
+            .and_then(|item| {
+                Some((
+                    item.modifiers().first()?.kind,
+                    item.modifiers().first()?.tier,
+                ))
+            });
+        assert_eq!(
+            hybrid,
+            Some((ModifierKind::Explicit(Some(Affix::Prefix)), Some(6)))
+        );
+
+        // Names that don't know its base: read again from its copy, its lines apart again.
+        let unknown = || crate::item_names::Names {
+            exchange: std::collections::HashMap::new(),
+            base_types: Vec::new(),
+            stats: Vec::new(),
+        };
+        assert!(session.apply_item_names(ItemNames::new(
+            SystemTime::UNIX_EPOCH,
+            unknown(),
+            unknown(),
+            Vec::new(),
+        )));
+        assert_eq!(shape(&session), Some(vec![1, 1, 1]));
+    }
+
+    #[test]
+    fn a_magic_item_copied_from_the_in_game_trade_gets_its_tiers_once_the_names_tell_its_base() {
+        const MACE: &str = "Item Class: Two Hand Maces\nRarity: Magic\n\
+            Crackling Temple Maul of the Brute\n--------\nItem Level: 32\n--------\n\
+            Adds 1 to 50 Lightning Damage\n+8 to Strength";
+        let mut session = session();
+        let strength = |session: &Session| {
+            let item = session.item()?.parsed().ok()?;
+            let modifier = item.modifiers().get(1)?;
+            Some((modifier.kind, modifier.tier.is_some()))
+        };
+
+        copy(&mut session, MACE);
+        assert_eq!(
+            strength(&session),
+            Some((ModifierKind::Explicit(None), false)),
+            "the names aren't known yet"
+        );
+        assert!(!session.apply_item_names(crate::item_names::tests::item_names()));
+        assert_eq!(
+            strength(&session),
+            Some((ModifierKind::Explicit(Some(Affix::Suffix)), true))
+        );
+        // Its added lightning damage was copied before a patch changed its ranges: no tier.
+        let damage = session
+            .item()
+            .and_then(|item| item.parsed().ok())
+            .and_then(|item| Some(item.modifiers().first()?.kind));
+        assert_eq!(damage, Some(ModifierKind::Explicit(None)));
     }
 
     #[test]

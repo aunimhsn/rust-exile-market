@@ -131,6 +131,9 @@ pub struct Item {
     /// The damage and the speed of a weapon.
     weapon: Option<Weapon>,
     modifiers: Vec<Modifier>,
+    /// A rare or magic item copied from the trade of the game (another player's listing): its
+    /// explicit modifiers without the `{ … }` headers of the advanced copy.
+    tiers_from_values: bool,
     warnings: Vec<ParseWarning>,
 }
 
@@ -313,6 +316,20 @@ impl Item {
     #[must_use]
     pub fn modifiers(&self) -> &[Modifier] {
         &self.modifiers
+    }
+
+    /// The modifiers read again, e.g. with the affixes and tiers found from their values for
+    /// an item copied from the in-game trade.
+    pub fn set_modifiers(&mut self, modifiers: Vec<Modifier>) {
+        self.modifiers = modifiers;
+    }
+
+    /// A rare or magic item copied from the trade of the game (another player's listing): its
+    /// explicit modifiers have no `{ … }` header, hence no affix, tier nor range, which are
+    /// found from their values in the modifier tables.
+    #[must_use]
+    pub fn has_tiers_from_values(&self) -> bool {
+        self.tiers_from_values
     }
 
     /// The number of desecrated modifiers not revealed yet.
