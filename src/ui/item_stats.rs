@@ -1831,11 +1831,7 @@ fn tier_label(ui: &mut Ui, tier: &ModifierTier<'_>, i18n: &Translator) {
     if let Some(ruled_out) = tier.ruled_out
         && label.hovered()
     {
-        let words = i18n.tier_ruled_out(
-            ruled_out.affix,
-            &format!("T{}", ruled_out.tier),
-            &ranges_text(&ruled_out.ranges),
-        );
+        let words = i18n.tier_ruled_out(ruled_out.affix, &ruled_out_tier(ruled_out));
         let line = TooltipLine {
             wrap: Some(WRAPPED_TOOLTIP_WIDTH),
             ..TooltipLine::new(words, color::TEXT)
@@ -1855,6 +1851,17 @@ fn tier_label(ui: &mut Ui, tier: &ModifierTier<'_>, i18n: &Translator) {
     }
     if !tier.ranges.is_empty() {
         range_label(ui, &tier.ranges);
+    }
+}
+
+/// The tier ruled out of the tooltip of a tier, with its ranges in parentheses: "T1 (16–19)",
+/// or "T1" alone when it has none (a range across zero, a value its line writes).
+fn ruled_out_tier(found: &AffixTier) -> String {
+    let tier = format!("T{}", found.tier);
+    if found.ranges.is_empty() {
+        tier
+    } else {
+        format!("{tier} ({})", ranges_text(&found.ranges))
     }
 }
 
@@ -2162,6 +2169,25 @@ mod tests {
             "{}",
             texts[rarity]
         );
+    }
+
+    #[test]
+    fn the_tier_ruled_out_has_its_ranges_in_parentheses_only_when_it_has_some() {
+        let found = |ranges| AffixTier {
+            affix: Affix::Prefix,
+            tier: 1,
+            ranges,
+        };
+
+        assert_eq!(
+            ruled_out_tier(&found(vec![Range {
+                min: 16.0,
+                max: 19.0
+            }])),
+            "T1 (16–19)"
+        );
+        // Without range, no empty parentheses: "T1 ()".
+        assert_eq!(ruled_out_tier(&found(Vec::new())), "T1");
     }
 
     #[test]

@@ -606,16 +606,16 @@ impl Translator {
 
     /// The tooltip of a tier found from the values when the affix `ruled_out` holds them too,
     /// the item having no room for it: "A suffix, since the prefixes are full: a prefix T1
-    /// (16–19) rolls it too"; `tier` and `ranges` are those of the affix ruled out.
+    /// (16–19) rolls it too"; `tier` is the tier of the affix ruled out with its ranges, "T1
+    /// (16–19)", or "T1" without range.
     #[must_use]
-    pub fn tier_ruled_out(&self, ruled_out: Affix, tier: &str, ranges: &str) -> String {
+    pub fn tier_ruled_out(&self, ruled_out: Affix, tier: &str) -> String {
         let id = match ruled_out {
             Affix::Prefix => TIER_RULED_OUT_PREFIX,
             Affix::Suffix => TIER_RULED_OUT_SUFFIX,
         };
         let mut args = FluentArgs::new();
         args.set("tier", tier);
-        args.set("ranges", ranges);
         self.format(id, Some(&args))
     }
 
@@ -1071,7 +1071,7 @@ mod tests {
             assert!(translator.filter_rolls("-7.5", "60").contains("-7.5"));
             assert!(translator.filter_rolls("-7.5", "60").contains("60"));
             for affix in [Affix::Prefix, Affix::Suffix] {
-                let tooltip = translator.tier_ruled_out(affix, "T1", "16–19");
+                let tooltip = translator.tier_ruled_out(affix, "T1 (16–19)");
                 assert!(tooltip.contains("T1 (16–19)"), "{tooltip}");
             }
             assert!(translator.unit_price("prices").contains("prices"));
@@ -1165,7 +1165,7 @@ mod tests {
     #[test]
     fn the_tooltip_of_a_tier_tells_the_affix_ruled_out() {
         assert_eq!(
-            Translator::new(Language::English).tier_ruled_out(Affix::Prefix, "T1", "16–19"),
+            Translator::new(Language::English).tier_ruled_out(Affix::Prefix, "T1 (16–19)"),
             "A suffix, since the prefixes are full: a prefix T1 (16–19) rolls it too"
         );
     }
