@@ -11,6 +11,8 @@ use super::lines::{LineMatch, StatSource, modifier_stats};
 use crate::item::{Affix, AffixTier, Modifier, ModifierKind, ModifierOrigin, Range, TierDoubt};
 use crate::language::Language;
 
+mod summed_readings;
+
 /// How far a copied value can be from a tier: the game rounds the values it scales, e.g. a
 /// regeneration stored per minute shown per second with one decimal.
 const ROUNDING: f64 = 0.051;
@@ -61,6 +63,15 @@ struct TableTier {
     level: u32,
     /// For each line, the range of each of its values, with the sign of the stat.
     ranges: Vec<Vec<[f64; 2]>>,
+}
+
+impl From<TableAffix> for Affix {
+    fn from(affix: TableAffix) -> Self {
+        match affix {
+            TableAffix::Prefix => Self::Prefix,
+            TableAffix::Suffix => Self::Suffix,
+        }
+    }
 }
 
 impl Table {
@@ -216,6 +227,16 @@ pub struct AddedTiers {
 /// modifiers are read as the best of these readings does, with its room. No line of a
 /// `sanctified` item is split: its values can leave their tiers.
 ///
+/// A line stays without tier too, with the other lines of its hybrids, when another reading
+/// fits the item as well ([`summed_readings::doubts`]), with a line adding up several
+/// modifiers, whichever, or any reading where the best one splits a line: the `47%
+/// d'Augmentation de l'Armure et de l'Évasion` of the owner's body armour adds up two hybrids,
+/// one with `+23 à l'Armure` and `+19 au Score d'Évasion`, the other with the life; a line split
+/// with its neighbour may be summed with another line's hybrid, the copy sorting its lines by
+/// stat, not by modifier. Such a reading
+/// that leaves another room to a line that can be a prefix or a suffix keeps both its affixes;
+/// a search that can't conclude leaves every line it reads without tier.
+///
 /// A hybrid whose other line is read on its own (a sanctified value out of its tier, or two
 /// lines apart) counts twice and may rule out an affix wrongly: a rare case, left as it is.
 #[must_use]
@@ -266,18 +287,38 @@ pub fn trade_tiers(
     let Some((key, reading)) = search.best else {
         return Vec::new();
     };
-    let ambiguous = search.ambiguous;
+    let mut ambiguous = search.ambiguous;
+    // Another reading in doubt may take another room, which no longer rules out an affix.
+    let mut room_in_doubt = false;
+    if !sanctified {
+        let best = summed_readings::Best {
+            candidates: &candidates,
+            reading: &reading,
+            room,
+            fits_room: key.room,
+        };
+        let doubts = summed_readings::doubts(tags, item_level, modifiers, &copied, &best);
+        doubts.outcome.log(base_type);
+        room_in_doubt = doubts.other_room;
+        for line in doubts.lines {
+            if !ambiguous.contains(&line) {
+                ambiguous.push(line);
+            }
+        }
+    }
     // A modifier that can be both, when the others leave room for one affix only: the lines
     // split in two ways as good take their room too.
-    let both = if key.room {
-        room.both(&reading, &candidates)
-    } else {
+    let both = if !key.room {
         log::warn!(
             "Game data, {base_type} copied from the in-game trade: no reading of its lines fits {} prefixes and {} suffixes",
             limits.prefixes,
             limits.suffixes
         );
         (true, true)
+    } else if room_in_doubt {
+        (true, true)
+    } else {
+        room.both(&reading, &candidates)
     };
     reading
         .iter()
@@ -647,12 +688,8 @@ fn splits(
                     else {
                         continue;
                     };
-                    let affix = |table: &Table| match table.affix {
-                        TableAffix::Prefix => Affix::Prefix,
-                        TableAffix::Suffix => Affix::Suffix,
-                    };
                     ways.push(Split {
-                        affix: affix(whole),
+                        affix: whole.affix.into(),
                         tiers: ModifierTiers {
                             tiers: whole_tiers.clone(),
                             found,
@@ -660,7 +697,7 @@ fn splits(
                         },
                         added: AddedTiers {
                             line: owner,
-                            affix: affix(added),
+                            affix: added.affix.into(),
                             tiers: ModifierTiers {
                                 tiers: added_tiers.clone(),
                                 found: added_found,
