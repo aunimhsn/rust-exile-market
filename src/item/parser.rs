@@ -319,6 +319,7 @@ fn is_headed(recognized: &[Recognized<'_>]) -> bool {
         .any(|r| matches!(r, Recognized::Section(Section::Headed(_))))
 }
 
+/// Whether the states of the item say it is unidentified.
 fn is_unidentified(recognized: &[Recognized<'_>]) -> bool {
     recognized.iter().any(|r| {
         matches!(r, Recognized::Section(Section::States(states)) if states.contains(&ItemState::Unidentified))

@@ -242,13 +242,13 @@ impl Header {
         let (main, name) = take_name(main);
         let main = main.trim().trim_end_matches(':').trim();
 
-        let header = labels
+        let header_kind = labels
             .modifier_kinds
             .iter()
-            .find(|header| main.ends_with(header.label))?;
-        let origin_words = main.strip_suffix(header.label)?.trim();
+            .find(|header_kind| main.ends_with(header_kind.label))?;
+        let origin_words = main.strip_suffix(header_kind.label)?.trim();
         let origin = if origin_words.is_empty() {
-            header.origin
+            header_kind.origin
         } else {
             Some(
                 labels
@@ -262,7 +262,7 @@ impl Header {
             name,
             tier,
             tags,
-            ..Modifier::new(header.kind, origin)
+            ..Modifier::new(header_kind.kind, origin)
         })
     }
 }
