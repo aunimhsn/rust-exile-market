@@ -1,4 +1,7 @@
-//! The tests of `item_stats`.
+//! The stat rows of the item block, on the test items and on items built for a case: the
+//! groups and their order, the filters at first and their range fields, the bars over the
+//! tiers, the tiers found from the values of an item copied from the in-game trade, the lines
+//! in doubt and the notes.
 
 use super::*;
 use crate::item::{CopiedItem, ItemState};
@@ -215,9 +218,9 @@ fn the_origin_of_a_line_in_doubt_comes_after_its_tiers() {
     // The origin after the rows of the tiers: `roll_line` draws it on a row of its own,
     // since the line has it whichever affix it is (checked on a screenshot).
     assert!(texts(&open).contains(
-            &"■ 18% increased Rarity of Items found ≥16 [T1 16–19 AffixPrefix / T1 15–18 AffixSuffix / Desecrated]"
-                .to_owned()
-        ));
+        &"■ 18% increased Rarity of Items found ≥16 [T1 16–19 AffixPrefix / T1 15–18 AffixSuffix / Desecrated]"
+            .to_owned()
+    ));
 }
 
 #[test]
@@ -247,7 +250,7 @@ fn the_note_shows_also_when_the_only_tiers_found_are_those_of_a_line_in_doubt() 
     // A helmet with one modifier, which a prefix and a suffix both roll.
     let helmet = read_again(parse(
         "Item Class: Helmets\nRarity: Rare\nChimeric Visage\nAncestral Tiara\n--------\n\
-             Item Level: 82\n--------\n18% increased Rarity of Items found",
+         Item Level: 82\n--------\n18% increased Rarity of Items found",
     ));
 
     let texts = texts(&helmet);
@@ -286,10 +289,10 @@ fn only_the_tiers_found_from_the_values_have_the_note() {
 fn a_line_of_a_unique_without_range_never_varies() {
     let headhunter = parse(
         "Item Class: Belts\nRarity: Unique\nHeadhunter\nHeavy Belt\n--------\n\
-             Item Level: 80\n--------\n{ Implicit Modifier }\n\
-             26(20-30)% increased Stun Threshold\n--------\n{ Unique Modifier }\n\
-             When you kill a Rare monster, you gain its Modifiers for 60 seconds\n\
-             { Unique Modifier }\n+55(40-60) to maximum Life",
+         Item Level: 80\n--------\n{ Implicit Modifier }\n\
+         26(20-30)% increased Stun Threshold\n--------\n{ Unique Modifier }\n\
+         When you kill a Rare monster, you gain its Modifiers for 60 seconds\n\
+         { Unique Modifier }\n+55(40-60) to maximum Life",
     );
 
     assert_eq!(
@@ -325,8 +328,8 @@ fn the_vaal_modifier_of_a_unique_says_vaal_after_its_range() {
 fn the_vaal_modifier_of_a_unique_says_vaal_under_a_fixed_line() {
     let unique = parse(
         "Item Class: Rings\nRarity: Unique\nTest Loop\nGold Ring\n--------\n\
-             Item Level: 80\n--------\n{ Vaal Unique Modifier }\n\
-             +5% to Maximum Lightning Resistance\n--------\nCorrupted",
+         Item Level: 80\n--------\n{ Vaal Unique Modifier }\n\
+         +5% to Maximum Lightning Resistance\n--------\nCorrupted",
     );
 
     assert_eq!(
@@ -349,8 +352,8 @@ fn the_line_of_a_unique_without_header_never_varies() {
 fn a_unique_copied_without_any_range_has_only_fixed_lines() {
     let unique = parse(
         "Item Class: Rings\nRarity: Unique\nTest Loop\nGold Ring\n--------\n\
-             Item Level: 80\n--------\n{ Unique Modifier }\n\
-             +5% to Maximum Lightning Resistance\n{ Unique Modifier }\n+52 to maximum Life",
+         Item Level: 80\n--------\n{ Unique Modifier }\n\
+         +5% to Maximum Lightning Resistance\n{ Unique Modifier }\n+52 to maximum Life",
     );
 
     // The advanced copy writes a range for every number that rolls.
@@ -368,8 +371,8 @@ fn a_unique_copied_without_any_range_has_only_fixed_lines() {
 fn a_number_written_by_the_string_of_a_stat_has_no_range() {
     let unique = parse(
         "Item Class: Gloves\nRarity: Unique\nTest Grip\nSuede Bracers\n--------\n\
-             Item Level: 80\n--------\n{ Unique Modifier }\n\
-             1% more Unarmed Damage per 5(4-6) Strength",
+         Item Level: 80\n--------\n{ Unique Modifier }\n\
+         1% more Unarmed Damage per 5(4-6) Strength",
     );
 
     // The 1 is written by the string of the stat: the field holds the 5, in its range.
@@ -386,10 +389,10 @@ fn a_number_written_by_the_string_of_a_stat_has_no_range() {
 fn an_implicit_and_an_explicit_of_the_same_stat_keep_their_own_ranges() {
     let ring = parse(
         "Item Class: Rings\nRarity: Unique\nVenom Loop\nAmethyst Ring\n--------\n\
-             Item Level: 80\n--------\n{ Implicit Modifier }\n\
-             +10(7-13)% to Chaos Resistance\n--------\n{ Unique Modifier }\n\
-             +20(17-23)% to Chaos Resistance\n{ Unique Modifier }\n\
-             Adds 1 to 55(50-60) Lightning damage to Attacks",
+         Item Level: 80\n--------\n{ Implicit Modifier }\n\
+         +10(7-13)% to Chaos Resistance\n--------\n{ Unique Modifier }\n\
+         +20(17-23)% to Chaos Resistance\n{ Unique Modifier }\n\
+         Adds 1 to 55(50-60) Lightning damage to Attacks",
     );
 
     assert_eq!(
@@ -427,8 +430,8 @@ fn a_unique_copied_with_ctrl_alt_c_has_its_own_ranges() {
 fn a_negative_range_of_the_advanced_copy_is_without_its_sign() {
     let ring = parse(
         "Item Class: Rings\nRarity: Unique\nCold Loop\nRuby Ring\n--------\n\
-             { Unique Modifier — Elemental, Fire, Resistance }\n-15(-20--10)% to Fire Resistance\n\
-             { Unique Modifier — Elemental, Cold, Resistance }\n2(-5-10)% to Cold Resistance",
+         { Unique Modifier — Elemental, Fire, Resistance }\n-15(-20--10)% to Fire Resistance\n\
+         { Unique Modifier — Elemental, Cold, Resistance }\n2(-5-10)% to Cold Resistance",
     );
 
     assert_eq!(
@@ -503,9 +506,9 @@ fn the_origin_of_a_modifier_follows_the_range_of_its_tier_under_its_last_line() 
 
     let ring = parse(
         "Item Class: Rings\nRarity: Rare\nRune Loop\nGold Ring\n--------\n\
-             Item Level: 79\n--------\n\
-             { Fractured Prefix Modifier \"Hale\" (Tier: 9) — Life, Mana }\n\
-             +12(10-14) to maximum Life\n+10(9-13) to maximum Mana",
+         Item Level: 79\n--------\n\
+         { Fractured Prefix Modifier \"Hale\" (Tier: 9) — Life, Mana }\n\
+         +12(10-14) to maximum Life\n+10(9-13) to maximum Mana",
     );
     let lines: Vec<String> = texts(&ring)
         .into_iter()
@@ -520,11 +523,11 @@ fn the_origin_of_a_modifier_follows_the_range_of_its_tier_under_its_last_line() 
 fn a_modifier_whose_header_is_unknown_is_explicit_without_tier() {
     let ring = parse(
         "Item Class: Rings\nRarity: Rare\nRune Loop\nPrismatic Ring\n--------\n\
-             Item Level: 79\n--------\n{ Implicit Modifier }\n\
-             +8(7-10)% to all Elemental Resistances\n--------\n{ Strange Modifier }\n\
-             +143(120-150) to Evasion Rating\n\
-             { Suffix Modifier \"of the Brute\" (Tier: 7) — Attribute }\n+12(9-12) to Strength\n\
-             --------\nCorrupted",
+         Item Level: 79\n--------\n{ Implicit Modifier }\n\
+         +8(7-10)% to all Elemental Resistances\n--------\n{ Strange Modifier }\n\
+         +143(120-150) to Evasion Rating\n\
+         { Suffix Modifier \"of the Brute\" (Tier: 7) — Attribute }\n+12(9-12) to Strength\n\
+         --------\nCorrupted",
     );
 
     assert_eq!(
@@ -554,18 +557,18 @@ fn a_modifier_whose_header_is_unknown_is_explicit_without_tier() {
 fn the_affixes_a_rune_or_an_implicit_allows_count_in_the_fill() {
     let english = parse(
         "Item Class: Amulets\nRarity: Rare\nDoom Idol\nGloam Amulet\n--------\n\
-             Item Level: 79\n--------\n+1 Suffix Modifier allowed (rune)\n--------\n\
-             { Implicit Modifier }\n-1 Prefix Modifier allowed\n--------\n\
-             { Prefix Modifier \"Hale\" (Tier: 9) }\n+12(10-14) to maximum Life\n\
-             { Suffix Modifier \"of the Brute\" (Tier: 7) — Attribute }\n+12(9-12) to Strength",
+         Item Level: 79\n--------\n+1 Suffix Modifier allowed (rune)\n--------\n\
+         { Implicit Modifier }\n-1 Prefix Modifier allowed\n--------\n\
+         { Prefix Modifier \"Hale\" (Tier: 9) }\n+12(10-14) to maximum Life\n\
+         { Suffix Modifier \"of the Brute\" (Tier: 7) — Attribute }\n+12(9-12) to Strength",
     );
     let french = parse(
         "Classe d'objet: Amulettes\nRareté: Rare\nIdole funeste\nAmulette crépusculaire\n\
-             --------\nNiveau de l'objet: 79\n--------\n\
-             +1 Modificateur suffixe autorisé (rune)\n--------\n\
-             { Modificateur Implicite }\n-1 Modificateur préfixe autorisé\n--------\n\
-             { Préfixe : « Sain » (Palier : 9) }\n+12(10-14) de Vie maximale\n\
-             { Suffixe : « de la Brute » (Palier : 7) — Attribut }\n+12(9-12) de Force",
+         --------\nNiveau de l'objet: 79\n--------\n\
+         +1 Modificateur suffixe autorisé (rune)\n--------\n\
+         { Modificateur Implicite }\n-1 Modificateur préfixe autorisé\n--------\n\
+         { Préfixe : « Sain » (Palier : 9) }\n+12(10-14) de Vie maximale\n\
+         { Suffixe : « de la Brute » (Palier : 7) — Attribut }\n+12(9-12) de Force",
     );
 
     let groups = |item: &Item| -> Vec<String> {
@@ -582,11 +585,11 @@ fn the_affixes_a_rune_or_an_implicit_allows_count_in_the_fill() {
 fn a_fixed_implicit_of_a_rare_is_a_filter_without_bar_after_those_that_vary() {
     let boots = parse(
         "Item Class: Boots\nRarity: Rare\nGale Tread\nLattice Sandals\n--------\n\
-             { Implicit Modifier }\n5(5-5)% increased Movement Speed\n\
-             { Implicit Modifier }\n+12(10-15) to Dexterity\n--------\n\
-             { Prefix Modifier \"Hale\" (Tier: 3) — Life }\n+86(85-99) to maximum Life\n\
-             { Prefix Modifier \"Sturdy\" (Tier: 5) — Defences }\n\
-             +20(15-25) to Evasion Rating\n+10(8-12)% increased Evasion Rating",
+         { Implicit Modifier }\n5(5-5)% increased Movement Speed\n\
+         { Implicit Modifier }\n+12(10-15) to Dexterity\n--------\n\
+         { Prefix Modifier \"Hale\" (Tier: 3) — Life }\n+86(85-99) to maximum Life\n\
+         { Prefix Modifier \"Sturdy\" (Tier: 5) — Defences }\n\
+         +20(15-25) to Evasion Rating\n+10(8-12)% increased Evasion Rating",
     );
 
     assert_eq!(
@@ -618,12 +621,12 @@ fn a_fixed_implicit_of_a_rare_is_a_filter_without_bar_after_those_that_vary() {
 fn a_prefix_or_suffix_rolls_over_every_tier_of_its_modifier_on_the_base() {
     let mail = parse(
         "Item Class: Body Armours\nRarity: Rare\nDoom Shell\nAncestral Mail\n--------\n\
-             Item Level: 82\n--------\n\
-             { Prefix Modifier \"Vigorous\" (Tier: 7) — Life }\n+86(85-99) to maximum Life\n\
-             { Prefix Modifier \"Lacquered\" (Tier: 4) — Defences }\n\
-             +98(86-102) to Armour\n+88(79-94) to Evasion Rating\n\
-             { Suffix Modifier \"of the Penguin\" (Tier: 1) — Elemental, Cold, Resistance }\n\
-             +41(41-45)% to Cold Resistance",
+         Item Level: 82\n--------\n\
+         { Prefix Modifier \"Vigorous\" (Tier: 7) — Life }\n+86(85-99) to maximum Life\n\
+         { Prefix Modifier \"Lacquered\" (Tier: 4) — Defences }\n\
+         +98(86-102) to Armour\n+88(79-94) to Evasion Rating\n\
+         { Suffix Modifier \"of the Penguin\" (Tier: 1) — Elemental, Cold, Resistance }\n\
+         +41(41-45)% to Cold Resistance",
     );
     let rows = rows(&mail);
     let texts = row_texts(rows.iter().cloned());
@@ -647,9 +650,9 @@ fn a_prefix_or_suffix_rolls_over_every_tier_of_its_modifier_on_the_base() {
     );
     let limit_of = |text: &str| {
         let row = rows
-                .iter()
-                .find(|row| matches!(row, Row::Stat(Stat { text: StatText::Line(line), .. }) if *line == text))
-                .expect("its row");
+            .iter()
+            .find(|row| matches!(row, Row::Stat(Stat { text: StatText::Line(line), .. }) if *line == text))
+            .expect("its row");
         limit(row)
     };
     // The field stays within the rolls of every tier, which its tooltip tells.
@@ -683,9 +686,9 @@ fn a_prefix_or_suffix_rolls_over_every_tier_of_its_modifier_on_the_base() {
 fn a_line_fixed_in_its_tier_varies_over_the_tiers() {
     let bow = parse(
         "Item Class: Bows\nRarity: Rare\nStorm Bite\nGemini Bow\n--------\n\
-             Item Level: 81\n--------\n\
-             { Suffix Modifier \"of the Sniper\" (Tier: 2) — Gem }\n\
-             +3 to Level of all Projectile Skills",
+         Item Level: 81\n--------\n\
+         { Suffix Modifier \"of the Sniper\" (Tier: 2) — Gem }\n\
+         +3 to Level of all Projectile Skills",
     );
 
     // A bar and a range field: the other tiers roll 1, 2 and 4.
@@ -699,15 +702,15 @@ fn a_line_fixed_in_its_tier_varies_over_the_tiers() {
 fn the_pseudo_totals_are_checked_and_the_lines_they_add_up_unchecked() {
     let ring = parse(
         "Item Class: Rings\nRarity: Rare\nStorm Spiral\nSapphire Ring\n--------\n\
-             Item Level: 77\n--------\n{ Implicit Modifier }\n\
-             +22(20-30)% to Cold Resistance\n--------\n\
-             { Prefix Modifier \"Rotund\" (Tier: 4) — Life }\n+65(60-69) to maximum Life\n\
-             { Prefix Modifier \"Agile\" (Tier: 6) — Defences }\n+60(52-79) to Evasion Rating\n\
-             { Suffix Modifier \"of the Furnace\" (Tier: 2) — Elemental, Fire, Resistance }\n\
-             +38(36-40)% to Fire Resistance\n\
-             { Suffix Modifier \"of the Squall\" (Tier: 5) — Elemental, Lightning, Resistance }\n\
-             +23(21-25)% to Lightning Resistance\n\
-             { Suffix Modifier \"of the Lynx\" (Tier: 7) — Attribute }\n+12(9-12) to Dexterity",
+         Item Level: 77\n--------\n{ Implicit Modifier }\n\
+         +22(20-30)% to Cold Resistance\n--------\n\
+         { Prefix Modifier \"Rotund\" (Tier: 4) — Life }\n+65(60-69) to maximum Life\n\
+         { Prefix Modifier \"Agile\" (Tier: 6) — Defences }\n+60(52-79) to Evasion Rating\n\
+         { Suffix Modifier \"of the Furnace\" (Tier: 2) — Elemental, Fire, Resistance }\n\
+         +38(36-40)% to Fire Resistance\n\
+         { Suffix Modifier \"of the Squall\" (Tier: 5) — Elemental, Lightning, Resistance }\n\
+         +23(21-25)% to Lightning Resistance\n\
+         { Suffix Modifier \"of the Lynx\" (Tier: 7) — Attribute }\n+12(9-12) to Dexterity",
     );
 
     assert_eq!(
@@ -738,8 +741,8 @@ fn the_pseudo_totals_are_checked_and_the_lines_they_add_up_unchecked() {
 fn a_unique_has_no_pseudo_totals() {
     let unique = parse(
         "Item Class: Rings\nRarity: Unique\nTest Loop\nGold Ring\n--------\n\
-             Item Level: 80\n--------\n{ Unique Modifier }\n+52(40-60) to maximum Life\n\
-             { Unique Modifier }\n+30(25-35)% to Fire Resistance",
+         Item Level: 80\n--------\n{ Unique Modifier }\n+52(40-60) to maximum Life\n\
+         { Unique Modifier }\n+30(25-35)% to Fire Resistance",
     );
 
     assert_eq!(
@@ -756,11 +759,11 @@ fn a_unique_has_no_pseudo_totals() {
 fn a_jewel_has_two_prefixes_and_two_suffixes_at_most() {
     let english = parse(
         "Item Class: Jewels\nRarity: Rare\nGlow Spark\nRuby\n--------\n\
-             { Prefix Modifier \"Hale\" (Tier: 2) — Life }\n+12(10-14) to maximum Life",
+         { Prefix Modifier \"Hale\" (Tier: 2) — Life }\n+12(10-14) to maximum Life",
     );
     let french = parse(
         "Classe d'objet: Joyaux\nRareté: Rare\nÉclat\nRubis\n--------\n\
-             { Préfixe : « Sain » (Palier : 2) — Vie }\n+12(10-14) de Vie maximale",
+         { Préfixe : « Sain » (Palier : 2) — Vie }\n+12(10-14) de Vie maximale",
     );
 
     assert!(english.is_jewel());
@@ -793,8 +796,8 @@ fn a_weapon_mostly_elemental_is_searched_by_its_elemental_dps_too() {
     let weapon = |physical: &str, lightning: &str| {
         parse(&format!(
             "Item Class: Two Hand Maces\nRarity: Rare\nStorm Fall\nTemple Maul\n--------\n\
-                 Physical Damage: {physical}\nLightning Damage: {lightning} (lightning)\n\
-                 Attacks per Second: 1.00\n--------\nItem Level: 80"
+             Physical Damage: {physical}\nLightning Damage: {lightning} (lightning)\n\
+             Attacks per Second: 1.00\n--------\nItem Level: 80"
         ))
     };
     let dps = |item: &Item| texts(item)[4..6].to_vec();
@@ -851,9 +854,9 @@ fn an_unrevealed_modifier_is_a_line_of_its_group_and_unchecks_the_other_stats() 
 fn a_corrupted_item_counts_each_unrevealed_modifier() {
     let ring = parse(
         "Item Class: Rings\nRarity: Rare\nWoe Loop\nRuby Ring\n--------\n\
-             Item Level: 80\n--------\n\
-             { Prefix Modifier \"Veiled\" }\nDesecrated Prefix\n\
-             { Suffix Modifier \"of the Veil\" }\nDesecrated Suffix\n--------\nCorrupted",
+         Item Level: 80\n--------\n\
+         { Prefix Modifier \"Veiled\" }\nDesecrated Prefix\n\
+         { Suffix Modifier \"of the Veil\" }\nDesecrated Suffix\n--------\nCorrupted",
     );
     assert_eq!(
         texts(&ring),
@@ -875,9 +878,9 @@ fn a_corrupted_item_counts_each_unrevealed_modifier() {
 fn a_weapon_with_an_unrevealed_modifier_starts_with_its_dps_unchecked() {
     let weapon = parse(
         "Item Class: Two Hand Maces\nRarity: Rare\nStorm Fall\nTemple Maul\n--------\n\
-             Physical Damage: 10-20\nLightning Damage: 1-59 (lightning)\n\
-             Attacks per Second: 1.00\n--------\nItem Level: 80\n--------\n\
-             { Prefix Modifier \"Veiled\" }\nDesecrated Prefix",
+         Physical Damage: 10-20\nLightning Damage: 1-59 (lightning)\n\
+         Attacks per Second: 1.00\n--------\nItem Level: 80\n--------\n\
+         { Prefix Modifier \"Veiled\" }\nDesecrated Prefix",
     );
     assert_eq!(
         texts(&weapon),
@@ -901,7 +904,7 @@ fn a_weapon_with_an_unrevealed_modifier_starts_with_its_dps_unchecked() {
 fn the_attack_speed_of_an_item_that_isnt_a_weapon_stays_checked() {
     let quiver = parse(
         "Item Class: Quivers\nRarity: Magic\nQuick Broadhead Quiver\n--------\n\
-             { Suffix Modifier \"of Skill\" (Tier: 4) }\n8(7-9)% increased Attack Speed",
+         { Suffix Modifier \"of Skill\" (Tier: 4) }\n8(7-9)% increased Attack Speed",
     );
 
     assert_eq!(
@@ -942,7 +945,7 @@ fn a_normal_item_is_searched_by_its_base_sockets_item_level_and_quality() {
     let helmet = parse(include_str!("../../item/test-items/en-normal-helmet.txt"));
     let targe = parse(
         "Item Class: Shields\nRarity: Normal\nExceptional Mammoth Targe\n--------\n\
-             Quality: +24% (augmented)\nArmour: 139 (augmented)\n--------\nItem Level: 82",
+         Quality: +24% (augmented)\nArmour: 139 (augmented)\n--------\nItem Level: 82",
     );
 
     // An exceptional base by its sockets: the trade site doesn't know its name.
@@ -1041,8 +1044,8 @@ fn the_fields_of_the_properties_stay_within_the_values_of_the_game() {
     ));
     let leveling = parse(
         "Item Class: Body Armours\nRarity: Rare\nHate Shell\nWaxed Jacket\n--------\n\
-             Quality: +23% (augmented)\nEvasion Rating: 120\n--------\n\
-             Requires: Level 40, 30 Dex\n--------\nItem Level: 45",
+         Quality: +23% (augmented)\nEvasion Rating: 120\n--------\n\
+         Requires: Level 40, 30 Dex\n--------\nItem Level: 45",
     );
 
     assert_eq!(
@@ -1071,7 +1074,7 @@ fn the_fields_of_the_properties_stay_within_the_values_of_the_game() {
 fn a_property_out_of_the_values_of_the_game_widens_its_field() {
     let item = parse(
         "Item Class: Rings\nRarity: Rare\nStorm Loop\nGold Ring\n--------\n\
-             Item Level: 101",
+         Item Level: 101",
     );
 
     // Its own value stays; a higher one is brought back to it.
@@ -1090,8 +1093,8 @@ fn the_sockets_are_checked_above_those_of_the_base_or_on_a_corrupted_item() {
     let armour = |sockets: &str, corrupted: &str| {
         parse(&format!(
             "Item Class: Body Armours\nRarity: Rare\nHate Shell\nWaxed Jacket\n--------\n\
-                 Sockets: {sockets}\n--------\nItem Level: 80\n--------\n\
-                 {{ Prefix Modifier }}\n+80 to maximum Life{corrupted}"
+             Sockets: {sockets}\n--------\nItem Level: 80\n--------\n\
+             {{ Prefix Modifier }}\n+80 to maximum Life{corrupted}"
         ))
     };
     let sockets = |item: &Item| {
@@ -1115,7 +1118,7 @@ fn the_sockets_are_checked_above_those_of_the_base_or_on_a_corrupted_item() {
     );
     let none = parse(
         "Item Class: Body Armours\nRarity: Rare\nHate Shell\nWaxed Jacket\n--------\n\
-             Item Level: 80\n--------\n{ Prefix Modifier }\n+80 to maximum Life",
+         Item Level: 80\n--------\n{ Prefix Modifier }\n+80 to maximum Life",
     );
     assert_eq!(sockets(&none), None);
 }
@@ -1188,13 +1191,13 @@ fn an_exceptional_quality_is_checked_except_on_a_rare() {
     ));
     let magic = parse(
         "Item Class: Gloves\nRarity: Magic\nVaal Mitts of the Fox\n--------\n\
-             Quality: +23% (augmented)\n--------\nItem Level: 70\n--------\n\
-             { Suffix Modifier }\n+20 to Dexterity",
+         Quality: +23% (augmented)\n--------\nItem Level: 70\n--------\n\
+         { Suffix Modifier }\n+20 to Dexterity",
     );
     let twenty = parse(
         "Item Class: Gloves\nRarity: Magic\nVaal Mitts of the Fox\n--------\n\
-             Quality: +20% (augmented)\n--------\nItem Level: 70\n--------\n\
-             { Suffix Modifier }\n+20 to Dexterity",
+         Quality: +20% (augmented)\n--------\nItem Level: 70\n--------\n\
+         { Suffix Modifier }\n+20 to Dexterity",
     );
 
     // Its bow usually has two sockets; its required level is above 75.
@@ -1220,8 +1223,8 @@ fn a_rare_for_leveling_has_its_required_level_as_a_maximum() {
     let ring = |required: u32, item_level: u32| {
         parse(&format!(
             "Item Class: Rings\nRarity: Rare\nHate Loop\nRuby Ring\n--------\n\
-                 Requires: Level {required}\n--------\nItem Level: {item_level}\n--------\n\
-                 {{ Prefix Modifier }}\n+30 to maximum Life"
+             Requires: Level {required}\n--------\nItem Level: {item_level}\n--------\n\
+             {{ Prefix Modifier }}\n+30 to maximum Life"
         ))
     };
     let required = |item: &Item| {
@@ -1243,8 +1246,8 @@ fn a_rare_for_leveling_has_its_required_level_as_a_maximum() {
     // A magic item, even for leveling.
     let magic = parse(
         "Item Class: Rings\nRarity: Magic\nVital Ruby Ring\n--------\n\
-             Requires: Level 40\n--------\nItem Level: 45\n--------\n\
-             { Prefix Modifier }\n+30 to maximum Life",
+         Requires: Level 40\n--------\nItem Level: 45\n--------\n\
+         { Prefix Modifier }\n+30 to maximum Life",
     );
     assert_eq!(required(&magic), None);
 }
@@ -1254,8 +1257,8 @@ fn the_sockets_of_a_base_the_data_doesnt_know_are_checked_only_on_a_corrupted_it
     let armour = |corrupted: &str| {
         parse(&format!(
             "Item Class: Body Armours\nRarity: Rare\nHate Shell\nPatch Jacket\n--------\n\
-                 Sockets: S S S\n--------\nItem Level: 80\n--------\n\
-                 {{ Prefix Modifier }}\n+80 to maximum Life{corrupted}"
+             Sockets: S S S\n--------\nItem Level: 80\n--------\n\
+             {{ Prefix Modifier }}\n+80 to maximum Life{corrupted}"
         ))
     };
     let sockets = |item: &Item| {
@@ -1276,8 +1279,8 @@ fn the_quality_of_a_charm_counts_from_10_and_of_a_flask_from_20() {
     let quality = |class: &str, name: &str, base: &str, quality: u32| {
         let item = parse(&format!(
             "Item Class: {class}\nRarity: Magic\n{name}\n--------\n\
-                 Quality: +{quality}% (augmented)\n--------\nItem Level: 60\n--------\n\
-                 {{ Suffix Modifier }}\n+10% to Fire Resistance"
+             Quality: +{quality}% (augmented)\n--------\nItem Level: 60\n--------\n\
+             {{ Suffix Modifier }}\n+10% to Fire Resistance"
         ));
         item_group_of(&item, Some(base))
             .into_iter()
@@ -1329,12 +1332,12 @@ fn a_magic_item_has_one_prefix_and_one_suffix_at_most() {
 fn a_limit_stays_within_the_range_of_its_stat() {
     let ring = parse(
         "Item Class: Rings\nRarity: Unique\nVenom Loop\nAmethyst Ring\n--------\n\
-             Item Level: 80\n--------\n{ Unique Modifier }\n\
-             Adds 1 to 55(50-60) Lightning damage to Attacks",
+         Item Level: 80\n--------\n{ Unique Modifier }\n\
+         Adds 1 to 55(50-60) Lightning damage to Attacks",
     );
     let boots = parse(
         "Item Class: Boots\nRarity: Rare\nGale Tread\nLattice Sandals\n--------\n\
-             { Implicit Modifier }\n+10(10-15) to Dexterity",
+         { Implicit Modifier }\n+10(10-15) to Dexterity",
     );
     // The fixed number counts in the range of the average; the tooltip doesn't tell it,
     // since it isn't a roll.
@@ -1385,13 +1388,13 @@ fn limit(row: &Row<'_>) -> Limit {
 fn a_line_better_lower_is_searched_with_a_maximum() {
     let unique = parse(
         "Item Class: Boots\nRarity: Unique\nStormtread\nLattice Sandals\n--------\n\
-             { Unique Modifier }\n+52(40-60) to maximum Life\n\
-             { Unique Modifier }\n18(15-25)% reduced Movement Speed",
+         { Unique Modifier }\n+52(40-60) to maximum Life\n\
+         { Unique Modifier }\n18(15-25)% reduced Movement Speed",
     );
     let rare = parse(
         "Item Class: Rings\nRarity: Rare\nGale Loop\nRuby Ring\n--------\n\
-             { Implicit Modifier }\n12(10-15)% increased Charm Charges used\n--------\n\
-             { Suffix Modifier \"of the Hare\" (Tier: 2) }\n18(15-25)% reduced Movement Speed",
+         { Implicit Modifier }\n12(10-15)% increased Charm Charges used\n--------\n\
+         { Suffix Modifier \"of the Hare\" (Tier: 2) }\n18(15-25)% reduced Movement Speed",
     );
 
     assert_eq!(
@@ -1559,12 +1562,12 @@ fn a_negative_stat_takes_a_minus_sign() {
 fn a_corrupted_item_has_no_note_and_a_lit_state_tag_counts_among_the_active_filters() {
     let headhunter = parse(
         "Item Class: Belts\nRarity: Unique\nHeadhunter\nHeavy Belt\n--------\n\
-             Item Level: 80\n--------\n{ Unique Modifier }\n+55(40-60) to maximum Life\n\
-             --------\nCorrupted",
+         Item Level: 80\n--------\n{ Unique Modifier }\n+55(40-60) to maximum Life\n\
+         --------\nCorrupted",
     );
     let staff = parse(
         "Item Class: Staves\nRarity: Normal\nChiming Staff\n--------\n\
-             Item Level: 82\n--------\nCorrupted",
+         Item Level: 82\n--------\nCorrupted",
     );
     let stats = |item| {
         Stats::new(
@@ -1606,13 +1609,13 @@ fn a_corrupted_item_has_no_note_and_a_lit_state_tag_counts_among_the_active_filt
 fn a_line_the_trade_site_cant_search_isnt_a_filter() {
     let unique = parse(
         "Item Class: Boots\nRarity: Unique\nStormtread\nLattice Sandals\n--------\n\
-             Item Level: 72\n--------\n\
-             { Unique Modifier }\n+52(40-60) to maximum Life\n\
-             { Unique Modifier }\nGain 3(2-4) Thunder Charges when you Dodge Roll\n\
-             { Unique Modifier }\n20(15-25)% chance to gain Onslaught for 3 seconds when you kill an\n\
-             enemy affected by Abyssal Wasting\n\
-             { Unique Modifier }\nLife that would be lost by taking Damage is instead Reserved\n\
-             until you take no Damage to Life for 5(4-6) seconds",
+         Item Level: 72\n--------\n\
+         { Unique Modifier }\n+52(40-60) to maximum Life\n\
+         { Unique Modifier }\nGain 3(2-4) Thunder Charges when you Dodge Roll\n\
+         { Unique Modifier }\n20(15-25)% chance to gain Onslaught for 3 seconds when you kill an\n\
+         enemy affected by Abyssal Wasting\n\
+         { Unique Modifier }\nLife that would be lost by taking Damage is instead Reserved\n\
+         until you take no Damage to Life for 5(4-6) seconds",
     );
     let lines = CopiedLines::new(
         unique.language(),
@@ -1703,7 +1706,7 @@ fn the_active_filters_count_the_choices_of_the_player() {
 fn a_legacy_unique_keeps_its_value_out_of_the_range_of_today() {
     let belt = parse(
         "Item Class: Belts\nRarity: Unique\nHeadhunter\nHeavy Belt\n--------\n\
-             Item Level: 80\n--------\n{ Unique Modifier }\n+65(40-60) to maximum Life",
+         Item Level: 80\n--------\n{ Unique Modifier }\n+65(40-60) to maximum Life",
     );
     let rows = rows(&belt);
 

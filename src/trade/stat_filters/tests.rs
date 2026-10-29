@@ -1,4 +1,6 @@
-//! The tests of `stat_filters`.
+//! The stat of each line on the trade site and its limits, in English and French: its ids,
+//! the sign of a reduced or inverted stat, the lines of several numbers or on two lines, the
+//! damage of a weapon, the pseudo totals and the affixes a rune or an implicit allows.
 
 use super::*;
 use crate::filters::Property;
@@ -28,7 +30,7 @@ fn unique(lines: &str) -> Item {
     };
     parse(&format!(
         "Item Class: Rings\nRarity: Unique\nTest Loop\nGold Ring\n--------\n\
-             Item Level: 80\n--------\n{modifiers}"
+         Item Level: 80\n--------\n{modifiers}"
     ))
 }
 
@@ -169,7 +171,7 @@ fn an_inverted_stat_has_the_other_sign_on_the_trade_site() {
 fn a_line_of_several_numbers_is_searched_at_their_average() {
     let item = parse(
         "Item Class: One Hand Maces\nRarity: Unique\nTest Mace\nWooden Club\n--------\n\
-             Item Level: 80\n--------\n{ Unique Modifier }\nAdds 24 to 51 Physical Damage",
+         Item Level: 80\n--------\n{ Unique Modifier }\nAdds 24 to 51 Physical Damage",
     );
     let stats = line_stats(&item);
 
@@ -201,7 +203,7 @@ fn a_stat_of_the_trade_site_is_searched_as_its_template_writes_it() {
     let trade = game_data::trade_stats();
     let item = unique(
         "20% reduced Damage per Patch\n\
-             Sacrifice up to 10 Chaos Orbs to receive double on Trial completion",
+         Sacrifice up to 10 Chaos Orbs to receive double on Trial completion",
     );
     let stats = LineStats::new(item.language(), item.modifiers(), Some(&trade));
 
@@ -258,8 +260,8 @@ fn the_limits_are_searched_within_the_range_of_the_stat() {
 fn a_stat_written_on_two_lines_is_searched_by_its_first_line() {
     let item = unique(
         "{ Unique Modifier — Speed }\n\
-             20(15-25)% chance to gain Onslaught for 3 seconds when you kill an\n\
-             enemy affected by Abyssal Wasting",
+         20(15-25)% chance to gain Onslaught for 3 seconds when you kill an\n\
+         enemy affected by Abyssal Wasting",
     );
     let stats = line_stats(&item);
 
@@ -279,8 +281,8 @@ fn a_stat_written_on_two_lines_is_searched_by_its_first_line() {
 fn a_stat_whose_numbers_are_on_its_second_line_is_searched_by_it() {
     let item = unique(
         "{ Unique Modifier — Life }\n\
-             Life that would be lost by taking Damage is instead Reserved\n\
-             until you take no Damage to Life for 5(4-6) seconds",
+         Life that would be lost by taking Damage is instead Reserved\n\
+         until you take no Damage to Life for 5(4-6) seconds",
     );
     let stats = line_stats(&item);
 
@@ -295,9 +297,9 @@ fn a_stat_whose_numbers_are_on_its_second_line_is_searched_by_it() {
 fn a_stat_is_searched_by_its_first_line_with_one_of_its_numbers() {
     let item = unique(
         "{ Unique Modifier — Damage }\n\
-             Alternating every 5 seconds:\n\
-             Take 20% more Damage from Hits\n\
-             Take 20% more Damage over time",
+         Alternating every 5 seconds:\n\
+         Take 20% more Damage from Hits\n\
+         Take 20% more Damage over time",
     );
     let stats = line_stats(&item);
 
@@ -333,7 +335,7 @@ fn weapon(language: Language, lines: &str) -> Item {
         ),
         Language::French => (
             "Classe d'objet: Arcs\nRareté: Rare\nChant funeste\nArc jumelé\n--------\n\
-                 Niveau de l'objet: 80",
+             Niveau de l'objet: 80",
             "Préfixe",
         ),
     };
@@ -345,8 +347,8 @@ fn the_damage_and_the_attack_speed_of_a_weapon_are_known_in_every_language() {
     let english = weapon(
         Language::English,
         "152% increased Physical Damage\nAdds 3 to 71 Lightning Damage\n\
-             14% increased Attack Speed\n109% increased Elemental Damage with Attacks\n\
-             Adds 5 to 9 Chaos Damage",
+         14% increased Attack Speed\n109% increased Elemental Damage with Attacks\n\
+         Adds 5 to 9 Chaos Damage",
     );
     let french = weapon(
         Language::French,
@@ -370,23 +372,23 @@ fn rare_ring(language: Language) -> Item {
     parse(match language {
         Language::English => {
             "Item Class: Rings\nRarity: Rare\nStorm Spiral\nSapphire Ring\n--------\n\
-                 Item Level: 77\n--------\n+10% to Lightning Resistance (rune)\n--------\n\
-                 { Implicit Modifier }\n+22% to Cold Resistance\n--------\n\
-                 { Prefix Modifier }\n+65 to maximum Life\n\
-                 { Suffix Modifier }\n+38% to Fire Resistance\n\
-                 { Suffix Modifier }\n+10% to all Elemental Resistances\n\
-                 { Suffix Modifier }\n+12 to Strength\n\
-                 { Suffix Modifier }\n+23% to Chaos Resistance"
+             Item Level: 77\n--------\n+10% to Lightning Resistance (rune)\n--------\n\
+             { Implicit Modifier }\n+22% to Cold Resistance\n--------\n\
+             { Prefix Modifier }\n+65 to maximum Life\n\
+             { Suffix Modifier }\n+38% to Fire Resistance\n\
+             { Suffix Modifier }\n+10% to all Elemental Resistances\n\
+             { Suffix Modifier }\n+12 to Strength\n\
+             { Suffix Modifier }\n+23% to Chaos Resistance"
         }
         Language::French => {
             "Classe d'objet: Anneaux\nRareté: Rare\nSpirale\nAnneau de saphir\n--------\n\
-                 Niveau de l'objet: 77\n--------\n+10% à la Résistance à la foudre (rune)\n\
-                 --------\n{ Modificateur Implicite }\n+22% à la Résistance au froid\n\
-                 --------\n{ Préfixe }\n+65 de Vie maximale\n\
-                 { Suffixe }\n+38% à la Résistance au feu\n\
-                 { Suffixe }\n+10% à toutes les Résistances Élémentaires\n\
-                 { Suffixe }\n+12 de Force\n\
-                 { Suffixe }\n+23% à la Résistance au chaos"
+             Niveau de l'objet: 77\n--------\n+10% à la Résistance à la foudre (rune)\n\
+             --------\n{ Modificateur Implicite }\n+22% à la Résistance au froid\n\
+             --------\n{ Préfixe }\n+65 de Vie maximale\n\
+             { Suffixe }\n+38% à la Résistance au feu\n\
+             { Suffixe }\n+10% à toutes les Résistances Élémentaires\n\
+             { Suffixe }\n+12 de Force\n\
+             { Suffixe }\n+23% à la Résistance au chaos"
         }
     })
 }
@@ -424,8 +426,8 @@ fn the_pseudo_totals_add_up_the_lines_of_every_group_in_every_language() {
 fn a_negative_line_counts_against_its_total() {
     let item = parse(
         "Item Class: Rings\nRarity: Rare\nVile Loop\nAmethyst Ring\n--------\n\
-             Item Level: 77\n--------\n{ Implicit Modifier }\n-13% to Chaos Resistance\n\
-             --------\n{ Suffix Modifier }\n+17% to Fire and Chaos Resistances",
+         Item Level: 77\n--------\n{ Implicit Modifier }\n-13% to Chaos Resistance\n\
+         --------\n{ Suffix Modifier }\n+17% to Fire and Chaos Resistances",
     );
     let totals: Vec<(Pseudo, f64)> = line_stats(&item)
         .pseudo_totals()
@@ -534,9 +536,9 @@ fn counts_the_affixes_a_rune_or_an_implicit_allows() {
 
     let amulet = parse(
         "Item Class: Amulets\nRarity: Rare\nDoom Idol\nGloam Amulet\n--------\n\
-             Item Level: 79\n--------\n+2 Suffix Modifiers allowed (rune)\n--------\n\
-             { Implicit Modifier }\n-1 Prefix Modifier allowed\n\
-             --------\n{ Prefix Modifier \"Hale\" (Tier: 9) }\n+12(10-14) to maximum Life",
+         Item Level: 79\n--------\n+2 Suffix Modifiers allowed (rune)\n--------\n\
+         { Implicit Modifier }\n-1 Prefix Modifier allowed\n\
+         --------\n{ Prefix Modifier \"Hale\" (Tier: 9) }\n+12(10-14) to maximum Life",
     );
     let stats = LineStats::new(amulet.language(), amulet.modifiers(), None);
     assert_eq!(stats.affixes_allowed(Affix::Prefix), -1);
@@ -549,7 +551,7 @@ fn counts_the_affixes_allowed_by_a_line_the_trade_site_finds() {
     // trade site finds the line once it is known, its stat without game id.
     let amulet = parse(
         "Item Class: Amulets\nRarity: Rare\nDoom Idol\nGloam Amulet\n--------\n\
-             Item Level: 79\n--------\n+1 Prefix Modifier allowed (rune)",
+         Item Level: 79\n--------\n+1 Prefix Modifier allowed (rune)",
     );
     let trade = game_data::trade_stats();
     for (trade, source) in [

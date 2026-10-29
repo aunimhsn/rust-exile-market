@@ -1,4 +1,6 @@
-//! The tests of `modifiers`.
+//! The modifier tables: the tier and range the advanced copy writes, found again on the test
+//! items; and the tiers found from the values of an item copied from the in-game trade, its
+//! hybrids, its affixes in doubt, its summed lines, its room and the bounds of the search.
 
 use super::*;
 use crate::item::{CopiedItem, Item, ItemState, Rarity, StatLine};

@@ -1,4 +1,5 @@
-//! The tests of `roll_difference`.
+//! The difference between a line of an offer and the same line of the copied item, and the
+//! better side of a line read from its words, in English and French.
 
 use super::*;
 use crate::item::StatLine;

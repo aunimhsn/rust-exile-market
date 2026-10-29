@@ -1,4 +1,6 @@
-//! The tests of `session`.
+//! The session, event by event: the copied item shown, the leagues and their bubble, the
+//! prices downloaded or cached, the lines read again once the stats and the names of the trade
+//! site arrive (with the tiers of an item copied from the in-game trade), and the offers.
 
 use super::*;
 use crate::item::{Affix, ModifierKind};
@@ -322,7 +324,7 @@ fn the_lines_of_the_item_shown_are_read_again_with_the_stats_of_the_trade_site()
     copy(
         &mut session,
         "Item Class: Rings\nRarity: Unique\nAndvarius\nGold Ring\n--------\n\
-             Item Level: 80\n--------\n{ Unique Modifier }\n20% reduced Damage per Patch",
+         Item Level: 80\n--------\n{ Unique Modifier }\n20% reduced Damage per Patch",
     );
     let line = StatKey {
         modifier: 0,
@@ -469,8 +471,8 @@ fn an_item_copied_from_the_in_game_trade_is_read_again_from_its_copy() {
 #[test]
 fn a_magic_hybrid_joined_once_the_names_arrive_reshapes_the_modifiers() {
     const MACE: &str = "Item Class: Two Hand Maces\nRarity: Magic\n\
-            Crackling Temple Maul of the Brute\n--------\nItem Level: 32\n--------\n\
-            30% increased Physical Damage\n+60 to Accuracy Rating\n+8 to Strength";
+        Crackling Temple Maul of the Brute\n--------\nItem Level: 32\n--------\n\
+        30% increased Physical Damage\n+60 to Accuracy Rating\n+8 to Strength";
     let mut session = session();
     let shape = |session: &Session| {
         let item = session.item()?.parsed().ok()?;
@@ -519,8 +521,8 @@ fn a_magic_hybrid_joined_once_the_names_arrive_reshapes_the_modifiers() {
 #[test]
 fn a_magic_item_copied_from_the_in_game_trade_gets_its_tiers_once_the_names_tell_its_base() {
     const MACE: &str = "Item Class: Two Hand Maces\nRarity: Magic\n\
-            Crackling Temple Maul of the Brute\n--------\nItem Level: 32\n--------\n\
-            Adds 1 to 50 Lightning Damage\n+8 to Strength";
+        Crackling Temple Maul of the Brute\n--------\nItem Level: 32\n--------\n\
+        Adds 1 to 50 Lightning Damage\n+8 to Strength";
     let mut session = session();
     let strength = |session: &Session| {
         let item = session.item()?.parsed().ok()?;
