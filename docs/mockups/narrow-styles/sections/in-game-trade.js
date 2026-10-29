@@ -6,7 +6,7 @@
 // them without tier:
 // - the lines of a hybrid modifier, one after the other with the same marker, read together (the 41% and
 //   +34 fractured lines of the tiara: one modifier, since an item has one fractured modifier only);
-// - a value in two tiers: the worst tier, its tooltip naming the other;
+// - a value in two tiers: the worst tier (specifications, Item detection);
 // - an affix the prefixes or suffixes left full rule out (the rarity of the tiara rolls as a prefix too),
 //   without tooltip: the room makes it certain (owner, 2026-10-29, step 13k2e3c2); otherwise the line in
 //   Explicit, the tier and range of each affix one under the other, the affix after the range, its origin
@@ -30,8 +30,11 @@ const DEDUCED_NOTE_FR = { note: "Copié depuis l'échange du jeu : les paliers s
 const TIARA_TRADE = { rarity: "rare", name: "Chimeric Visage", base: "Ancestral Tiara", cls: "Helmets",
   tags: [state("Fractured", "fractured", false), "Q 20%", "2 sockets", "ilvl 82"], props: [["Energy Shield", "511"]],
   req: "Requires Level 80 · 115 Int", statsLabel: "Stats (12)", filters: "8 filters" };
-const tiaraTradeStats = [
-  ...itemFilters({ base: "Ancestral Tiara", level: { value: 82, check: false }, sockets: { value: 2, check: true }, quality: { value: 20, check: false } }),
+// The filters of the tiara above its explicit modifiers, the same in its three windows: its quality of 20 %
+// isn't one (only a quality above 20 % is), its two sockets are (checked, as the application does), and its
+// pseudo totals count the rune of lightning.
+const tiaraTop = [
+  ...itemFilters({ base: "Ancestral Tiara", level: { value: 82, check: false }, sockets: { value: 2, check: true } }),
   { group: "Pseudo" },
   { mod: "+105% total Elemental Resistance", check: true, min: 95 },
   { mod: "+34 total maximum Mana", check: true, min: 31 },
@@ -42,6 +45,9 @@ const tiaraTradeStats = [
   { mod: "Raven-Touched", check: false },
   { mod: "Bonded: +20 to maximum Life", check: false },
   { mod: "Bonded: +20 to maximum Mana", check: false },
+];
+const tiaraTradeStats = [
+  ...tiaraTop,
   { group: "Prefixes", fill: "3 of 3" },
   { mod: "41% increased Energy Shield", check: true, min: 37, over: { share: .97 }, origin: "fractured" },
   { mod: "+34 to maximum Mana", check: false, min: 31, over: { share: .85 }, origin: "fractured" },
@@ -59,10 +65,7 @@ const tiaraTradeStats = [
 // suffix, so it goes into Explicit, with the tier and range of both, one under the other (owner,
 // 2026-10-29, against "Prefix or suffix" and a tooltip).
 const tiaraOpenStats = [
-  ...itemFilters({ base: "Ancestral Tiara", level: { value: 82, check: false } }),
-  { group: "Pseudo" },
-  { mod: "+105% total Elemental Resistance", check: true, min: 95 },
-  { mod: "+34 total maximum Mana", check: true, min: 31 },
+  ...tiaraTop,
   { group: "Prefixes", fill: "2 of 3 · 1 open" },
   { mod: "41% increased Energy Shield", check: true, min: 37, over: { share: .97 }, origin: "fractured" },
   { mod: "+34 to maximum Mana", check: false, min: 31, over: { share: .85 }, origin: "fractured" },
@@ -81,10 +84,7 @@ const tiaraOpenStats = [
 // desecrated whichever affix it is (owner, 2026-10-29: after the word of the last tier, it read as the
 // origin of the suffix only; after the text of the line, it wrapped it more and was unlike every other).
 const tiaraOpenDesecratedStats = [
-  ...itemFilters({ base: "Ancestral Tiara", level: { value: 82, check: false } }),
-  { group: "Pseudo" },
-  { mod: "+105% total Elemental Resistance", check: true, min: 95 },
-  { mod: "+34 total maximum Mana", check: true, min: 31 },
+  ...tiaraTop,
   { group: "Prefixes", fill: "2 of 3 · 1 open" },
   { mod: "41% increased Energy Shield", check: true, min: 37, over: { share: .97 }, origin: "fractured" },
   { mod: "+34 to maximum Mana", check: false, min: 31, over: { share: .85 }, origin: "fractured" },
@@ -120,7 +120,7 @@ const bowTradeStats = [
   { group: "Suffixes", fill: "4 of 4" },
   { mod: "+5% to Critical Hit Chance", check: true, min: 5, tier: 1, range: "4.41–5", over: { share: 1 }, origin: "fractured" },
   { mod: "+25% to Critical Damage Bonus", check: true, min: 23, tier: 1, range: "23–25", over: { share: 1 } },
-  { mod: "+4 to Level of all Projectile Skills", check: true, min: 4, tier: 1, range: "4–4", over: { share: 1 } },
+  { mod: "+4 to Level of all Projectile Skills", check: true, min: 4, tier: 1, range: "4", over: { share: 1 } },
   { mod: "+181% Surpassing chance to fire an additional Arrow", check: true, min: 163, tier: 1, range: "175–200", over: { share: .89 } },
   DEDUCED_NOTE,
 ];
@@ -153,15 +153,15 @@ const bowTradeStatsFr = [
   { group: "Suffixes", fill: "4 sur 4" },
   { mod: "+5% aux Chances de Touche critique", check: true, min: 5, tier: 1, range: "4.41–5", over: { share: 1 }, origin: "fractured", originLabel: "Fissuré" },
   { mod: "+25% au Bonus de Dégâts Critiques", check: true, min: 23, tier: 1, range: "23–25", over: { share: 1 } },
-  { mod: "+4 au Niveau de toutes les Aptitudes à Projectiles", check: true, min: 4, tier: 1, range: "4–4", over: { share: 1 } },
+  { mod: "+4 au Niveau de toutes les Aptitudes à Projectiles", check: true, min: 4, tier: 1, range: "4", over: { share: 1 } },
   { mod: "+200% de chances Cumulatives de tirer une Flèche supplémentaire", check: true, min: 180, tier: 1, range: "175–200", over: { share: 1 } },
   DEDUCED_NOTE_FR,
 ];
 
 SECTIONS.push(["In-game trade (13k2e): copies without headers, tiers found from the values", [
-  ["New (13k2e3c2) · The same tiara, the rarity desecrated: its origin on a line of its own", win(topBar(), item({ ...TIARA_TRADE, tags: [state("Fractured", "fractured", false), "ilvl 82"], statsLabel: "Stats (8)", filters: "6 filters", stats: tiaraOpenDesecratedStats }, true), price(RARE_ESTIMATE_BEFORE), foot())],
+  ["New (13k2e3c2) · The same tiara, the rarity desecrated: its origin on a line of its own", win(topBar(), item({ ...TIARA_TRADE, statsLabel: "Stats (11)", filters: "7 filters", stats: tiaraOpenDesecratedStats }, true), price(RARE_ESTIMATE_BEFORE), foot())],
   ["Fractured tiara: a fractured hybrid, the rarity a suffix", win(topBar(), item({ ...TIARA_TRADE, stats: tiaraTradeStats }, true), price(RARE_ESTIMATE_BEFORE), foot())],
-  ["The same tiara with an open prefix: the rarity in Explicit", win(topBar(), item({ ...TIARA_TRADE, statsLabel: "Stats (6)", filters: "6 filters", stats: tiaraOpenStats }, true), price(RARE_ESTIMATE_BEFORE), foot())],
+  ["The same tiara with an open prefix: the rarity in Explicit", win(topBar(), item({ ...TIARA_TRADE, statsLabel: "Stats (11)", filters: "7 filters", stats: tiaraOpenStats }, true), price(RARE_ESTIMATE_BEFORE), foot())],
   ["Bow: 258% adds up two modifiers", win(topBar(), item({ ...BOW_TRADE, stats: bowTradeStats }, true), price(RARE_ESTIMATE_BEFORE), foot())],
   ["Bow, French: a desecrated hybrid on two lines", win(topBar(), item({ ...BOW_TRADE_FR, stats: bowTradeStatsFr }, true), price(RARE_ESTIMATE_BEFORE), foot())],
 ]]);

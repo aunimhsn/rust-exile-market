@@ -1742,7 +1742,7 @@ fn clamped(text: &str) -> LayoutJob {
 /// The bar of a roll drawn in the style `bar`, and its ranges; for a line of a prefix or
 /// suffix, its bar over every tier, then under the last line of its modifier its tier, the
 /// ranges of that tier and its origin; or the tiers of a line that can be a prefix or a
-/// suffix, one under the other.
+/// suffix, one under the other, then its origin on a row of its own.
 fn roll_line(ui: &mut Ui, roll: &Roll, bar: RollBar, i18n: &Translator) {
     match roll {
         Roll::Bar {
@@ -1815,8 +1815,8 @@ fn origin_word(ui: &mut Ui, origin: ModifierOrigin, i18n: &Translator) {
     small_word(ui, i18n.text(message), tint);
 }
 
-/// A small word after the ranges of a tier, in `tint`: its origin, or the affix of a tier among
-/// several ("Prefix") in gray.
+/// A small word in `tint`: an origin, after the ranges of a tier or on a row of its own, or the
+/// affix of a tier among several ("Prefix") in gray, after its ranges.
 fn small_word(ui: &mut Ui, word: String, tint: Color32) {
     // The space before it only.
     ui.spacing_mut().item_spacing.x = ORIGIN_GAP;
@@ -1894,7 +1894,9 @@ mod tests {
     /// site can't search, then its minimum or its maximum and its roll (`■ +55 to maximum Life
     /// ≥55 [40–60 0.75]`, `■ 18% reduced Movement Speed ≤18`, a line of a prefix or suffix
     /// with its bar over every tier and, under its last line, its tier, its ranges and its
-    /// origin: `■ +86 to maximum Life ≥77 [0.37 T7 85–99]`, `[0.80 T2 71–79 Desecrated]`).
+    /// origin: `■ +86 to maximum Life ≥77 [0.37 T7 85–99]`, `[0.80 T2 71–79 Desecrated]`; the
+    /// tiers of a line that can be a prefix or a suffix, each row after a ` / `, its origin a
+    /// row of its own: `[T1 16–19 AffixPrefix / T1 15–18 AffixSuffix / Desecrated]`).
     fn row_texts<'a>(rows: impl IntoIterator<Item = Row<'a>>) -> Vec<String> {
         rows.into_iter()
             .map(|row| match row {
@@ -2056,7 +2058,7 @@ mod tests {
     }
 
     #[test]
-    fn the_origin_of_a_line_in_doubt_has_a_line_of_its_own_under_its_tiers() {
+    fn the_origin_of_a_line_in_doubt_comes_after_its_tiers() {
         let tiara = include_str!("../item/test-items/en-owner-trade-rare-helmet-fractured.txt");
         // A prefix open, and the rarity desecrated.
         let open = read_again(parse(
@@ -2068,6 +2070,8 @@ mod tests {
                 ),
         ));
 
+        // The origin after the rows of the tiers: `roll_line` draws it on a row of its own,
+        // since the line has it whichever affix it is (checked on a screenshot).
         assert!(texts(&open).contains(
             &"■ 18% increased Rarity of Items found ≥16 [T1 16–19 AffixPrefix / T1 15–18 AffixSuffix / Desecrated]"
                 .to_owned()

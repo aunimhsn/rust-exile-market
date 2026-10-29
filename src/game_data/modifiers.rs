@@ -166,9 +166,6 @@ pub struct FoundTiers {
     /// `counts`, follow the line matches of [`modifier_stats`] for each of these modifiers in
     /// their order.
     pub affixes: Vec<(Affix, ModifierTiers)>,
-    /// The other affix, whose tables hold the values too, left out since the item has no room
-    /// for it: a prefix, the prefixes being full.
-    pub ruled_out: Option<Affix>,
 }
 
 /// The tiers of the explicit modifiers of a rare or magic item copied from the in-game trade,
@@ -257,15 +254,16 @@ pub fn trade_tiers(
                 (AffixSet::Both, Affix::Prefix) => both.0,
                 (AffixSet::Both, Affix::Suffix) => both.1,
             };
-            let (affixes, ruled_out): (Vec<_>, Vec<_>) = candidate
-                .affixes
-                .iter()
-                .cloned()
-                .partition(|(affix, _)| kept(*affix));
             Some(FoundTiers {
                 modifiers: candidate.modifiers.clone(),
-                affixes,
-                ruled_out: ruled_out.first().map(|(affix, _)| *affix),
+                // Without the affix the item has no room for, whose tables hold the values
+                // too: a prefix, the prefixes being full.
+                affixes: candidate
+                    .affixes
+                    .iter()
+                    .filter(|(affix, _)| kept(*affix))
+                    .cloned()
+                    .collect(),
             })
         })
         .collect()
@@ -1365,8 +1363,6 @@ mod tests {
                     (1, vec![(Prefix, 1)]),
                 ]
             );
-            let rarity = found.get(2).expect("the rarity");
-            assert_eq!(rarity.ruled_out, Some(Prefix), "the prefixes are full");
             let hybrid = found.first().and_then(|found| found.affixes.first());
             assert_eq!(
                 hybrid.and_then(|(_, tiers)| Some(tiers.tier()?.ranges.clone())),
