@@ -161,7 +161,8 @@ pub struct FoundTiers {
     pub modifiers: std::ops::Range<usize>,
     /// Each affix the modifier can be, with its tiers on the base, the copied one the worst
     /// that holds its values: a prefix or a suffix, or both when the item has room for either
-    /// (the `18% increased Rarity of Items found` of a helmet). The ranges of a tier, and
+    /// (the `18% increased Rarity of Items found` of a helmet), the prefix first, as
+    /// [`TierDoubt::EitherAffix`] reads them. The ranges of a tier, and
     /// `counts`, follow the line matches of [`modifier_stats`] for each of these modifiers in
     /// their order.
     pub affixes: Vec<(Affix, ModifierTiers)>,
