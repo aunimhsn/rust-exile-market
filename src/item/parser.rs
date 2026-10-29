@@ -369,10 +369,11 @@ fn fill(item: &mut Item, section: Section<'_>, labels: &Labels) {
 
 /// Phase 4: the modifiers of one line written without header that make one stat written on
 /// several lines (`Inflict Anaemia on Hit` then `Anaemia allows 2 Corrupted Blood debuffs to
-/// be inflicted on enemies`, both desecrated) joined into one, as under a header of the
-/// advanced copy, when the game data finds that stat on their lines together: consecutive, of
-/// the same kind and origin. The runes and the enchantments never have a header; the implicit
-/// and explicit modifiers only in a copy without any (`with_headers` false).
+/// be inflicted on enemies`, desecrated) joined into one, as under a header of the advanced
+/// copy, when the game data finds that stat on their lines together: consecutive, of the same
+/// kind, with the origin of the last line, whose marker may be the only one of the stat. The
+/// runes and the enchantments never have a header; the implicit and explicit modifiers only in
+/// a copy without any (`with_headers` false).
 fn join_written_stats(modifiers: &mut Vec<Modifier>, language: Language, with_headers: bool) {
     let without_header = |modifier: &Modifier| {
         modifier.lines.len() == 1
@@ -387,20 +388,20 @@ fn join_written_stats(modifiers: &mut Vec<Modifier>, language: Language, with_he
         let run = modifiers
             .iter()
             .skip(first)
-            .take_while(|modifier| {
-                without_header(modifier)
-                    && (modifier.kind, modifier.origin) == (start.kind, start.origin)
-            })
+            .take_while(|modifier| without_header(modifier) && modifier.kind == start.kind)
             .count();
         let joined = (2..=run).rev().find_map(|count| {
-            let lines = modifiers
-                .iter()
-                .skip(first)
-                .take(count)
-                .flat_map(|modifier| modifier.lines.iter().cloned())
-                .collect();
+            let window = || modifiers.iter().skip(first).take(count);
+            let origin = modifiers.get(first + count - 1)?.origin;
+            // The lines before the last: without marker, or with its own.
+            if window().any(|modifier| modifier.origin.is_some_and(|o| Some(o) != origin)) {
+                return None;
+            }
             let candidate = Modifier {
-                lines,
+                lines: window()
+                    .flat_map(|modifier| modifier.lines.iter().cloned())
+                    .collect(),
+                origin,
                 ..start.clone()
             };
             let stats = game_data::modifier_stats(language, &candidate, None);

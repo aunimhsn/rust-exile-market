@@ -1122,6 +1122,33 @@ fn joins_the_lines_of_one_stat_written_without_header() {
     assert_eq!(anaemia.origin, Some(ModifierOrigin::Desecrated));
     assert_eq!(stat_id(anaemia), Some("apply_anaemia_magnitude_on_hit"));
 
+    // The marker after the last line only, as after a stat written on two lines, also in
+    // French.
+    for (text, lines) in [
+        (
+            "Item Class: Gloves\nRarity: Rare\nTest Grip\nVaal Gloves\n--------\n\
+             Item Level: 80\n--------\n+40 to maximum Life\nInflict Anaemia on Hit\n\
+             Anaemia allows 2 Corrupted Blood debuffs to be inflicted on enemies (desecrated)",
+            [1, 2],
+        ),
+        (
+            "Classe d'objet: Gants\nRareté: Rare\nTest Prise\nGants vaal\n--------\n\
+             Niveau de l'objet: 80\n--------\nVous infligez Anémie au Toucher (fractured)\n\
+             Anémie permet d'infliger 2 cumuls de l'Effet néfaste Sang corrompu aux ennemis \
+             (fractured)\n+40 de Vie maximale",
+            [2, 1],
+        ),
+    ] {
+        let rare = item(text);
+        let found: Vec<usize> = explicit(&rare).iter().map(|m| m.lines.len()).collect();
+        assert_eq!(found, lines, "{text}");
+        let anaemia = explicit(&rare)
+            .into_iter()
+            .find(|m| m.lines.len() == 2)
+            .unwrap();
+        assert!(anaemia.origin.is_some(), "{text}");
+    }
+
     // The second line alone would take the stat of every rarity.
     let unique = item(
         "Item Class: Gloves\nRarity: Unique\nTest Grasp\nVaal Gloves\n--------\nItem Level: 80\n\
