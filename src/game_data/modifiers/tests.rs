@@ -1455,7 +1455,8 @@ fn a_line_after_the_other_line_of_its_hybrid_is_split() {
         modifier(None, &["258% increased Physical Damage"]),
     ];
 
-    // With a prefix open, the accuracy could add up a pure modifier too.
+    // With a prefix open, the accuracy could add up a pure modifier too: without tier.
+    assert_eq!(found_tiers(&item, &modifiers, (3, 3)), []);
     let found = found_tiers(&item, &modifiers, (2, 3));
 
     assert_eq!(summary(&modifiers, &found), [(2, vec![(Affix::Prefix, 1)])]);
@@ -1475,12 +1476,11 @@ fn the_tiers_of_a_split_are_those_the_item_level_allows() {
         modifier(None, &["258% increased Physical Damage"]),
         modifier(None, &["+195 to Accuracy Rating"]),
     ];
-    // With a prefix open, the accuracy could add up a pure modifier too.
-    let limits = AffixLimits {
-        prefixes: 2,
-        suffixes: 3,
-    };
-    let read = |item_level| {
+    let read = |item_level, prefixes| {
+        let limits = AffixLimits {
+            prefixes,
+            suffixes: 3,
+        };
         let found = trade_tiers(
             Language::English,
             "Warmonger Bow",
@@ -1502,8 +1502,10 @@ fn the_tiers_of_a_split_are_those_the_item_level_allows() {
             1,
         )],
     );
-    assert_eq!(read(82), split);
-    assert_eq!(read(81), (vec![(1, vec![(Affix::Prefix, 5)])], vec![]));
+    assert_eq!(read(82, 2), split);
+    assert_eq!(read(81, 2), (vec![(1, vec![(Affix::Prefix, 5)])], vec![]));
+    // With a prefix open, the accuracy could add up a pure modifier too: without tier.
+    assert_eq!(read(82, 3), (vec![], vec![]));
 }
 
 #[test]
@@ -1564,6 +1566,42 @@ fn both_lines_of_a_hybrid_that_may_add_up_another_modifier_have_no_tier() {
             Affix::Prefix,
             3
         )]
+    );
+}
+
+#[test]
+fn an_affix_the_room_ruled_out_is_kept_when_a_reading_in_doubt_frees_it() {
+    use Affix::{Prefix, Suffix};
+    let modifiers: Vec<_> = [
+        "16% increased Rarity of Items found",
+        "41% increased Energy Shield",
+        "+15 to maximum Life",
+        "+20 to maximum Mana",
+        "+16% to Chaos Resistance",
+    ]
+    .iter()
+    .map(|line| modifier(None, &[*line]))
+    .collect();
+    let limits = AffixLimits {
+        prefixes: 3,
+        suffixes: 3,
+    };
+
+    let found = trade_tiers(
+        Language::English,
+        "Ancestral Tiara",
+        Some(82),
+        &modifiers,
+        limits,
+        false,
+    );
+
+    // The energy shield, the life and the mana are three pure prefixes, which leave the rarity
+    // a suffix; but they are in doubt, another reading of them, with a line adding up two
+    // modifiers, taking a prefix less: the rarity can be a prefix too.
+    assert_eq!(
+        summary(&modifiers, &found),
+        [(1, vec![(Prefix, 1), (Suffix, 1)]), (1, vec![(Suffix, 3)])]
     );
 }
 
