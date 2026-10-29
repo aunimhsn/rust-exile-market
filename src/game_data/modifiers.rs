@@ -189,7 +189,8 @@ pub struct AddedTiers {
 /// found from their values in the tables of its base (`base_type` in `language`) among the
 /// tiers its `item_level` allows; the other modifiers count as the affix their header tells. A
 /// modifier no tier holds isn't in the list, nor counted as a prefix or a suffix: a stat the
-/// tables don't know, or a line adding up two modifiers of the same stat in more than one way.
+/// tables don't know; nor a line adding up two modifiers of the same stat in more than one way,
+/// with the other lines of its hybrids, which take their room.
 ///
 /// Only the explicit modifiers without header are read, one line each, as the parser reads
 /// such a copy: a modifier whose header the parser doesn't know isn't a line of the in-game
@@ -209,8 +210,9 @@ pub struct AddedTiers {
 /// split counts two affixes, and a reading with fewer split lines is better: a line a modifier
 /// holds alone is split only when the room of the item needs it. A line that two readings as
 /// good split in other ways (a rarity of a prefix of tier 1 and a suffix of tier 2, or of tier
-/// 2 and tier 1) stays without tier. No line of a `sanctified` item is split: its values can
-/// leave their tiers.
+/// 2 and tier 1) stays without tier, with the other lines of its hybrids, while the other
+/// modifiers are read as the best of these readings does, with its room. No line of a
+/// `sanctified` item is split: its values can leave their tiers.
 ///
 /// A hybrid whose other line is read on its own (a sanctified value out of its tier, or two
 /// lines apart) counts twice and may rule out an affix wrongly: a rare case, left as it is.
@@ -237,7 +239,7 @@ pub fn trade_tiers(
                 .flatten()
         })
         .collect();
-    let mut candidates = candidates(modifiers, &copied, tags, item_level, !sanctified);
+    let candidates = candidates(modifiers, &copied, tags, item_level, !sanctified);
     let known = |affix| {
         modifiers
             .iter()
@@ -257,25 +259,14 @@ pub fn trade_tiers(
         .iter()
         .filter(|modifier| modifier.origin == Some(ModifierOrigin::Fractured))
         .count();
-    let (key, reading) = loop {
-        let mut search = Search::new(&candidates, modifiers.len(), room, fractured);
-        search.walk(0, &mut Vec::new());
-        let Some(best) = search.best else {
-            return Vec::new();
-        };
-        if search.ambiguous.is_empty() {
-            break best;
-        }
-        // A line split in two ways as good, and the other lines of its hybrids: without tier,
-        // also alone or in a hybrid, which the room had ruled out; the others read again.
-        let ambiguous = search.ambiguous;
-        candidates.retain(|candidate| {
-            !ambiguous
-                .iter()
-                .any(|line| candidate.modifiers.contains(line))
-        });
+    let mut search = Search::new(&candidates, modifiers.len(), room, fractured);
+    search.walk(0, &mut Vec::new());
+    let Some((key, reading)) = search.best else {
+        return Vec::new();
     };
-    // A modifier that can be both, when the others leave room for one affix only.
+    let ambiguous = search.ambiguous;
+    // A modifier that can be both, when the others leave room for one affix only: the lines
+    // split in two ways as good take their room too.
     let both = if key.room {
         room.both(&reading, &candidates)
     } else {
@@ -289,7 +280,13 @@ pub fn trade_tiers(
     reading
         .iter()
         .filter_map(|&index| {
-            let candidate = candidates.get(index)?;
+            // A line split in two ways as good, and the other lines of its hybrids: without
+            // tier, the others read as the best reading does.
+            let candidate = candidates.get(index).filter(|candidate| {
+                !ambiguous
+                    .iter()
+                    .any(|line| candidate.modifiers.contains(line))
+            })?;
             let kept = |affix| match (candidate.set(), affix) {
                 (AffixSet::Only(_), _) => true,
                 (AffixSet::Both, Affix::Prefix) => both.0,
@@ -2454,6 +2451,37 @@ mod tests {
     }
 
     #[test]
+    fn the_lines_split_in_two_ways_as_good_keep_their_room() {
+        let item = parse(TIARA_EN);
+        let modifiers = [
+            modifier(None, &["33% increased Rarity of Items found"]),
+            modifier(None, &["30% increased Energy Shield"]),
+            modifier(None, &["+30 to maximum Life"]),
+            modifier(None, &["+34 to maximum Mana"]),
+        ];
+
+        let found = found_tiers(&item, &modifiers, (3, 3));
+
+        // The rarity is a prefix and a suffix in three ways as good, without tier: with its
+        // prefix, the other prefixes are full, the energy shield and the life one hybrid T3
+        // (27–32 · 26–32), not two pure prefixes of T6 and T8.
+        let hybrid = vec![
+            "30% increased Energy Shield".to_owned(),
+            "+30 to maximum Life".to_owned(),
+        ];
+        assert_eq!(
+            lines_read(&modifiers, &found),
+            [
+                (hybrid, vec![(Affix::Prefix, 3)]),
+                (
+                    vec!["+34 to maximum Mana".to_owned()],
+                    vec![(Affix::Prefix, 8)]
+                ),
+            ]
+        );
+    }
+
+    #[test]
     fn a_fractured_line_isnt_split() {
         let item = parse(TIARA_EN);
         // Split, the line would be two fractured modifiers.
@@ -2701,6 +2729,16 @@ mod tests {
             split(1..2, Prefix, Suffix, 1),
         ];
         assert_eq!(search(&candidates, room(3, 3)), (Some(vec![0]), vec![]));
+        // A split over the lines 1 and 2, a hybrid, against one of the line 2 only, alone: every
+        // line of both.
+        let candidates = [
+            candidate(0..1, &[Prefix], false),
+            split(1..3, Prefix, Prefix, 2),
+            split(2..3, Prefix, Prefix, 2),
+        ];
+        assert_eq!(differently_split(&candidates, &[0, 1], &[0, 2]), [1, 2, 2]);
+        assert_eq!(differently_split(&candidates, &[0, 1], &[0, 1]), [0; 0]);
+        assert_eq!(differently_split(&candidates, &[0], &[0]), [0; 0]);
         // Room for one split only, of either line: both ambiguous, the line 0 without tier
         // looked at first.
         let candidates = [
