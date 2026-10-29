@@ -20,6 +20,18 @@ const stateTag = t => `<span class="tag app-state-tag app-state-${t.state}${t.on
   + ` data-tip-on="${t.tips[0]}" data-tip-off="${t.tips[1]}">`
   + t.label
   + `<span class="app-tip">${t.tips[t.on ? 0 : 1]}</span></span>`;
+// The data of a state tag, shared by the sections: `on` lit, `hover` its tooltip open; `fr` for a French item.
+const STATE_TIPS = {
+  corrupted: ["Corrupted offers only", "Corrupted or not", "Offres corrompues seulement", "Corrompues ou non"],
+  twice: ["Twice corrupted offers only", "Corrupted or not", "Offres doublement corrompues seulement", "Corrompues ou non"],
+  sanctified: ["Sanctified offers only", "Sanctified or not", "Offres sanctifiées seulement", "Sanctifiées ou non"],
+  fractured: ["Fractured offers only", "Fractured or not", "Offres fissurées seulement", "Fissurées ou non"],
+  mirrored: ["Mirrored offers only", "Mirrored or not", "Offres reflétées seulement", "Reflétées ou non"],
+};
+const state = (label, kind, on, { hover = false, fr = false } = {}) => ({
+  label, state: kind === "twice" ? "corrupted" : kind, on, hover, tips: STATE_TIPS[kind].slice(fr ? 2 : 0, fr ? 4 : 2),
+});
+
 document.addEventListener("click", event => {
   const tag = event.target.closest(".app-state-tag");
   if (!tag) return;
@@ -56,8 +68,39 @@ function item(it, unfolded = false) {
       // A modifier not revealed yet (13k1): a line without filter, on a green band.
       if (row.unrevealed) return `<div class="mod2 wide app-unrevealed${cls}"><span class="text">${row.unrevealed}</span></div>`;
       if (row.note) return `<div class="note${cls}">${row.note}</div>`;
+      // A tier found from the value (13k2e, a copy from the in-game trade) looks like any other, a note
+      // under the stats saying so (decided with the owner on 2026-10-29, against a dashed outline and "≈");
+      // a tier chosen among several has a tooltip saying why (`row.tierTip`, `row.tierHover` open).
+      const tierBadge = number => {
+        const text = row.tierTip;
+        const hover = row.tierHover;
+        const found = text ? ` app-tier-tip${hover ? " is-hovered" : ""}` : "";
+        const tip = text ? `<span class="app-tip">${text}</span>` : "";
+        return `<span class="tier ${number <= 3 ? "tier-top" : ""} t${number}${found}">T${number}${tip}</span>`;
+      };
       // The tier and the ranges of a hybrid modifier, under all its lines: it reads as one modifier.
-      if (row.rollOnly) return `<div class="mod2 min-top"><span></span><div class="roll2" style="grid-column: 2"><span class="range"><span class="tier t${row.tier}">T${row.tier}</span>${row.range}</span></div></div>`;
+      if (row.rollOnly) {
+        const rollOrigin = row.origin ? `<span class="app-origin">${row.originLabel || ORIGIN_LABEL[row.origin]}</span>` : "";
+        return `<div class="mod2 min-top${cls}"><span></span><div class="roll2" style="grid-column: 2"><span class="range">${tierBadge(row.tier)}${row.range}${rollOrigin}</span></div></div>`;
+      }
+      // A word after the range (13k2e), like the origin: "Hybrid" on the part of a hybrid modifier (13k2e4,
+      // its tooltip naming its other line), the affix of a line whose affix stays unknown; so that the tiers
+      // stay aligned on the left (owner, 2026-10-29, against the word before the tier, and "with …" after the
+      // range, too long).
+      const after = word => {
+        if (!word) return "";
+        const tip = word.tip ? `<span class="app-tip">${word.tip}</span>` : "";
+        return `<span class="app-after${word.tip ? " app-has-tip" : ""}${word.hover ? " is-hovered" : ""}">${word.label}${tip}</span>`;
+      };
+      // A line whose affix stays unknown (13k2e), or a line that adds up two modifiers (13k2e4): the tier and
+      // range of each, one under the other (`row.affixes`: [tier, range, word after the range]).
+      if (row.affixes) {
+        const check = `<span class="check ${row.check ? "on" : ""}">${row.check ? ICON.check(11) : ""}</span>`;
+        const field = `<span class="input app-range"><input value="${row.min ?? ""}" inputmode="decimal" aria-label="Minimum"><i>–</i><input value="" inputmode="decimal" aria-label="Maximum"><span class="app-tip"></span></span>`;
+        const lines = row.affixes.map(([number, range, word]) =>
+          `<span class="range">${tierBadge(number)}${range}${after(word)}</span>`).join("");
+        return `<div class="mod2 min-top${cls}">${check}<span class="text">${row.mod}</span>${field}<div class="roll2 app-affixes">${lines}</div></div>`;
+      }
       // A filter: its checkbox, its text on two lines at most (whole under the pointer), its minimum
       // on the line of the checkbox in a column kept for it, and its bar and range under the text.
       // A stat without a filter has no checkbox and starts at the left edge.
@@ -67,8 +110,7 @@ function item(it, unfolded = false) {
       const box = warning || (row.check === undefined ? "" : `<span class="check ${row.check ? "on" : ""}">${row.check ? ICON.check(11) : ""}</span>`);
       // A modifier of one tier only (`row.single`, 13k1: jewels, lords of the Abyss, waystones) has no tier:
       // its T1 would say "the best" while it is "the only one" (decided with the owner on 2026-10-28).
-      const tier = row.single ? ""
-        : row.tier ? `<span class="tier ${row.tier <= 3 ? "tier-top" : ""} t${row.tier}">T${row.tier}</span>` : "";
+      const tier = row.single ? "" : row.tier ? tierBadge(row.tier) : "";
       // The origin in words after the range.
       const origin = row.origin ? `<span class="app-origin">${row.originLabel || ORIGIN_LABEL[row.origin]}</span>` : "";
       // A line of a Time-Lost jewel (`row.radius`: the words the game writes before it, and its short tag):
@@ -108,7 +150,7 @@ function item(it, unfolded = false) {
       const tip = row.tip ? `${plain}\n${row.tip}` : plain;
       const text = `<span class="text" title="${tip.replace(/"/g, "&quot;")}">${mod}</span>`;
       if (box) {
-        const rollTop = row.range ? `<div class="roll2">${bar}<span class="range">${tier}${row.range}${origin}</span>${radius}</div>`
+        const rollTop = row.range ? `<div class="roll2">${bar}<span class="range">${tier}${row.range}${after(row.after)}${origin}</span>${radius}</div>`
           : bar || radius ? `<div class="roll2">${bar}${radius}</div>` : "";
         return `<div class="mod2 min-top${row.wide ? " app-wide" : ""}${cls}">${box}${text}${fields || "<span></span>"}${rollTop}</div>`;
       }
