@@ -2165,7 +2165,8 @@ mod tests {
              --------\nNiveau de l'objet: 79\n--------\n\
              +1 Modificateur suffixe autorisé (rune)\n--------\n\
              { Modificateur Implicite }\n-1 Modificateur préfixe autorisé\n--------\n\
-             { Préfixe : « Sain » (Palier : 9) }\n+12(10-14) de Vie maximale",
+             { Préfixe : « Sain » (Palier : 9) }\n+12(10-14) de Vie maximale\n\
+             { Suffixe : « de la Brute » (Palier : 7) — Attribut }\n+12(9-12) de Force",
         );
 
         let groups = |item: &Item| -> Vec<String> {
@@ -2175,7 +2176,7 @@ mod tests {
                 .collect()
         };
         assert_eq!(groups(&english), ["Prefixes 1/2", "Suffixes 1/4"]);
-        assert_eq!(groups(&french), ["Prefixes 1/2"]);
+        assert_eq!(groups(&french), ["Prefixes 1/2", "Suffixes 1/4"]);
     }
 
     #[test]

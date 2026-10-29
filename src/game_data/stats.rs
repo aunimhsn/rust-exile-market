@@ -119,6 +119,17 @@ impl Stat {
     pub fn trade_ids(&self, group: TradeGroup) -> &[String] {
         self.ids.get(&group).map_or(&[], Vec::as_slice)
     }
+
+    /// Whether the stat is `stat` of the trade site in a group (`stat_718638445`, the
+    /// `rune.stat_718638445` of a rune): the stats of the game data and of the trade site have
+    /// it, unlike the game id.
+    #[must_use]
+    pub fn is_trade_stat(&self, stat: &str) -> bool {
+        self.ids
+            .values()
+            .flatten()
+            .any(|id| id.split_once('.').is_some_and(|(_, number)| number == stat))
+    }
 }
 
 /// A string of a language that matches a line of the stat, with `#` for its values, e.g.

@@ -25,12 +25,14 @@ const WEAPON_DAMAGE: [&str; 6] = [
     "local_attack_speed_+%",
 ];
 
-/// The game stats of the lines that add prefixes or suffixes to those an item can have, or
-/// take some away: `+1 Suffix Modifier allowed` of a rune, `-1 Prefix Modifier allowed` of an
-/// implicit.
+/// The stats of the trade site of the lines that add prefixes or suffixes to those an item
+/// can have, or take some away: `+1 Suffix Modifier allowed` of a rune, `-1 Prefix Modifier
+/// allowed` of an implicit (`local_maximum_prefixes_allowed_+` and
+/// `local_maximum_suffixes_allowed_+` in the game data). By their trade stat, which a line
+/// found by the templates of the trade site has too, not by their game id.
 const AFFIXES_ALLOWED: [(&str, Affix); 2] = [
-    ("local_maximum_prefixes_allowed_+", Affix::Prefix),
-    ("local_maximum_suffixes_allowed_+", Affix::Suffix),
+    ("stat_3182714256", Affix::Prefix),
+    ("stat_718638445", Affix::Suffix),
 ];
 
 /// How a line is searched on the trade site.
@@ -181,6 +183,16 @@ pub fn counted_numbers(found: &game_data::LineMatch, modifier: &Modifier) -> Vec
         .collect()
 }
 
+/// A number of affixes added up from the values of lines, rounded.
+fn affixes(total: f64) -> i32 {
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "a few affixes; the cast saturates"
+    )]
+    let affixes = total.round() as i32;
+    affixes
+}
+
 /// A limit as the search writes it, without the noise of the calculation (`37.500000001`).
 fn written(value: f64) -> f64 {
     (value * 1e6).round() / 1e6
@@ -202,8 +214,10 @@ struct Line {
 pub struct LineStats {
     lines: Vec<Line>,
     pseudo: Vec<PseudoTotal>,
-    /// The affixes each line of [`AFFIXES_ALLOWED`] adds, negative when it takes some away.
-    allowed: Vec<(Affix, f64)>,
+    /// The prefixes the lines of [`AFFIXES_ALLOWED`] add, negative when they take some away.
+    prefixes_allowed: i32,
+    /// The suffixes they add.
+    suffixes_allowed: i32,
 }
 
 impl LineStats {
@@ -212,7 +226,7 @@ impl LineStats {
     #[must_use]
     pub fn new(language: Language, modifiers: &[Modifier], trade: Option<&TradeStats>) -> Self {
         let mut lines = Vec::new();
-        let mut allowed = Vec::new();
+        let (mut prefixes_allowed, mut suffixes_allowed) = (0.0, 0.0);
         for (index, modifier) in modifiers.iter().enumerate() {
             let group = TradeGroup::of(modifier);
             for found in game_data::modifier_stats(language, modifier, trade) {
@@ -235,12 +249,16 @@ impl LineStats {
                     });
                 let known = found.stat.is_some();
                 let game_id = found.stat.as_ref().and_then(|found| found.stat.id.clone());
-                if let Some(&(_, affix)) = AFFIXES_ALLOWED
-                    .iter()
-                    .find(|(id, _)| game_id.as_deref() == Some(*id))
-                    && let Some(&value) = found.stat.as_ref().and_then(|stat| stat.values.first())
+                if let Some(stat) = &found.stat
+                    && let Some(&(_, affix)) = AFFIXES_ALLOWED
+                        .iter()
+                        .find(|(trade, _)| stat.stat.is_trade_stat(trade))
+                    && let Some(&value) = stat.values.first()
                 {
-                    allowed.push((affix, value));
+                    match affix {
+                        Affix::Prefix => prefixes_allowed += value,
+                        Affix::Suffix => suffixes_allowed += value,
+                    }
                 }
                 for (line, numbers) in found.lines.zip(numbers) {
                     let key = StatKey {
@@ -278,7 +296,8 @@ impl LineStats {
         Self {
             lines,
             pseudo,
-            allowed,
+            prefixes_allowed: affixes(prefixes_allowed),
+            suffixes_allowed: affixes(suffixes_allowed),
         }
     }
 
@@ -322,18 +341,10 @@ impl LineStats {
     /// allowed`.
     #[must_use]
     pub fn affixes_allowed(&self, affix: Affix) -> i32 {
-        let total: f64 = self
-            .allowed
-            .iter()
-            .filter(|(allowed, _)| *allowed == affix)
-            .map(|(_, value)| value)
-            .sum();
-        #[expect(
-            clippy::cast_possible_truncation,
-            reason = "a few affixes, capped by the six an item can have"
-        )]
-        let total = total.round().clamp(-6.0, 6.0) as i32;
-        total
+        match affix {
+            Affix::Prefix => self.prefixes_allowed,
+            Affix::Suffix => self.suffixes_allowed,
+        }
     }
 
     fn line(&self, key: StatKey) -> Option<&Line> {
@@ -933,11 +944,32 @@ mod tests {
 
         let amulet = parse(
             "Item Class: Amulets\nRarity: Rare\nDoom Idol\nGloam Amulet\n--------\n\
-             Item Level: 79\n--------\n{ Implicit Modifier }\n-1 Prefix Modifier allowed\n\
+             Item Level: 79\n--------\n+2 Suffix Modifiers allowed (rune)\n--------\n\
+             { Implicit Modifier }\n-1 Prefix Modifier allowed\n\
              --------\n{ Prefix Modifier \"Hale\" (Tier: 9) }\n+12(10-14) to maximum Life",
         );
         let stats = LineStats::new(amulet.language(), amulet.modifiers(), None);
         assert_eq!(stats.affixes_allowed(Affix::Prefix), -1);
-        assert_eq!(stats.affixes_allowed(Affix::Suffix), 0);
+        assert_eq!(stats.affixes_allowed(Affix::Suffix), 2, "the plural");
+    }
+
+    #[test]
+    fn counts_the_affixes_allowed_by_a_line_the_trade_site_finds() {
+        // Exiled Exchange 2 has no rune id for the prefixes allowed: the template of the
+        // trade site finds the line once it is known, its stat without game id.
+        let amulet = parse(
+            "Item Class: Amulets\nRarity: Rare\nDoom Idol\nGloam Amulet\n--------\n\
+             Item Level: 79\n--------\n+1 Prefix Modifier allowed (rune)",
+        );
+        let trade = game_data::trade_stats();
+        for (trade, source) in [
+            (None, game_data::StatSource::GameData),
+            (Some(&trade), game_data::StatSource::TradeSite),
+        ] {
+            let found = game_data::modifier_stats(amulet.language(), &amulet.modifiers()[0], trade);
+            assert_eq!(found[0].stat.as_ref().map(|stat| stat.source), Some(source));
+            let stats = LineStats::new(amulet.language(), amulet.modifiers(), trade);
+            assert_eq!(stats.affixes_allowed(Affix::Prefix), 1);
+        }
     }
 }
