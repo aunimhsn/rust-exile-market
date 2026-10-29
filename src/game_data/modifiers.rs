@@ -176,24 +176,34 @@ pub struct FoundTiers {
     pub modifiers: std::ops::Range<usize>,
     /// Each affix the modifier can be, with its tiers on the base, the copied one the worst
     /// that holds its values: a prefix or a suffix, or both when the item has room for either
-    /// (the `18% increased Rarity of Items found` of a helmet).
+    /// (the `18% increased Rarity of Items found` of a helmet). The ranges of a tier, and
+    /// `counts`, follow the line matches of [`modifier_stats`] for each of these modifiers in
+    /// their order.
     pub affixes: Vec<(Affix, ModifierTiers)>,
+    /// The other affix, whose tables hold the values too, left out since the item has no room
+    /// for it: a suffix, the prefixes being full.
+    pub ruled_out: Option<Affix>,
 }
 
 /// The tiers of the explicit modifiers of a rare or magic item copied from the in-game trade,
-/// found from their values in the tables of its base (`base_type` in `language`); the other
-/// modifiers count as the affix their header tells. A modifier no tier holds isn't in the
-/// list, nor counted as a prefix or a suffix: a stat the tables don't know, or a line adding
-/// up two modifiers of the same stat.
+/// found from their values in the tables of its base (`base_type` in `language`) among the
+/// tiers its `item_level` allows; the other modifiers count as the affix their header tells. A
+/// modifier no tier holds isn't in the list, nor counted as a prefix or a suffix: a stat the
+/// tables don't know, or a line adding up two modifiers of the same stat.
 ///
 /// Only the explicit modifiers without header are read, one line each, as the parser reads
 /// such a copy: a modifier whose header the parser doesn't know isn't a line of the in-game
-/// trade, the caller leaves it out. The consecutive lines of one origin are read as one
-/// modifier when they fit a hybrid of the tables (the fractured `41% increased Energy Shield`
-/// and `+34 to maximum Mana` of a tiara), as the lines of the hybrids follow each other on the
-/// owner's copies; an affix that would give the item more prefixes or suffixes than `limits`
-/// is left out, unless no reading fits them, the tables being then out of step with the game.
-/// A value in several tiers takes the worst of them.
+/// trade, the caller leaves it out. Each line is read alone, unless the item has more
+/// prefixes or suffixes than `limits` that way, or two fractured modifiers (a Fracturing Orb
+/// fractures one modifier of an item not fractured yet): the consecutive lines of one origin
+/// are then read as one modifier when they fit a hybrid of the tables (the fractured `41%
+/// increased Energy Shield` and `+34 to maximum Mana` of a tiara), as the lines of the hybrids
+/// follow each other on the owner's copies. An affix the full prefixes or suffixes rule out is
+/// left out, unless no reading fits them, the tables being then out of step with the game. A
+/// value in several tiers takes the worst of them.
+///
+/// A hybrid whose other line is read on its own (a sanctified value out of its tier, or two
+/// lines apart) counts twice and may rule out an affix wrongly: a rare case, left as it is.
 #[must_use]
 #[cfg_attr(
     not(test),
@@ -202,6 +212,7 @@ pub struct FoundTiers {
 pub fn trade_tiers(
     language: Language,
     base_type: &str,
+    item_level: Option<u32>,
     modifiers: &[Modifier],
     limits: AffixLimits,
 ) -> Vec<FoundTiers> {
@@ -213,48 +224,49 @@ pub fn trade_tiers(
         .map(|modifier| {
             let open = modifier.kind == ModifierKind::Explicit(None)
                 && modifier.tier.is_none()
-                && !modifier.unrevealed;
+                && !modifier.unrevealed
+                && !modifier.lines.is_empty();
             open.then(|| Copied::of(modifier, &modifier_stats(language, modifier, None)))
                 .flatten()
         })
         .collect();
-    let candidates = candidates(modifiers, &copied, tags);
+    let candidates = candidates(modifiers, &copied, tags, Tie::Worst { item_level });
     let known = |affix| {
         modifiers
             .iter()
             .filter(|modifier| modifier.kind == ModifierKind::Explicit(Some(affix)))
             .count()
     };
+    let room = |limit: u32, affix| {
+        usize::try_from(limit)
+            .unwrap_or(usize::MAX)
+            .saturating_sub(known(affix))
+    };
     let room = Room {
-        prefixes: usize::try_from(limits.prefixes)
-            .unwrap_or(usize::MAX)
-            .saturating_sub(known(Affix::Prefix)),
-        suffixes: usize::try_from(limits.suffixes)
-            .unwrap_or(usize::MAX)
-            .saturating_sub(known(Affix::Suffix)),
+        prefixes: room(limits.prefixes, Affix::Prefix),
+        suffixes: room(limits.suffixes, Affix::Suffix),
     };
-    let mut search = Search {
-        candidates: &candidates,
-        count: modifiers.len(),
-        room,
-        readings: 0,
-        fitting: None,
-        any: None,
-    };
+    let fractured = modifiers
+        .iter()
+        .filter(|modifier| modifier.origin == Some(ModifierOrigin::Fractured))
+        .count();
+    let mut search = Search::new(&candidates, modifiers.len(), room, fractured);
     search.walk(0, &mut Vec::new());
-    let (reading, fits) = match (search.fitting, search.any) {
-        (Some(reading), _) => (reading, true),
-        (None, Some(reading)) => (reading, false),
-        (None, None) => return Vec::new(),
+    let Some((key, reading)) = search.best else {
+        return Vec::new();
     };
     // A modifier that can be both, when the others leave room for one affix only.
-    let both = if fits {
-        room.both(&reading.chosen, &candidates)
+    let both = if key.room {
+        room.both(&reading, &candidates)
     } else {
+        log::warn!(
+            "Game data, {base_type} copied from the in-game trade: no reading of its lines fits {} prefixes and {} suffixes",
+            limits.prefixes,
+            limits.suffixes
+        );
         (true, true)
     };
     reading
-        .chosen
         .iter()
         .filter_map(|&index| {
             let candidate = candidates.get(index)?;
@@ -263,15 +275,15 @@ pub fn trade_tiers(
                 (AffixSet::Both, Affix::Prefix) => both.0,
                 (AffixSet::Both, Affix::Suffix) => both.1,
             };
-            let affixes = candidate
+            let (affixes, ruled_out): (Vec<_>, Vec<_>) = candidate
                 .affixes
                 .iter()
-                .filter(|(affix, _)| kept(*affix))
                 .cloned()
-                .collect();
+                .partition(|(affix, _)| kept(*affix));
             Some(FoundTiers {
                 modifiers: candidate.modifiers.clone(),
                 affixes,
+                ruled_out: ruled_out.first().map(|(affix, _)| *affix),
             })
         })
         .collect()
@@ -281,6 +293,8 @@ pub fn trade_tiers(
 /// whose tables hold their values.
 struct Candidate {
     modifiers: std::ops::Range<usize>,
+    /// Whether its modifiers are fractured.
+    fractured: bool,
     /// A prefix, a suffix, or both, never none.
     affixes: Vec<(Affix, ModifierTiers)>,
 }
@@ -301,29 +315,32 @@ enum AffixSet {
     Both,
 }
 
+/// The most lines a modifier of the tables has: a hybrid of three lines.
+static MOST_LINES: LazyLock<usize> = LazyLock::new(|| {
+    TABLES
+        .iter()
+        .map(|table| table.lines.len())
+        .max()
+        .unwrap_or(1)
+});
+
 /// Every modifier or run of modifiers among `modifiers` whose values the tables of a base with
-/// `tags` hold, `copied` giving the lines of each modifier to read (none for a modifier that
-/// isn't, or whose lines have no stat of the game data): one modifier, or up to as many as the
-/// lines of a hybrid, of the same origin. The shorter first at each start.
+/// `tags` hold, the tier taken on a `tie`, `copied` giving the lines of each modifier to read
+/// (none for a modifier that isn't, or whose lines have no stat of the game data): one
+/// modifier, or up to as many as the lines of a hybrid, of the same origin. The shorter first
+/// at each start.
 fn candidates(
     modifiers: &[Modifier],
     copied: &[Option<Copied<'_>>],
     tags: &[String],
+    tie: Tie,
 ) -> Vec<Candidate> {
-    let most = TABLES
-        .iter()
-        .map(|table| table.lines.len())
-        .max()
-        .unwrap_or(1);
     let mut candidates = Vec::new();
-    for start in 0..modifiers.len() {
-        let origin: Option<Option<ModifierOrigin>> =
-            modifiers.get(start).map(|modifier| modifier.origin);
+    for (start, first) in modifiers.iter().enumerate() {
         let mut lines = Vec::new();
-        for end in start + 1..=modifiers.len().min(start + most) {
-            let index = end - 1;
-            let same_origin = modifiers.get(index).map(|modifier| modifier.origin) == origin;
-            let Some(Some(part)) = copied.get(index).filter(|_| same_origin) else {
+        let run = modifiers.iter().zip(copied).skip(start).take(*MOST_LINES);
+        for (end, (modifier, part)) in (start + 1..).zip(run) {
+            let Some(part) = part.as_ref().filter(|_| modifier.origin == first.origin) else {
                 break;
             };
             lines.extend(part.lines.iter().cloned());
@@ -337,15 +354,13 @@ fn candidates(
             ]
             .into_iter()
             .filter_map(|(affix, table_affix)| {
-                Some((
-                    affix,
-                    find(&TABLES, table_affix, tags, &joined, Tie::Worst)?,
-                ))
+                Some((affix, find(&TABLES, table_affix, tags, &joined, tie)?))
             })
             .collect();
             if !affixes.is_empty() {
                 candidates.push(Candidate {
                     modifiers: start..end,
+                    fractured: first.origin == Some(ModifierOrigin::Fractured),
                     affixes,
                 });
             }
@@ -375,7 +390,7 @@ impl Room {
         }
         let lowest = (both + suffixes).saturating_sub(self.suffixes);
         let highest = both.min(self.prefixes.checked_sub(prefixes)?);
-        (suffixes <= self.suffixes && lowest <= highest).then_some((lowest, highest))
+        (lowest <= highest).then_some((lowest, highest))
     }
 
     /// Whether a modifier that can be both can be a prefix, and a suffix, while the others of
@@ -393,52 +408,69 @@ impl Room {
     }
 }
 
-/// A way to read the modifiers: the candidates chosen, the others without tier.
-struct Reading {
-    chosen: Vec<usize>,
-    /// How many modifiers the lines make, those without tier counted: the fewer, the more
-    /// lines read as hybrids.
+/// How good a reading is, the better the greater: one fractured modifier at most, then the
+/// room of the item, then the lines read alone.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+struct ReadingKey {
+    fractured: bool,
+    room: bool,
+    /// How many modifiers the lines make, those without tier counted.
     modifiers: usize,
 }
 
-/// The ways to read the modifiers of an item, looked at one by one.
+/// The ways to read the modifiers of an item, looked at one by one: for each, the candidates
+/// chosen, the other modifiers without tier.
 struct Search<'a> {
     candidates: &'a [Candidate],
-    /// The number of modifiers of the item.
-    count: usize,
+    /// For each modifier of the item, the candidates that start at it, the shorter first.
+    starting: Vec<Vec<usize>>,
     room: Room,
+    /// How many modifiers of the item are fractured.
+    fractured: usize,
     readings: usize,
-    /// The reading with the fewest modifiers that fits the room, the first one on a tie.
-    fitting: Option<Reading>,
-    /// The reading with the fewest modifiers.
-    any: Option<Reading>,
+    /// The best reading, the first one on a tie.
+    best: Option<(ReadingKey, Vec<usize>)>,
 }
 
-impl Search<'_> {
-    /// Every reading from the modifier `position` on, after the candidates `chosen`: the
-    /// longer candidates first, a modifier no candidate starts at read without tier.
+impl<'a> Search<'a> {
+    fn new(candidates: &'a [Candidate], count: usize, room: Room, fractured: usize) -> Self {
+        let mut starting = vec![Vec::new(); count];
+        for (index, candidate) in candidates.iter().enumerate() {
+            if let Some(starting) = starting.get_mut(candidate.modifiers.start) {
+                starting.push(index);
+            }
+        }
+        Self {
+            candidates,
+            starting,
+            room,
+            fractured,
+            readings: 0,
+            best: None,
+        }
+    }
+
+    /// Every reading from the modifier `position` on, after the candidates `chosen`, at most
+    /// [`MAX_READINGS`]: the lines alone first, a modifier no candidate starts at read
+    /// without tier.
     fn walk(&mut self, position: usize, chosen: &mut Vec<usize>) {
         if self.readings >= MAX_READINGS {
             return;
         }
-        if position >= self.count {
+        let Some(starting) = self.starting.get(position) else {
             self.readings += 1;
             self.keep(chosen);
             return;
-        }
-        let starting: Vec<usize> = (0..self.candidates.len())
-            .rev()
-            .filter(|&index| {
-                self.candidates
-                    .get(index)
-                    .is_some_and(|candidate| candidate.modifiers.start == position)
-            })
-            .collect();
+        };
+        let starting = starting.clone();
         let alone = starting.iter().any(|&index| {
             self.candidates
                 .get(index)
                 .is_some_and(|candidate| candidate.modifiers.len() == 1)
         });
+        if !alone {
+            self.walk(position + 1, chosen);
+        }
         for index in starting {
             let Some(end) = self.candidates.get(index).map(|c| c.modifiers.end) else {
                 continue;
@@ -447,30 +479,27 @@ impl Search<'_> {
             self.walk(end, chosen);
             chosen.pop();
         }
-        if !alone {
-            self.walk(position + 1, chosen);
-        }
     }
 
     fn keep(&mut self, chosen: &[usize]) {
-        let joined: usize = chosen
+        let (mut joined, mut fractured_joined) = (0, 0);
+        for candidate in chosen
             .iter()
             .filter_map(|&index| self.candidates.get(index))
-            .map(|candidate| candidate.modifiers.len() - 1)
-            .sum();
-        let reading = || Reading {
-            chosen: chosen.to_vec(),
-            modifiers: self.count - joined,
-        };
-        let fewer = |kept: &Option<Reading>| {
-            kept.as_ref()
-                .is_none_or(|kept| self.count - joined < kept.modifiers)
-        };
-        if fewer(&self.any) {
-            self.any = Some(reading());
+        {
+            let lines = candidate.modifiers.len() - 1;
+            joined += lines;
+            if candidate.fractured {
+                fractured_joined += lines;
+            }
         }
-        if self.room.bounds(chosen, self.candidates).is_some() && fewer(&self.fitting) {
-            self.fitting = Some(reading());
+        let key = ReadingKey {
+            fractured: self.fractured.saturating_sub(fractured_joined) <= 1,
+            room: self.room.bounds(chosen, self.candidates).is_some(),
+            modifiers: self.starting.len() - joined,
+        };
+        if self.best.as_ref().is_none_or(|(best, _)| key > *best) {
+            self.best = Some((key, chosen.to_vec()));
         }
     }
 }
@@ -480,9 +509,9 @@ impl Search<'_> {
 enum Tie {
     /// The best: the advanced copy wrote the ranges of the tier, which tell it.
     Best,
-    /// Without the ranges of the copy, the worst tier that could have rolled the values,
-    /// never one the item may not have.
-    Worst,
+    /// Without the ranges of the copy, the worst tier that could have rolled the values on an
+    /// item of `item_level` (any level when the copy doesn't write it).
+    Worst { item_level: Option<u32> },
 }
 
 /// The tiers of `copied` among `tables`, on a base with `tags`: those of the modifier of
@@ -516,11 +545,17 @@ fn find(
         let found = tiers
             .iter()
             .enumerate()
+            .filter(|(_, tier)| match tie {
+                Tie::Best | Tie::Worst { item_level: None } => true,
+                Tie::Worst {
+                    item_level: Some(item_level),
+                } => tier.level <= item_level,
+            })
             .filter_map(|(index, tier)| Some((copied.fit(&values, tier)?, index)))
             .min_by(|&(fit, index), &(other_fit, other)| {
                 let tier = match tie {
                     Tie::Best => index.cmp(&other),
-                    Tie::Worst => other.cmp(&index),
+                    Tie::Worst { .. } => other.cmp(&index),
                 };
                 fit.cmp(&other_fit).then(tier)
             });
@@ -1142,7 +1177,13 @@ mod tests {
         (prefixes, suffixes): (u32, u32),
     ) -> Vec<FoundTiers> {
         let limits = AffixLimits { prefixes, suffixes };
-        trade_tiers(item.language(), item.base_type(), modifiers, limits)
+        trade_tiers(
+            item.language(),
+            item.base_type(),
+            item.item_level(),
+            modifiers,
+            limits,
+        )
     }
 
     /// For each modifier read from its values, the texts of its lines and the tier number of
@@ -1200,6 +1241,8 @@ mod tests {
                     (1, vec![(Prefix, 1)]),
                 ]
             );
+            let rarity = found.get(2).expect("the rarity");
+            assert_eq!(rarity.ruled_out, Some(Prefix), "the prefixes are full");
             let hybrid = found.first().and_then(|found| found.affixes.first());
             assert_eq!(
                 hybrid.and_then(|(_, tiers)| Some(tiers.tier()?.ranges.clone())),
@@ -1468,7 +1511,13 @@ mod tests {
             };
             let (modifiers, written) = as_in_game_trade(&item, base_type);
 
-            let read = trade_tiers(item.language(), base_type, &modifiers, limits);
+            let read = trade_tiers(
+                item.language(),
+                base_type,
+                item.item_level(),
+                &modifiers,
+                limits,
+            );
 
             for Written {
                 modifiers: lines,
@@ -1560,7 +1609,7 @@ mod tests {
         };
 
         assert_eq!(number(Tie::Best), Some(1));
-        assert_eq!(number(Tie::Worst), Some(2));
+        assert_eq!(number(Tie::Worst { item_level: None }), Some(2));
     }
 
     #[test]
@@ -1571,7 +1620,13 @@ mod tests {
             suffixes: 3,
         };
 
-        let found = trade_tiers(Language::English, "Unknown Tiara", item.modifiers(), limits);
+        let found = trade_tiers(
+            Language::English,
+            "Unknown Tiara",
+            Some(82),
+            item.modifiers(),
+            limits,
+        );
 
         assert_eq!(found, []);
     }
@@ -1594,10 +1649,208 @@ mod tests {
 
         let found = found_tiers(&item, &modifiers, (10, 0));
 
-        // The first reading looked at: each line with the next one.
+        // The readings that fit, ten hybrids, are past the bound: the lines are read alone,
+        // the pure energy shield T6 and mana T8, every affix kept.
+        let alone = [(1, vec![(Affix::Prefix, 6)]), (1, vec![(Affix::Prefix, 8)])];
+        let expected: Vec<_> = alone.iter().cycle().take(20).cloned().collect();
+        assert_eq!(summary(&modifiers, &found), expected);
+    }
+
+    /// The lines of two pure prefixes of a helmet that also fit the hybrid of both, T3
+    /// (`27–32 · 26–32`).
+    fn energy_shield_and_life() -> Vec<Modifier> {
+        vec![
+            modifier(None, &["30% increased Energy Shield"]),
+            modifier(None, &["+30 to maximum Life"]),
+        ]
+    }
+
+    #[test]
+    fn lines_that_fit_a_hybrid_are_read_alone_while_the_item_has_room() {
+        use Affix::Prefix;
+        let item = parse(TIARA_EN);
+        let modifiers = energy_shield_and_life();
+
+        let found = found_tiers(&item, &modifiers, (3, 3));
         assert_eq!(
             summary(&modifiers, &found),
-            vec![(2, vec![(Affix::Prefix, 1)]); 10]
+            [(1, vec![(Prefix, 6)]), (1, vec![(Prefix, 8)])]
+        );
+
+        // With room for one prefix only, the hybrid.
+        let found = found_tiers(&item, &modifiers, (1, 3));
+        assert_eq!(summary(&modifiers, &found), [(2, vec![(Prefix, 3)])]);
+    }
+
+    #[test]
+    fn two_fractured_lines_are_one_hybrid_even_when_the_item_has_room() {
+        let item = parse(TIARA_EN);
+
+        // Room for four prefixes: the two fractured lines read alone would fit it, but an item
+        // has one fractured modifier only.
+        let found = found_tiers(&item, item.modifiers(), (4, 3));
+
+        let first = found.first().map(|found| found.modifiers.len());
+        assert_eq!(first, Some(2));
+    }
+
+    #[test]
+    fn a_tier_above_the_item_level_isnt_found() {
+        let modifiers = energy_shield_and_life();
+        let limits = AffixLimits {
+            prefixes: 1,
+            suffixes: 3,
+        };
+        let read = |item_level| {
+            let found = trade_tiers(
+                Language::English,
+                "Ancestral Tiara",
+                Some(item_level),
+                &modifiers,
+                limits,
+            );
+            summary(&modifiers, &found)
+        };
+
+        // The hybrid T3 needs the level 46: on an item of level 40, the lines are two
+        // prefixes, more than its room, every affix kept.
+        assert_eq!(read(46), [(2, vec![(Affix::Prefix, 3)])]);
+        assert_eq!(
+            read(40),
+            [(1, vec![(Affix::Prefix, 6)]), (1, vec![(Affix::Prefix, 8)])]
+        );
+
+        // The prefix of rarity `16–19` needs the level 47, the suffix `15–18` the level 40.
+        let rarity = [modifier(None, &["18% increased Rarity of Items found"])];
+        let affixes = |item_level| {
+            let found = trade_tiers(
+                Language::English,
+                "Ancestral Tiara",
+                Some(item_level),
+                &rarity,
+                limits,
+            );
+            summary(&rarity, &found)
+        };
+        assert_eq!(
+            affixes(47),
+            [(1, vec![(Affix::Prefix, 1), (Affix::Suffix, 1)])]
+        );
+        assert_eq!(affixes(45), [(1, vec![(Affix::Suffix, 1)])]);
+    }
+
+    /// A candidate of the modifiers `modifiers` that can be `affixes`, without tiers.
+    fn candidate(
+        modifiers: std::ops::Range<usize>,
+        affixes: &[Affix],
+        fractured: bool,
+    ) -> Candidate {
+        let tiers = ModifierTiers {
+            tiers: Vec::new(),
+            found: 0,
+            counts: Vec::new(),
+        };
+        Candidate {
+            modifiers,
+            fractured,
+            affixes: affixes
+                .iter()
+                .map(|&affix| (affix, tiers.clone()))
+                .collect(),
+        }
+    }
+
+    #[test]
+    fn the_room_tells_the_affix_of_the_modifiers_that_can_be_both() {
+        use Affix::{Prefix, Suffix};
+        let candidates = [
+            candidate(0..1, &[Prefix], false),
+            candidate(1..2, &[Prefix, Suffix], false),
+            candidate(2..3, &[Prefix, Suffix], false),
+            candidate(3..4, &[Suffix], false),
+        ];
+        let all = [0, 1, 2, 3];
+        let room = |prefixes, suffixes| Room { prefixes, suffixes };
+
+        // One more prefix and one more suffix: one of the two is a prefix, either.
+        assert_eq!(room(2, 2).bounds(&all, &candidates), Some((1, 1)));
+        assert_eq!(room(2, 2).both(&all, &candidates), (true, true));
+        // No room for another suffix: both are prefixes.
+        assert_eq!(room(3, 1).bounds(&all, &candidates), Some((2, 2)));
+        assert_eq!(room(3, 1).both(&all, &candidates), (true, false));
+        // No room for another prefix: both are suffixes.
+        assert_eq!(room(1, 3).both(&all, &candidates), (false, true));
+        // Too few: none fits, every affix kept.
+        assert_eq!(room(1, 2).bounds(&all, &candidates), None);
+        assert_eq!(room(1, 2).both(&all, &candidates), (true, true));
+        assert_eq!(room(0, 5).bounds(&all, &candidates), None);
+        assert_eq!(room(0, 0).bounds(&[], &candidates), Some((0, 0)));
+    }
+
+    #[test]
+    fn the_first_reading_of_the_most_modifiers_that_fits_is_taken() {
+        use Affix::Prefix;
+        let candidates = [
+            candidate(0..1, &[Prefix], false),
+            candidate(0..2, &[Prefix], false),
+            candidate(1..2, &[Prefix], false),
+            candidate(1..3, &[Prefix], false),
+            candidate(2..3, &[Prefix], false),
+        ];
+        let room = Room {
+            prefixes: 2,
+            suffixes: 0,
+        };
+        let mut search = Search::new(&candidates, 3, room, 0);
+
+        search.walk(0, &mut Vec::new());
+
+        // The three lines alone make three prefixes; then `A, BC` and `AB, C`, the first one
+        // looked at taken.
+        assert_eq!(search.readings, 3);
+        assert_eq!(search.best.map(|(_, reading)| reading), Some(vec![0, 3]));
+    }
+
+    #[test]
+    fn the_readings_looked_at_are_bounded() {
+        use Affix::Prefix;
+        let count = 30;
+        let candidates: Vec<_> = (0..count)
+            .flat_map(|start| {
+                let pair =
+                    (start + 2 <= count).then(|| candidate(start..start + 2, &[Prefix], false));
+                [Some(candidate(start..start + 1, &[Prefix], false)), pair]
+            })
+            .flatten()
+            .collect();
+        let room = Room {
+            prefixes: 0,
+            suffixes: 0,
+        };
+        let mut search = Search::new(&candidates, count, room, 0);
+
+        search.walk(0, &mut Vec::new());
+
+        assert_eq!(search.readings, MAX_READINGS);
+        // The lines alone, looked at first.
+        assert_eq!(search.best.map(|(key, _)| key.modifiers), Some(count));
+    }
+
+    #[test]
+    fn a_modifier_without_line_isnt_read() {
+        let item = parse(TIARA_EN);
+        // Its lines would be those of the line before: the fire resistance alone.
+        let modifiers = [
+            modifier(None, &["+43% to Fire Resistance"]),
+            modifier(None, &[]),
+        ];
+
+        let found = found_tiers(&item, &modifiers, (3, 3));
+
+        assert_eq!(found.len(), 1);
+        assert_eq!(
+            found.first().map(|found| found.modifiers.clone()),
+            Some(0..1)
         );
     }
 }
