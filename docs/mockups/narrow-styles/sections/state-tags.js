@@ -12,18 +12,6 @@
 // Exiled Exchange 2 adds a row of buttons under the item for the states, and only a tag "Mutated" on the
 // filter of a Vaal modifier.
 
-// A state tag: `on` lit, `hover` its tooltip open; `fr` for a French item.
-const STATE_TIPS = {
-  corrupted: ["Corrupted offers only", "Corrupted or not", "Offres corrompues seulement", "Corrompues ou non"],
-  twice: ["Twice corrupted offers only", "Corrupted or not", "Offres doublement corrompues seulement", "Corrompues ou non"],
-  sanctified: ["Sanctified offers only", "Sanctified or not", "Offres sanctifiées seulement", "Sanctifiées ou non"],
-  fractured: ["Fractured offers only", "Fractured or not", "Offres fissurées seulement", "Fissurées ou non"],
-  mirrored: ["Mirrored offers only", "Mirrored or not", "Offres reflétées seulement", "Reflétées ou non"],
-};
-const state = (label, kind, on, { hover = false, fr = false } = {}) => ({
-  label, state: kind === "twice" ? "corrupted" : kind, on, hover, tips: STATE_TIPS[kind].slice(fr ? 2 : 0, fr ? 4 : 2),
-});
-
 // Mirrored and fractured bow (the owner's copy, English), as copied: both gray, Mirrored under the pointer.
 const BOW_MIRRORED = { rarity: "rare", name: "Storm Volley", base: "Warmonger Bow", cls: "Bows",
   tags: [state("Mirrored", "mirrored", false, { hover: true }), state("Fractured", "fractured", false), "Q 30%", "3 sockets", "ilvl 82"],
