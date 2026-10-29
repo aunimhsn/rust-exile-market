@@ -140,7 +140,8 @@ pub mod tests {
     }
 
     /// A few templates of the trade site on 2026-10-26, which Exiled Exchange 2 doesn't
-    /// know (the Sacrifice), or not in their group (the Mark skills as a rune), and fake new
+    /// know (the Sacrifice), or not in their group (the Mark skills and the prefixes allowed as a
+    /// rune), and fake new
     /// modifiers; one it knows (the maximum Life).
     pub fn trade_stats() -> TradeStats {
         TradeStats::new(
@@ -151,6 +152,7 @@ pub mod tests {
                     "Sacrifice up to 10 Chaos Orbs to receive double on Trial completion",
                 ),
                 ("rune.stat_1992191903", "# to Level of all Mark Skills"),
+                ("rune.stat_3182714256", "# Prefix Modifier allowed"),
                 ("explicit.stat_1000000001", "#% reduced Damage per Patch"),
                 (
                     "explicit.stat_1000000002",
