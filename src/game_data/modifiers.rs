@@ -208,7 +208,9 @@ pub struct AddedTiers {
 /// 179% and the 79% of the hybrid with `+195 to Accuracy Rating`): a pure modifier, and
 /// another, pure or a hybrid whose other lines follow or precede it with the same origin; the
 /// split counts two affixes, and a reading with fewer split lines is better: a line a modifier
-/// holds alone is split only when the room of the item needs it. A line that two readings as
+/// holds alone is split only when the room of the item needs it, or when the other line of the
+/// hybrid has no tier alone (the `9% increased Armour` of a body armour, under every pure tier,
+/// with `+100 to maximum Life`: the hybrid T6 and the pure T7). A line that two readings as
 /// good split in other ways (a rarity of a prefix of tier 1 and a suffix of tier 2, or of tier
 /// 2 and tier 1) stays without tier, with the other lines of its hybrids, while the other
 /// modifiers are read as the best of these readings does, with its room. No line of a
@@ -2575,6 +2577,67 @@ mod tests {
 
         // Read alone, the accuracy would be a pure prefix of tier 5.
         assert_eq!(found, []);
+    }
+
+    #[test]
+    fn a_line_held_alone_is_split_when_the_other_line_of_the_hybrid_has_no_tier_alone() {
+        let modifiers = [
+            modifier(None, &["9% increased Armour"]),
+            modifier(None, &["+100 to maximum Life"]),
+        ];
+        let limits = AffixLimits {
+            prefixes: 3,
+            suffixes: 3,
+        };
+
+        let found = trade_tiers(
+            Language::English,
+            "Soldier Cuirass",
+            Some(82),
+            &modifiers,
+            limits,
+            false,
+        );
+
+        // 9% is under every pure tier: the hybrid T6 (6–13 · 7–10), and the life the pure T7
+        // (85–99), not the pure T6 (100–119) the life alone would be.
+        assert_eq!(summary(&modifiers, &found), [(2, vec![(Affix::Prefix, 6)])]);
+        assert_eq!(
+            added(&modifiers, &found),
+            [("+100 to maximum Life".to_owned(), Affix::Prefix, 7)]
+        );
+    }
+
+    #[test]
+    fn a_line_split_in_two_ways_as_good_takes_its_room_from_a_line_in_doubt() {
+        use Affix::{Prefix, Suffix};
+        let item = parse(TIARA_EN);
+        let lines = |mana: bool| {
+            let mut lines = vec!["10% increased Energy Shield", "+127 to maximum Life"];
+            lines.extend(mana.then_some("+34 to maximum Mana"));
+            lines.push("18% increased Rarity of Items found");
+            lines
+                .iter()
+                .map(|line| modifier(None, &[*line]))
+                .collect::<Vec<_>>()
+        };
+
+        // The hybrid T6 (6–13 · 7–10) with a pure T3 or T2, two prefixes either way, without
+        // tier: with the mana, the prefixes are full, the rarity a suffix.
+        let modifiers = lines(true);
+        let found = found_tiers(&item, &modifiers, (3, 3));
+        assert_eq!(
+            summary(&modifiers, &found),
+            [(1, vec![(Prefix, 8)]), (1, vec![(Suffix, 1)])]
+        );
+
+        // Without the mana, a prefix is open.
+        let modifiers = lines(false);
+        let found = found_tiers(&item, &modifiers, (3, 3));
+        assert_eq!(
+            summary(&modifiers, &found),
+            [(1, vec![(Prefix, 1), (Suffix, 1)])]
+        );
     }
 
     #[test]
