@@ -72,7 +72,13 @@ function item(it, unfolded = false) {
       // under the stats saying so (decided with the owner on 2026-10-29, against a dashed outline and "≈");
       // without tooltip, also when the room of the item rules out the other affix: it is then certain
       // (owner, 2026-10-29, step 13k2e3c2).
-      const tierBadge = number => `<span class="tier ${number <= 3 ? "tier-top" : ""} t${number}">T${number}</span>`;
+      // Two neighbouring tiers in doubt (13k2e4b, `[best, worst]`): "T1/T2", one or the other, in the color of
+      // the worst (owner, 2026-10-29: a dash reads as a span of tiers, as "T13–T1" of the field's tooltip).
+      const tierBadge = number => {
+        const [best, worst] = Array.isArray(number) ? number : [number, number];
+        const label = best === worst ? `T${best}` : `T${best}/T${worst}`;
+        return `<span class="tier ${worst <= 3 ? "tier-top" : ""} t${worst}">${label}</span>`;
+      };
       // The tier and the ranges of a hybrid modifier, under all its lines: it reads as one modifier.
       if (row.rollOnly) {
         const rollOrigin = row.origin ? `<span class="app-origin">${row.originLabel || ORIGIN_LABEL[row.origin]}</span>` : "";
@@ -151,7 +157,9 @@ function item(it, unfolded = false) {
       const text = `<span class="text" title="${tip.replace(/"/g, "&quot;")}">${mod}</span>`;
       if (box) {
         const rollTop = row.range ? `<div class="roll2">${bar}<span class="range">${tier}${row.range}${after(row.after)}${origin}</span>${radius}</div>`
-          : bar || radius ? `<div class="roll2">${bar}${radius}</div>` : "";
+          : bar || radius ? `<div class="roll2">${bar}${radius}</div>`
+          // A word without tier nor range (13k2e4b): a summed line split two ways.
+          : row.after ? `<div class="roll2"><span class="range">${after(row.after)}</span></div>` : "";
         return `<div class="mod2 min-top${row.wide ? " app-wide" : ""}${cls}">${box}${text}${fields || "<span></span>"}${rollTop}</div>`;
       }
       const input = row.min === undefined ? "" : `<span class="input">${row.min}</span>`;

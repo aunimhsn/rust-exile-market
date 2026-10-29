@@ -210,3 +210,5 @@
    under the pointer, wrapped (above). */
 .app-after { position: relative; margin-left: 6px; font-weight: 600; color: var(--weak); cursor: default; }
 .app-after.app-has-tip:is(:hover, .is-hovered) .app-tip { display: block; }
+/* A word alone, without tier nor range: on the left edge of the roll. */
+.range > .app-after:first-child { margin-left: 0; }
