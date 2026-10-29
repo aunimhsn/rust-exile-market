@@ -1,0 +1,32 @@
+Item Class: Helmets
+Rarity: Rare
+Chimeric Visage
+Ancestral Tiara
+--------
+Quality: +20% (augmented)
+Energy Shield: 511 (augmented)
+--------
+Requires: Level 80, 115 Int
+--------
+Sockets: S S 
+--------
+Item Level: 82
+--------
+Allocates Paragon (enchant)
+--------
++22% to Lightning Resistance (rune)
+Raven-Touched (rune)
+Bonded: +20 to maximum Life (rune)
+Bonded: +20 to maximum Mana (rune)
+--------
+41% increased Energy Shield (fractured)
++34 to maximum Mana (fractured)
+98% increased Energy Shield
+18% increased Rarity of Items found
++43% to Fire Resistance
++40% to Cold Resistance
++69 to maximum Energy Shield (desecrated)
+--------
+Fractured Item
+--------
+Hinekora's Lock

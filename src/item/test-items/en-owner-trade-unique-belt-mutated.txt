@@ -1,0 +1,24 @@
+Item Class: Belts
+Rarity: Unique
+Soul Tether
+Long Belt
+--------
+Requires: Level 20
+--------
+Item Level: 80
+--------
+15% increased Evasion Rating (enchant)
+--------
+16% increased Charm Effect Duration (implicit)
+Has 3 Charm Slots (implicit)
+--------
+14% increased Energy Shield Recovery rate (mutated)
++51 to maximum Energy Shield
+You lose 5% of maximum Energy Shield per second
+Excess Life Recovery from Leech is applied to Energy Shield
+--------
+Vaal bloodpriests were among the earliest intellectuals on record.
+It was they who found that a newly freed soul would
+desperately cling to any other source of life.
+--------
+Corrupted

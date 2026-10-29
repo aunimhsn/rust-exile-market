@@ -1,0 +1,32 @@
+Classe d'objet: Casques
+Rareté: Rare
+ Visage chimérique
+Tiare ancestrale
+--------
+Qualité: +20% (augmented)
+Bouclier d'énergie: 511 (augmented)
+--------
+Prérequis : Niveau 80, 115 Int
+--------
+Châsses: S S 
+--------
+Niveau de l'objet: 82
+--------
+Attribue Parangon (enchant)
+--------
++22% à la Résistance à la foudre (rune)
+Touché par le Corbeau (rune)
+Lié : +20 de Vie maximale (rune)
+Lié : +20 de Mana maximal (rune)
+--------
+41% d'Augmentation du Bouclier d'énergie (fractured)
++34 de Mana maximal (fractured)
+98% d'Augmentation du Bouclier d'énergie
+18% d'Augmentation de la Rareté des Objets cédés
++43% à la Résistance au feu
++40% à la Résistance au froid
++69 de Bouclier d'énergie maximal (desecrated)
+--------
+Objet fissuré
+--------
+Mèche de cheveux d'Hinekora

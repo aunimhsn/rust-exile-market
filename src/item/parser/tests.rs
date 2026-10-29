@@ -1,6 +1,7 @@
 //! The parser on real copied items (see `../test-items/README.md`).
 
 use super::*;
+use crate::game_data;
 use crate::item::modifier::{Range, Roll, StatLine};
 use crate::item::{Affix, Defences, ModifierOrigin};
 use crate::language::Language;
@@ -39,8 +40,14 @@ const EN_PLAIN_RARE_RING_UNIDENTIFIED: &str = test_item!("en-plain-rare-ring-uni
 const EN_PLAIN_UNIQUE_JEWEL: &str = test_item!("en-plain-unique-jewel.txt");
 const EN_PLAIN_MAGIC_JEWEL_UNIDENTIFIED: &str = test_item!("en-plain-magic-jewel-unidentified.txt");
 const EN_PLAIN_CURRENCY_LARGE_STACK: &str = test_item!("en-plain-currency-large-stack.txt");
+const FR_TRADE_RARE_HELMET: &str = test_item!("fr-trade-rare-helmet-fractured.txt");
+const FR_TRADE_RARE_BOW: &str = test_item!("fr-trade-rare-bow-mirrored.txt");
+const FR_TRADE_UNIQUE_BELT: &str = test_item!("fr-trade-unique-belt-mutated.txt");
+const EN_TRADE_RARE_HELMET: &str = test_item!("en-owner-trade-rare-helmet-fractured.txt");
+const EN_TRADE_RARE_BOW: &str = test_item!("en-owner-trade-rare-bow-mirrored.txt");
+const EN_TRADE_UNIQUE_BELT: &str = test_item!("en-owner-trade-unique-belt-mutated.txt");
 
-const ALL: [&str; 28] = [
+const ALL: [&str; 34] = [
     FR_RARE_STAFF,
     FR_RARE_BODY_ARMOUR,
     FR_UNIQUE_CROSSBOW,
@@ -69,6 +76,12 @@ const ALL: [&str; 28] = [
     EN_PLAIN_UNIQUE_JEWEL,
     EN_PLAIN_MAGIC_JEWEL_UNIDENTIFIED,
     EN_PLAIN_CURRENCY_LARGE_STACK,
+    FR_TRADE_RARE_HELMET,
+    FR_TRADE_RARE_BOW,
+    FR_TRADE_UNIQUE_BELT,
+    EN_TRADE_RARE_HELMET,
+    EN_TRADE_RARE_BOW,
+    EN_TRADE_UNIQUE_BELT,
 ];
 
 const PREFIX: ModifierKind = ModifierKind::Explicit(Some(Affix::Prefix));
@@ -511,57 +524,219 @@ fn reads_no_description_as_a_modifier_on_a_plain_unidentified_item() {
     assert_eq!(item.modifiers(), []);
 }
 
-/// The copies without the `{ … }` headers of the advanced copy, among [`ALL`]: an implicit
-/// line, or the explicit lines of an identified item.
-const WITHOUT_DETAILS: [&str; 3] = [
-    EN_PLAIN_RARE_RING,
-    EN_PLAIN_UNIQUE_JEWEL,
-    EN_PLAIN_RARE_RING_UNIDENTIFIED,
-];
+/// The kinds of the modifiers of an item, in order, each with its origin.
+fn kinds(item: &Item) -> Vec<(ModifierKind, Option<ModifierOrigin>)> {
+    item.modifiers()
+        .iter()
+        .map(|modifier| (modifier.kind, modifier.origin))
+        .collect()
+}
+
+/// The texts of the explicit lines of an item.
+fn explicit_texts(item: &Item) -> Vec<&str> {
+    explicit(item)
+        .into_iter()
+        .flat_map(|modifier| modifier.lines.iter().map(|line| line.text.as_str()))
+        .collect()
+}
 
 #[test]
-fn tells_the_items_whose_modifiers_were_copied_without_their_details() {
-    // Implicit or explicit lines without the `{ … }` header of the advanced copy.
-    let normal_ring = "Item Class: Rings\nRarity: Normal\nRuby Ring\n--------\nItem Level: 70\n\
-                       --------\n+25% to Fire Resistance (implicit)";
+fn reads_the_items_copied_from_the_in_game_trade() {
+    use ModifierKind::{Enchant, Implicit, Rune};
+    use ModifierOrigin::{Desecrated, Fractured, Vaal};
+    let explicit = ModifierKind::Explicit(None);
+    let line = |origin| (explicit, origin);
+    let tiara = [
+        [(Enchant, None)].as_slice(),
+        &[(Rune, None); 4],
+        &[line(Some(Fractured)); 2],
+        &[line(None); 4],
+        &[line(Some(Desecrated))],
+    ]
+    .concat();
+    let english_bow = [
+        [(Rune, None); 3].as_slice(),
+        &[line(Some(Fractured))],
+        &[line(None); 5],
+        &[line(Some(Desecrated))],
+    ]
+    .concat();
+    let french_bow = [
+        [(Rune, None); 5].as_slice(),
+        &[line(Some(Fractured))],
+        &[line(None); 5],
+        &[line(Some(Desecrated)); 2],
+    ]
+    .concat();
+    let belt = |explicit_lines: &[(ModifierKind, Option<ModifierOrigin>)]| {
+        [
+            [(Enchant, None), (Implicit, None), (Implicit, None)].as_slice(),
+            explicit_lines,
+        ]
+        .concat()
+    };
+    for (text, expected) in [
+        (FR_TRADE_RARE_HELMET, tiara.clone()),
+        (EN_TRADE_RARE_HELMET, tiara),
+        (FR_TRADE_RARE_BOW, french_bow),
+        (EN_TRADE_RARE_BOW, english_bow),
+        (
+            FR_TRADE_UNIQUE_BELT,
+            belt(&[line(None), line(None), line(None), line(Some(Vaal))]),
+        ),
+        (
+            EN_TRADE_UNIQUE_BELT,
+            belt(&[line(Some(Vaal)), line(None), line(None), line(None)]),
+        ),
+    ] {
+        let item = item(text);
+        assert_eq!(kinds(&item), expected, "{text}");
+        // One line each, without tier nor range.
+        for modifier in item.modifiers() {
+            assert_eq!((modifier.lines.len(), modifier.tier), (1, None), "{text}");
+            let rolls = &first_line(modifier).rolls;
+            assert!(rolls.iter().all(|roll| roll.range.is_none()), "{text}");
+        }
+    }
+}
+
+#[test]
+fn reads_a_rare_copied_from_the_in_game_trade() {
+    let tiara = item(EN_TRADE_RARE_HELMET);
+
+    assert_eq!(
+        (tiara.name(), tiara.base_type()),
+        (Some("Chimeric Visage"), "Ancestral Tiara")
+    );
+    assert_eq!(
+        (tiara.quality(), tiara.sockets(), tiara.item_level()),
+        (Some(20), Some(2), Some(82))
+    );
+    assert_eq!(tiara.states(), [ItemState::Fractured]);
+    // Without their markers; the line of Hinekora's Lock, after the states, isn't read.
+    assert_eq!(
+        explicit_texts(&tiara),
+        [
+            "41% increased Energy Shield",
+            "+34 to maximum Mana",
+            "98% increased Energy Shield",
+            "18% increased Rarity of Items found",
+            "+43% to Fire Resistance",
+            "+40% to Cold Resistance",
+            "+69 to maximum Energy Shield",
+        ]
+    );
+    assert_eq!(
+        first_line(explicit(&tiara)[0]).rolls,
+        [Roll {
+            value: 41.0,
+            range: None
+        }]
+    );
+    let french = item(FR_TRADE_RARE_HELMET);
+    assert_eq!(french.states(), [ItemState::Fractured]);
+    assert!(
+        french
+            .modifiers()
+            .iter()
+            .all(|modifier| !first_line(modifier).text.contains("Hinekora"))
+    );
+
+    let bow = item(EN_TRADE_RARE_BOW);
+    assert_eq!(bow.states(), [ItemState::Mirrored, ItemState::Fractured]);
+    assert_eq!(
+        first_line(explicit(&bow)[1]).text,
+        "258% increased Physical Damage"
+    );
+    assert!(bow.weapon().is_some());
+}
+
+#[test]
+fn reads_a_unique_copied_from_the_in_game_trade() {
+    let belt = item(EN_TRADE_UNIQUE_BELT);
+
+    assert_eq!(belt.states(), [ItemState::Corrupted]);
+    assert_eq!(
+        first_line(of_kind(&belt, ModifierKind::Implicit)[1]).text,
+        "Has 3 Charm Slots"
+    );
+    // Its flavour text, after its lines, isn't read.
+    assert_eq!(
+        explicit_texts(&belt),
+        [
+            "14% increased Energy Shield Recovery rate",
+            "+51 to maximum Energy Shield",
+            "You lose 5% of maximum Energy Shield per second",
+            "Excess Life Recovery from Leech is applied to Energy Shield",
+        ]
+    );
+    let french = item(FR_TRADE_UNIQUE_BELT);
+    assert_eq!(
+        first_line(explicit(&french)[3]).text,
+        "14% d'Augmentation de la Récupération de Bouclier d'énergie"
+    );
+}
+
+#[test]
+fn reads_the_items_written_without_the_headers() {
+    use ModifierKind::Implicit;
+    let explicit = ModifierKind::Explicit(None);
     // The magic flask of the owner, in French, without its headers.
     let french_flask = FR_MAGIC_MANA_FLASK
         .lines()
         .filter(|line| !line.starts_with('{'))
         .collect::<Vec<_>>()
         .join("\n");
-    for text in WITHOUT_DETAILS
-        .into_iter()
-        .chain([normal_ring, french_flask.as_str()])
-    {
-        assert_eq!(
-            try_parse(text).err(),
-            Some(ParseError::WithoutDetails),
-            "{text}"
-        );
+    let normal_ring = "Item Class: Rings\nRarity: Normal\nRuby Ring\n--------\nItem Level: 70\n\
+                       --------\n+25% to Fire Resistance (implicit)";
+    for (text, expected) in [
+        (
+            EN_PLAIN_RARE_RING,
+            vec![
+                (Implicit, None),
+                (explicit, None),
+                (explicit, Some(ModifierOrigin::Crafted)),
+            ],
+        ),
+        (EN_PLAIN_RARE_RING_UNIDENTIFIED, vec![(Implicit, None)]),
+        (EN_PLAIN_UNIQUE_JEWEL, vec![(explicit, None); 2]),
+        (normal_ring, vec![(Implicit, None)]),
+        (&french_flask, vec![(explicit, None); 2]),
+    ] {
+        assert_eq!(kinds(&item(text)), expected, "{text}");
     }
+    // Their descriptions aren't read.
+    assert_eq!(
+        explicit_texts(&item(&french_flask)),
+        [
+            "53% d'Augmentation du Montant Récupéré",
+            "55% d'Augmentation de Charges"
+        ]
+    );
 }
 
 #[test]
-fn tells_no_item_the_same_with_both_copies_copied_without_its_details() {
-    // The advanced copies, and the items the same with both copies: without modifiers, or
-    // with runes and enchantments only, which have no header in either copy.
+fn reads_no_description_as_a_modifier_of_an_item_without_headers() {
+    // Runes and an enchantment only, which have no header in either copy.
     let runes_and_enchantment = "Item Class: Body Armours\nRarity: Normal\nVile Robe\n--------\n\
                                  Item Level: 81\n--------\n+12% to Fire Resistance (rune)\n\
                                  --------\n45% increased Armour (enchant)";
+    assert_eq!(
+        kinds(&item(runes_and_enchantment)),
+        [(ModifierKind::Rune, None), (ModifierKind::Enchant, None)]
+    );
     // A magic flask whose only modifier was removed: its description is no modifier.
     let (before, modifiers) = FR_MAGIC_MANA_FLASK.split_once("--------\n{").unwrap();
     let description = modifiers.split_once("--------\n").unwrap().1;
     let flask_without_modifier = format!("{before}--------\n{description}");
-    for text in ALL
-        .into_iter()
-        .filter(|text| !WITHOUT_DETAILS.contains(text))
-        .chain([runes_and_enchantment, &flask_without_modifier])
-    {
-        let item = item(text);
-        if text == flask_without_modifier {
-            assert_eq!(item.modifiers(), []);
-        }
+    assert_eq!(item(&flask_without_modifier).modifiers(), []);
+    // Only the first plain section after the item level: a flavour text with a number after
+    // the lines isn't read.
+    let jewel = item(&EN_PLAIN_UNIQUE_JEWEL.replace("A rainbow", "A rainbow of 7"));
+    assert_eq!(explicit(&jewel).len(), 2);
+    // Every copied item is read without warning.
+    for text in ALL {
+        item(text);
     }
 }
 
@@ -855,19 +1030,23 @@ fn reads_the_line_of_a_unique_written_without_header() {
 }
 
 #[test]
-fn a_unique_copied_without_details_is_refused_and_its_lines_without_number_are_read() {
-    // A plain copy: its lines with numbers are refused before the rule of the lines without
-    // header can read them (the copies of the trade of the game, step 13k2e).
-    assert_eq!(
-        try_parse(
-            "Item Class: Rings\nRarity: Unique\nTest Loop\nGold Ring\n--------\n\
-             Item Level: 80\n--------\n+52 to maximum Life\n--------\nFlavour text."
-        )
-        .err(),
-        Some(ParseError::WithoutDetails)
-    );
+fn a_unique_copied_without_details_is_read_with_its_lines_with_or_without_number() {
+    // A copy of the trade of the game: its lines with numbers, also without a flavour text
+    // after them.
+    for text in [
+        "Item Class: Rings\nRarity: Unique\nTest Loop\nGold Ring\n--------\n\
+         Item Level: 80\n--------\n+52 to maximum Life\n--------\nFlavour text.",
+        "Item Class: Rings\nRarity: Unique\nTest Loop\nGold Ring\n--------\n\
+         Item Level: 80\n--------\n+52 to maximum Life",
+    ] {
+        assert_eq!(
+            explicit_texts(&item(text)),
+            ["+52 to maximum Life"],
+            "{text}"
+        );
+    }
     // Its lines without number are the same on every copy: read like those of Kalandra's
-    // Touch, while they were left out before step 13k2d3.
+    // Touch.
     let ring = item(
         "Item Class: Rings\nRarity: Unique\nTest Loop\nGold Ring\n--------\n\
          Item Level: 80\n--------\nReflects opposite Ring\n--------\nFlavour text.",
@@ -919,4 +1098,146 @@ fn reads_no_flavour_text_nor_description_as_a_line_without_header() {
         ),
         Vec::<String>::new()
     );
+}
+
+/// The id of the stat the game data finds on all the lines of `modifier` together.
+fn stat_id(modifier: &Modifier) -> Option<&'static str> {
+    match game_data::modifier_stats(Language::English, modifier, None).as_slice() {
+        [found] => found.stat.as_ref()?.stat.id.as_deref(),
+        _ => None,
+    }
+}
+
+#[test]
+fn joins_the_lines_of_one_stat_written_without_header() {
+    let rare = item(
+        "Item Class: Gloves\nRarity: Rare\nTest Grip\nVaal Gloves\n--------\nItem Level: 80\n\
+         --------\n+40 to maximum Life\nInflict Anaemia on Hit (desecrated)\n\
+         Anaemia allows 2 Corrupted Blood debuffs to be inflicted on enemies (desecrated)\n\
+         +30% to Fire Resistance (desecrated)",
+    );
+    let lines: Vec<usize> = explicit(&rare).iter().map(|m| m.lines.len()).collect();
+    assert_eq!(lines, [1, 2, 1]);
+    let anaemia = explicit(&rare)[1];
+    assert_eq!(anaemia.origin, Some(ModifierOrigin::Desecrated));
+    assert_eq!(stat_id(anaemia), Some("apply_anaemia_magnitude_on_hit"));
+
+    // The marker after the last line only, as after a stat written on two lines, also in
+    // French.
+    for (text, lines) in [
+        (
+            "Item Class: Gloves\nRarity: Rare\nTest Grip\nVaal Gloves\n--------\n\
+             Item Level: 80\n--------\n+40 to maximum Life\nInflict Anaemia on Hit\n\
+             Anaemia allows 2 Corrupted Blood debuffs to be inflicted on enemies (desecrated)",
+            [1, 2],
+        ),
+        (
+            "Classe d'objet: Gants\nRareté: Rare\nTest Prise\nGants vaal\n--------\n\
+             Niveau de l'objet: 80\n--------\nVous infligez Anémie au Toucher (fractured)\n\
+             Anémie permet d'infliger 2 cumuls de l'Effet néfaste Sang corrompu aux ennemis \
+             (fractured)\n+40 de Vie maximale",
+            [2, 1],
+        ),
+    ] {
+        let rare = item(text);
+        let found: Vec<usize> = explicit(&rare).iter().map(|m| m.lines.len()).collect();
+        assert_eq!(found, lines, "{text}");
+        let anaemia = explicit(&rare)
+            .into_iter()
+            .find(|m| m.lines.len() == 2)
+            .unwrap();
+        assert!(anaemia.origin.is_some(), "{text}");
+    }
+
+    // The second line alone would take the stat of every rarity.
+    let unique = item(
+        "Item Class: Gloves\nRarity: Unique\nTest Grasp\nVaal Gloves\n--------\nItem Level: 80\n\
+         --------\n50% increased Rarity of Items found\n\
+         Your other Modifiers to Rarity of Items found do not apply\n+20 to Strength\n\
+         --------\nFlavour text.",
+    );
+    let lines: Vec<usize> = explicit(&unique).iter().map(|m| m.lines.len()).collect();
+    assert_eq!(lines, [2, 1]);
+    assert_eq!(
+        stat_id(explicit(&unique)[0]),
+        Some("unique_gloves_item_rarity_only_+%")
+    );
+}
+
+#[test]
+fn keeps_apart_the_lines_of_other_modifiers() {
+    // Another origin: two modifiers.
+    let rare = item(
+        "Item Class: Gloves\nRarity: Rare\nTest Grip\nVaal Gloves\n--------\nItem Level: 80\n\
+         --------\nInflict Anaemia on Hit (desecrated)\n\
+         Anaemia allows 2 Corrupted Blood debuffs to be inflicted on enemies",
+    );
+    assert_eq!(explicit(&rare).len(), 2);
+    // Two headers: the advanced copy tells its modifiers apart.
+    let headed = item(
+        "Item Class: Gloves\nRarity: Unique\nTest Grasp\nVaal Gloves\n--------\nItem Level: 80\n\
+         --------\n{ Unique Modifier }\n50(40-50)% increased Rarity of Items found\n\
+         { Unique Modifier }\nYour other Modifiers to Rarity of Items found do not apply",
+    );
+    assert_eq!(explicit(&headed).len(), 2);
+    // The copied items keep their modifiers: none of them is written on several lines.
+    for text in [
+        FR_TRADE_RARE_BOW,
+        EN_TRADE_RARE_HELMET,
+        EN_TRADE_UNIQUE_BELT,
+    ] {
+        let item = item(text);
+        assert!(
+            item.modifiers().iter().all(|m| m.lines.len() == 1),
+            "{text}"
+        );
+    }
+}
+
+#[test]
+fn reads_a_section_of_fractured_lines_only_as_the_explicit_modifiers() {
+    let rare = item(
+        "Item Class: Rings\nRarity: Rare\nTest Loop\nGold Ring\n--------\nItem Level: 80\n\
+         --------\n+40 to maximum Life (fractured)\n+30% to Fire Resistance (fractured)",
+    );
+    let explicit_kind = ModifierKind::Explicit(None);
+    assert_eq!(
+        kinds(&rare),
+        [(explicit_kind, Some(ModifierOrigin::Fractured)); 2]
+    );
+}
+
+#[test]
+fn a_french_unique_without_header_is_read_before_a_note_with_a_number() {
+    let ring = item(
+        "Classe d'objet: Bagues\nRareté: Unique\nToucher de Kalandra\nBague\n--------\n\
+         Niveau de l'objet: 80\n--------\nReflète la Bague opposée\n--------\n\
+         Le pouvoir n'est qu'affaire de perception.\n--------\n~prix 5 divine",
+    );
+    assert_eq!(explicit_texts(&ring), ["Reflète la Bague opposée"]);
+}
+
+#[test]
+fn loses_the_explicit_lines_without_number_of_a_magic_item_without_headers() {
+    // A known limit (step 13k5): a line without number can't be told from a description.
+    let waystone = item(
+        "Item Class: Waystones\nRarity: Magic\nBurning Waystone (Tier 15)\n--------\n\
+         Item Level: 80\n--------\nArea has patches of Ignited Ground",
+    );
+    assert_eq!(waystone.modifiers(), []);
+}
+
+#[test]
+fn an_advanced_copy_never_has_its_explicit_modifiers_found_without_header() {
+    for text in ALL.into_iter().filter(|text| text.contains("\n{ ")) {
+        let copied = CopiedItem::from_text(text).expect("an item");
+        let labels = Labels::of(copied.language());
+        let text = copied.text().replace(['\u{a0}', '\u{202f}'], " ");
+        let recognized: Vec<Recognized<'_>> = split_sections(&text)
+            .skip(1)
+            .map(|lines| recognize(lines, labels))
+            .collect();
+        let rarity = item(&text).rarity();
+        assert_eq!(explicit_section(&recognized, rarity), None, "{text}");
+    }
 }

@@ -1,0 +1,31 @@
+Item Class: Bows
+Rarity: Rare
+Storm Volley
+Warmonger Bow
+--------
+Quality: +30% (augmented)
+Physical Damage: 476-724 (augmented)
+Critical Hit Chance: 10.00% (augmented)
+Attacks per Second: 1.20
+--------
+Requires: Level 77, 163 Dex
+--------
+Sockets: S S S 
+--------
+Item Level: 82
+--------
++1 Suffix Modifier allowed (rune)
+40% increased Physical Damage (rune)
+Bonded: 40% increased effect of Fully Broken Armour (rune)
+--------
++5% to Critical Hit Chance (fractured)
+258% increased Physical Damage
++195 to Accuracy Rating
++25% to Critical Damage Bonus
++4 to Level of all Projectile Skills
++181% Surpassing chance to fire an additional Arrow
+Adds 36 to 56 Physical Damage (desecrated)
+--------
+Mirrored
+--------
+Fractured Item

@@ -1,5 +1,6 @@
 //! The modifiers of an item: their header in the advanced copy, the marker of a line without
-//! header (a rune, an enchantment), and the values of their lines.
+//! header (a rune, an enchantment, or any modifier copied from the trade of the game), and the
+//! values of their lines.
 
 use super::labels::Labels;
 
@@ -29,8 +30,8 @@ pub enum ModifierOrigin {
     Crafted,
     Desecrated,
     Fractured,
-    /// The Vaal modifier of a corrupted unique, told by its header (`{ Vaal Unique Modifier }`);
-    /// "mutated" on the trade site.
+    /// The Vaal modifier of a corrupted unique, told by its header (`{ Vaal Unique Modifier }`)
+    /// or its marker (` (mutated)`); "mutated" on the trade site.
     Vaal,
 }
 
@@ -43,16 +44,19 @@ pub(super) enum Marker {
     Crafted,
     Fractured,
     Desecrated,
+    /// The Vaal modifier of a corrupted unique copied from the trade of the game.
+    Mutated,
 }
 
 impl Marker {
-    const ALL: [Self; 6] = [
+    const ALL: [Self; 7] = [
         Self::Implicit,
         Self::Enchant,
         Self::Rune,
         Self::Crafted,
         Self::Fractured,
         Self::Desecrated,
+        Self::Mutated,
     ];
 
     fn suffix(self) -> &'static str {
@@ -63,6 +67,7 @@ impl Marker {
             Self::Crafted => " (crafted)",
             Self::Fractured => " (fractured)",
             Self::Desecrated => " (desecrated)",
+            Self::Mutated => " (mutated)",
         }
     }
 
@@ -80,7 +85,7 @@ impl Marker {
             Self::Implicit => Some(ModifierKind::Implicit),
             Self::Enchant => Some(ModifierKind::Enchant),
             Self::Rune => Some(ModifierKind::Rune),
-            Self::Crafted | Self::Fractured | Self::Desecrated => None,
+            Self::Crafted | Self::Fractured | Self::Desecrated | Self::Mutated => None,
         }
     }
 
@@ -89,6 +94,7 @@ impl Marker {
             Self::Crafted => Some(ModifierOrigin::Crafted),
             Self::Fractured => Some(ModifierOrigin::Fractured),
             Self::Desecrated => Some(ModifierOrigin::Desecrated),
+            Self::Mutated => Some(ModifierOrigin::Vaal),
             Self::Implicit | Self::Enchant | Self::Rune => None,
         }
     }
@@ -189,11 +195,13 @@ impl Modifier {
         }
     }
 
-    /// A modifier of one line without header, of the `kind` its marker tells, e.g.
-    /// `18% increased Physical Damage (rune)`.
+    /// A modifier of one line without header, of the `kind` its section tells, e.g.
+    /// `18% increased Physical Damage (rune)`, and of the origin its marker tells, e.g.
+    /// `+5% to Critical Hit Chance (fractured)` copied from the trade of the game.
     pub(super) fn marked(line: &str, kind: ModifierKind) -> Self {
-        let mut modifier = Self::new(kind, None);
-        modifier.lines.push(StatLine::parse(Marker::take(line).0));
+        let (text, marker) = Marker::take(line);
+        let mut modifier = Self::new(kind, marker.and_then(Marker::origin));
+        modifier.lines.push(StatLine::parse(text));
         modifier
     }
 
@@ -521,6 +529,34 @@ mod tests {
         let rune = Modifier::marked("18% increased Physical Damage (rune)", ModifierKind::Rune);
         assert_eq!((rune.kind, rune.origin), (ModifierKind::Rune, None));
         assert_eq!(rune.lines[0].text, "18% increased Physical Damage");
+    }
+
+    #[test]
+    fn a_marked_line_has_the_origin_of_its_marker() {
+        let explicit = ModifierKind::Explicit(None);
+        for (line, origin) in [
+            (
+                "+5% to Critical Hit Chance (fractured)",
+                ModifierOrigin::Fractured,
+            ),
+            (
+                "Adds 36 to 56 Physical Damage (desecrated)",
+                ModifierOrigin::Desecrated,
+            ),
+            ("+12 to Strength (crafted)", ModifierOrigin::Crafted),
+            (
+                "14% increased Energy Shield Recovery rate (mutated)",
+                ModifierOrigin::Vaal,
+            ),
+        ] {
+            let modifier = Modifier::marked(line, explicit);
+            assert_eq!((modifier.kind, modifier.origin), (explicit, Some(origin)));
+            assert!(!modifier.lines[0].text.ends_with(')'), "{line}");
+        }
+        assert_eq!(
+            Modifier::marked("+195 to Accuracy Rating", explicit).origin,
+            None
+        );
     }
 
     #[test]

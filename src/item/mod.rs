@@ -139,11 +139,11 @@ impl Item {
     ///
     /// # Errors
     ///
-    /// When the header of the item (rarity, base type) can't be read, or when its implicit or
-    /// explicit modifiers were copied without the `{ … }` headers of the advanced copy
-    /// (Ctrl+Alt+C), which give their tiers ([`ParseError::WithoutDetails`]; the runes and the
-    /// enchantments have no header in either copy): the window then shows the message of an
-    /// item that can't be read. The other parts that can't be read are [`Item::warnings`].
+    /// When the header of the item (rarity, base type) can't be read: the window then shows
+    /// the message of an item that can't be read. The other parts that can't be read are
+    /// [`Item::warnings`]. An item copied from the trade of the game, without the `{ … }`
+    /// headers of the advanced copy, is read with its modifiers, without their affixes, tiers
+    /// nor ranges.
     pub fn parse(copied: &CopiedItem) -> Result<Self, ParseError> {
         parser::parse(copied)
     }

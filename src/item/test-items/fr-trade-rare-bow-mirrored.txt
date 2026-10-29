@@ -1,0 +1,34 @@
+Classe d'objet: Arcs
+Rareté: Rare
+ Guide afflictif
+Arc de belliciste
+--------
+Qualité: +30% (augmented)
+Dégâts Physiques: 379-662 (augmented)
+Chances de Touche critique: 10.00% (augmented)
+Attaques par seconde: 1.20
+--------
+Prérequis : Niveau 77, 163 Dex
+--------
+Châsses: S S S 
+--------
+Niveau de l'objet: 82
+--------
++1 Modificateur suffixe autorisé (rune)
+Les Attaques à l'arc tirent une Flèche supplémentaire (rune)
+50% d'Augmentation des Dégâts d'Attaque contre les Ennemis Rares ou Uniques (rune)
+Lié : 20% d'Augmentation de la Vitesse des Projectiles (rune)
+Lié : +1 au Niveau de toutes les Aptitudes d'Attaque (rune)
+--------
++5% aux Chances de Touche critique (fractured)
+172% d'Augmentation des Dégâts Physiques
+Ajoute 27 à 61 Dégâts Physiques
++25% au Bonus de Dégâts Critiques
++4 au Niveau de toutes les Aptitudes à Projectiles
++200% de chances Cumulatives de tirer une Flèche supplémentaire
+79% d'Augmentation des Dégâts Physiques (desecrated)
++193 au Score de Précision (desecrated)
+--------
+Reflété
+--------
+Objet fissuré
