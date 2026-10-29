@@ -1998,6 +1998,7 @@ mod tests {
             item.item_level(),
             item.modifiers(),
             stats.affix_limits(&item),
+            item.has_state(crate::item::ItemState::Sanctified),
         );
         item.set_modifiers(modifiers);
         item

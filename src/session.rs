@@ -5,7 +5,7 @@ use std::time::{Duration, SystemTime};
 
 use crate::clipboard::ClipboardEvent;
 use crate::game_data::{self, StatSource, TradeGroup, TradeStats};
-use crate::item::{CopiedItem, Item, Modifier, ParseError, Rarity};
+use crate::item::{CopiedItem, Item, ItemState, Modifier, ParseError, Rarity};
 use crate::item_names::ItemNames;
 use crate::league::{League, Leagues};
 use crate::market::{MarketEvent, Source};
@@ -92,6 +92,7 @@ impl ShownItem {
                         item.item_level(),
                         copied,
                         stats.affix_limits(item),
+                        item.has_state(ItemState::Sanctified),
                     )
                 }
                 None => copied.clone(),

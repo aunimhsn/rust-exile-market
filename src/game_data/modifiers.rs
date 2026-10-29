@@ -206,9 +206,11 @@ pub struct AddedTiers {
 /// the game writes them on one line (the `258% increased Physical Damage` of a bow, a pure
 /// 179% and the 79% of the hybrid with `+195 to Accuracy Rating`): a pure modifier, and
 /// another, pure or a hybrid whose other lines follow or precede it with the same origin; the
-/// split counts two affixes, and a reading with fewer split lines is better. A line that two
-/// readings as good split in other ways (a rarity of a prefix of tier 1 and a suffix of tier 2,
-/// or of tier 2 and tier 1) stays without tier.
+/// split counts two affixes, and a reading with fewer split lines is better: a line a modifier
+/// holds alone is split only when the room of the item needs it. A line that two readings as
+/// good split in other ways (a rarity of a prefix of tier 1 and a suffix of tier 2, or of tier
+/// 2 and tier 1) stays without tier. No line of a `sanctified` item is split: its values can
+/// leave their tiers.
 ///
 /// A hybrid whose other line is read on its own (a sanctified value out of its tier, or two
 /// lines apart) counts twice and may rule out an affix wrongly: a rare case, left as it is.
@@ -219,6 +221,7 @@ pub fn trade_tiers(
     item_level: Option<u32>,
     modifiers: &[Modifier],
     limits: AffixLimits,
+    sanctified: bool,
 ) -> Vec<FoundTiers> {
     let Some(tags) = bases::tags(language, base_type) else {
         return Vec::new();
@@ -234,7 +237,7 @@ pub fn trade_tiers(
                 .flatten()
         })
         .collect();
-    let mut candidates = candidates(modifiers, &copied, tags, item_level);
+    let mut candidates = candidates(modifiers, &copied, tags, item_level, !sanctified);
     let known = |affix| {
         modifiers
             .iter()
@@ -263,13 +266,13 @@ pub fn trade_tiers(
         if search.ambiguous.is_empty() {
             break best;
         }
-        // A line split in two ways as good: without tier, the others read again.
+        // A line split in two ways as good: without tier, also alone or in a hybrid, which
+        // the room had ruled out; the others read again.
         let ambiguous = search.ambiguous;
         candidates.retain(|candidate| {
-            candidate
-                .added
-                .as_ref()
-                .is_none_or(|added| !ambiguous.contains(&added.line))
+            !ambiguous
+                .iter()
+                .any(|line| candidate.modifiers.contains(line))
         });
     };
     // A modifier that can be both, when the others leave room for one affix only.
@@ -321,8 +324,11 @@ pub fn with_trade_tiers(
     item_level: Option<u32>,
     modifiers: &[Modifier],
     limits: AffixLimits,
+    sanctified: bool,
 ) -> Vec<Modifier> {
-    let found = trade_tiers(language, base_type, item_level, modifiers, limits);
+    let found = trade_tiers(
+        language, base_type, item_level, modifiers, limits, sanctified,
+    );
     let mut read = Vec::with_capacity(modifiers.len());
     let mut next = 0;
     while let Some(modifier) = modifiers.get(next) {
@@ -500,13 +506,14 @@ static MOST_LINES: LazyLock<usize> = LazyLock::new(|| {
 /// `tags` hold, the tier the worst among those `item_level` allows, `copied` giving the lines
 /// of each modifier to read (none for a modifier that isn't, or whose lines have no stat of the
 /// game data): one modifier, or up to as many as the lines of a hybrid, of the same origin;
-/// then each way one of their lines adds up two modifiers ([`splits`]). The shorter first at
-/// each start.
+/// then, when they may `split`, each way one of their lines adds up two modifiers
+/// ([`splits`]). The shorter first at each start.
 fn candidates(
     modifiers: &[Modifier],
     copied: &[Option<Copied<'_>>],
     tags: &[String],
     item_level: Option<u32>,
+    split: bool,
 ) -> Vec<Candidate> {
     let tie = Tie::Worst { item_level };
     let mut candidates = Vec::new();
@@ -543,21 +550,17 @@ fn candidates(
                     added: None,
                 });
             }
-            for (summed, &owner) in owners.iter().enumerate() {
+            for (summed, &owner) in owners.iter().enumerate().filter(|_| split) {
                 // A modifier of one line only: the line the game writes for both.
                 if owners.iter().filter(|&&other| other == owner).count() != 1 {
                     continue;
                 }
-                for split in splits(&TABLES, tags, &joined, summed, item_level) {
+                for split in splits(&TABLES, tags, &joined, (summed, owner), item_level) {
                     candidates.push(Candidate {
                         modifiers: start..end,
                         fractured,
-                        affixes: vec![split.whole],
-                        added: Some(AddedTiers {
-                            line: owner,
-                            affix: split.added.0,
-                            tiers: split.added.1,
-                        }),
+                        affixes: vec![(split.affix, split.tiers)],
+                        added: Some(split.added),
                     });
                 }
             }
@@ -566,17 +569,18 @@ fn candidates(
     candidates
 }
 
-/// A way a copied line adds up two modifiers of its stat.
+/// A way a copied line adds up two modifiers of its stat: the modifier of every copied line,
+/// with the summed one, pure or a hybrid, of `affix` with its `tiers`, and a pure modifier of
+/// another type of the summed line only.
 struct Split {
-    /// The modifier of every copied line, with the summed one: pure, or a hybrid.
-    whole: (Affix, ModifierTiers),
-    /// A pure modifier of another type, of the summed line only.
-    added: (Affix, ModifierTiers),
+    affix: Affix,
+    tiers: ModifierTiers,
+    added: AddedTiers,
     fit: Fit,
 }
 
-/// Every way the line `summed` of `copied`, the lines of consecutive modifiers, adds up two
-/// modifiers of its stat on a base with `tags`, the tiers of both among those `item_level`
+/// Every way the line `summed` of `copied`, the lines of consecutive modifiers, the line of the
+/// modifier `owner` of the item, adds up two modifiers of its stat on a base with `tags`, the tiers of both among those `item_level`
 /// allows: the modifier of every copied line, and a pure modifier of another type of the summed
 /// line only, the values of both adding up on that line; the ways that fit best only. None for
 /// a line without number.
@@ -584,7 +588,7 @@ fn splits(
     tables: &[Table],
     tags: &[String],
     copied: &Copied<'_>,
-    summed: usize,
+    (summed, owner): (usize, usize),
     item_level: Option<u32>,
 ) -> Vec<Split> {
     let Some(line) = copied
@@ -649,22 +653,21 @@ fn splits(
                         TableAffix::Suffix => Affix::Suffix,
                     };
                     ways.push(Split {
-                        whole: (
-                            affix(whole),
-                            ModifierTiers {
-                                tiers: whole_tiers.clone(),
-                                found,
-                                counts: counts.clone(),
-                            },
-                        ),
-                        added: (
-                            affix(added),
-                            ModifierTiers {
+                        affix: affix(whole),
+                        tiers: ModifierTiers {
+                            tiers: whole_tiers.clone(),
+                            found,
+                            counts: counts.clone(),
+                        },
+                        added: AddedTiers {
+                            line: owner,
+                            affix: affix(added),
+                            tiers: ModifierTiers {
                                 tiers: added_tiers.clone(),
                                 found: added_found,
                                 counts: vec![line.count()],
                             },
-                        ),
+                        },
                         fit,
                     });
                 }
@@ -712,10 +715,16 @@ fn split_fit(
             })
         })
         .collect();
+    holds(values, &ranges)
+}
+
+/// How well `ranges` hold `values`: within them, or give or take the rounding of the game;
+/// none otherwise.
+fn holds(values: &[f64], ranges: &[Range]) -> Option<Fit> {
     let within = |margin: f64| {
         values
             .iter()
-            .zip(&ranges)
+            .zip(ranges)
             .all(|(&value, range)| range.min - margin <= value && value <= range.max + margin)
     };
     if within(0.0) {
@@ -869,7 +878,8 @@ impl<'a> Search<'a> {
             joined += lines - 1;
             split += candidate.count() - 1;
             if candidate.fractured {
-                fractured = (fractured + candidate.count()).saturating_sub(lines);
+                // Its fractured lines are among those of the item: as many modifiers as it makes.
+                fractured = fractured + candidate.count() - lines;
             }
         }
         let key = ReadingKey {
@@ -1170,19 +1180,7 @@ impl<'a> Copied<'a> {
                 return None;
             }
         }
-        let within = |margin: f64| {
-            values
-                .iter()
-                .zip(&tier.ranges)
-                .all(|(&value, range)| range.min - margin <= value && value <= range.max + margin)
-        };
-        if within(0.0) {
-            Some(Fit::Within)
-        } else if within(ROUNDING) {
-            Some(Fit::Rounded)
-        } else {
-            self.ranges.as_ref().map(|_| Fit::Written)
-        }
+        holds(values, &tier.ranges).or_else(|| self.ranges.as_ref().map(|_| Fit::Written))
     }
 }
 
@@ -1205,7 +1203,7 @@ fn read(text: &str) -> Vec<Table> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::item::{CopiedItem, Item, Rarity, StatLine};
+    use crate::item::{CopiedItem, Item, ItemState, Rarity, StatLine};
 
     #[test]
     fn every_table_of_the_embedded_file_is_read() {
@@ -1578,6 +1576,13 @@ mod tests {
     /// The tier number of each affix a modifier can be.
     type AffixTiers = Vec<(Affix, u32)>;
 
+    /// The texts of the lines of each modifier read from its values, and the tier number of
+    /// each affix it can be.
+    type LinesRead = Vec<(Vec<String>, AffixTiers)>;
+
+    /// The text of each line split, and the affix and tier number of its pure modifier.
+    type Added = Vec<(String, Affix, u32)>;
+
     fn parse(text: &str) -> Item {
         Item::parse(&CopiedItem::from_text(text).expect("an item")).expect("read")
     }
@@ -1596,12 +1601,13 @@ mod tests {
             item.item_level(),
             modifiers,
             limits,
+            false,
         )
     }
 
     /// For each modifier read from its values, the texts of its lines and the tier number of
     /// each affix it can be.
-    fn lines_read(modifiers: &[Modifier], found: &[FoundTiers]) -> Vec<(Vec<String>, AffixTiers)> {
+    fn lines_read(modifiers: &[Modifier], found: &[FoundTiers]) -> LinesRead {
         found
             .iter()
             .map(|found| {
@@ -1622,7 +1628,7 @@ mod tests {
 
     /// For each line read as two modifiers, its text and the affix and tier number of the
     /// other one, a pure modifier of the line.
-    fn added(modifiers: &[Modifier], found: &[FoundTiers]) -> Vec<(String, Affix, u32)> {
+    fn added(modifiers: &[Modifier], found: &[FoundTiers]) -> Added {
         found
             .iter()
             .filter_map(|found| {
@@ -1969,6 +1975,7 @@ mod tests {
                 item.item_level(),
                 &modifiers,
                 limits,
+                item.has_state(ItemState::Sanctified),
             );
 
             for Written {
@@ -2075,6 +2082,7 @@ mod tests {
                 item.item_level(),
                 &modifiers,
                 limits,
+                item.has_state(ItemState::Sanctified),
             );
 
             let advanced = item.modifiers().iter().filter(|modifier| {
@@ -2117,6 +2125,7 @@ mod tests {
                 item.item_level(),
                 modifiers,
                 limits,
+                false,
             )
         };
         let explicit = |modifiers: Vec<Modifier>| -> Vec<(Vec<String>, ModifierKind, Option<u32>)> {
@@ -2193,6 +2202,7 @@ mod tests {
                 item.item_level(),
                 modifiers,
                 limits,
+                false,
             )
         };
         let find = |modifiers: &[Modifier], words: &str| {
@@ -2283,6 +2293,7 @@ mod tests {
             Some(82),
             item.modifiers(),
             limits,
+            false,
         );
 
         assert_eq!(found, []);
@@ -2380,6 +2391,7 @@ mod tests {
                 Some(item_level),
                 &modifiers,
                 limits,
+                false,
             );
             summary(&modifiers, &found)
         };
@@ -2401,6 +2413,7 @@ mod tests {
                 Some(item_level),
                 &rarity,
                 limits,
+                false,
             );
             summary(&rarity, &found)
         };
@@ -2451,6 +2464,179 @@ mod tests {
         assert_eq!(found, []);
     }
 
+    /// The lines of greaves with three resistances, whose `armour` may add up the pure
+    /// modifier and the hybrid with the `+30 to Stun Threshold` after it.
+    fn greaves(armour: u32) -> Vec<Modifier> {
+        let armour = format!("{armour}% increased Armour");
+        [
+            armour.as_str(),
+            "+30 to Stun Threshold",
+            "+30% to Fire Resistance",
+            "+30% to Cold Resistance",
+            "+30% to Lightning Resistance",
+        ]
+        .iter()
+        .map(|line| modifier(None, &[line]))
+        .collect()
+    }
+
+    /// The lines of `modifiers` read from their values on greaves of `item_level` with 3
+    /// prefixes and 3 suffixes, and the lines split.
+    fn greaves_read(modifiers: &[Modifier], item_level: u32) -> (LinesRead, Added) {
+        let limits = AffixLimits {
+            prefixes: 3,
+            suffixes: 3,
+        };
+        let found = trade_tiers(
+            Language::English,
+            "Bronze Greaves",
+            Some(item_level),
+            modifiers,
+            limits,
+            false,
+        );
+        (lines_read(modifiers, &found), added(modifiers, &found))
+    }
+
+    #[test]
+    fn a_line_a_modifier_holds_alone_is_split_when_the_room_needs_it() {
+        use Affix::{Prefix, Suffix};
+        let line = |text: &str| vec![text.to_owned()];
+        let resistances = [
+            (line("+30% to Fire Resistance"), vec![(Suffix, 4)]),
+            (line("+30% to Cold Resistance"), vec![(Suffix, 4)]),
+            (line("+30% to Lightning Resistance"), vec![(Suffix, 4)]),
+        ];
+
+        // Read alone, the armour a pure prefix, the stun threshold would be a fourth suffix:
+        // the hybrid T4 (27–32 · 41–63) and the pure T6.
+        let modifiers = greaves(60);
+        let hybrid = vec![
+            "60% increased Armour".to_owned(),
+            "+30 to Stun Threshold".to_owned(),
+        ];
+        let mut expected = vec![(hybrid, vec![(Prefix, 4)])];
+        expected.extend(resistances.clone());
+        assert_eq!(
+            greaves_read(&modifiers, 82),
+            (
+                expected,
+                vec![("60% increased Armour".to_owned(), Prefix, 6)]
+            )
+        );
+
+        // 50% splits in two ways as good: the armour without tier, also alone, and the
+        // stun threshold a fourth suffix, every affix kept.
+        let modifiers = greaves(50);
+        let mut expected = vec![(line("+30 to Stun Threshold"), vec![(Suffix, 9)])];
+        expected.extend(resistances);
+        assert_eq!(greaves_read(&modifiers, 82), (expected, vec![]));
+    }
+
+    #[test]
+    fn a_line_after_the_other_line_of_its_hybrid_is_split() {
+        let item = parse(BOW_EN);
+        let modifiers = [
+            modifier(None, &["+195 to Accuracy Rating"]),
+            modifier(None, &["258% increased Physical Damage"]),
+        ];
+
+        let found = found_tiers(&item, &modifiers, (3, 3));
+
+        assert_eq!(summary(&modifiers, &found), [(2, vec![(Affix::Prefix, 1)])]);
+        assert_eq!(
+            added(&modifiers, &found),
+            [(
+                "258% increased Physical Damage".to_owned(),
+                Affix::Prefix,
+                1
+            )]
+        );
+    }
+
+    #[test]
+    fn the_tiers_of_a_split_are_those_the_item_level_allows() {
+        let modifiers = [
+            modifier(None, &["258% increased Physical Damage"]),
+            modifier(None, &["+195 to Accuracy Rating"]),
+        ];
+        let limits = AffixLimits {
+            prefixes: 3,
+            suffixes: 3,
+        };
+        let read = |item_level| {
+            let found = trade_tiers(
+                Language::English,
+                "Warmonger Bow",
+                Some(item_level),
+                &modifiers,
+                limits,
+                false,
+            );
+            (summary(&modifiers, &found), added(&modifiers, &found))
+        };
+
+        // The pure T1 170–179 needs the level 82: below it, 258 is out of reach, the accuracy
+        // a pure prefix.
+        let split = (
+            vec![(2, vec![(Affix::Prefix, 1)])],
+            vec![(
+                "258% increased Physical Damage".to_owned(),
+                Affix::Prefix,
+                1,
+            )],
+        );
+        assert_eq!(read(82), split);
+        assert_eq!(read(81), (vec![(1, vec![(Affix::Prefix, 5)])], vec![]));
+    }
+
+    #[test]
+    fn no_line_of_a_sanctified_item_is_split() {
+        let item = parse(BOW_EN);
+        let limits = AffixLimits {
+            prefixes: 3,
+            suffixes: 4,
+        };
+
+        let found = trade_tiers(
+            item.language(),
+            item.base_type(),
+            item.item_level(),
+            item.modifiers(),
+            limits,
+            true,
+        );
+
+        // Its values can leave their tiers: the `258%` without tier, the accuracy a pure prefix.
+        assert_eq!(added(item.modifiers(), &found), []);
+        let accuracy = (
+            vec!["+195 to Accuracy Rating".to_owned()],
+            vec![(Affix::Prefix, 5)],
+        );
+        assert!(lines_read(item.modifiers(), &found).contains(&accuracy));
+    }
+
+    #[test]
+    fn a_split_holds_its_value_give_or_take_the_rounding() {
+        let tier = |ranges: &[(f64, f64)]| Tier {
+            number: 1,
+            level: 1,
+            ranges: ranges.iter().map(|&(min, max)| range(min, max)).collect(),
+        };
+        // A hybrid of two values, the second one summed with a pure 1–2.
+        let whole = tier(&[(10.0, 20.0), (4.41, 5.0)]);
+        let added = tier(&[(1.0, 2.0)]);
+        let fit = |summed| split_fit(&[15.0, summed], &whole, &added, &(1..2));
+
+        assert_eq!(fit(7.0), Some(Fit::Within));
+        assert_eq!(fit(5.41), Some(Fit::Within));
+        assert_eq!(fit(7.03), Some(Fit::Rounded));
+        assert_eq!(fit(5.3), None);
+        assert_eq!(fit(7.1), None);
+        // The value of the other line within its own range only.
+        assert_eq!(split_fit(&[9.0, 6.0], &whole, &added, &(1..2)), None);
+    }
+
     /// A candidate that splits the line `line` into a modifier of `affix` over the modifiers
     /// `modifiers` and a pure one of `added`, without tiers.
     fn split(
@@ -2499,6 +2685,13 @@ mod tests {
             split(1..2, Prefix, Suffix, 1),
         ];
         assert_eq!(search(&candidates, room(3, 3)), (Some(vec![0]), vec![]));
+        // Room for one split only, of either line: both ambiguous, the line 0 without tier
+        // looked at first.
+        let candidates = [
+            split(0..1, Prefix, Prefix, 0),
+            split(1..2, Prefix, Prefix, 1),
+        ];
+        assert_eq!(search(&candidates, room(2, 0)), (Some(vec![1]), vec![1, 0]));
     }
 
     /// A candidate of the modifiers `modifiers` that can be `affixes`, without tiers.
