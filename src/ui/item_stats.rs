@@ -170,7 +170,9 @@ enum Roll {
     /// A line of a prefix or a suffix: where its value falls over every tier of its modifier
     /// on the base, from 0 to 1, when the modifier tables know them; under the last line of the
     /// modifier, its tier and the ranges of that tier, of all its lines for a hybrid, so that it
-    /// reads as one modifier, then its origin when it is desecrated, fractured or crafted.
+    /// reads as one modifier, then its origin when it is desecrated, fractured or crafted. Also
+    /// the origin alone under a line of a unique that never varies (a fixed Vaal modifier),
+    /// without bar nor tier.
     Affix {
         share: Option<f32>,
         tier: Option<ModifierTier>,
@@ -745,7 +747,7 @@ fn unique_rows<'a>(item: &'a Item, reading: &Reading<'_>) -> Vec<Row<'a>> {
         stats(item, is_rune, added_stat, varies),
     );
     // The origin of a modifier under its last line.
-    let unique_stat = |key: StatKey, line| {
+    let line_stat = |key: StatKey, line| {
         let origin = item
             .modifiers()
             .get(key.modifier)
@@ -756,7 +758,7 @@ fn unique_rows<'a>(item: &'a Item, reading: &Reading<'_>) -> Vec<Row<'a>> {
     push_group(
         &mut rows,
         Group::Implicit,
-        stats(item, is_implicit, unique_stat, varies),
+        stats(item, is_implicit, line_stat, varies),
     );
     push_group(
         &mut rows,
@@ -764,7 +766,7 @@ fn unique_rows<'a>(item: &'a Item, reading: &Reading<'_>) -> Vec<Row<'a>> {
         stats(
             item,
             |kind| matches!(kind, ModifierKind::Explicit(_)),
-            unique_stat,
+            line_stat,
             varies,
         ),
     );

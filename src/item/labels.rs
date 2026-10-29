@@ -48,15 +48,41 @@ pub(super) struct Labels {
     /// The marker of the advanced copy after a line whose value never changes, e.g.
     /// ` — Unscalable Value`.
     pub fixed_value: &'static str,
-    /// The kinds of the modifier headers, and the origin a kind tells (the Vaal modifier of a
-    /// unique). A label never ends with an earlier one, so that "Corruption Enhancement" is not
-    /// taken for "Enhancement" (checked by the tests).
-    pub modifier_kinds: &'static [(&'static str, ModifierKind, Option<ModifierOrigin>)],
+    /// The kinds of the modifier headers. A label never ends with an earlier one, so that
+    /// "Corruption Enhancement" is not taken for "Enhancement" (checked by the tests).
+    pub modifier_kinds: &'static [HeaderKind],
     /// The words before the kind in a modifier header.
     pub modifier_origins: &'static [(&'static str, ModifierOrigin)],
     /// The only line of a desecrated modifier not revealed yet, for each affix, under its
     /// header without tier (`{ Prefix Modifier "Veiled" }`).
     pub unrevealed: &'static [(&'static str, Affix)],
+}
+
+/// The kind of a modifier header, e.g. `Prefix Modifier`.
+#[derive(Debug, Clone, Copy)]
+pub(super) struct HeaderKind {
+    pub label: &'static str,
+    pub kind: ModifierKind,
+    /// The origin the kind itself tells: the Vaal modifier of a unique.
+    pub origin: Option<ModifierOrigin>,
+}
+
+impl HeaderKind {
+    const fn new(label: &'static str, kind: ModifierKind) -> Self {
+        Self {
+            label,
+            kind,
+            origin: None,
+        }
+    }
+
+    const fn vaal(label: &'static str) -> Self {
+        Self {
+            label,
+            kind: UNIQUE,
+            origin: Some(ModifierOrigin::Vaal),
+        }
+    }
 }
 
 /// A word written before or after a name, e.g. "Superior" in "Superior Divine Crown".
@@ -139,13 +165,13 @@ static ENGLISH: Labels = Labels {
     tier: "Tier: ",
     fixed_value: " — Unscalable Value",
     modifier_kinds: &[
-        ("Prefix Modifier", PREFIX, None),
-        ("Suffix Modifier", SUFFIX, None),
-        ("Vaal Unique Modifier", UNIQUE, Some(ModifierOrigin::Vaal)),
-        ("Unique Modifier", UNIQUE, None),
-        ("Implicit Modifier", ModifierKind::Implicit, None),
-        ("Corruption Enhancement", ModifierKind::Corruption, None),
-        ("Enhancement", ModifierKind::Enchant, None),
+        HeaderKind::new("Prefix Modifier", PREFIX),
+        HeaderKind::new("Suffix Modifier", SUFFIX),
+        HeaderKind::vaal("Vaal Unique Modifier"),
+        HeaderKind::new("Unique Modifier", UNIQUE),
+        HeaderKind::new("Implicit Modifier", ModifierKind::Implicit),
+        HeaderKind::new("Corruption Enhancement", ModifierKind::Corruption),
+        HeaderKind::new("Enhancement", ModifierKind::Enchant),
     ],
     modifier_origins: &[
         ("Crafted", ModifierOrigin::Crafted),
@@ -205,17 +231,13 @@ static FRENCH: Labels = Labels {
     tier: "Palier : ",
     fixed_value: " — Valeur fixe",
     modifier_kinds: &[
-        ("Préfixe", PREFIX, None),
-        ("Suffixe", SUFFIX, None),
-        (
-            "Modificateur vaal unique",
-            UNIQUE,
-            Some(ModifierOrigin::Vaal),
-        ),
-        ("Modificateur d'Objet unique", UNIQUE, None),
-        ("Modificateur Implicite", ModifierKind::Implicit, None),
-        ("Amélioration de Corruption", ModifierKind::Corruption, None),
-        ("Amélioration", ModifierKind::Enchant, None),
+        HeaderKind::new("Préfixe", PREFIX),
+        HeaderKind::new("Suffixe", SUFFIX),
+        HeaderKind::vaal("Modificateur vaal unique"),
+        HeaderKind::new("Modificateur d'Objet unique", UNIQUE),
+        HeaderKind::new("Modificateur Implicite", ModifierKind::Implicit),
+        HeaderKind::new("Amélioration de Corruption", ModifierKind::Corruption),
+        HeaderKind::new("Amélioration", ModifierKind::Enchant),
     ],
     modifier_origins: &[
         ("Artisanat", ModifierOrigin::Crafted),
@@ -296,7 +318,7 @@ mod tests {
                         || labels
                             .modifier_kinds
                             .iter()
-                            .any(|&(.., o)| o == Some(origin)),
+                            .any(|kind| kind.origin == Some(origin)),
                     "{language:?} {origin:?}"
                 );
             }
@@ -313,11 +335,13 @@ mod tests {
     fn no_modifier_kind_is_hidden_by_an_earlier_one() {
         for language in Language::ALL {
             let kinds = Labels::of(language).modifier_kinds;
-            for (index, (earlier, ..)) in kinds.iter().enumerate() {
-                for (later, ..) in kinds.iter().skip(index + 1) {
+            for (index, earlier) in kinds.iter().enumerate() {
+                for later in kinds.iter().skip(index + 1) {
                     assert!(
-                        !later.ends_with(earlier),
-                        "{language:?}: {later} after {earlier}"
+                        !later.label.ends_with(earlier.label),
+                        "{language:?}: {} after {}",
+                        later.label,
+                        earlier.label
                     );
                 }
             }

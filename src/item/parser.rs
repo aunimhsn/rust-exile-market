@@ -120,7 +120,7 @@ pub(super) fn parse(copied: &CopiedItem) -> Result<Item, ParseError> {
     let mut item = read_header(&header, copied.language(), labels)?;
 
     let recognized: Vec<Recognized<'_>> = sections.map(|lines| recognize(lines, labels)).collect();
-    for section in resolve_plain_sections(recognized, item.rarity, labels)? {
+    for section in resolve_plain_sections(recognized, item.rarity)? {
         fill(&mut item, section, labels);
     }
     Ok(item)
@@ -269,25 +269,14 @@ fn state(line: &str, labels: &Labels) -> Option<ItemState> {
 /// item with implicit lines without one, or without any header but with a plain section after
 /// the item level that reads as the explicit modifiers of an identified item, was copied
 /// without the details.
-fn resolve_plain_sections<'a>(
-    recognized: Vec<Recognized<'a>>,
+fn resolve_plain_sections(
+    recognized: Vec<Recognized<'_>>,
     rarity: Rarity,
-    labels: &Labels,
-) -> Result<Vec<Section<'a>>, ParseError> {
-    let is_section = |recognized: &Recognized<'_>, test: fn(&Section<'_>) -> bool| matches!(recognized, Recognized::Section(section) if test(section));
-    let headed = recognized
-        .iter()
-        .any(|r| is_section(r, |s| matches!(s, Section::Headed(_))));
-    let unidentified = recognized.iter().any(|r| {
-        is_section(
-            r,
-            |s| matches!(s, Section::States(states) if states.contains(&ItemState::Unidentified)),
-        )
-    });
-    let explicit_expected = !headed && rarity.has_explicit_modifiers() && !unidentified;
-    let unheaded = (rarity == Rarity::Unique && !unidentified)
-        .then(|| unheaded_section(&recognized, labels))
-        .flatten();
+) -> Result<Vec<Section<'_>>, ParseError> {
+    let headed = is_headed(&recognized);
+    let explicit_expected =
+        !headed && rarity.has_explicit_modifiers() && !is_unidentified(&recognized);
+    let unheaded = unheaded_section(&recognized, rarity);
     let mut after_item_level = false;
 
     recognized
@@ -312,6 +301,9 @@ fn resolve_plain_sections<'a>(
             {
                 Err(ParseError::WithoutDetails)
             }
+            // After the arm above: a unique copied without the details (from the trade of the
+            // game, step 13k2e) has the shape of the lines without header, and its lines with
+            // numbers must be refused, not read as lines that never vary.
             Recognized::Plain(lines) if Some(index) == unheaded => {
                 Ok(Section::Marked(lines, ModifierKind::Explicit(None)))
             }
@@ -320,29 +312,35 @@ fn resolve_plain_sections<'a>(
         .collect()
 }
 
+/// Whether one of the sections has a `{ … }` header.
+fn is_headed(recognized: &[Recognized<'_>]) -> bool {
+    recognized
+        .iter()
+        .any(|r| matches!(r, Recognized::Section(Section::Headed(_))))
+}
+
+fn is_unidentified(recognized: &[Recognized<'_>]) -> bool {
+    recognized.iter().any(|r| {
+        matches!(r, Recognized::Section(Section::States(states)) if states.contains(&ItemState::Unidentified))
+    })
+}
+
 /// The index of the lines of an identified unique written without header, the same on every
-/// copy (`Reflects opposite Ring` of Kalandra's Touch): when no explicit modifier has a
-/// header, its first plain section after the item level, if another plain section, its
+/// copy (`Reflects opposite Ring` of Kalandra's Touch): when the copy has no `{ … }` header
+/// at all, its first plain section after the item level, if another plain section, its
 /// flavour text, follows it; a description or a flavour text alone is never taken for it.
-fn unheaded_section(recognized: &[Recognized<'_>], labels: &Labels) -> Option<usize> {
-    let explicit_header = |line: &&str| match Header::parse(line, labels) {
-        Some(Header::Known(modifier)) => matches!(modifier.kind, ModifierKind::Explicit(_)),
-        Some(Header::Unknown) => true,
-        None => false,
-    };
-    if recognized.iter().any(|recognized| {
-        matches!(recognized, Recognized::Section(Section::Headed(lines)) if lines.iter().any(explicit_header))
-    }) {
+fn unheaded_section(recognized: &[Recognized<'_>], rarity: Rarity) -> Option<usize> {
+    if rarity != Rarity::Unique || is_headed(recognized) || is_unidentified(recognized) {
         return None;
     }
     let item_level = recognized
         .iter()
-        .position(|recognized| matches!(recognized, Recognized::Section(Section::ItemLevel(_))))?;
+        .position(|r| matches!(r, Recognized::Section(Section::ItemLevel(_))))?;
     let mut plain = recognized
         .iter()
         .enumerate()
         .skip(item_level + 1)
-        .filter(|(_, recognized)| matches!(recognized, Recognized::Plain(_)))
+        .filter(|(_, r)| matches!(r, Recognized::Plain(_)))
         .map(|(index, _)| index);
     let first = plain.next()?;
     plain.next().map(|_| first)

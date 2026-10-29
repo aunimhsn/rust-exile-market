@@ -840,6 +840,42 @@ fn reads_the_line_of_a_unique_written_without_header() {
     );
     // Its flavour text, after it, isn't read.
     assert_eq!(ring.modifiers().len(), 1);
+
+    // Only its first plain section, also with a third one after the flavour text.
+    let noted = item(
+        "Classe d'objet: Bagues\nRareté: Unique\nToucher de Kalandra\nBague\n--------\n\
+         Niveau de l'objet: 80\n--------\nReflète la Bague opposée\n--------\n\
+         Le pouvoir n'est qu'affaire de perception.\n--------\nUne description.",
+    );
+    let lines: Vec<&str> = explicit(&noted)
+        .into_iter()
+        .flat_map(|modifier| modifier.lines.iter().map(|line| line.text.as_str()))
+        .collect();
+    assert_eq!(lines, ["Reflète la Bague opposée"]);
+}
+
+#[test]
+fn a_unique_copied_without_details_is_refused_and_its_lines_without_number_are_read() {
+    // A plain copy: its lines with numbers are refused before the rule of the lines without
+    // header can read them (the copies of the trade of the game, step 13k2e).
+    assert_eq!(
+        try_parse(
+            "Item Class: Rings\nRarity: Unique\nTest Loop\nGold Ring\n--------\n\
+             Item Level: 80\n--------\n+52 to maximum Life\n--------\nFlavour text."
+        )
+        .err(),
+        Some(ParseError::WithoutDetails)
+    );
+    // Its lines without number are the same on every copy: read like those of Kalandra's
+    // Touch, while they were left out before step 13k2d3.
+    let ring = item(
+        "Item Class: Rings\nRarity: Unique\nTest Loop\nGold Ring\n--------\n\
+         Item Level: 80\n--------\nReflects opposite Ring\n--------\nFlavour text.",
+    );
+    assert_eq!(
+        first_line(explicit(&ring)[0]).text,
+        "Reflects opposite Ring"
+    );
 }
 
 #[test]
@@ -860,8 +896,12 @@ fn reads_no_flavour_text_nor_description_as_a_line_without_header() {
         ),
         ["+52 to maximum Life"]
     );
-    // A flavour text alone, unidentified, or on another rarity.
+    // A flavour text alone, unidentified, on another rarity, or after an implicit with its
+    // header: a copy with a `{ … }` header writes one before every modifier.
     for text in [
+        "Item Class: Rings\nRarity: Unique\nTest Loop\nGold Ring\n--------\nItem Level: 80\n\
+         --------\n{ Implicit Modifier }\n+10 to Strength\n--------\nFlavour text.\n--------\n\
+         A description.",
         "Item Class: Rings\nRarity: Unique\nTest Loop\nGold Ring\n--------\nItem Level: 80\n\
          --------\nFlavour text.",
         "Item Class: Rings\nRarity: Unique\nGold Ring\n--------\nItem Level: 80\n--------\n\
