@@ -776,11 +776,13 @@ fn unique_rows<'a>(item: &'a Item, reading: &Reading<'_>) -> Vec<Row<'a>> {
 /// The rows of a rare, magic or normal item: its enchantments, its runes, its implicit
 /// modifiers, then its prefixes and suffixes.
 fn affix_rows<'a>(item: &'a Item, reading: &Reading<'_>) -> Vec<Row<'a>> {
-    let max = match item.rarity() {
+    let usual = match item.rarity() {
         Rarity::Magic => 1,
         _ if item.is_jewel() => 2,
         _ => 3,
     };
+    // A rune or an implicit can add affixes or take some away (`+1 Suffix Modifier allowed`).
+    let max = |affix| u32::saturating_add_signed(usual, reading.stats.affixes_allowed(affix));
     let line_varies = |line: &StatLine, _: &Stat<'_>| varies(line);
     let prefixes = affix_stats(item, Some(Affix::Prefix), reading);
     let suffixes = affix_stats(item, Some(Affix::Suffix), reading);
@@ -810,7 +812,7 @@ fn affix_rows<'a>(item: &'a Item, reading: &Reading<'_>) -> Vec<Row<'a>> {
         &mut rows,
         Group::Prefixes {
             filled: prefixes.count,
-            max,
+            max: max(Affix::Prefix),
         },
         prefixes.stats,
     );
@@ -818,7 +820,7 @@ fn affix_rows<'a>(item: &'a Item, reading: &Reading<'_>) -> Vec<Row<'a>> {
         &mut rows,
         Group::Suffixes {
             filled: suffixes.count,
-            max,
+            max: max(Affix::Suffix),
         },
         suffixes.stats,
     );
@@ -2147,6 +2149,33 @@ mod tests {
                 "■ +143 to Evasion Rating ≥129",
             ]
         );
+    }
+
+    #[test]
+    fn the_affixes_a_rune_or_an_implicit_allows_count_in_the_fill() {
+        let english = parse(
+            "Item Class: Amulets\nRarity: Rare\nDoom Idol\nGloam Amulet\n--------\n\
+             Item Level: 79\n--------\n+1 Suffix Modifier allowed (rune)\n--------\n\
+             { Implicit Modifier }\n-1 Prefix Modifier allowed\n--------\n\
+             { Prefix Modifier \"Hale\" (Tier: 9) }\n+12(10-14) to maximum Life\n\
+             { Suffix Modifier \"of the Brute\" (Tier: 7) — Attribute }\n+12(9-12) to Strength",
+        );
+        let french = parse(
+            "Classe d'objet: Amulettes\nRareté: Rare\nIdole funeste\nAmulette crépusculaire\n\
+             --------\nNiveau de l'objet: 79\n--------\n\
+             +1 Modificateur suffixe autorisé (rune)\n--------\n\
+             { Modificateur Implicite }\n-1 Modificateur préfixe autorisé\n--------\n\
+             { Préfixe : « Sain » (Palier : 9) }\n+12(10-14) de Vie maximale",
+        );
+
+        let groups = |item: &Item| -> Vec<String> {
+            texts(item)
+                .into_iter()
+                .filter(|text| text.starts_with("Prefixes") || text.starts_with("Suffixes"))
+                .collect()
+        };
+        assert_eq!(groups(&english), ["Prefixes 1/2", "Suffixes 1/4"]);
+        assert_eq!(groups(&french), ["Prefixes 1/2"]);
     }
 
     #[test]

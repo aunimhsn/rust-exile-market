@@ -12,7 +12,7 @@ use super::pseudo::{self, CountedLine, PseudoTotal};
 use super::query::{PropertyFilter, SearchFilters, StatFilter};
 use crate::filters::{Filter, FilterKey, StatKey};
 use crate::game_data::{self, TradeGroup, TradeStats};
-use crate::item::{Modifier, StatLine};
+use crate::item::{Affix, Modifier, StatLine};
 use crate::language::Language;
 
 /// The game stats of the damage and the attack speed of a weapon, which its DPS counts.
@@ -23,6 +23,14 @@ const WEAPON_DAMAGE: [&str; 6] = [
     "local_minimum_added_cold_damage",
     "local_minimum_added_lightning_damage",
     "local_attack_speed_+%",
+];
+
+/// The game stats of the lines that add prefixes or suffixes to those an item can have, or
+/// take some away: `+1 Suffix Modifier allowed` of a rune, `-1 Prefix Modifier allowed` of an
+/// implicit.
+const AFFIXES_ALLOWED: [(&str, Affix); 2] = [
+    ("local_maximum_prefixes_allowed_+", Affix::Prefix),
+    ("local_maximum_suffixes_allowed_+", Affix::Suffix),
 ];
 
 /// How a line is searched on the trade site.
@@ -194,6 +202,8 @@ struct Line {
 pub struct LineStats {
     lines: Vec<Line>,
     pseudo: Vec<PseudoTotal>,
+    /// The affixes each line of [`AFFIXES_ALLOWED`] adds, negative when it takes some away.
+    allowed: Vec<(Affix, f64)>,
 }
 
 impl LineStats {
@@ -202,6 +212,7 @@ impl LineStats {
     #[must_use]
     pub fn new(language: Language, modifiers: &[Modifier], trade: Option<&TradeStats>) -> Self {
         let mut lines = Vec::new();
+        let mut allowed = Vec::new();
         for (index, modifier) in modifiers.iter().enumerate() {
             let group = TradeGroup::of(modifier);
             for found in game_data::modifier_stats(language, modifier, trade) {
@@ -224,6 +235,13 @@ impl LineStats {
                     });
                 let known = found.stat.is_some();
                 let game_id = found.stat.as_ref().and_then(|found| found.stat.id.clone());
+                if let Some(&(_, affix)) = AFFIXES_ALLOWED
+                    .iter()
+                    .find(|(id, _)| game_id.as_deref() == Some(*id))
+                    && let Some(&value) = found.stat.as_ref().and_then(|stat| stat.values.first())
+                {
+                    allowed.push((affix, value));
+                }
                 for (line, numbers) in found.lines.zip(numbers) {
                     let key = StatKey {
                         modifier: index,
@@ -257,7 +275,11 @@ impl LineStats {
             })
             .collect();
         let pseudo = pseudo::totals(&counted);
-        Self { lines, pseudo }
+        Self {
+            lines,
+            pseudo,
+            allowed,
+        }
     }
 
     /// The stat of the line `key`; none for a line that isn't of the copied item.
@@ -293,6 +315,25 @@ impl LineStats {
     #[must_use]
     pub fn added_up(&self, key: StatKey) -> bool {
         self.pseudo.iter().any(|total| total.lines.contains(&key))
+    }
+
+    /// The prefixes or suffixes (`affix`) the lines of the item add to those it can have,
+    /// negative when they take some away: a rune or an implicit, e.g. `+1 Suffix Modifier
+    /// allowed`.
+    #[must_use]
+    pub fn affixes_allowed(&self, affix: Affix) -> i32 {
+        let total: f64 = self
+            .allowed
+            .iter()
+            .filter(|(allowed, _)| *allowed == affix)
+            .map(|(_, value)| value)
+            .sum();
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "a few affixes, capped by the six an item can have"
+        )]
+        let total = total.round().clamp(-6.0, 6.0) as i32;
+        total
     }
 
     fn line(&self, key: StatKey) -> Option<&Line> {
@@ -876,5 +917,27 @@ mod tests {
         assert!(stats.search_filters(&filters).any_base);
         // An item without filter of its base type, a unique, is searched by it.
         assert!(!stats.search_filters(&filters[1..]).any_base);
+    }
+
+    #[test]
+    fn counts_the_affixes_a_rune_or_an_implicit_allows() {
+        for text in [
+            include_str!("../item/test-items/en-owner-trade-rare-bow-mirrored.txt"),
+            include_str!("../item/test-items/fr-trade-rare-bow-mirrored.txt"),
+        ] {
+            let bow = parse(text);
+            let stats = LineStats::new(bow.language(), bow.modifiers(), None);
+            assert_eq!(stats.affixes_allowed(Affix::Suffix), 1);
+            assert_eq!(stats.affixes_allowed(Affix::Prefix), 0);
+        }
+
+        let amulet = parse(
+            "Item Class: Amulets\nRarity: Rare\nDoom Idol\nGloam Amulet\n--------\n\
+             Item Level: 79\n--------\n{ Implicit Modifier }\n-1 Prefix Modifier allowed\n\
+             --------\n{ Prefix Modifier \"Hale\" (Tier: 9) }\n+12(10-14) to maximum Life",
+        );
+        let stats = LineStats::new(amulet.language(), amulet.modifiers(), None);
+        assert_eq!(stats.affixes_allowed(Affix::Prefix), -1);
+        assert_eq!(stats.affixes_allowed(Affix::Suffix), 0);
     }
 }
