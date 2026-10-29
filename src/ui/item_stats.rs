@@ -480,7 +480,7 @@ fn rows<'a>(
     if unrevealed {
         rows.push(Row::UnrevealedNote);
     }
-    if item.is_in_game_trade_copy() && matches!(item.rarity(), Rarity::Magic | Rarity::Rare) {
+    if item.has_tiers_from_values() {
         rows.push(Row::TradeCopyNote);
     }
     rows
@@ -1911,8 +1911,13 @@ mod tests {
             "../item/test-items/en-owner-trade-rare-helmet-fractured.txt"
         )));
 
+        let texts = texts(&tiara);
+        let prefixes = texts
+            .iter()
+            .position(|text| text.starts_with("Prefixes"))
+            .expect("its prefixes");
         assert_eq!(
-            texts(&tiara)[14..],
+            texts[prefixes..],
             [
                 "Prefixes 3/3",
                 // The fractured hybrid, its lines read together.
@@ -1928,6 +1933,22 @@ mod tests {
                 "Trade copy note",
             ]
         );
+    }
+
+    #[test]
+    fn only_the_tiers_found_from_the_values_have_the_note() {
+        for text in [
+            include_str!("../item/test-items/en-rare-crossbow-all-modifiers.txt"),
+            include_str!("../item/test-items/en-owner-trade-unique-belt-mutated.txt"),
+            include_str!("../item/test-items/en-normal-helmet.txt"),
+        ] {
+            let item = parse(text);
+
+            assert!(
+                !texts(&item).contains(&"Trade copy note".to_owned()),
+                "{text}"
+            );
+        }
     }
 
     #[test]

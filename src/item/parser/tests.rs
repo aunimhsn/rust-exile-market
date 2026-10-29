@@ -1243,16 +1243,26 @@ fn an_advanced_copy_never_has_its_explicit_modifiers_found_without_header() {
 }
 
 #[test]
-fn tells_an_item_copied_from_the_in_game_trade() {
-    for text in [EN_TRADE_RARE_HELMET, FR_TRADE_RARE_HELMET] {
-        assert!(item(text).is_in_game_trade_copy(), "{text}");
-    }
-    // An advanced copy, and an item whose lines have no header in either copy: its runes.
+fn tells_a_rare_or_magic_item_copied_from_the_in_game_trade() {
     for text in [
+        EN_TRADE_RARE_HELMET,
+        FR_TRADE_RARE_HELMET,
+        EN_TRADE_RARE_BOW,
+    ] {
+        assert!(item(text).has_tiers_from_values(), "{text}");
+    }
+    for text in [
+        // An advanced copy.
         EN_RARE_CROSSBOW,
+        // A unique copied from the in-game trade: no tiers.
+        EN_TRADE_UNIQUE_BELT,
+        // Lines without header in either copy: runes.
         "Item Class: Rings\nRarity: Rare\nWoe Loop\nRuby Ring\n--------\nItem Level: 80\n\
          --------\n+22% to Lightning Resistance (rune)",
+        // An unidentified rare copied from the in-game trade: an implicit only.
+        "Item Class: Rings\nRarity: Rare\nRuby Ring\n--------\nItem Level: 80\n--------\n\
+         +27% to Fire Resistance (implicit)\n--------\nUnidentified",
     ] {
-        assert!(!item(text).is_in_game_trade_copy(), "{text}");
+        assert!(!item(text).has_tiers_from_values(), "{text}");
     }
 }

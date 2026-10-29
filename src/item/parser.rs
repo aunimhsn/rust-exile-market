@@ -124,13 +124,13 @@ pub(super) fn parse(copied: &CopiedItem) -> Result<Item, ParseError> {
         fill(&mut item, section, labels);
     }
     join_written_stats(&mut item.modifiers, copied.language(), with_headers);
-    item.in_game_trade_copy = !with_headers
-        && item.modifiers.iter().any(|modifier| {
-            matches!(
-                modifier.kind,
-                ModifierKind::Implicit | ModifierKind::Explicit(_)
-            )
-        });
+    // A rare or magic item copied from the in-game trade: its explicit lines without header.
+    item.tiers_from_values = !with_headers
+        && matches!(item.rarity, Rarity::Magic | Rarity::Rare)
+        && item
+            .modifiers
+            .iter()
+            .any(|modifier| matches!(modifier.kind, ModifierKind::Explicit(_)));
     Ok(item)
 }
 
@@ -192,7 +192,7 @@ fn read_header(lines: &[&str], language: Language, labels: &Labels) -> Result<It
         properties: Vec::new(),
         weapon: None,
         modifiers: Vec::new(),
-        in_game_trade_copy: false,
+        tiers_from_values: false,
         warnings: Vec::new(),
     })
 }

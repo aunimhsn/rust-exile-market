@@ -381,8 +381,11 @@ impl App for ExileMarketApp {
         }
         // The league shown at the first launch, or after the end of a league.
         self.market.price(self.session.league());
-        self.item_names
-            .receive(|names| self.session.apply_item_names(names));
+        self.item_names.receive(|names| {
+            if self.session.apply_item_names(names) {
+                self.filters.forget_stats();
+            }
+        });
         // Escape closes what is on top: the list of the leagues, then the settings.
         if ctx.input(|input| input.key_pressed(Key::Escape)) {
             if self.leagues_open {

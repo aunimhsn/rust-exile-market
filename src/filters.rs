@@ -178,6 +178,13 @@ impl Filters {
         }
     }
 
+    /// Forgets the choices of the player on the lines of the modifiers, whose keys moved: the
+    /// item shown was read again.
+    pub fn forget_stats(&mut self) {
+        self.changed
+            .retain(|key, _| !matches!(key, FilterKey::Stat(_)));
+    }
+
     /// Forgets the choices of the player: an item is copied.
     pub fn clear(&mut self) {
         self.changed.clear();
@@ -219,6 +226,32 @@ mod tests {
 
     fn texts(minimum: &str, maximum: &str) -> (String, String) {
         (minimum.to_owned(), maximum.to_owned())
+    }
+
+    #[test]
+    fn the_choices_on_the_lines_are_forgotten_when_the_item_is_read_again() {
+        let mut filters = Filters::default();
+        let line = FilterKey::Stat(StatKey {
+            modifier: 1,
+            line: 0,
+        });
+        let unchecked = || Filter {
+            checked: false,
+            ..filter("", "", None)
+        };
+        filters.set(line, unchecked());
+        filters.set(FilterKey::BaseType, unchecked());
+        filters.toggle_state(ItemState::Corrupted);
+
+        filters.forget_stats();
+
+        assert!(filters.get(line, || filter("", "", None)).checked);
+        assert!(
+            !filters
+                .get(FilterKey::BaseType, || filter("", "", None))
+                .checked
+        );
+        assert!(filters.is_lit(ItemState::Corrupted));
     }
 
     #[test]
