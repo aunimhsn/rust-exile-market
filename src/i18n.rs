@@ -88,6 +88,7 @@ pub enum Message {
     DefenceEvasion,
     DefenceEnergyShield,
     DefenceBlock,
+    DefenceRunicWard,
     GroupEnchant,
     GroupRunes,
     GroupUnique,
@@ -103,6 +104,7 @@ pub enum Message {
     OriginDesecrated,
     OriginFractured,
     OriginCrafted,
+    OriginVaal,
     /// The line of a modifier not revealed yet, and the note under the stats of its item.
     UnrevealedPrefix,
     UnrevealedSuffix,
@@ -133,7 +135,7 @@ pub enum Message {
 impl Message {
     /// Every message, for the tests.
     #[cfg(test)]
-    const ALL: [Self; 102] = [
+    const ALL: [Self; 104] = [
         Self::LeagueModeSoftcore,
         Self::LeagueModeHardcore,
         Self::LeagueLoading,
@@ -197,6 +199,7 @@ impl Message {
         Self::DefenceEvasion,
         Self::DefenceEnergyShield,
         Self::DefenceBlock,
+        Self::DefenceRunicWard,
         Self::GroupEnchant,
         Self::GroupRunes,
         Self::GroupUnique,
@@ -212,6 +215,7 @@ impl Message {
         Self::OriginDesecrated,
         Self::OriginFractured,
         Self::OriginCrafted,
+        Self::OriginVaal,
         Self::UnrevealedPrefix,
         Self::UnrevealedSuffix,
         Self::UnrevealedNote,
@@ -305,6 +309,7 @@ impl Message {
             Self::DefenceEvasion => "defence-evasion",
             Self::DefenceEnergyShield => "defence-energy-shield",
             Self::DefenceBlock => "defence-block",
+            Self::DefenceRunicWard => "defence-runic-ward",
             Self::GroupEnchant => "group-enchant",
             Self::GroupRunes => "group-runes",
             Self::GroupUnique => "group-unique",
@@ -320,6 +325,7 @@ impl Message {
             Self::OriginDesecrated => "origin-desecrated",
             Self::OriginFractured => "origin-fractured",
             Self::OriginCrafted => "origin-crafted",
+            Self::OriginVaal => "origin-vaal",
             Self::UnrevealedPrefix => "unrevealed-prefix",
             Self::UnrevealedSuffix => "unrevealed-suffix",
             Self::UnrevealedNote => "unrevealed-note",

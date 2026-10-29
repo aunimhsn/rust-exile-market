@@ -29,6 +29,9 @@ pub enum ModifierOrigin {
     Crafted,
     Desecrated,
     Fractured,
+    /// The Vaal modifier of a corrupted unique, told by its header (`{ Vaal Unique Modifier }`);
+    /// "mutated" on the trade site.
+    Vaal,
 }
 
 /// The marker at the end of a modifier line, in English in every language, e.g. ` (rune)`.
@@ -239,13 +242,13 @@ impl Header {
         let (main, name) = take_name(main);
         let main = main.trim().trim_end_matches(':').trim();
 
-        let &(kind_label, kind) = labels
+        let header_kind = labels
             .modifier_kinds
             .iter()
-            .find(|(label, _)| main.ends_with(label))?;
-        let origin_words = main.strip_suffix(kind_label)?.trim();
+            .find(|header_kind| main.ends_with(header_kind.label))?;
+        let origin_words = main.strip_suffix(header_kind.label)?.trim();
         let origin = if origin_words.is_empty() {
-            None
+            header_kind.origin
         } else {
             Some(
                 labels
@@ -259,7 +262,7 @@ impl Header {
             name,
             tier,
             tags,
-            ..Modifier::new(kind, origin)
+            ..Modifier::new(header_kind.kind, origin)
         })
     }
 }

@@ -30,16 +30,18 @@ impl TradeGroup {
     /// The group where the lines of `modifier` are searched on the trade site. A desecrated or
     /// a fractured line is searched by its explicit id, like Exiled Exchange 2: it finds the
     /// offers where the line is desecrated, fractured or plain (checked on the trade site on
-    /// 2026-10-28), and every desecrated and fractured stat of the game data has one.
+    /// 2026-10-28), and every desecrated and fractured stat of the game data has one. So is
+    /// the Vaal modifier of a corrupted unique (checked on Soul Tether, 2026-10-28).
     #[must_use]
     pub fn of(modifier: &Modifier) -> Self {
         match modifier.kind {
             ModifierKind::Implicit => Self::Implicit,
             ModifierKind::Explicit(_) => match modifier.origin {
                 Some(ModifierOrigin::Crafted) => Self::Crafted,
-                Some(ModifierOrigin::Fractured | ModifierOrigin::Desecrated) | None => {
-                    Self::Explicit
-                }
+                Some(
+                    ModifierOrigin::Fractured | ModifierOrigin::Desecrated | ModifierOrigin::Vaal,
+                )
+                | None => Self::Explicit,
             },
             // The trade site lists the modifiers of the corruption with the enchantments.
             ModifierKind::Enchant | ModifierKind::Corruption => Self::Enchant,

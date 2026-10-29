@@ -1,0 +1,27 @@
+Classe d'objet: Ceintures
+Rareté: Unique
+Héritage du couard
+Ceinture en mailles
+--------
+Prérequis : Niveau 40
+--------
+Niveau de l'objet: 79
+--------
+{ Modificateur Implicite }
+11(15-10)% de Réduction du nombre de Charges de Flacon utilisées
+{ Modificateur Implicite — Charme }
+Possède 1(1-3) Emplacement de Charme
+--------
+{ Modificateur d'Objet unique — Vie, Mana }
+36(30-40)% d'Augmentation de la Récupération de Vie et de Mana des Flacons
+{ Modificateur d'Objet unique — Attribut }
+-18(-20--10) de Force
+{ Modificateur vaal unique — Évasion }
++112(100-150) au Score d'Évasion tant que votre Vie est Basse
+{ Modificateur d'Objet unique }
+Votre Vie est désormais considérée comme Basse tant que vous avez 75% de votre Vie maximale ou moins
+--------
+Mourir est votre devoir le plus fondamental.
+Assumez-le, ou votre descendance sera maudite pour l'éternité.
+--------
+Corrompu

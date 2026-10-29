@@ -122,6 +122,7 @@ defence-armour = Armour
 defence-evasion = Evasion
 defence-energy-shield = Energy Shield
 defence-block = Block
+defence-runic-ward = Runic Ward
 # The summary of an item that grants skills, e.g. "Level 18 Sigil of Power", joined by " · ".
 granted-skill = Grants Skill: { $skill }
 # The requirements line, its parts joined by " · ": "Requires Level 65 · 145 Dex".
@@ -197,6 +198,8 @@ filter-unsearchable-hint = The offers may not have it.
 origin-desecrated = Desecrated
 origin-fractured = Fractured
 origin-crafted = Crafted
+# The Vaal modifier of a corrupted unique: the word of the game, the same in every language.
+origin-vaal = Vaal
 # A desecrated modifier not revealed yet, in its group; and the note under the stats of its item.
 unrevealed-prefix = Unrevealed prefix
 unrevealed-suffix = Unrevealed suffix
