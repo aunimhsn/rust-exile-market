@@ -25,8 +25,9 @@ pub struct ShownItem {
     /// from the values of its lines once its base is known.
     parsed: Result<Item, ParseError>,
     /// The modifiers of a rare or magic item copied from the in-game trade as the parser read
-    /// them, without affix nor tier: read again when the names of the trade site tell the base
-    /// of a magic item.
+    /// them, without affix nor tier: each reading starts from them, when the item is copied and
+    /// each time the names of the trade site arrive (they tell the base of a magic item, and
+    /// their stats the affixes a rune or an implicit allows).
     trade_copy: Option<Vec<Modifier>>,
     /// Its modifier lines, which the offers are compared with; none for an unreadable item.
     lines: CopiedLines,
@@ -1021,6 +1022,20 @@ mod tests {
             hybrid,
             Some((ModifierKind::Explicit(Some(Affix::Prefix)), Some(6)))
         );
+
+        // Names that don't know its base: read again from its copy, its lines apart again.
+        let unknown = || crate::item_names::Names {
+            exchange: std::collections::HashMap::new(),
+            base_types: Vec::new(),
+            stats: Vec::new(),
+        };
+        assert!(session.apply_item_names(ItemNames::new(
+            SystemTime::UNIX_EPOCH,
+            unknown(),
+            unknown(),
+            Vec::new(),
+        )));
+        assert_eq!(shape(&session), Some(vec![1, 1, 1]));
     }
 
     #[test]

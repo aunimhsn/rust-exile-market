@@ -480,7 +480,12 @@ fn rows<'a>(
     if unrevealed {
         rows.push(Row::UnrevealedNote);
     }
-    if item.has_tiers_from_values() {
+    // Once a tier is found: none before the names of the trade site tell the base of a magic
+    // item, nor on a base the game data doesn't know.
+    let found = item.modifiers().iter().any(|modifier| {
+        matches!(modifier.kind, ModifierKind::Explicit(Some(_))) && modifier.tier.is_some()
+    });
+    if item.has_tiers_from_values() && found {
         rows.push(Row::TradeCopyNote);
     }
     rows
@@ -1937,6 +1942,11 @@ mod tests {
 
     #[test]
     fn only_the_tiers_found_from_the_values_have_the_note() {
+        // Copied from the in-game trade, its tiers not found yet: its base unknown.
+        let tiara = parse(include_str!(
+            "../item/test-items/en-owner-trade-rare-helmet-fractured.txt"
+        ));
+        assert!(!texts(&tiara).contains(&"Trade copy note".to_owned()));
         for text in [
             include_str!("../item/test-items/en-rare-crossbow-all-modifiers.txt"),
             include_str!("../item/test-items/en-owner-trade-unique-belt-mutated.txt"),
