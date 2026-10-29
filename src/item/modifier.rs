@@ -157,6 +157,30 @@ pub struct StatLine {
     pub rolls: Vec<Roll>,
 }
 
+/// The tier of a modifier for one affix it can be, found from its values on an item copied
+/// from the in-game trade: a prefix of tier 1, 16–19.
+#[derive(Debug, Clone, PartialEq)]
+pub struct AffixTier {
+    pub affix: Affix,
+    /// 1 is the best.
+    pub tier: u32,
+    /// The range of each value its stats count, in their order, as the game writes it:
+    /// without its sign.
+    pub ranges: Vec<Range>,
+}
+
+/// What the values of a modifier copied from the in-game trade leave in doubt about its tier.
+#[derive(Debug, Clone, PartialEq)]
+pub enum TierDoubt {
+    /// The tier of the other affix, which holds the values too, left out since the item has
+    /// no room for it: a prefix T1 (16–19) for the suffix `18% increased Rarity of Items
+    /// found` of a helmet whose prefixes are full.
+    RuledOut(AffixTier),
+    /// The tier of each affix, the item having room for either: the modifier stays explicit,
+    /// without affix nor tier.
+    EitherAffix(Vec<AffixTier>),
+}
+
 /// A modifier, with one line or more.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Modifier {
@@ -173,6 +197,8 @@ pub struct Modifier {
     /// none.
     pub unrevealed: bool,
     pub lines: Vec<StatLine>,
+    /// What its values leave in doubt about its tier, when it was found from them.
+    pub doubt: Option<TierDoubt>,
 }
 
 /// What a header line of the advanced copy tells.
@@ -194,6 +220,7 @@ impl Modifier {
             tags: Vec::new(),
             unrevealed: false,
             lines: Vec::new(),
+            doubt: None,
         }
     }
 

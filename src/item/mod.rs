@@ -25,7 +25,9 @@ mod parser;
 mod weapon;
 
 pub use copied::CopiedItem;
-pub use modifier::{Affix, Modifier, ModifierKind, ModifierOrigin, Range, StatLine};
+pub use modifier::{
+    Affix, AffixTier, Modifier, ModifierKind, ModifierOrigin, Range, StatLine, TierDoubt,
+};
 pub use parser::{ParseError, ParseWarning};
 pub use weapon::{DamageKind, Weapon};
 

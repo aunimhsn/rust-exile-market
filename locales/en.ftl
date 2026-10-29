@@ -206,6 +206,12 @@ unrevealed-suffix = Unrevealed suffix
 unrevealed-note = An unrevealed modifier can change the item: its other stats start unchecked.
 # Under the stats of a rare or magic item copied from the trade of the game, without the affixes and tiers of the advanced copy.
 trade-copy-note = Copied from the in-game trade: the tiers are found from the values.
+# After the range of a tier found from the values, when the line can be a prefix or a suffix: the affix of that tier, in gray.
+affix-prefix = Prefix
+affix-suffix = Suffix
+# The tooltip of a tier found from the values, when the other affix rolls the value too but the item has no room for it; $tier and $ranges are those of the other affix ("T1", "16–19").
+tier-ruled-out-prefix = A suffix, since the prefixes are full: a prefix { $tier } ({ $ranges }) rolls it too
+tier-ruled-out-suffix = A prefix, since the suffixes are full: a suffix { $tier } ({ $ranges }) rolls it too
 
 ## Price block
 
