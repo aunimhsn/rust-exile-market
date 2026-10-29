@@ -110,6 +110,7 @@ Follow [Conventional Commits 1.0.0](https://www.conventionalcommits.org/en/v1.0.
 - The same checks run in CI (`.github/workflows/ci.yml`) on every pull request, skipped when it only changes Markdown files and `docs/` (the jobs, required on `main`, then succeed at once).
 - `unsafe` code is forbidden and Clippy pedantic lints are enabled (see `[lints]` in `Cargo.toml`).
 - `rust-version` in `Cargo.toml` is the minimum Rust version: CI also builds with it. Raise it when a dependency or a language feature needs a newer Rust.
+- Once the tests of a module run past a few hundred lines, move them to a file of their own, `<module>/tests.rs` (`src/session.rs` ends with `#[cfg(test)] mod tests;`, its tests in `src/session/tests.rs`), so that reading the code doesn't read its tests too; as a child module, they still reach its private items (`use super::*;`). The paths of `include_str!` are then one `../` deeper.
 
 ## Releases
 
