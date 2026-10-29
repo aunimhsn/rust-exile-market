@@ -1,8 +1,9 @@
-//! The other readings of the lines of an item copied from the in-game trade in which a line adds
-//! up several modifiers of its stat, whichever: the lines whose tier the best reading can't be
-//! sure of, since the candidates of the best reading only split a line into a pure modifier and
-//! another whose lines follow each other (the `47% d'Augmentation de l'Armure et de l'Évasion` of
-//! the owner's body armour adds up two hybrids, one of whose other lines is a sum too).
+//! The other readings of the lines of an item copied from the in-game trade, with a line adding
+//! up several modifiers of its stat, whichever, or any reading where the best one splits a line:
+//! the lines whose tier the best reading can't be sure of, since its candidates only split a line
+//! into a pure modifier and another whose lines follow each other (the `47% d'Augmentation de
+//! l'Armure et de l'Évasion` of the owner's body armour adds up two hybrids, one of whose other
+//! lines is a sum too).
 
 use super::{
     Affix, AffixSet, Candidate, Copied, CopiedLine, ROUNDING, Range, Room, TABLES, Table,
@@ -113,8 +114,8 @@ struct Placement<'a> {
 /// Accuracy Rating` of a bow with a prefix open: the hybrid T1 and a pure T3, or a pure T1, the
 /// hybrid T5 and a pure accuracy, three prefixes; a `119% increased Armour` split with its
 /// neighbour, while it may be summed with the hybrid of another line: any other reading there,
-/// with a sum or not), or when it adds up several
-/// modifiers on a line there and makes no more modifiers there than the best one (the two
+/// with a sum or not), or when it adds up several modifiers on a line there and makes no more
+/// modifiers there than the best one (the two
 /// hybrids of the owner's body armour, three prefixes either way, while the best reading splits
 /// no line): the best reading prefers fewer split lines, a modifier holding a line alone being
 /// likelier than two adding up, and a hybrid likelier than two pure modifiers only when one of
@@ -615,7 +616,8 @@ struct State {
     cut: bool,
     /// Whether a reading the same as the best one was met.
     met_best: bool,
-    /// Whether a reading that leaves lines in doubt takes another room than the best one.
+    /// Whether a reading that leaves lines in doubt leaves another room than the best one to the
+    /// modifiers that can be a prefix or a suffix.
     other_room: bool,
     /// The indexes among the modifiers of the item of the lines in doubt.
     doubts: Vec<usize>,

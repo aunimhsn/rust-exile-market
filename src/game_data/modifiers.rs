@@ -229,10 +229,11 @@ pub struct AddedTiers {
 ///
 /// A line stays without tier too, with the other lines of its hybrids, when another reading
 /// fits the item as well ([`summed_readings::doubts`]), with a line adding up several
-/// modifiers, whichever, or any reading where the best one splits a line: the `47% d'Augmentation de l'Armure et de l'Évasion` of the
-/// owner's body armour adds up two hybrids, one with `+23 à l'Armure` and `+19 au Score
-/// d'Évasion`, the other with the life; a line split with its neighbour may be summed with
-/// another line's hybrid, the copy sorting its lines by stat, not by modifier. Such a reading
+/// modifiers, whichever, or any reading where the best one splits a line: the `47%
+/// d'Augmentation de l'Armure et de l'Évasion` of the owner's body armour adds up two hybrids,
+/// one with `+23 à l'Armure` and `+19 au Score d'Évasion`, the other with the life; a line split
+/// with its neighbour may be summed with another line's hybrid, the copy sorting its lines by
+/// stat, not by modifier. Such a reading
 /// that leaves another room to a line that can be a prefix or a suffix keeps both its affixes;
 /// a search that can't conclude leaves every line it reads without tier.
 ///

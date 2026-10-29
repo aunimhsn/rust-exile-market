@@ -442,4 +442,20 @@ fn a_reading_leaves_the_same_room_to_a_prefix_or_suffix_with_as_many_of_each_els
     assert!(!same(&[on(0, Prefix), on(1, Suffix), on(2, Suffix)]));
     // A prefix less on the others.
     assert!(!same(&[on(0, Prefix), on(2, Suffix)]));
+    // A hybrid of the rarity and the life takes the prefix of the life.
+    let hybrid = placement(
+        "Hybrid",
+        Prefix,
+        &[0, 1],
+        &[(0, range(1.0, 10.0)), (1, range(1.0, 10.0))],
+        false,
+    );
+    assert!(same(&[hybrid, on(2, Suffix)]));
+    // A prefix and a suffix added up on the rarity line.
+    assert!(same(&[
+        on(0, Prefix),
+        on(0, Suffix),
+        on(1, Prefix),
+        on(2, Suffix)
+    ]));
 }
