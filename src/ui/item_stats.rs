@@ -165,9 +165,9 @@ enum Group {
     Unique,
 }
 
-/// The roll of a stat.
+/// The roll of a stat, borrowing from the modifiers of the item.
 #[derive(Debug, Clone, PartialEq)]
-enum Roll {
+enum Roll<'a> {
     /// Where its value falls in its ranges, from 0 to 1, and the ranges; then, under the last
     /// line of a Vaal modifier of a unique, its origin.
     Bar {
@@ -183,14 +183,14 @@ enum Roll {
     /// without bar nor tier.
     Affix {
         share: Option<f32>,
-        tier: Option<ModifierTier>,
+        tier: Option<ModifierTier<'a>>,
         origin: Option<ModifierOrigin>,
     },
     /// Under the last line of a modifier copied from the in-game trade that can be a prefix or
     /// a suffix: the tier of each and its ranges, one under the other, a word after the ranges
     /// ("Prefix"), without bar; then its origin.
     Tiers {
-        rows: Vec<TierRow>,
+        rows: Vec<TierRow<'a>>,
         origin: Option<ModifierOrigin>,
     },
 }
@@ -198,24 +198,24 @@ enum Roll {
 /// The tier of a prefix or suffix, written by the advanced copy or found from the values, and
 /// the ranges of that tier.
 #[derive(Debug, Clone, PartialEq)]
-struct ModifierTier {
+struct ModifierTier<'a> {
     /// 1 is the best.
     number: u32,
     ranges: Vec<Range>,
     /// Found from the values: the tier of the other affix, which holds them too, ruled out
-    /// since the item has no room for it; its tooltip says so. Boxed, since it is rare and every
-    /// row of the stats holds the room of a tier.
-    ruled_out: Option<Box<AffixTier>>,
+    /// since the item has no room for it; its tooltip says so. Borrowed from its modifier, like
+    /// the text of a stat.
+    ruled_out: Option<&'a AffixTier>,
 }
 
 /// A tier among several under a line, and the word after its ranges.
 #[derive(Debug, Clone, PartialEq)]
-struct TierRow {
-    tier: ModifierTier,
+struct TierRow<'a> {
+    tier: ModifierTier<'a>,
     word: Message,
 }
 
-impl TierRow {
+impl TierRow<'_> {
     /// The tier `found` for one affix of a line that can be either, "Prefix" after its ranges.
     fn affix(found: &AffixTier) -> Self {
         Self {
@@ -383,7 +383,7 @@ struct Stat<'a> {
     /// A line the trade site can't search, which would be a filter: the "not allowed" sign in
     /// place of its checkbox.
     unsearchable: bool,
-    roll: Option<Roll>,
+    roll: Option<Roll<'a>>,
 }
 
 /// A row of the stats.
@@ -1020,7 +1020,7 @@ fn affix_stats<'a>(item: &'a Item, affix: Option<Affix>, reading: &Reading<'_>) 
                             .map(|(_, range)| range)
                             .collect();
                         let ruled_out = match &modifier.doubt {
-                            Some(TierDoubt::RuledOut(found)) => Some(Box::new(found.clone())),
+                            Some(TierDoubt::RuledOut(found)) => Some(found),
                             _ => None,
                         };
                         ModifierTier {
@@ -1056,7 +1056,7 @@ fn affix_stats<'a>(item: &'a Item, affix: Option<Affix>, reading: &Reading<'_>) 
 fn affix_stat<'a>(
     key: StatKey,
     line: &'a StatLine,
-    tier: Option<ModifierTier>,
+    tier: Option<ModifierTier<'a>>,
     origin: Option<ModifierOrigin>,
     reading: &Reading<'_>,
 ) -> Stat<'a> {
@@ -1300,7 +1300,7 @@ fn average(values: impl Iterator<Item = f64>) -> Option<f64> {
 
 /// The bar of `rolls`, those whose range is wider than one value ([`varying_share`]), their
 /// ranges and the `origin` of their modifier; none when no roll varies.
-fn bar(rolls: Vec<(f64, Range)>, origin: Option<ModifierOrigin>) -> Option<Roll> {
+fn bar(rolls: Vec<(f64, Range)>, origin: Option<ModifierOrigin>) -> Option<Roll<'static>> {
     let share = varying_share(&rolls)?;
     Some(Roll::Bar {
         share,
@@ -1533,7 +1533,7 @@ fn unrevealed_row(ui: &mut Ui, words: &str) {
 fn stat_text(
     ui: &mut Ui,
     text: &str,
-    roll: Option<&Roll>,
+    roll: Option<&Roll<'_>>,
     note: Option<&str>,
     width: f32,
     bar: RollBar,
@@ -1766,7 +1766,7 @@ fn clamped(text: &str) -> LayoutJob {
 /// suffix, its bar over every tier, then under the last line of its modifier its tier, the
 /// ranges of that tier and its origin; or the tiers of a line that can be a prefix or a
 /// suffix, one under the other.
-fn roll_line(ui: &mut Ui, roll: &Roll, bar: RollBar, i18n: &Translator) {
+fn roll_line(ui: &mut Ui, roll: &Roll<'_>, bar: RollBar, i18n: &Translator) {
     match roll {
         Roll::Bar {
             share,
@@ -1822,13 +1822,13 @@ fn roll_row(ui: &mut Ui, parts: impl FnOnce(&mut Ui)) {
 
 /// A tier, `T1` in its color, and its ranges; for a tier found from the values that rules out
 /// the other affix, its tooltip says why under the pointer.
-fn tier_label(ui: &mut Ui, tier: &ModifierTier, i18n: &Translator) {
+fn tier_label(ui: &mut Ui, tier: &ModifierTier<'_>, i18n: &Translator) {
     let label = ui.label(
         RichText::new(format!("T{}", tier.number))
             .font(text::tier())
             .color(tier_color(tier.number)),
     );
-    if let Some(ruled_out) = &tier.ruled_out
+    if let Some(ruled_out) = tier.ruled_out
         && label.hovered()
     {
         let words = i18n.tier_ruled_out(
@@ -2029,8 +2029,8 @@ mod tests {
 
     /// A tier as [`row_texts`] writes it: `T1 15–18`, then the affix it rules out after a `≠`
     /// (`≠ Prefix T1 16–19`).
-    fn tier_text(tier: &ModifierTier) -> String {
-        let ruled_out = tier.ruled_out.as_ref().map(|found| {
+    fn tier_text(tier: &ModifierTier<'_>) -> String {
+        let ruled_out = tier.ruled_out.map(|found| {
             format!(
                 "≠ {:?} T{} {}",
                 found.affix,
