@@ -1942,7 +1942,7 @@ mod tests {
 
     #[test]
     fn only_the_tiers_found_from_the_values_have_the_note() {
-        // Copied from the in-game trade, its tiers not found yet: its base unknown.
+        // Copied from the in-game trade, not read again yet: no tier found.
         let tiara = parse(include_str!(
             "../item/test-items/en-owner-trade-rare-helmet-fractured.txt"
         ));
