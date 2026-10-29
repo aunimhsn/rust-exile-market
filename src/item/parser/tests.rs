@@ -1241,3 +1241,18 @@ fn an_advanced_copy_never_has_its_explicit_modifiers_found_without_header() {
         assert_eq!(explicit_section(&recognized, rarity), None, "{text}");
     }
 }
+
+#[test]
+fn tells_an_item_copied_from_the_in_game_trade() {
+    for text in [EN_TRADE_RARE_HELMET, FR_TRADE_RARE_HELMET] {
+        assert!(item(text).is_in_game_trade_copy(), "{text}");
+    }
+    // An advanced copy, and an item whose lines have no header in either copy: its runes.
+    for text in [
+        EN_RARE_CROSSBOW,
+        "Item Class: Rings\nRarity: Rare\nWoe Loop\nRuby Ring\n--------\nItem Level: 80\n\
+         --------\n+22% to Lightning Resistance (rune)",
+    ] {
+        assert!(!item(text).is_in_game_trade_copy(), "{text}");
+    }
+}

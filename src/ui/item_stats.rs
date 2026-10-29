@@ -349,6 +349,9 @@ enum Row<'a> {
     Stat(Stat<'a>),
     /// Under the stats of an item with an unrevealed modifier.
     UnrevealedNote,
+    /// Under the stats of a rare or magic item copied from the in-game trade, whose tiers are
+    /// found from the values.
+    TradeCopyNote,
 }
 
 /// The number of stats of `item`, for the pill that unfolds them.
@@ -476,6 +479,9 @@ fn rows<'a>(
     }
     if unrevealed {
         rows.push(Row::UnrevealedNote);
+    }
+    if item.is_in_game_trade_copy() && matches!(item.rarity(), Rarity::Magic | Rarity::Rare) {
+        rows.push(Row::TradeCopyNote);
     }
     rows
 }
@@ -776,13 +782,8 @@ fn unique_rows<'a>(item: &'a Item, reading: &Reading<'_>) -> Vec<Row<'a>> {
 /// The rows of a rare, magic or normal item: its enchantments, its runes, its implicit
 /// modifiers, then its prefixes and suffixes.
 fn affix_rows<'a>(item: &'a Item, reading: &Reading<'_>) -> Vec<Row<'a>> {
-    let usual = match item.rarity() {
-        Rarity::Magic => 1,
-        _ if item.is_jewel() => 2,
-        _ => 3,
-    };
     // A rune or an implicit can add affixes or take some away (`+1 Suffix Modifier allowed`).
-    let max = |affix| u32::saturating_add_signed(usual, reading.stats.affixes_allowed(affix));
+    let limits = reading.stats.affix_limits(item);
     let line_varies = |line: &StatLine, _: &Stat<'_>| varies(line);
     let prefixes = affix_stats(item, Some(Affix::Prefix), reading);
     let suffixes = affix_stats(item, Some(Affix::Suffix), reading);
@@ -812,7 +813,7 @@ fn affix_rows<'a>(item: &'a Item, reading: &Reading<'_>) -> Vec<Row<'a>> {
         &mut rows,
         Group::Prefixes {
             filled: prefixes.count,
-            max: max(Affix::Prefix),
+            max: limits.prefixes,
         },
         prefixes.stats,
     );
@@ -820,7 +821,7 @@ fn affix_rows<'a>(item: &'a Item, reading: &Reading<'_>) -> Vec<Row<'a>> {
         &mut rows,
         Group::Suffixes {
             filled: suffixes.count,
-            max: max(Affix::Suffix),
+            max: limits.suffixes,
         },
         suffixes.stats,
     );
@@ -1312,6 +1313,7 @@ fn show(ui: &mut Ui, rows: Vec<Row<'_>>, filters: &mut Filters, i18n: &Translato
             }
             Row::Stat(stat) => stat_row(ui, &stat, filters, i18n, bar),
             Row::UnrevealedNote => note(ui, i18n.text(Message::UnrevealedNote)),
+            Row::TradeCopyNote => note(ui, i18n.text(Message::TradeCopyNote)),
         }
     }
 }
@@ -1816,6 +1818,7 @@ mod tests {
                 Row::Group(Group::Suffixes { filled, max }) => format!("Suffixes {filled}/{max}"),
                 Row::Group(group) => format!("{group:?}"),
                 Row::UnrevealedNote => "Unrevealed note".to_owned(),
+                Row::TradeCopyNote => "Trade copy note".to_owned(),
                 Row::Stat(Stat {
                     text,
                     filter,
@@ -1885,6 +1888,46 @@ mod tests {
                 }
             })
             .collect()
+    }
+
+    /// `item`, copied from the in-game trade, read again with the tiers found from its values,
+    /// as the session does.
+    fn read_again(mut item: Item) -> Item {
+        let stats = LineStats::new(item.language(), item.modifiers(), None);
+        let modifiers = crate::game_data::with_trade_tiers(
+            item.language(),
+            item.base_type(),
+            item.item_level(),
+            item.modifiers(),
+            stats.affix_limits(&item),
+        );
+        item.set_modifiers(modifiers);
+        item
+    }
+
+    #[test]
+    fn an_item_copied_from_the_in_game_trade_shows_its_tiers_found_and_a_note() {
+        let tiara = read_again(parse(include_str!(
+            "../item/test-items/en-owner-trade-rare-helmet-fractured.txt"
+        )));
+
+        assert_eq!(
+            texts(&tiara)[14..],
+            [
+                "Prefixes 3/3",
+                // The fractured hybrid, its lines read together.
+                "■ 41% increased Energy Shield ≥37 [0.97]",
+                "□ +34 to maximum Mana ≥31 [0.85 T1 39–42 · 33–39 Fractured]",
+                "■ 98% increased Energy Shield ≥88 [0.98 T1 92–100]",
+                "■ +69 to maximum Energy Shield ≥62 [0.94 T1 61–73 Desecrated]",
+                "Suffixes 3/3",
+                // A prefix too, but the prefixes are full.
+                "■ 18% increased Rarity of Items found ≥16 [1.00 T1 15–18]",
+                "□ +43% to Fire Resistance ≥39 [0.95 T1 41–45]",
+                "□ +40% to Cold Resistance ≥36 [0.87 T2 36–40]",
+                "Trade copy note",
+            ]
+        );
     }
 
     #[test]

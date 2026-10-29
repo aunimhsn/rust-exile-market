@@ -21,7 +21,13 @@ use crate::trade::stat_filters::LineStats;
 /// What the parser read from the last item copied in the game.
 #[derive(Debug)]
 pub struct ShownItem {
+    /// For an item copied from the in-game trade, with the affixes and tiers found from the
+    /// values of its lines once its base is known.
     parsed: Result<Item, ParseError>,
+    /// A rare or magic item copied from the in-game trade as the parser read it, its lines
+    /// without affix nor tier: read again when the names of the trade site tell the base of a
+    /// magic item.
+    trade_copy: Option<Item>,
     /// Its modifier lines, which the offers are compared with; none for an unreadable item.
     lines: CopiedLines,
     /// The stat of each modifier line on the trade site, which searches it.
@@ -45,8 +51,17 @@ impl ShownItem {
             }
             Err(error) => log::warn!("A copied item couldn't be read: {error}"),
         }
+        let trade_copy = parsed
+            .as_ref()
+            .ok()
+            .filter(|item| {
+                item.is_in_game_trade_copy()
+                    && matches!(item.rarity(), Rarity::Magic | Rarity::Rare)
+            })
+            .cloned();
         let mut shown = Self {
             parsed,
+            trade_copy,
             lines: CopiedLines::default(),
             stats: LineStats::default(),
             tiers: TierRolls::default(),
@@ -56,14 +71,31 @@ impl ShownItem {
     }
 
     /// Reads the modifier lines of the item, with the stats of the trade site `trade`, and
-    /// their tiers on its base, found among the `names` of the trade site for a magic item.
+    /// their tiers on its base, found among the `names` of the trade site for a magic item;
+    /// from their values for an item copied from the in-game trade.
     fn read_lines(&mut self, trade: Option<&TradeStats>, names: Option<&ItemNames>) {
-        if let Ok(item) = &self.parsed {
+        let Ok(item) = &mut self.parsed else {
+            return;
+        };
+        let base_type = link::target(item, names, None)
+            .and_then(|target| target.base_type())
+            .map(str::to_owned);
+        self.stats = LineStats::new(item.language(), item.modifiers(), trade);
+        if let Some(copied) = &self.trade_copy
+            && let Some(base_type) = &base_type
+        {
+            let modifiers = game_data::with_trade_tiers(
+                copied.language(),
+                base_type,
+                copied.item_level(),
+                copied.modifiers(),
+                LineStats::new(copied.language(), copied.modifiers(), trade).affix_limits(copied),
+            );
+            item.set_modifiers(modifiers);
             self.stats = LineStats::new(item.language(), item.modifiers(), trade);
-            self.lines = CopiedLines::new(item.language(), item.modifiers(), &self.stats, trade);
-            let base_type = link::target(item, names, None).and_then(|target| target.base_type());
-            self.tiers = TierRolls::new(item.language(), item.modifiers(), base_type);
         }
+        self.lines = CopiedLines::new(item.language(), item.modifiers(), &self.stats, trade);
+        self.tiers = TierRolls::new(item.language(), item.modifiers(), base_type.as_deref());
     }
 
     pub fn parsed(&self) -> Result<&Item, ParseError> {
@@ -467,6 +499,7 @@ fn log_unknown_stats(item: &Item, trade: Option<&TradeStats>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::item::{Affix, ModifierKind};
     use crate::language::Language;
     use crate::league::LeagueMode;
     use crate::prices::Rates;
@@ -863,6 +896,86 @@ mod tests {
         // Copied once the names are known: at once.
         copy(&mut session, MACE);
         assert!(strength(&session).is_some_and(|rolls| rolls.tiers.is_some()));
+    }
+
+    #[test]
+    fn an_item_copied_from_the_in_game_trade_gets_the_tiers_found_from_its_values() {
+        const TIARA: &str =
+            include_str!("item/test-items/en-owner-trade-rare-helmet-fractured.txt");
+        use Affix::{Prefix, Suffix};
+        let mut session = session();
+        let explicit = |session: &Session| -> Vec<(usize, Option<Affix>, Option<u32>)> {
+            let Some(Ok(item)) = session.item().map(ShownItem::parsed) else {
+                return Vec::new();
+            };
+            item.modifiers()
+                .iter()
+                .filter_map(|modifier| match modifier.kind {
+                    ModifierKind::Explicit(affix) => {
+                        Some((modifier.lines.len(), affix, modifier.tier))
+                    }
+                    _ => None,
+                })
+                .collect()
+        };
+
+        copy(&mut session, TIARA);
+
+        assert_eq!(
+            explicit(&session),
+            [
+                // The fractured hybrid of `41% increased Energy Shield` and `+34 to maximum
+                // Mana`, its lines joined.
+                (2, Some(Prefix), Some(1)),
+                (1, Some(Prefix), Some(1)),
+                (1, Some(Suffix), Some(1)),
+                (1, Some(Suffix), Some(1)),
+                (1, Some(Suffix), Some(2)),
+                (1, Some(Prefix), Some(1)),
+            ]
+        );
+        let hybrid = session.item().and_then(|item| {
+            let key = crate::filters::StatKey {
+                modifier: 5,
+                line: 1,
+            };
+            item.tiers().get(key).cloned()
+        });
+        assert!(
+            hybrid.is_some(),
+            "the rolls over every tier of its second line, after the enchantment and the runes"
+        );
+    }
+
+    #[test]
+    fn a_magic_item_copied_from_the_in_game_trade_gets_its_tiers_once_the_names_tell_its_base() {
+        const MACE: &str = "Item Class: Two Hand Maces\nRarity: Magic\n\
+            Crackling Temple Maul of the Brute\n--------\nItem Level: 32\n--------\n\
+            Adds 1 to 50 Lightning Damage\n+8 to Strength";
+        let mut session = session();
+        let strength = |session: &Session| {
+            let item = session.item()?.parsed().ok()?;
+            let modifier = item.modifiers().get(1)?;
+            Some((modifier.kind, modifier.tier.is_some()))
+        };
+
+        copy(&mut session, MACE);
+        assert_eq!(
+            strength(&session),
+            Some((ModifierKind::Explicit(None), false)),
+            "the names aren't known yet"
+        );
+        session.apply_item_names(crate::item_names::tests::item_names());
+        assert_eq!(
+            strength(&session),
+            Some((ModifierKind::Explicit(Some(Affix::Suffix)), true))
+        );
+        // Its added lightning damage was copied before a patch changed its ranges: no tier.
+        let damage = session
+            .item()
+            .and_then(|item| item.parsed().ok())
+            .and_then(|item| Some(item.modifiers().first()?.kind));
+        assert_eq!(damage, Some(ModifierKind::Explicit(None)));
     }
 
     #[test]

@@ -109,13 +109,6 @@ pub struct ModifierTiers {
 impl ModifierTiers {
     /// The tier of the copied modifier.
     #[must_use]
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "checked by the tests: the application shows the tier the advanced copy writes"
-        )
-    )]
     pub fn tier(&self) -> Option<&Tier> {
         self.tiers.get(self.found)
     }
@@ -155,10 +148,6 @@ pub fn modifier_tiers(
 /// How many prefixes and suffixes an item can have: those of its rarity, with those its runes
 /// and implicits add or take away (`+1 Suffix Modifier allowed`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "the tiers found are shown in step 13k2e3c")
-)]
 pub struct AffixLimits {
     pub prefixes: u32,
     pub suffixes: u32,
@@ -166,10 +155,6 @@ pub struct AffixLimits {
 
 /// The tiers of a modifier copied from the in-game trade, found from its values.
 #[derive(Debug, Clone, PartialEq)]
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "the tiers found are shown in step 13k2e3c")
-)]
 pub struct FoundTiers {
     /// The indexes among the modifiers of the item of the lines read as one modifier: one
     /// line, or the consecutive lines of a hybrid.
@@ -205,10 +190,6 @@ pub struct FoundTiers {
 /// A hybrid whose other line is read on its own (a sanctified value out of its tier, or two
 /// lines apart) counts twice and may rule out an affix wrongly: a rare case, left as it is.
 #[must_use]
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "the tiers found are shown in step 13k2e3c")
-)]
 pub fn trade_tiers(
     language: Language,
     base_type: &str,
@@ -287,6 +268,91 @@ pub fn trade_tiers(
             })
         })
         .collect()
+}
+
+/// The modifiers of a rare or magic item copied from the in-game trade read again with the
+/// tiers found from their values ([`trade_tiers`], with the same arguments), as the advanced
+/// copy writes them: the lines of a hybrid made one modifier, a prefix or a suffix, its tier,
+/// and on each value its stat counts the range of that tier. A modifier that can be a prefix
+/// or a suffix, or that no tier holds, stays as it was: explicit, without affix nor tier.
+#[must_use]
+pub fn with_trade_tiers(
+    language: Language,
+    base_type: &str,
+    item_level: Option<u32>,
+    modifiers: &[Modifier],
+    limits: AffixLimits,
+) -> Vec<Modifier> {
+    let found = trade_tiers(language, base_type, item_level, modifiers, limits);
+    let mut read = Vec::with_capacity(modifiers.len());
+    let mut next = 0;
+    while let Some(modifier) = modifiers.get(next) {
+        let joined = found
+            .iter()
+            .filter(|found| found.modifiers.start == next)
+            .find_map(|found| {
+                let parts = modifiers.get(found.modifiers.clone())?;
+                Some((found.modifiers.end, with_tier(language, parts, found)?))
+            });
+        if let Some((end, joined)) = joined {
+            read.push(joined);
+            next = end;
+        } else {
+            read.push(modifier.clone());
+            next += 1;
+        }
+    }
+    read
+}
+
+/// The modifiers `parts`, read as one modifier of one affix in `found`, joined with its tier
+/// and the ranges of that tier on the values their stats count, in their order; none when
+/// `found` has both affixes. A line whose counted values aren't as many as those of its stat in
+/// the tables (none for `Loads an additional bolt`, whose string gives the value) keeps them
+/// without range.
+fn with_tier(language: Language, parts: &[Modifier], found: &FoundTiers) -> Option<Modifier> {
+    let [(affix, tiers)] = found.affixes.as_slice() else {
+        return None;
+    };
+    let tier = tiers.tier()?;
+    let first = parts.first()?;
+    let mut joined = Modifier {
+        kind: ModifierKind::Explicit(Some(*affix)),
+        tier: Some(tier.number),
+        lines: parts
+            .iter()
+            .flat_map(|part| part.lines.iter().cloned())
+            .collect(),
+        ..first.clone()
+    };
+    // The ranges and `counts` follow the line matches of each part, in their order.
+    let mut ranges = tier.ranges.iter();
+    let mut counts = tiers.counts.iter();
+    let mut offset = 0;
+    for part in parts {
+        for line_match in modifier_stats(language, part, None) {
+            let count = *counts.next()?;
+            let taken: Vec<Range> = ranges.by_ref().take(count).copied().collect();
+            let stat = line_match.stat.as_ref()?;
+            let lines = offset + line_match.lines.start..offset + line_match.lines.end;
+            let rolls: Vec<_> = joined
+                .lines
+                .get_mut(lines)?
+                .iter_mut()
+                .flat_map(|line| &mut line.rolls)
+                .zip(&stat.counted)
+                .filter_map(|(roll, &counted)| counted.then_some(roll))
+                .collect();
+            if rolls.len() == taken.len() {
+                for (roll, range) in rolls.into_iter().zip(taken) {
+                    // As the game writes it: without its sign.
+                    roll.range = range.magnitude();
+                }
+            }
+        }
+        offset += part.lines.len();
+    }
+    Some(joined)
 }
 
 /// Consecutive modifiers of an item copied from the in-game trade read as one, and the affixes
@@ -1584,6 +1650,148 @@ mod tests {
             [
                 "15% increased Rarity of Items found",
                 "15% d'Augmentation de la Rareté des Objets cédés",
+            ]
+        );
+    }
+
+    /// The texts of the lines of `modifier`.
+    fn texts(modifier: &Modifier) -> Vec<String> {
+        modifier
+            .lines
+            .iter()
+            .map(|line| line.text.clone())
+            .collect()
+    }
+
+    /// The range of each value of the lines of `modifier`, as the game writes it.
+    fn written_ranges(modifier: &Modifier) -> Vec<Option<Range>> {
+        modifier
+            .lines
+            .iter()
+            .flat_map(|line| &line.rolls)
+            .map(|roll| roll.range.and_then(Range::magnitude))
+            .collect()
+    }
+
+    #[test]
+    fn the_lines_read_again_from_their_values_are_the_modifiers_of_the_advanced_copy() {
+        let mut read_again = 0;
+        for (text, base_type) in ADVANCED_COPIES {
+            let item = parse(text);
+            let base_type = base_type.unwrap_or(item.base_type());
+            let limit = if item.rarity() == Rarity::Magic { 1 } else { 3 };
+            let limits = AffixLimits {
+                prefixes: limit,
+                suffixes: limit,
+            };
+            let (modifiers, written) = as_in_game_trade(&item, base_type);
+
+            let read = with_trade_tiers(
+                item.language(),
+                base_type,
+                item.item_level(),
+                &modifiers,
+                limits,
+            );
+
+            let advanced = item.modifiers().iter().filter(|modifier| {
+                matches!(modifier.kind, ModifierKind::Explicit(Some(_))) && !modifier.unrevealed
+            });
+            for (modifier, written) in advanced.zip(written) {
+                let again = read.iter().find(|again| texts(again) == texts(modifier));
+                let Some(again) = again.filter(|again| again.tier.is_some()) else {
+                    continue;
+                };
+                let text = &modifier.lines[0].text;
+                assert_eq!(again.kind, modifier.kind, "{text}");
+                assert_eq!(again.origin, modifier.origin, "{text}");
+                if written.within {
+                    assert_eq!(again.tier, written.tier, "{text}");
+                    assert_eq!(written_ranges(again), written_ranges(modifier), "{text}");
+                }
+                read_again += 1;
+            }
+            // The other lines stay as they were.
+            let lines = |modifiers: &[Modifier]| -> Vec<String> {
+                modifiers.iter().flat_map(texts).collect()
+            };
+            assert_eq!(lines(&read), lines(&modifiers));
+        }
+        assert_eq!(read_again, 43);
+    }
+
+    #[test]
+    fn the_lines_of_a_tiara_read_again_join_its_hybrid_and_keep_an_unknown_affix() {
+        let item = parse(TIARA_EN);
+        let read = |modifiers: &[Modifier]| {
+            let limits = AffixLimits {
+                prefixes: 3,
+                suffixes: 3,
+            };
+            with_trade_tiers(
+                item.language(),
+                item.base_type(),
+                item.item_level(),
+                modifiers,
+                limits,
+            )
+        };
+        let explicit = |modifiers: Vec<Modifier>| -> Vec<(Vec<String>, ModifierKind, Option<u32>)> {
+            modifiers
+                .into_iter()
+                .filter(|modifier| matches!(modifier.kind, ModifierKind::Explicit(_)))
+                .map(|modifier| (texts(&modifier), modifier.kind, modifier.tier))
+                .collect()
+        };
+        let line = |text: &str| vec![text.to_owned()];
+        let prefix = ModifierKind::Explicit(Some(Affix::Prefix));
+        let suffix = ModifierKind::Explicit(Some(Affix::Suffix));
+
+        let full = read(item.modifiers());
+        // Without the desecrated `+69 to maximum Energy Shield`, a prefix is open.
+        let open = read(&item.modifiers()[..item.modifiers().len() - 1]);
+
+        let hybrid = (
+            vec![
+                "41% increased Energy Shield".to_owned(),
+                "+34 to maximum Mana".to_owned(),
+            ],
+            prefix,
+            Some(1),
+        );
+        let joined = full.iter().find(|modifier| modifier.lines.len() == 2);
+        assert_eq!(
+            joined.map(written_ranges),
+            Some(vec![Some(range(39.0, 42.0)), Some(range(33.0, 39.0))]),
+        );
+        assert_eq!(
+            joined.map(|modifier| modifier.origin),
+            Some(Some(ModifierOrigin::Fractured))
+        );
+        assert_eq!(
+            explicit(full),
+            [
+                hybrid.clone(),
+                (line("98% increased Energy Shield"), prefix, Some(1)),
+                (line("18% increased Rarity of Items found"), suffix, Some(1)),
+                (line("+43% to Fire Resistance"), suffix, Some(1)),
+                (line("+40% to Cold Resistance"), suffix, Some(2)),
+                (line("+69 to maximum Energy Shield"), prefix, Some(1)),
+            ]
+        );
+        assert_eq!(
+            explicit(open),
+            [
+                hybrid,
+                (line("98% increased Energy Shield"), prefix, Some(1)),
+                // A prefix or a suffix: left without affix nor tier.
+                (
+                    line("18% increased Rarity of Items found"),
+                    ModifierKind::Explicit(None),
+                    None
+                ),
+                (line("+43% to Fire Resistance"), suffix, Some(1)),
+                (line("+40% to Cold Resistance"), suffix, Some(2)),
             ]
         );
     }

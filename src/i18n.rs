@@ -109,6 +109,8 @@ pub enum Message {
     UnrevealedPrefix,
     UnrevealedSuffix,
     UnrevealedNote,
+    /// The note under the stats of a rare or magic item copied from the in-game trade.
+    TradeCopyNote,
     OffersLabel,
     OffersSearchHint,
     OffersSearchTooltip,
@@ -135,7 +137,7 @@ pub enum Message {
 impl Message {
     /// Every message, for the tests.
     #[cfg(test)]
-    const ALL: [Self; 104] = [
+    const ALL: [Self; 105] = [
         Self::LeagueModeSoftcore,
         Self::LeagueModeHardcore,
         Self::LeagueLoading,
@@ -219,6 +221,7 @@ impl Message {
         Self::UnrevealedPrefix,
         Self::UnrevealedSuffix,
         Self::UnrevealedNote,
+        Self::TradeCopyNote,
         Self::OffersLabel,
         Self::OffersSearchHint,
         Self::OffersSearchTooltip,
@@ -329,6 +332,7 @@ impl Message {
             Self::UnrevealedPrefix => "unrevealed-prefix",
             Self::UnrevealedSuffix => "unrevealed-suffix",
             Self::UnrevealedNote => "unrevealed-note",
+            Self::TradeCopyNote => "trade-copy-note",
             Self::OffersLabel => "offers-label",
             Self::OffersSearchHint => "offers-search-hint",
             Self::OffersSearchTooltip => "offers-search-tooltip",

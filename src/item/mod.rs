@@ -131,6 +131,9 @@ pub struct Item {
     /// The damage and the speed of a weapon.
     weapon: Option<Weapon>,
     modifiers: Vec<Modifier>,
+    /// Copied from the trade of the game (another player's listing): its implicit and explicit
+    /// modifiers without the `{ … }` headers of the advanced copy.
+    in_game_trade_copy: bool,
     warnings: Vec<ParseWarning>,
 }
 
@@ -313,6 +316,21 @@ impl Item {
     #[must_use]
     pub fn modifiers(&self) -> &[Modifier] {
         &self.modifiers
+    }
+
+    /// The modifiers read again, e.g. with the affixes and tiers found from their values for
+    /// an item copied from the in-game trade.
+    pub fn set_modifiers(&mut self, modifiers: Vec<Modifier>) {
+        self.modifiers = modifiers;
+    }
+
+    /// Copied from the trade of the game (another player's listing): its implicit and explicit
+    /// modifiers have no `{ … }` header, hence no affix, tier nor range. A unique whose lines
+    /// have no header in either copy (`Reflects opposite Ring` of Kalandra's Touch) seems so
+    /// too.
+    #[must_use]
+    pub fn is_in_game_trade_copy(&self) -> bool {
+        self.in_game_trade_copy
     }
 
     /// The number of desecrated modifiers not revealed yet.

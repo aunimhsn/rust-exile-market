@@ -29,7 +29,7 @@ pub use bases::{Category, category, trade_category};
 #[cfg(test)]
 pub use lines::equipment_strings;
 pub use lines::{LineMatch, StatMatch, StatSource, english_string, modifier_stats};
-pub use modifiers::{Tier, modifier_tiers};
+pub use modifiers::{AffixLimits, Tier, modifier_tiers, with_trade_tiers};
 pub use stats::TradeGroup;
 pub use trade_site::TradeStats;
 #[cfg(test)]
