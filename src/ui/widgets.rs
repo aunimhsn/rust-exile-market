@@ -161,13 +161,6 @@ pub fn text_line(ui: &Ui, text: impl Into<String>, font: FontId) -> Arc<Galley> 
     )
 }
 
-/// A text wrapped at `max_width`.
-#[must_use]
-pub fn wrapped_text(ui: &Ui, text: impl Into<String>, font: FontId, max_width: f32) -> Arc<Galley> {
-    let job = LayoutJob::simple(text.into(), font, Color32::PLACEHOLDER, max_width);
-    ui.painter().layout_job(job)
-}
-
 /// A line of text cut with "…" when it is wider than `max_width`.
 #[must_use]
 pub fn truncated_line(

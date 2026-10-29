@@ -167,8 +167,8 @@ pub struct FoundTiers {
     /// their order.
     pub affixes: Vec<(Affix, ModifierTiers)>,
     /// The other affix, whose tables hold the values too, left out since the item has no room
-    /// for it, with its tiers: a prefix, the prefixes being full.
-    pub ruled_out: Option<(Affix, ModifierTiers)>,
+    /// for it: a prefix, the prefixes being full.
+    pub ruled_out: Option<Affix>,
 }
 
 /// The tiers of the explicit modifiers of a rare or magic item copied from the in-game trade,
@@ -265,7 +265,7 @@ pub fn trade_tiers(
             Some(FoundTiers {
                 modifiers: candidate.modifiers.clone(),
                 affixes,
-                ruled_out: ruled_out.into_iter().next(),
+                ruled_out: ruled_out.first().map(|(affix, _)| *affix),
             })
         })
         .collect()
@@ -274,10 +274,9 @@ pub fn trade_tiers(
 /// The modifiers of a rare or magic item copied from the in-game trade read again with the
 /// tiers found from their values ([`trade_tiers`], with the same arguments), as the advanced
 /// copy writes them: the lines of a hybrid made one modifier, a prefix or a suffix, its tier,
-/// and on each value its stat counts the range of that tier; with the tier of the affix the
-/// item has no room for, when it holds the values too ([`TierDoubt::RuledOut`]). A modifier
-/// that can be a prefix or a suffix stays explicit, without affix nor tier, with the tier of
-/// each ([`TierDoubt::EitherAffix`]); one that no tier holds stays as it was.
+/// and on each value its stat counts the range of that tier. A modifier that can be a prefix
+/// or a suffix stays explicit, without affix nor tier, with the tier of each
+/// ([`TierDoubt::EitherAffix`]); one that no tier holds stays as it was.
 #[must_use]
 pub fn with_trade_tiers(
     language: Language,
@@ -308,21 +307,11 @@ pub fn with_trade_tiers(
     read
 }
 
-/// The modifiers `parts`, read as one modifier in `found`: of its affix with its tier, and the
-/// tier of the affix ruled out; or, when `found` has both affixes, explicit with the tier of
-/// each.
+/// The modifiers `parts`, read as one modifier in `found`: of its affix with its tier; or, when
+/// `found` has both affixes, explicit with the tier of each.
 fn read_found(language: Language, parts: &[Modifier], found: &FoundTiers) -> Option<Modifier> {
     match found.affixes.as_slice() {
-        [(affix, tiers)] => {
-            let ruled_out = found
-                .ruled_out
-                .as_ref()
-                .and_then(|(affix, tiers)| affix_tier(language, parts, *affix, tiers));
-            Some(Modifier {
-                doubt: ruled_out.map(TierDoubt::RuledOut),
-                ..with_tier(language, parts, *affix, tiers)?
-            })
-        }
+        [(affix, tiers)] => with_tier(language, parts, *affix, tiers),
         [(Affix::Prefix, prefix), (Affix::Suffix, suffix)] => Some(Modifier {
             doubt: Some(TierDoubt::EitherAffix {
                 prefix: affix_tier(language, parts, Affix::Prefix, prefix)?,
@@ -1377,11 +1366,7 @@ mod tests {
                 ]
             );
             let rarity = found.get(2).expect("the rarity");
-            assert_eq!(
-                rarity.ruled_out.as_ref().map(|(affix, _)| *affix),
-                Some(Prefix),
-                "the prefixes are full"
-            );
+            assert_eq!(rarity.ruled_out, Some(Prefix), "the prefixes are full");
             let hybrid = found.first().and_then(|found| found.affixes.first());
             assert_eq!(
                 hybrid.and_then(|(_, tiers)| Some(tiers.tier()?.ranges.clone())),
@@ -1905,20 +1890,16 @@ mod tests {
         let open = find(&read(&item.modifiers()[..desecrated]), "Rarity");
         let rarity_prefix = find(&read(&resistances), "Rarity");
 
-        // A suffix, since the prefixes are full: a prefix T1 (16–19) rolls it too.
-        assert_eq!(
-            find(&full, "Rarity").doubt,
-            Some(TierDoubt::RuledOut(tier(Affix::Prefix, 16.0, 19.0)))
-        );
-        // A prefix, since the suffixes are full: a suffix T1 (15–18) rolls it too.
+        // A suffix, since the prefixes are full; a prefix, since the suffixes are full: nothing
+        // left in doubt.
+        let rarity = find(&full, "Rarity");
+        assert_eq!(rarity.kind, ModifierKind::Explicit(Some(Affix::Suffix)));
+        assert_eq!(rarity.doubt, None);
         assert_eq!(
             rarity_prefix.kind,
             ModifierKind::Explicit(Some(Affix::Prefix))
         );
-        assert_eq!(
-            rarity_prefix.doubt,
-            Some(TierDoubt::RuledOut(tier(Affix::Suffix, 15.0, 18.0)))
-        );
+        assert_eq!(rarity_prefix.doubt, None);
         // A prefix or a suffix: the tier of each, the line without range.
         assert_eq!(
             open.doubt,
@@ -1928,8 +1909,6 @@ mod tests {
             })
         );
         assert_eq!(written_ranges(&open), [None]);
-        // A modifier only one affix rolls leaves nothing in doubt.
-        assert_eq!(find(&full, "Fire").doubt, None);
     }
 
     #[test]

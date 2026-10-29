@@ -212,9 +212,6 @@ trade-copy-note = Copié depuis l'échange du jeu : les paliers sont trouvés d
 # Après la plage d'un palier trouvé d'après les valeurs, quand la ligne peut être un préfixe ou un suffixe : l'affixe de ce palier, en gris.
 affix-prefix = Préfixe
 affix-suffix = Suffixe
-# L'infobulle d'un palier trouvé d'après les valeurs, quand l'autre affixe donne aussi la valeur mais que l'objet n'a plus de place pour lui ; $tier est le palier de l'autre affixe avec ses plages (« T1 (16–19) », ou « T1 » sans plage).
-tier-ruled-out-prefix = Un suffixe, puisque les préfixes sont pleins : un préfixe { $tier } donne aussi cette valeur
-tier-ruled-out-suffix = Un préfixe, puisque les suffixes sont pleins : un suffixe { $tier } donne aussi cette valeur
 
 ## Bloc prix
 

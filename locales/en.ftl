@@ -209,9 +209,6 @@ trade-copy-note = Copied from the in-game trade: the tiers are found from the va
 # After the range of a tier found from the values, when the line can be a prefix or a suffix: the affix of that tier, in gray.
 affix-prefix = Prefix
 affix-suffix = Suffix
-# The tooltip of a tier found from the values, when the other affix rolls the value too but the item has no room for it; $tier is the tier of the other affix with its ranges ("T1 (16–19)", or "T1" without range).
-tier-ruled-out-prefix = A suffix, since the prefixes are full: a prefix { $tier } rolls it too
-tier-ruled-out-suffix = A prefix, since the suffixes are full: a suffix { $tier } rolls it too
 
 ## Price block
 

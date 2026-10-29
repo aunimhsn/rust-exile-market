@@ -172,11 +172,8 @@ pub struct AffixTier {
 /// What the values of a modifier copied from the in-game trade leave in doubt about its tier.
 #[derive(Debug, Clone, PartialEq)]
 pub enum TierDoubt {
-    /// The tier of the other affix, which holds the values too, left out since the item has
-    /// no room for it: a prefix T1 (16–19) for the suffix `18% increased Rarity of Items
-    /// found` of a helmet whose prefixes are full.
-    RuledOut(AffixTier),
-    /// The tier of each affix, the item having room for either: the modifier stays explicit,
+    /// The tier of each affix, the item having room for either (the `18% increased Rarity of
+    /// Items found` of a helmet with a prefix and a suffix open): the modifier stays explicit,
     /// without affix nor tier.
     EitherAffix {
         prefix: AffixTier,

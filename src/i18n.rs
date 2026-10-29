@@ -9,7 +9,6 @@ use std::time::Duration;
 use fluent_bundle::{FluentArgs, FluentBundle, FluentResource, FluentValue};
 
 use crate::filters::Property;
-use crate::item::Affix;
 use crate::language::Language;
 use crate::prices::Direction;
 use crate::trade::pseudo::Pseudo;
@@ -426,8 +425,6 @@ const AFFIX_FILL: &str = "affix-fill";
 const AFFIX_FILL_OPEN: &str = "affix-fill-open";
 const ACTIVE_FILTERS: &str = "active-filters";
 const FILTER_ROLLS: &str = "filter-rolls";
-const TIER_RULED_OUT_PREFIX: &str = "tier-ruled-out-prefix";
-const TIER_RULED_OUT_SUFFIX: &str = "tier-ruled-out-suffix";
 const FILTER_BASE_TYPE: &str = "filter-base-type";
 const FILTER_ITEM_CLASS: &str = "filter-item-class";
 const FILTER_ITEM_LEVEL: &str = "filter-item-level";
@@ -602,21 +599,6 @@ impl Translator {
         args.set("low", low);
         args.set("high", high);
         self.format(FILTER_ROLLS, Some(&args))
-    }
-
-    /// The tooltip of a tier found from the values when the affix `ruled_out` holds them too,
-    /// the item having no room for it: "A suffix, since the prefixes are full: a prefix T1
-    /// (16–19) rolls it too"; `tier` is the tier of the affix ruled out with its ranges, "T1
-    /// (16–19)", or "T1" without range.
-    #[must_use]
-    pub fn tier_ruled_out(&self, ruled_out: Affix, tier: &str) -> String {
-        let id = match ruled_out {
-            Affix::Prefix => TIER_RULED_OUT_PREFIX,
-            Affix::Suffix => TIER_RULED_OUT_SUFFIX,
-        };
-        let mut args = FluentArgs::new();
-        args.set("tier", tier);
-        self.format(id, Some(&args))
     }
 
     /// The filter of the base type of an item: "Base: Gemini Bow".
@@ -977,8 +959,6 @@ mod tests {
                 AFFIX_FILL_OPEN,
                 ACTIVE_FILTERS,
                 FILTER_ROLLS,
-                TIER_RULED_OUT_PREFIX,
-                TIER_RULED_OUT_SUFFIX,
                 FILTER_BASE_TYPE,
                 FILTER_ITEM_CLASS,
                 FILTER_ITEM_LEVEL,
@@ -1070,10 +1050,6 @@ mod tests {
             assert!(translator.active_filters(3).contains('3'));
             assert!(translator.filter_rolls("-7.5", "60").contains("-7.5"));
             assert!(translator.filter_rolls("-7.5", "60").contains("60"));
-            for affix in [Affix::Prefix, Affix::Suffix] {
-                let tooltip = translator.tier_ruled_out(affix, "T1 (16–19)");
-                assert!(tooltip.contains("T1 (16–19)"), "{tooltip}");
-            }
             assert!(translator.unit_price("prices").contains("prices"));
             for direction in [Direction::Rise, Direction::Fall, Direction::Stable] {
                 assert!(translator.trend(direction, 4, 7).contains('7'));
@@ -1160,14 +1136,6 @@ mod tests {
                 assert!(!line.contains(&format!(" {mark}")), "{line}");
             }
         }
-    }
-
-    #[test]
-    fn the_tooltip_of_a_tier_tells_the_affix_ruled_out() {
-        assert_eq!(
-            Translator::new(Language::English).tier_ruled_out(Affix::Prefix, "T1 (16–19)"),
-            "A suffix, since the prefixes are full: a prefix T1 (16–19) rolls it too"
-        );
     }
 
     #[test]

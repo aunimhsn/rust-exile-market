@@ -79,11 +79,8 @@ const TOOLTIP_PADDING: Margin = Margin::symmetric(8, 5);
 const TOOLTIP_LINE_GAP: f32 = 3.0;
 /// The space above a small line of a tooltip, the tiers of the rolls right under them.
 const TOOLTIP_SMALL_LINE_GAP: f32 = 1.0;
-/// How far a tooltip opening to the right starts left of what it tells about: the "not
-/// allowed" sign, a tier.
-const LEFT_TOOLTIP_SHIFT: f32 = 4.0;
-/// The width a tooltip of a long sentence wraps at: the tooltip of a tier found from the values.
-const WRAPPED_TOOLTIP_WIDTH: f32 = 230.0;
+/// How far the tooltip of the "not allowed" sign starts left of the sign.
+const UNSEARCHABLE_TOOLTIP_SHIFT: f32 = 4.0;
 /// The space between the rows of several tiers under a line.
 const TIER_ROW_GAP: f32 = 1.0;
 /// The lines of the text of a stat, at most; the whole text is in its tooltip.
@@ -165,9 +162,9 @@ enum Group {
     Unique,
 }
 
-/// The roll of a stat, borrowing from the modifiers of the item.
+/// The roll of a stat.
 #[derive(Debug, Clone, PartialEq)]
-enum Roll<'a> {
+enum Roll {
     /// Where its value falls in its ranges, from 0 to 1, and the ranges; then, under the last
     /// line of a Vaal modifier of a unique, its origin.
     Bar {
@@ -183,14 +180,15 @@ enum Roll<'a> {
     /// without bar nor tier.
     Affix {
         share: Option<f32>,
-        tier: Option<ModifierTier<'a>>,
+        tier: Option<ModifierTier>,
         origin: Option<ModifierOrigin>,
     },
     /// Under the last line of a modifier copied from the in-game trade that can be a prefix or
     /// a suffix: the tier of each and its ranges, one under the other, a word after the ranges
-    /// ("Prefix"), without bar; then its origin.
+    /// ("Prefix"), without bar; then its origin on a line of its own, since the line has it
+    /// whichever affix it is.
     Tiers {
-        rows: Vec<TierRow<'a>>,
+        rows: Vec<TierRow>,
         origin: Option<ModifierOrigin>,
     },
 }
@@ -198,31 +196,26 @@ enum Roll<'a> {
 /// The tier of a prefix or suffix, written by the advanced copy or found from the values, and
 /// the ranges of that tier.
 #[derive(Debug, Clone, PartialEq)]
-struct ModifierTier<'a> {
+struct ModifierTier {
     /// 1 is the best.
     number: u32,
     ranges: Vec<Range>,
-    /// Found from the values: the tier of the other affix, which holds them too, ruled out
-    /// since the item has no room for it; its tooltip says so. Borrowed from its modifier, like
-    /// the text of a stat.
-    ruled_out: Option<&'a AffixTier>,
 }
 
 /// A tier among several under a line, and the word after its ranges.
 #[derive(Debug, Clone, PartialEq)]
-struct TierRow<'a> {
-    tier: ModifierTier<'a>,
+struct TierRow {
+    tier: ModifierTier,
     word: Message,
 }
 
-impl TierRow<'_> {
+impl TierRow {
     /// The tier `found` for one affix of a line that can be either, "Prefix" after its ranges.
     fn affix(found: &AffixTier) -> Self {
         Self {
             tier: ModifierTier {
                 number: found.tier,
                 ranges: found.ranges.clone(),
-                ruled_out: None,
             },
             word: match found.affix {
                 Affix::Prefix => Message::AffixPrefix,
@@ -383,7 +376,7 @@ struct Stat<'a> {
     /// A line the trade site can't search, which would be a filter: the "not allowed" sign in
     /// place of its checkbox.
     unsearchable: bool,
-    roll: Option<Roll<'a>>,
+    roll: Option<Roll>,
 }
 
 /// A row of the stats.
@@ -1019,15 +1012,7 @@ fn affix_stats<'a>(item: &'a Item, affix: Option<Affix>, reading: &Reading<'_>) 
                             .flat_map(|line| magnitudes(line, &copied_ranges(line)))
                             .map(|(_, range)| range)
                             .collect();
-                        let ruled_out = match &modifier.doubt {
-                            Some(TierDoubt::RuledOut(found)) => Some(found),
-                            _ => None,
-                        };
-                        ModifierTier {
-                            number,
-                            ranges,
-                            ruled_out,
-                        }
+                        ModifierTier { number, ranges }
                     });
                     let origin = modifier.origin.filter(|_| line_index == last);
                     let mut stat = affix_stat(key, line, tier, origin, reading);
@@ -1056,7 +1041,7 @@ fn affix_stats<'a>(item: &'a Item, affix: Option<Affix>, reading: &Reading<'_>) 
 fn affix_stat<'a>(
     key: StatKey,
     line: &'a StatLine,
-    tier: Option<ModifierTier<'a>>,
+    tier: Option<ModifierTier>,
     origin: Option<ModifierOrigin>,
     reading: &Reading<'_>,
 ) -> Stat<'a> {
@@ -1300,7 +1285,7 @@ fn average(values: impl Iterator<Item = f64>) -> Option<f64> {
 
 /// The bar of `rolls`, those whose range is wider than one value ([`varying_share`]), their
 /// ranges and the `origin` of their modifier; none when no roll varies.
-fn bar(rolls: Vec<(f64, Range)>, origin: Option<ModifierOrigin>) -> Option<Roll<'static>> {
+fn bar(rolls: Vec<(f64, Range)>, origin: Option<ModifierOrigin>) -> Option<Roll> {
     let share = varying_share(&rolls)?;
     Some(Roll::Bar {
         share,
@@ -1533,7 +1518,7 @@ fn unrevealed_row(ui: &mut Ui, words: &str) {
 fn stat_text(
     ui: &mut Ui,
     text: &str,
-    roll: Option<&Roll<'_>>,
+    roll: Option<&Roll>,
     note: Option<&str>,
     width: f32,
     bar: RollBar,
@@ -1627,8 +1612,6 @@ struct TooltipLine {
     text: String,
     tint: Color32,
     small: bool,
-    /// The width it wraps at, for a long sentence; on one line otherwise.
-    wrap: Option<f32>,
 }
 
 impl TooltipLine {
@@ -1637,7 +1620,6 @@ impl TooltipLine {
             text,
             tint,
             small: false,
-            wrap: None,
         }
     }
 }
@@ -1653,11 +1635,9 @@ fn tooltip_lines(limit: Limit, i18n: &Translator) -> Vec<TooltipLine> {
         )
     });
     let tiers = limit.rolls.and(limit.tiers).map(|tiers| TooltipLine {
+        text: format!("T{}–T{}", tiers.lowest, tiers.highest),
+        tint: color::FAINT,
         small: true,
-        ..TooltipLine::new(
-            format!("T{}–T{}", tiers.lowest, tiers.highest),
-            color::FAINT,
-        )
     });
     let lower = (limit.half == Half::Maximum)
         .then(|| TooltipLine::new(i18n.text(Message::FilterLowerBetter), color::WEAK));
@@ -1698,7 +1678,7 @@ fn unsearchable_tooltip(ui: &Ui, key: FilterKey, sign: Rect, i18n: &Translator) 
     let lines = [Message::FilterUnsearchable, Message::FilterUnsearchableHint]
         .map(|message| TooltipLine::new(i18n.text(message), color::TEXT));
     let at = pos2(
-        sign.left() - LEFT_TOOLTIP_SHIFT,
+        sign.left() - UNSEARCHABLE_TOOLTIP_SHIFT,
         sign.bottom() + TOOLTIP_GAP,
     );
     tooltip(
@@ -1739,10 +1719,7 @@ fn tooltip(ui: &Ui, id: Id, at: Pos2, pivot: Align2, lines: Vec<TooltipLine>) {
                         } else {
                             text::note()
                         };
-                        let galley = match line.wrap {
-                            Some(width) => widgets::wrapped_text(ui, line.text, font, width),
-                            None => widgets::text_line(ui, line.text, font),
-                        };
+                        let galley = widgets::text_line(ui, line.text, font);
                         let (rect, _) = ui.allocate_exact_size(galley.size(), Sense::hover());
                         ui.painter().galley(rect.min, galley, line.tint);
                     }
@@ -1766,7 +1743,7 @@ fn clamped(text: &str) -> LayoutJob {
 /// suffix, its bar over every tier, then under the last line of its modifier its tier, the
 /// ranges of that tier and its origin; or the tiers of a line that can be a prefix or a
 /// suffix, one under the other.
-fn roll_line(ui: &mut Ui, roll: &Roll<'_>, bar: RollBar, i18n: &Translator) {
+fn roll_line(ui: &mut Ui, roll: &Roll, bar: RollBar, i18n: &Translator) {
     match roll {
         Roll::Bar {
             share,
@@ -1788,7 +1765,7 @@ fn roll_line(ui: &mut Ui, roll: &Roll<'_>, bar: RollBar, i18n: &Translator) {
                 roll_bar(ui, *share, bar);
             }
             if let Some(tier) = tier {
-                tier_label(ui, tier, i18n);
+                tier_label(ui, tier);
             }
             if let Some(origin) = origin {
                 origin_word(ui, *origin, i18n);
@@ -1797,15 +1774,15 @@ fn roll_line(ui: &mut Ui, roll: &Roll<'_>, bar: RollBar, i18n: &Translator) {
         Roll::Tiers { rows, origin } => {
             ui.vertical(|ui| {
                 ui.spacing_mut().item_spacing.y = TIER_ROW_GAP;
-                let last = rows.len().saturating_sub(1);
-                for (index, row) in rows.iter().enumerate() {
+                for row in rows {
                     roll_row(ui, |ui| {
-                        tier_label(ui, &row.tier, i18n);
+                        tier_label(ui, &row.tier);
                         small_word(ui, i18n.text(row.word), color::WEAK);
-                        if let Some(origin) = origin.filter(|_| index == last) {
-                            origin_word(ui, origin, i18n);
-                        }
                     });
+                }
+                // On a line of its own: the line has it whichever affix it is.
+                if let Some(origin) = origin {
+                    roll_row(ui, |ui| origin_word(ui, *origin, i18n));
                 }
             });
         }
@@ -1820,48 +1797,15 @@ fn roll_row(ui: &mut Ui, parts: impl FnOnce(&mut Ui)) {
     });
 }
 
-/// A tier, `T1` in its color, and its ranges; for a tier found from the values that rules out
-/// the other affix, its tooltip says why under the pointer.
-fn tier_label(ui: &mut Ui, tier: &ModifierTier<'_>, i18n: &Translator) {
-    let label = ui.label(
+/// A tier, `T1` in its color, and its ranges.
+fn tier_label(ui: &mut Ui, tier: &ModifierTier) {
+    ui.label(
         RichText::new(format!("T{}", tier.number))
             .font(text::tier())
             .color(tier_color(tier.number)),
     );
-    if let Some(ruled_out) = tier.ruled_out
-        && label.hovered()
-    {
-        let words = i18n.tier_ruled_out(ruled_out.affix, &ruled_out_tier(ruled_out));
-        let line = TooltipLine {
-            wrap: Some(WRAPPED_TOOLTIP_WIDTH),
-            ..TooltipLine::new(words, color::TEXT)
-        };
-        // Opening to the right, since the tier is on the left.
-        let at = pos2(
-            label.rect.left() - LEFT_TOOLTIP_SHIFT,
-            label.rect.bottom() + TOOLTIP_GAP,
-        );
-        tooltip(
-            ui,
-            label.id.with("tier-tooltip"),
-            at,
-            Align2::LEFT_TOP,
-            vec![line],
-        );
-    }
     if !tier.ranges.is_empty() {
         range_label(ui, &tier.ranges);
-    }
-}
-
-/// The tier ruled out of the tooltip of a tier, with its ranges in parentheses: "T1 (16–19)",
-/// or "T1" alone when it has none (a range across zero, a value its line writes).
-fn ruled_out_tier(found: &AffixTier) -> String {
-    let tier = format!("T{}", found.tier);
-    if found.ranges.is_empty() {
-        tier
-    } else {
-        format!("{tier} ({})", ranges_text(&found.ranges))
     }
 }
 
@@ -2007,14 +1951,13 @@ mod tests {
                             format!(" [{}]", parts.join(" "))
                         }
                         Some(Roll::Tiers { rows, origin }) => {
+                            // The origin on a line of its own, after the tiers.
                             let rows: Vec<String> = rows
                                 .iter()
                                 .map(|row| format!("{} {:?}", tier_text(&row.tier), row.word))
+                                .chain(origin.map(|origin| format!("{origin:?}")))
                                 .collect();
-                            let origin = origin
-                                .map(|origin| format!(" {origin:?}"))
-                                .unwrap_or_default();
-                            format!(" [{}{origin}]", rows.join(" / "))
+                            format!(" [{}]", rows.join(" / "))
                         }
                     };
                     let text = match text {
@@ -2034,27 +1977,13 @@ mod tests {
             .collect()
     }
 
-    /// A tier as [`row_texts`] writes it: `T1 15–18`, then the affix it rules out after a `≠`
-    /// (`≠ Prefix T1 16–19`).
-    fn tier_text(tier: &ModifierTier<'_>) -> String {
-        let ruled_out = tier.ruled_out.map(|found| {
-            format!(
-                "≠ {:?} T{} {}",
-                found.affix,
-                found.tier,
-                ranges_text(&found.ranges)
-            )
-        });
-        [
-            Some(format!("T{}", tier.number)),
-            Some(ranges_text(&tier.ranges)),
-            ruled_out,
-        ]
-        .into_iter()
-        .flatten()
-        .filter(|part| !part.is_empty())
-        .collect::<Vec<_>>()
-        .join(" ")
+    /// A tier as [`row_texts`] writes it: `T1 15–18`.
+    fn tier_text(tier: &ModifierTier) -> String {
+        [format!("T{}", tier.number), ranges_text(&tier.ranges)]
+            .into_iter()
+            .filter(|part| !part.is_empty())
+            .collect::<Vec<_>>()
+            .join(" ")
     }
 
     /// `item`, copied from the in-game trade, read again with the tiers found from its values,
@@ -2093,8 +2022,8 @@ mod tests {
                 "■ 98% increased Energy Shield ≥88 [0.98 T1 92–100]",
                 "■ +69 to maximum Energy Shield ≥62 [0.94 T1 61–73 Desecrated]",
                 "Suffixes 3/3",
-                // A prefix too, but the prefixes are full: its tooltip says so.
-                "■ 18% increased Rarity of Items found ≥16 [1.00 T1 15–18 ≠ Prefix T1 16–19]",
+                // A prefix too, but the prefixes are full.
+                "■ 18% increased Rarity of Items found ≥16 [1.00 T1 15–18]",
                 "□ +43% to Fire Resistance ≥39 [0.95 T1 41–45]",
                 "□ +40% to Cold Resistance ≥36 [0.87 T2 36–40]",
                 "Trade copy note",
@@ -2127,7 +2056,7 @@ mod tests {
     }
 
     #[test]
-    fn the_origin_of_a_line_in_doubt_follows_its_last_tier() {
+    fn the_origin_of_a_line_in_doubt_has_a_line_of_its_own_under_its_tiers() {
         let tiara = include_str!("../item/test-items/en-owner-trade-rare-helmet-fractured.txt");
         // A prefix open, and the rarity desecrated.
         let open = read_again(parse(
@@ -2140,13 +2069,13 @@ mod tests {
         ));
 
         assert!(texts(&open).contains(
-            &"■ 18% increased Rarity of Items found ≥16 [T1 16–19 AffixPrefix / T1 15–18 AffixSuffix Desecrated]"
+            &"■ 18% increased Rarity of Items found ≥16 [T1 16–19 AffixPrefix / T1 15–18 AffixSuffix / Desecrated]"
                 .to_owned()
         ));
     }
 
     #[test]
-    fn a_prefix_chosen_since_the_suffixes_are_full_names_the_suffix_ruled_out() {
+    fn a_line_that_can_be_a_prefix_is_one_once_the_suffixes_are_full() {
         let tiara = include_str!("../item/test-items/en-owner-trade-rare-helmet-fractured.txt");
         // A third resistance in place of the desecrated line: the suffixes full, a prefix open.
         let resistances = read_again(parse(&tiara.replace(
@@ -2164,30 +2093,7 @@ mod tests {
             .position(|text| text.starts_with("Suffixes"))
             .expect("its suffixes");
         assert!(rarity < suffixes, "a prefix: {texts:?}");
-        assert!(
-            texts[rarity].ends_with("T1 16–19 ≠ Suffix T1 15–18]"),
-            "{}",
-            texts[rarity]
-        );
-    }
-
-    #[test]
-    fn the_tier_ruled_out_has_its_ranges_in_parentheses_only_when_it_has_some() {
-        let found = |ranges| AffixTier {
-            affix: Affix::Prefix,
-            tier: 1,
-            ranges,
-        };
-
-        assert_eq!(
-            ruled_out_tier(&found(vec![Range {
-                min: 16.0,
-                max: 19.0
-            }])),
-            "T1 (16–19)"
-        );
-        // Without range, no empty parentheses: "T1 ()".
-        assert_eq!(ruled_out_tier(&found(Vec::new())), "T1");
+        assert!(texts[rarity].ends_with("T1 16–19]"), "{}", texts[rarity]);
     }
 
     #[test]
@@ -3429,8 +3335,9 @@ mod tests {
         );
         // A prefix or suffix: the tiers of its rolls right under them, small and faint.
         let tiers = TooltipLine {
+            text: "T5–T1".to_owned(),
+            tint: color::FAINT,
             small: true,
-            ..TooltipLine::new("T5–T1".to_owned(), color::FAINT)
         };
         assert_eq!(
             tooltip(
