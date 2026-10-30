@@ -366,71 +366,12 @@ pub fn reduce(
     templates: &Templates,
     essences: &[Essence],
 ) -> Result<(Vec<Modifier>, BaseTags)> {
-    let mut by_stat: HashMap<&str, usize> = HashMap::new();
-    for (index, translation) in translations.iter().enumerate() {
-        for id in &translation.ids {
-            by_stat.entry(id.as_str()).or_insert(index);
-        }
-    }
     let released: Vec<&SourceBase> = bases
         .values()
         .filter(|base| base.release_state == "released")
         .collect();
     let essences = essence_spawns(modifiers, essences, &released)?;
-    let mut grouped: BTreeMap<Key, Vec<Tier>> = BTreeMap::new();
-    for (id, modifier) in modifiers {
-        let essence = essences.get(id.as_str());
-        let spawn_weights = essence.unwrap_or(&modifier.spawn_weights);
-        let rolls = (is_kept(&modifier.domain) || modifier.domain == DESECRATED)
-            && ["prefix", "suffix"].contains(&modifier.generation_type.as_str())
-            && (essence.is_some() || !modifier.is_essence_only)
-            && spawn_weights.iter().any(|spawn| spawn.weight > 0);
-        if !rolls {
-            continue;
-        }
-        // Its lines would be written within the words of the passive skills on the other bases.
-        if on_radius_jewel(modifier)
-            && modifier
-                .spawn_weights
-                .iter()
-                .any(|spawn| spawn.weight > 0 && !radius_jewel(&spawn.tag))
-        {
-            return Err(format!(
-                "{id}: a modifier of the Time-Lost jewels that rolls on other bases"
-            )
-            .into());
-        }
-        let (lines, ranges) = lines(modifier, translations, &by_stat, templates)
-            .map_err(|error| format!("{id}: {error}"))?;
-        let (spawn, genesis) = spawn_on_bases(spawn_weights);
-        let source = if essence.is_some() {
-            Some(Source::Essence)
-        } else {
-            genesis.then_some(Source::Genesis)
-        };
-        grouped
-            .entry((
-                modifier.kind.clone(),
-                modifier.generation_type.clone(),
-                modifier.domain.clone(),
-                lines,
-                spawn,
-                source,
-            ))
-            .or_default()
-            .push(Tier {
-                // An essence adds its modifier whatever the level of the item, below the
-                // level RePoE writes (72 for the Perfect ones): a Cultist Bow of level 33 with
-                // the `+2 to Level of all Attack Skills` of an essence, on the trade site on
-                // 2026-10-30.
-                level: if essence.is_some() {
-                    1
-                } else {
-                    modifier.required_level
-                },
-                ranges,
-            });
-    }
+    let grouped = grouped(modifiers, translations, templates, &essences)?;
 
     let mut tables = Vec::new();
     let mut unknown_lines = BTreeSet::new();
@@ -494,6 +435,77 @@ pub fn reduce(
     tables.sort_by_key(|table| (table.domain == DESECRATED, table.source));
     let base_tags = base_tags(&released, &tables);
     Ok((tables, base_tags))
+}
+
+/// The tiers of `modifiers` that roll (with the spawn weights of `essences` for those only an
+/// essence adds), grouped by type, affix, domain, lines, bases and source.
+fn grouped(
+    modifiers: &BTreeMap<String, SourceModifier>,
+    translations: &[Translation],
+    templates: &Templates,
+    essences: &HashMap<&str, Vec<SpawnWeight>>,
+) -> Result<BTreeMap<Key, Vec<Tier>>> {
+    let mut by_stat: HashMap<&str, usize> = HashMap::new();
+    for (index, translation) in translations.iter().enumerate() {
+        for id in &translation.ids {
+            by_stat.entry(id.as_str()).or_insert(index);
+        }
+    }
+    let mut grouped: BTreeMap<Key, Vec<Tier>> = BTreeMap::new();
+    for (id, modifier) in modifiers {
+        let essence = essences.get(id.as_str());
+        let spawn_weights = essence.unwrap_or(&modifier.spawn_weights);
+        let rolls = (is_kept(&modifier.domain) || modifier.domain == DESECRATED)
+            && ["prefix", "suffix"].contains(&modifier.generation_type.as_str())
+            && (essence.is_some() || !modifier.is_essence_only)
+            && spawn_weights.iter().any(|spawn| spawn.weight > 0);
+        if !rolls {
+            continue;
+        }
+        // Its lines would be written within the words of the passive skills on the other bases.
+        if on_radius_jewel(modifier)
+            && modifier
+                .spawn_weights
+                .iter()
+                .any(|spawn| spawn.weight > 0 && !radius_jewel(&spawn.tag))
+        {
+            return Err(format!(
+                "{id}: a modifier of the Time-Lost jewels that rolls on other bases"
+            )
+            .into());
+        }
+        let (lines, ranges) = lines(modifier, translations, &by_stat, templates)
+            .map_err(|error| format!("{id}: {error}"))?;
+        let (spawn, genesis) = spawn_on_bases(spawn_weights);
+        let source = if essence.is_some() {
+            Some(Source::Essence)
+        } else {
+            genesis.then_some(Source::Genesis)
+        };
+        grouped
+            .entry((
+                modifier.kind.clone(),
+                modifier.generation_type.clone(),
+                modifier.domain.clone(),
+                lines,
+                spawn,
+                source,
+            ))
+            .or_default()
+            .push(Tier {
+                // An essence adds its modifier whatever the level of the item, below the
+                // level RePoE writes (72 for the Perfect ones): a Cultist Bow of level 33 with
+                // the `+2 to Level of all Attack Skills` of an essence, on the trade site on
+                // 2026-10-30.
+                level: if essence.is_some() {
+                    1
+                } else {
+                    modifier.required_level
+                },
+                ranges,
+            });
+    }
+    Ok(grouped)
 }
 
 /// The spawn weights of each modifier of `essences` by its id, `default` at 0 after its own
