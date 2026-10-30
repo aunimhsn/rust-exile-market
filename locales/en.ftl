@@ -208,6 +208,9 @@ unrevealed-note = An unrevealed modifier can change the item: its other stats st
 trade-copy-note = The tiers are found from the values.
 # Under the stats of a unique copied from the trade of the game, without the ranges of the advanced copy: its rolls come from the price database.
 unique-rolls-note = The rolls are those of poe2scout.
+# After the range of a line of a Time-Lost jewel, on a small gray block: the passive skills in its radius the line is granted to, the line written without their words.
+radius-small = Small
+radius-notable = Notable
 # After the range of a tier found from the values, when the line can be a prefix or a suffix: the affix of that tier, in gray.
 affix-prefix = Prefix
 affix-suffix = Suffix
