@@ -1,0 +1,24 @@
+Item Class: Rings
+Rarity: Rare
+Glyph Circle
+Breach Ring
+--------
+Requires: Level 44
+--------
+Item Level: 77
+--------
+{ Implicit Modifier }
++20% to Maximum Quality — Unscalable Value
+--------
+{ Prefix Modifier "Reinforcing" — Life, Minion }
+Minions have 21(19-22)% increased maximum Life
+{ Prefix Modifier "Aqua" (Tier: 7) — Mana }
++76(65-79) to maximum Mana
+{ Prefix Modifier "Phased" (Tier: 4) — Evasion }
++129(108-141) to Evasion Rating
+{ Suffix Modifier "of the Falcon" (Tier: 5) — Attribute }
++20(17-20) to Dexterity
+{ Suffix Modifier "of Vanquishing" (Tier: 2) — Life }
+Gain 35(29-40) Life per enemy killed
+{ Suffix Modifier "of Expulsion" (Tier: 3) — Chaos, Resistance }
++18(16-19)% to Chaos Resistance

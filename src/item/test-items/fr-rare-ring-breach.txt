@@ -1,0 +1,24 @@
+Classe d'objet: Bagues
+Rareté: Rare
+ Cercle glyphique
+Bague de Brèche
+--------
+Prérequis : Niveau 44
+--------
+Niveau de l'objet: 77
+--------
+{ Modificateur Implicite }
++20% à la Qualité maximale — Valeur fixe
+--------
+{ Préfixe : « Solidifiant » — Vie, Créature }
+Les Créatures ont 21(19-22)% d'Augmentation de Vie maximale
+{ Préfixe : « Aqua » (Palier : 7) — Mana }
++76(65-79) de Mana maximal
+{ Préfixe : « Déphasé » (Palier : 4) — Évasion }
++129(108-141) au Score d'Évasion
+{ Suffixe : « du Faucon » (Palier : 5) — Attribut }
++20(17-20) de Dextérité
+{ Suffixe : « du Surclassement » (Palier : 2) — Vie }
+Vous gagnez 35(29-40) de Vie par Ennemi Tué
+{ Suffixe : « de l'Expulsion » (Palier : 3) — Chaos, Résistance }
++18(16-19)% à la Résistance au chaos

@@ -40,6 +40,10 @@ struct Table {
     /// Each tag and its weight: the first tag of the list a base has tells whether the
     /// modifier rolls on it (above zero) or not.
     spawn: Vec<(String, u32)>,
+    /// Whether it is a modifier of the Genesis tree of the Breach, whose tiers the game
+    /// doesn't write (`Reinforcing`, `Minions have 21(19-22)% increased maximum Life`).
+    #[serde(default)]
+    genesis: bool,
     tiers: Vec<TableTier>,
 }
 
@@ -108,12 +112,17 @@ impl Table {
     /// cost efficiency of attacks of Kurgal on the maces), which merged would read as a T1 and
     /// a T2. Nothing tells two such tables apart but their place: `self` and `other` are tables
     /// of one slice (`TABLES`, or the tables of a test), and a desecrated table is the same
-    /// modifier as itself only.
+    /// modifier as itself only. A minion modifier of the Genesis tree merges with no ordinary
+    /// one: `of the Despot` of the tree (`MinionGemLevelBelt2`) would make the `+2 to Level of
+    /// all Minion Skills` of an amulet, its T2 of 3, a T3 of 5.
     fn same_modifier(&self, other: &Self) -> bool {
         if self.domain == Domain::Desecrated || other.domain == Domain::Desecrated {
             return std::ptr::eq(self, other);
         }
-        self.kind == other.kind && self.affix == other.affix && self.lines == other.lines
+        self.genesis == other.genesis
+            && self.kind == other.kind
+            && self.affix == other.affix
+            && self.lines == other.lines
     }
 }
 
@@ -150,6 +159,9 @@ pub struct ModifierTiers {
     /// follow them (two for `Adds # to # Physical Damage`; for a line without number, one
     /// when its string gives the value, `Loads an additional bolt`, none otherwise).
     pub counts: Vec<usize>,
+    /// Whether the game writes the modifier without tier, one of the Genesis tree: it is read
+    /// as the advanced copy writes it, the ranges of its tier without number.
+    pub unwritten: bool,
 }
 
 impl ModifierTiers {
@@ -159,11 +171,11 @@ impl ModifierTiers {
         self.tiers.get(self.found)
     }
 
-    /// Whether the modifier has one tier only on the base: its T1 would read as "the best"
-    /// while it is "the only one".
+    /// Whether the modifier has no tier to tell: one tier only on the base, whose T1 would read
+    /// as "the best" while it is "the only one", or a tier the game doesn't write.
     #[must_use]
     pub fn single(&self) -> bool {
-        self.tiers.len() == 1
+        self.tiers.len() == 1 || self.unwritten
     }
 
     /// The tiers the copied modifier may be, the best first: the neighbouring one, then its
@@ -200,8 +212,8 @@ impl ModifierTiers {
 /// the one whose values left it (any value out of its tier, e.g. on a sanctified item). Without
 /// them (a line without number has no range), only a tier that holds the values. When several
 /// tiers fit as well, the one of the number the advanced copy wrote is taken, then the best
-/// one; when several modifiers do, the first of the file, an ordinary one before a desecrated
-/// one.
+/// one; when several modifiers do, the first of the file, an ordinary one before one of the
+/// Genesis tree, before a desecrated one.
 #[must_use]
 pub fn modifier_tiers(
     language: Language,
@@ -308,6 +320,7 @@ fn hybrid_tiers(
                 found: worse,
                 neighbour: better,
                 counts: counts.clone(),
+                unwritten: table.genesis,
             };
             best = Some((fit, tiers));
         }
@@ -760,17 +773,19 @@ fn joined(parts: &[Modifier]) -> Option<Modifier> {
 }
 
 /// The modifiers `parts` made one modifier of `affix`, with the tier of `tiers` and the ranges
-/// of that tier on its values ([`with_ranges`]).
+/// of that tier on its values ([`with_ranges`]); without tier when the game writes none, as
+/// the advanced copy writes it.
 fn with_tier(
     language: Language,
     parts: &[Modifier],
     affix: Affix,
     tiers: &ModifierTiers,
 ) -> Option<Modifier> {
+    let tier = tiers.tier()?;
     Some(Modifier {
         kind: ModifierKind::Explicit(Some(affix)),
-        tier: Some(tiers.tier()?.number),
-        ..with_ranges(language, parts, tiers.tier()?, &tiers.counts)?
+        tier: (!tiers.unwritten).then_some(tier.number),
+        ..with_ranges(language, parts, tier, &tiers.counts)?
     })
 }
 
@@ -1057,6 +1072,7 @@ fn splits(
                             found,
                             neighbour: None,
                             counts: counts.clone(),
+                            unwritten: whole.genesis,
                         },
                         added: AddedTiers {
                             line: owner,
@@ -1066,6 +1082,7 @@ fn splits(
                                 found: added_found,
                                 neighbour: None,
                                 counts: vec![line.count()],
+                                unwritten: added.genesis,
                             },
                         },
                         fit,
@@ -1447,6 +1464,7 @@ fn find(
                     found,
                     neighbour: None,
                     counts,
+                    unwritten: table.genesis,
                 },
             ));
         }
