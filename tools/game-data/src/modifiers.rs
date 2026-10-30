@@ -1,7 +1,8 @@
 //! The modifier tables, from the RePoE fork (`mods.json`, `base_items.json` and
 //! `stat_translations/stat_descriptions.json`): the tiers of each prefix and suffix that rolls
 //! on the equipment, the jewels, the flasks and the charms, also those a desecration reveals
-//! (the lords of the Abyss), and the tags of each base that tell where a modifier rolls.
+//! (the lords of the Abyss) and those of the Genesis tree of the Breach, and the tags of each
+//! base that tell where a modifier rolls.
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
@@ -17,8 +18,25 @@ pub const EQUIPMENT: &str = "item";
 const JEWELS: &str = "misc";
 
 /// The domain of the modifiers a desecration reveals on the equipment and the jewels: those of
-/// the lords of the Abyss (Amanamu, Kurgal, Ulaman), of one tier each.
+/// the lords of the Abyss (Amanamu, Kurgal, Ulaman) and of the Genesis tree, of one tier each.
 const DESECRATED: &str = "desecrated";
+
+/// The tags of the lords of the Abyss, after `default`, on no base, and the name of each.
+const LORDS: [(&str, &str); 3] = [
+    ("amanamu_mod", "Amanamu"),
+    ("kurgal_mod", "Kurgal"),
+    ("ulaman_mod", "Ulaman"),
+];
+
+/// The tags the Genesis tree of the Breach gives the items it grows, which no base has: its
+/// desecrated modifiers (`breach_desecration`) and those of the minions (`genesis_tree_minion`,
+/// of several tiers, which the game writes without tier).
+const GENESIS_TAGS: [&str; 2] = ["breach_desecration", "genesis_tree_minion"];
+
+/// The tags of the bases the Genesis tree grows, the rings, the amulets and the belts (seen on
+/// the trade site on 2026-10-30): a modifier of a tag of [`GENESIS_TAGS`] rolls on them, but on
+/// those its tags before rule out (`ring` and `belt` at 0 for one of the amulets).
+const GENESIS_BASES: [&str; 3] = ["ring", "amulet", "belt"];
 
 /// The domains of the bases kept, and of their modifiers: the equipment, the jewels, the flasks
 /// and the charms; each one a domain the application knows (`Domain` in
@@ -48,7 +66,7 @@ pub struct SourceModifier {
 
 /// The weight of a modifier on the bases with a tag: the first tag of the list a base has
 /// tells whether the modifier rolls on it (above zero) or not.
-#[derive(Deserialize, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Deserialize, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct SpawnWeight {
     tag: String,
     weight: u32,
@@ -106,6 +124,14 @@ pub struct Modifier {
     lines: Vec<Line>,
     /// Each tag and its weight, as `["bow", 1]`.
     spawn: Vec<(String, u32)>,
+    /// Whether it is a modifier of the Genesis tree, written when it is: a modifier of its
+    /// own, whose tiers the game doesn't write.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    genesis: bool,
+    /// The lord of the Abyss whose modifier it is, written when it is one ("Amanamu"): named
+    /// by the application before the affix of a line that can be his or an ordinary modifier.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    lord: Option<String>,
     tiers: Vec<Tier>,
 }
 
@@ -191,8 +217,9 @@ impl Serialize for Number {
     }
 }
 
-/// The modifiers of one type and affix, with the same lines, that roll on the same bases.
-type Key = (String, String, String, Vec<Line>, Vec<SpawnWeight>);
+/// The modifiers of one type and affix, with the same lines, that roll on the same bases, and
+/// whether they are of the Genesis tree.
+type Key = (String, String, String, Vec<Line>, Vec<SpawnWeight>, bool);
 
 /// What tells the modifiers that roll on a base: their domain and the tags of the base.
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -237,13 +264,15 @@ pub fn reduce(
         }
         let (lines, ranges) = lines(modifier, translations, &by_stat, templates)
             .map_err(|error| format!("{id}: {error}"))?;
+        let (spawn, genesis) = spawn_on_bases(&modifier.spawn_weights);
         grouped
             .entry((
                 modifier.kind.clone(),
                 modifier.generation_type.clone(),
                 modifier.domain.clone(),
                 lines,
-                modifier.spawn_weights.clone(),
+                spawn,
+                genesis,
             ))
             .or_default()
             .push(Tier {
@@ -258,7 +287,12 @@ pub fn reduce(
         .collect();
     let mut tables = Vec::new();
     let mut unknown_lines = BTreeSet::new();
-    for ((kind, affix, domain, lines, spawn), mut tiers) in grouped {
+    for ((kind, affix, domain, lines, spawn, genesis), mut tiers) in grouped {
+        let lord = spawn
+            .iter()
+            .filter(|weight| weight.weight > 0)
+            .find_map(|weight| LORDS.iter().find(|&&(tag, _)| weight.tag == tag))
+            .map(|&(_, name)| name.to_owned());
         let tags_of_bases: BTreeSet<&String> = released
             .iter()
             .filter(|base| rolls_on(&domain, &base.domain))
@@ -288,17 +322,49 @@ pub fn reduce(
             domain,
             lines,
             spawn,
+            genesis,
+            lord,
             tiers,
         });
     }
     for line in unknown_lines {
         println!("Modifier line without template, its modifier left out: {line}");
     }
-    // The desecrated tables last: of two tables that hold a copied modifier as well, the
-    // application takes the first of the file, the ordinary one.
-    tables.sort_by_key(|table| table.domain == DESECRATED);
+    // The ordinary tables first, then those of the Genesis tree, then the desecrated ones: of
+    // two tables that hold a copied modifier as well, the application takes the first of the
+    // file, the ordinary one (`+2 to Level of all Minion Skills` of an amulet, a T2 of its own
+    // or a minion modifier of the Genesis tree).
+    tables.sort_by_key(|table| (table.domain == DESECRATED, table.genesis));
     let base_tags = base_tags(&released, &tables);
     Ok((tables, base_tags))
+}
+
+/// The tags of `spawn` with a tag of the Genesis tree ([`GENESIS_TAGS`]) that rolls in place of
+/// the tags of the bases it grows ([`GENESIS_BASES`]), with its weight, after the tags before it
+/// (a tag written twice is decided by the first), and whether it had one. A tag of the tree at 0
+/// is left out: on no base, it decides nothing.
+fn spawn_on_bases(spawn: &[SpawnWeight]) -> (Vec<SpawnWeight>, bool) {
+    let mut on_bases: Vec<SpawnWeight> = Vec::new();
+    let mut genesis = false;
+    for weight in spawn {
+        if !GENESIS_TAGS.contains(&weight.tag.as_str()) {
+            on_bases.push(weight.clone());
+            continue;
+        }
+        if weight.weight == 0 {
+            continue;
+        }
+        genesis = true;
+        for tag in GENESIS_BASES {
+            if !on_bases.iter().any(|before| before.tag == tag) {
+                on_bases.push(SpawnWeight {
+                    tag: tag.to_owned(),
+                    weight: weight.weight,
+                });
+            }
+        }
+    }
+    (on_bases, genesis)
 }
 
 /// The domain of each base among `released` and its tags that tell where a modifier of
@@ -777,7 +843,10 @@ mod tests {
             desecrated(
                 r#"[{"tag": "ring", "weight": 1}, {"tag": "default", "weight": 0}, {"tag": "kurgal_mod", "weight": 1}]"#
             ),
-            desecrated(r#"[{"tag": "strjewel", "weight": 1}, {"tag": "default", "weight": 0}]"#),
+            // A tag of a lord at 0 names no lord.
+            desecrated(
+                r#"[{"tag": "strjewel", "weight": 1}, {"tag": "default", "weight": 0}, {"tag": "ulaman_mod", "weight": 0}]"#
+            ),
             desecrated(r#"[{"tag": "map", "weight": 1}, {"tag": "default", "weight": 0}]"#),
             modifier(
                 "Leech",
@@ -804,6 +873,14 @@ mod tests {
             .iter()
             .map(|table| (table.get("domain").cloned(), table["spawn"].clone()))
             .collect();
+        let lords: Vec<_> = tables
+            .as_array()
+            .expect("tables")
+            .iter()
+            .map(|table| table.get("lord").cloned())
+            .collect();
+        // The name of the lord, of the first table only.
+        assert_eq!(lords, [None, Some(serde_json::json!("Kurgal")), None]);
         let desecrated = Some(serde_json::json!("desecrated"));
         // Without the tag of the lord, nor the table of the waystones, a base of another
         // domain.
@@ -824,6 +901,155 @@ mod tests {
         assert_eq!(
             tags.get("Ruby").map(|spawn| spawn.tags.clone()),
             Some(vec!["strjewel".to_owned(), "default".to_owned()])
+        );
+    }
+
+    #[test]
+    fn a_modifier_of_the_genesis_tree_rolls_on_the_rings_the_amulets_and_the_belts_it_grows() {
+        let bases = r#"{
+            "Ring": {"domain": "item", "name": "Ring", "release_state": "released", "tags": ["ring", "default"]},
+            "Amulet": {"domain": "item", "name": "Amulet", "release_state": "released", "tags": ["amulet", "default"]},
+            "Belt": {"domain": "item", "name": "Belt", "release_state": "released", "tags": ["belt", "default"]}
+        }"#;
+        let life = |level: u32, min: u32, max: u32, spawn: &str| {
+            modifier(
+                "MinionLife",
+                level,
+                spawn,
+                &format!(r#"[{{"id": "minion_maximum_life_+%", "min": {min}, "max": {max}}}]"#),
+            )
+        };
+        let tree =
+            r#"[{"tag": "genesis_tree_minion", "weight": 1}, {"tag": "default", "weight": 0}]"#;
+        let modifiers = format!(
+            r#"{{"MinionLifeRing2": {}, "MinionLifeRing1": {}, "Amulet": {}, "Exposure": {}, "Sceptre": {}}}"#,
+            life(29, 11, 14, tree),
+            life(18, 7, 10, tree),
+            // Ruled out of the rings and the belts before the tag of the tree.
+            modifier(
+                "MinionLife",
+                1,
+                r#"[{"tag": "ring", "weight": 0}, {"tag": "belt", "weight": 0}, {"tag": "genesis_tree_minion", "weight": 1}, {"tag": "default", "weight": 0}]"#,
+                r#"[{"id": "minion_maximum_life_+%", "min": 1, "max": 2}]"#
+            ),
+            modifier(
+                "Exposure",
+                1,
+                r#"[{"tag": "amulet", "weight": 0}, {"tag": "belt", "weight": 0}, {"tag": "breach_desecration", "weight": 1}, {"tag": "default", "weight": 0}]"#,
+                r#"[{"id": "exposure_effect_+%", "min": 25, "max": 35}]"#
+            )
+            .replace(r#""domain": "item""#, r#""domain": "desecrated""#),
+            // An ordinary one, with a tag of the tree at 0 that decides nothing.
+            life(
+                2,
+                21,
+                25,
+                r#"[{"tag": "genesis_tree_minion", "weight": 0}, {"tag": "ring", "weight": 1}, {"tag": "default", "weight": 0}]"#
+            ),
+        );
+        let translations = r#"[
+            {"ids": ["minion_maximum_life_+%"], "English": [{"string": "Minions have {0}% increased maximum Life", "index_handlers": [[]]}], "hidden": null},
+            {"ids": ["exposure_effect_+%"], "English": [{"string": "{0}% increased Exposure Effect", "index_handlers": [[]]}], "hidden": null}
+        ]"#;
+
+        let (tables, tags) = tables(
+            &modifiers,
+            bases,
+            translations,
+            &[
+                (
+                    "Minions have #% increased maximum Life",
+                    "Minions have #% increased maximum Life",
+                ),
+                (
+                    "#% increased Exposure Effect",
+                    "#% increased Exposure Effect",
+                ),
+            ],
+        );
+
+        let summary: Vec<_> = tables
+            .as_array()
+            .expect("tables")
+            .iter()
+            .map(|table| {
+                let levels: Vec<_> = table["tiers"]
+                    .as_array()
+                    .expect("tiers")
+                    .iter()
+                    .map(|tier| tier["level"].clone())
+                    .collect();
+                serde_json::json!([table["type"], table["spawn"], table.get("genesis"), levels])
+            })
+            .collect();
+        // The ordinary table first, then those of the tree, the desecrated one last; the tiers
+        // of the tree on the same bases one table.
+        assert_eq!(
+            summary,
+            [
+                serde_json::json!(["MinionLife", [["ring", 1], ["default", 0]], null, [2]]),
+                serde_json::json!([
+                    "MinionLife",
+                    [["ring", 0], ["belt", 0], ["amulet", 1], ["default", 0]],
+                    true,
+                    [1]
+                ]),
+                serde_json::json!([
+                    "MinionLife",
+                    [["ring", 1], ["amulet", 1], ["belt", 1], ["default", 0]],
+                    true,
+                    [18, 29]
+                ]),
+                serde_json::json!([
+                    "Exposure",
+                    [["amulet", 0], ["belt", 0], ["ring", 1], ["default", 0]],
+                    true,
+                    [1]
+                ]),
+            ]
+        );
+        assert_eq!(
+            tags.get("Belt").map(|spawn| spawn.tags.clone()),
+            Some(vec!["belt".to_owned(), "default".to_owned()])
+        );
+    }
+
+    #[test]
+    fn the_tags_of_the_genesis_tree_give_way_to_the_bases_it_grows_the_first_tag_deciding() {
+        let spawn = |tags: &[(&str, u32)]| -> Vec<SpawnWeight> {
+            tags.iter()
+                .map(|&(tag, weight)| SpawnWeight {
+                    tag: tag.to_owned(),
+                    weight,
+                })
+                .collect()
+        };
+
+        // A tag of a base after the tag of the tree: the tree's weight, written first, decides;
+        // the second tag of the tree adds no base twice.
+        assert_eq!(
+            spawn_on_bases(&spawn(&[
+                ("breach_desecration", 1),
+                ("ring", 0),
+                ("genesis_tree_minion", 2),
+                ("default", 0),
+            ])),
+            (
+                spawn(&[
+                    ("ring", 1),
+                    ("amulet", 1),
+                    ("belt", 1),
+                    ("ring", 0),
+                    ("default", 0),
+                ]),
+                true
+            )
+        );
+        // A tag of the tree at 0 left out, the others as they are.
+        let ordinary = spawn(&[("genesis_tree_minion", 0), ("ring", 1), ("default", 0)]);
+        assert_eq!(
+            spawn_on_bases(&ordinary),
+            (spawn(&[("ring", 1), ("default", 0)]), false)
         );
     }
 

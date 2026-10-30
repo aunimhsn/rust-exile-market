@@ -9,6 +9,7 @@ use std::time::Duration;
 use fluent_bundle::{FluentArgs, FluentBundle, FluentResource, FluentValue};
 
 use crate::filters::Property;
+use crate::item::{Affix, Lord};
 use crate::language::Language;
 use crate::prices::Direction;
 use crate::trade::pseudo::Pseudo;
@@ -442,6 +443,8 @@ const NO_PRICE_FOUND: &str = "no-price-found";
 const SHOW_STATS: &str = "show-stats";
 const AFFIX_FILL: &str = "affix-fill";
 const AFFIX_FILL_OPEN: &str = "affix-fill-open";
+const LORD_PREFIX: &str = "lord-prefix";
+const LORD_SUFFIX: &str = "lord-suffix";
 const ACTIVE_FILTERS: &str = "active-filters";
 const FILTER_ROLLS: &str = "filter-rolls";
 const HYBRID_WITH: &str = "hybrid-with";
@@ -611,6 +614,20 @@ impl Translator {
         }
         args.set("open", open);
         self.format(AFFIX_FILL_OPEN, Some(&args))
+    }
+
+    /// The affix of a modifier of the lord `lord` after the ranges of its tier, in gray, when
+    /// the line can be his or an ordinary modifier: "Amanamu Prefix".
+    #[must_use]
+    pub fn lord_affix(&self, affix: Affix, lord: Lord) -> String {
+        let mut args = FluentArgs::new();
+        // The French messages select on the name: "de Kurgal", "d'Amanamu".
+        args.set("lord", lord.name());
+        let id = match affix {
+            Affix::Prefix => LORD_PREFIX,
+            Affix::Suffix => LORD_SUFFIX,
+        };
+        self.format(id, Some(&args))
     }
 
     /// The rolls a range field accepts, in its tooltip: "Rolls 40 to 60"; `low` and `high`
@@ -1008,6 +1025,8 @@ mod tests {
                 SHOW_STATS,
                 AFFIX_FILL,
                 AFFIX_FILL_OPEN,
+                LORD_PREFIX,
+                LORD_SUFFIX,
                 ACTIVE_FILTERS,
                 FILTER_ROLLS,
                 HYBRID_WITH,
@@ -1056,6 +1075,34 @@ mod tests {
         for language in Language::ALL {
             assert_eq!(file_ids(language), code_ids, "messages of {language:?}");
         }
+    }
+
+    #[test]
+    fn the_affix_of_a_lord_names_him_in_each_language() {
+        for language in Language::ALL {
+            let translator = Translator::new(language);
+            for lord in [Lord::Amanamu, Lord::Kurgal, Lord::Ulaman] {
+                for affix in [Affix::Prefix, Affix::Suffix] {
+                    let text = translator.lord_affix(affix, lord);
+                    assert!(text.contains(lord.name()), "{text} in {language:?}");
+                }
+            }
+        }
+        let english = Translator::new(Language::English);
+        assert_eq!(
+            english.lord_affix(Affix::Prefix, Lord::Amanamu),
+            "Amanamu Prefix"
+        );
+        // The elision of the French: "de Kurgal", "d'Amanamu".
+        let french = Translator::new(Language::French);
+        assert_eq!(
+            french.lord_affix(Affix::Prefix, Lord::Kurgal),
+            "Préfixe de Kurgal"
+        );
+        assert_eq!(
+            french.lord_affix(Affix::Suffix, Lord::Amanamu),
+            "Suffixe d'Amanamu"
+        );
     }
 
     #[test]

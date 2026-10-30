@@ -9,7 +9,7 @@ use serde::Deserialize;
 use super::bases::{self, BaseSpawn, Domain};
 use super::lines::{LineMatch, StatSource, modifier_stats};
 use crate::item::{
-    Affix, AffixTier, Modifier, ModifierKind, ModifierOrigin, PartTier, Range, TierDoubt,
+    Affix, AffixTier, Lord, Modifier, ModifierKind, ModifierOrigin, PartTier, Range, TierDoubt,
 };
 use crate::language::Language;
 
@@ -40,7 +40,32 @@ struct Table {
     /// Each tag and its weight: the first tag of the list a base has tells whether the
     /// modifier rolls on it (above zero) or not.
     spawn: Vec<(String, u32)>,
+    /// Whether it is a modifier of the Genesis tree of the Breach, whose tiers the game
+    /// doesn't write (`Reinforcing`, `Minions have 21(19-22)% increased maximum Life`).
+    #[serde(default)]
+    genesis: bool,
+    /// The lord of the Abyss whose modifier it is.
+    #[serde(default)]
+    lord: Option<TableLord>,
     tiers: Vec<TableTier>,
+}
+
+/// A lord of the Abyss, as the generator writes him.
+#[derive(Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
+enum TableLord {
+    Amanamu,
+    Kurgal,
+    Ulaman,
+}
+
+impl From<TableLord> for Lord {
+    fn from(lord: TableLord) -> Self {
+        match lord {
+            TableLord::Amanamu => Self::Amanamu,
+            TableLord::Kurgal => Self::Kurgal,
+            TableLord::Ulaman => Self::Ulaman,
+        }
+    }
 }
 
 /// The prefix first, as the two pure modifiers of a split line are read.
@@ -108,12 +133,17 @@ impl Table {
     /// cost efficiency of attacks of Kurgal on the maces), which merged would read as a T1 and
     /// a T2. Nothing tells two such tables apart but their place: `self` and `other` are tables
     /// of one slice (`TABLES`, or the tables of a test), and a desecrated table is the same
-    /// modifier as itself only.
+    /// modifier as itself only. A minion modifier of the Genesis tree merges with no ordinary
+    /// one: `of the Despot` of the tree (`MinionGemLevelBelt2`) would make the `+2 to Level of
+    /// all Minion Skills` of an amulet, its T2 of 3, a T3 of 5.
     fn same_modifier(&self, other: &Self) -> bool {
         if self.domain == Domain::Desecrated || other.domain == Domain::Desecrated {
             return std::ptr::eq(self, other);
         }
-        self.kind == other.kind && self.affix == other.affix && self.lines == other.lines
+        self.genesis == other.genesis
+            && self.kind == other.kind
+            && self.affix == other.affix
+            && self.lines == other.lines
     }
 }
 
@@ -150,6 +180,13 @@ pub struct ModifierTiers {
     /// follow them (two for `Adds # to # Physical Damage`; for a line without number, one
     /// when its string gives the value, `Loads an additional bolt`, none otherwise).
     pub counts: Vec<usize>,
+    /// Whether the game writes the modifier without tier, one of the Genesis tree: it is read
+    /// as the advanced copy writes it, the ranges of its tier without number.
+    pub tier_unwritten: bool,
+    /// The lord of the Abyss whose modifier it is: none for another modifier, or when the
+    /// modifiers of two lords hold the copied one as well (`find`; a split, `splits`, takes the
+    /// lord of its table, never shown).
+    pub lord: Option<Lord>,
 }
 
 impl ModifierTiers {
@@ -164,6 +201,13 @@ impl ModifierTiers {
     #[must_use]
     pub fn single(&self) -> bool {
         self.tiers.len() == 1
+    }
+
+    /// Whether the number of its tier isn't shown: one tier only on the base, or a tier the
+    /// game doesn't write (the Genesis tree).
+    #[must_use]
+    pub fn hides_number(&self) -> bool {
+        self.single() || self.tier_unwritten
     }
 
     /// The tiers the copied modifier may be, the best first: the neighbouring one, then its
@@ -200,8 +244,8 @@ impl ModifierTiers {
 /// the one whose values left it (any value out of its tier, e.g. on a sanctified item). Without
 /// them (a line without number has no range), only a tier that holds the values. When several
 /// tiers fit as well, the one of the number the advanced copy wrote is taken, then the best
-/// one; when several modifiers do, the first of the file, an ordinary one before a desecrated
-/// one.
+/// one; when several modifiers do, the first of the file, an ordinary one before one of the
+/// Genesis tree, before a desecrated one.
 #[must_use]
 pub fn modifier_tiers(
     language: Language,
@@ -308,6 +352,8 @@ fn hybrid_tiers(
                 found: worse,
                 neighbour: better,
                 counts: counts.clone(),
+                tier_unwritten: table.genesis,
+                lord: table.lord.map(Lord::from),
             };
             best = Some((fit, tiers));
         }
@@ -704,7 +750,7 @@ fn part_tier(
     Some(PartTier {
         affix,
         tiers: tiers.possible().map(|tier| tier.number).collect(),
-        single: tiers.single(),
+        hides_number: tiers.hides_number(),
         ranges: spanned_ranges(language, parts, tiers, line)?
             .into_iter()
             .flatten()
@@ -760,17 +806,19 @@ fn joined(parts: &[Modifier]) -> Option<Modifier> {
 }
 
 /// The modifiers `parts` made one modifier of `affix`, with the tier of `tiers` and the ranges
-/// of that tier on its values ([`with_ranges`]).
+/// of that tier on its values ([`with_ranges`]); without tier when the game writes none, as
+/// the advanced copy writes it.
 fn with_tier(
     language: Language,
     parts: &[Modifier],
     affix: Affix,
     tiers: &ModifierTiers,
 ) -> Option<Modifier> {
+    let tier = tiers.tier()?;
     Some(Modifier {
         kind: ModifierKind::Explicit(Some(affix)),
-        tier: Some(tiers.tier()?.number),
-        ..with_ranges(language, parts, tiers.tier()?, &tiers.counts)?
+        tier: (!tiers.tier_unwritten).then_some(tier.number),
+        ..with_ranges(language, parts, tier, &tiers.counts)?
     })
 }
 
@@ -786,13 +834,16 @@ fn affix_tier(
     Some(AffixTier {
         affix,
         tier: tiers.tier()?.number,
-        single: tiers.single(),
-        ranges: ranged
-            .lines
-            .iter()
-            .flat_map(|line| &line.rolls)
-            .filter_map(|roll| roll.range)
-            .collect(),
+        hides_number: tiers.hides_number(),
+        // None for a fixed value, as under any modifier: "T2 Suffix", not "T2 1 Suffix".
+        ranges: Range::unless_fixed(
+            ranged
+                .lines
+                .iter()
+                .flat_map(|line| &line.rolls)
+                .filter_map(|roll| Some((roll.value, roll.range?))),
+        ),
+        lord: tiers.lord,
     })
 }
 
@@ -1057,6 +1108,8 @@ fn splits(
                             found,
                             neighbour: None,
                             counts: counts.clone(),
+                            tier_unwritten: whole.genesis,
+                            lord: whole.lord.map(Lord::from),
                         },
                         added: AddedTiers {
                             line: owner,
@@ -1066,6 +1119,8 @@ fn splits(
                                 found: added_found,
                                 neighbour: None,
                                 counts: vec![line.count()],
+                                tier_unwritten: added.genesis,
+                                lord: added.lord.map(Lord::from),
                             },
                         },
                         fit,
@@ -1447,8 +1502,20 @@ fn find(
                     found,
                     neighbour: None,
                     counts,
+                    tier_unwritten: table.genesis,
+                    lord: table.lord.map(Lord::from),
                 },
             ));
+        } else if let Some(((fit, _), (best_fit, best_tiers))) = found.zip(best.as_mut())
+            && fit == *best_fit
+            && best_tiers.lord != table.lord.map(Lord::from)
+        {
+            // The modifiers of two lords hold it as well: neither is named (the flask charges
+            // of Kurgal, `10–15`, and of Ulaman, `10–18`, on the belts). An ordinary table comes
+            // before them, so a lord never takes its place; the desecrated tables of the Genesis
+            // tree come after them, but share no line and base with a lord's in a range of both
+            // (the exposure of the rings, `10–15` of Kurgal, `25–35` of the tree).
+            best_tiers.lord = None;
         }
     }
     best.map(|(_, tiers)| tiers)

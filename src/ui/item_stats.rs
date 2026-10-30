@@ -36,7 +36,7 @@ use crate::format;
 use crate::game_data::{self, Category};
 use crate::i18n::{Message, Translator};
 use crate::item::{
-    Affix, AffixTier, Item, Modifier, ModifierKind, ModifierOrigin, PartTier, Range, Rarity,
+    Affix, AffixTier, Item, Lord, Modifier, ModifierKind, ModifierOrigin, PartTier, Range, Rarity,
     StatLine, TierDoubt,
 };
 use crate::roll_difference::CopiedLines;
@@ -217,6 +217,11 @@ struct TierRow<'a> {
     better: Option<u32>,
     /// In gray after the ranges: the affix of the tier ("Prefix"), or "Hybrid".
     word: Option<Message>,
+    /// The lord of the Abyss named before the affix: "Amanamu Prefix".
+    lord: Option<Lord>,
+    /// Whether its tier, an affix of a line in doubt without range (a fixed value), is written
+    /// in the style of its word: "T2 Suffix".
+    quiet: bool,
     /// The tooltip of that word.
     tip: Option<WordTip<'a>>,
 }
@@ -235,26 +240,38 @@ enum WordTip<'a> {
 }
 
 impl<'a> TierRow<'a> {
+    /// Whether its tier, without range, is written as its word: "T2 Suffix"; only under a line
+    /// in doubt, the other rows keeping the color of their tier ("T1 Hybrid suffix" under the
+    /// other line of a hybrid split from a summed line, whose T1 the summed line writes too).
+    fn quiet_tier(&self) -> bool {
+        // Set by `TierRow::affix` only: a word, no ranges, one tier.
+        self.quiet
+    }
+
     /// The tier `tier` of a modifier, without word.
     fn plain(tier: ModifierTier) -> Self {
         Self {
             tier,
             better: None,
             word: None,
+            lord: None,
+            quiet: false,
             tip: None,
         }
     }
 
     /// The tier `found` for one affix of a line that can be either, "Prefix" after its ranges;
-    /// without number for a modifier of one tier only.
+    /// without number for a modifier of one tier only, or whose tier the game doesn't write.
     fn affix(found: &AffixTier) -> Self {
         Self {
             tier: ModifierTier {
-                number: (!found.single).then_some(found.tier),
+                number: (!found.hides_number).then_some(found.tier),
                 ranges: found.ranges.clone(),
             },
             better: None,
             word: Some(affix_word(found.affix)),
+            lord: found.lord,
+            quiet: found.ranges.is_empty(),
             tip: None,
         }
     }
@@ -266,7 +283,8 @@ impl<'a> TierRow<'a> {
     }
 
     /// The tiers `part` may be, the best first (one, or two neighbouring ones), over `ranges`,
-    /// with `word` and its `tip`; without number for a modifier of one tier only.
+    /// with `word` and its `tip`; without number for a modifier of one tier only, or whose tier
+    /// the game doesn't write.
     fn tiers(
         part: &PartTier,
         ranges: Vec<Range>,
@@ -276,7 +294,7 @@ impl<'a> TierRow<'a> {
         let worse = *part.tiers.last()?;
         Some(Self {
             tier: ModifierTier {
-                number: (!part.single).then_some(worse),
+                number: (!part.hides_number).then_some(worse),
                 ranges,
             },
             better: part
@@ -285,9 +303,28 @@ impl<'a> TierRow<'a> {
                 .copied()
                 .filter(|&better| better != worse),
             word,
+            lord: None,
+            quiet: false,
             tip,
         })
     }
+}
+
+/// The words after the ranges of the tier of `row`, in `i18n`: its affix, after the lord whose
+/// modifier it is ("Amanamu Prefix"); after its tier written as they are ("T2 Suffix") under a
+/// line in doubt without range (a fixed value), so that it reads as one with them (owner's choice
+/// on 2026-10-30).
+fn row_word(row: &TierRow, i18n: &Translator) -> Option<String> {
+    let word = row.word?;
+    let text = match (row.lord, word) {
+        (Some(lord), Message::AffixPrefix) => i18n.lord_affix(Affix::Prefix, lord),
+        (Some(lord), Message::AffixSuffix) => i18n.lord_affix(Affix::Suffix, lord),
+        _ => i18n.text(word),
+    };
+    Some(match row.tier.number.filter(|_| row.quiet_tier()) {
+        Some(number) => format!("T{number} {text}"),
+        None => text,
+    })
 }
 
 /// The word of an affix after the ranges of its tier.
@@ -361,10 +398,10 @@ fn hybrid_row<'a>(
     whole: &PartTier,
     added: &PartTier,
 ) -> Option<TierRow<'a>> {
-    let ranges = other_lines(modifier, summed)
-        .flat_map(|(_, line)| magnitudes(line, &copied_ranges(line)))
-        .map(|(_, range)| range)
-        .collect();
+    // As under any modifier, none for fixed values.
+    let ranges = Range::unless_fixed(
+        other_lines(modifier, summed).flat_map(|(_, line)| magnitudes(line, &copied_ranges(line))),
+    );
     let tip = WordTip::HybridPart {
         ranges: whole.ranges.clone(),
         line: &modifier.lines.get(summed)?.text,
@@ -668,13 +705,19 @@ fn rows<'a>(
         rows.push(Row::UnrevealedNote);
     }
     // Once a tier is found, also for a line that can be a prefix or a suffix, or that adds up
-    // two modifiers: none before the names of the trade site tell the base of a magic item, nor
-    // on a base the game data doesn't know.
+    // two modifiers, or one of the Genesis tree, read with the ranges of its tier but without
+    // its number, which the game doesn't write: none before the names of the trade site tell
+    // the base of a magic item, nor on a base the game data doesn't know.
     let found = item.modifiers().iter().any(|modifier| {
-        let with_tier =
-            matches!(modifier.kind, ModifierKind::Explicit(Some(_))) && modifier.tier.is_some();
+        let ranged = modifier
+            .lines
+            .iter()
+            .flat_map(|line| &line.rolls)
+            .any(|roll| roll.range.is_some());
+        let read = matches!(modifier.kind, ModifierKind::Explicit(Some(_)))
+            && (modifier.tier.is_some() || ranged);
         let in_doubt = modifier.doubt.is_some();
-        with_tier || in_doubt
+        read || in_doubt
     });
     if item.has_tiers_from_values() && found {
         rows.push(Row::TradeCopyNote);
@@ -1204,12 +1247,7 @@ fn affix_stats<'a>(item: &'a Item, affix: Option<Affix>, reading: &Reading<'_>) 
                             // value is fixed.
                             let single = reading.tiers.single(index);
                             let number = modifier.tier.filter(|_| !single);
-                            let ranges: Vec<Range> = modifier
-                                .lines
-                                .iter()
-                                .flat_map(|line| magnitudes(line, &copied_ranges(line)))
-                                .map(|(_, range)| range)
-                                .collect();
+                            let ranges = tier_ranges(modifier);
                             (number.is_some() || (single && !ranges.is_empty()))
                                 .then(|| TierRow::plain(ModifierTier { number, ranges }))
                         }
@@ -1434,6 +1472,18 @@ fn unique_stat<'a>(
         roll: Some(roll),
         ..fixed
     }
+}
+
+/// The ranges written under the last line of a prefix or suffix, those the copy writes, in their
+/// order; none for a fixed value ([`Range::unless_fixed`]: `50(50)% reduced Amount Recovered`, or
+/// the range the tables put on a line of the in-game trade, `+2 to Level of all Minion Skills`).
+fn tier_ranges(modifier: &Modifier) -> Vec<Range> {
+    Range::unless_fixed(
+        modifier
+            .lines
+            .iter()
+            .flat_map(|line| magnitudes(line, &copied_ranges(line))),
+    )
 }
 
 /// The range of each number of a line, from the advanced copy.
@@ -2011,11 +2061,14 @@ fn roll_line(ui: &mut Ui, roll: &Roll, bar: RollBar, i18n: &Translator) {
 /// A tier and its ranges ([`tier_label`]), then the word after them in gray, with its
 /// tooltip wrapped past [`WORD_TIP_WIDTH`].
 fn tier_row(ui: &mut Ui, row: &TierRow, i18n: &Translator) {
-    tier_label(ui, &row.tier, row.better);
-    let Some(word) = row.word else {
+    let word = row_word(row, i18n);
+    if !row.quiet_tier() {
+        tier_label(ui, &row.tier, row.better);
+    }
+    let Some(word) = word else {
         return;
     };
-    let response = small_word(ui, i18n.text(word), color::WEAK);
+    let response = small_word(ui, word, color::WEAK);
     if let Some(tip) = &row.tip {
         let text = match tip {
             WordTip::Text(message) => i18n.text(*message),

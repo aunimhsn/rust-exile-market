@@ -27,7 +27,7 @@ const bowMirroredStats = [
   { group: "Suffixes", fill: "3 of 3" },
   { mod: "+5% to Critical Hit Chance", check: false, min: 5, tier: 1, range: "4.1–5", over: { share: .95 }, origin: "fractured" },
   { mod: "+25% to Critical Damage Bonus", check: false, min: 23, tier: 2, range: "25–29", over: { share: .7 } },
-  { mod: "+4 to Level of all Projectile Skills", check: true, min: 4, tier: 1, range: "4–4", over: { share: 1 } },
+  { mod: "+4 to Level of all Projectile Skills", check: true, min: 4, tier: 1, tierOnly: true, over: { share: 1 } },
 ];
 
 // Corrupted unique with a Vaal modifier (the owner's copy, French), after a click: Corrompu lit, under the

@@ -5,6 +5,7 @@
 
 use super::*;
 use crate::item::{CopiedItem, ItemState};
+use crate::language::Language;
 
 fn parse(text: &str) -> Item {
     Item::parse(&CopiedItem::from_text(text).expect("an item")).expect("read")
@@ -132,14 +133,18 @@ fn row_texts<'a>(rows: impl IntoIterator<Item = Row<'a>>) -> Vec<String> {
 
 /// A tier under a line as [`row_texts`] writes it: `T1/T2 155–179`, then its word and its
 /// tooltip, `AffixSuffix AddedUpWithPrefix`, `Hybrid (with +195 to Accuracy Rating)`, `Hybrid
-/// (with 75–79 of 258% increased Physical Damage)`.
+/// (with 75–79 of 258% increased Physical Damage)`; the lord before the word, `Amanamu
+/// AffixPrefix`, and a tier written in the style of its word between braces, `{T2 AffixSuffix}`.
 fn tier_row_text(row: &TierRow) -> String {
     let tier = tier_text(&row.tier);
     let tier = match row.better {
         Some(better) => format!("T{better}/{tier}"),
         None => tier,
     };
-    let word = row.word.map(|word| format!("{word:?}"));
+    let word = row.word.map(|word| match row.lord {
+        Some(lord) => format!("{} {word:?}", lord.name()),
+        None => format!("{word:?}"),
+    });
     let tip = row.tip.as_ref().map(|tip| match tip {
         WordTip::Text(message) => format!("{message:?}"),
         WordTip::HybridLines(lines) => format!("(with {})", lines.join(" and ")),
@@ -147,10 +152,18 @@ fn tier_row_text(row: &TierRow) -> String {
             format!("(with {} of {line})", ranges_text(ranges))
         }
     });
-    [word, tip]
+    let text = [Some(tier), word, tip]
         .into_iter()
         .flatten()
-        .fold(tier, |text, part| format!("{text} {part}"))
+        .filter(|part| !part.is_empty())
+        .collect::<Vec<_>>()
+        .join(" ");
+    // A tier written in the style of its word, between braces.
+    if row.quiet_tier() {
+        format!("{{{text}}}")
+    } else {
+        text
+    }
 }
 
 /// A tier as [`row_texts`] writes it: `T1 15–18`, `15–18` for a modifier of one tier only.
@@ -261,7 +274,8 @@ fn a_modifier_of_one_tier_only_shows_its_ranges_without_tier() {
         Some("■ +1 to Level of all Projectile Skills")
     );
 
-    // A hybrid of one tier only, a line without number: the ranges under its last line.
+    // A hybrid of one tier only, a line without number and a fixed value, `50(50)%`: nothing
+    // under its last line, as under any fixed value.
     let flask = parse(
         "Item Class: Life Flasks\nRarity: Magic\nSaturated Ultimate Life Flask\n\
          --------\nItem Level: 82\n--------\n\
@@ -286,7 +300,7 @@ fn a_modifier_of_one_tier_only_shows_its_ranges_without_tier() {
     let flask = row_texts(super::rows(&flask, &lines, &stats, &tiers, base));
     assert_eq!(
         flask[flask.len() - 2..],
-        ["■ Instant Recovery", "■ 50% reduced Amount Recovered [50]"]
+        ["■ Instant Recovery", "■ 50% reduced Amount Recovered"]
     );
 
     // Copied from the in-game trade: its tier found from its value.
@@ -341,8 +355,8 @@ fn a_line_of_the_in_game_trade_that_can_be_a_prefix_or_a_suffix_shows_the_tier_o
 
 #[test]
 fn a_line_that_can_be_a_modifier_of_one_tier_only_writes_no_tier_number_on_its_row() {
-    // `+1` desecrated is the prefix of Amanamu, the only one, or the T2 of the suffix of a
-    // cannon.
+    // `+1` desecrated is the prefix of Amanamu, the only one, named, or the T2 of the suffix of
+    // a cannon: a fixed value, without range under it.
     let cannon = parse(
         "Item Class: Crossbows\nRarity: Rare\nDoom Bolt\nTrarthan Cannon\n--------\n\
          Item Level: 82\n--------\nGrenade Skills have +1 Cooldown Use (desecrated)\n",
@@ -351,7 +365,7 @@ fn a_line_that_can_be_a_modifier_of_one_tier_only_writes_no_tier_number_on_its_r
     let texts = texts(&read_again(cannon));
     assert!(
         texts.contains(
-            &"■ Grenade Skills have +1 Cooldown Use ≥1 [1 AffixPrefix / T2 1 AffixSuffix / Desecrated]"
+            &"■ Grenade Skills have +1 Cooldown Use ≥1 [{Amanamu AffixPrefix} / {T2 AffixSuffix} / Desecrated]"
                 .to_owned()
         ),
         "{texts:?}"
@@ -417,6 +431,136 @@ fn the_note_shows_also_when_the_only_tiers_found_are_those_of_a_line_in_doubt() 
             "■ 18% increased Rarity of Items found ≥16 [T1 16–19 AffixPrefix / T1 15–18 AffixSuffix]",
             "Trade copy note",
         ]
+    );
+}
+
+#[test]
+fn a_minion_modifier_of_the_genesis_tree_found_from_its_value_shows_no_tier_and_the_note() {
+    // `Reinforcing`, the only line of a Breach Ring: the range of its tier, without its number,
+    // which the game doesn't write.
+    let ring = read_again(parse(
+        "Item Class: Rings\nRarity: Rare\nGlyph Circle\nBreach Ring\n--------\n\
+         Item Level: 77\n--------\nMinions have 21% increased maximum Life",
+    ));
+
+    let texts = texts(&ring);
+    assert_eq!(
+        texts[texts.len() - 3..],
+        [
+            "Prefixes 1/3",
+            "■ Minions have 21% increased maximum Life ≥19 [0.67 19–22]",
+            "Trade copy note",
+        ]
+    );
+}
+
+#[test]
+fn a_fixed_value_shows_the_same_in_both_copies() {
+    // `+2 to Level of all Minion Skills`: the ordinary T2 of 3 of an amulet, `of the Despot` of
+    // the Genesis tree on a belt, whose tier the game doesn't write; the advanced copy writes no
+    // range for a fixed value, the in-game trade none at all.
+    let advanced = |class: &str, base: &str, header: &str| {
+        format!(
+            "Item Class: {class}\nRarity: Rare\nDoom Idol\n{base}\n--------\nItem Level: 79\n\
+             --------\n{{ Suffix Modifier \"of the Despot\"{header} — Minion, Gem }}\n\
+             +2 to Level of all Minion Skills"
+        )
+    };
+    let in_game_trade = |text: &str| {
+        let lines: Vec<&str> = text.lines().filter(|line| !line.starts_with('{')).collect();
+        read_again(parse(&lines.join("\n")))
+    };
+    let last = |item: &Item| texts(item).into_iter().rfind(|text| text.starts_with('■'));
+
+    // A tier without range: the bar over the three tiers, "T2", the field from 2.
+    let amulet = advanced("Amulets", "Gold Amulet", " (Tier: 2)");
+    let t2 = Some("■ +2 to Level of all Minion Skills ≥2 [0.50 T2]".to_owned());
+    assert_eq!(last(&parse(&amulet)), t2);
+    assert_eq!(last(&in_game_trade(&amulet)), t2);
+    // Fixed in its tier, which the game doesn't write: no field, nothing under it.
+    let belt = advanced("Belts", "Heavy Belt", "");
+    let fixed = Some("■ +2 to Level of all Minion Skills".to_owned());
+    assert_eq!(last(&parse(&belt)), fixed);
+    assert_eq!(last(&in_game_trade(&belt)), fixed);
+}
+
+#[test]
+fn the_words_of_a_tier_name_the_lord_and_take_a_tier_without_range() {
+    let row = |number: Option<u32>, ranges: Vec<Range>, affix, lord| TierRow {
+        lord,
+        ..TierRow::affix(&AffixTier {
+            affix,
+            tier: number.unwrap_or(1),
+            hides_number: number.is_none(),
+            ranges,
+            lord: None,
+        })
+    };
+    let english = Translator::new(Language::English);
+    let french = Translator::new(Language::French);
+    let words = |row: &TierRow, i18n: &Translator| row_word(row, i18n);
+    let amanamu = row(None, Vec::new(), Affix::Prefix, Some(Lord::Amanamu));
+    let kurgal = row(None, Vec::new(), Affix::Suffix, Some(Lord::Kurgal));
+    let t2 = row(Some(2), Vec::new(), Affix::Suffix, None);
+    let ranged = row(
+        Some(1),
+        vec![Range {
+            min: 16.0,
+            max: 19.0,
+        }],
+        Affix::Prefix,
+        None,
+    );
+
+    assert_eq!(words(&amanamu, &english).as_deref(), Some("Amanamu Prefix"));
+    assert_eq!(
+        words(&amanamu, &french).as_deref(),
+        Some("Préfixe d'Amanamu")
+    );
+    assert_eq!(
+        words(&kurgal, &french).as_deref(),
+        Some("Suffixe de Kurgal")
+    );
+    assert_eq!(words(&kurgal, &english).as_deref(), Some("Kurgal Suffix"));
+    let ulaman = row(None, Vec::new(), Affix::Prefix, Some(Lord::Ulaman));
+    assert_eq!(words(&ulaman, &french).as_deref(), Some("Préfixe d'Ulaman"));
+    // A tier without range written as the word, in its style; with a range, apart.
+    assert_eq!(words(&t2, &english).as_deref(), Some("T2 Suffix"));
+    assert!(t2.quiet_tier());
+    assert_eq!(words(&ranged, &english).as_deref(), Some("Prefix"));
+    assert!(!ranged.quiet_tier());
+}
+
+#[test]
+fn the_ranges_written_under_a_modifier_are_those_of_its_numbers_that_vary() {
+    // The ranges the advanced copy writes, on every line of the modifier (`Range::unless_fixed`):
+    // a ring whose prefix adds a fixed and a varying number, then a flask whose prefix of two
+    // lines has a fixed value only.
+    let ranges = |text: &str| {
+        parse(text)
+            .modifiers()
+            .iter()
+            .find(|modifier| modifier.kind == ModifierKind::Explicit(Some(Affix::Prefix)))
+            .map(tier_ranges)
+            .unwrap_or_default()
+    };
+    let range = |min, max| Range { min, max };
+
+    assert_eq!(
+        ranges(
+            "Item Class: Rings\nRarity: Rare\nGlyph Circle\nGold Ring\n--------\n\
+             Item Level: 80\n--------\n{ Prefix Modifier \"Glinting\" (Tier: 6) — Damage }\n\
+             Adds 5(5) to 10(8-12) Physical Damage to Attacks"
+        ),
+        [range(5.0, 5.0), range(8.0, 12.0)]
+    );
+    assert_eq!(
+        ranges(
+            "Item Class: Life Flasks\nRarity: Magic\nSaturated Ultimate Life Flask\n--------\n\
+             Item Level: 82\n--------\n{ Prefix Modifier \"Saturated\" (Tier: 1) — Life }\n\
+             Instant Recovery\n50(50)% reduced Amount Recovered"
+        ),
+        []
     );
 }
 
@@ -2091,8 +2235,8 @@ fn a_part_of_a_summed_line_of_one_tier_only_writes_no_tier_number() {
     let mut modifiers = bow.modifiers().to_vec();
     for modifier in &mut modifiers {
         if let Some(TierDoubt::Split { whole, added, .. }) = &mut modifier.doubt {
-            whole.single = true;
-            added.single = true;
+            whole.hides_number = true;
+            added.hides_number = true;
         }
     }
     bow.set_modifiers(modifiers);
@@ -2227,7 +2371,8 @@ fn a_pure_prefix_added_up_with_a_hybrid_suffix_says_hybrid_suffix_on_both_its_li
     ));
 
     let accuracy = "■ +600 to Accuracy Rating ≥540 [T1/T2 451–650 AffixPrefix / T1 41–60 HybridSuffix (with 15% increased Light Radius)]";
-    let radius = "■ 15% increased Light Radius ≥14 [1.00 T1 15 HybridSuffix (with 41–60 of +600 to Accuracy Rating)]";
+    // A fixed value, without range under it.
+    let radius = "■ 15% increased Light Radius ≥14 [1.00 T1 HybridSuffix (with 41–60 of +600 to Accuracy Rating)]";
     assert_eq!(
         texts_from(&bow, "Explicit"),
         [
@@ -2280,7 +2425,7 @@ fn part(affix: Affix) -> PartTier {
     PartTier {
         affix,
         tiers: vec![1],
-        single: false,
+        hides_number: false,
         ranges: vec![Range { min: 1.0, max: 2.0 }],
     }
 }
@@ -2362,8 +2507,9 @@ fn a_modifier_counts_the_affixes_it_takes_in_the_room_of_its_item() {
     let tier = AffixTier {
         affix: Affix::Prefix,
         tier: 1,
-        single: false,
+        hides_number: false,
         ranges: Vec::new(),
+        lord: None,
     };
 
     let prefix = ModifierKind::Explicit(Some(Affix::Prefix));

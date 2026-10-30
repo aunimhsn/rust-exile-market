@@ -42,7 +42,7 @@ const amuletDesecratedStats = [
   { mod: "+22% to Chaos Resistance", check: true, min: 19, tier: 2, range: "20–23", over: { share: .8 }, origin: "desecrated" },
   { mod: "+33% to Lightning Resistance", check: false, min: 29, tier: 3, range: "31–35", over: { share: .68 }, origin: "desecrated" },
   { mod: "+19% to Cold Resistance", check: false, min: 17, tier: 6, range: "16–20", over: { share: .34 }, origin: "desecrated" },
-  { mod: "+2 to Level of all Minion Skills", check: true, min: 2, tier: 2, range: "2–2", over: { share: .5 }, origin: "desecrated" },
+  { mod: "+2 to Level of all Minion Skills", check: true, min: 2, tier: 2, tierOnly: true, over: { share: .5 }, origin: "desecrated" },
 ];
 
 // Fractured mace: one fractured suffix.
@@ -60,7 +60,7 @@ const maceFracturedStats = [
   { group: "Suffixes", fill: "3 of 3" },
   { mod: "Gain 3 Mana per enemy killed", check: false, min: 3, tier: 8, range: "2–3", over: { share: .05 }, origin: "fractured" },
   { mod: "+12% to Critical Damage Bonus", check: true, min: 11, tier: 5, range: "12–13", over: { share: .3 } },
-  { mod: "+3 to Level of all Melee Skills", check: true, min: 3, tier: 3, range: "3–3", over: { share: .67 } },
+  { mod: "+3 to Level of all Melee Skills", check: true, min: 3, tier: 3, tierOnly: true, over: { share: .67 } },
 ];
 
 // Sanctified sceptre: a crafted prefix, an unrevealed suffix, values outside the range of their tier.
