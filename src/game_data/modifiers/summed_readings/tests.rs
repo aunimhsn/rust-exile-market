@@ -216,7 +216,7 @@ fn a_modifier_sits_on_lines_of_its_templates_of_one_origin() {
             })
             .collect(),
         spawn: Vec::new(),
-        genesis: false,
+        source: None,
         lord: None,
         tiers: Vec::new(),
     };
