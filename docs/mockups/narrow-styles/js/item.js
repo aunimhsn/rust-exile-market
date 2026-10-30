@@ -159,12 +159,14 @@ function item(it, unfolded = false) {
       if (box) {
         const rollTop = row.range ? `<div class="roll2">${bar}<span class="range">${tier}${row.range}${after(row.after)}${origin}</span>${radius}</div>`
           : bar || radius ? `<div class="roll2">${bar}${radius}</div>`
-          // A word without tier nor range (13k2e4b): a summed line split two ways.
-          : row.after ? `<div class="roll2"><span class="range">${after(row.after)}</span></div>` : "";
+          // A word without tier nor range (13k2e4b): a summed line split two ways; or the origin alone
+          // (13k2e5: the Vaal modifier of a unique copied from the in-game trade, without range).
+          : row.after || origin ? `<div class="roll2"><span class="range${row.after ? "" : " app-origin-alone"}">${after(row.after)}${origin}</span></div>` : "";
         return `<div class="mod2 min-top${row.wide ? " app-wide" : ""}${cls}">${box}${text}${fields || "<span></span>"}${rollTop}</div>`;
       }
       const input = row.min === undefined ? "" : `<span class="input">${row.min}</span>`;
-      const roll = row.range || input ? `<div class="roll2">${bar}<span class="range">${tier}${row.range || ""}</span>${input}</div>` : "";
+      // The origin after the range, or alone under a fixed line (a fixed Vaal modifier, as the application shows it).
+      const roll = row.range || input || origin ? `<div class="roll2">${bar}<span class="range${row.range ? "" : " app-origin-alone"}">${tier}${row.range || ""}${origin}</span>${input}</div>` : "";
       return `<div class="mod2 ${box ? "" : "wide"}${cls}">${box}${text}${roll}</div>`;
     }).join("")}</div>`;
   } else if (it.statsLabel) {

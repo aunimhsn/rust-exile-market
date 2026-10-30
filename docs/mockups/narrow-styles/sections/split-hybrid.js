@@ -39,7 +39,7 @@ const splitShield = (hybrid, { fr = false, hover = "summed" } = {}) => {
         pseudo: ["Pseudo", "+70% aux Résistances Élémentaires au total", "+132 de Vie maximale au total"],
         added: "Additionné au préfixe sur cette ligne", with: "Avec", of: "des",
         groups: ["Objet", "Préfixes", "Suffixes", "Explicite"], fill: n => `${n} sur 3`, base: "Base : Targe aviaire",
-        level: "Niveau de l'objet : 80", note: "Copié depuis l'échange du jeu : les paliers sont trouvés d'après les valeurs." }
+        level: "Niveau de l'objet : 80", note: "Les paliers sont trouvés d'après les valeurs." }
     : { percent: "35% increased Armour and Evasion", stun: "+310 to Stun Threshold",
         life: "+132 to maximum Life", block: "26% increased Block chance",
         fire: "+38% to Fire Resistance", cold: "+32% to Cold Resistance", suffix: "Suffix",

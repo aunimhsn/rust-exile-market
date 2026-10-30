@@ -19,7 +19,7 @@
 // has no tier (B1).
 
 // The note under the stats.
-const SUMMED_NOTE = { note: "Copied from the in-game trade: the tiers are found from the values." };
+const SUMMED_NOTE = { note: "The tiers are found from the values." };
 
 // The owner's bow, its summed line at 248% instead of 258%.
 const SUMMED_BOW = { rarity: "rare", name: "Storm Volley", base: "Warmonger Bow", cls: "Bows",
@@ -143,7 +143,7 @@ const summedArmourStats = [
   { mod: "+19 au Score d'Évasion", check: true, min: 17 },
   { mod: "47% d'Augmentation de l'Armure et de l'Évasion", check: true, min: 42 },
   { mod: "+93 de Vie maximale", check: false, min: 84 },
-  { note: "Copié depuis l'échange du jeu : les paliers sont trouvés d'après les valeurs." },
+  { note: "Les paliers sont trouvés d'après les valeurs." },
 ];
 
 // One section per decision, so that the windows of each fit the width of the page.
