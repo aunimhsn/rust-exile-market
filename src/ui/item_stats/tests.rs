@@ -1858,8 +1858,8 @@ fn part(affix: Affix) -> PartTier {
     }
 }
 
-/// The rows of the parts `whole` and `added` of a split line, as [`row_texts`] writes them,
-/// the ranges left out.
+/// The rows of the parts `whole` and `added` of a split line: the tier, the word and its
+/// tooltip of each, the ranges left out.
 fn split_texts(whole: Affix, added: Affix) -> Vec<String> {
     split_rows(&part(whole), &part(added))
         .iter()
@@ -1877,12 +1877,12 @@ fn the_parts_of_a_split_line_show_the_prefix_first_then_the_pure_one() {
             "1 Some(AffixSuffix) Some(AddedUpWithPrefix)",
         ]
     );
-    let mut whole = part(Affix::Suffix);
-    whole.tiers = vec![2];
-    // Two suffixes: the pure part (`added`) first, without words.
-    let rows = split_rows(&whole, &part(Affix::Suffix));
+    let mut added = part(Affix::Suffix);
+    added.tiers = vec![2];
+    // Two suffixes: the pure part (`added`) first, though of a worse tier, without words.
+    let rows = split_rows(&part(Affix::Suffix), &added);
     let tiers: Vec<_> = rows.iter().map(|row| (row.tier.number, row.word)).collect();
-    assert_eq!(tiers, [(1, None), (2, None)]);
+    assert_eq!(tiers, [(2, None), (1, None)]);
 }
 
 #[test]

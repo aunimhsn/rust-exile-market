@@ -411,7 +411,10 @@ pub fn with_trade_tiers(
             .filter(|found| found.modifiers.start == next)
             .find_map(|found| {
                 let parts = modifiers.get(found.modifiers.clone())?;
-                Some((found.modifiers.end, read_found(language, parts, found)?))
+                Some((
+                    found.modifiers.end,
+                    read_found(language, base_type, parts, found)?,
+                ))
             });
         if let Some((end, joined)) = joined {
             read.push(joined);
@@ -426,8 +429,14 @@ pub fn with_trade_tiers(
 
 /// The modifiers `parts`, read as one modifier in `found`: of its affix with its tier; or, when
 /// `found` has both affixes, explicit with the tier of each; or, for a line that adds up two
-/// modifiers, with the tiers of each part.
-fn read_found(language: Language, parts: &[Modifier], found: &FoundTiers) -> Option<Modifier> {
+/// modifiers, with the tiers of each part, logged when they can't be written on the item
+/// (`base_type`).
+fn read_found(
+    language: Language,
+    base_type: &str,
+    parts: &[Modifier],
+    found: &FoundTiers,
+) -> Option<Modifier> {
     if let Some(added) = &found.added {
         let [(affix, tiers)] = found.affixes.as_slice() else {
             return None;
@@ -446,7 +455,9 @@ fn read_found(language: Language, parts: &[Modifier], found: &FoundTiers) -> Opt
                 .flat_map(|part| &part.lines)
                 .map(|line| line.text.as_str())
                 .collect();
-            log::warn!("Game data, in-game trade copy: a split of {lines:?} can't be read");
+            log::warn!(
+                "Game data, {base_type} copied from the in-game trade: the split of {lines:?} can't be written, its lines left without tier"
+            );
         }
         return split;
     }
@@ -494,8 +505,8 @@ fn read_split(
 
 /// The tiers `tiers` may be (one, or two neighbouring ones) of the modifiers `parts` read as
 /// one modifier of `affix`, with the range over these tiers of each value of their line
-/// `line` its stat counts ([`with_ranges`]); none when the tiers don't give that line as many
-/// ranges, which then can't be told apart.
+/// `line` its stat counts ([`with_ranges`]); none when the tiers don't give a range to the
+/// same values of that line, whose ranges then can't be told apart.
 fn part_tier(
     language: Language,
     parts: &[Modifier],
@@ -503,30 +514,36 @@ fn part_tier(
     tiers: &ModifierTiers,
     line: usize,
 ) -> Option<PartTier> {
-    let mut ranges: Option<Vec<Range>> = None;
+    let mut ranges: Option<Vec<Option<Range>>> = None;
     for tier in tiers.possible() {
         let read = with_ranges(language, parts, tier, &tiers.counts)?;
-        let line_ranges: Vec<Range> = read
+        // The range of each value, none for a value its stat doesn't count.
+        let line_ranges: Vec<Option<Range>> = read
             .lines
             .get(line)?
             .rolls
             .iter()
-            .filter_map(|roll| roll.range)
+            .map(|roll| roll.range)
             .collect();
         ranges = Some(match ranges {
             None => line_ranges,
-            Some(spanned) if spanned.len() == line_ranges.len() => spanned
+            Some(spanned) => spanned
                 .into_iter()
                 .zip(line_ranges)
-                .map(|(spanned, range)| spanned.holding(range.min).holding(range.max))
-                .collect(),
-            Some(_) => return None,
+                .map(|pair| match pair {
+                    (Some(spanned), Some(range)) => {
+                        Some(Some(spanned.holding(range.min).holding(range.max)))
+                    }
+                    (None, None) => Some(None),
+                    _ => None,
+                })
+                .collect::<Option<_>>()?,
         });
     }
     Some(PartTier {
         affix,
         tiers: tiers.possible().map(|tier| tier.number).collect(),
-        ranges: ranges?,
+        ranges: ranges?.into_iter().flatten().collect(),
     })
 }
 
