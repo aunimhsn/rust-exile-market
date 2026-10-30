@@ -35,6 +35,28 @@ pub enum ModifierOrigin {
     Vaal,
 }
 
+/// A lord of the Abyss whose modifier a desecration reveals, of one tier on its base: named
+/// before the affix of a line that can be his or an ordinary modifier ("Amanamu Prefix"), so
+/// that its row without tier number reads as "the only one", not as an unknown tier.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Lord {
+    Amanamu,
+    Kurgal,
+    Ulaman,
+}
+
+impl Lord {
+    /// His name, the same in every language of the game.
+    #[must_use]
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Amanamu => "Amanamu",
+            Self::Kurgal => "Kurgal",
+            Self::Ulaman => "Ulaman",
+        }
+    }
+}
+
 /// The marker at the end of a modifier line, in English in every language, e.g. ` (rune)`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum Marker {
@@ -145,17 +167,24 @@ impl Range {
         })
     }
 
-    /// The ranges of `rolls`, values without their sign each with its range, as written under
-    /// a line: none when each value is fixed, its range of one value being the value, as the
-    /// advanced copy most often writes it, without range ("T2", not "T2 2"; owner's choice on
-    /// 2026-10-30); a range of one value other than the value stays, `29(30)%` of a sanctified
-    /// item ("T2 30").
+    /// Whether the range holds one value only, `2–2`.
+    #[must_use]
+    pub fn is_one_value(self) -> bool {
+        (self.max - self.min).abs() < f64::EPSILON
+    }
+
+    /// The ranges of `rolls`, values each with its range without sign, as written under a line:
+    /// none when each value is fixed, its range of one value being the value (its sign left
+    /// out), as the advanced copy most often writes it, without range ("T2", not "T2 2";
+    /// owner's choice on 2026-10-30); a range of one value other than the value stays, `29(30)%`
+    /// of a sanctified item ("T2 30"). The values compared as they are, not within the rounding
+    /// of the game: a fixed tier with decimals read from a rounded value keeps its range, none
+    /// met on 2026-10-30.
     #[must_use]
     pub fn unless_fixed(rolls: impl IntoIterator<Item = (f64, Self)>) -> Vec<Self> {
         let rolls: Vec<(f64, Self)> = rolls.into_iter().collect();
         let fixed = rolls.iter().all(|(value, range)| {
-            (range.max - range.min).abs() < f64::EPSILON
-                && (value.abs() - range.min).abs() < f64::EPSILON
+            range.is_one_value() && (value.abs() - range.min).abs() < f64::EPSILON
         });
         if fixed {
             return Vec::new();
@@ -195,6 +224,8 @@ pub struct AffixTier {
     /// The range of each value its stats count, in their order, as the game writes it:
     /// without its sign; none for fixed values ([`Range::unless_fixed`]).
     pub ranges: Vec<Range>,
+    /// The lord of the Abyss whose modifier it is, named before the affix.
+    pub lord: Option<Lord>,
 }
 
 /// What the values of a modifier copied from the in-game trade leave in doubt about its tier.
@@ -482,6 +513,28 @@ mod tests {
             value,
             range: range.map(|(min, max)| Range { min, max }),
         }
+    }
+
+    #[test]
+    fn the_ranges_of_fixed_values_only_are_left_out() {
+        let range = |min, max| Range { min, max };
+
+        assert_eq!(Range::unless_fixed([]), []);
+        // Each value fixed, also a negative one, its range without sign.
+        assert_eq!(
+            Range::unless_fixed([(2.0, range(2.0, 2.0)), (-10.0, range(10.0, 10.0))]),
+            []
+        );
+        // One varies: every range stays, as one varying alone.
+        assert_eq!(
+            Range::unless_fixed([(5.0, range(5.0, 5.0)), (10.0, range(8.0, 12.0))]),
+            [range(5.0, 5.0), range(8.0, 12.0)]
+        );
+        // A sanctified value out of its range of one value.
+        assert_eq!(
+            Range::unless_fixed([(29.0, range(30.0, 30.0))]),
+            [range(30.0, 30.0)]
+        );
     }
 
     #[test]

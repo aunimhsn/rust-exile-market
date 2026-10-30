@@ -21,6 +21,13 @@ const JEWELS: &str = "misc";
 /// the lords of the Abyss (Amanamu, Kurgal, Ulaman) and of the Genesis tree, of one tier each.
 const DESECRATED: &str = "desecrated";
 
+/// The tags of the lords of the Abyss, after `default`, on no base, and the name of each.
+const LORDS: [(&str, &str); 3] = [
+    ("amanamu_mod", "Amanamu"),
+    ("kurgal_mod", "Kurgal"),
+    ("ulaman_mod", "Ulaman"),
+];
+
 /// The tags the Genesis tree of the Breach gives the items it grows, which no base has: its
 /// desecrated modifiers (`breach_desecration`) and those of the minions (`genesis_tree_minion`,
 /// of several tiers, which the game writes without tier).
@@ -121,6 +128,10 @@ pub struct Modifier {
     /// own, whose tiers the game doesn't write.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     genesis: bool,
+    /// The lord of the Abyss whose modifier it is, written when it is one ("Amanamu"): named
+    /// by the application before the affix of a line that can be his or an ordinary modifier.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    lord: Option<String>,
     tiers: Vec<Tier>,
 }
 
@@ -277,6 +288,12 @@ pub fn reduce(
     let mut tables = Vec::new();
     let mut unknown_lines = BTreeSet::new();
     for ((kind, affix, domain, lines, spawn, genesis), mut tiers) in grouped {
+        let lord = spawn.iter().find_map(|weight| {
+            LORDS
+                .iter()
+                .find(|&&(tag, _)| weight.weight > 0 && weight.tag == tag)
+                .map(|&(_, name)| name.to_owned())
+        });
         let tags_of_bases: BTreeSet<&String> = released
             .iter()
             .filter(|base| rolls_on(&domain, &base.domain))
@@ -307,6 +324,7 @@ pub fn reduce(
             lines,
             spawn,
             genesis,
+            lord,
             tiers,
         });
     }
@@ -853,6 +871,14 @@ mod tests {
             .iter()
             .map(|table| (table.get("domain").cloned(), table["spawn"].clone()))
             .collect();
+        let lords: Vec<_> = tables
+            .as_array()
+            .expect("tables")
+            .iter()
+            .map(|table| table.get("lord").cloned())
+            .collect();
+        // The name of the lord, of the first table only.
+        assert_eq!(lords, [None, Some(serde_json::json!("Kurgal")), None]);
         let desecrated = Some(serde_json::json!("desecrated"));
         // Without the tag of the lord, nor the table of the waystones, a base of another
         // domain.

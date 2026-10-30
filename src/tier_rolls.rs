@@ -91,11 +91,7 @@ impl TierRolls {
             // in a tier of the tree that rolls, `19–22`).
             let rolled = if fixed {
                 let of_the_tree = |tier: &&Tier| {
-                    tiers.tier_unwritten
-                        && tier
-                            .ranges
-                            .iter()
-                            .all(|range| (range.max - range.min).abs() < f64::EPSILON)
+                    tiers.tier_unwritten && tier.ranges.iter().all(|range| range.is_one_value())
                 };
                 match tiers.tier().filter(of_the_tree) {
                     Some(tier) => std::slice::from_ref(tier),

@@ -214,6 +214,15 @@ unique-rolls-note = Les jets sont ceux de poe2scout.
 # Après la plage d'un palier trouvé d'après les valeurs, quand la ligne peut être un préfixe ou un suffixe : l'affixe de ce palier, en gris.
 affix-prefix = Préfixe
 affix-suffix = Suffixe
+# La même chose pour un modificateur d'un seigneur de l'Abîme (Amanamu, Kurgal, Ulaman), d'un seul palier, pour que sa rangée sans numéro de palier se lise « le seul » : « Préfixe d'Amanamu ».
+lord-prefix = { $lord ->
+    [Kurgal] Préfixe de Kurgal
+   *[other] Préfixe d'{ $lord }
+}
+lord-suffix = { $lord ->
+    [Kurgal] Suffixe de Kurgal
+   *[other] Suffixe d'{ $lord }
+}
 # L'infobulle de « Suffixe » sous une ligne qui additionne un préfixe et un suffixe de la même stat, le préfixe écrit au-dessus.
 added-up-with-prefix = Additionné au préfixe sur cette ligne
 # Après la plage de la part d'un hybride dans une ligne qui additionne deux modificateurs de la même stat, et sous ses autres lignes, en gris ; avec son affixe quand l'autre part est de l'autre affixe (un préfixe hybride additionné à un suffixe pur).

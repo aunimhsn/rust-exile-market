@@ -66,20 +66,26 @@ const fixedWindow = (it, stats) => win(topBar(), item({ ...it, stats }, true), p
 // line (`15% increased Light Radius`, "T1 Hybrid suffix"). Only the in-game trade writes such a line, so
 // both copies agree either way: one rule for every row. Chosen by the owner on 2026-10-30. Not the parts
 // of a summed line: the range of a part is the only amount known of it, never the value of the line.
+// The owner's idea, chosen on 2026-10-30: the lord's name before the affix, "Amanamu Prefix" (French
+// "Préfixe d'Amanamu", "Suffixe de Kurgal"), so that the row without tier number reads as "the only one",
+// not as an unknown tier, and a tier without range in the style of the affix, "T2 Suffix" (with a range,
+// the tier keeps its color: "T1 16–19 Prefix"); "Desecrated" last, on its own line. No modifier of the
+// Genesis tree can be in doubt (its tables have one affix each, and share a line with tables of the same
+// affix only), so none is named.
 const FIXED_CANNON = { rarity: "rare", name: "Havoc Roar", base: "Trarthan Cannon", cls: "Crossbows",
   tags: ["ilvl 82"], props: [["Physical DPS", "312"]], req: "Requires Level 79 · 98 Str · 98 Dex",
   statsLabel: "Stats (4)", filters: "2 filters" };
 const fixedCannon = affixes => [
   ...itemFilters({ base: "Trarthan Cannon", level: { value: 82, check: false } }),
   { group: "Suffixes", fill: "1 of 3" },
-  { mod: "+28% to Fire Resistance", check: false, min: 25, tier: 4, range: "26–30", over: { share: .55 } },
+  { mod: "15% increased Attack Speed", check: false, min: 14, tier: 2, range: "14–16", over: { share: .71 } },
   { group: "Explicit" },
   { mod: "Grenade Skills have +1 Cooldown Use", check: true, min: 1, origin: "desecrated", affixes },
   FIXED_NOTE,
 ];
 
 // Three sections, so that the windows of each fit the width of the page: the options first, then before
-// put above them, then the line in doubt, still open, at the top.
+// put above them, then the line in doubt, the last decided, at the top.
 SECTIONS.unshift(["Fixed values (13k3b2), the decision: A or B, each the same in both copies", [
   ["A · Chosen · Nothing under a fixed value, both copies: \"T2\" alone", fixedWindow(FIXED_AMULET, fixedAmulet({ tierOnly: true }, true))],
   ["A · Belt, both copies: no field, nothing under", fixedWindow(FIXED_BELT, fixedBelt({}, true))],
@@ -95,5 +101,6 @@ SECTIONS.unshift(["Fixed values (13k3b2), before: +2 to Level of all Minion Skil
 // The last decision, put first.
 SECTIONS.unshift(["Fixed values (13k3b2), a line in doubt: A extended to the tier of each affix", [
   ["Before · \"1 Prefix\", \"T2 1 Suffix\"", fixedWindow(FIXED_CANNON, fixedCannon([[null, "1", { label: "Prefix" }], [2, "1", { label: "Suffix" }]]))],
-  ["A extended · Chosen · \"Prefix\", \"T2 Suffix\"", fixedWindow(FIXED_CANNON, fixedCannon([[null, "", { label: "Prefix" }], [2, "", { label: "Suffix" }]]))],
+  ["A extended · \"Prefix\", \"T2 Suffix\"", fixedWindow(FIXED_CANNON, fixedCannon([[null, "", { label: "Prefix" }], [2, "", { label: "Suffix" }]]))],
+  ["Owner's idea · Chosen · \"Amanamu Prefix\", \"T2 Suffix\", all in the style of the affix", fixedWindow(FIXED_CANNON, fixedCannon([[null, "", { label: "Amanamu Prefix" }], [null, "", { label: "T2 Suffix" }]]))],
 ]]);

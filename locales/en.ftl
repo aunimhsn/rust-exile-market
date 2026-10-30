@@ -211,6 +211,9 @@ unique-rolls-note = The rolls are those of poe2scout.
 # After the range of a tier found from the values, when the line can be a prefix or a suffix: the affix of that tier, in gray.
 affix-prefix = Prefix
 affix-suffix = Suffix
+# The same for a modifier of a lord of the Abyss (Amanamu, Kurgal, Ulaman), of one tier, so that its row without tier number reads as "the only one": "Amanamu Prefix".
+lord-prefix = { $lord } Prefix
+lord-suffix = { $lord } Suffix
 # The tooltip of "Suffix" under a line that adds up a prefix and a suffix of the same stat, the prefix written above it.
 added-up-with-prefix = Added up with the prefix on this line
 # After the range of the part of a hybrid in a line that adds up two modifiers of the same stat, and under its other lines, in gray; with its affix when the other part is of the other affix (a hybrid prefix added up with a pure suffix).

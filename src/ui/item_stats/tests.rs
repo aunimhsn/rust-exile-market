@@ -5,6 +5,7 @@
 
 use super::*;
 use crate::item::{CopiedItem, ItemState};
+use crate::language::Language;
 
 fn parse(text: &str) -> Item {
     Item::parse(&CopiedItem::from_text(text).expect("an item")).expect("read")
@@ -139,7 +140,10 @@ fn tier_row_text(row: &TierRow) -> String {
         Some(better) => format!("T{better}/{tier}"),
         None => tier,
     };
-    let word = row.word.map(|word| format!("{word:?}"));
+    let word = row.word.map(|word| match row.lord {
+        Some(lord) => format!("{} {word:?}", lord.name()),
+        None => format!("{word:?}"),
+    });
     let tip = row.tip.as_ref().map(|tip| match tip {
         WordTip::Text(message) => format!("{message:?}"),
         WordTip::HybridLines(lines) => format!("(with {})", lines.join(" and ")),
@@ -344,8 +348,8 @@ fn a_line_of_the_in_game_trade_that_can_be_a_prefix_or_a_suffix_shows_the_tier_o
 
 #[test]
 fn a_line_that_can_be_a_modifier_of_one_tier_only_writes_no_tier_number_on_its_row() {
-    // `+1` desecrated is the prefix of Amanamu, the only one, or the T2 of the suffix of a
-    // cannon: a fixed value, without range under it.
+    // `+1` desecrated is the prefix of Amanamu, the only one, named, or the T2 of the suffix of
+    // a cannon: a fixed value, without range under it.
     let cannon = parse(
         "Item Class: Crossbows\nRarity: Rare\nDoom Bolt\nTrarthan Cannon\n--------\n\
          Item Level: 82\n--------\nGrenade Skills have +1 Cooldown Use (desecrated)\n",
@@ -354,7 +358,7 @@ fn a_line_that_can_be_a_modifier_of_one_tier_only_writes_no_tier_number_on_its_r
     let texts = texts(&read_again(cannon));
     assert!(
         texts.contains(
-            &"■ Grenade Skills have +1 Cooldown Use ≥1 [AffixPrefix / T2 AffixSuffix / Desecrated]"
+            &"■ Grenade Skills have +1 Cooldown Use ≥1 [Amanamu AffixPrefix / T2 AffixSuffix / Desecrated]"
                 .to_owned()
         ),
         "{texts:?}"
@@ -474,29 +478,79 @@ fn a_fixed_value_shows_the_same_in_both_copies() {
 }
 
 #[test]
-fn the_ranges_of_a_fixed_value_only_arent_written_under_it() {
+fn the_words_of_a_tier_name_the_lord_and_take_a_tier_without_range() {
+    let row = |number: Option<u32>, ranges: Vec<Range>, affix, lord| TierRow {
+        lord,
+        ..TierRow::affix(&AffixTier {
+            affix,
+            tier: number.unwrap_or(1),
+            hides_number: number.is_none(),
+            ranges,
+            lord: None,
+        })
+    };
+    let english = Translator::new(Language::English);
+    let french = Translator::new(Language::French);
+    let words = |row: &TierRow, i18n: &Translator| row_word(row, i18n);
+    let amanamu = row(None, Vec::new(), Affix::Prefix, Some(Lord::Amanamu));
+    let kurgal = row(None, Vec::new(), Affix::Suffix, Some(Lord::Kurgal));
+    let t2 = row(Some(2), Vec::new(), Affix::Suffix, None);
+    let ranged = row(
+        Some(1),
+        vec![Range {
+            min: 16.0,
+            max: 19.0,
+        }],
+        Affix::Prefix,
+        None,
+    );
+
+    assert_eq!(words(&amanamu, &english).as_deref(), Some("Amanamu Prefix"));
+    assert_eq!(
+        words(&amanamu, &french).as_deref(),
+        Some("Préfixe d'Amanamu")
+    );
+    assert_eq!(
+        words(&kurgal, &french).as_deref(),
+        Some("Suffixe de Kurgal")
+    );
+    // A tier without range written as the word, in its style; with a range, apart.
+    assert_eq!(words(&t2, &english).as_deref(), Some("T2 Suffix"));
+    assert!(t2.quiet_tier());
+    assert_eq!(words(&ranged, &english).as_deref(), Some("Prefix"));
+    assert!(!ranged.quiet_tier());
+}
+
+#[test]
+fn the_ranges_written_under_a_modifier_are_those_of_its_numbers_that_vary() {
+    // The ranges the advanced copy writes, on every line of the modifier (`Range::unless_fixed`):
+    // a ring whose prefix adds a fixed and a varying number, then a flask whose prefix of two
+    // lines has a fixed value only.
     let ranges = |text: &str| {
-        let item = parse(&format!(
-            "Item Class: Rings\nRarity: Rare\nGlyph Circle\nGold Ring\n--------\n\
-             Item Level: 80\n--------\n{{ Prefix Modifier \"Glinting\" (Tier: 3) — Damage }}\n{text}"
-        ));
-        item.modifiers()
-            .first()
+        parse(text)
+            .modifiers()
+            .iter()
+            .find(|modifier| modifier.kind == ModifierKind::Explicit(Some(Affix::Prefix)))
             .map(tier_ranges)
             .unwrap_or_default()
     };
     let range = |min, max| Range { min, max };
 
-    // Every value fixed: nothing; one varies: the range of each.
-    assert_eq!(ranges("50(50)% reduced Amount Recovered"), []);
     assert_eq!(
-        ranges("Adds 5(5) to 10(8-12) Physical Damage to Attacks"),
+        ranges(
+            "Item Class: Rings\nRarity: Rare\nGlyph Circle\nGold Ring\n--------\n\
+             Item Level: 80\n--------\n{ Prefix Modifier \"Glinting\" (Tier: 6) — Damage }\n\
+             Adds 5(5) to 10(8-12) Physical Damage to Attacks"
+        ),
         [range(5.0, 5.0), range(8.0, 12.0)]
     );
-    // A sanctified value out of its range of one value: "T2 30".
     assert_eq!(
-        ranges("29(30)% reduced Attribute Requirements"),
-        [range(30.0, 30.0)]
+        ranges(
+            "Item Class: Life Flasks\nRarity: Magic\nSaturated Ultimate Life Flask\n--------\n\
+             Item Level: 82\n--------\n{ Prefix Modifier \"Saturated\" (Tier: 1) — Life }\n\
+             Instant Recovery\n50(50)% reduced Amount Recovered"
+        ),
+        []
     );
 }
 
@@ -2445,6 +2499,7 @@ fn a_modifier_counts_the_affixes_it_takes_in_the_room_of_its_item() {
         tier: 1,
         hides_number: false,
         ranges: Vec::new(),
+        lord: None,
     };
 
     let prefix = ModifierKind::Explicit(Some(Affix::Prefix));

@@ -36,7 +36,7 @@ use crate::format;
 use crate::game_data::{self, Category};
 use crate::i18n::{Message, Translator};
 use crate::item::{
-    Affix, AffixTier, Item, Modifier, ModifierKind, ModifierOrigin, PartTier, Range, Rarity,
+    Affix, AffixTier, Item, Lord, Modifier, ModifierKind, ModifierOrigin, PartTier, Range, Rarity,
     StatLine, TierDoubt,
 };
 use crate::roll_difference::CopiedLines;
@@ -217,6 +217,8 @@ struct TierRow<'a> {
     better: Option<u32>,
     /// In gray after the ranges: the affix of the tier ("Prefix"), or "Hybrid".
     word: Option<Message>,
+    /// The lord of the Abyss named before the affix: "Amanamu Prefix".
+    lord: Option<Lord>,
     /// The tooltip of that word.
     tip: Option<WordTip<'a>>,
 }
@@ -235,12 +237,18 @@ enum WordTip<'a> {
 }
 
 impl<'a> TierRow<'a> {
+    /// Whether its tier, without range, is written as its word: "T2 Suffix".
+    fn quiet_tier(&self) -> bool {
+        self.word.is_some() && self.tier.ranges.is_empty() && self.better.is_none()
+    }
+
     /// The tier `tier` of a modifier, without word.
     fn plain(tier: ModifierTier) -> Self {
         Self {
             tier,
             better: None,
             word: None,
+            lord: None,
             tip: None,
         }
     }
@@ -255,6 +263,7 @@ impl<'a> TierRow<'a> {
             },
             better: None,
             word: Some(affix_word(found.affix)),
+            lord: found.lord,
             tip: None,
         }
     }
@@ -286,9 +295,26 @@ impl<'a> TierRow<'a> {
                 .copied()
                 .filter(|&better| better != worse),
             word,
+            lord: None,
             tip,
         })
     }
+}
+
+/// The words after the ranges of the tier of `row`, in `i18n`: its affix, after the lord whose
+/// modifier it is ("Amanamu Prefix"); after its tier written as they are ("T2 Suffix") when it has
+/// no range (a fixed value), so that it reads as one with them (owner's choice on 2026-10-30).
+fn row_word(row: &TierRow, i18n: &Translator) -> Option<String> {
+    let word = row.word?;
+    let text = match (row.lord, word) {
+        (Some(lord), Message::AffixPrefix) => i18n.lord_affix(Affix::Prefix, lord.name()),
+        (Some(lord), Message::AffixSuffix) => i18n.lord_affix(Affix::Suffix, lord.name()),
+        _ => i18n.text(word),
+    };
+    Some(match row.tier.number.filter(|_| row.quiet_tier()) {
+        Some(number) => format!("T{number} {text}"),
+        None => text,
+    })
 }
 
 /// The word of an affix after the ranges of its tier.
@@ -2025,11 +2051,14 @@ fn roll_line(ui: &mut Ui, roll: &Roll, bar: RollBar, i18n: &Translator) {
 /// A tier and its ranges ([`tier_label`]), then the word after them in gray, with its
 /// tooltip wrapped past [`WORD_TIP_WIDTH`].
 fn tier_row(ui: &mut Ui, row: &TierRow, i18n: &Translator) {
-    tier_label(ui, &row.tier, row.better);
-    let Some(word) = row.word else {
+    let word = row_word(row, i18n);
+    if !row.quiet_tier() {
+        tier_label(ui, &row.tier, row.better);
+    }
+    let Some(word) = word else {
         return;
     };
-    let response = small_word(ui, i18n.text(word), color::WEAK);
+    let response = small_word(ui, word, color::WEAK);
     if let Some(tip) = &row.tip {
         let text = match tip {
             WordTip::Text(message) => i18n.text(*message),

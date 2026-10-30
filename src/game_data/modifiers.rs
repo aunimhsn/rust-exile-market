@@ -9,7 +9,7 @@ use serde::Deserialize;
 use super::bases::{self, BaseSpawn, Domain};
 use super::lines::{LineMatch, StatSource, modifier_stats};
 use crate::item::{
-    Affix, AffixTier, Modifier, ModifierKind, ModifierOrigin, PartTier, Range, TierDoubt,
+    Affix, AffixTier, Lord, Modifier, ModifierKind, ModifierOrigin, PartTier, Range, TierDoubt,
 };
 use crate::language::Language;
 
@@ -44,7 +44,28 @@ struct Table {
     /// doesn't write (`Reinforcing`, `Minions have 21(19-22)% increased maximum Life`).
     #[serde(default)]
     genesis: bool,
+    /// The lord of the Abyss whose modifier it is.
+    #[serde(default)]
+    lord: Option<TableLord>,
     tiers: Vec<TableTier>,
+}
+
+/// A lord of the Abyss, as the generator writes him.
+#[derive(Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
+enum TableLord {
+    Amanamu,
+    Kurgal,
+    Ulaman,
+}
+
+impl From<TableLord> for Lord {
+    fn from(lord: TableLord) -> Self {
+        match lord {
+            TableLord::Amanamu => Self::Amanamu,
+            TableLord::Kurgal => Self::Kurgal,
+            TableLord::Ulaman => Self::Ulaman,
+        }
+    }
 }
 
 /// The prefix first, as the two pure modifiers of a split line are read.
@@ -162,6 +183,8 @@ pub struct ModifierTiers {
     /// Whether the game writes the modifier without tier, one of the Genesis tree: it is read
     /// as the advanced copy writes it, the ranges of its tier without number.
     pub tier_unwritten: bool,
+    /// The lord of the Abyss whose modifier it is.
+    pub lord: Option<Lord>,
 }
 
 impl ModifierTiers {
@@ -328,6 +351,7 @@ fn hybrid_tiers(
                 neighbour: better,
                 counts: counts.clone(),
                 tier_unwritten: table.genesis,
+                lord: table.lord.map(Lord::from),
             };
             best = Some((fit, tiers));
         }
@@ -817,6 +841,7 @@ fn affix_tier(
                 .flat_map(|line| &line.rolls)
                 .filter_map(|roll| Some((roll.value, roll.range?))),
         ),
+        lord: tiers.lord,
     })
 }
 
@@ -1082,6 +1107,7 @@ fn splits(
                             neighbour: None,
                             counts: counts.clone(),
                             tier_unwritten: whole.genesis,
+                            lord: whole.lord.map(Lord::from),
                         },
                         added: AddedTiers {
                             line: owner,
@@ -1092,6 +1118,7 @@ fn splits(
                                 neighbour: None,
                                 counts: vec![line.count()],
                                 tier_unwritten: added.genesis,
+                                lord: added.lord.map(Lord::from),
                             },
                         },
                         fit,
@@ -1474,6 +1501,7 @@ fn find(
                     neighbour: None,
                     counts,
                     tier_unwritten: table.genesis,
+                    lord: table.lord.map(Lord::from),
                 },
             ));
         }
