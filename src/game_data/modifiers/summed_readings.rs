@@ -406,7 +406,8 @@ fn best_shown(chosen: &[&Candidate], count: usize) -> Vec<Vec<Vec<Shown>>> {
 
 /// Whether the modifiers `other` are those `best` reads on a line: one for each, among the
 /// affixes and tiers it can be, whatever their order. Each is matched against every one left,
-/// two modifiers of `best` being able to share an option (a line has three modifiers at most).
+/// two modifiers of `best` being able to share an option (the best reading has two modifiers on
+/// a line at most).
 fn same(best: &[Vec<Shown>], other: &[&Shown]) -> bool {
     let Some((options, rest)) = best.split_first() else {
         return other.is_empty();

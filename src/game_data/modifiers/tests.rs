@@ -1428,6 +1428,56 @@ fn a_part_of_a_split_line_in_two_neighbouring_tiers_keeps_both() {
 }
 
 #[test]
+fn the_summed_part_of_a_split_line_in_two_neighbouring_tiers_keeps_both() {
+    let rarity = [modifier(None, &["18% increased Rarity of Items found"])];
+    let limits = AffixLimits {
+        prefixes: 3,
+        suffixes: 3,
+    };
+    let read = |item_level| {
+        let found = trade_tiers(
+            Language::English,
+            "Ancestral Tiara",
+            Some(item_level),
+            &rarity,
+            limits,
+            false,
+        );
+        let numbers = |tiers: &ModifierTiers| -> Vec<u32> {
+            tiers.possible().map(|tier| tier.number).collect()
+        };
+        found
+            .iter()
+            .map(|found| {
+                let affixes: Vec<_> = found
+                    .affixes
+                    .iter()
+                    .map(|(affix, tiers)| (*affix, numbers(tiers)))
+                    .collect();
+                let added = found
+                    .added
+                    .as_ref()
+                    .map(|added| (added.affix, numbers(&added.tiers)));
+                (affixes, added)
+            })
+            .collect::<Vec<_>>()
+    };
+
+    // At level 35, the rarity rolls as a prefix 8–11 (T3) or 12–15 (T2), and as a suffix
+    // 6–10 (T3) or 11–14 (T2): 18% fits neither alone, and is the suffix T3 with the prefix
+    // T2 or T3, the prefix the summed part.
+    assert_eq!(
+        read(35),
+        [(
+            vec![(Affix::Prefix, vec![2, 3])],
+            Some((Affix::Suffix, vec![3]))
+        )]
+    );
+    // At level 40, the suffix T1 (15–18) holds it alone: not split.
+    assert_eq!(read(40), [(vec![(Affix::Suffix, vec![1])], None)]);
+}
+
+#[test]
 fn a_line_held_alone_is_split_when_the_other_line_of_the_hybrid_has_no_tier_alone() {
     let modifiers = [
         modifier(None, &["9% increased Armour"]),
@@ -1486,6 +1536,10 @@ fn the_lines_in_doubt_keep_their_room() {
     assert_eq!(
         summary(&modifiers, &found),
         [(2, vec![(Prefix, 6)]), (1, vec![(Prefix, 1), (Suffix, 1)])]
+    );
+    assert_eq!(
+        added(&modifiers, &found),
+        [("+127 to maximum Life".to_owned(), Prefix, 3)]
     );
     assert_eq!(neighbours(&found), [(3, 2)]);
 }
@@ -1873,10 +1927,8 @@ fn two_ways_that_differ_by_a_neighbouring_tier_of_one_modifier_are_one() {
     let joined = |ways: &[Split]| way_tiers(&neighbours_joined(ways));
 
     // The added modifier in the tier of index 1 or 0, or the summed one: the worse found,
-    // the better its neighbour. No item rolls the summed one in two tiers today: no two pure
-    // modifiers of one stat, a prefix and a suffix, fit only that way, and the tiers of a
-    // hybrid hold the same value of its other line only on two flask modifiers (checked on
-    // the tables, 2026-10-30).
+    // the better its neighbour (the summed one on an item:
+    // `the_summed_part_of_a_split_line_in_two_neighbouring_tiers_keeps_both`).
     assert_eq!(
         joined(&[way((0, 1), (0, 0)), way((0, 1), (0, 1))]),
         [((0, 1), (0, None), (1, Some(0)))]
