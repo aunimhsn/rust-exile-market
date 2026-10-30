@@ -456,9 +456,8 @@ fn neighbours(found: &[FoundTiers]) -> Vec<(u32, u32)> {
             found.affixes.iter().map(|(_, tiers)| tiers).chain(added)
         })
         .filter_map(|tiers| {
-            let mut possible = tiers.possible().map(|tier| tier.number);
-            let (tier, neighbour) = (possible.next()?, possible.next()?);
-            Some((tier, neighbour))
+            let neighbour = tiers.tiers.get(tiers.neighbour?)?;
+            Some((tiers.tier()?.number, neighbour.number))
         })
         .collect()
 }
@@ -1409,7 +1408,7 @@ fn a_part_of_a_split_line_in_two_neighbouring_tiers_keeps_both() {
         modifier(None, &["+195 to Accuracy Rating"]),
     ];
 
-    // The other readings with three prefixes are the same as the best one but for the tier
+    // With two prefixes, the other readings are the same as the best one but for the tier
     // of the pure part.
     let found = found_tiers(&item, &modifiers, (2, 3));
     assert_eq!(summary(&modifiers, &found), [(2, vec![(Affix::Prefix, 1)])]);
@@ -1458,7 +1457,7 @@ fn a_line_held_alone_is_split_when_the_other_line_of_the_hybrid_has_no_tier_alon
 }
 
 #[test]
-fn a_line_in_doubt_takes_its_room() {
+fn the_lines_in_doubt_keep_their_room() {
     use Affix::{Prefix, Suffix};
     let item = parse(TIARA_EN);
     let lines = |mana: bool| {
@@ -1874,7 +1873,10 @@ fn two_ways_that_differ_by_a_neighbouring_tier_of_one_modifier_are_one() {
     let joined = |ways: &[Split]| way_tiers(&neighbours_joined(ways));
 
     // The added modifier in the tier of index 1 or 0, or the summed one: the worse found,
-    // the better its neighbour.
+    // the better its neighbour. No item rolls the summed one in two tiers today: no two pure
+    // modifiers of one stat, a prefix and a suffix, fit only that way, and the tiers of a
+    // hybrid hold the same value of its other line only on two flask modifiers (checked on
+    // the tables, 2026-10-30).
     assert_eq!(
         joined(&[way((0, 1), (0, 0)), way((0, 1), (0, 1))]),
         [((0, 1), (0, None), (1, Some(0)))]
@@ -1883,8 +1885,8 @@ fn two_ways_that_differ_by_a_neighbouring_tier_of_one_modifier_are_one() {
         joined(&[way((0, 1), (2, 1)), way((0, 1), (1, 1))]),
         [((0, 1), (2, Some(1)), (1, None))]
     );
-    // Both modifiers in other tiers, tiers that aren't neighbours, three ways, or two pairs
-    // of modifiers: apart.
+    // Both modifiers in other tiers, tiers that aren't neighbours, three ways (also a
+    // modifier in three tiers), or two pairs of modifiers: apart.
     let apart = [
         vec![way((0, 1), (0, 1)), way((0, 1), (1, 0))],
         vec![way((0, 1), (0, 0)), way((0, 1), (0, 2))],
@@ -1892,6 +1894,11 @@ fn two_ways_that_differ_by_a_neighbouring_tier_of_one_modifier_are_one() {
             way((0, 1), (0, 0)),
             way((0, 1), (0, 1)),
             way((0, 1), (1, 0)),
+        ],
+        vec![
+            way((0, 1), (0, 0)),
+            way((0, 1), (0, 1)),
+            way((0, 1), (0, 2)),
         ],
         vec![way((0, 1), (0, 0)), way((0, 2), (0, 1))],
     ];

@@ -405,21 +405,18 @@ fn best_shown(chosen: &[&Candidate], count: usize) -> Vec<Vec<Vec<Shown>>> {
 }
 
 /// Whether the modifiers `other` are those `best` reads on a line: one for each, among the
-/// affixes it can be.
+/// affixes and tiers it can be, whatever their order. Each is matched against every one left,
+/// two modifiers of `best` being able to share an option (a line has three modifiers at most).
 fn same(best: &[Vec<Shown>], other: &[&Shown]) -> bool {
-    if best.len() != other.len() {
-        return false;
-    }
-    let mut used = vec![false; other.len()];
-    best.iter().all(|options| {
-        let found = other
-            .iter()
-            .zip(&used)
-            .position(|(shown, &used)| !used && options.contains(shown));
-        found
-            .and_then(|index| used.get_mut(index))
-            .map(|used| *used = true)
-            .is_some()
+    let Some((options, rest)) = best.split_first() else {
+        return other.is_empty();
+    };
+    other.iter().enumerate().any(|(index, shown)| {
+        options.contains(shown) && {
+            let mut left = other.to_vec();
+            left.remove(index);
+            same(rest, &left)
+        }
     })
 }
 
