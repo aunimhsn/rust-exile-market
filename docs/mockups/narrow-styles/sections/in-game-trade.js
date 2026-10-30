@@ -23,8 +23,8 @@
 // a pseudo total adds up and the damage a weapon's DPS counts (step 13k2e3c2).
 
 // The note under the stats.
-const DEDUCED_NOTE = { note: "Copied from the in-game trade: the tiers are found from the values." };
-const DEDUCED_NOTE_FR = { note: "Copié depuis l'échange du jeu : les paliers sont trouvés d'après les valeurs." };
+const DEDUCED_NOTE = { note: "The tiers are found from the values." };
+const DEDUCED_NOTE_FR = { note: "Les paliers sont trouvés d'après les valeurs." };
 
 // Fractured tiara (the owner's copy, English): a fractured hybrid, the rarity ruled a suffix.
 const TIARA_TRADE = { rarity: "rare", name: "Chimeric Visage", base: "Ancestral Tiara", cls: "Helmets",
