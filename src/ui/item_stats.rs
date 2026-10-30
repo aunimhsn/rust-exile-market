@@ -16,7 +16,9 @@
 //! least the physical one. The pseudo totals start checked, and the lines they add up
 //! unchecked. A desecrated modifier not revealed yet is a line of its group without filter, on a
 //! band of the desecrated green; its item gets a filter of its number of unrevealed modifiers,
-//! and its other stats start unchecked, with a note under them.
+//! and its other stats start unchecked, with a note under them. A line of a Time-Lost jewel is
+//! written without the words of its radius, a tag of the passive skills they name after its
+//! range.
 //!
 //! The rows are decided apart from the drawing ([`rows`]), and tested.
 
@@ -94,6 +96,8 @@ const BAR_SIZE: Vec2 = vec2(96.0, 4.0);
 const ROLL_GAP: f32 = 3.0;
 /// The space between the range of a tier and the origin of its modifier.
 const ORIGIN_GAP: f32 = 6.0;
+/// The space around the tag of the radius of a line of a Time-Lost jewel, inside its block.
+const RADIUS_TAG_PADDING: Vec2 = vec2(5.0, 0.0);
 /// The separator of the ranges of a stat with several rolls.
 const RANGE_SEPARATOR: &str = " · ";
 /// The share of the copied value the limit of a rare, magic or normal item leaves below it
@@ -515,11 +519,57 @@ impl StatFilter {
     }
 }
 
+/// The passive skills in the radius of a Time-Lost jewel that a line of it is granted to; not
+/// the radius of the jewel itself (`Radius: Small`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RadiusSkills {
+    Small,
+    Notable,
+}
+
+impl RadiusSkills {
+    /// Its tag, after the range of the line: "Small", "Notable".
+    fn message(self) -> Message {
+        match self {
+            Self::Small => Message::RadiusSmall,
+            Self::Notable => Message::RadiusNotable,
+        }
+    }
+}
+
+/// The words a Time-Lost jewel writes before each of its lines, in each language of the game,
+/// and the passive skills they name.
+const RADIUS_WORDS: [(&str, RadiusSkills); 4] = [
+    (
+        "Small Passive Skills in Radius also grant ",
+        RadiusSkills::Small,
+    ),
+    (
+        "Notable Passive Skills in Radius also grant ",
+        RadiusSkills::Notable,
+    ),
+    (
+        "Les Talents Mineurs dans le Rayon octroient également ",
+        RadiusSkills::Small,
+    ),
+    (
+        "Les Talents éminents dans le Rayon octroient également ",
+        RadiusSkills::Notable,
+    ),
+];
+
 /// The text of a stat.
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum StatText<'a> {
     /// A line of a modifier.
     Line(&'a str),
+    /// A line of a Time-Lost jewel, without the words of its radius (`line`), and the whole
+    /// line, which names it to a screen reader.
+    RadiusLine {
+        skills: RadiusSkills,
+        line: &'a str,
+        whole: &'a str,
+    },
     /// The base type, with the item class searched in its place when it is unchecked; none
     /// for a base the game data doesn't know, searched among any base instead.
     BaseType {
@@ -534,9 +584,41 @@ enum StatText<'a> {
 }
 
 impl<'a> StatText<'a> {
+    /// A line of a modifier, without the words of its radius for a line of a Time-Lost jewel.
+    fn line(text: &'a str) -> Self {
+        RADIUS_WORDS
+            .iter()
+            .find_map(|&(words, skills)| {
+                let line = text.strip_prefix(words)?;
+                Some(Self::RadiusLine {
+                    skills,
+                    line,
+                    whole: text,
+                })
+            })
+            .unwrap_or(Self::Line(text))
+    }
+
+    /// The passive skills a line of a Time-Lost jewel is granted to.
+    fn radius_skills(self) -> Option<RadiusSkills> {
+        match self {
+            Self::RadiusLine { skills, .. } => Some(skills),
+            _ => None,
+        }
+    }
+
+    /// The text that names the stat to a screen reader: the whole line of a Time-Lost jewel,
+    /// with the words of its radius shown as a tag.
+    fn label(self, i18n: &Translator) -> Cow<'a, str> {
+        match self {
+            Self::RadiusLine { whole, .. } => Cow::Borrowed(whole),
+            _ => self.text(i18n),
+        }
+    }
+
     fn text(self, i18n: &Translator) -> Cow<'a, str> {
         match self {
-            Self::Line(text) => Cow::Borrowed(text),
+            Self::Line(text) | Self::RadiusLine { line: text, .. } => Cow::Borrowed(text),
             Self::BaseType { base_type, .. } => Cow::Owned(i18n.filter_base_type(base_type)),
             Self::Property(property, value) => {
                 Cow::Owned(i18n.filter_property(property, &format::number(value)))
@@ -1098,7 +1180,7 @@ fn added<'a>(key: StatKey, line: &'a StatLine, reading: &Reading<'_>) -> Stat<'a
     let counted = reading.counted(key, line);
     Stat {
         key: FilterKey::Stat(key),
-        text: StatText::Line(&line.text),
+        text: StatText::line(&line.text),
         filter: Some(StatFilter {
             checked: false,
             limit: value(&counted).map(|value| Limit::new(value, half, None, value, &counted)),
@@ -1115,7 +1197,7 @@ fn implicit_stat<'a>(key: StatKey, line: &'a StatLine, reading: &Reading<'_>) ->
     let ranges = copied_ranges(&counted);
     Stat {
         key: FilterKey::Stat(key),
-        text: StatText::Line(&line.text),
+        text: StatText::line(&line.text),
         filter: Some(comparable_filter(
             &counted,
             bounds(&counted, &ranges),
@@ -1309,7 +1391,7 @@ fn affix_stat<'a>(
         .and_then(|over| varying_share(&magnitudes(&counted, &over.ranges)));
     Stat {
         key: FilterKey::Stat(key),
-        text: StatText::Line(&line.text),
+        text: StatText::line(&line.text),
         filter: Some(filter),
         unsearchable: false,
         roll: (share.is_some() || tier.is_some() || origin.is_some()).then_some(Roll::Affix {
@@ -1429,7 +1511,7 @@ fn unique_stat<'a>(
     let ranges = copied_ranges(line);
     let fixed = Stat {
         key: FilterKey::Stat(key),
-        text: StatText::Line(&whole.text),
+        text: StatText::line(&whole.text),
         filter: None,
         unsearchable: false,
         roll: origin.map(|origin| Roll::Affix {
@@ -1702,9 +1784,8 @@ fn group_title(ui: &mut Ui, group: Group, range: bool, i18n: &Translator) {
 /// A stat in the color of the modifiers, on two lines at most, and its roll under it; a
 /// filter between its checkbox and the column of its range field.
 fn stat_row(ui: &mut Ui, stat: &Stat<'_>, filters: &mut Filters, i18n: &Translator, bar: RollBar) {
-    let text = stat.text.text(i18n);
     if let StatText::Unrevealed(_) = stat.text {
-        unrevealed_row(ui, &text);
+        unrevealed_row(ui, &stat.text.text(i18n));
         return;
     }
     ui.horizontal_top(|ui| {
@@ -1718,8 +1799,7 @@ fn stat_row(ui: &mut Ui, stat: &Stat<'_>, filters: &mut Filters, i18n: &Translat
             ui.add_space(GAP);
             stat_text(
                 ui,
-                &text,
-                stat.roll.as_ref(),
+                stat,
                 None,
                 (width - GUTTER - GAP - GAP - RANGE_COLUMN).max(0.0),
                 bar,
@@ -1728,13 +1808,14 @@ fn stat_row(ui: &mut Ui, stat: &Stat<'_>, filters: &mut Filters, i18n: &Translat
             return;
         }
         let Some(filter) = stat.filter else {
-            stat_text(ui, &text, stat.roll.as_ref(), None, width, bar, i18n);
+            stat_text(ui, stat, None, width, bar, i18n);
             return;
         };
         let mut choice = filters.get(stat.key, || filter.default_choice());
         let before = choice.clone();
         // The checkbox on the first line of the text.
-        if widgets::check_box(ui, choice.checked, vec2(GUTTER, line_height), &text).clicked() {
+        let label = stat.text.label(i18n);
+        if widgets::check_box(ui, choice.checked, vec2(GUTTER, line_height), &label).clicked() {
             choice.checked = !choice.checked;
         }
         ui.add_space(GAP);
@@ -1751,8 +1832,7 @@ fn stat_row(ui: &mut Ui, stat: &Stat<'_>, filters: &mut Filters, i18n: &Translat
         };
         stat_text(
             ui,
-            &text,
-            stat.roll.as_ref(),
+            stat,
             note.as_deref(),
             (width - GUTTER - GAP - GAP - column).max(0.0),
             bar,
@@ -1786,11 +1866,11 @@ fn unrevealed_row(ui: &mut Ui, words: &str) {
         });
 }
 
-/// The text of a stat and its roll, or a `note` in faint text under it, `width` across.
+/// The text of a stat and its roll, the tag of the passive skills of its radius after it (alone
+/// under a line without roll), or a `note` in faint text under it, `width` across.
 fn stat_text(
     ui: &mut Ui,
-    text: &str,
-    roll: Option<&Roll>,
+    stat: &Stat,
     note: Option<&str>,
     width: f32,
     bar: RollBar,
@@ -1798,10 +1878,14 @@ fn stat_text(
 ) {
     ui.allocate_ui_with_layout(vec2(width, 0.0), Layout::top_down(Align::Min), |ui| {
         ui.set_width(width);
-        ui.add(Label::new(clamped(text)).wrap());
-        if let Some(roll) = roll {
+        ui.add(Label::new(clamped(&stat.text.text(i18n))).wrap());
+        let skills = stat.text.radius_skills();
+        if let Some(roll) = &stat.roll {
             ui.add_space(ROLL_GAP);
-            roll_line(ui, roll, bar, i18n);
+            roll_line(ui, roll, skills, bar, i18n);
+        } else if let Some(skills) = skills {
+            ui.add_space(ROLL_GAP);
+            roll_row(ui, |ui| radius_tag(ui, skills, i18n));
         }
         if let Some(note) = note {
             ui.add_space(ROLL_GAP);
@@ -2014,8 +2098,24 @@ fn clamped(text: &str) -> LayoutJob {
 /// The bar of a roll drawn in the style `bar`, and its ranges; for a line of a prefix or
 /// suffix, its bar over every tier, then under the last line of its modifier its tier, the
 /// ranges of that tier and its origin; or the tiers of a line that can be a prefix or a
-/// suffix, one under the other, then its origin on a row of its own.
-fn roll_line(ui: &mut Ui, roll: &Roll, bar: RollBar, i18n: &Translator) {
+/// suffix, one under the other, then its origin on a row of its own. Last, the tag of the
+/// passive `skills` of the radius of a line of a Time-Lost jewel.
+fn roll_line(
+    ui: &mut Ui,
+    roll: &Roll,
+    skills: Option<RadiusSkills>,
+    bar: RollBar,
+    i18n: &Translator,
+) {
+    // What ends the roll: its origin, then the tag.
+    let ending = |ui: &mut Ui, origin: Option<ModifierOrigin>| {
+        if let Some(origin) = origin {
+            origin_word(ui, origin, i18n);
+        }
+        if let Some(skills) = skills {
+            radius_tag(ui, skills, i18n);
+        }
+    };
     match roll {
         Roll::Bar {
             share,
@@ -2024,9 +2124,7 @@ fn roll_line(ui: &mut Ui, roll: &Roll, bar: RollBar, i18n: &Translator) {
         } => roll_row(ui, |ui| {
             roll_bar(ui, *share, bar);
             range_label(ui, ranges);
-            if let Some(origin) = origin {
-                origin_word(ui, *origin, i18n);
-            }
+            ending(ui, *origin);
         }),
         Roll::Affix {
             share,
@@ -2039,9 +2137,7 @@ fn roll_line(ui: &mut Ui, roll: &Roll, bar: RollBar, i18n: &Translator) {
             if let Some(tier) = tier {
                 tier_row(ui, tier, i18n);
             }
-            if let Some(origin) = origin {
-                origin_word(ui, *origin, i18n);
-            }
+            ending(ui, *origin);
         }),
         Roll::Tiers { rows, origin } => {
             ui.vertical(|ui| {
@@ -2050,8 +2146,8 @@ fn roll_line(ui: &mut Ui, roll: &Roll, bar: RollBar, i18n: &Translator) {
                     roll_row(ui, |ui| tier_row(ui, row, i18n));
                 }
                 // On a line of its own: the line has it whichever affix it is.
-                if let Some(origin) = origin {
-                    roll_row(ui, |ui| origin_word(ui, *origin, i18n));
+                if origin.is_some() || skills.is_some() {
+                    roll_row(ui, |ui| ending(ui, *origin));
                 }
             });
         }
@@ -2117,11 +2213,31 @@ fn origin_word(ui: &mut Ui, origin: ModifierOrigin, i18n: &Translator) {
 }
 
 /// A small word in `tint`: an origin, after the ranges of a tier or on a row of its own, or the
-/// affix of a tier among several ("Prefix") in gray, after its ranges.
+/// affix of a tier among several ("Prefix") in gray, after its ranges; `ORIGIN_GAP` after what
+/// comes before it.
 fn small_word(ui: &mut Ui, word: String, tint: Color32) -> Response {
-    // The space before it only.
-    ui.spacing_mut().item_spacing.x = ORIGIN_GAP;
+    space_before(ui, ORIGIN_GAP);
     ui.label(RichText::new(word).font(text::origin()).color(tint))
+}
+
+/// The tag of the passive `skills` a line of a Time-Lost jewel is granted to, small, gray on a
+/// block: "Small", `GAP` after what comes before it.
+fn radius_tag(ui: &mut Ui, skills: RadiusSkills, i18n: &Translator) {
+    space_before(ui, GAP);
+    let galley = widgets::text_line(ui, i18n.text(skills.message()), text::origin());
+    let (rect, _) =
+        ui.allocate_exact_size(galley.size() + 2.0 * RADIUS_TAG_PADDING, Sense::hover());
+    let painter = ui.painter();
+    painter.rect_filled(rect, CornerRadius::same(size::RADIUS), color::CONTROL);
+    painter.galley(rect.min + RADIUS_TAG_PADDING, galley, color::WEAK);
+}
+
+/// Makes the space between what the row of `ui` already holds and the next item `gap`: egui puts
+/// the spacing of the row after an item, so the item before set it. Nothing on an empty row.
+fn space_before(ui: &mut Ui, gap: f32) {
+    if ui.min_rect().width() > 0.0 {
+        ui.add_space(gap - ui.spacing().item_spacing.x);
+    }
 }
 
 /// The word of an origin, and its color.

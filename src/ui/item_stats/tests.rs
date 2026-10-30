@@ -47,7 +47,8 @@ fn texts(item: &Item) -> Vec<String> {
 /// origin: `■ +86 to maximum Life ≥77 [0.37 T7 85–99]`, `[0.80 T2 71–79 Desecrated]`; the
 /// tiers of a line that can be a prefix or a suffix, each row after a ` / `, its origin a
 /// row of its own: `[T1 16–19 AffixPrefix / T1 15–18 AffixSuffix / Desecrated]`; the word
-/// after the ranges followed by its tooltip, and two neighbouring tiers `T1/T2 155–179`).
+/// after the ranges followed by its tooltip, and two neighbouring tiers `T1/T2 155–179`); last,
+/// the tag of the radius of a line of a Time-Lost jewel, `<Small>`.
 fn row_texts<'a>(rows: impl IntoIterator<Item = Row<'a>>) -> Vec<String> {
     rows.into_iter()
         .map(|row| match row {
@@ -114,8 +115,14 @@ fn row_texts<'a>(rows: impl IntoIterator<Item = Row<'a>>) -> Vec<String> {
                         format!(" [{}]", rows.join(" / "))
                     }
                 };
+                let radius = text
+                    .radius_skills()
+                    .map(|skills| format!(" <{skills:?}>"))
+                    .unwrap_or_default();
                 let text = match text {
-                    StatText::Line(text) => text.to_owned(),
+                    StatText::Line(text) | StatText::RadiusLine { line: text, .. } => {
+                        text.to_owned()
+                    }
                     StatText::BaseType { base_type, .. } => format!("Base: {base_type}"),
                     StatText::Property(property, value) => {
                         format!("{property:?}: {}", format::number(value))
@@ -125,7 +132,7 @@ fn row_texts<'a>(rows: impl IntoIterator<Item = Row<'a>>) -> Vec<String> {
                     }
                     StatText::Unrevealed(affix) => format!("Unrevealed {affix:?}"),
                 };
-                format!("{check}{text}{limit}{roll}")
+                format!("{check}{text}{limit}{roll}{radius}")
             }
         })
         .collect()
@@ -487,17 +494,19 @@ fn a_fixed_value_shows_the_same_in_both_copies() {
 #[test]
 fn a_time_lost_jewel_shows_its_lines_over_their_ranges_in_both_copies() {
     // The owner's Time-Lost Sapphire, every modifier of one tier: its bar and its field over
-    // the range of that tier, nothing under its fixed `1%`; the same from the in-game trade.
+    // the range of that tier, nothing under its fixed `1%`; each line without the words of
+    // its radius, its tag after its range, alone under the fixed line; the same from the
+    // in-game trade.
     let text = include_str!("../../item/test-items/en-owner-rare-jewel-time-lost.txt");
     let lines: Vec<&str> = text.lines().filter(|line| !line.starts_with('{')).collect();
     let in_game_trade = read_again(parse(&lines.join("\n")));
     let modifiers = [
         "Prefixes 2/2",
-        "■ Small Passive Skills in Radius also grant 2% increased Elemental Damage ≥2 [1.00 1–2]",
-        "■ Notable Passive Skills in Radius also grant 7% faster start of Energy Shield Recharge ≥6 [1.00 5–7]",
+        "■ 2% increased Elemental Damage ≥2 [1.00 1–2] <Small>",
+        "■ 7% faster start of Energy Shield Recharge ≥6 [1.00 5–7] <Notable>",
         "Suffixes 2/2",
-        "■ Small Passive Skills in Radius also grant 1% increased Mana Regeneration Rate ≥1 [0.00 1–2]",
-        "■ Notable Passive Skills in Radius also grant 1% of Damage taken Recouped as Life",
+        "■ 1% increased Mana Regeneration Rate ≥1 [0.00 1–2] <Small>",
+        "■ 1% of Damage taken Recouped as Life <Notable>",
     ];
     let explicit = |texts: Vec<String>| -> Vec<String> {
         texts
@@ -509,6 +518,86 @@ fn a_time_lost_jewel_shows_its_lines_over_their_ranges_in_both_copies() {
 
     assert_eq!(explicit(texts(&parse(text))), modifiers);
     assert_eq!(explicit(texts(&in_game_trade)), modifiers);
+}
+
+#[test]
+fn a_french_time_lost_jewel_shows_its_lines_without_the_words_of_its_radius() {
+    // Both radiuses, the notable written `éminents` by the game; a line without these words
+    // (`Améliore le Rayon en Grand`) stays whole, without tag.
+    let jewel = parse(include_str!(
+        "../../item/test-items/fr-rare-jewel-time-lost.txt"
+    ));
+    let large = parse(include_str!(
+        "../../item/test-items/fr-rare-jewel-time-lost-large.txt"
+    ));
+
+    assert_eq!(
+        texts_from(&jewel, "Prefixes"),
+        [
+            "Prefixes 2/2",
+            "■ 2% d'Augmentation des Dégâts élémentaires ≥2 [1.00 1–2] <Small>",
+            "■ Le Démarrage de la Recharge du Bouclier d'énergie est 7% plus rapide ≥6 [1.00 5–7] <Notable>",
+            "Suffixes 2/2",
+            "■ 1% d'Augmentation du Taux de Régénération de Mana ≥1 [0.00 1–2] <Small>",
+            "■ 1% des Dégâts subis sont Recouvrés sous forme de Vie <Notable>",
+        ]
+    );
+    assert_eq!(
+        texts_from(&large, "Prefixes"),
+        [
+            "Prefixes 2/2",
+            "■ 2% d'Augmentation des Dégâts des Sorts ≥2 [1.00 1–2] <Small>",
+            "■ Améliore le Rayon en Grand [T1]",
+            "Suffixes 2/2",
+            "■ Vous gagnez du Seuil d'Étourdissement équivalent à 2% de votre Bouclier d'énergie maximal ≥2 [1.00 1–2] <Small>",
+            "■ 2% d'Augmentation de l'Amplitude de l'Inflammabilité ≥2 [0.00 2–3] <Small>",
+        ]
+    );
+}
+
+#[test]
+fn every_line_of_a_time_lost_jewel_in_the_game_data_is_shown_short() {
+    // Each matcher of a stat granted to the passive skills in a radius, in both languages, so
+    // that game data written again with other words fails here rather than shows long lines.
+    for data in [
+        include_str!("../../../assets/game-data/stats-en.ndjson"),
+        include_str!("../../../assets/game-data/stats-fr.ndjson"),
+    ] {
+        let mut lines = 0;
+        for stat in data.lines() {
+            let stat: serde_json::Value = serde_json::from_str(stat).expect("a stat");
+            let reference = stat["ref"].as_str().expect("its reference");
+            let skills = if reference.starts_with("Small Passive Skills in Radius also grant ") {
+                RadiusSkills::Small
+            } else if reference.starts_with("Notable Passive Skills in Radius also grant ") {
+                RadiusSkills::Notable
+            } else {
+                continue;
+            };
+            for matcher in stat["matchers"].as_array().expect("its matchers") {
+                let line = matcher["string"].as_str().expect("a line");
+                assert_eq!(StatText::line(line).radius_skills(), Some(skills), "{line}");
+                lines += 1;
+            }
+        }
+        assert!(lines > 100, "{lines}");
+    }
+}
+
+#[test]
+fn a_line_of_a_time_lost_jewel_is_named_whole_to_a_screen_reader() {
+    let i18n = Translator::new(Language::English);
+    let line = "Small Passive Skills in Radius also grant 2% increased Elemental Damage";
+
+    assert_eq!(
+        StatText::line(line).text(&i18n),
+        "2% increased Elemental Damage"
+    );
+    assert_eq!(StatText::line(line).label(&i18n), line);
+    assert_eq!(
+        StatText::line("+20 to Strength").label(&i18n),
+        "+20 to Strength"
+    );
 }
 
 #[test]

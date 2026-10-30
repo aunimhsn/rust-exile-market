@@ -114,6 +114,10 @@ pub enum Message {
     TradeCopyNote,
     /// The note under the stats of a unique copied from the in-game trade.
     UniqueRollsNote,
+    /// After the range of a line of a Time-Lost jewel, the passive skills in its radius it is
+    /// granted to.
+    RadiusSmall,
+    RadiusNotable,
     /// After the range of a tier found from the values, the affix it is the tier of.
     AffixPrefix,
     AffixSuffix,
@@ -150,7 +154,7 @@ pub enum Message {
 impl Message {
     /// Every message, for the tests.
     #[cfg(test)]
-    const ALL: [Self; 112] = [
+    const ALL: [Self; 114] = [
         Self::LeagueModeSoftcore,
         Self::LeagueModeHardcore,
         Self::LeagueLoading,
@@ -236,6 +240,8 @@ impl Message {
         Self::UnrevealedNote,
         Self::TradeCopyNote,
         Self::UniqueRollsNote,
+        Self::RadiusSmall,
+        Self::RadiusNotable,
         Self::AffixPrefix,
         Self::AffixSuffix,
         Self::AddedUpWithPrefix,
@@ -354,6 +360,8 @@ impl Message {
             Self::UnrevealedNote => "unrevealed-note",
             Self::TradeCopyNote => "trade-copy-note",
             Self::UniqueRollsNote => "unique-rolls-note",
+            Self::RadiusSmall => "radius-small",
+            Self::RadiusNotable => "radius-notable",
             Self::AffixPrefix => "affix-prefix",
             Self::AffixSuffix => "affix-suffix",
             Self::AddedUpWithPrefix => "added-up-with-prefix",
