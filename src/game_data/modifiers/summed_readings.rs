@@ -238,6 +238,7 @@ fn placements<'a>(
                     .collect(),
                 ranges: None,
                 tier: None,
+                without_tier: false,
                 desecrated,
             };
             let Some(order) = copied.order(&table.lines) else {

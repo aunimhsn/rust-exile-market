@@ -85,15 +85,15 @@ impl TierRolls {
             else {
                 continue;
             };
-            // A fixed value without tier: only of a modifier whose tier the game doesn't write,
-            // over that tier, as a line of the in-game trade read in it, a tier of fixed values
-            // too (not one of an essence, whose tables aren't known yet, whose value would fall
-            // in a tier of the tree that rolls, `19–22`).
+            // A fixed value without tier: only of a modifier whose tier the game doesn't write
+            // (the Genesis tree, an essence), over that tier, as a line of the in-game trade
+            // read in it, a tier of fixed values too (not a value of a modifier whose tier the
+            // game writes, nor one that falls in a tier of the tree that rolls, `19–22`).
             let rolled = if fixed {
-                let of_the_tree = |tier: &&Tier| {
+                let unwritten = |tier: &&Tier| {
                     tiers.tier_unwritten && tier.ranges.iter().all(|range| range.is_one_value())
                 };
-                match tiers.tier().filter(of_the_tree) {
+                match tiers.tier().filter(unwritten) {
                     Some(tier) => std::slice::from_ref(tier),
                     None => continue,
                 }
@@ -177,7 +177,8 @@ fn written_without_tier(modifier: &Modifier) -> bool {
 
 /// Whether the advanced copy writes `modifier`, a prefix or suffix, without tier nor range: a
 /// fixed value of a modifier whose tier the game doesn't write (`of the Despot` of the Genesis
-/// tree on a belt, `+2 to Level of all Minion Skills`), or of an essence.
+/// tree on a belt, `+2 to Level of all Minion Skills`; `of the Essence` on a bow, `+2 to Level of
+/// all Attack Skills`).
 fn fixed_without_tier(modifier: &Modifier) -> bool {
     matches!(modifier.kind, ModifierKind::Explicit(Some(_)))
         && modifier.tier.is_none()
@@ -394,7 +395,7 @@ mod tests {
     }
 
     #[test]
-    fn a_fixed_value_without_tier_rolls_over_its_tier_only_on_the_genesis_tree() {
+    fn a_fixed_value_without_tier_rolls_over_its_tier_only_of_the_genesis_tree_or_an_essence() {
         // `of the Despot` of the Genesis tree on a belt, the best of its two tiers (+1, +2),
         // which the copy writes without tier nor range: fixed in its tier.
         let belt = rolls_of(
@@ -410,8 +411,18 @@ mod tests {
         };
         assert_eq!(belt.get(key(0, 0)), Some(&fixed));
 
+        // An essence on a bow, of one value.
+        let bow = rolls_of(
+            "Item Class: Bows\nRarity: Rare\nMiracle Siege\nObliterator Bow\n--------\n\
+             Item Level: 81\n--------\n\
+             { Suffix Modifier \"of the Essence\" — Attack }\n\
+             +2 to Level of all Attack Skills",
+        );
+        assert!(bow.single(0));
+        assert_eq!(bow.get(key(0, 0)), Some(&fixed));
+
         // The same without tier on a quiver, a modifier of the tables, of one tier there, but
-        // not of the tree (of an essence, whose tables aren't known yet): no rolls.
+        // neither of the tree nor of an essence (none adds it): no rolls.
         let quiver = |header: &str| {
             rolls_of(&format!(
                 "Item Class: Quivers\nRarity: Rare\nStorm Song\nFire Quiver\n--------\n\

@@ -55,16 +55,23 @@ fn a_table_rolls_on_the_bases_of_its_domain_only() {
 }
 
 #[test]
-fn the_tables_are_ordinary_then_of_the_genesis_tree_then_desecrated() {
+fn the_tables_are_ordinary_then_of_the_genesis_tree_and_the_essences_then_desecrated() {
     // Of two tables that hold a copied modifier as well, the first is taken: the ordinary one,
     // then the minion one of the Genesis tree.
     let order: Vec<_> = TABLES
         .iter()
-        .map(|table| (table.domain == Domain::Desecrated, table.genesis))
+        .map(|table| (table.domain == Domain::Desecrated, table.source))
         .collect();
 
     assert!(order.is_sorted());
-    for kind in [(false, true), (true, false), (true, true)] {
+    let genesis = Some(TableSource::Genesis);
+    let essence = Some(TableSource::Essence);
+    for kind in [
+        (false, genesis),
+        (false, essence),
+        (true, None),
+        (true, genesis),
+    ] {
         assert!(order.contains(&kind), "{kind:?}");
     }
 }
@@ -307,6 +314,7 @@ fn the_value_of_a_line_without_number_is_divided_as_its_table_shows_it() {
         }],
         ranges: None,
         tier: None,
+        without_tier: false,
         desecrated: false,
     };
     let number = |copied| {
@@ -536,6 +544,7 @@ fn of_two_tiers_as_good_the_one_the_advanced_copy_wrote_is_taken() {
         }],
         ranges: Some(vec![range(10.0, 20.0)]),
         tier,
+        without_tier: false,
         // A desecrated line: an ordinary modifier, or a lord's.
         desecrated: true,
     };
@@ -587,6 +596,7 @@ fn two_tables_with_the_same_lines_in_another_order_are_two_modifiers() {
         ],
         ranges: None,
         tier: None,
+        without_tier: false,
         desecrated: false,
     };
 
@@ -1118,14 +1128,14 @@ fn the_tiers_found_from_the_values_alone_are_those_of_the_advanced_copy() {
         }
     }
     // With the 4 modifiers of Amanamu, a lord of the Abyss, among the desecrated tables,
-    // `Reinforcing` of the Genesis tree on the Breach Rings, and the lines of the Time-Lost
-    // jewels, each within the words of the passive skills it grants but the radius.
-    assert_eq!(found, 71);
+    // `Reinforcing` of the Genesis tree on the Breach Rings, the lines of the Time-Lost jewels,
+    // each within the words of the passive skills it grants but the radius, and the Onslaught
+    // of an essence on a bow.
+    assert_eq!(found, 72);
     assert_eq!(
         without_tier,
         [
-            // Two modifiers of an essence, without tier in the advanced copy too.
-            "20% chance to gain Onslaught on Killing Hits with this Weapon",
+            // An essence of an older patch: the bows take `+2` today (trade site, 2026-10-30).
             "+3 to Level of all Attack Skills",
             // Copied before a patch changed its ranges.
             "Adds 1 to 50 Lightning Damage",
@@ -1231,9 +1241,9 @@ fn the_lines_read_again_from_their_values_are_the_modifiers_of_the_advanced_copy
             |modifiers: &[Modifier]| -> Vec<String> { modifiers.iter().flat_map(texts).collect() };
         assert_eq!(lines(&read), lines(&modifiers));
     }
-    // With `Reinforcing` of the Breach Rings, read again without tier, as the copy writes it,
-    // and the lines of the Time-Lost jewels.
-    assert_eq!(read_again, 71);
+    // With `Reinforcing` of the Breach Rings and the Onslaught of an essence on a bow, read
+    // again without tier, as the copy writes them, and the lines of the Time-Lost jewels.
+    assert_eq!(read_again, 72);
 }
 
 #[test]
@@ -1765,9 +1775,19 @@ fn a_minion_modifier_of_the_genesis_tree_is_read_as_the_advanced_copy_writes_it(
 #[test]
 fn a_minion_modifier_of_the_genesis_tree_merges_with_no_ordinary_one() {
     let levels = ["+2 to Level of all Minion Skills"];
+    // Written without tier, as the game writes the tree's; with its T2 on an amulet.
     let suffix = modifier(Some(Affix::Suffix), &levels);
+    let of_tier_2 = Modifier {
+        tier: Some(2),
+        ..suffix.clone()
+    };
     let numbers = |base_type: &str| {
-        tiers(base_type, &suffix).map(|tiers| {
+        let suffix = if base_type.ends_with("Amulet") {
+            &of_tier_2
+        } else {
+            &suffix
+        };
+        tiers(base_type, suffix).map(|tiers| {
             let number = tiers.tier().map(|tier| tier.number);
             (tiers.tiers.len(), number, tiers.hides_number())
         })
@@ -1787,6 +1807,57 @@ fn a_minion_modifier_of_the_genesis_tree_merges_with_no_ordinary_one() {
     assert_eq!(read("Heavy Belt"), [(kind, None, two)]);
     // The tree rules it out of the rings.
     assert_eq!(numbers("Gold Ring"), None);
+}
+
+#[test]
+fn a_modifier_of_an_essence_written_without_tier_is_not_the_ordinary_tier_of_its_value() {
+    let numbers = |base_type: &str, line: &str, tier: Option<u32>| {
+        let suffix = Modifier {
+            tier,
+            ..modifier(Some(Affix::Suffix), &[line])
+        };
+        tiers(base_type, &suffix).map(|tiers| {
+            let number = tiers.tier().map(|tier| tier.number);
+            (tiers.tiers.len(), number, tiers.tier_unwritten)
+        })
+    };
+
+    // `of the Essence` on a wand, its one value, the T2 of 4 of the ordinary modifier as well.
+    let wand = "+3 to Level of all Spell Skills";
+    assert_eq!(numbers("Acrid Wand", wand, None), Some((1, Some(1), true)));
+    assert_eq!(
+        numbers("Acrid Wand", wand, Some(2)),
+        Some((4, Some(2), false))
+    );
+    // On a staff, in the T1 of the ordinary one, `5–6`.
+    let staff = "+5 to Level of all Spell Skills";
+    assert_eq!(
+        numbers("Ashen Staff", staff, None),
+        Some((1, Some(1), true))
+    );
+    assert_eq!(
+        numbers("Ashen Staff", staff, Some(1)),
+        Some((4, Some(1), false))
+    );
+}
+
+#[test]
+fn a_line_of_an_essence_copied_from_the_in_game_trade_gets_its_affix_and_range() {
+    let read = |base_type: &str, line: &str| {
+        explicit_tiers(&read_again(base_type, 80, &trade_lines(&[line]), (3, 3)))
+    };
+    let prefix = ModifierKind::Explicit(Some(Affix::Prefix));
+
+    // A bow takes the range of the one-handed weapons, a crossbow that of the two-handed ones;
+    // without tier, as the advanced copy writes it.
+    assert_eq!(
+        read("Gemini Bow", "Gain 18% of Damage as Extra Fire Damage"),
+        [(prefix, None, vec![Some(range(15.0, 20.0))])]
+    );
+    assert_eq!(
+        read("Gemini Crossbow", "Gain 30% of Damage as Extra Fire Damage"),
+        [(prefix, None, vec![Some(range(25.0, 33.0))])]
+    );
 }
 
 #[test]
@@ -1836,6 +1907,7 @@ fn a_value_in_several_tiers_takes_the_worst_without_the_ranges_of_the_copy() {
         }],
         ranges: None,
         tier: None,
+        without_tier: false,
         desecrated: false,
     };
     let number = |tie| {
@@ -1875,6 +1947,7 @@ fn the_tiers_of_the_hybrid_of_a_split_are_those_of_its_part() {
         ],
         ranges: None,
         tier: None,
+        without_tier: false,
         desecrated: false,
     };
     let base = equipment(&["shield"]);
@@ -1930,6 +2003,7 @@ fn the_hybrid_of_a_split_is_the_first_table_whose_tiers_of_its_part_the_item_lev
         ],
         ranges: None,
         tier: None,
+        without_tier: false,
         desecrated: false,
     };
     let whole = part(Affix::Prefix, &[1], &[(30.0, 39.0)]);
@@ -1990,6 +2064,7 @@ fn two_hybrids_of_the_same_lines_that_split_a_line_are_two_ways() {
         ],
         ranges: None,
         tier: None,
+        without_tier: false,
         desecrated: false,
     };
 
