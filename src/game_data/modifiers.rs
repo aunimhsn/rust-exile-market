@@ -1504,6 +1504,14 @@ fn find(
                     lord: table.lord.map(Lord::from),
                 },
             ));
+        } else if let Some(((fit, _), (best_fit, best_tiers))) = found.zip(best.as_mut())
+            && fit == *best_fit
+            && best_tiers.lord != table.lord.map(Lord::from)
+        {
+            // The modifiers of two lords hold it as well: neither is named (the flask charges
+            // of Kurgal, `10–15`, and of Ulaman, `10–18`, on the belts). An ordinary table comes
+            // before them, so a lord never takes its place.
+            best_tiers.lord = None;
         }
     }
     best.map(|(_, tiers)| tiers)

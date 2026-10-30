@@ -9,7 +9,7 @@ use std::time::Duration;
 use fluent_bundle::{FluentArgs, FluentBundle, FluentResource, FluentValue};
 
 use crate::filters::Property;
-use crate::item::Affix;
+use crate::item::{Affix, Lord};
 use crate::language::Language;
 use crate::prices::Direction;
 use crate::trade::pseudo::Pseudo;
@@ -619,9 +619,10 @@ impl Translator {
     /// The affix of a modifier of the lord `lord` after the ranges of its tier, in gray, when
     /// the line can be his or an ordinary modifier: "Amanamu Prefix".
     #[must_use]
-    pub fn lord_affix(&self, affix: Affix, lord: &str) -> String {
+    pub fn lord_affix(&self, affix: Affix, lord: Lord) -> String {
         let mut args = FluentArgs::new();
-        args.set("lord", lord);
+        // The French messages select on the name: "de Kurgal", "d'Amanamu".
+        args.set("lord", lord.name());
         let id = match affix {
             Affix::Prefix => LORD_PREFIX,
             Affix::Suffix => LORD_SUFFIX,
@@ -1107,6 +1108,12 @@ mod tests {
                 with.contains(lines[0]) && with.contains(lines[1]),
                 "{with} in {language:?}"
             );
+            for lord in [Lord::Amanamu, Lord::Kurgal, Lord::Ulaman] {
+                for affix in [Affix::Prefix, Affix::Suffix] {
+                    let text = translator.lord_affix(affix, lord);
+                    assert!(text.contains(lord.name()), "{text} in {language:?}");
+                }
+            }
             let part = translator.hybrid_part("75–79", "258% increased");
             assert!(
                 part.contains("75–79") && part.contains("258% increased"),

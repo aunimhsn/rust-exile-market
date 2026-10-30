@@ -219,6 +219,9 @@ struct TierRow<'a> {
     word: Option<Message>,
     /// The lord of the Abyss named before the affix: "Amanamu Prefix".
     lord: Option<Lord>,
+    /// Whether its tier, an affix of a line in doubt without range (a fixed value), is written
+    /// in the style of its word: "T2 Suffix".
+    quiet: bool,
     /// The tooltip of that word.
     tip: Option<WordTip<'a>>,
 }
@@ -237,9 +240,11 @@ enum WordTip<'a> {
 }
 
 impl<'a> TierRow<'a> {
-    /// Whether its tier, without range, is written as its word: "T2 Suffix".
+    /// Whether its tier, without range, is written as its word: "T2 Suffix"; only under a line
+    /// in doubt, the other rows keeping the color of their tier ("T1 Hybrid suffix" under the
+    /// other line of a hybrid split from a summed line, whose T1 the summed line writes too).
     fn quiet_tier(&self) -> bool {
-        self.word.is_some() && self.tier.ranges.is_empty() && self.better.is_none()
+        self.quiet && self.word.is_some() && self.tier.ranges.is_empty() && self.better.is_none()
     }
 
     /// The tier `tier` of a modifier, without word.
@@ -249,6 +254,7 @@ impl<'a> TierRow<'a> {
             better: None,
             word: None,
             lord: None,
+            quiet: false,
             tip: None,
         }
     }
@@ -264,6 +270,7 @@ impl<'a> TierRow<'a> {
             better: None,
             word: Some(affix_word(found.affix)),
             lord: found.lord,
+            quiet: found.ranges.is_empty(),
             tip: None,
         }
     }
@@ -296,19 +303,21 @@ impl<'a> TierRow<'a> {
                 .filter(|&better| better != worse),
             word,
             lord: None,
+            quiet: false,
             tip,
         })
     }
 }
 
 /// The words after the ranges of the tier of `row`, in `i18n`: its affix, after the lord whose
-/// modifier it is ("Amanamu Prefix"); after its tier written as they are ("T2 Suffix") when it has
-/// no range (a fixed value), so that it reads as one with them (owner's choice on 2026-10-30).
+/// modifier it is ("Amanamu Prefix"); after its tier written as they are ("T2 Suffix") under a
+/// line in doubt without range (a fixed value), so that it reads as one with them (owner's choice
+/// on 2026-10-30).
 fn row_word(row: &TierRow, i18n: &Translator) -> Option<String> {
     let word = row.word?;
     let text = match (row.lord, word) {
-        (Some(lord), Message::AffixPrefix) => i18n.lord_affix(Affix::Prefix, lord.name()),
-        (Some(lord), Message::AffixSuffix) => i18n.lord_affix(Affix::Suffix, lord.name()),
+        (Some(lord), Message::AffixPrefix) => i18n.lord_affix(Affix::Prefix, lord),
+        (Some(lord), Message::AffixSuffix) => i18n.lord_affix(Affix::Suffix, lord),
         _ => i18n.text(word),
     };
     Some(match row.tier.number.filter(|_| row.quiet_tier()) {

@@ -393,6 +393,10 @@ fn a_desecrated_table_is_a_modifier_of_one_tier_of_its_own() {
         only("Heavy Belt", &charges(17)),
         Some((true, Some(vec![range(10.0, 18.0)])))
     );
+    // Named only when one lord holds it: 12 is Kurgal's or Ulaman's, 17 Ulaman's.
+    let lord = |modifier: &Modifier| tiers("Heavy Belt", modifier).and_then(|tiers| tiers.lord);
+    assert_eq!(lord(&charges(12)), None);
+    assert_eq!(lord(&charges(17)), Some(Lord::Ulaman));
     // The presence of Amanamu on a helmet, which the game always marks desecrated.
     let presence = ["30% increased Presence Area of Effect"];
     assert_eq!(

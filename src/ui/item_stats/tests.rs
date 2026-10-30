@@ -133,7 +133,8 @@ fn row_texts<'a>(rows: impl IntoIterator<Item = Row<'a>>) -> Vec<String> {
 
 /// A tier under a line as [`row_texts`] writes it: `T1/T2 155–179`, then its word and its
 /// tooltip, `AffixSuffix AddedUpWithPrefix`, `Hybrid (with +195 to Accuracy Rating)`, `Hybrid
-/// (with 75–79 of 258% increased Physical Damage)`.
+/// (with 75–79 of 258% increased Physical Damage)`; the lord before the word, `Amanamu
+/// AffixPrefix`, and a tier written in the style of its word between braces, `{T2 AffixSuffix}`.
 fn tier_row_text(row: &TierRow) -> String {
     let tier = tier_text(&row.tier);
     let tier = match row.better {
@@ -151,12 +152,18 @@ fn tier_row_text(row: &TierRow) -> String {
             format!("(with {} of {line})", ranges_text(ranges))
         }
     });
-    [Some(tier), word, tip]
+    let text = [Some(tier), word, tip]
         .into_iter()
         .flatten()
         .filter(|part| !part.is_empty())
         .collect::<Vec<_>>()
-        .join(" ")
+        .join(" ");
+    // A tier written in the style of its word, between braces.
+    if row.quiet_tier() {
+        format!("{{{text}}}")
+    } else {
+        text
+    }
 }
 
 /// A tier as [`row_texts`] writes it: `T1 15–18`, `15–18` for a modifier of one tier only.
@@ -358,7 +365,7 @@ fn a_line_that_can_be_a_modifier_of_one_tier_only_writes_no_tier_number_on_its_r
     let texts = texts(&read_again(cannon));
     assert!(
         texts.contains(
-            &"■ Grenade Skills have +1 Cooldown Use ≥1 [Amanamu AffixPrefix / T2 AffixSuffix / Desecrated]"
+            &"■ Grenade Skills have +1 Cooldown Use ≥1 [{Amanamu AffixPrefix} / {T2 AffixSuffix} / Desecrated]"
                 .to_owned()
         ),
         "{texts:?}"
@@ -514,6 +521,9 @@ fn the_words_of_a_tier_name_the_lord_and_take_a_tier_without_range() {
         words(&kurgal, &french).as_deref(),
         Some("Suffixe de Kurgal")
     );
+    assert_eq!(words(&kurgal, &english).as_deref(), Some("Kurgal Suffix"));
+    let ulaman = row(None, Vec::new(), Affix::Prefix, Some(Lord::Ulaman));
+    assert_eq!(words(&ulaman, &french).as_deref(), Some("Préfixe d'Ulaman"));
     // A tier without range written as the word, in its style; with a range, apart.
     assert_eq!(words(&t2, &english).as_deref(), Some("T2 Suffix"));
     assert!(t2.quiet_tier());

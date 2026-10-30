@@ -288,12 +288,11 @@ pub fn reduce(
     let mut tables = Vec::new();
     let mut unknown_lines = BTreeSet::new();
     for ((kind, affix, domain, lines, spawn, genesis), mut tiers) in grouped {
-        let lord = spawn.iter().find_map(|weight| {
-            LORDS
-                .iter()
-                .find(|&&(tag, _)| weight.weight > 0 && weight.tag == tag)
-                .map(|&(_, name)| name.to_owned())
-        });
+        let lord = spawn
+            .iter()
+            .filter(|weight| weight.weight > 0)
+            .find_map(|weight| LORDS.iter().find(|&&(tag, _)| weight.tag == tag))
+            .map(|&(_, name)| name.to_owned());
         let tags_of_bases: BTreeSet<&String> = released
             .iter()
             .filter(|base| rolls_on(&domain, &base.domain))
@@ -844,7 +843,10 @@ mod tests {
             desecrated(
                 r#"[{"tag": "ring", "weight": 1}, {"tag": "default", "weight": 0}, {"tag": "kurgal_mod", "weight": 1}]"#
             ),
-            desecrated(r#"[{"tag": "strjewel", "weight": 1}, {"tag": "default", "weight": 0}]"#),
+            // A tag of a lord at 0 names no lord.
+            desecrated(
+                r#"[{"tag": "strjewel", "weight": 1}, {"tag": "default", "weight": 0}, {"tag": "ulaman_mod", "weight": 0}]"#
+            ),
             desecrated(r#"[{"tag": "map", "weight": 1}, {"tag": "default", "weight": 0}]"#),
             modifier(
                 "Leech",
