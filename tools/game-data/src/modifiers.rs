@@ -61,10 +61,13 @@ const NOTABLE_GRANTS: &str = "Notable Passive Skills in Radius also grant ";
 /// modifiers have the stats of the line alone, `elemental_damage_+%`).
 const RADIUS_GRANTS: [&str; 2] = [SMALL_GRANTS, NOTABLE_GRANTS];
 
-/// What a line of a Time-Lost jewel needs to be written alone, without the words of
-/// [`RADIUS_GRANTS`]: a line about the radius itself (`Upgrades Radius to #`, `#% increased
-/// Effect of Small Passive Skills in Radius`).
-const ABOUT_THE_RADIUS: &str = "Radius";
+/// The lines of a Time-Lost jewel about the radius itself, written alone, without the words of
+/// [`RADIUS_GRANTS`], as templates of Exiled Exchange 2.
+const RADIUS_LINES: [&str; 3] = [
+    "#% increased Effect of Small Passive Skills in Radius",
+    "#% increased Effect of Notable Passive Skills in Radius",
+    "Upgrades Radius to #",
+];
 
 /// A modifier of `mods.json`, with the fields the generator reads.
 #[derive(Deserialize)]
@@ -275,6 +278,18 @@ pub fn reduce(
         if !rolls {
             continue;
         }
+        // Its lines would be written within the words of the passive skills on the other bases.
+        if on_radius_jewel(modifier)
+            && modifier
+                .spawn_weights
+                .iter()
+                .any(|spawn| spawn.weight > 0 && !radius_jewel(&spawn.tag))
+        {
+            return Err(format!(
+                "{id}: a modifier of the Time-Lost jewels that rolls on other bases"
+            )
+            .into());
+        }
         let (lines, ranges) = lines(modifier, translations, &by_stat, templates)
             .map_err(|error| format!("{id}: {error}"))?;
         let (spawn, genesis) = spawn_on_bases(&modifier.spawn_weights);
@@ -472,16 +487,22 @@ fn line(
         .map(|variant| template(&variant.string))
         .collect();
     let Some(template) = known_template(modifier, &strings, templates)?.cloned() else {
-        // Without template, the line can't be found: written as the game writes it, after the
-        // name of the Time-Lost jewels for one of theirs, which the game writes within the words
-        // of the passive skills that grant it.
+        // Without template, the line can't be found: written as the game writes it, its string
+        // with the most numbers; one of the Time-Lost jewels, which the game writes within the
+        // words of the passive skills that grant it, saying so.
+        let string = translation
+            .english
+            .iter()
+            .rev()
+            .max_by_key(|variant| placeholders(&variant.string).len())
+            .unwrap_or(first);
         let jewel = if on_radius_jewel(modifier) {
-            "(Time-Lost jewels) "
+            " (Time-Lost jewels: not known within the words of the passive skills, with its number)"
         } else {
             ""
         };
         let line = Line {
-            template: format!("{jewel}{}", template(&first.string)),
+            template: format!("{}{jewel}", template(&string.string)),
             divisor: 1,
             known: false,
         };
@@ -567,17 +588,15 @@ fn line(
 
 /// The template of Exiled Exchange 2 of a line of `modifier` written one of `strings` (templates
 /// of the game, [`template`]), the first it knows. On a Time-Lost jewel, the line within the
-/// words of [`RADIUS_GRANTS`] of which it knows one only (`Small Passive Skills in Radius also
-/// grant #% increased Elemental Damage`), with its number when a string writes one: known
+/// words of [`RADIUS_GRANTS`] of which it knows one kind only (`Small Passive Skills in Radius
+/// also grant #% increased Elemental Damage`), with its number when a string writes one: known
 /// without its number only (`Small Passive Skills in Radius also grant Attack Hits apply
-/// Incision`, while the game writes `… 4% chance for Attack Hits to apply Incision`), the line
-/// can't be found, and has none. A line about the radius itself ([`ABOUT_THE_RADIUS`]) is
-/// written alone when it knows it within neither (`#% increased Effect of Small Passive Skills
-/// in Radius`), another has none. Of a desecrated modifier, which it knows within both (`#%
-/// increased maximum Life`), the notables: the trade site has a desecrated stat for them only,
-/// as for every other desecrated modifier of these jewels (checked on 2026-10-30). A modifier
-/// of these jewels that also rolls on other bases stops the generator: its lines would be
-/// written within these words there too.
+/// Incision`, while the game writes `… 4% chance for Attack Hits to apply Incision`, seen on the
+/// trade site on 2026-10-30), the line can't be found, and has none. A line about the radius
+/// itself ([`RADIUS_LINES`]) is written alone; another line known within neither has none. Of
+/// a desecrated modifier, which it knows within both (`#% increased maximum Life`), the
+/// notables: the trade site has a desecrated stat for them only, as for every other desecrated
+/// modifier of these jewels (checked on 2026-10-30).
 fn known_template<'a>(
     modifier: &SourceModifier,
     strings: &[String],
@@ -587,46 +606,30 @@ fn known_template<'a>(
     if !on_radius_jewel(modifier) {
         return Ok(alone());
     }
-    if modifier
-        .spawn_weights
-        .iter()
-        .any(|spawn| spawn.weight > 0 && !radius_jewel(&spawn.tag))
-    {
-        return Err("a modifier of the Time-Lost jewels that rolls on other bases".into());
-    }
-    let granted = |numbered_only: bool| -> Vec<(&str, &'a String)> {
-        RADIUS_GRANTS
-            .iter()
-            .filter_map(|&words| {
-                let template = strings
-                    .iter()
-                    .filter(|string| !numbered_only || string.contains('#'))
-                    .find_map(|string| templates.get(&format!("{words}{string}")))?;
-                Some((words, template))
-            })
-            .collect()
+    let within = |words: &str, string: &String| templates.get(&format!("{words}{string}"));
+    let granted: Vec<&str> = RADIUS_GRANTS
+        .into_iter()
+        .filter(|words| strings.iter().any(|string| within(words, string).is_some()))
+        .collect();
+    let words = match granted.as_slice() {
+        [] => {
+            return Ok(alone().filter(|template| RADIUS_LINES.contains(&template.as_str())));
+        }
+        &[words] => words,
+        [_, _] if modifier.domain == DESECRATED => NOTABLE_GRANTS,
+        _ => {
+            return Err(format!(
+                "{} is known within the words of both kinds of passive skills",
+                strings.first().map_or("", String::as_str)
+            )
+            .into());
+        }
     };
     let numbered = strings.iter().any(|string| string.contains('#'));
-    match granted(numbered).as_slice() {
-        [] if !granted(false).is_empty() => Ok(None),
-        [] if strings
-            .iter()
-            .any(|string| string.contains(ABOUT_THE_RADIUS)) =>
-        {
-            Ok(alone())
-        }
-        [] => Ok(None),
-        &[(_, one)] => Ok(Some(one)),
-        both if modifier.domain == DESECRATED => Ok(both
-            .iter()
-            .find(|&&(words, _)| words == NOTABLE_GRANTS)
-            .map(|&(_, notables)| notables)),
-        _ => Err(format!(
-            "{} is known within the words of both kinds of passive skills",
-            strings.first().map_or("", String::as_str)
-        )
-        .into()),
-    }
+    Ok(strings
+        .iter()
+        .filter(|string| !numbered || string.contains('#'))
+        .find_map(|string| within(words, string)))
 }
 
 /// Whether `modifier` rolls on a Time-Lost jewel.
@@ -1565,17 +1568,24 @@ mod tests {
     #[test]
     fn a_line_of_a_time_lost_jewel_is_written_within_the_words_of_the_passive_skills_it_grants() {
         // The small passive skills or the notables, whichever Exiled Exchange 2 knows, also when
-        // it knows the line alone; a line about the radius alone when it knows it only, another
-        // line left out.
+        // it knows the line alone; a line about the radius itself alone when it knows it only,
+        // another line left out (`Light Radius`, an ordinary modifier of other bases).
         let templates = time_lost_templates(
-            &["Armour", "Evasion", "Effect in Radius", "Life"],
+            &[
+                "Armour",
+                "Evasion",
+                "Effect of Small Passive Skills in Radius",
+                "Life",
+                "Light Radius",
+            ],
             false,
             &[
                 "#% increased Armour",
                 "Small Passive Skills in Radius also grant #% increased Armour",
                 "Notable Passive Skills in Radius also grant #% increased Evasion",
-                "#% increased Effect in Radius",
+                "#% increased Effect of Small Passive Skills in Radius",
                 "#% increased Life",
+                "#% increased Light Radius",
             ],
         )
         .expect("tables");
@@ -1584,7 +1594,7 @@ mod tests {
             templates,
             [
                 "Small Passive Skills in Radius also grant #% increased Armour",
-                "#% increased Effect in Radius",
+                "#% increased Effect of Small Passive Skills in Radius",
                 "Notable Passive Skills in Radius also grant #% increased Evasion",
             ]
         );
@@ -1671,6 +1681,79 @@ mod tests {
             Some(
                 "Life: #% increased Life is known within the words of both kinds of passive skills"
             )
+        );
+    }
+
+    #[test]
+    fn a_line_of_a_time_lost_jewel_known_for_both_kinds_by_two_strings_stops_the_generator() {
+        // Its number under the small passive skills, its string without number under the
+        // notables.
+        let modifiers = format!(
+            r#"{{"Daze": {}}}"#,
+            modifier(
+                "Daze",
+                1,
+                r#"[{"tag": "str_radius_jewel", "weight": 1}, {"tag": "default", "weight": 0}]"#,
+                r#"[{"id": "daze_chance", "min": 1, "max": 2}]"#
+            )
+            .replace(r#""domain": "item""#, r#""domain": "misc""#)
+        );
+        let bases = r#"{"TimeLostRuby": {"domain": "misc", "name": "Time-Lost Ruby", "release_state": "released", "tags": ["str_radius_jewel", "radius_jewel", "default"]}}"#;
+        let translations = r#"[{"ids": ["daze_chance"], "English": [
+            {"string": "Dazes on Hit", "index_handlers": [[]]},
+            {"string": "{0}% chance to Daze on Hit", "index_handlers": [[]]}
+        ], "hidden": null}]"#;
+        let templates: Templates = [
+            "Small Passive Skills in Radius also grant #% chance to Daze on Hit",
+            "Notable Passive Skills in Radius also grant Dazes on Hit",
+        ]
+        .into_iter()
+        .map(|template| (template.to_owned(), template.to_owned()))
+        .collect();
+
+        let error = reduce(
+            &serde_json::from_str(&modifiers).expect("modifiers"),
+            &serde_json::from_str(bases).expect("bases"),
+            &serde_json::from_str::<Vec<_>>(translations).expect("translations"),
+            &templates,
+        )
+        .err()
+        .map(|error| error.to_string());
+
+        assert_eq!(
+            error.as_deref(),
+            Some("Daze: Dazes on Hit is known within the words of both kinds of passive skills")
+        );
+    }
+
+    #[test]
+    fn a_string_without_number_of_another_template_gives_no_divisor() {
+        // `Rage loss starts 1 second later` is the string of another stat: the line of
+        // `Rage loss starts # seconds later` keeps its values as they are shown, undivided.
+        let delay = one_table(
+            &[r#"[{"id": "rage_delay_ms", "min": 1000, "max": 2000}]"#],
+            r#"{"ids": ["rage_delay_ms"], "English": [
+                {"string": "Rage loss starts {0} seconds later", "index_handlers": [["milliseconds_to_seconds"]]},
+                {"string": "Rage loss starts 1 second later", "index_handlers": [["milliseconds_to_seconds"]]}
+            ], "hidden": null}"#,
+            &[
+                (
+                    "Rage loss starts # seconds later",
+                    "Rage loss starts # seconds later",
+                ),
+                (
+                    "Rage loss starts 1 second later",
+                    "Inherent Rage loss starts 1 second later",
+                ),
+            ],
+        );
+
+        assert_eq!(
+            delay,
+            serde_json::json!([
+                [{"template": "Rage loss starts # seconds later"}],
+                [{"level": 0, "ranges": [[[1, 2]]]}]
+            ])
         );
     }
 }

@@ -3,7 +3,7 @@
 //! hybrids, its affixes in doubt, its summed lines, its room and the bounds of the search.
 
 use super::*;
-use crate::item::{CopiedItem, Item, ItemState, Rarity, StatLine};
+use crate::item::{CopiedItem, Item, ItemState, StatLine};
 
 #[test]
 fn every_table_of_the_embedded_file_is_read() {
@@ -996,6 +996,13 @@ const ADVANCED_COPIES: [(&str, Option<&str>); 16] = [
     ),
 ];
 
+/// The prefixes and suffixes `item` can have, as the application gives them
+/// (`LineStats::affix_limits`): 2 of each on a rare jewel.
+fn affix_limits(item: &Item) -> AffixLimits {
+    crate::trade::stat_filters::LineStats::new(item.language(), item.modifiers(), None)
+        .affix_limits(item)
+}
+
 /// A modifier of the advanced copy written as the in-game trade writes it.
 struct Written {
     /// The indexes of the modifiers its lines make, one per stat.
@@ -1063,16 +1070,7 @@ fn the_tiers_found_from_the_values_alone_are_those_of_the_advanced_copy() {
     for (text, base_type) in ADVANCED_COPIES {
         let item = parse(text);
         let base_type = base_type.unwrap_or(item.base_type());
-        // As the application gives them (`StatFilters::affix_limits`): 2 on a rare jewel.
-        let limit = match item.rarity() {
-            Rarity::Magic => 1,
-            _ if item.is_jewel() => 2,
-            _ => 3,
-        };
-        let limits = AffixLimits {
-            prefixes: limit,
-            suffixes: limit,
-        };
+        let limits = affix_limits(&item);
         let (modifiers, written) = as_in_game_trade(&item, base_type);
 
         let read = trade_tiers(
@@ -1191,16 +1189,7 @@ fn the_lines_read_again_from_their_values_are_the_modifiers_of_the_advanced_copy
     for (text, base_type) in ADVANCED_COPIES {
         let item = parse(text);
         let base_type = base_type.unwrap_or(item.base_type());
-        // As the application gives them (`StatFilters::affix_limits`): 2 on a rare jewel.
-        let limit = match item.rarity() {
-            Rarity::Magic => 1,
-            _ if item.is_jewel() => 2,
-            _ => 3,
-        };
-        let limits = AffixLimits {
-            prefixes: limit,
-            suffixes: limit,
-        };
+        let limits = affix_limits(&item);
         let (modifiers, written) = as_in_game_trade(&item, base_type);
 
         let read = with_trade_tiers(
