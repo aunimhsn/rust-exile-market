@@ -49,13 +49,22 @@ fn radius_jewel(tag: &str) -> bool {
     tag == "radius_jewel" || tag.ends_with("_radius_jewel")
 }
 
-/// The words the game writes before a line of a Time-Lost jewel, the small passive skills in its
-/// radius or its notables granting the line, which RePoE doesn't write (its modifiers have the
-/// stats of the line alone, `elemental_damage_+%`): the small ones, then the notables.
-const RADIUS_GRANTS: [&str; 2] = [
-    "Small Passive Skills in Radius also grant ",
-    "Notable Passive Skills in Radius also grant ",
-];
+/// The words the game writes before a line the small passive skills in the radius of a
+/// Time-Lost jewel grant.
+const SMALL_GRANTS: &str = "Small Passive Skills in Radius also grant ";
+
+/// The words the game writes before a line the notables in the radius of a Time-Lost jewel
+/// grant.
+const NOTABLE_GRANTS: &str = "Notable Passive Skills in Radius also grant ";
+
+/// The words the game writes before a line of a Time-Lost jewel, which RePoE doesn't write (its
+/// modifiers have the stats of the line alone, `elemental_damage_+%`).
+const RADIUS_GRANTS: [&str; 2] = [SMALL_GRANTS, NOTABLE_GRANTS];
+
+/// What a line of a Time-Lost jewel needs to be written alone, without the words of
+/// [`RADIUS_GRANTS`]: a line about the radius itself (`Upgrades Radius to #`, `#% increased
+/// Effect of Small Passive Skills in Radius`).
+const ABOUT_THE_RADIUS: &str = "Radius";
 
 /// A modifier of `mods.json`, with the fields the generator reads.
 #[derive(Deserialize)]
@@ -319,6 +328,9 @@ pub fn reduce(
             unknown_lines.extend(unknown.iter().map(|line| line.template.clone()));
             continue;
         }
+        // By level, then by ranges: of two tiers of one level, the higher ranges last, the better
+        // tier for the application (`Upgrades Radius to Large` after `to Medium`, both of level
+        // 1: its T1, as the game writes it).
         tiers.sort();
         tables.push(Modifier {
             kind,
@@ -460,9 +472,16 @@ fn line(
         .map(|variant| template(&variant.string))
         .collect();
     let Some(template) = known_template(modifier, &strings, templates)?.cloned() else {
-        // Without template, the line can't be found: written as the game writes it.
+        // Without template, the line can't be found: written as the game writes it, after the
+        // name of the Time-Lost jewels for one of theirs, which the game writes within the words
+        // of the passive skills that grant it.
+        let jewel = if on_radius_jewel(modifier) {
+            "(Time-Lost jewels) "
+        } else {
+            ""
+        };
         let line = Line {
-            template: template(&first.string),
+            template: format!("{jewel}{}", template(&first.string)),
             divisor: 1,
             known: false,
         };
@@ -524,7 +543,8 @@ fn line(
         .filter(|variant| placeholders(&variant.string).is_empty())
         .map(|variant| self::template(&variant.string))
         .collect();
-    let written = known_template(modifier, &without_number, templates)?.is_some();
+    let written = known_template(modifier, &without_number, templates)?
+        .is_some_and(|known| *known == template);
     let divisor = match (written, indexes.as_slice()) {
         (false, _) | (true, []) => 1,
         (true, &[index]) => divisor_of(handlers(index))?,
@@ -548,41 +568,73 @@ fn line(
 /// The template of Exiled Exchange 2 of a line of `modifier` written one of `strings` (templates
 /// of the game, [`template`]), the first it knows. On a Time-Lost jewel, the line within the
 /// words of [`RADIUS_GRANTS`] of which it knows one only (`Small Passive Skills in Radius also
-/// grant #% increased Elemental Damage`), or the line alone when it knows neither (`#% increased
-/// Effect of Small Passive Skills in Radius`). Of a desecrated modifier, which it knows within
-/// both (`#% increased maximum Life`), the notables: the trade site has a desecrated stat for
-/// them only, as for every other desecrated modifier of these jewels (checked on 2026-10-30).
+/// grant #% increased Elemental Damage`), with its number when a string writes one: known
+/// without its number only (`Small Passive Skills in Radius also grant Attack Hits apply
+/// Incision`, while the game writes `… 4% chance for Attack Hits to apply Incision`), the line
+/// can't be found, and has none. A line about the radius itself ([`ABOUT_THE_RADIUS`]) is
+/// written alone when it knows it within neither (`#% increased Effect of Small Passive Skills
+/// in Radius`), another has none. Of a desecrated modifier, which it knows within both (`#%
+/// increased maximum Life`), the notables: the trade site has a desecrated stat for them only,
+/// as for every other desecrated modifier of these jewels (checked on 2026-10-30). A modifier
+/// of these jewels that also rolls on other bases stops the generator: its lines would be
+/// written within these words there too.
 fn known_template<'a>(
     modifier: &SourceModifier,
     strings: &[String],
     templates: &'a Templates,
 ) -> Result<Option<&'a String>> {
     let alone = || strings.iter().find_map(|string| templates.get(string));
-    let on_radius_jewel = modifier
-        .spawn_weights
-        .iter()
-        .any(|spawn| spawn.weight > 0 && radius_jewel(&spawn.tag));
-    if !on_radius_jewel {
+    if !on_radius_jewel(modifier) {
         return Ok(alone());
     }
-    let granted: Vec<&String> = RADIUS_GRANTS
+    if modifier
+        .spawn_weights
         .iter()
-        .filter_map(|words| {
-            strings
-                .iter()
-                .find_map(|string| templates.get(&format!("{words}{string}")))
-        })
-        .collect();
-    match granted.as_slice() {
-        [] => Ok(alone()),
-        [one] => Ok(Some(one)),
-        [_, notables] if modifier.domain == DESECRATED => Ok(Some(notables)),
+        .any(|spawn| spawn.weight > 0 && !radius_jewel(&spawn.tag))
+    {
+        return Err("a modifier of the Time-Lost jewels that rolls on other bases".into());
+    }
+    let granted = |numbered_only: bool| -> Vec<(&str, &'a String)> {
+        RADIUS_GRANTS
+            .iter()
+            .filter_map(|&words| {
+                let template = strings
+                    .iter()
+                    .filter(|string| !numbered_only || string.contains('#'))
+                    .find_map(|string| templates.get(&format!("{words}{string}")))?;
+                Some((words, template))
+            })
+            .collect()
+    };
+    let numbered = strings.iter().any(|string| string.contains('#'));
+    match granted(numbered).as_slice() {
+        [] if !granted(false).is_empty() => Ok(None),
+        [] if strings
+            .iter()
+            .any(|string| string.contains(ABOUT_THE_RADIUS)) =>
+        {
+            Ok(alone())
+        }
+        [] => Ok(None),
+        &[(_, one)] => Ok(Some(one)),
+        both if modifier.domain == DESECRATED => Ok(both
+            .iter()
+            .find(|&&(words, _)| words == NOTABLE_GRANTS)
+            .map(|&(_, notables)| notables)),
         _ => Err(format!(
             "{} is known within the words of both kinds of passive skills",
             strings.first().map_or("", String::as_str)
         )
         .into()),
     }
+}
+
+/// Whether `modifier` rolls on a Time-Lost jewel.
+fn on_radius_jewel(modifier: &SourceModifier) -> bool {
+    modifier
+        .spawn_weights
+        .iter()
+        .any(|spawn| spawn.weight > 0 && radius_jewel(&spawn.tag))
 }
 
 /// The stat `id` of `modifier`, if it has it.
@@ -1450,9 +1502,19 @@ mod tests {
         desecrated: bool,
         templates: &[&str],
     ) -> Result<Vec<serde_json::Value>> {
-        let bases = r#"{"TimeLostRuby": {"domain": "misc", "name": "Time-Lost Ruby", "release_state": "released", "tags": ["jewel", "str_radius_jewel", "radius_jewel", "default"]}}"#;
         let spawn =
             r#"[{"tag": "str_radius_jewel", "weight": 1}, {"tag": "default", "weight": 0}]"#;
+        time_lost_tables(stats, spawn, desecrated, templates)
+    }
+
+    /// [`time_lost_templates`] with the modifiers rolling where `spawn` says.
+    fn time_lost_tables(
+        stats: &[&str],
+        spawn: &str,
+        desecrated: bool,
+        templates: &[&str],
+    ) -> Result<Vec<serde_json::Value>> {
+        let bases = r#"{"TimeLostRuby": {"domain": "misc", "name": "Time-Lost Ruby", "release_state": "released", "tags": ["jewel", "str_radius_jewel", "radius_jewel", "default"]}}"#;
         let modifiers: Vec<String> = stats
             .iter()
             .map(|stat| {
@@ -1503,15 +1565,17 @@ mod tests {
     #[test]
     fn a_line_of_a_time_lost_jewel_is_written_within_the_words_of_the_passive_skills_it_grants() {
         // The small passive skills or the notables, whichever Exiled Exchange 2 knows, also when
-        // it knows the line alone; the line alone when it knows it only.
+        // it knows the line alone; a line about the radius alone when it knows it only, another
+        // line left out.
         let templates = time_lost_templates(
-            &["Armour", "Evasion", "Effect"],
+            &["Armour", "Evasion", "Effect in Radius", "Life"],
             false,
             &[
                 "#% increased Armour",
                 "Small Passive Skills in Radius also grant #% increased Armour",
                 "Notable Passive Skills in Radius also grant #% increased Evasion",
-                "#% increased Effect",
+                "#% increased Effect in Radius",
+                "#% increased Life",
             ],
         )
         .expect("tables");
@@ -1520,9 +1584,68 @@ mod tests {
             templates,
             [
                 "Small Passive Skills in Radius also grant #% increased Armour",
-                "#% increased Effect",
+                "#% increased Effect in Radius",
                 "Notable Passive Skills in Radius also grant #% increased Evasion",
             ]
+        );
+    }
+
+    #[test]
+    fn a_line_of_a_time_lost_jewel_known_without_its_number_only_is_left_out() {
+        // The game writes `… 4% chance for Attack Hits to apply Incision`, which Exiled Exchange 2
+        // knows alone only, within the words without number (`value` 100).
+        let modifiers = format!(
+            r#"{{"Incision": {}}}"#,
+            modifier(
+                "Incision",
+                1,
+                r#"[{"tag": "str_radius_jewel", "weight": 1}, {"tag": "default", "weight": 0}]"#,
+                r#"[{"id": "incision_chance", "min": 3, "max": 5}]"#
+            )
+            .replace(r#""domain": "item""#, r#""domain": "misc""#)
+        );
+        let bases = r#"{"TimeLostRuby": {"domain": "misc", "name": "Time-Lost Ruby", "release_state": "released", "tags": ["str_radius_jewel", "radius_jewel", "default"]}}"#;
+        let translations = r#"[{"ids": ["incision_chance"], "English": [
+            {"string": "Attack Hits apply Incision", "index_handlers": [[]]},
+            {"string": "{0}% chance for Attack Hits to apply Incision", "index_handlers": [[]]}
+        ], "hidden": null}]"#;
+
+        let (tables, _) = tables(
+            &modifiers,
+            bases,
+            translations,
+            &[
+                ("Attack Hits apply Incision", "Attack Hits apply Incision"),
+                (
+                    "#% chance for Attack Hits to apply Incision",
+                    "Attack Hits apply Incision",
+                ),
+                (
+                    "Small Passive Skills in Radius also grant Attack Hits apply Incision",
+                    "Small Passive Skills in Radius also grant Attack Hits apply Incision",
+                ),
+            ],
+        );
+
+        assert_eq!(tables, serde_json::json!([]));
+    }
+
+    #[test]
+    fn a_modifier_of_the_time_lost_jewels_rolling_on_other_bases_stops_the_generator() {
+        let spawn = r#"[{"tag": "str_radius_jewel", "weight": 1}, {"tag": "ring", "weight": 1}, {"tag": "default", "weight": 0}]"#;
+
+        let error = time_lost_tables(
+            &["Armour"],
+            spawn,
+            false,
+            &["Small Passive Skills in Radius also grant #% increased Armour"],
+        )
+        .err()
+        .map(|error| error.to_string());
+
+        assert_eq!(
+            error.as_deref(),
+            Some("Armour: a modifier of the Time-Lost jewels that rolls on other bases")
         );
     }
 

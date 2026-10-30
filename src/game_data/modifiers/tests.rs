@@ -373,6 +373,30 @@ fn a_modifier_of_a_time_lost_jewel_is_found_within_the_words_of_the_passive_skil
 }
 
 #[test]
+fn a_desecrated_modifier_of_a_time_lost_jewel_is_found_among_the_notables_it_grants() {
+    // A hybrid of the Abyss on the jewels, which Exiled Exchange 2 knows granted by both kinds
+    // of passive skills; and `1% of Damage taken Recouped as Life`, an ordinary suffix of the
+    // Sapphires or a desecrated prefix, the desecrated tables holding only a line marked so.
+    let life = desecrated(
+        Affix::Prefix,
+        &["Notable Passive Skills in Radius also grant 1% increased maximum Life"],
+    );
+    let recoup = "Notable Passive Skills in Radius also grant 1% of Damage taken Recouped as Life";
+    let single = |modifier: &Modifier| {
+        tiers("Time-Lost Sapphire", modifier).map(|tiers| {
+            let ranges = tiers.tier().map(|tier| tier.ranges.clone());
+            (tiers.single(), ranges)
+        })
+    };
+    let one = Some((true, Some(vec![range(1.0, 1.0)])));
+
+    assert_eq!(single(&life), one);
+    assert_eq!(single(&desecrated(Affix::Prefix, &[recoup])), one);
+    assert_eq!(single(&modifier(Some(Affix::Suffix), &[recoup])), one);
+    assert_eq!(single(&modifier(Some(Affix::Prefix), &[recoup])), None);
+}
+
+#[test]
 fn the_radius_of_a_time_lost_jewel_upgraded_to_large_is_the_better_of_two_tiers() {
     // `Upgrades Radius to Medium` or `to Large`, of one type, both of level 1: the owner's
     // Sapphire upgraded to Large writes it `(Palier : 1)`.
@@ -1039,7 +1063,12 @@ fn the_tiers_found_from_the_values_alone_are_those_of_the_advanced_copy() {
     for (text, base_type) in ADVANCED_COPIES {
         let item = parse(text);
         let base_type = base_type.unwrap_or(item.base_type());
-        let limit = if item.rarity() == Rarity::Magic { 1 } else { 3 };
+        // As the application gives them (`StatFilters::affix_limits`): 2 on a rare jewel.
+        let limit = match item.rarity() {
+            Rarity::Magic => 1,
+            _ if item.is_jewel() => 2,
+            _ => 3,
+        };
         let limits = AffixLimits {
             prefixes: limit,
             suffixes: limit,
@@ -1137,19 +1166,23 @@ fn written_ranges(modifier: &Modifier) -> Vec<Option<Range>> {
         .collect()
 }
 
-/// The ranges written under `modifier` ([`Range::unless_fixed`]): none for fixed values, as the
-/// advanced copy most often writes them.
-fn shown_ranges(modifier: &Modifier) -> Vec<Range> {
-    let rolls = modifier.lines.iter().flat_map(|line| &line.rolls);
-    let ranged: Vec<(f64, Range)> = rolls
-        .clone()
-        .filter_map(|roll| Some((roll.value, roll.range.and_then(Range::magnitude)?)))
+/// The range of each value of the lines of `modifier`, as written under it
+/// ([`Range::unless_fixed`]): none when every value is fixed, as the advanced copy most often
+/// writes them.
+fn shown_ranges(modifier: &Modifier) -> Vec<Option<Range>> {
+    let rolls: Vec<(f64, Option<Range>)> = modifier
+        .lines
+        .iter()
+        .flat_map(|line| &line.rolls)
+        .map(|roll| (roll.value, roll.range.and_then(Range::magnitude)))
         .collect();
-    // A value without range is fixed too, but stays apart from one with a range.
-    if ranged.len() < rolls.count() {
-        return ranged.into_iter().map(|(_, range)| range).collect();
+    let fixed = rolls.iter().all(|&(value, range)| {
+        range.is_none_or(|range| Range::unless_fixed([(value, range)]).is_empty())
+    });
+    if fixed {
+        return vec![None; rolls.len()];
     }
-    Range::unless_fixed(ranged)
+    rolls.into_iter().map(|(_, range)| range).collect()
 }
 
 #[test]
@@ -1158,7 +1191,12 @@ fn the_lines_read_again_from_their_values_are_the_modifiers_of_the_advanced_copy
     for (text, base_type) in ADVANCED_COPIES {
         let item = parse(text);
         let base_type = base_type.unwrap_or(item.base_type());
-        let limit = if item.rarity() == Rarity::Magic { 1 } else { 3 };
+        // As the application gives them (`StatFilters::affix_limits`): 2 on a rare jewel.
+        let limit = match item.rarity() {
+            Rarity::Magic => 1,
+            _ if item.is_jewel() => 2,
+            _ => 3,
+        };
         let limits = AffixLimits {
             prefixes: limit,
             suffixes: limit,
