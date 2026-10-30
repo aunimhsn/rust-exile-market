@@ -57,7 +57,8 @@ fn a_table_rolls_on_the_bases_of_its_domain_only() {
 #[test]
 fn the_tables_are_ordinary_then_of_the_genesis_tree_and_the_essences_then_desecrated() {
     // Of two tables that hold a copied modifier as well, the first is taken: the ordinary one,
-    // then the minion one of the Genesis tree.
+    // then the minion one of the Genesis tree; but for a header written without tier, which
+    // takes one whose tier the game doesn't write (an essence's).
     let order: Vec<_> = TABLES
         .iter()
         .map(|table| (table.domain == Domain::Desecrated, table.source))

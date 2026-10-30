@@ -431,7 +431,8 @@ pub fn reduce(
     // The ordinary tables first, then those of the Genesis tree and of the essences, then the
     // desecrated ones: of two tables that hold a copied modifier as well, the application takes
     // the first of the file, the ordinary one (`+2 to Level of all Minion Skills` of an amulet, a
-    // T2 of its own or a minion modifier of the Genesis tree).
+    // T2 of its own or a minion modifier of the Genesis tree), but for a header written without
+    // tier, which takes one whose tier the game doesn't write (`find` in the application).
     tables.sort_by_key(|table| (table.domain == DESECRATED, table.source));
     let base_tags = base_tags(&released, &tables);
     Ok((tables, base_tags))
