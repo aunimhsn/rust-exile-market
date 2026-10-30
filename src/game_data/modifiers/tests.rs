@@ -373,14 +373,19 @@ fn a_modifier_of_a_time_lost_jewel_is_found_within_the_words_of_the_passive_skil
 }
 
 #[test]
-fn the_radius_of_a_time_lost_jewel_upgraded_to_medium_is_the_lower_of_two_tiers() {
-    // `Upgrades Radius to Medium` or `to Large`, of one type: never both on a jewel.
-    let medium = modifier(Some(Affix::Prefix), &["Upgrades Radius to Medium"]);
+fn the_radius_of_a_time_lost_jewel_upgraded_to_large_is_the_better_of_two_tiers() {
+    // `Upgrades Radius to Medium` or `to Large`, of one type, both of level 1: the owner's
+    // Sapphire upgraded to Large writes it `(Palier : 1)`.
+    let tier = |line: &str| {
+        let upgrade = modifier(Some(Affix::Prefix), &[line]);
+        tiers("Time-Lost Ruby", &upgrade).map(|tiers| {
+            let number = tiers.tier().map(|tier| tier.number);
+            (tiers.tiers.len(), number)
+        })
+    };
 
-    let tiers = tiers("Time-Lost Ruby", &medium).expect("its tiers");
-
-    assert_eq!(tiers.tiers.len(), 2);
-    assert_eq!(tiers.tier().map(|tier| tier.number), Some(2));
+    assert_eq!(tier("Upgrades Radius to Large"), Some((2, Some(1))));
+    assert_eq!(tier("Upgrades Radius to Medium"), Some((2, Some(2))));
 }
 
 /// A modifier of `affix` with `lines`, the game marking it desecrated.
@@ -900,7 +905,7 @@ fn the_tiers_of_a_bow_copied_from_the_in_game_trade_are_found_from_its_values() 
 }
 
 /// The rare and magic items of the advanced copy, with the base type of a magic one.
-const ADVANCED_COPIES: [(&str, Option<&str>); 15] = [
+const ADVANCED_COPIES: [(&str, Option<&str>); 16] = [
     (
         include_str!("../../item/test-items/en-rare-crossbow-all-modifiers.txt"),
         None,
@@ -959,6 +964,10 @@ const ADVANCED_COPIES: [(&str, Option<&str>); 15] = [
     ),
     (
         include_str!("../../item/test-items/fr-rare-jewel-time-lost.txt"),
+        None,
+    ),
+    (
+        include_str!("../../item/test-items/fr-rare-jewel-time-lost-large.txt"),
         None,
     ),
 ];
@@ -1082,9 +1091,9 @@ fn the_tiers_found_from_the_values_alone_are_those_of_the_advanced_copy() {
         }
     }
     // With the 4 modifiers of Amanamu, a lord of the Abyss, among the desecrated tables,
-    // `Reinforcing` of the Genesis tree on the Breach Rings, and the 4 lines of the Time-Lost
-    // jewel, each within the words of the passive skills it grants.
-    assert_eq!(found, 67);
+    // `Reinforcing` of the Genesis tree on the Breach Rings, and the lines of the Time-Lost
+    // jewels, each within the words of the passive skills it grants but the radius.
+    assert_eq!(found, 71);
     assert_eq!(
         without_tier,
         [
@@ -1196,8 +1205,8 @@ fn the_lines_read_again_from_their_values_are_the_modifiers_of_the_advanced_copy
         assert_eq!(lines(&read), lines(&modifiers));
     }
     // With `Reinforcing` of the Breach Rings, read again without tier, as the copy writes it,
-    // and the 4 lines of the Time-Lost jewel.
-    assert_eq!(read_again, 67);
+    // and the lines of the Time-Lost jewels.
+    assert_eq!(read_again, 71);
 }
 
 #[test]
