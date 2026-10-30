@@ -300,11 +300,36 @@ mod tests {
             }),
         };
 
-        let rolls = TierRolls::new(Language::English, &[split], Some("Warmonger Bow"));
+        let rolls = TierRolls::new(
+            Language::English,
+            std::slice::from_ref(&split),
+            Some("Warmonger Bow"),
+        );
 
         // A sum over no tiers; the accuracy over the 8 tiers of the hybrid.
         assert_eq!(rolls.get(key(0, 0)), None);
         assert_eq!(rolls.get(key(0, 1)), Some(&one(16.0, 200.0, 8, 1)));
+
+        // A part whose ranges the hybrid doesn't give the line: another table, no rolls.
+        let mut other = split.clone();
+        other.doubt = Some(TierDoubt::Split {
+            line: 0,
+            whole: part(vec![1], 76.0, 79.0),
+            added: part(vec![1], 170.0, 179.0),
+        });
+        let rolls = TierRolls::new(Language::English, &[other], Some("Warmonger Bow"));
+        assert_eq!(rolls.get(key(0, 1)), None);
+
+        // Two pure modifiers on one line: no rolls.
+        let mut pure = split;
+        pure.lines.truncate(1);
+        pure.doubt = Some(TierDoubt::Split {
+            line: 0,
+            whole: part(vec![1], 75.0, 79.0),
+            added: part(vec![1], 170.0, 179.0),
+        });
+        let rolls = TierRolls::new(Language::English, &[pure], Some("Warmonger Bow"));
+        assert_eq!(rolls.get(key(0, 0)), None);
     }
 
     #[test]

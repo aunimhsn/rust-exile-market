@@ -218,11 +218,11 @@ added-up-with-prefix = Additionné au préfixe sur cette ligne
 hybrid = Hybride
 hybrid-prefix = Préfixe hybride
 hybrid-suffix = Suffixe hybride
-# L'infobulle de « Hybride » sur la ligne qui additionne la part d'un hybride : les autres lignes de l'hybride, p. ex. « Avec +195 au Score de précision ».
+# L'infobulle de « Hybride » sur la ligne qui additionne la part d'un hybride : les autres lignes de l'hybride, p. ex. « Avec +195 au Score de Précision ».
 hybrid-with = Avec { $lines }
 # Deux autres lignes d'un hybride dans l'infobulle ci-dessus : « +38 à l'Armure et +35 au Score d'Évasion ».
 hybrid-lines-and = { $first } et { $second }
-# L'infobulle de « Hybride » sous les autres lignes de l'hybride : la plage de sa part sur la ligne qui l'additionne, puis cette ligne, p. ex. « Avec 75–79 des 258% d'Augmentation des Dégâts physiques ».
+# L'infobulle de « Hybride » sous les autres lignes de l'hybride : la plage de sa part sur la ligne qui l'additionne, puis cette ligne, p. ex. « Avec 75–79 des 258% d'Augmentation des Dégâts Physiques ».
 hybrid-part = Avec { $ranges } des { $line }
 
 ## Bloc prix

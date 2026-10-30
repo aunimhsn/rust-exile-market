@@ -1917,6 +1917,51 @@ fn a_hybrid_of_three_lines_has_its_tier_under_the_last_other_line() {
     );
 }
 
+#[test]
+fn a_pure_prefix_added_up_with_a_hybrid_suffix_says_hybrid_suffix_on_both_its_lines() {
+    let bow = include_str!("../../item/test-items/en-owner-trade-rare-bow-mirrored.txt");
+    // A prefix and a suffix open: +600 is the pure prefix T1 or T2 (451–650) and the hybrid
+    // suffix T1 (41–60) with the Light Radius.
+    let bow = read_again(parse(
+        &bow.replace("258% increased Physical Damage\n", "")
+            .replace("+25% to Critical Damage Bonus\n", "")
+            .replace(
+                "+195 to Accuracy Rating\n",
+                "+600 to Accuracy Rating\n15% increased Light Radius\n",
+            ),
+    ));
+
+    assert_eq!(
+        texts_from(&bow, "Explicit"),
+        [
+            "Explicit",
+            // The prefix first, without tooltip; "Hybrid suffix" naming the other line.
+            "■ +600 to Accuracy Rating ≥540 [T1/T2 451–650 AffixPrefix / T1 41–60 HybridSuffix (with 15% increased Light Radius)]",
+            "■ 15% increased Light Radius ≥14 [1.00 T1 15 HybridSuffix (with 41–60 of +600 to Accuracy Rating)]",
+            "Trade copy note",
+        ]
+    );
+}
+
+#[test]
+fn a_line_that_adds_up_the_middle_line_of_a_hybrid_has_its_tier_under_the_last_one() {
+    let armour = read_again(parse(
+        "Item Class: Body Armours\nRarity: Rare\nStorm Shell\nAncestral Mail\n--------\n\
+         Item Level: 80\n--------\n\
+         +180 to maximum Life\n+50 to Armour\n115% increased Armour and Evasion\n\
+         +41 to Evasion Rating\n+38% to Fire Resistance\n+29 to Strength\n",
+    ));
+
+    assert_eq!(
+        texts_from(&armour, "Prefixes")[2..5],
+        [
+            "■ +50 to Armour ≥45 [0.96]",
+            "■ 115% increased Armour and Evasion ≥104 [T4 68–79 / T1 39–42 Hybrid (with +50 to Armour and +41 to Evasion Rating)]",
+            "■ +41 to Evasion Rating ≥37 [0.81 T1 42–52 · 40–50 Hybrid (with 39–42 of 115% increased Armour and Evasion)]",
+        ]
+    );
+}
+
 /// A part of a split line of `affix` in tier 1, over 1–2.
 fn part(affix: Affix) -> PartTier {
     PartTier {
@@ -1947,7 +1992,7 @@ fn the_parts_of_a_split_line_show_the_prefix_first_then_the_pure_one() {
     );
     // A pure prefix with a hybrid suffix: "Hybrid suffix" in place of "Suffix", its tooltip
     // naming the other line.
-    let others = ["+10% to Light Radius".to_owned()];
+    let others = ["+10% to Light Radius"];
     let rows = split_rows(&part(Affix::Suffix), &part(Affix::Prefix), &others);
     let words: Vec<_> = rows.iter().map(|row| (row.word, row.tip.clone())).collect();
     assert_eq!(

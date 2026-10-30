@@ -622,10 +622,10 @@ impl Translator {
     /// The tooltip of "Hybrid" under the line that adds up the part of a hybrid: its other
     /// `lines`, "With +195 to Accuracy Rating", two of them joined by "and".
     #[must_use]
-    pub fn hybrid_with(&self, lines: &[String]) -> String {
+    pub fn hybrid_with(&self, lines: &[&str]) -> String {
         let lines = lines
             .iter()
-            .cloned()
+            .map(|&line| line.to_owned())
             .reduce(|first, second| {
                 let mut args = FluentArgs::new();
                 args.set("first", first);
@@ -1079,10 +1079,10 @@ mod tests {
             }
             assert!(translator.stack_tag(7, 20).contains("7/20"), "{language:?}");
             assert!(translator.granted_skill("Skill").contains("Skill"));
-            let lines = ["+38 to Armour".to_owned(), "+35 to Evasion".to_owned()];
+            let lines = ["+38 to Armour", "+35 to Evasion"];
             let with = translator.hybrid_with(&lines);
             assert!(
-                with.contains(&lines[0]) && with.contains(&lines[1]),
+                with.contains(lines[0]) && with.contains(lines[1]),
                 "{with} in {language:?}"
             );
             let part = translator.hybrid_part("75–79", "258% increased");

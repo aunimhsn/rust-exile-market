@@ -1363,6 +1363,57 @@ fn a_value_in_several_tiers_takes_the_worst_without_the_ranges_of_the_copy() {
 }
 
 #[test]
+fn the_tiers_of_the_hybrid_of_a_split_are_those_of_its_part() {
+    // T2 at level 1, T1 at level 50.
+    let tables = read(concat!(
+        r##"{"type": "ArmourAndStun", "affix": "prefix", "lines": [{"template": "#% increased Armour"}, {"template": "# to Stun Threshold"}], "##,
+        r#""spawn": [["shield", 1]], "tiers": [{"level": 1, "ranges": [[[10, 19]], [[20, 29]]]}, {"level": 50, "ranges": [[[20, 29]], [[30, 39]]]}]}"#
+    ));
+    let copied = |armour: f64| Copied {
+        lines: vec![
+            CopiedLine {
+                template: "#% increased Armour",
+                values: vec![armour],
+                written: None,
+            },
+            CopiedLine {
+                template: "# to Stun Threshold",
+                values: vec![100.0],
+                written: None,
+            },
+        ],
+        ranges: None,
+    };
+    let tags = ["shield".to_owned()];
+    // The tier and its neighbour found, by their numbers.
+    let tiers = |armour, whole: PartTier| {
+        hybrid_tiers(&tables, &tags, copied(armour), 1, &whole).map(|tiers| {
+            let number = |index: usize| tiers.tiers.get(index).map(|tier| tier.number);
+            (number(tiers.found), tiers.neighbour.and_then(number))
+        })
+    };
+
+    assert_eq!(
+        tiers(25.0, part(Affix::Prefix, &[1], &[(30.0, 39.0)])),
+        Some((Some(1), None))
+    );
+    // In two neighbouring tiers, the worse found, over the range of both.
+    assert_eq!(
+        tiers(19.0, part(Affix::Prefix, &[1, 2], &[(20.0, 39.0)])),
+        Some((Some(2), Some(1)))
+    );
+    // Ranges the tiers of that table don't give the summed line: another table.
+    assert_eq!(
+        tiers(25.0, part(Affix::Prefix, &[1], &[(31.0, 39.0)])),
+        None
+    );
+    assert_eq!(
+        tiers(25.0, part(Affix::Prefix, &[3], &[(30.0, 39.0)])),
+        None
+    );
+}
+
+#[test]
 fn a_base_the_data_doesnt_know_has_no_tiers_found() {
     let item = parse(TIARA_EN);
     let limits = AffixLimits {

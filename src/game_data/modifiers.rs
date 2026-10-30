@@ -190,8 +190,7 @@ pub fn modifier_tiers(
 }
 
 /// The tiers of the modifier of every line of `modifier`, whose line `line` adds up its part
-/// `whole` and a pure modifier: found from the values of its other lines, that line taken at
-/// the lowest roll of its part, the sum being in no tier.
+/// `whole` and a pure modifier ([`hybrid_tiers`]).
 fn split_tiers(
     language: Language,
     base_type: &str,
@@ -199,15 +198,38 @@ fn split_tiers(
     matches: &[LineMatch<'_>],
     (line, whole): (usize, &PartTier),
 ) -> Option<ModifierTiers> {
+    let tags = bases::tags(language, base_type)?;
+    let copied = Copied::of(modifier, matches)?;
+    let summed = matches
+        .iter()
+        .position(|found| found.lines == (line..line + 1))?;
+    hybrid_tiers(&TABLES, tags, copied, summed, whole)
+}
+
+/// The tiers among `tables`, on a base with `tags`, of the modifier of every line of `copied`,
+/// whose line `summed` adds up its part `whole` and a pure modifier: found from the values of
+/// its other lines, that line taken at the lowest roll of its part, the sum being in no tier;
+/// the tiers of `whole`, the worse found and the better its neighbour. None when the tiers of
+/// `whole` in that table don't give that line the ranges of `whole`: another table, whose
+/// rolls would be wrong.
+fn hybrid_tiers(
+    tables: &[Table],
+    tags: &[String],
+    mut copied: Copied<'_>,
+    summed: usize,
+    whole: &PartTier,
+) -> Option<ModifierTiers> {
     let affix = match whole.affix {
         Affix::Prefix => TableAffix::Prefix,
         Affix::Suffix => TableAffix::Suffix,
     };
-    let tags = bases::tags(language, base_type)?;
-    let mut copied = Copied::of(modifier, matches)?;
-    let summed = matches
+    // The values of that line among those of every line, in their order.
+    let offset: usize = copied
+        .lines
         .iter()
-        .position(|found| found.lines == (line..line + 1))?;
+        .take(summed)
+        .map(CopiedLine::count)
+        .sum();
     let values = &mut copied.lines.get_mut(summed)?.values;
     if values.len() != whole.ranges.len() {
         return None;
@@ -218,7 +240,38 @@ fn split_tiers(
     }
     // The summed line has no range: the tier is found by the values.
     copied.ranges = None;
-    find(&TABLES, affix, tags, &copied, Tie::Best)
+    let found = find(tables, affix, tags, &copied, Tie::Best)?;
+    let index = |number: &u32| found.tiers.iter().position(|tier| tier.number == *number);
+    let worse = index(whole.tiers.last()?)?;
+    let better = match whole.tiers.as_slice() {
+        [better, _] => Some(index(better)?),
+        _ => None,
+    };
+    let part = [Some(worse), better].into_iter().flatten();
+    for (value, range) in whole.ranges.iter().enumerate() {
+        let spanned = part
+            .clone()
+            .map(|tier| {
+                found
+                    .tiers
+                    .get(tier)?
+                    .ranges
+                    .get(offset + value)?
+                    .magnitude()
+            })
+            .reduce(|spanned, range| {
+                let (spanned, range) = (spanned?, range?);
+                Some(spanned.holding(range.min).holding(range.max))
+            })??;
+        if spanned != *range {
+            return None;
+        }
+    }
+    Some(ModifierTiers {
+        found: worse,
+        neighbour: better,
+        ..found
+    })
 }
 
 /// How many prefixes and suffixes an item can have: those of its rarity, with those its runes
@@ -534,7 +587,8 @@ fn read_split(
         if index == line {
             continue;
         }
-        // A line whose tiers give other values a range keeps its values without range.
+        // When the tiers of the hybrid don't give a range to the same values of that line,
+        // it keeps its values without range, as the summed line has none.
         if let Some(ranges) = spanned_ranges(language, parts, whole, index) {
             for (roll, range) in other.rolls.iter_mut().zip(ranges) {
                 roll.range = range;
