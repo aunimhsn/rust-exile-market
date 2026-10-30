@@ -1,0 +1,21 @@
+Classe d'objet: Joyaux
+Rareté: Rare
+ Pierre de la damnation
+Saphir perdu dans le temps
+--------
+Rayon: Grand
+--------
+Niveau de l'objet: 80
+--------
+{ Préfixe : « Majestueux » (Palier : 1) }
+Améliore le Rayon en Grand — Valeur fixe
+{ Préfixe : « Mystique » (Palier : 1) — Dégâts, Lanceur de sorts }
+Les Talents Mineurs dans le Rayon octroient également 2(1-2)% d'Augmentation des Dégâts des Sorts
+{ Suffixe : « des Barrières » (Palier : 1) }
+Les Talents Mineurs dans le Rayon octroient également Vous gagnez du Seuil d'Étourdissement équivalent à 2(1-2)% de votre Bouclier d'énergie maximal
+{ Suffixe : « de l'Embrasement » (Palier : 1) — Élémentaire, Feu, Altération }
+Les Talents Mineurs dans le Rayon octroient également 2(2-3)% d'Augmentation de l'Amplitude de l'Inflammabilité
+--------
+Insérez ce Joyau dans une Châsse attribuée dans l'Arbre des Talents. Retirez-le à l'aide d'un clic droit.
+--------
+Corrompu

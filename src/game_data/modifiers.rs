@@ -1537,6 +1537,8 @@ fn tiers_on_base(
         .filter(|other| other.same_modifier(table) && other.rolls_on(base))
         .flat_map(|other| &other.tiers)
         .collect();
+    // A stable sort: two tiers of one level keep the order of the file, the better last
+    // (`Upgrades Radius to Large` of a Time-Lost jewel, T1, after `to Medium`).
     tiers.sort_by_key(|tier| tier.level);
     tiers
         .iter()

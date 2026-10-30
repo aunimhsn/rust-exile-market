@@ -1,0 +1,19 @@
+Item Class: Jewels
+Rarity: Rare
+Viper Glimmer
+Time-Lost Sapphire
+--------
+Radius: Small
+--------
+Item Level: 43
+--------
+{ Prefix Modifier "Prismatic" (Tier: 1) — Damage, Elemental, Fire, Cold, Lightning }
+Small Passive Skills in Radius also grant 2(1-2)% increased Elemental Damage
+{ Prefix Modifier "Serene" (Tier: 1) — Energy Shield }
+Notable Passive Skills in Radius also grant 7(5-7)% faster start of Energy Shield Recharge
+{ Suffix Modifier "of Energy" (Tier: 1) — Mana }
+Small Passive Skills in Radius also grant 1(1-2)% increased Mana Regeneration Rate
+{ Suffix Modifier "of Infusion" (Tier: 1) — Life }
+Notable Passive Skills in Radius also grant 1% of Damage taken Recouped as Life
+--------
+Place into an allocated Jewel Socket on the Passive Skill Tree. Right click to remove from the Socket.
