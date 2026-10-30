@@ -144,10 +144,25 @@ struct Base {
 #[derive(Deserialize)]
 struct BaseData {
     category: Category,
+    #[serde(flatten)]
+    spawn: BaseSpawn,
+}
+
+/// What tells the modifiers that roll on a base.
+#[derive(Deserialize, Debug, PartialEq)]
+pub(super) struct BaseSpawn {
+    /// The domain of its modifiers in RePoE: `item` for the equipment (when the generator
+    /// writes none), `flask` for the flasks and the charms, `misc` for the jewels.
+    #[serde(default = "item")]
+    pub domain: String,
     /// E.g. `crossbow`, `two_hand_weapon`: only those that tell where a modifier rolls, also
     /// the kind of a flask (`life_flask`, `mana_flask`), its category on the trade site.
     #[serde(default)]
-    tags: Vec<String>,
+    pub tags: Vec<String>,
+}
+
+fn item() -> String {
+    "item".to_owned()
 }
 
 static ENGLISH: LazyLock<HashMap<String, BaseData>> =
@@ -176,15 +191,15 @@ pub fn category(language: Language, name: &str) -> Option<Category> {
 /// doesn't know.
 #[must_use]
 pub fn trade_category(language: Language, name: &str) -> Option<&'static str> {
-    base(language, name).map(|base| base.category.trade_id(&base.tags))
+    base(language, name).map(|base| base.category.trade_id(&base.spawn.tags))
 }
 
-/// The tags of the base type `name` in `language` that tell where a modifier rolls; none for a
-/// base the data doesn't know, or doesn't know the tags of.
-pub(super) fn tags(language: Language, name: &str) -> Option<&'static [String]> {
+/// The domain and the tags of the base type `name` in `language` that tell where a modifier
+/// rolls; none for a base the data doesn't know, or doesn't know the tags of.
+pub(super) fn spawn(language: Language, name: &str) -> Option<&'static BaseSpawn> {
     base(language, name)
-        .map(|base| base.tags.as_slice())
-        .filter(|tags| !tags.is_empty())
+        .map(|base| &base.spawn)
+        .filter(|spawn| !spawn.tags.is_empty())
 }
 
 /// Reads one base per line; a line that can't be read is logged and left out (the tests read
@@ -250,9 +265,26 @@ mod tests {
         // Every flask of the data is a life or a mana flask.
         for bases in [&ENGLISH, &FRENCH] {
             for base in bases.values() {
-                assert_ne!(base.category.trade_id(&base.tags), "flask");
+                assert_ne!(base.category.trade_id(&base.spawn.tags), "flask");
             }
         }
+    }
+
+    #[test]
+    fn a_base_has_the_domain_of_its_modifiers() {
+        let domain = |language, name| spawn(language, name).map(|spawn| spawn.domain.as_str());
+
+        assert_eq!(domain(Language::English, "Gemini Bow"), Some("item"));
+        assert_eq!(
+            domain(Language::English, "Ultimate Life Flask"),
+            Some("flask")
+        );
+        assert_eq!(
+            domain(Language::French, "Charme en améthyste"),
+            Some("flask")
+        );
+        assert_eq!(domain(Language::English, "Ruby"), Some("misc"));
+        assert_eq!(domain(Language::English, "Mystery Ring"), None);
     }
 
     #[test]

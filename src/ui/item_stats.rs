@@ -202,8 +202,9 @@ enum Roll<'a> {
 /// the ranges of that tier.
 #[derive(Debug, Clone, PartialEq)]
 struct ModifierTier {
-    /// 1 is the best.
-    number: u32,
+    /// 1 is the best; none for a modifier of one tier only on its base, whose T1 would read as
+    /// "the best" while it is "the only one".
+    number: Option<u32>,
     ranges: Vec<Range>,
 }
 
@@ -248,7 +249,7 @@ impl<'a> TierRow<'a> {
     fn affix(found: &AffixTier) -> Self {
         Self {
             tier: ModifierTier {
-                number: found.tier,
+                number: Some(found.tier),
                 ranges: found.ranges.clone(),
             },
             better: None,
@@ -274,7 +275,7 @@ impl<'a> TierRow<'a> {
         let worse = *tiers.last()?;
         Some(Self {
             tier: ModifierTier {
-                number: worse,
+                number: Some(worse),
                 ranges,
             },
             better: tiers.first().copied().filter(|&better| better != worse),
@@ -1197,15 +1198,23 @@ fn affix_stats<'a>(item: &'a Item, affix: Option<Affix>, reading: &Reading<'_>) 
                         Some(TierDoubt::Split {
                             line, whole, added, ..
                         }) => hybrid_row(modifier, *line, whole, added),
-                        _ => modifier.tier.map(|number| {
-                            let ranges = modifier
-                                .lines
-                                .iter()
-                                .flat_map(|line| magnitudes(line, &copied_ranges(line)))
-                                .map(|(_, range)| range)
-                                .collect();
-                            TierRow::plain(ModifierTier { number, ranges })
-                        }),
+                        _ => {
+                            // A modifier of one tier only: the ranges of that tier without its
+                            // number, also when the copy writes no tier.
+                            let single = reading.tiers.single(index);
+                            (single || modifier.tier.is_some()).then(|| {
+                                let ranges = modifier
+                                    .lines
+                                    .iter()
+                                    .flat_map(|line| magnitudes(line, &copied_ranges(line)))
+                                    .map(|(_, range)| range)
+                                    .collect();
+                                TierRow::plain(ModifierTier {
+                                    number: modifier.tier.filter(|_| !single),
+                                    ranges,
+                                })
+                            })
+                        }
                     };
                     let origin = modifier.origin.filter(|_| line_index == origin_line);
                     let mut stat = affix_stat(key, line, tier, origin, reading);
@@ -2030,18 +2039,21 @@ fn roll_row(ui: &mut Ui, parts: impl FnOnce(&mut Ui)) {
     });
 }
 
-/// A tier, `T1` in its color, and its ranges; or two neighbouring tiers, the `better` and
-/// `tier`, `T1/T2` in the color of the worse, and the ranges of both.
+/// A tier, `T1` in its color, and its ranges (the ranges alone for a modifier of one tier only);
+/// or two neighbouring tiers, the `better` and `tier`, `T1/T2` in the color of the worse, and
+/// the ranges of both.
 fn tier_label(ui: &mut Ui, tier: &ModifierTier, better: Option<u32>) {
-    let label = match better {
-        Some(better) => format!("T{better}/T{}", tier.number),
-        None => format!("T{}", tier.number),
-    };
-    ui.label(
-        RichText::new(label)
-            .font(text::tier())
-            .color(tier_color(tier.number)),
-    );
+    if let Some(number) = tier.number {
+        let label = match better {
+            Some(better) => format!("T{better}/T{number}"),
+            None => format!("T{number}"),
+        };
+        ui.label(
+            RichText::new(label)
+                .font(text::tier())
+                .color(tier_color(number)),
+        );
+    }
     if !tier.ranges.is_empty() {
         range_label(ui, &tier.ranges);
     }

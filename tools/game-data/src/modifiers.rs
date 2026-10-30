@@ -51,6 +51,9 @@ struct SourceStat {
 /// A base of `base_items.json`, with the fields the generator reads.
 #[derive(Deserialize)]
 pub struct SourceBase {
+    /// The domain of the modifiers that roll on it: `item` for the equipment, `flask` for the
+    /// flasks and the charms, `misc` for the jewels.
+    domain: String,
     name: String,
     release_state: String,
     tags: Vec<String>,
@@ -82,6 +85,10 @@ pub struct Modifier {
     #[serde(rename = "type")]
     kind: String,
     affix: String,
+    /// The domain of the bases it rolls on, written when it isn't `item`: a tag of every base,
+    /// `default`, rolls on the bases of its domain only (the charges of the flasks).
+    #[serde(skip_serializing_if = "is_item")]
+    domain: String,
     lines: Vec<Line>,
     /// Each tag and its weight, as `["bow", 1]`.
     spawn: Vec<(String, u32)>,
@@ -110,6 +117,12 @@ struct Line {
 )]
 fn is_one(value: &i64) -> bool {
     *value == 1
+}
+
+/// Whether `domain` is that of the equipment, the one the application takes when none is
+/// written.
+pub fn is_item(domain: &String) -> bool {
+    domain == "item"
 }
 
 #[derive(Serialize, PartialEq, Eq, PartialOrd, Ord)]
@@ -154,10 +167,17 @@ impl Serialize for Number {
 }
 
 /// The modifiers of one type and affix, with the same lines, that roll on the same bases.
-type Key = (String, String, Vec<Line>, Vec<SpawnWeight>);
+type Key = (String, String, String, Vec<Line>, Vec<SpawnWeight>);
 
-/// The tags of each base, by its English name.
-pub type BaseTags = BTreeMap<String, Vec<String>>;
+/// What tells the modifiers that roll on a base: their domain and the tags of the base.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct BaseSpawn {
+    pub domain: String,
+    pub tags: Vec<String>,
+}
+
+/// The domain and the tags of each base, by its English name.
+pub type BaseTags = BTreeMap<String, BaseSpawn>;
 
 /// The English template of Exiled Exchange 2 (its `ref`) of each of its English strings, and of
 /// each template itself: `Loads # additional bolts` is `Loads an additional bolt`.
@@ -196,6 +216,7 @@ pub fn reduce(
             .entry((
                 modifier.kind.clone(),
                 modifier.generation_type.clone(),
+                modifier.domain.clone(),
                 lines,
                 modifier.spawn_weights.clone(),
             ))
@@ -213,7 +234,7 @@ pub fn reduce(
     let tags_of_bases: BTreeSet<&String> = released.iter().flat_map(|base| &base.tags).collect();
     let mut tables = Vec::new();
     let mut unknown_lines = BTreeSet::new();
-    for ((kind, affix, lines, spawn), mut tiers) in grouped {
+    for ((kind, affix, domain, lines, spawn), mut tiers) in grouped {
         // Only the tags of the bases matter, in their order: the first one a base has decides.
         let spawn: Vec<(String, u32)> = spawn
             .into_iter()
@@ -235,6 +256,7 @@ pub fn reduce(
         tables.push(Modifier {
             kind,
             affix,
+            domain,
             lines,
             spawn,
             tiers,
@@ -247,8 +269,8 @@ pub fn reduce(
     Ok((tables, base_tags))
 }
 
-/// The tags of each base among `released` that tell where a modifier of `tables` rolls, by its
-/// name.
+/// The domain of each base among `released` and its tags that tell where a modifier of
+/// `tables` rolls, by its name.
 fn base_tags(released: &[&SourceBase], tables: &[Modifier]) -> BaseTags {
     let tags_used: BTreeSet<&String> = tables
         .iter()
@@ -256,21 +278,22 @@ fn base_tags(released: &[&SourceBase], tables: &[Modifier]) -> BaseTags {
         .collect();
     let mut base_tags = BaseTags::new();
     for base in released {
-        let tags: Vec<String> = base
-            .tags
-            .iter()
-            .filter(|tag| tags_used.contains(tag))
-            .cloned()
-            .collect();
+        let spawn = BaseSpawn {
+            domain: base.domain.clone(),
+            tags: base
+                .tags
+                .iter()
+                .filter(|tag| tags_used.contains(tag))
+                .cloned()
+                .collect(),
+        };
         // A name of several bases, e.g. the "Random Helmet" of each attribute, the
         // application can't tell apart: it gets no tag.
-        match base_tags.get(&base.name) {
-            Some(known) if *known != tags => {
-                base_tags.insert(base.name.clone(), Vec::new());
-            }
+        match base_tags.get_mut(&base.name) {
+            Some(known) if *known != spawn => known.tags.clear(),
             Some(_) => {}
             None => {
-                base_tags.insert(base.name.clone(), tags);
+                base_tags.insert(base.name.clone(), spawn);
             }
         }
     }
@@ -527,9 +550,10 @@ mod tests {
     }
 
     const BASES: &str = r#"{
-        "Bow": {"name": "Bow", "release_state": "released", "tags": ["bow", "weapon", "default"]},
-        "Ring": {"name": "Ring", "release_state": "released", "tags": ["ring", "default"]},
-        "Old": {"name": "Old", "release_state": "unreleased", "tags": ["fishing_rod", "default"]}
+        "Bow": {"domain": "item", "name": "Bow", "release_state": "released", "tags": ["bow", "weapon", "default"]},
+        "Ring": {"domain": "item", "name": "Ring", "release_state": "released", "tags": ["ring", "default"]},
+        "Flask": {"domain": "flask", "name": "Flask", "release_state": "released", "tags": ["life_flask", "default"]},
+        "Old": {"domain": "item", "name": "Old", "release_state": "unreleased", "tags": ["fishing_rod", "default"]}
     }"#;
 
     #[test]
@@ -610,21 +634,23 @@ mod tests {
                 serde_json::json!([["ring", 1], ["default", 0]])
             )]
         );
-        // The tags of the tables only, of the released bases only.
-        assert_eq!(
-            tags.get("Ring"),
-            Some(&vec!["ring".to_owned(), "default".to_owned()])
-        );
-        assert_eq!(tags.get("Bow"), Some(&vec!["default".to_owned()]));
+        // The tags of the tables only, of the released bases only, with their domain.
+        let spawn = |domain: &str, tags: &[&str]| BaseSpawn {
+            domain: domain.to_owned(),
+            tags: tags.iter().map(|&tag| tag.to_owned()).collect(),
+        };
+        assert_eq!(tags.get("Ring"), Some(&spawn("item", &["ring", "default"])));
+        assert_eq!(tags.get("Bow"), Some(&spawn("item", &["default"])));
+        assert_eq!(tags.get("Flask"), Some(&spawn("flask", &["default"])));
         assert_eq!(tags.get("Old"), None);
     }
 
     #[test]
     fn a_name_of_several_bases_with_other_tags_gets_none() {
         let bases = r#"{
-            "StrHelmet": {"name": "Random Helmet", "release_state": "released", "tags": ["str_armour", "default"]},
-            "IntHelmet": {"name": "Random Helmet", "release_state": "released", "tags": ["int_armour", "default"]},
-            "Cap": {"name": "Cap", "release_state": "released", "tags": ["int_armour", "default"]}
+            "StrHelmet": {"domain": "item", "name": "Random Helmet", "release_state": "released", "tags": ["str_armour", "default"]},
+            "IntHelmet": {"domain": "item", "name": "Random Helmet", "release_state": "released", "tags": ["int_armour", "default"]},
+            "Cap": {"domain": "item", "name": "Cap", "release_state": "released", "tags": ["int_armour", "default"]}
         }"#;
         let modifiers = format!(
             r#"{{"Shield": {}}}"#,
@@ -644,11 +670,47 @@ mod tests {
             &[("# to maximum Energy Shield", "# to maximum Energy Shield")],
         );
 
-        assert_eq!(tags.get("Random Helmet"), Some(&Vec::new()));
+        let tags_of = |name: &str| tags.get(name).map(|spawn| spawn.tags.clone());
+        assert_eq!(tags_of("Random Helmet"), Some(Vec::new()));
         assert_eq!(
-            tags.get("Cap"),
-            Some(&vec!["int_armour".to_owned(), "default".to_owned()])
+            tags_of("Cap"),
+            Some(vec!["int_armour".to_owned(), "default".to_owned()])
         );
+    }
+
+    #[test]
+    fn a_table_keeps_its_domain_when_it_isnt_that_of_the_equipment() {
+        let charges = |domain: &str| {
+            modifier(
+                "Charges",
+                1,
+                r#"[{"tag": "default", "weight": 1}]"#,
+                r#"[{"id": "charges_gained_+%", "min": 23, "max": 30}]"#,
+            )
+            .replace(r#""domain": "item""#, &format!(r#""domain": "{domain}""#))
+        };
+        let modifiers = format!(
+            r#"{{"FlaskCharges": {}, "ItemCharges": {}}}"#,
+            charges("flask"),
+            charges("item"),
+        );
+        let translations = r#"[{"ids": ["charges_gained_+%"], "English": [{"string": "{0}% increased Charges gained", "index_handlers": [[]]}], "hidden": null}]"#;
+
+        let (tables, _) = tables(
+            &modifiers,
+            BASES,
+            translations,
+            &[("#% increased Charges gained", "#% increased Charges gained")],
+        );
+
+        let domains: Vec<_> = tables
+            .as_array()
+            .expect("tables")
+            .iter()
+            .map(|table| table.get("domain").cloned())
+            .collect();
+        // One table per domain, the domain of the equipment unwritten.
+        assert_eq!(domains, [Some(serde_json::json!("flask")), None]);
     }
 
     /// The lines and the tiers of the one table of a modifier of `stats`, written by

@@ -6,7 +6,7 @@ use std::sync::LazyLock;
 
 use serde::Deserialize;
 
-use super::bases;
+use super::bases::{self, BaseSpawn};
 use super::lines::{LineMatch, StatSource, modifier_stats};
 use crate::item::{
     Affix, AffixTier, Modifier, ModifierKind, ModifierOrigin, PartTier, Range, TierDoubt,
@@ -30,6 +30,10 @@ struct Table {
     #[serde(rename = "type")]
     kind: String,
     affix: TableAffix,
+    /// The domain of the bases it rolls on (`item` when the generator writes none): `default`,
+    /// a tag of every base, rolls on those of its domain only (the charges of a flask).
+    #[serde(default = "item")]
+    domain: String,
     lines: Vec<TableLine>,
     /// Each tag and its weight: the first tag of the list a base has tells whether the
     /// modifier rolls on it (above zero) or not.
@@ -61,6 +65,10 @@ fn one() -> f64 {
     1.0
 }
 
+fn item() -> String {
+    "item".to_owned()
+}
+
 #[derive(Deserialize)]
 struct TableTier {
     level: u32,
@@ -78,12 +86,15 @@ impl From<TableAffix> for Affix {
 }
 
 impl Table {
-    /// Whether the modifier rolls on a base with `tags`.
-    fn rolls_on(&self, tags: &[String]) -> bool {
-        self.spawn
-            .iter()
-            .find(|(tag, _)| tags.contains(tag))
-            .is_some_and(|&(_, weight)| weight > 0)
+    /// Whether the modifier rolls on `base`: a base of its domain, whose first tag of the list
+    /// says so.
+    fn rolls_on(&self, base: &BaseSpawn) -> bool {
+        self.domain == base.domain
+            && self
+                .spawn
+                .iter()
+                .find(|(tag, _)| base.tags.contains(tag))
+                .is_some_and(|&(_, weight)| weight > 0)
     }
 
     /// Whether the table holds tiers of the same modifier as `other`, maybe on other bases.
@@ -184,9 +195,9 @@ pub fn modifier_tiers(
         ModifierKind::Explicit(Some(Affix::Suffix)) => TableAffix::Suffix,
         _ => return None,
     };
-    let tags = bases::tags(language, base_type)?;
+    let base = bases::spawn(language, base_type)?;
     let copied = Copied::of(modifier, matches)?;
-    find(&TABLES, affix, tags, &copied, Tie::Best)
+    find(&TABLES, affix, base, &copied, Tie::Best)
 }
 
 /// The tiers of the modifier of every line of `modifier`, whose line `line` adds up its part
@@ -198,15 +209,15 @@ fn split_tiers(
     matches: &[LineMatch<'_>],
     (line, whole): (usize, &PartTier),
 ) -> Option<ModifierTiers> {
-    let tags = bases::tags(language, base_type)?;
+    let base = bases::spawn(language, base_type)?;
     let copied = Copied::of(modifier, matches)?;
     let summed = matches
         .iter()
         .position(|found| found.lines == (line..line + 1))?;
-    hybrid_tiers(&TABLES, tags, copied, summed, whole)
+    hybrid_tiers(&TABLES, base, copied, summed, whole)
 }
 
-/// The tiers among `tables`, on a base with `tags`, of the modifier of every line of `copied`,
+/// The tiers among `tables`, on `base`, of the modifier of every line of `copied`,
 /// whose line `summed` adds up its part `whole` and a pure modifier: found from the values of
 /// its other lines, that line taken at the lowest roll of its part, the sum being in no tier;
 /// the tiers of `whole`, the worse found and the better its neighbour. None when the tiers of
@@ -218,7 +229,7 @@ fn split_tiers(
 /// base today).
 fn hybrid_tiers(
     tables: &[Table],
-    tags: &[String],
+    base: &BaseSpawn,
     mut copied: Copied<'_>,
     summed: usize,
     whole: &PartTier,
@@ -244,7 +255,7 @@ fn hybrid_tiers(
     }
     // The summed line has no range: the tier is found by the values.
     copied.ranges = None;
-    let table = find(tables, affix, tags, &copied, Tie::Best)?;
+    let table = find(tables, affix, base, &copied, Tie::Best)?;
     let index = |number: &u32| table.tiers.iter().position(|tier| tier.number == *number);
     let worse = index(whole.tiers.last()?)?;
     let better = match whole.tiers.as_slice() {
@@ -371,7 +382,7 @@ pub fn trade_tiers(
     limits: AffixLimits,
     sanctified: bool,
 ) -> Vec<FoundTiers> {
-    let Some(tags) = bases::tags(language, base_type) else {
+    let Some(base) = bases::spawn(language, base_type) else {
         return Vec::new();
     };
     let copied: Vec<Option<Copied<'_>>> = modifiers
@@ -385,7 +396,7 @@ pub fn trade_tiers(
                 .flatten()
         })
         .collect();
-    let candidates = candidates(modifiers, &copied, tags, item_level, !sanctified);
+    let candidates = candidates(modifiers, &copied, base, item_level, !sanctified);
     let known = |affix| {
         modifiers
             .iter()
@@ -420,7 +431,7 @@ pub fn trade_tiers(
             room,
             fits_room: key.room,
         };
-        let doubts = summed_readings::doubts(tags, item_level, modifiers, &copied, &best);
+        let doubts = summed_readings::doubts(base, item_level, modifiers, &copied, &best);
         doubts.outcome.log(base_type);
         room_in_doubt = doubts.other_room;
         for line in doubts.lines {
@@ -801,8 +812,8 @@ static MOST_LINES: LazyLock<usize> = LazyLock::new(|| {
         .unwrap_or(1)
 });
 
-/// Every modifier or run of modifiers among `modifiers` whose values the tables of a base with
-/// `tags` hold, the tier the worst among those `item_level` allows, `copied` giving the lines
+/// Every modifier or run of modifiers among `modifiers` whose values the tables of `base`
+/// hold, the tier the worst among those `item_level` allows, `copied` giving the lines
 /// of each modifier to read (none for a modifier that isn't, or whose lines have no stat of the
 /// game data): one modifier, or up to as many as the lines of a hybrid, of the same origin;
 /// then, when they `may_split`, each way one of their lines adds up two modifiers
@@ -810,7 +821,7 @@ static MOST_LINES: LazyLock<usize> = LazyLock::new(|| {
 fn candidates(
     modifiers: &[Modifier],
     copied: &[Option<Copied<'_>>],
-    tags: &[String],
+    base: &BaseSpawn,
     item_level: Option<u32>,
     may_split: bool,
 ) -> Vec<Candidate> {
@@ -837,7 +848,7 @@ fn candidates(
             ]
             .into_iter()
             .filter_map(|(affix, table_affix)| {
-                Some((affix, find(&TABLES, table_affix, tags, &joined, tie)?))
+                Some((affix, find(&TABLES, table_affix, base, &joined, tie)?))
             })
             .collect();
             let fractured = first.origin == Some(ModifierOrigin::Fractured);
@@ -854,7 +865,7 @@ fn candidates(
                 if !may_split || owners.iter().filter(|&&other| other == owner).count() != 1 {
                     continue;
                 }
-                for split in splits(&TABLES, tags, &joined, (summed, owner), item_level) {
+                for split in splits(&TABLES, base, &joined, (summed, owner), item_level) {
                     candidates.push(Candidate {
                         modifiers: start..end,
                         fractured,
@@ -882,7 +893,7 @@ struct Split {
 }
 
 /// Every way the line `summed` of `copied` (the lines of consecutive modifiers), the line of
-/// the modifier `owner` of the item, adds up two modifiers of its stat on a base with `tags`:
+/// the modifier `owner` of the item, adds up two modifiers of its stat on `base`:
 /// the modifier of every copied line, and a pure modifier of another type of the summed line
 /// only, whose values add up on that line, their tiers among those `item_level` allows. Only
 /// the ways that fit best, those of two neighbouring tiers of one modifier made one
@@ -890,7 +901,7 @@ struct Split {
 /// is the summed one, as [`TierDoubt::EitherAffix`] reads a prefix first.
 fn splits(
     tables: &[Table],
-    tags: &[String],
+    base: &BaseSpawn,
     copied: &Copied<'_>,
     (summed, owner): (usize, usize),
     item_level: Option<u32>,
@@ -922,7 +933,7 @@ fn splits(
         .enumerate()
         .filter_map(|(index, table)| {
             let order = alone.order(&table.lines)?;
-            let tiers = tiers_on_base(tables, table, tags, &order, &alone)?;
+            let tiers = tiers_on_base(tables, table, base, &order, &alone)?;
             first_of_its_modifier(tables, index).then_some((index, table, tiers))
         })
         .collect();
@@ -936,7 +947,7 @@ fn splits(
         if !first_of_its_modifier(tables, whole_index) {
             continue;
         }
-        let Some(whole_tiers) = tiers_on_base(tables, whole, tags, &order, copied) else {
+        let Some(whole_tiers) = tiers_on_base(tables, whole, base, &order, copied) else {
             continue;
         };
         let values = copied.values(&whole.lines, &order);
@@ -1296,12 +1307,12 @@ enum Tie {
     Worst { item_level: Option<u32> },
 }
 
-/// The tiers of `copied` among `tables`, on a base with `tags`: those of the modifier of
+/// The tiers of `copied` among `tables`, on `base`: those of the modifier of
 /// `affix` that holds it best, the tier taken on a `tie`.
 fn find(
     tables: &[Table],
     affix: TableAffix,
-    tags: &[String],
+    base: &BaseSpawn,
     copied: &Copied<'_>,
     tie: Tie,
 ) -> Option<ModifierTiers> {
@@ -1316,7 +1327,7 @@ fn find(
         if !first_of_its_modifier(tables, index) {
             continue;
         }
-        let Some(tiers) = tiers_on_base(tables, table, tags, &order, copied) else {
+        let Some(tiers) = tiers_on_base(tables, table, base, &order, copied) else {
             continue;
         };
         let values = copied.values(&table.lines, &order);
@@ -1355,20 +1366,20 @@ fn find(
     best.map(|(_, tiers)| tiers)
 }
 
-/// Every tier of the modifier of `table` that rolls on a base with `tags`, the best first, the
+/// Every tier of the modifier of `table` that rolls on `base`, the best first, the
 /// ranges of each in the order of the copied lines (`order`, [`Copied::order`]): a type can
 /// roll other ranges on other bases (the added damage of a two-handed weapon). None when a
 /// line of a tier hasn't as many values as the copied one.
 fn tiers_on_base(
     tables: &[Table],
     table: &Table,
-    tags: &[String],
+    base: &BaseSpawn,
     order: &[usize],
     copied: &Copied<'_>,
 ) -> Option<Vec<Tier>> {
     let mut tiers: Vec<&TableTier> = tables
         .iter()
-        .filter(|other| other.same_modifier(table) && other.rolls_on(tags))
+        .filter(|other| other.same_modifier(table) && other.rolls_on(base))
         .flat_map(|other| &other.tiers)
         .collect();
     tiers.sort_by_key(|tier| tier.level);

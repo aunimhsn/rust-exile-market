@@ -184,6 +184,9 @@ struct SourceCraftable {
 struct Base {
     name: String,
     category: String,
+    /// The domain of its modifiers, written when it isn't `item`.
+    #[serde(skip_serializing_if = "modifiers::is_item")]
+    domain: String,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     tags: Vec<String>,
 }
@@ -427,8 +430,9 @@ fn reduce_stat(stat: SourceStat) -> Result<Stat> {
 /// The bases of an `items.ndjson`, of the categories the application searches, each name
 /// once: a base listed in several categories takes the one most of its entries have
 /// (`Runemastered Venerable Defender`, three times a shield and once a buckler), the first in
-/// alphabetical order on a tie. Each takes the tags of its English name in `tags`.
-fn reduce_bases(source: &str, tags: &modifiers::BaseTags) -> Result<Vec<Base>> {
+/// alphabetical order on a tie. Each takes the domain and the tags of its English name in
+/// `spawns`.
+fn reduce_bases(source: &str, spawns: &modifiers::BaseTags) -> Result<Vec<Base>> {
     let mut categories: BTreeMap<String, BTreeMap<String, usize>> = BTreeMap::new();
     let mut english_names = BTreeMap::new();
     for (index, line) in source.lines().enumerate() {
@@ -471,13 +475,17 @@ fn reduce_bases(source: &str, tags: &modifiers::BaseTags) -> Result<Vec<Base>> {
             .map(|(category, _)| category)
             .ok_or("a base without category")?;
         let english = english_names.get(&name).unwrap_or(&name);
-        let tags = tags.get(english).cloned().unwrap_or_default();
+        let (domain, tags) = spawns.get(english).map_or_else(
+            || ("item".to_owned(), Vec::new()),
+            |spawn| (spawn.domain.clone(), spawn.tags.clone()),
+        );
         if tags.is_empty() {
             println!("Without tags: {name}");
         }
         bases.push(Base {
             name,
             category,
+            domain,
             tags,
         });
     }

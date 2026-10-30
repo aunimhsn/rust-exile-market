@@ -6,8 +6,8 @@
 //! lines is a sum too).
 
 use super::{
-    Affix, AffixSet, Candidate, Copied, CopiedLine, ROUNDING, Range, Room, TABLES, Table,
-    first_of_its_modifier, holds, tiers_on_base,
+    Affix, AffixSet, BaseSpawn, Candidate, Copied, CopiedLine, ROUNDING, Range, Room, TABLES,
+    Table, first_of_its_modifier, holds, tiers_on_base,
 };
 use crate::item::{Modifier, ModifierOrigin};
 
@@ -101,7 +101,7 @@ struct Placement<'a> {
 
 /// The indexes among `modifiers` of the lines that another reading of the item reads otherwise
 /// than the `best` one, where the best one splits a line, or with a line adding up several
-/// modifiers: on a base with `tags`, among the tiers `item_level` allows, `copied` giving the
+/// modifiers: on `base`, among the tiers `item_level` allows, `copied` giving the
 /// lines of each modifier (those of [`super::trade_tiers`]).
 ///
 /// Another reading covers the lines the best one reads, each within the sum of the ranges of its
@@ -122,18 +122,18 @@ struct Placement<'a> {
 /// them can't hold its line alone. A reading that differs from the best one only by the tier of
 /// a modifier of a split line, the neighbouring tier the best one gives it too, is the best one.
 pub(super) fn doubts(
-    tags: &[String],
+    base: &BaseSpawn,
     item_level: Option<u32>,
     modifiers: &[Modifier],
     copied: &[Option<Copied<'_>>],
     best: &Best<'_>,
 ) -> Doubts {
-    doubts_within(tags, item_level, modifiers, copied, best, MAX_STEPS)
+    doubts_within(base, item_level, modifiers, copied, best, MAX_STEPS)
 }
 
 /// [`doubts`], in at most `max_steps` steps.
 fn doubts_within(
-    tags: &[String],
+    base: &BaseSpawn,
     item_level: Option<u32>,
     modifiers: &[Modifier],
     copied: &[Option<Copied<'_>>],
@@ -168,7 +168,7 @@ fn doubts_within(
             });
         }
     }
-    let placements = placements(&TABLES, tags, item_level, &lines, &values);
+    let placements = placements(&TABLES, base, item_level, &lines, &values);
     let ground = Ground::new(
         &lines,
         &values,
@@ -205,12 +205,12 @@ fn doubts_within(
     }
 }
 
-/// Every tier of every modifier of `tables` on a base with `tags`, among those `item_level`
+/// Every tier of every modifier of `tables` on `base`, among those `item_level`
 /// allows, whose lines are among `lines`, of one origin; without a tier that can't hold the
 /// `values` whatever adds up with it.
 fn placements<'a>(
     tables: &'a [Table],
-    tags: &[String],
+    base: &BaseSpawn,
     item_level: Option<u32>,
     lines: &[Line<'a>],
     values: &[f64],
@@ -246,7 +246,7 @@ fn placements<'a>(
             if divided {
                 continue;
             }
-            let Some(tiers) = tiers_on_base(tables, table, tags, &order, &copied) else {
+            let Some(tiers) = tiers_on_base(tables, table, base, &order, &copied) else {
                 continue;
             };
             let indexes: Vec<usize> = mapped

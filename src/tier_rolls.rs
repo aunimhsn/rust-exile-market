@@ -2,7 +2,10 @@
 //! modifier on the base of the item, from the modifier tables: its bar, the range its field
 //! stays in and the rolls its tooltip tells. Read once when the item is copied, for a modifier
 //! whose header tells its affix and its tier, and for the other lines of a hybrid whose part a
-//! line adds up, over the tiers of the hybrid; not for that line, a sum over no tiers.
+//! line adds up, over the tiers of the hybrid; not for that line, a sum over no tiers. A
+//! modifier of one tier only on the base has no tier to tell: its lines roll over that tier, or
+//! over the ranges of the advanced copy when its header writes no tier (`Reinforcing` of the
+//! Genesis tree), which the tables needn't know.
 //!
 //! The ranges of a tier follow the values of each line match of the modifier, and the values
 //! of a match the numbers its stat counts on its lines, in their order: the numbers are read
@@ -10,7 +13,7 @@
 
 use crate::filters::StatKey;
 use crate::game_data::{self, Tier};
-use crate::item::{Modifier, Range, TierDoubt};
+use crate::item::{Modifier, ModifierKind, Range, TierDoubt};
 use crate::language::Language;
 use crate::trade::stat_filters::counted_numbers;
 
@@ -36,6 +39,9 @@ pub struct LineRolls {
 #[derive(Debug, Default)]
 pub struct TierRolls {
     lines: Vec<(StatKey, LineRolls)>,
+    /// The index of each modifier of one tier only on the base of the item: its T1 would read
+    /// as "the best" while it is "the only one".
+    single: Vec<usize>,
 }
 
 impl TierRolls {
@@ -48,7 +54,13 @@ impl TierRolls {
             return Self::default();
         };
         let mut lines = Vec::new();
+        let mut single = Vec::new();
         for (index, modifier) in modifiers.iter().enumerate() {
+            if written_without_tier(modifier) {
+                single.push(index);
+                lines.extend(copied_rolls(index, modifier));
+                continue;
+            }
             let summed = match &modifier.doubt {
                 Some(TierDoubt::Split { line, .. }) => Some(*line),
                 _ if modifier.tier.is_some() => None,
@@ -59,6 +71,10 @@ impl TierRolls {
             else {
                 continue;
             };
+            let one_tier = summed.is_none() && tiers.tiers.len() == 1;
+            if one_tier {
+                single.push(index);
+            }
             let mut start = 0;
             for (found, &count) in matches.iter().zip(&tiers.counts) {
                 let numbers = counted_numbers(found, modifier);
@@ -68,7 +84,11 @@ impl TierRolls {
                             continue;
                         }
                         let rolls = modifier.lines.get(line).map_or(0, |line| line.rolls.len());
-                        if let Some(rolls) = line_rolls(&tiers.tiers, &values, rolls) {
+                        if let Some(mut rolls) = line_rolls(&tiers.tiers, &values, rolls) {
+                            if one_tier {
+                                // "T1–T1" would tell nothing.
+                                rolls.tiers = None;
+                            }
                             let key = StatKey {
                                 modifier: index,
                                 line,
@@ -80,7 +100,7 @@ impl TierRolls {
                 start += count;
             }
         }
-        Self { lines }
+        Self { lines, single }
     }
 
     /// The rolls of the line `key` over every tier; none for a line without them.
@@ -91,6 +111,56 @@ impl TierRolls {
             .find(|(line, _)| *line == key)
             .map(|(_, rolls)| rolls)
     }
+
+    /// Whether the modifier `index` has one tier only on the base of the item, and so no tier
+    /// to tell.
+    #[must_use]
+    pub fn single(&self, index: usize) -> bool {
+        self.single.contains(&index)
+    }
+}
+
+/// Whether the advanced copy writes `modifier`, a prefix or suffix, with its ranges but without
+/// tier: the game writes none for a modifier of one tier only (`Reinforcing` of the Genesis
+/// tree, `Minions have 21(19-22)% increased maximum Life`).
+fn written_without_tier(modifier: &Modifier) -> bool {
+    matches!(modifier.kind, ModifierKind::Explicit(Some(_)))
+        && modifier.tier.is_none()
+        && modifier.doubt.is_none()
+        && !modifier.unrevealed
+        && modifier
+            .lines
+            .iter()
+            .any(|line| line.rolls.iter().any(|roll| roll.range.is_some()))
+}
+
+/// The rolls of each line of the modifier `index`, `modifier`, over the ranges the advanced copy
+/// writes, without their sign.
+fn copied_rolls(index: usize, modifier: &Modifier) -> impl Iterator<Item = (StatKey, LineRolls)> {
+    modifier
+        .lines
+        .iter()
+        .enumerate()
+        .filter_map(move |(line, text)| {
+            let ranges: Vec<Option<Range>> = text
+                .rolls
+                .iter()
+                .map(|roll| roll.range.and_then(Range::magnitude))
+                .collect();
+            ranges.iter().any(Option::is_some).then(|| {
+                let key = StatKey {
+                    modifier: index,
+                    line,
+                };
+                (
+                    key,
+                    LineRolls {
+                        ranges,
+                        tiers: None,
+                    },
+                )
+            })
+        })
 }
 
 /// The values of a line match, `count` of them from `start` among the ranges of a tier,
@@ -199,6 +269,63 @@ mod tests {
         assert_eq!(rolls.get(key(1, 0)), Some(&one(9.0, 170.0, 8, 1)));
         assert_eq!(rolls.get(key(1, 1)), Some(&one(6.0, 161.0, 8, 1)));
         assert_eq!(rolls.get(key(2, 0)), Some(&one(6.0, 45.0, 8, 1)));
+    }
+
+    #[test]
+    fn a_modifier_of_one_tier_only_on_its_base_has_no_tier_to_tell() {
+        let rolls = rolls_of(
+            "Item Class: Jewels\nRarity: Rare\nViper Glimmer\nRuby\n--------\n\
+             Item Level: 43\n--------\n\
+             { Prefix Modifier \"Brutish\" (Tier: 1) — Minion, Life }\n\
+             Minions have 12(5-15)% increased maximum Life",
+        );
+
+        assert!(rolls.single(0));
+        // Over its only tier, without "T1–T1".
+        assert_eq!(
+            rolls.get(key(0, 0)),
+            Some(&LineRolls {
+                ranges: vec![Some(range(5.0, 15.0))],
+                tiers: None,
+            })
+        );
+    }
+
+    #[test]
+    fn a_modifier_written_without_tier_rolls_over_its_copied_range() {
+        let rolls = rolls_of(
+            "Item Class: Rings\nRarity: Rare\nGlyph Circle\nBreach Ring\n--------\n\
+             Item Level: 77\n--------\n\
+             { Prefix Modifier \"Reinforcing\" — Life, Minion }\n\
+             Minions have 21(19-22)% increased maximum Life\n\
+             { Prefix Modifier \"Aqua\" (Tier: 7) — Mana }\n\
+             +76(65-79) to maximum Mana",
+        );
+
+        // The Genesis tree, which the tables don't know.
+        assert!(rolls.single(0));
+        assert_eq!(
+            rolls.get(key(0, 0)),
+            Some(&LineRolls {
+                ranges: vec![Some(range(19.0, 22.0))],
+                tiers: None,
+            })
+        );
+        assert!(!rolls.single(1));
+        assert!(
+            rolls
+                .get(key(1, 0))
+                .is_some_and(|rolls| rolls.tiers.is_some())
+        );
+
+        // Copied from the in-game trade, without its range: no rolls.
+        let rolls = rolls_of(
+            "Item Class: Rings\nRarity: Rare\nGlyph Circle\nBreach Ring\n--------\n\
+             Item Level: 77\n--------\n\
+             Minions have 21% increased maximum Life",
+        );
+        assert!(!rolls.single(0));
+        assert_eq!(rolls.get(key(0, 0)), None);
     }
 
     #[test]

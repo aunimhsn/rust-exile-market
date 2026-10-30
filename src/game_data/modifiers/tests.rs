@@ -16,6 +16,29 @@ fn range(min: f64, max: f64) -> Range {
     Range { min, max }
 }
 
+/// A base of the equipment with `tags`.
+fn equipment(tags: &[&str]) -> BaseSpawn {
+    BaseSpawn {
+        domain: "item".to_owned(),
+        tags: tags.iter().map(|&tag| tag.to_owned()).collect(),
+    }
+}
+
+#[test]
+fn a_table_rolls_on_the_bases_of_its_domain_only() {
+    let charges = TABLES
+        .iter()
+        .find(|table| table.kind == "FlaskIncreasedMaxCharges")
+        .expect("the charges of a flask");
+    let base = |name| bases::spawn(Language::English, name).expect("a base");
+
+    // Its only tag, `default`, is a tag of every base.
+    assert_eq!(charges.spawn, [("default".to_owned(), 1)]);
+    assert!(charges.rolls_on(base("Ultimate Life Flask")));
+    assert!(!charges.rolls_on(base("Gold Ring")));
+    assert!(!charges.rolls_on(base("Ruby")));
+}
+
 /// A tier number and the ranges of its values, as the game writes them.
 type TierRanges = (u32, Vec<Range>);
 
@@ -265,7 +288,7 @@ fn the_value_of_a_line_without_number_is_divided_as_its_table_shows_it() {
         find(
             &tables,
             TableAffix::Suffix,
-            &["weapon".to_owned()],
+            &equipment(&["weapon"]),
             &copied,
             Tie::Best,
         )
@@ -338,7 +361,7 @@ fn two_tables_with_the_same_lines_in_another_order_are_two_modifiers() {
     let tiers = find(
         &tables,
         TableAffix::Prefix,
-        &["weapon".to_owned()],
+        &equipment(&["weapon"]),
         &copied,
         Tie::Best,
     )
@@ -1351,7 +1374,7 @@ fn a_value_in_several_tiers_takes_the_worst_without_the_ranges_of_the_copy() {
         find(
             &tables,
             TableAffix::Prefix,
-            &["helmet".to_owned()],
+            &equipment(&["helmet"]),
             &copied,
             tie,
         )
@@ -1384,10 +1407,10 @@ fn the_tiers_of_the_hybrid_of_a_split_are_those_of_its_part() {
         ],
         ranges: None,
     };
-    let tags = ["shield".to_owned()];
+    let base = equipment(&["shield"]);
     // The tier and its neighbour found, by their numbers.
     let tiers = |armour, whole: PartTier| {
-        hybrid_tiers(&tables, &tags, copied(armour), 1, &whole).map(|tiers| {
+        hybrid_tiers(&tables, &base, copied(armour), 1, &whole).map(|tiers| {
             let number = |index: usize| tiers.tiers.get(index).map(|tier| tier.number);
             (number(tiers.found), tiers.neighbour.and_then(number))
         })
