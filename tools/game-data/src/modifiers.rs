@@ -51,7 +51,7 @@ pub type Essence = (&'static str, &'static [(&'static str, u32)]);
 /// that of an older patch). The ordinary essences add ordinary modifiers, with their tiers.
 /// Left out: the notable of the Essence of Delirium on a body armour (`EssenceGrantedPassive`,
 /// `Allocates #`), whose value is the hash of the notable, not a roll.
-pub const ESSENCES: [Essence; 33] = [
+pub const ESSENCES: &[Essence] = &[
     ("EssenceAbyssPrefix", &[("default", 1)]),
     ("EssenceAbyssSuffix", &[("default", 1)]),
     (
@@ -372,7 +372,11 @@ pub fn reduce(
             by_stat.entry(id.as_str()).or_insert(index);
         }
     }
-    let essences = essence_spawns(modifiers, essences)?;
+    let released: Vec<&SourceBase> = bases
+        .values()
+        .filter(|base| base.release_state == "released")
+        .collect();
+    let essences = essence_spawns(modifiers, essences, &released)?;
     let mut grouped: BTreeMap<Key, Vec<Tier>> = BTreeMap::new();
     for (id, modifier) in modifiers {
         let essence = essences.get(id.as_str());
@@ -415,15 +419,19 @@ pub fn reduce(
             ))
             .or_default()
             .push(Tier {
-                level: modifier.required_level,
+                // An essence adds its modifier whatever the level of the item, below the
+                // level RePoE writes (72 for the Perfect ones): a Cultist Bow of level 33 with
+                // the `+2 to Level of all Attack Skills` of an essence, on the trade site on
+                // 2026-10-30.
+                level: if essence.is_some() {
+                    1
+                } else {
+                    modifier.required_level
+                },
                 ranges,
             });
     }
 
-    let released: Vec<&SourceBase> = bases
-        .values()
-        .filter(|base| base.release_state == "released")
-        .collect();
     let mut tables = Vec::new();
     let mut unknown_lines = BTreeSet::new();
     for ((kind, affix, domain, lines, spawn, source), mut tiers) in grouped {
@@ -450,6 +458,13 @@ pub fn reduce(
         }
         // A line without template can't be found, nor its modifier.
         let unknown: Vec<&Line> = lines.iter().filter(|line| !line.known).collect();
+        if source == Some(Source::Essence) && !unknown.is_empty() {
+            let line = unknown.first().map_or("", |line| line.template.as_str());
+            return Err(format!(
+                "{kind}: a modifier of an essence with a line without template, {line}"
+            )
+            .into());
+        }
         if !unknown.is_empty() {
             unknown_lines.extend(unknown.iter().map(|line| line.template.clone()));
             continue;
@@ -482,26 +497,42 @@ pub fn reduce(
 }
 
 /// The spawn weights of each modifier of `essences` by its id, `default` at 0 after its own
-/// tags. An error when one isn't a prefix or a suffix of the equipment among `modifiers`, or
-/// rolls without an essence: the list is to be checked again, after a patch of the game.
+/// tags. An error when one is written twice, isn't a prefix or a suffix of the equipment among
+/// `modifiers`, rolls without an essence, or has a tag no base of the equipment among `released`
+/// has (mistyped, or gone): the list is to be checked again, after a patch of the game.
 fn essence_spawns(
     modifiers: &BTreeMap<String, SourceModifier>,
     essences: &[Essence],
+    released: &[&SourceBase],
 ) -> Result<HashMap<&'static str, Vec<SpawnWeight>>> {
+    let equipment_tags: BTreeSet<&str> = released
+        .iter()
+        .filter(|base| base.domain == EQUIPMENT)
+        .flat_map(|base| base.tags.iter().map(String::as_str))
+        .collect();
     let mut spawns = HashMap::new();
     for &(id, tags) in essences {
         let modifier = modifiers
             .get(id)
             .ok_or_else(|| format!("{id}: a modifier of an essence that RePoE doesn't have"))?;
-        if modifier.domain != EQUIPMENT
-            || !["prefix", "suffix"].contains(&modifier.generation_type.as_str())
-            || modifier.spawn_weights.iter().any(|spawn| spawn.weight > 0)
-        {
-            return Err(format!(
-                "{id}: a modifier of an essence that isn't one of the equipment rolled by an \
-                 essence only"
-            )
-            .into());
+        let error = if spawns.contains_key(id) {
+            Some("written twice in the list".to_owned())
+        } else if modifier.domain != EQUIPMENT {
+            Some(format!("of the domain {}", modifier.domain))
+        } else if !["prefix", "suffix"].contains(&modifier.generation_type.as_str()) {
+            Some(format!(
+                "neither a prefix nor a suffix ({})",
+                modifier.generation_type
+            ))
+        } else if modifier.spawn_weights.iter().any(|spawn| spawn.weight > 0) {
+            Some("rolls without an essence".to_owned())
+        } else {
+            tags.iter()
+                .find(|(tag, _)| !equipment_tags.contains(tag))
+                .map(|(tag, _)| format!("a tag no base of the equipment has, {tag}"))
+        };
+        if let Some(error) = error {
+            return Err(format!("{id}: a modifier of an essence: {error}").into());
         }
         let weight = |(tag, weight): (&str, u32)| SpawnWeight {
             tag: tag.to_owned(),
@@ -1373,83 +1404,174 @@ mod tests {
             summary,
             [
                 serde_json::json!(["SpellLevel", [["bow", 1], ["default", 0]], null, [1, 40]]),
-                serde_json::json!(["SpellLevel", [["bow", 1], ["default", 0]], "essence", [72]]),
+                // Of level 1: an essence adds it whatever the level of the item.
+                serde_json::json!(["SpellLevel", [["bow", 1], ["default", 0]], "essence", [1]]),
             ]
         );
     }
 
     #[test]
-    fn a_modifier_of_an_essence_missing_or_rolling_without_it_stops_the_generator() {
+    fn a_modifier_of_an_essence_missing_rolling_or_mistyped_stops_the_generator() {
         let nowhere = r#"[{"tag": "default", "weight": 0}]"#;
-        let missing = essence_tables(
-            &format!(r#"{{"Essence": {}}}"#, spell_levels("Kind", 72, nowhere, 3)),
-            &[("Renamed", &[("bow", 1)])],
-        );
-        assert_eq!(
-            missing.err().map(|error| error.to_string()),
-            Some("Renamed: a modifier of an essence that RePoE doesn't have".to_owned())
-        );
-
-        // Rolling on a base of its own after a patch: the list is to be checked again.
-        let rolling = essence_tables(
-            &format!(
-                r#"{{"Essence": {}}}"#,
-                spell_levels(
-                    "Kind",
-                    72,
-                    r#"[{"tag": "bow", "weight": 1}, {"tag": "default", "weight": 0}]"#,
-                    3
-                )
-            ),
-            &[("Essence", &[("bow", 1)])],
-        );
-        assert_eq!(
-            rolling.err().map(|error| error.to_string()),
-            Some(
-                "Essence: a modifier of an essence that isn't one of the equipment rolled by an \
-                 essence only"
-                    .to_owned()
+        let on_bows = r#"[{"tag": "bow", "weight": 1}, {"tag": "default", "weight": 0}]"#;
+        let error = |spawn: &str, essences: &[Essence]| {
+            essence_tables(
+                &format!(r#"{{"Essence": {}}}"#, spell_levels("Kind", 72, spawn, 3)),
+                essences,
             )
+            .err()
+            .map(|error| error.to_string())
+        };
+
+        assert_eq!(
+            error(nowhere, &[("Renamed", &[("bow", 1)])]).as_deref(),
+            Some("Renamed: a modifier of an essence that RePoE doesn't have")
+        );
+        // Rolling on a base of its own after a patch: the list is to be checked again.
+        assert_eq!(
+            error(on_bows, &[("Essence", &[("bow", 1)])]).as_deref(),
+            Some("Essence: a modifier of an essence: rolls without an essence")
+        );
+        // A tag mistyped would leave its bases out without a word.
+        assert_eq!(
+            error(nowhere, &[("Essence", &[("bwo", 1)])]).as_deref(),
+            Some("Essence: a modifier of an essence: a tag no base of the equipment has, bwo")
+        );
+        assert_eq!(
+            error(
+                nowhere,
+                &[("Essence", &[("bow", 1)]), ("Essence", &[("ring", 1)])]
+            )
+            .as_deref(),
+            Some("Essence: a modifier of an essence: written twice in the list")
         );
     }
 
     #[test]
-    fn the_modifiers_of_the_essences_roll_on_the_bases_their_tags_say() {
-        // The tags of the bases of Path of Exile 2, as `bases-en.ndjson` writes them.
-        let bow = ["bow", "ranged", "two_hand_weapon", "weapon", "default"];
-        let crossbow = [
-            "cannon",
-            "crossbow",
-            "ranged",
-            "two_hand_weapon",
-            "weapon",
-            "default",
-        ];
-        let spear = ["one_hand_weapon", "spear", "weapon", "default"];
-        let wand = ["wand", "default"];
-        let spawn = |id: &str| {
-            ESSENCES
+    fn a_modifier_of_an_essence_with_a_line_without_template_stops_the_generator() {
+        let nowhere = r#"[{"tag": "default", "weight": 0}]"#;
+        let modifiers = format!(
+            r#"{{"Essence": {}}}"#,
+            modifier(
+                "Kind",
+                72,
+                nowhere,
+                r#"[{"id": "spell_skill_gem_level_+", "min": 3, "max": 3}, {"id": "other", "min": 1, "max": 1}]"#
+            )
+        );
+        let translations = r#"[
+            {"ids": ["spell_skill_gem_level_+"], "English": [{"string": "{0:+d} to Level of all Spell Skills", "index_handlers": [[]]}], "hidden": null},
+            {"ids": ["other"], "English": [{"string": "{0} Unknown things", "index_handlers": [[]]}], "hidden": null}
+        ]"#;
+        let template = "# to Level of all Spell Skills";
+        let error = reduce(
+            &serde_json::from_str(&modifiers).expect("modifiers"),
+            &serde_json::from_str(BASES).expect("bases"),
+            &serde_json::from_str::<Vec<_>>(translations).expect("translations"),
+            &[(template.to_owned(), template.to_owned())].into(),
+            &[("Essence", &[("bow", 1)])],
+        )
+        .err()
+        .map(|error| error.to_string());
+
+        // Left out, it would be read as no modifier, without a word.
+        assert_eq!(
+            error.as_deref(),
+            Some("Kind: a modifier of an essence with a line without template, # Unknown things")
+        );
+    }
+
+    #[test]
+    fn the_modifiers_of_the_essences_roll_on_the_item_classes_of_craft_of_exile() {
+        // The categories of the equipment and the tags of each base, as the generator wrote
+        // them; a name of several bases has none.
+        let mut categories: BTreeMap<String, Vec<Vec<String>>> = BTreeMap::new();
+        for line in include_str!("../../../assets/game-data/bases-en.ndjson").lines() {
+            let base: serde_json::Value = serde_json::from_str(line).expect("a base");
+            // Unwritten when it has none.
+            let tags: Vec<String> = base
+                .get("tags")
+                .map(|tags| serde_json::from_value(tags.clone()).expect("its tags"))
+                .unwrap_or_default();
+            if base.get("domain").is_none() && !tags.is_empty() {
+                let category = base["category"].as_str().expect("its category").to_owned();
+                categories.entry(category).or_default().push(tags);
+            }
+        }
+        let rolls = |spawn: &[(&str, u32)], tags: &[String]| {
+            spawn
                 .iter()
-                .find(|&&(essence, _)| essence == id)
-                .map(|&(_, tags)| tags)
-                .expect("an essence")
-        };
-        let rolls = |id: &str, base: &[&str]| {
-            spawn(id)
-                .iter()
-                .find(|(tag, _)| base.contains(tag))
+                .chain(&[("default", 0)])
+                .find(|(tag, _)| tags.iter().any(|base| base == tag))
                 .is_some_and(|&(_, weight)| weight > 0)
         };
+        let one_hand = [
+            "Bow",
+            "Dagger",
+            "Flail",
+            "One Hand Axe",
+            "One Hand Mace",
+            "One Hand Sword",
+            "Spear",
+        ];
+        let two_hand = [
+            "Crossbow",
+            "Talisman",
+            "Two Hand Axe",
+            "Two Hand Mace",
+            "Two Hand Sword",
+            "Warstaff",
+        ];
+        let martial: Vec<&str> = one_hand.iter().chain(&two_hand).copied().collect();
+        let every: Vec<&str> = categories.keys().map(String::as_str).collect();
+        // The item classes of each modifier in Craft of Exile (2026-10-30), the bows with the
+        // one-handed weapons as the trade site has them.
+        let expected: [(&str, &[&str]); 33] = [
+            ("EssenceAbyssPrefix", &every),
+            ("EssenceAbyssSuffix", &every),
+            ("EssenceAttackSkillLevel1H1", &one_hand),
+            ("EssenceAttackSkillLevel2H1", &two_hand),
+            ("EssenceAuraEffect1", &["Sceptre"]),
+            ("EssenceBreach", &["Amulet", "Ring"]),
+            ("EssenceColdRecoupLife1", &["Helmet"]),
+            ("EssenceCorruptForTwoEnchantments1", &["Belt"]),
+            ("EssenceDamageasExtraCold1", &one_hand),
+            ("EssenceDamageasExtraCold2H", &two_hand),
+            ("EssenceDamageasExtraFire1", &one_hand),
+            ("EssenceDamageasExtraFire2H", &two_hand),
+            ("EssenceDamageasExtraLightning1", &one_hand),
+            ("EssenceDamageasExtraLightning2H", &two_hand),
+            ("EssenceDamageasExtraPhysical1", &one_hand),
+            ("EssenceDamageasExtraPhysical2H", &two_hand),
+            ("EssenceFireRecoupLife1", &["Belt"]),
+            ("EssenceGlobalDefences1", &["Amulet"]),
+            ("EssenceGoldDropped1", &["Gloves"]),
+            ("EssenceIncreasedLifePercent1", &["Body Armour"]),
+            ("EssenceIncreasedManaPercent1", &["Ring"]),
+            ("EssenceLightningRecoupLife1", &["Gloves"]),
+            ("EssenceLocalRuneAndSoulCoreEffect1", &["Boots", "Gloves"]),
+            ("EssenceManaCostReduction", &["Focus", "Wand"]),
+            ("EssenceManaCostReduction2H", &["Staff"]),
+            ("EssenceOnslaughtonKill1", &martial),
+            ("EssencePercentDexterity1", &["Amulet"]),
+            ("EssencePercentIntelligence1", &["Amulet"]),
+            ("EssencePercentStrength1", &["Amulet"]),
+            ("EssencePhysicalDamageTakenAsChaos1", &["Body Armour"]),
+            ("EssenceReducedCriticalDamageAgainstYou1", &["Body Armour"]),
+            ("EssenceSpellSkillLevel1H1", &["Wand"]),
+            ("EssenceSpellSkillLevel2H1", &["Staff"]),
+        ];
 
-        // A bow takes the values of the one-handed weapons (trade site, 2026-10-30).
-        assert!(rolls("EssenceAttackSkillLevel1H1", &bow));
-        assert!(!rolls("EssenceAttackSkillLevel2H1", &bow));
-        assert!(rolls("EssenceAttackSkillLevel1H1", &spear));
-        assert!(rolls("EssenceAttackSkillLevel2H1", &crossbow));
-        assert!(!rolls("EssenceAttackSkillLevel1H1", &crossbow));
-        // A martial weapon only.
-        assert!(rolls("EssenceOnslaughtonKill1", &bow));
-        assert!(!rolls("EssenceOnslaughtonKill1", &wand));
+        assert_eq!(ESSENCES.len(), expected.len());
+        for (&(id, spawn), &(expected_id, classes)) in ESSENCES.iter().zip(&expected) {
+            assert_eq!(id, expected_id);
+            for (category, bases) in &categories {
+                // Every base of a class, or none.
+                let on: Vec<bool> = bases.iter().map(|tags| rolls(spawn, tags)).collect();
+                let all = classes.contains(&category.as_str());
+                assert!(on.iter().all(|&on| on == all), "{id} on {category}: {on:?}");
+            }
+        }
     }
 
     /// The lines and the tiers of the one table of a modifier of `stats`, written by

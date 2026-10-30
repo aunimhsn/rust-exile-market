@@ -313,8 +313,7 @@ fn the_value_of_a_line_without_number_is_divided_as_its_table_shows_it() {
             written,
         }],
         ranges: None,
-        tier: None,
-        without_tier: false,
+        tier: CopiedTier::Unknown,
         desecrated: false,
     };
     let number = |copied| {
@@ -536,15 +535,14 @@ fn of_two_tiers_as_good_the_one_the_advanced_copy_wrote_is_taken() {
         r##"{"type": "Life", "affix": "prefix", "lines": [{"template": "# to maximum Life"}], "##,
         r#""spawn": [["helmet", 1]], "tiers": [{"level": 1, "ranges": [[[10, 20]]]}, {"level": 30, "ranges": [[[21, 30]]]}, {"level": 60, "ranges": [[[31, 40]]]}]}"#
     ));
-    let copied = |tier| Copied {
+    let copied = |tier: Option<u32>| Copied {
         lines: vec![CopiedLine {
             template: "# to maximum Life",
             values: vec![15.0],
             written: None,
         }],
         ranges: Some(vec![range(10.0, 20.0)]),
-        tier,
-        without_tier: false,
+        tier: tier.map_or(CopiedTier::Unknown, CopiedTier::Written),
         // A desecrated line: an ordinary modifier, or a lord's.
         desecrated: true,
     };
@@ -595,8 +593,7 @@ fn two_tables_with_the_same_lines_in_another_order_are_two_modifiers() {
             },
         ],
         ranges: None,
-        tier: None,
-        without_tier: false,
+        tier: CopiedTier::Unknown,
         desecrated: false,
     };
 
@@ -1800,6 +1797,12 @@ fn a_minion_modifier_of_the_genesis_tree_merges_with_no_ordinary_one() {
     // `of the Despot` of an amulet, its T2 of 3 (the owner's amulet): with the two tiers of the
     // tree, it would be a T3 of 5.
     assert_eq!(numbers("Gold Amulet"), Some((3, Some(2), false)));
+    // Written without tier on an amulet, as the game writes the tree's only: the tree's T1 of 2.
+    let unwritten = tiers("Gold Amulet", &suffix).map(|tiers| {
+        let number = tiers.tier().map(|tier| tier.number);
+        (tiers.tiers.len(), number, tiers.hides_number())
+    });
+    assert_eq!(unwritten, Some((2, Some(1), true)));
     assert_eq!(read("Gold Amulet"), [(kind, Some(2), two.clone())]);
     // On a belt, the tree's only, whose tier the game doesn't write.
     assert_eq!(numbers("Heavy Belt"), Some((2, Some(1), true)));
@@ -1858,6 +1861,19 @@ fn a_line_of_an_essence_copied_from_the_in_game_trade_gets_its_affix_and_range()
         read("Gemini Crossbow", "Gain 30% of Damage as Extra Fire Damage"),
         [(prefix, None, vec![Some(range(25.0, 33.0))])]
     );
+    // Whatever the level of the item, below the 72 of the Perfect essences in RePoE: a Cultist
+    // Bow of level 33 on the trade site (2026-10-30).
+    let low = read_again(
+        "Cultist Bow",
+        33,
+        &trade_lines(&["+2 to Level of all Attack Skills"]),
+        (3, 3),
+    );
+    let suffix = ModifierKind::Explicit(Some(Affix::Suffix));
+    assert_eq!(
+        explicit_tiers(&low),
+        [(suffix, None, vec![Some(range(2.0, 2.0))])]
+    );
 }
 
 #[test]
@@ -1906,8 +1922,7 @@ fn a_value_in_several_tiers_takes_the_worst_without_the_ranges_of_the_copy() {
             written: None,
         }],
         ranges: None,
-        tier: None,
-        without_tier: false,
+        tier: CopiedTier::Unknown,
         desecrated: false,
     };
     let number = |tie| {
@@ -1946,8 +1961,7 @@ fn the_tiers_of_the_hybrid_of_a_split_are_those_of_its_part() {
             },
         ],
         ranges: None,
-        tier: None,
-        without_tier: false,
+        tier: CopiedTier::Unknown,
         desecrated: false,
     };
     let base = equipment(&["shield"]);
@@ -2002,8 +2016,7 @@ fn the_hybrid_of_a_split_is_the_first_table_whose_tiers_of_its_part_the_item_lev
             },
         ],
         ranges: None,
-        tier: None,
-        without_tier: false,
+        tier: CopiedTier::Unknown,
         desecrated: false,
     };
     let whole = part(Affix::Prefix, &[1], &[(30.0, 39.0)]);
@@ -2063,8 +2076,7 @@ fn two_hybrids_of_the_same_lines_that_split_a_line_are_two_ways() {
             },
         ],
         ranges: None,
-        tier: None,
-        without_tier: false,
+        tier: CopiedTier::Unknown,
         desecrated: false,
     };
 

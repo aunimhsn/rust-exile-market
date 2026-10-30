@@ -6,8 +6,8 @@
 //! lines is a sum too).
 
 use super::{
-    Affix, AffixSet, BaseSpawn, Candidate, Copied, CopiedLine, ROUNDING, Range, Room, TABLES,
-    Table, first_of_its_modifier, holds, tiers_on_base,
+    Affix, AffixSet, BaseSpawn, Candidate, Copied, CopiedLine, CopiedTier, ROUNDING, Range, Room,
+    TABLES, Table, first_of_its_modifier, holds, tiers_on_base,
 };
 use crate::item::{Modifier, ModifierOrigin};
 
@@ -237,8 +237,7 @@ fn placements<'a>(
                     .map(|line| line.copied.clone())
                     .collect(),
                 ranges: None,
-                tier: None,
-                without_tier: false,
+                tier: CopiedTier::Unknown,
                 desecrated,
             };
             let Some(order) = copied.order(&table.lines) else {

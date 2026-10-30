@@ -420,6 +420,25 @@ mod tests {
         );
         assert!(bow.single(0));
         assert_eq!(bow.get(key(0, 0)), Some(&fixed));
+        // On a wand, where its value is the ordinary T2 of 4 as well: the essence's, fixed.
+        let wand = |header: &str| {
+            rolls_of(&format!(
+                "Item Class: Wands\nRarity: Rare\nWoe Song\nAcrid Wand\n--------\n\
+                 Item Level: 81\n--------\n\
+                 {{ Suffix Modifier {header} — Caster, Gem }}\n\
+                 +3 to Level of all Spell Skills"
+            ))
+        };
+        let essence = wand("\"of the Essence\"");
+        assert!(essence.single(0));
+        assert_eq!(
+            essence.get(key(0, 0)),
+            Some(&LineRolls {
+                ranges: vec![Some(range(3.0, 3.0))],
+                tiers: None,
+            })
+        );
+        assert!(!wand("\"of the Magus\" (Tier: 2)").single(0));
 
         // The same without tier on a quiver, a modifier of the tables, of one tier there, but
         // neither of the tree nor of an essence (none adds it): no rolls.

@@ -141,7 +141,10 @@ impl Table {
     /// Whether the game writes the modifier without tier: one of the Genesis tree or of an
     /// essence.
     fn tier_unwritten(&self) -> bool {
-        self.source.is_some()
+        match self.source {
+            Some(TableSource::Genesis | TableSource::Essence) => true,
+            None => false,
+        }
     }
 
     /// Whether the table holds tiers of the same modifier as `other`, maybe on other bases. A
@@ -263,9 +266,11 @@ impl ModifierTiers {
 /// copied values first, then the one that holds them give or take the rounding of the game, then
 /// the one whose values left it (any value out of its tier, e.g. on a sanctified item). Without
 /// them (a line without number has no range), only a tier that holds the values. When several
-/// tiers fit as well, the one of the number the advanced copy wrote is taken, then the best
-/// one; when several modifiers do, the first of the file, an ordinary one before one of the
-/// Genesis tree, before a desecrated one.
+/// tiers fit as well, the one of the number the advanced copy wrote is taken, or, for a header
+/// written without tier, one of a modifier whose tier the game doesn't write (the Genesis tree,
+/// an essence: the `+3 to Level of all Spell Skills` of an essence on a wand, not the ordinary
+/// T2); then the best one; when several modifiers do, the first of the file, an ordinary one
+/// before one of the Genesis tree or of an essence, before a desecrated one.
 #[must_use]
 pub fn modifier_tiers(
     language: Language,
@@ -986,8 +991,7 @@ fn candidates(
             let joined = Copied {
                 lines: lines.clone(),
                 ranges: None,
-                tier: None,
-                without_tier: false,
+                tier: CopiedTier::Unknown,
                 desecrated: first.origin == Some(ModifierOrigin::Desecrated),
             };
             let affixes: Vec<_> = [
@@ -1064,8 +1068,7 @@ fn splits(
     let alone = Copied {
         lines: vec![line.clone()],
         ranges: None,
-        tier: None,
-        without_tier: false,
+        tier: CopiedTier::Unknown,
         desecrated: copied.desecrated,
     };
     // The values of the summed line among those of every line, in their order.
@@ -1482,8 +1485,9 @@ fn find(
 ) -> Option<ModifierTiers> {
     // Whether a tier of `table` isn't the one the advanced copy wrote.
     let other_number = |table: &Table, tier: &Tier| match copied.tier {
-        Some(number) => tier.number != number,
-        None => copied.without_tier && !table.tier_unwritten(),
+        CopiedTier::Written(number) => tier.number != number,
+        CopiedTier::Unwritten => !table.tier_unwritten(),
+        CopiedTier::Unknown => false,
     };
     let mut best: Option<((Fit, bool), ModifierTiers)> = None;
     for (index, table) in tables.iter().enumerate() {
@@ -1636,18 +1640,26 @@ impl CopiedLine<'_> {
     }
 }
 
+/// The tier the advanced copy wrote in the header of a copied modifier.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CopiedTier {
+    /// Its number (`(Tier: 2)`): of two tiers that hold the modifier as well, that one.
+    Written(u32),
+    /// None (`of the Essence`): of two tiers that hold it as well, one of a modifier whose tier
+    /// the game doesn't write.
+    Unwritten,
+    /// No header: a line of the in-game trade, or several joined.
+    Unknown,
+}
+
 /// The lines of a copied modifier, and the ranges of its tier when the advanced copy gave them.
 struct Copied<'a> {
     lines: Vec<CopiedLine<'a>>,
     /// The ranges the advanced copy gave for each value of the lines, in their order, as the
     /// game writes them: without their sign.
     ranges: Option<Vec<Range>>,
-    /// The tier the advanced copy wrote: of two tiers that hold the modifier as well, that one.
-    tier: Option<u32>,
-    /// Whether the advanced copy wrote the header of the modifier without tier (`of the
-    /// Essence`): of two tiers that hold it as well, one of a modifier whose tier the game
-    /// doesn't write.
-    without_tier: bool,
+    /// The tier the advanced copy wrote.
+    tier: CopiedTier,
     /// Whether the game marks the modifier desecrated (`Desecrated Prefix Modifier`, `
     /// (desecrated)`): only such a modifier may be one of the desecrated tables, which the game
     /// always marks (a desecrated modifier can't be fractured, owner's answer on 2026-10-30),
@@ -1695,9 +1707,11 @@ impl<'a> Copied<'a> {
         Some(Self {
             lines,
             ranges,
-            tier: modifier.tier,
-            without_tier: matches!(modifier.kind, ModifierKind::Explicit(Some(_)))
-                && modifier.tier.is_none(),
+            tier: match (&modifier.kind, modifier.tier) {
+                (_, Some(number)) => CopiedTier::Written(number),
+                (ModifierKind::Explicit(Some(_)), None) => CopiedTier::Unwritten,
+                _ => CopiedTier::Unknown,
+            },
             desecrated: modifier.origin == Some(ModifierOrigin::Desecrated),
         })
     }
