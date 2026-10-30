@@ -1707,10 +1707,12 @@ impl<'a> Copied<'a> {
         Some(Self {
             lines,
             ranges,
-            tier: match (&modifier.kind, modifier.tier) {
-                (_, Some(number)) => CopiedTier::Written(number),
-                (ModifierKind::Explicit(Some(_)), None) => CopiedTier::Unwritten,
-                _ => CopiedTier::Unknown,
+            tier: match modifier.tier {
+                Some(number) => CopiedTier::Written(number),
+                None if matches!(modifier.kind, ModifierKind::Explicit(Some(_))) => {
+                    CopiedTier::Unwritten
+                }
+                None => CopiedTier::Unknown,
             },
             desecrated: modifier.origin == Some(ModifierOrigin::Desecrated),
         })

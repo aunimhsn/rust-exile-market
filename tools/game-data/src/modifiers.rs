@@ -371,7 +371,7 @@ pub fn reduce(
         .filter(|base| base.release_state == "released")
         .collect();
     let essences = essence_spawns(modifiers, essences, &released)?;
-    let grouped = grouped(modifiers, translations, templates, &essences)?;
+    let grouped = group_tiers(modifiers, translations, templates, &essences)?;
 
     let mut tables = Vec::new();
     let mut unknown_lines = BTreeSet::new();
@@ -399,13 +399,6 @@ pub fn reduce(
         }
         // A line without template can't be found, nor its modifier.
         let unknown: Vec<&Line> = lines.iter().filter(|line| !line.known).collect();
-        if source == Some(Source::Essence) && !unknown.is_empty() {
-            let line = unknown.first().map_or("", |line| line.template.as_str());
-            return Err(format!(
-                "{kind}: a modifier of an essence with a line without template, {line}"
-            )
-            .into());
-        }
         if !unknown.is_empty() {
             unknown_lines.extend(unknown.iter().map(|line| line.template.clone()));
             continue;
@@ -440,7 +433,7 @@ pub fn reduce(
 
 /// The tiers of `modifiers` that roll (with the spawn weights of `essences` for those only an
 /// essence adds), grouped by type, affix, domain, lines, bases and source.
-fn grouped(
+fn group_tiers(
     modifiers: &BTreeMap<String, SourceModifier>,
     translations: &[Translation],
     templates: &Templates,
@@ -477,6 +470,16 @@ fn grouped(
         }
         let (lines, ranges) = lines(modifier, translations, &by_stat, templates)
             .map_err(|error| format!("{id}: {error}"))?;
+        // Left out, it would be read as no modifier, without a word.
+        if essence.is_some()
+            && let Some(line) = lines.iter().find(|line| !line.known)
+        {
+            return Err(format!(
+                "{id}: a modifier of an essence with a line without template, {}",
+                line.template
+            )
+            .into());
+        }
         let (spawn, genesis) = spawn_on_bases(spawn_weights);
         let source = if essence.is_some() {
             Some(Source::Essence)
@@ -1487,10 +1490,12 @@ mod tests {
         .err()
         .map(|error| error.to_string());
 
-        // Left out, it would be read as no modifier, without a word.
+        // Named by its id: two modifiers of an essence may share a type.
         assert_eq!(
             error.as_deref(),
-            Some("Kind: a modifier of an essence with a line without template, # Unknown things")
+            Some(
+                "Essence: a modifier of an essence with a line without template, # Unknown things"
+            )
         );
     }
 
