@@ -221,10 +221,15 @@ fn placements<'a>(
     let mut placements = Vec::new();
     for (index, table) in tables.iter().enumerate() {
         for mapped in mappings(table, lines) {
+            // The lines of a mapping are of one origin.
             let origin = mapped
                 .first()
                 .and_then(|&line| lines.get(line))
                 .and_then(|line| line.origin);
+            let desecrated = origin == Some(ModifierOrigin::Desecrated);
+            if !table.may_hold(desecrated) {
+                continue;
+            }
             let copied = Copied {
                 lines: mapped
                     .iter()
@@ -233,11 +238,8 @@ fn placements<'a>(
                     .collect(),
                 ranges: None,
                 tier: None,
-                desecrated: origin == Some(ModifierOrigin::Desecrated),
+                desecrated,
             };
-            if !copied.may_be(table) {
-                continue;
-            }
             let Some(order) = copied.order(&table.lines) else {
                 continue;
             };
@@ -271,10 +273,7 @@ fn placements<'a>(
                 .map(|line| line.modifier)
                 .collect();
             modifiers.dedup();
-            let fractured = mapped
-                .first()
-                .and_then(|&line| lines.get(line))
-                .is_some_and(|line| line.origin == Some(ModifierOrigin::Fractured));
+            let fractured = origin == Some(ModifierOrigin::Fractured);
             for tier in &tiers {
                 if !allowed(tier.level) || tier.ranges.len() != indexes.len() {
                     continue;

@@ -95,6 +95,12 @@ impl Table {
                 .is_some_and(|&(_, weight)| weight > 0)
     }
 
+    /// Whether the table may hold a modifier the game marks `desecrated` or not: a desecrated
+    /// table only a desecrated one.
+    fn may_hold(&self, desecrated: bool) -> bool {
+        desecrated || self.domain != Domain::Desecrated
+    }
+
     /// Whether the table holds tiers of the same modifier as `other`, maybe on other bases. A
     /// desecrated table is a modifier of its own, its one tier "the only one": two of them
     /// may roll the same lines on one base, a lord's own (the flask charges of Ulaman,
@@ -1590,10 +1596,9 @@ impl<'a> Copied<'a> {
         })
     }
 
-    /// Whether the modifier may be one of `table`: a desecrated table only for a modifier the
-    /// game marks desecrated.
+    /// Whether the modifier may be one of `table` ([`Table::may_hold`]).
     fn may_be(&self, table: &Table) -> bool {
-        self.desecrated || table.domain != Domain::Desecrated
+        table.may_hold(self.desecrated)
     }
 
     /// For each copied line, the index of the line of the same template in `lines`, the lines
