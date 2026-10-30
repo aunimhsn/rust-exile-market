@@ -135,6 +135,17 @@ fn unique_modifiers(metadata: Option<&serde_json::Value>) -> UniqueModifiers {
     }
 }
 
+/// The unique of the answer with its price in Exalted Orbs and its modifiers; none without a
+/// current price.
+fn unique_price(conversion: &Conversion, item: ApiUnique) -> Option<UniquePrice> {
+    Some(UniquePrice {
+        price: conversion.price(item.price)?,
+        modifiers: unique_modifiers(item.item_metadata.as_ref()),
+        name: item.name,
+        base_type: item.base_type,
+    })
+}
+
 /// An item of the currency exchange in the answer of `/Currencies/ByCategory`.
 #[derive(Deserialize)]
 #[serde(rename_all = "PascalCase")]
@@ -337,14 +348,11 @@ impl PriceDatabase for Poe2Scout {
             else {
                 return Ok(None);
             };
-            prices.uniques.extend(items.into_iter().filter_map(|item| {
-                Some(UniquePrice {
-                    price: conversion.price(item.price)?,
-                    name: item.name,
-                    base_type: item.base_type,
-                    modifiers: unique_modifiers(item.item_metadata.as_ref()),
-                })
-            }));
+            prices.uniques.extend(
+                items
+                    .into_iter()
+                    .filter_map(|item| unique_price(&conversion, item)),
+            );
             done += 1;
             download.progress(&prices, share(done));
         }
@@ -582,6 +590,42 @@ mod tests {
                 "{metadata}"
             );
         }
+    }
+
+    #[test]
+    fn a_unique_keeps_its_price_and_its_modifiers() {
+        let page: ApiPage<ApiUnique> = serde_json::from_str(UNIQUES).expect("the answer parses");
+        let conversion = conversion();
+        let uniques: Vec<UniquePrice> = page
+            .items
+            .into_iter()
+            .filter_map(|item| unique_price(&conversion, item))
+            .collect();
+
+        assert_eq!(uniques.len(), 1, "the unique without a price is skipped");
+        assert_eq!(uniques[0].name, "Bursting Decay");
+        assert_eq!(uniques[0].price.exalted, 150.8);
+        assert_eq!(
+            uniques[0].modifiers.implicit,
+            ["Grants (1-1) additional Skill Slot"]
+        );
+        assert_eq!(uniques[0].modifiers.explicit.len(), 2);
+    }
+
+    #[test]
+    fn a_unique_with_unexpected_modifiers_keeps_its_price() {
+        let page: ApiPage<ApiUnique> = serde_json::from_str(
+            r#"{"Pages": 1, "Items": [{"Name": "A", "Type": "Ruby Ring",
+                "ItemMetadata": {"implicit_mods": "text", "explicit_mods": {"mod": 3}},
+                "PriceLogs": [], "CurrentPrice": 2.0, "CurrentQuantity": 1}]}"#,
+        )
+        .expect("the page still parses");
+        let item = page.items.into_iter().next().unwrap();
+
+        let unique = unique_price(&conversion(), item).expect("a current price");
+
+        assert_eq!(unique.price.exalted, 2.0);
+        assert_eq!(unique.modifiers, UniqueModifiers::default());
     }
 
     #[test]
