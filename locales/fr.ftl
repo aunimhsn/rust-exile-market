@@ -209,6 +209,8 @@ unrevealed-suffix = Suffixe non révélé
 unrevealed-note = Un modificateur non révélé peut changer l'objet : ses autres stats partent décochées.
 # Sous les stats d'un objet rare ou magique copié depuis l'échange du jeu, sans les affixes ni les paliers de la copie avancée.
 trade-copy-note = Les paliers sont trouvés d'après les valeurs.
+# Sous les stats d'un objet unique copié depuis l'échange du jeu, sans les plages de la copie avancée : ses jets viennent de la base de prix.
+unique-rolls-note = Les jets sont ceux de poe2scout.
 # Après la plage d'un palier trouvé d'après les valeurs, quand la ligne peut être un préfixe ou un suffixe : l'affixe de ce palier, en gris.
 affix-prefix = Préfixe
 affix-suffix = Suffixe

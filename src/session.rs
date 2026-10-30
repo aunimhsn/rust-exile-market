@@ -24,10 +24,11 @@ pub struct ShownItem {
     /// For a rare or magic item copied from the in-game trade, with the affixes and tiers found
     /// from the values of its lines once its base is known.
     parsed: Result<Item, ParseError>,
-    /// The modifiers of a rare or magic item copied from the in-game trade as the parser read
-    /// them, without affix nor tier: each reading starts from them, when the item is copied and
-    /// each time the names of the trade site arrive (they tell the base of a magic item, and
-    /// their stats the affixes a rune or an implicit allows).
+    /// The modifiers of an item copied from the in-game trade as the parser read them, without
+    /// affix, tier nor range: each reading starts from them, when the item is copied and each
+    /// time the names of the trade site arrive (they tell the base of a magic item, and their
+    /// stats the affixes a rune or an implicit allows), and for a unique when the prices arrive
+    /// (they write the ranges of its modifiers).
     trade_copy: Option<Vec<Modifier>>,
     /// Its modifier lines, which the offers are compared with; none for an unreadable item.
     lines: CopiedLines,
@@ -39,8 +40,13 @@ pub struct ShownItem {
 
 impl ShownItem {
     /// The item `copied`; `trade` holds the stats of the trade site and `names` the names of
-    /// its items, once it gave them.
-    fn new(copied: &CopiedItem, trade: Option<&TradeStats>, names: Option<&ItemNames>) -> Self {
+    /// its items, once it gave them, and `prices` the prices of the league shown known so far.
+    fn new(
+        copied: &CopiedItem,
+        trade: Option<&TradeStats>,
+        names: Option<&ItemNames>,
+        prices: Option<&PriceList>,
+    ) -> Self {
         // An item that can't be read shows its message in the window.
         let parsed = Item::parse(copied);
         match &parsed {
@@ -55,7 +61,7 @@ impl ShownItem {
         let trade_copy = parsed
             .as_ref()
             .ok()
-            .filter(|item| item.has_tiers_from_values())
+            .filter(|item| item.has_tiers_from_values() || item.has_rolls_from_prices())
             .map(|item| item.modifiers().to_vec());
         let mut shown = Self {
             parsed,
@@ -64,16 +70,23 @@ impl ShownItem {
             stats: LineStats::default(),
             tiers: TierRolls::default(),
         };
-        shown.read_lines(trade, names);
+        shown.read_lines(trade, names, prices);
         shown
     }
 
     /// Reads the modifier lines of the item, with the stats of the trade site `trade`, and
     /// their tiers on its base, found among the `names` of the trade site for a magic item;
-    /// from their values for an item copied from the in-game trade, from its modifiers as the
-    /// parser read them. True when its modifiers changed shape (the lines of a hybrid joined
-    /// once the names tell the base of a magic item): the keys of their filters moved.
-    fn read_lines(&mut self, trade: Option<&TradeStats>, names: Option<&ItemNames>) -> bool {
+    /// from their values for a rare or magic item copied from the in-game trade, and for a
+    /// unique copied that way their ranges from its modifiers among `prices`, from its
+    /// modifiers as the parser read them. True when its modifiers changed shape (the lines of a
+    /// hybrid joined once the names tell the base of a magic item): the keys of their filters
+    /// moved.
+    fn read_lines(
+        &mut self,
+        trade: Option<&TradeStats>,
+        names: Option<&ItemNames>,
+        prices: Option<&PriceList>,
+    ) -> bool {
         let Ok(item) = &mut self.parsed else {
             return false;
         };
@@ -82,20 +95,21 @@ impl ShownItem {
             .map(str::to_owned);
         let mut reshaped = false;
         if let Some(copied) = &self.trade_copy {
-            let modifiers = match &base_type {
-                Some(base_type) => {
-                    // The runes and the implicits, which tell the room, are never read again.
-                    let stats = LineStats::new(item.language(), copied, trade);
-                    game_data::with_trade_tiers(
-                        item.language(),
-                        base_type,
-                        item.item_level(),
-                        copied,
-                        stats.affix_limits(item),
-                        item.has_state(ItemState::Sanctified),
-                    )
-                }
-                None => copied.clone(),
+            let modifiers = if item.has_rolls_from_prices() {
+                unique_rolls(item, copied, trade, names, prices)
+            } else if let Some(base_type) = &base_type {
+                // The runes and the implicits, which tell the room, are never read again.
+                let stats = LineStats::new(item.language(), copied, trade);
+                game_data::with_trade_tiers(
+                    item.language(),
+                    base_type,
+                    item.item_level(),
+                    copied,
+                    stats.affix_limits(item),
+                    item.has_state(ItemState::Sanctified),
+                )
+            } else {
+                copied.clone()
             };
             reshaped = shape(item.modifiers()) != shape(&modifiers);
             item.set_modifiers(modifiers);
@@ -124,6 +138,37 @@ impl ShownItem {
     pub fn tiers(&self) -> &TierRolls {
         &self.tiers
     }
+}
+
+/// The modifiers `copied` of `item`, a unique copied from the in-game trade, with the ranges of
+/// its modifiers and of those of its base among `prices`, found by its English name (through
+/// the `names` of the trade site for a French copy); as copied while they don't hold it.
+fn unique_rolls(
+    item: &Item,
+    copied: &[Modifier],
+    trade: Option<&TradeStats>,
+    names: Option<&ItemNames>,
+    prices: Option<&PriceList>,
+) -> Vec<Modifier> {
+    match pricing::fixed_price(item, prices, names) {
+        Ok(FixedPrice::Unique(unique)) => game_data::with_unique_rolls(
+            item.language(),
+            copied,
+            &unique.modifiers.implicit,
+            &unique.modifiers.explicit,
+            trade,
+        ),
+        _ => copied.to_vec(),
+    }
+}
+
+/// `prices` if they are those of `league`, the league shown: the borrows of the fields of the
+/// session, apart, let it read them while it changes the item shown.
+fn shown_prices<'a>(
+    prices: Option<&'a LeaguePrices>,
+    league: Option<&League>,
+) -> Option<&'a LeaguePrices> {
+    prices.filter(|prices| league == Some(&prices.list.league))
 }
 
 /// The number of lines of each modifier: the filter of a line is kept by its place.
@@ -259,8 +304,18 @@ impl Session {
     /// Keeps `prices` if they are those of the league shown, `downloading` while they are
     /// partial: the prices of a league left meanwhile are dropped.
     fn keep_prices(&mut self, list: PriceList, downloading: Option<f32>) {
-        if self.shows(&list) {
-            self.prices = Some(LeaguePrices { list, downloading });
+        if !self.shows(&list) {
+            return;
+        }
+        self.prices = Some(LeaguePrices { list, downloading });
+        // A unique copied from the in-game trade takes its ranges from them; the shape of its
+        // modifiers never changes.
+        if let Some(shown) = &mut self.item
+            && shown.parsed().is_ok_and(Item::has_rolls_from_prices)
+        {
+            // Those of the league shown, checked above.
+            let prices = self.prices.as_ref().map(|prices| &prices.list);
+            shown.read_lines(self.trade_stats.as_ref(), self.item_names.as_ref(), prices);
         }
     }
 
@@ -286,10 +341,12 @@ impl Session {
         self.item_names = Some(names);
         // An item copied before them may have a line only the trade site knows, or be a
         // magic item whose base type they tell.
+        let prices =
+            shown_prices(self.prices.as_ref(), self.league.as_ref()).map(|prices| &prices.list);
         let reshaped = self
             .item
             .as_mut()
-            .is_some_and(|shown| shown.read_lines(Some(&trade), self.item_names.as_ref()));
+            .is_some_and(|shown| shown.read_lines(Some(&trade), self.item_names.as_ref(), prices));
         self.trade_stats = Some(trade);
         reshaped
     }
@@ -298,7 +355,8 @@ impl Session {
         match event {
             ClipboardEvent::Copied(copied) => {
                 let trade = self.trade_stats.as_ref();
-                let shown = ShownItem::new(&copied, trade, self.item_names.as_ref());
+                let prices = self.league_prices().map(|prices| &prices.list);
+                let shown = ShownItem::new(&copied, trade, self.item_names.as_ref(), prices);
                 if let Ok(item) = shown.parsed() {
                     self.log_price(item);
                     log_unknown_stats(item, trade);
@@ -451,9 +509,7 @@ impl Session {
 
     /// The prices of the league shown, complete or still downloading.
     fn league_prices(&self) -> Option<&LeaguePrices> {
-        self.prices
-            .as_ref()
-            .filter(|prices| self.shows(&prices.list))
+        shown_prices(self.prices.as_ref(), self.league.as_ref())
     }
 
     /// The state of the prices of the league shown, at `now`.

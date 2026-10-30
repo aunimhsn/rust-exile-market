@@ -13,11 +13,11 @@ const itemFilters = ({ base, level, sockets, quality, required }) => [
   required && { mod: `Required level: ${required.value}`, check: false, min: required.value, max: required.value, lower: true },
 ].filter(Boolean);
 // Sample items.
-const HH = { rarity: "unique", name: "Headhunter", base: "Heavy Belt", cls: "Belts", tags: ["Corrupted", "ilvl 80"], req: "Requires Level 50", statsLabel: "Stats (6)", filters: "3 filters" };
+const HH = { rarity: "unique", name: "Headhunter", base: "Heavy Belt", cls: "Belts", tags: ["Corrupted", "ilvl 80"], req: "Requires Level 50", statsLabel: "Stats (6)", filters: "5 filters" };
 const HH_STATS = [
   { group: "Implicit", min: true },
-  { mod: "26% increased Stun Threshold", check: false, min: 26, range: "20–30", share: .6 },
-  { mod: "Has 2 Charm Slots", check: false, min: 2, range: "1–3", share: .5 },
+  { mod: "26% increased Stun Threshold", check: true, min: 26, range: "20–30", share: .6 },
+  { mod: "Has 2 Charm Slots", check: true, min: 2, range: "1–3", share: .5 },
   { group: "Unique" },
   { mod: "+55 to maximum Life", check: true, min: 55, range: "40–60", share: .75 },
   { mod: "+34 to Strength", check: true, min: 34, range: "20–40", share: .7 },
