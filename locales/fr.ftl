@@ -211,7 +211,7 @@ unrevealed-note = Un modificateur non révélé peut changer l'objet : ses autr
 trade-copy-note = Les paliers sont trouvés d'après les valeurs.
 # Sous les stats d'un objet unique copié depuis l'échange du jeu, sans les plages de la copie avancée : ses jets viennent de la base de prix.
 unique-rolls-note = Les jets sont ceux de poe2scout.
-# Après la plage d'une ligne d'un joyau perdu dans le temps, sur un petit bloc gris : les talents du rayon auxquels la ligne est octroyée, dont la ligne est écrite sans les mots.
+# Après la plage d'une ligne d'un joyau perdu dans le temps, sur un petit bloc gris : les talents du rayon qui reçoivent la ligne. La ligne est affichée sans les mots du jeu qui les nomment.
 radius-small = Mineurs
 radius-notable = Éminents
 # Après la plage d'un palier trouvé d'après les valeurs, quand la ligne peut être un préfixe ou un suffixe : l'affixe de ce palier, en gris.

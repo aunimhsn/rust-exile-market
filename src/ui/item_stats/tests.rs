@@ -116,8 +116,8 @@ fn row_texts<'a>(rows: impl IntoIterator<Item = Row<'a>>) -> Vec<String> {
                     }
                 };
                 let radius = text
-                    .radius()
-                    .map(|radius| format!(" <{radius:?}>"))
+                    .radius_skills()
+                    .map(|skills| format!(" <{skills:?}>"))
                     .unwrap_or_default();
                 let text = match text {
                     StatText::Line(text) | StatText::RadiusLine { line: text, .. } => {
@@ -552,6 +552,51 @@ fn a_french_time_lost_jewel_shows_its_lines_without_the_words_of_its_radius() {
             "■ Vous gagnez du Seuil d'Étourdissement équivalent à 2% de votre Bouclier d'énergie maximal ≥2 [1.00 1–2] <Small>",
             "■ 2% d'Augmentation de l'Amplitude de l'Inflammabilité ≥2 [0.00 2–3] <Small>",
         ]
+    );
+}
+
+#[test]
+fn every_line_of_a_time_lost_jewel_in_the_game_data_is_shown_short() {
+    // Each matcher of a stat granted to the passive skills in a radius, in both languages, so
+    // that game data written again with other words fails here rather than shows long lines.
+    for data in [
+        include_str!("../../../assets/game-data/stats-en.ndjson"),
+        include_str!("../../../assets/game-data/stats-fr.ndjson"),
+    ] {
+        let mut lines = 0;
+        for stat in data.lines() {
+            let stat: serde_json::Value = serde_json::from_str(stat).expect("a stat");
+            let reference = stat["ref"].as_str().expect("its reference");
+            let skills = if reference.starts_with("Small Passive Skills in Radius also grant ") {
+                RadiusSkills::Small
+            } else if reference.starts_with("Notable Passive Skills in Radius also grant ") {
+                RadiusSkills::Notable
+            } else {
+                continue;
+            };
+            for matcher in stat["matchers"].as_array().expect("its matchers") {
+                let line = matcher["string"].as_str().expect("a line");
+                assert_eq!(StatText::line(line).radius_skills(), Some(skills), "{line}");
+                lines += 1;
+            }
+        }
+        assert!(lines > 100, "{lines}");
+    }
+}
+
+#[test]
+fn a_line_of_a_time_lost_jewel_is_named_whole_to_a_screen_reader() {
+    let i18n = Translator::new(Language::English);
+    let line = "Small Passive Skills in Radius also grant 2% increased Elemental Damage";
+
+    assert_eq!(
+        StatText::line(line).text(&i18n),
+        "2% increased Elemental Damage"
+    );
+    assert_eq!(StatText::line(line).label(&i18n), line);
+    assert_eq!(
+        StatText::line("+20 to Strength").label(&i18n),
+        "+20 to Strength"
     );
 }
 
