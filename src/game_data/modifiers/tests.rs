@@ -1267,7 +1267,9 @@ fn a_line_no_tier_holds_is_split_only_when_one_way_fits() {
         read(&rarity(37)),
         (vec![(1, vec![(Prefix, 1)])], vec![(rarity(37), Suffix, 1)])
     );
-    // 33% is also T1 and T2, or T2 and T1, both parts in doubt: without tier.
+    // 30% is T1 and T2, or T2 and T1, both parts in doubt: without tier; so is 33%, also
+    // both T1.
+    assert_eq!(read(&rarity(30)), (vec![], vec![]));
     assert_eq!(read(&rarity(33)), (vec![], vec![]));
     // 18% fits one modifier: not split, though two would hold it too.
     assert_eq!(

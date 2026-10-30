@@ -760,10 +760,10 @@ fn splits(
 /// The `ways` a line adds up two modifiers, those of the same two modifiers following each
 /// other, with the two ways of a pair of modifiers that differ only by the tier of one of them,
 /// two neighbouring tiers, made one (the pure T1 or T2 of the `248% increased Physical Damage`
-/// of a bow, with the hybrid T1 on `+195 to Accuracy Rating`). More ways of a pair, or two that
-/// differ by both tiers (the `33% increased Rarity of Items found` of a tiara, a prefix T1 and a
-/// suffix T2, or a T2 and a T1), stay apart: a modifier in three tiers leaves its line without
-/// tier.
+/// of a bow, with the hybrid T1 on `+195 to Accuracy Rating`). Two ways that differ by both
+/// tiers (the `30% increased Rarity of Items found` of a tiara, a prefix T1 and a suffix T2, or a
+/// T2 and a T1), or more ways of a pair (its `33%`, also both T1), stay apart: a modifier in three
+/// tiers leaves its line without tier.
 fn neighbours_joined(ways: &[Split]) -> Vec<Split> {
     let mut joined = Vec::new();
     for pair in ways.chunk_by(|one, other| one.tables == other.tables) {
@@ -784,15 +784,22 @@ impl Split {
     fn with_neighbour(&self, other: &Self) -> Option<Self> {
         let (whole, added) = (&self.tiers, &self.added.tiers);
         let (other_whole, other_added) = (&other.tiers, &other.added.tiers);
-        let mut way = self.clone();
         if whole.found == other_whole.found && added.found.abs_diff(other_added.found) == 1 {
-            way.added.tiers = added.or_tier(other_added.found);
+            Some(Self {
+                added: AddedTiers {
+                    tiers: added.or_tier(other_added.found),
+                    ..self.added.clone()
+                },
+                ..self.clone()
+            })
         } else if added.found == other_added.found && whole.found.abs_diff(other_whole.found) == 1 {
-            way.tiers = whole.or_tier(other_whole.found);
+            Some(Self {
+                tiers: whole.or_tier(other_whole.found),
+                ..self.clone()
+            })
         } else {
-            return None;
+            None
         }
-        Some(way)
     }
 }
 
@@ -1026,7 +1033,7 @@ impl<'a> Search<'a> {
 
 /// The lines of the splits that the readings `one` and `other`, as good, don't share: the line
 /// one only splits, or splits into other modifiers, with the other lines of its hybrid, which
-/// would otherwise be read alone (the `33% increased Rarity of Items found` of a tiara, a prefix
+/// would otherwise be read alone (the `30% increased Rarity of Items found` of a tiara, a prefix
 /// T1 and a suffix T2, or a T2 and a T1).
 fn differently_split(candidates: &[Candidate], one: &[usize], other: &[usize]) -> Vec<usize> {
     let splits = |reading: &[usize]| -> Vec<usize> {
