@@ -59,7 +59,7 @@ pub struct SourceModifier {
 
 /// The weight of a modifier on the bases with a tag: the first tag of the list a base has
 /// tells whether the modifier rolls on it (above zero) or not.
-#[derive(Deserialize, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Deserialize, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct SpawnWeight {
     tag: String,
     weight: u32,
@@ -983,6 +983,45 @@ mod tests {
         assert_eq!(
             tags.get("Belt").map(|spawn| spawn.tags.clone()),
             Some(vec!["belt".to_owned(), "default".to_owned()])
+        );
+    }
+
+    #[test]
+    fn the_tags_of_the_genesis_tree_give_way_to_the_bases_it_grows_the_first_tag_deciding() {
+        let spawn = |tags: &[(&str, u32)]| -> Vec<SpawnWeight> {
+            tags.iter()
+                .map(|&(tag, weight)| SpawnWeight {
+                    tag: tag.to_owned(),
+                    weight,
+                })
+                .collect()
+        };
+
+        // A tag of a base after the tag of the tree: the tree's weight, written first, decides;
+        // the second tag of the tree adds no base twice.
+        assert_eq!(
+            spawn_on_bases(&spawn(&[
+                ("breach_desecration", 1),
+                ("ring", 0),
+                ("genesis_tree_minion", 2),
+                ("default", 0),
+            ])),
+            (
+                spawn(&[
+                    ("ring", 1),
+                    ("amulet", 1),
+                    ("belt", 1),
+                    ("ring", 0),
+                    ("default", 0),
+                ]),
+                true
+            )
+        );
+        // Without a tag of the tree that rolls, the tags as they are.
+        let ordinary = spawn(&[("genesis_tree_minion", 0), ("ring", 1), ("default", 0)]);
+        assert_eq!(
+            spawn_on_bases(&ordinary),
+            (spawn(&[("ring", 1), ("default", 0)]), false)
         );
     }
 

@@ -161,7 +161,7 @@ pub struct ModifierTiers {
     pub counts: Vec<usize>,
     /// Whether the game writes the modifier without tier, one of the Genesis tree: it is read
     /// as the advanced copy writes it, the ranges of its tier without number.
-    pub unwritten: bool,
+    pub tier_unwritten: bool,
 }
 
 impl ModifierTiers {
@@ -171,11 +171,18 @@ impl ModifierTiers {
         self.tiers.get(self.found)
     }
 
-    /// Whether the modifier has no tier to tell: one tier only on the base, whose T1 would read
-    /// as "the best" while it is "the only one", or a tier the game doesn't write.
+    /// Whether the modifier has one tier only on the base: its T1 would read as "the best"
+    /// while it is "the only one".
     #[must_use]
     pub fn single(&self) -> bool {
-        self.tiers.len() == 1 || self.unwritten
+        self.tiers.len() == 1
+    }
+
+    /// Whether the number of its tier isn't shown: one tier only on the base, or a tier the
+    /// game doesn't write (the Genesis tree).
+    #[must_use]
+    pub fn hides_number(&self) -> bool {
+        self.single() || self.tier_unwritten
     }
 
     /// The tiers the copied modifier may be, the best first: the neighbouring one, then its
@@ -320,7 +327,7 @@ fn hybrid_tiers(
                 found: worse,
                 neighbour: better,
                 counts: counts.clone(),
-                unwritten: table.genesis,
+                tier_unwritten: table.genesis,
             };
             best = Some((fit, tiers));
         }
@@ -717,7 +724,7 @@ fn part_tier(
     Some(PartTier {
         affix,
         tiers: tiers.possible().map(|tier| tier.number).collect(),
-        single: tiers.single(),
+        single: tiers.hides_number(),
         ranges: spanned_ranges(language, parts, tiers, line)?
             .into_iter()
             .flatten()
@@ -784,7 +791,7 @@ fn with_tier(
     let tier = tiers.tier()?;
     Some(Modifier {
         kind: ModifierKind::Explicit(Some(affix)),
-        tier: (!tiers.unwritten).then_some(tier.number),
+        tier: (!tiers.tier_unwritten).then_some(tier.number),
         ..with_ranges(language, parts, tier, &tiers.counts)?
     })
 }
@@ -801,7 +808,7 @@ fn affix_tier(
     Some(AffixTier {
         affix,
         tier: tiers.tier()?.number,
-        single: tiers.single(),
+        single: tiers.hides_number(),
         ranges: ranged
             .lines
             .iter()
@@ -1072,7 +1079,7 @@ fn splits(
                             found,
                             neighbour: None,
                             counts: counts.clone(),
-                            unwritten: whole.genesis,
+                            tier_unwritten: whole.genesis,
                         },
                         added: AddedTiers {
                             line: owner,
@@ -1082,7 +1089,7 @@ fn splits(
                                 found: added_found,
                                 neighbour: None,
                                 counts: vec![line.count()],
-                                unwritten: added.genesis,
+                                tier_unwritten: added.genesis,
                             },
                         },
                         fit,
@@ -1464,7 +1471,7 @@ fn find(
                     found,
                     neighbour: None,
                     counts,
-                    unwritten: table.genesis,
+                    tier_unwritten: table.genesis,
                 },
             ));
         }

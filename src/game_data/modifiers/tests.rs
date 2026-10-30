@@ -55,7 +55,7 @@ fn a_table_rolls_on_the_bases_of_its_domain_only() {
 }
 
 #[test]
-fn the_desecrated_tables_come_after_the_ordinary_ones() {
+fn the_tables_are_ordinary_then_of_the_genesis_tree_then_desecrated() {
     // Of two tables that hold a copied modifier as well, the first is taken: the ordinary one,
     // then the minion one of the Genesis tree.
     let order: Vec<_> = TABLES
@@ -1062,14 +1062,19 @@ fn the_lines_read_again_from_their_values_are_the_modifiers_of_the_advanced_copy
         });
         for (modifier, written) in advanced.zip(written) {
             let again = read.iter().find(|again| texts(again) == texts(modifier));
-            let Some(again) = again.filter(|again| again.tier.is_some()) else {
+            // Read with its affix, not in doubt.
+            let read = |again: &&Modifier| {
+                matches!(again.kind, ModifierKind::Explicit(Some(_))) && again.doubt.is_none()
+            };
+            let Some(again) = again.filter(read) else {
                 continue;
             };
             let text = &modifier.lines[0].text;
             assert_eq!(again.kind, modifier.kind, "{text}");
             assert_eq!(again.origin, modifier.origin, "{text}");
             if written.within {
-                assert_eq!(again.tier, written.tier, "{text}");
+                // Without tier when the copy writes none (`Reinforcing` of the Genesis tree).
+                assert_eq!(again.tier, modifier.tier.and(written.tier), "{text}");
                 assert_eq!(written_ranges(again), written_ranges(modifier), "{text}");
             }
             read_again += 1;
@@ -1079,8 +1084,8 @@ fn the_lines_read_again_from_their_values_are_the_modifiers_of_the_advanced_copy
             |modifiers: &[Modifier]| -> Vec<String> { modifiers.iter().flat_map(texts).collect() };
         assert_eq!(lines(&read), lines(&modifiers));
     }
-    // Not `Reinforcing` of the Breach Rings, read again without tier, as the copy writes it.
-    assert_eq!(read_again, 57);
+    // With `Reinforcing` of the Breach Rings, read again without tier, as the copy writes it.
+    assert_eq!(read_again, 59);
 }
 
 #[test]
@@ -1347,7 +1352,7 @@ fn a_part_whose_two_tiers_give_its_line_other_ranges_isnt_read() {
         found: 1,
         neighbour: Some(0),
         counts: vec![1],
-        unwritten: false,
+        tier_unwritten: false,
     };
     let read =
         |tiers: &ModifierTiers| part_tier(Language::English, &rarity, Affix::Prefix, tiers, 0);
@@ -1370,7 +1375,7 @@ fn a_part_whose_two_tiers_give_its_line_other_ranges_isnt_read() {
         found: 1,
         neighbour: Some(0),
         counts: vec![2],
-        unwritten: false,
+        tier_unwritten: false,
     };
     let read_damage =
         |tiers: &ModifierTiers| part_tier(Language::English, &damage, Affix::Prefix, tiers, 0);
@@ -1593,6 +1598,15 @@ fn a_minion_modifier_of_the_genesis_tree_is_read_as_the_advanced_copy_writes_it(
         crate::tier_rolls::TierRolls::new(Language::English, &read, Some("Breach Ring"), Some(77));
     assert!(rolls.single(1));
     assert!(!rolls.single(2));
+    let key = crate::filters::StatKey {
+        modifier: 1,
+        line: 0,
+    };
+    let over_its_tier = crate::tier_rolls::LineRolls {
+        ranges: vec![Some(range(19.0, 22.0))],
+        tiers: None,
+    };
+    assert_eq!(rolls.get(key), Some(&over_its_tier));
 }
 
 #[test]
@@ -1602,7 +1616,7 @@ fn a_minion_modifier_of_the_genesis_tree_merges_with_no_ordinary_one() {
     let numbers = |base_type: &str| {
         tiers(base_type, &suffix).map(|tiers| {
             let number = tiers.tier().map(|tier| tier.number);
-            (tiers.tiers.len(), number, tiers.single())
+            (tiers.tiers.len(), number, tiers.hides_number())
         })
     };
     let read =
@@ -1616,6 +1630,7 @@ fn a_minion_modifier_of_the_genesis_tree_merges_with_no_ordinary_one() {
     assert_eq!(read("Gold Amulet"), [(kind, Some(2), two.clone())]);
     // On a belt, the tree's only, whose tier the game doesn't write.
     assert_eq!(numbers("Heavy Belt"), Some((2, Some(1), true)));
+    assert!(tiers("Heavy Belt", &suffix).is_some_and(|tiers| !tiers.single()));
     assert_eq!(read("Heavy Belt"), [(kind, None, two)]);
     // The tree rules it out of the rings.
     assert_eq!(numbers("Gold Ring"), None);
@@ -1639,6 +1654,15 @@ fn a_desecrated_modifier_of_the_genesis_tree_is_one_of_its_own() {
     assert_eq!(only("Gold Ring", &exposure(12)), single(10.0, 15.0));
     assert_eq!(only("Gold Amulet", &exposure(30)), None);
     assert_eq!(only("Gold Amulet", &exposure(12)), single(10.0, 15.0));
+    // From the in-game trade: the tree's without tier, as the game writes it, Kurgal's its T1.
+    let read = |value: u32| {
+        let mut lines = trade_lines(&[&format!("{value}% increased Exposure Effect")]);
+        lines[0].origin = Some(ModifierOrigin::Desecrated);
+        explicit_tiers(&read_again("Gold Ring", 80, &lines, (3, 3)))
+    };
+    let kind = ModifierKind::Explicit(Some(Affix::Suffix));
+    assert_eq!(read(30), [(kind, None, vec![Some(range(25.0, 35.0))])]);
+    assert_eq!(read(12), [(kind, Some(1), vec![Some(range(10.0, 15.0))])]);
     // `of Binding` on the belts, as the trade site shows it on every kind of belt.
     let duration = line("40% increased Minion Duration");
     assert_eq!(only("Heavy Belt", &duration), single(35.0, 49.0));
@@ -2593,7 +2617,7 @@ fn candidate(modifiers: std::ops::Range<usize>, affixes: &[Affix], fractured: bo
         found: 0,
         neighbour: None,
         counts: Vec::new(),
-        unwritten: false,
+        tier_unwritten: false,
     };
     Candidate {
         modifiers,
@@ -2614,7 +2638,7 @@ fn way(tables: (usize, usize), (found, added_found): (usize, usize)) -> Split {
         found,
         neighbour: None,
         counts: Vec::new(),
-        unwritten: false,
+        tier_unwritten: false,
     };
     Split {
         tables,

@@ -668,13 +668,19 @@ fn rows<'a>(
         rows.push(Row::UnrevealedNote);
     }
     // Once a tier is found, also for a line that can be a prefix or a suffix, or that adds up
-    // two modifiers: none before the names of the trade site tell the base of a magic item, nor
-    // on a base the game data doesn't know.
+    // two modifiers, or one of the Genesis tree, read with the ranges of its tier but without
+    // its number, which the game doesn't write: none before the names of the trade site tell
+    // the base of a magic item, nor on a base the game data doesn't know.
     let found = item.modifiers().iter().any(|modifier| {
-        let with_tier =
-            matches!(modifier.kind, ModifierKind::Explicit(Some(_))) && modifier.tier.is_some();
+        let ranged = modifier
+            .lines
+            .iter()
+            .flat_map(|line| &line.rolls)
+            .any(|roll| roll.range.is_some());
+        let read = matches!(modifier.kind, ModifierKind::Explicit(Some(_)))
+            && (modifier.tier.is_some() || ranged);
         let in_doubt = modifier.doubt.is_some();
-        with_tier || in_doubt
+        read || in_doubt
     });
     if item.has_tiers_from_values() && found {
         rows.push(Row::TradeCopyNote);

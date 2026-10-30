@@ -170,8 +170,9 @@ pub struct AffixTier {
     pub affix: Affix,
     /// 1 is the best.
     pub tier: u32,
-    /// Whether its modifier has one tier only on the base of the item: its T1 would read as
-    /// "the best" while it is "the only one", and isn't written.
+    /// Whether the number of its tier isn't written: its modifier has one tier only on the base
+    /// of the item, whose T1 would read as "the best" while it is "the only one", or a tier the
+    /// game doesn't write (the Genesis tree).
     pub single: bool,
     /// The range of each value its stats count, in their order, as the game writes it:
     /// without its sign.
@@ -210,8 +211,8 @@ pub struct PartTier {
     pub affix: Affix,
     /// The tiers it may be, the best first: one, or two neighbouring tiers.
     pub tiers: Vec<u32>,
-    /// Whether its modifier has one tier only on the base of the item, whose number isn't
-    /// written.
+    /// Whether the number of its tiers isn't written: its modifier has one tier only on the base
+    /// of the item, or a tier the game doesn't write (the Genesis tree).
     pub single: bool,
     /// The range over these tiers of each value of that line its stat counts, in their order,
     /// as the game writes it: without its sign.

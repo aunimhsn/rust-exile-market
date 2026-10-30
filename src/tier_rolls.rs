@@ -41,8 +41,9 @@ pub struct LineRolls {
 #[derive(Debug, Default)]
 pub struct TierRolls {
     lines: Vec<(StatKey, LineRolls)>,
-    /// The index of each modifier of one tier only on the base of the item: its T1 would read
-    /// as "the best" while it is "the only one".
+    /// The index of each modifier without tier to tell: of one tier only on the base of the
+    /// item, whose T1 would read as "the best" while it is "the only one", or whose tier the game
+    /// doesn't write (the Genesis tree).
     single: Vec<usize>,
 }
 
@@ -131,8 +132,8 @@ impl TierRolls {
             .map(|(_, rolls)| rolls)
     }
 
-    /// Whether the modifier `index` has one tier only on the base of the item, and so no tier
-    /// to tell.
+    /// Whether the modifier `index` has no tier to tell: one tier only on the base of the item,
+    /// or a tier the game doesn't write.
     #[must_use]
     pub fn single(&self, index: usize) -> bool {
         self.single.contains(&index)
@@ -140,8 +141,9 @@ impl TierRolls {
 }
 
 /// Whether the advanced copy writes `modifier`, a prefix or suffix, with its ranges but without
-/// tier: the game writes none for a modifier of one tier only (`Reinforcing` of the Genesis
-/// tree, `Minions have 21(19-22)% increased maximum Life`).
+/// tier: the game writes none for a modifier of the Genesis tree (`Reinforcing`, `Minions have
+/// 21(19-22)% increased maximum Life`, the third of its six tiers), nor does the application for
+/// such a line copied from the in-game trade (`with_trade_tiers`).
 fn written_without_tier(modifier: &Modifier) -> bool {
     matches!(modifier.kind, ModifierKind::Explicit(Some(_)))
         && modifier.tier.is_none()
@@ -368,7 +370,7 @@ mod tests {
              +76(65-79) to maximum Mana",
         );
 
-        // The Genesis tree, which the tables don't know.
+        // The Genesis tree, whose tier the game doesn't write: over the copied range.
         assert!(rolls.single(0));
         assert_eq!(
             rolls.get(key(0, 0)),

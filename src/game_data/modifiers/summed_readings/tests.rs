@@ -58,7 +58,7 @@ fn a_part_of_a_split_in_two_neighbouring_tiers_is_read_the_same_in_either() {
         found,
         neighbour,
         counts: vec![1],
-        unwritten: false,
+        tier_unwritten: false,
     };
     // A line split into two pure prefixes, the first a T2 or a T1, the other a T1: no base
     // rolls two pure prefixes of one stat today, but the comparison mustn't depend on the

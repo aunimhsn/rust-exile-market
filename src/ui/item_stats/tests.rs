@@ -421,6 +421,26 @@ fn the_note_shows_also_when_the_only_tiers_found_are_those_of_a_line_in_doubt() 
 }
 
 #[test]
+fn a_minion_modifier_of_the_genesis_tree_found_from_its_value_shows_no_tier_and_the_note() {
+    // `Reinforcing`, the only line of a Breach Ring: the range of its tier, without its number,
+    // which the game doesn't write.
+    let ring = read_again(parse(
+        "Item Class: Rings\nRarity: Rare\nGlyph Circle\nBreach Ring\n--------\n\
+         Item Level: 77\n--------\nMinions have 21% increased maximum Life",
+    ));
+
+    let texts = texts(&ring);
+    assert_eq!(
+        texts[texts.len() - 3..],
+        [
+            "Prefixes 1/3",
+            "■ Minions have 21% increased maximum Life ≥19 [0.67 19–22]",
+            "Trade copy note",
+        ]
+    );
+}
+
+#[test]
 fn only_the_tiers_found_from_the_values_have_the_note() {
     // Copied from the in-game trade, not read again yet: no tier found.
     let tiara = parse(include_str!(
