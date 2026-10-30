@@ -111,6 +111,8 @@ pub enum Message {
     UnrevealedNote,
     /// The note under the stats of a rare or magic item copied from the in-game trade.
     TradeCopyNote,
+    /// The note under the stats of a unique copied from the in-game trade.
+    UniqueRollsNote,
     /// After the range of a tier found from the values, the affix it is the tier of.
     AffixPrefix,
     AffixSuffix,
@@ -147,7 +149,7 @@ pub enum Message {
 impl Message {
     /// Every message, for the tests.
     #[cfg(test)]
-    const ALL: [Self; 111] = [
+    const ALL: [Self; 112] = [
         Self::LeagueModeSoftcore,
         Self::LeagueModeHardcore,
         Self::LeagueLoading,
@@ -232,6 +234,7 @@ impl Message {
         Self::UnrevealedSuffix,
         Self::UnrevealedNote,
         Self::TradeCopyNote,
+        Self::UniqueRollsNote,
         Self::AffixPrefix,
         Self::AffixSuffix,
         Self::AddedUpWithPrefix,
@@ -349,6 +352,7 @@ impl Message {
             Self::UnrevealedSuffix => "unrevealed-suffix",
             Self::UnrevealedNote => "unrevealed-note",
             Self::TradeCopyNote => "trade-copy-note",
+            Self::UniqueRollsNote => "unique-rolls-note",
             Self::AffixPrefix => "affix-prefix",
             Self::AffixSuffix => "affix-suffix",
             Self::AddedUpWithPrefix => "added-up-with-prefix",

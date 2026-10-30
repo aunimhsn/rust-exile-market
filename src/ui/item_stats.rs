@@ -535,6 +535,9 @@ enum Row<'a> {
     /// Under the stats of a rare or magic item copied from the in-game trade, whose tiers are
     /// found from the values.
     TradeCopyNote,
+    /// Under the stats of a unique copied from the in-game trade, whose rolls come from the
+    /// price database.
+    UniqueRollsNote,
 }
 
 /// The number of stats of `item`, for the pill that unfolds them.
@@ -674,6 +677,23 @@ fn rows<'a>(
     });
     if item.has_tiers_from_values() && found {
         rows.push(Row::TradeCopyNote);
+    }
+    // Once a range comes from the prices: none before they arrive.
+    let with_range = || {
+        item.modifiers()
+            .iter()
+            .filter(|modifier| {
+                matches!(
+                    modifier.kind,
+                    ModifierKind::Implicit | ModifierKind::Explicit(_)
+                )
+            })
+            .flat_map(|modifier| &modifier.lines)
+            .flat_map(|line| &line.rolls)
+            .any(|roll| roll.range.is_some())
+    };
+    if item.has_rolls_from_prices() && with_range() {
+        rows.push(Row::UniqueRollsNote);
     }
     rows
 }
@@ -951,7 +971,7 @@ fn unique_rows<'a>(item: &'a Item, reading: &Reading<'_>) -> Vec<Row<'a>> {
             .get(key.modifier)
             .filter(|modifier| key.line + 1 == modifier.lines.len())
             .and_then(|modifier| modifier.origin);
-        unique_stat(key, line, origin, reading)
+        unique_stat(key, line, origin, item.has_rolls_from_prices(), reading)
     };
     push_group(
         &mut rows,
@@ -1349,11 +1369,15 @@ fn is_implicit(kind: ModifierKind) -> bool {
 
 /// A line of a unique: a filter checked with its value filling its half and its bar when it
 /// varies, a fixed line otherwise; a line without a range in the advanced copy never varies.
-/// The `origin` of its modifier (Vaal) follows its range, or stands alone under a fixed line.
+/// For a unique copied without ranges, whose `rolls_from_prices`, a line with a number none
+/// of whose values got a range from the prices may vary: a filter unchecked at its value,
+/// without bar nor range. The `origin` of its modifier (Vaal) follows its range, or stands
+/// alone under a line without bar.
 fn unique_stat<'a>(
     key: StatKey,
     whole: &'a StatLine,
     origin: Option<ModifierOrigin>,
+    rolls_from_prices: bool,
     reading: &Reading<'_>,
 ) -> Stat<'a> {
     let line = &reading.counted(key, whole);
@@ -1369,6 +1393,18 @@ fn unique_stat<'a>(
             origin: Some(origin),
         }),
     };
+    if rolls_from_prices && ranges.iter().all(Option::is_none) {
+        let Some(value) = value(line) else {
+            return fixed;
+        };
+        return Stat {
+            filter: Some(StatFilter {
+                checked: false,
+                limit: Some(Limit::new(value, reading.half(key), None, value, line)),
+            }),
+            ..fixed
+        };
+    }
     // A filter when one of its ranges is wider than one value.
     let Some(roll) = bar(magnitudes(line, &ranges), origin) else {
         return fixed;
@@ -1548,6 +1584,7 @@ fn show(ui: &mut Ui, rows: Vec<Row<'_>>, filters: &mut Filters, i18n: &Translato
             Row::Stat(stat) => stat_row(ui, &stat, filters, i18n, bar),
             Row::UnrevealedNote => note(ui, i18n.text(Message::UnrevealedNote)),
             Row::TradeCopyNote => note(ui, i18n.text(Message::TradeCopyNote)),
+            Row::UniqueRollsNote => note(ui, i18n.text(Message::UniqueRollsNote)),
         }
     }
 }

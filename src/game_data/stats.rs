@@ -260,6 +260,12 @@ impl Stats {
         self.list.len()
     }
 
+    /// Every stat.
+    #[cfg(test)]
+    pub fn all(&self) -> impl Iterator<Item = &Stat> {
+        self.list.iter()
+    }
+
     /// The stat of the game id `id`, when there is one.
     #[cfg(test)]
     pub fn by_id(&self, id: &str) -> Option<&Stat> {

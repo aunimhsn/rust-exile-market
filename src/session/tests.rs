@@ -472,6 +472,110 @@ fn an_item_copied_from_the_in_game_trade_is_read_again_from_its_copy() {
     assert_eq!(modifiers(&session), read);
 }
 
+/// The prices of Forbidden Rites with Soul Tether and the modifiers poe2scout writes for it.
+fn soul_tether_prices() -> PriceList {
+    use crate::prices::{Price, UniqueModifiers, UniquePrice};
+
+    let written = |modifiers: &[&str]| -> Vec<String> {
+        modifiers
+            .iter()
+            .map(|&modifier| modifier.to_owned())
+            .collect()
+    };
+    PriceList {
+        uniques: vec![UniquePrice {
+            name: "Soul Tether".to_owned(),
+            base_type: "Long Belt".to_owned(),
+            price: Price {
+                exalted: 1.0,
+                quantity: 3981,
+                history: Vec::new(),
+            },
+            modifiers: UniqueModifiers {
+                implicit: written(&["(15-20)% increased Charm Effect Duration"]),
+                explicit: written(&["+(40-60) to maximum Energy Shield"]),
+            },
+        }],
+        ..prices("Forbidden Rites", now())
+    }
+}
+
+/// The range of the first value of the line of the item shown that starts with `start`.
+fn shown_range(session: &Session, start: &str) -> Option<(f64, f64)> {
+    let item = session.item()?.parsed().ok()?;
+    let line = item
+        .modifiers()
+        .iter()
+        .flat_map(|modifier| &modifier.lines)
+        .find(|line| line.text.starts_with(start))?;
+    let range = line.rolls.first()?.range?;
+    Some((range.min, range.max))
+}
+
+#[test]
+fn a_unique_copied_from_the_in_game_trade_gets_its_rolls_once_its_prices_arrive() {
+    let mut session = session();
+    copy(
+        &mut session,
+        include_str!("../item/test-items/en-owner-trade-unique-belt-mutated.txt"),
+    );
+    assert_eq!(shown_range(&session, "+51 to maximum Energy Shield"), None);
+
+    session.apply_market(
+        MarketEvent::PartialPrices {
+            prices: soul_tether_prices(),
+            progress: 0.25,
+        },
+        &[],
+    );
+
+    assert_eq!(
+        shown_range(&session, "+51 to maximum Energy Shield"),
+        Some((40.0, 60.0))
+    );
+    assert_eq!(
+        shown_range(&session, "16% increased Charm Effect Duration"),
+        Some((15.0, 20.0))
+    );
+}
+
+#[test]
+fn a_french_unique_copied_from_the_in_game_trade_gets_its_rolls_once_the_names_arrive() {
+    use crate::item_names::{ItemNames, Names, UniqueName, UniqueNames};
+
+    let mut session = session();
+    session.apply_market(MarketEvent::Prices(soul_tether_prices()), &[]);
+    copy(
+        &mut session,
+        include_str!("../item/test-items/fr-trade-unique-belt-mutated.txt"),
+    );
+    // Its English name isn't known yet.
+    assert_eq!(shown_range(&session, "+40 de Bouclier"), None);
+
+    let names = || Names {
+        exchange: std::collections::HashMap::new(),
+        base_types: Vec::new(),
+        stats: Vec::new(),
+    };
+    let unique = |name: &str, base_type: &str| UniqueName {
+        name: name.to_owned(),
+        base_type: base_type.to_owned(),
+    };
+    let reshaped = session.apply_item_names(ItemNames::new(
+        SystemTime::UNIX_EPOCH,
+        names(),
+        names(),
+        vec![UniqueNames {
+            english: unique("Soul Tether", "Long Belt"),
+            french: unique("Lanière animique", "Ceinture longue"),
+        }],
+    ));
+
+    assert!(!reshaped, "its modifiers keep their shape");
+    assert_eq!(shown_range(&session, "+40 de Bouclier"), Some((40.0, 60.0)));
+    assert_eq!(shown_range(&session, "+20 d'Intelligence"), None);
+}
+
 #[test]
 fn a_magic_hybrid_joined_once_the_names_arrive_reshapes_the_modifiers() {
     const MACE: &str = "Item Class: Two Hand Maces\nRarity: Magic\n\

@@ -50,6 +50,7 @@ fn row_texts<'a>(rows: impl IntoIterator<Item = Row<'a>>) -> Vec<String> {
             Row::Group(group) => format!("{group:?}"),
             Row::UnrevealedNote => "Unrevealed note".to_owned(),
             Row::TradeCopyNote => "Trade copy note".to_owned(),
+            Row::UniqueRollsNote => "Unique rolls note".to_owned(),
             Row::Stat(Stat {
                 text,
                 filter,
@@ -359,6 +360,109 @@ fn the_vaal_modifier_of_a_unique_says_vaal_under_a_fixed_line() {
     assert_eq!(
         texts(&unique),
         ["Unique", "+5% to Maximum Lightning Resistance [Vaal]"]
+    );
+}
+
+/// `item`, a unique copied from the in-game trade, with the rolls poe2scout writes for Soul
+/// Tether.
+fn with_soul_tether_rolls(mut item: Item) -> Item {
+    let written = |modifiers: &[&str]| -> Vec<String> {
+        modifiers
+            .iter()
+            .map(|&modifier| modifier.to_owned())
+            .collect()
+    };
+    let modifiers = game_data::with_unique_rolls(
+        item.language(),
+        item.modifiers(),
+        &written(&[
+            "(15-20)% increased Charm Effect Duration",
+            "Has (1-3) Charm Slots",
+        ]),
+        &written(&[
+            "+(40-60) to maximum Energy Shield",
+            "You lose (5-5)% of maximum Energy Shield per second",
+            "Excess Life Recovery from Leech is applied to Energy Shield",
+        ]),
+        None,
+    );
+    item.set_modifiers(modifiers);
+    item
+}
+
+#[test]
+fn a_unique_copied_from_the_in_game_trade_has_unchecked_filters_before_its_rolls() {
+    let belt = parse(include_str!(
+        "../../item/test-items/en-owner-trade-unique-belt-mutated.txt"
+    ));
+
+    assert_eq!(
+        texts(&belt),
+        [
+            "Enchant",
+            "□ 15% increased Evasion Rating ≥15",
+            "Implicit",
+            "□ 16% increased Charm Effect Duration ≥16",
+            "□ Has 3 Charm Slots ≥3",
+            "Unique",
+            "□ 14% increased Energy Shield Recovery rate ≥14 [Vaal]",
+            "□ +51 to maximum Energy Shield ≥51",
+            "□ You lose 5% of maximum Energy Shield per second ≤5",
+            // No number: the same on every copy.
+            "Excess Life Recovery from Leech is applied to Energy Shield",
+        ]
+    );
+}
+
+#[test]
+fn a_unique_copied_from_the_in_game_trade_shows_the_rolls_of_poe2scout_and_a_note() {
+    let belt = with_soul_tether_rolls(parse(include_str!(
+        "../../item/test-items/en-owner-trade-unique-belt-mutated.txt"
+    )));
+
+    assert_eq!(
+        texts(&belt),
+        [
+            "Enchant",
+            "□ 15% increased Evasion Rating ≥15",
+            "Implicit",
+            "■ 16% increased Charm Effect Duration ≥16 [15–20 0.20]",
+            // poe2scout writes the plural.
+            "■ Has 3 Charm Slots ≥3 [1–3 1.00]",
+            "Unique",
+            // The Vaal modifier, which poe2scout never holds.
+            "□ 14% increased Energy Shield Recovery rate ≥14 [Vaal]",
+            "■ +51 to maximum Energy Shield ≥51 [40–60 0.55]",
+            // `(5-5)`: it never varies.
+            "You lose 5% of maximum Energy Shield per second",
+            "Excess Life Recovery from Leech is applied to Energy Shield",
+            "Unique rolls note",
+        ]
+    );
+}
+
+#[test]
+fn a_french_unique_copied_from_the_in_game_trade_gets_the_rolls_by_its_stats() {
+    let belt = with_soul_tether_rolls(parse(include_str!(
+        "../../item/test-items/fr-trade-unique-belt-mutated.txt"
+    )));
+
+    assert_eq!(
+        texts(&belt),
+        [
+            "Enchant",
+            "□ 15% d'Augmentation de l'Armure ≥15",
+            "Implicit",
+            "■ 16% d'Augmentation de la Durée de l'Effet des Charmes ≥16 [15–20 0.20]",
+            "■ Possède 2 Emplacements de Charme ≥2 [1–3 0.50]",
+            "Unique",
+            "■ +40 de Bouclier d'énergie maximal ≥40 [40–60 0.00]",
+            // A line poe2scout doesn't hold.
+            "□ +20 d'Intelligence ≥20",
+            "□ 14% d'Augmentation de la Récupération de Bouclier d'énergie ≥14 [Vaal]",
+            "Vous perdez 5% de Bouclier d'énergie par seconde",
+            "Unique rolls note",
+        ]
     );
 }
 

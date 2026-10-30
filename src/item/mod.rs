@@ -136,6 +136,9 @@ pub struct Item {
     /// A rare or magic item copied from the trade of the game (another player's listing): its
     /// explicit modifiers without the `{ … }` headers of the advanced copy.
     tiers_from_values: bool,
+    /// A unique copied from the trade of the game: its implicit and explicit modifiers without
+    /// the `{ … }` headers, hence without ranges, which come from the price database.
+    rolls_from_prices: bool,
     warnings: Vec<ParseWarning>,
 }
 
@@ -332,6 +335,14 @@ impl Item {
     #[must_use]
     pub fn has_tiers_from_values(&self) -> bool {
         self.tiers_from_values
+    }
+
+    /// A unique copied from the trade of the game (another player's listing): its implicit and
+    /// explicit modifiers have no `{ … }` header, hence no range, whose rolls are taken from
+    /// the modifiers the price database writes for it.
+    #[must_use]
+    pub fn has_rolls_from_prices(&self) -> bool {
+        self.rolls_from_prices
     }
 
     /// The number of desecrated modifiers not revealed yet.

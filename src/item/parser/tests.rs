@@ -1266,3 +1266,18 @@ fn tells_a_rare_or_magic_item_copied_from_the_in_game_trade() {
         assert!(!item(text).has_tiers_from_values(), "{text}");
     }
 }
+
+#[test]
+fn tells_a_unique_copied_from_the_in_game_trade() {
+    for text in [EN_TRADE_UNIQUE_BELT, FR_TRADE_UNIQUE_BELT] {
+        assert!(item(text).has_rolls_from_prices(), "{text}");
+    }
+    for text in [
+        // An advanced copy.
+        FR_UNIQUE_BELT_VAAL,
+        // A rare copied from the in-game trade: tiers.
+        EN_TRADE_RARE_HELMET,
+    ] {
+        assert!(!item(text).has_rolls_from_prices(), "{text}");
+    }
+}
