@@ -114,6 +114,8 @@ pub enum Message {
     /// After the range of a tier found from the values, the affix it is the tier of.
     AffixPrefix,
     AffixSuffix,
+    /// The tooltip of the suffix of a line that adds up a prefix and a suffix.
+    AddedUpWithPrefix,
     OffersLabel,
     OffersSearchHint,
     OffersSearchTooltip,
@@ -140,7 +142,7 @@ pub enum Message {
 impl Message {
     /// Every message, for the tests.
     #[cfg(test)]
-    const ALL: [Self; 107] = [
+    const ALL: [Self; 108] = [
         Self::LeagueModeSoftcore,
         Self::LeagueModeHardcore,
         Self::LeagueLoading,
@@ -227,6 +229,7 @@ impl Message {
         Self::TradeCopyNote,
         Self::AffixPrefix,
         Self::AffixSuffix,
+        Self::AddedUpWithPrefix,
         Self::OffersLabel,
         Self::OffersSearchHint,
         Self::OffersSearchTooltip,
@@ -340,6 +343,7 @@ impl Message {
             Self::TradeCopyNote => "trade-copy-note",
             Self::AffixPrefix => "affix-prefix",
             Self::AffixSuffix => "affix-suffix",
+            Self::AddedUpWithPrefix => "added-up-with-prefix",
             Self::OffersLabel => "offers-label",
             Self::OffersSearchHint => "offers-search-hint",
             Self::OffersSearchTooltip => "offers-search-tooltip",

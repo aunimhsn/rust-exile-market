@@ -40,7 +40,8 @@ fn texts(item: &Item) -> Vec<String> {
 /// with its bar over every tier and, under its last line, its tier, its ranges and its
 /// origin: `■ +86 to maximum Life ≥77 [0.37 T7 85–99]`, `[0.80 T2 71–79 Desecrated]`; the
 /// tiers of a line that can be a prefix or a suffix, each row after a ` / `, its origin a
-/// row of its own: `[T1 16–19 AffixPrefix / T1 15–18 AffixSuffix / Desecrated]`).
+/// row of its own: `[T1 16–19 AffixPrefix / T1 15–18 AffixSuffix / Desecrated]`; the word
+/// after the ranges followed by its tooltip, and two neighbouring tiers `T1/T2 155–179`).
 fn row_texts<'a>(rows: impl IntoIterator<Item = Row<'a>>) -> Vec<String> {
     rows.into_iter()
         .map(|row| match row {
@@ -100,7 +101,17 @@ fn row_texts<'a>(rows: impl IntoIterator<Item = Row<'a>>) -> Vec<String> {
                         // The origin on a line of its own, after the tiers.
                         let rows: Vec<String> = rows
                             .iter()
-                            .map(|row| format!("{} {:?}", tier_text(&row.tier), row.word))
+                            .map(|row| {
+                                let tier = tier_text(&row.tier);
+                                let tier = match row.better {
+                                    Some(better) => format!("T{better}/{tier}"),
+                                    None => tier,
+                                };
+                                [row.word, row.tip]
+                                    .into_iter()
+                                    .flatten()
+                                    .fold(tier, |text, word| format!("{text} {word:?}"))
+                            })
                             .chain(origin.map(|origin| format!("{origin:?}")))
                             .collect();
                         format!(" [{}]", rows.join(" / "))
@@ -1761,4 +1772,176 @@ fn a_range_of_one_value_is_full() {
             .abs()
             < 1e-9
     );
+}
+
+/// The rows of `item` from its first group `title` on.
+fn texts_from(item: &Item, title: &str) -> Vec<String> {
+    let texts = texts(item);
+    let start = texts
+        .iter()
+        .position(|text| text.starts_with(title))
+        .unwrap_or_else(|| panic!("{title}: {texts:?}"));
+    texts[start..].to_vec()
+}
+
+#[test]
+fn a_line_that_adds_up_two_modifiers_shows_the_tier_of_each_and_counts_both() {
+    let bow = read_again(parse(include_str!(
+        "../../item/test-items/en-owner-trade-rare-bow-mirrored.txt"
+    )));
+
+    assert_eq!(
+        texts_from(&bow, "Prefixes")[..4],
+        [
+            // The split line and the accuracy, two modifiers: 3 prefixes with the added damage.
+            "Prefixes 3/3",
+            // Without bar, the pure part first, then the part of the hybrid; the damage
+            // unchecked since the DPS counts it.
+            "□ 258% increased Physical Damage ≥232 [T1 170–179 / T1 75–79]",
+            // The other line of the hybrid, without tier until step 13k2e4b3b.
+            "■ +195 to Accuracy Rating ≥176",
+            "□ Adds 36 to 56 Physical Damage ≥41 [0.88 T1 26–39 · 44–66 Desecrated]",
+        ]
+    );
+}
+
+#[test]
+fn a_part_of_a_summed_line_in_two_neighbouring_tiers_shows_both() {
+    let bow = include_str!("../../item/test-items/en-owner-trade-rare-bow-mirrored.txt");
+    // The 248% is a pure T1 or T2 with the hybrid T1.
+    let bow = read_again(parse(&bow.replace("258% increased", "248% increased")));
+
+    assert_eq!(
+        texts_from(&bow, "Prefixes")[..2],
+        [
+            "Prefixes 3/3",
+            "□ 248% increased Physical Damage ≥223 [T1/T2 155–179 / T1 75–79]",
+        ]
+    );
+}
+
+#[test]
+fn a_line_that_adds_up_a_prefix_and_a_suffix_is_explicit_and_counts_in_both() {
+    let tiara = include_str!("../../item/test-items/en-owner-trade-rare-helmet-fractured.txt");
+    // A prefix open, filled by the rarity, desecrated, the prefix and the suffix of tier 1.
+    let tiara = read_again(parse(
+        &tiara
+            .replace("+69 to maximum Energy Shield (desecrated)\n", "")
+            .replace(
+                "18% increased Rarity of Items found\n",
+                "37% increased Rarity of Items found (desecrated)\n",
+            ),
+    ));
+
+    let texts = texts_from(&tiara, "Prefixes");
+    let title = |start: &str| texts.iter().find(|text| text.starts_with(start)).cloned();
+    assert_eq!(title("Prefixes").as_deref(), Some("Prefixes 3/3"));
+    assert_eq!(title("Suffixes").as_deref(), Some("Suffixes 3/3"));
+    assert_eq!(
+        texts[texts.len() - 3..],
+        [
+            "Explicit",
+            // The prefix first; the tooltip of "Suffix" says they are added up; the origin on
+            // a row of its own.
+            "■ 37% increased Rarity of Items found ≥33 [T1 16–19 AffixPrefix / T1 15–18 AffixSuffix AddedUpWithPrefix / Desecrated]",
+            "Trade copy note",
+        ]
+    );
+}
+
+/// A part of a split line of `affix` in tier 1, over 1–2.
+fn part(affix: Affix) -> PartTier {
+    PartTier {
+        affix,
+        tiers: vec![1],
+        ranges: vec![Range { min: 1.0, max: 2.0 }],
+    }
+}
+
+/// The rows of the parts `whole` and `added` of a split line: the tier, the word and its
+/// tooltip of each, the ranges left out.
+fn split_texts(whole: Affix, added: Affix) -> Vec<String> {
+    split_rows(&part(whole), &part(added))
+        .iter()
+        .map(|row| format!("{:?} {:?} {:?}", row.tier.number, row.word, row.tip))
+        .collect()
+}
+
+#[test]
+fn the_parts_of_a_split_line_show_the_prefix_first_then_the_pure_one() {
+    // A pure prefix with a suffix hybrid: the prefix first, though it is the added part.
+    assert_eq!(
+        split_texts(Affix::Suffix, Affix::Prefix),
+        [
+            "1 Some(AffixPrefix) None",
+            "1 Some(AffixSuffix) Some(AddedUpWithPrefix)",
+        ]
+    );
+    let mut added = part(Affix::Suffix);
+    added.tiers = vec![2];
+    // Two suffixes: the pure part (`added`) first, though of a worse tier, without words.
+    let rows = split_rows(&part(Affix::Suffix), &added);
+    let tiers: Vec<_> = rows.iter().map(|row| (row.tier.number, row.word)).collect();
+    assert_eq!(tiers, [(2, None), (1, None)]);
+}
+
+#[test]
+fn a_modifier_counts_the_affixes_it_takes_in_the_room_of_its_item() {
+    let modifier = |kind, doubt| Modifier {
+        kind,
+        origin: None,
+        name: None,
+        tier: None,
+        tags: Vec::new(),
+        unrevealed: false,
+        lines: Vec::new(),
+        doubt,
+    };
+    let split = |whole, added| {
+        Some(TierDoubt::Split {
+            line: 0,
+            whole: part(whole),
+            added: part(added),
+        })
+    };
+    let counts = |modifier: &Modifier| {
+        (
+            affix_count(modifier, Affix::Prefix),
+            affix_count(modifier, Affix::Suffix),
+        )
+    };
+    let tier = AffixTier {
+        affix: Affix::Prefix,
+        tier: 1,
+        ranges: Vec::new(),
+    };
+
+    let prefix = ModifierKind::Explicit(Some(Affix::Prefix));
+    let explicit = ModifierKind::Explicit(None);
+    assert_eq!(counts(&modifier(prefix, None)), (1, 0));
+    assert_eq!(
+        counts(&modifier(prefix, split(Affix::Prefix, Affix::Prefix))),
+        (2, 0)
+    );
+    assert_eq!(
+        counts(&modifier(explicit, split(Affix::Prefix, Affix::Suffix))),
+        (1, 1)
+    );
+    // A prefix or a suffix, and an affix unknown: not counted.
+    let either = TierDoubt::EitherAffix {
+        prefix: tier.clone(),
+        suffix: AffixTier {
+            affix: Affix::Suffix,
+            ..tier
+        },
+    };
+    assert_eq!(counts(&modifier(explicit, Some(either))), (0, 0));
+    assert_eq!(counts(&modifier(explicit, None)), (0, 0));
+    assert_eq!(counts(&modifier(ModifierKind::Implicit, None)), (0, 0));
+    // An unrevealed prefix takes its room.
+    let unrevealed = Modifier {
+        unrevealed: true,
+        ..modifier(prefix, None)
+    };
+    assert_eq!(counts(&unrevealed), (1, 0));
 }
