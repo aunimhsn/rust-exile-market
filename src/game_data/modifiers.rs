@@ -31,7 +31,8 @@ struct Table {
     kind: String,
     affix: TableAffix,
     /// The domain of the bases it rolls on: `default`, a tag of every base, rolls on those of
-    /// its domain only (the charges of a flask).
+    /// its domain only (the charges of a flask); a desecrated table rolls on the equipment and
+    /// the jewels.
     #[serde(default)]
     domain: Domain,
     lines: Vec<TableLine>,
@@ -85,7 +86,7 @@ impl Table {
     /// Whether the modifier rolls on `base`: a base of its domain, whose first tag of the list
     /// says so.
     fn rolls_on(&self, base: &BaseSpawn) -> bool {
-        self.domain == base.domain
+        self.domain.rolls_on(base.domain)
             && self
                 .spawn
                 .iter()
@@ -93,8 +94,16 @@ impl Table {
                 .is_some_and(|&(_, weight)| weight > 0)
     }
 
-    /// Whether the table holds tiers of the same modifier as `other`, maybe on other bases.
+    /// Whether the table holds tiers of the same modifier as `other`, maybe on other bases. A
+    /// desecrated table is a modifier of its own, its one tier "the only one": two of them
+    /// may roll the same lines on one base, a lord's own (the flask charges of Ulaman,
+    /// `10–18`, and of Kurgal, `10–15`, on the belts), or the same range written twice (the
+    /// cost efficiency of attacks of Kurgal on the maces), which merged would read as a T1 and
+    /// a T2.
     fn same_modifier(&self, other: &Self) -> bool {
+        if self.domain == Domain::Desecrated || other.domain == Domain::Desecrated {
+            return std::ptr::eq(self, other);
+        }
         self.kind == other.kind && self.affix == other.affix && self.lines == other.lines
     }
 }
@@ -141,6 +150,13 @@ impl ModifierTiers {
         self.tiers.get(self.found)
     }
 
+    /// Whether the modifier has one tier only on the base: its T1 would read as "the best"
+    /// while it is "the only one".
+    #[must_use]
+    pub fn single(&self) -> bool {
+        self.tiers.len() == 1
+    }
+
     /// The tiers the copied modifier may be, the best first: the neighbouring one, then its
     /// tier.
     pub fn possible(&self) -> impl Iterator<Item = &Tier> {
@@ -159,32 +175,35 @@ impl ModifierTiers {
     }
 }
 
-/// Every tier of `modifier`, a prefix or suffix of an item whose base type is `base_type` in
-/// `language` (the name its search looks for), its lines matched with their stats in
-/// `matches` ([`super::modifier_stats`]).
+/// Every tier of `modifier`, a prefix or suffix of an item of `item_level` (none when the copy
+/// doesn't write it) whose base type is `base_type` in `language` (the name its search looks
+/// for), its lines matched with their stats in `matches` ([`super::modifier_stats`]).
 ///
 /// None for a modifier the tables don't hold: an implicit, a rune, an enchantment, a modifier
 /// whose header doesn't tell its affix, a line without stat, a base without tags; or whose
-/// ranges are in no tier: a modifier of the lords of the Abyss is desecrated, like some
-/// ordinary ones, and rolls its own range.
+/// ranges are in no tier, e.g. a line copied before a patch changed them.
 ///
 /// For a line that adds up two modifiers ([`TierDoubt::Split`]), the tiers of the modifier of
-/// every line ([`split_tiers`]).
+/// every line ([`split_tiers`]), among those `item_level` allows.
 ///
 /// With the ranges of the advanced copy, only a tier with those ranges: the tier that holds the
 /// copied values first, then the one that holds them give or take the rounding of the game, then
 /// the one whose values left it (any value out of its tier, e.g. on a sanctified item). Without
 /// them (a line without number has no range), only a tier that holds the values. When several
-/// tiers fit as well, the best one is taken; when several modifiers do, the first of the file.
+/// tiers fit as well, the one of the number the advanced copy wrote is taken, then the best
+/// one; when several modifiers do, the first of the file, an ordinary one before a desecrated
+/// one.
 #[must_use]
 pub fn modifier_tiers(
     language: Language,
     base_type: &str,
+    item_level: Option<u32>,
     modifier: &Modifier,
     matches: &[LineMatch<'_>],
 ) -> Option<ModifierTiers> {
     if let Some(TierDoubt::Split { line, whole, .. }) = &modifier.doubt {
-        return split_tiers(language, base_type, modifier, matches, (*line, whole));
+        let summed = (*line, whole);
+        return split_tiers(language, base_type, item_level, modifier, matches, summed);
     }
     let affix = match modifier.kind {
         ModifierKind::Explicit(Some(Affix::Prefix)) => TableAffix::Prefix,
@@ -197,10 +216,11 @@ pub fn modifier_tiers(
 }
 
 /// The tiers of the modifier of every line of `modifier`, whose line `line` adds up its part
-/// `whole` and a pure modifier ([`hybrid_tiers`]).
+/// `whole` and a pure modifier, among those `item_level` allows ([`hybrid_tiers`]).
 fn split_tiers(
     language: Language,
     base_type: &str,
+    item_level: Option<u32>,
     modifier: &Modifier,
     matches: &[LineMatch<'_>],
     (line, whole): (usize, &PartTier),
@@ -210,25 +230,22 @@ fn split_tiers(
     let summed = matches
         .iter()
         .position(|found| found.lines == (line..line + 1))?;
-    hybrid_tiers(&TABLES, base, copied, summed, whole)
+    hybrid_tiers(&TABLES, base, copied, (summed, whole), item_level)
 }
 
 /// The tiers among `tables`, on `base`, of the modifier of every line of `copied`,
-/// whose line `summed` adds up its part `whole` and a pure modifier: found from the values of
-/// its other lines, that line taken at the lowest roll of its part, the sum being in no tier;
-/// the tiers of `whole`, the worse found and the better its neighbour. None when the tiers of
-/// `whole` in that table don't give that line the ranges of `whole`: another table, whose
-/// rolls would be wrong. The first table that holds the values is the one of the split:
-/// another one holding them as well would have been a second way to split the line
-/// ([`splits`]), which leaves it without tier; but `splits` only takes the tiers the item
-/// level allows, which `find` doesn't (no two tables share the templates of a hybrid on one
-/// base today).
+/// whose line `summed` adds up its part `whole` and a pure modifier: those of the first table
+/// whose tiers of the numbers of `whole`, among those `item_level` allows, give that line the
+/// ranges of `whole` and hold the values of its other lines, that line taken at the lowest
+/// roll of its part, the sum being in no tier; the worse found and the better its neighbour.
+/// Another table holding them as well would have been a second way to split the line
+/// ([`splits`], which takes the same tiers), which leaves it without tier.
 fn hybrid_tiers(
     tables: &[Table],
     base: &BaseSpawn,
     mut copied: Copied<'_>,
-    summed: usize,
-    whole: &PartTier,
+    (summed, whole): (usize, &PartTier),
+    item_level: Option<u32>,
 ) -> Option<ModifierTiers> {
     let affix = match whole.affix {
         Affix::Prefix => TableAffix::Prefix,
@@ -249,21 +266,58 @@ fn hybrid_tiers(
         // The ranges as the game writes them, the values with the sign of the stat.
         *value = range.min.copysign(*value);
     }
-    // The summed line has no range: the tier is found by the values.
-    copied.ranges = None;
-    let table = find(tables, affix, base, &copied, Tie::Best)?;
-    let index = |number: &u32| table.tiers.iter().position(|tier| tier.number == *number);
+    let counts: Vec<usize> = copied.lines.iter().map(CopiedLine::count).collect();
+    tables.iter().enumerate().find_map(|(index, table)| {
+        if table.affix != affix || !first_of_its_modifier(tables, index) {
+            return None;
+        }
+        let order = copied.order(&table.lines)?;
+        let tiers = tiers_on_base(tables, table, base, &order, &copied)?;
+        let (worse, better) = part_in(&tiers, whole, offset, item_level)?;
+        let values = copied.values(&table.lines, &order);
+        let holds_values = [Some(worse), better].into_iter().flatten().any(|tier| {
+            tiers
+                .get(tier)
+                .is_some_and(|tier| holds(&values, &tier.ranges).is_some())
+        });
+        holds_values.then(|| ModifierTiers {
+            tiers,
+            found: worse,
+            neighbour: better,
+            counts: counts.clone(),
+        })
+    })
+}
+
+/// The indexes in `tiers` (the best first) of the tiers of `whole`, the part of a line from
+/// the value `offset` among those of a tier, the worse and the better one: none when one of them
+/// isn't among `tiers`, an item of `item_level` can't roll it, or the tiers don't give that
+/// line the ranges of `whole`.
+fn part_in(
+    tiers: &[Tier],
+    whole: &PartTier,
+    offset: usize,
+    item_level: Option<u32>,
+) -> Option<(usize, Option<usize>)> {
+    let index = |number: &u32| {
+        tiers
+            .iter()
+            .position(|tier| tier.number == *number)
+            .filter(|&index| {
+                tiers
+                    .get(index)
+                    .is_some_and(|tier| item_level.is_none_or(|level| tier.level <= level))
+            })
+    };
     let worse = index(whole.tiers.last()?)?;
     let better = match whole.tiers.as_slice() {
         [better, _] => Some(index(better)?),
         _ => None,
     };
-    let part = [Some(worse), better].into_iter().flatten();
     for (position, expected) in whole.ranges.iter().enumerate() {
         let mut spanned: Option<Range> = None;
-        for tier in part.clone() {
-            let range = table
-                .tiers
+        for tier in [Some(worse), better].into_iter().flatten() {
+            let range = tiers
                 .get(tier)?
                 .ranges
                 .get(offset + position)?
@@ -274,11 +328,7 @@ fn hybrid_tiers(
             return None;
         }
     }
-    Some(ModifierTiers {
-        found: worse,
-        neighbour: better,
-        ..table
-    })
+    Some((worse, better))
 }
 
 /// How many prefixes and suffixes an item can have: those of its rarity, with those its runes
@@ -628,6 +678,7 @@ fn part_tier(
     Some(PartTier {
         affix,
         tiers: tiers.possible().map(|tier| tier.number).collect(),
+        single: tiers.single(),
         ranges: spanned_ranges(language, parts, tiers, line)?
             .into_iter()
             .flatten()
@@ -709,6 +760,7 @@ fn affix_tier(
     Some(AffixTier {
         affix,
         tier: tiers.tier()?.number,
+        single: tiers.single(),
         ranges: ranged
             .lines
             .iter()
@@ -837,6 +889,7 @@ fn candidates(
             let joined = Copied {
                 lines: lines.clone(),
                 ranges: None,
+                tier: None,
             };
             let affixes: Vec<_> = [
                 (Affix::Prefix, TableAffix::Prefix),
@@ -912,6 +965,7 @@ fn splits(
     let alone = Copied {
         lines: vec![line.clone()],
         ranges: None,
+        tier: None,
     };
     // The values of the summed line among those of every line, in their order.
     let offset: usize = copied
@@ -1304,7 +1358,9 @@ enum Tie {
 }
 
 /// The tiers of `copied` among `tables`, on `base`: those of the modifier of
-/// `affix` that holds it best, the tier taken on a `tie`.
+/// `affix` that holds it best, the tier taken on a `tie`. Of two tiers that hold it as well,
+/// the one of the number the advanced copy wrote, maybe of another modifier: a modifier of one
+/// tier only, a lord's, can't hide a T3 of an ordinary one with the same lines and ranges.
 fn find(
     tables: &[Table],
     affix: TableAffix,
@@ -1312,7 +1368,9 @@ fn find(
     copied: &Copied<'_>,
     tie: Tie,
 ) -> Option<ModifierTiers> {
-    let mut best: Option<(Fit, ModifierTiers)> = None;
+    // Whether a tier isn't the one the advanced copy wrote.
+    let other_number = |tier: &Tier| copied.tier.is_some_and(|number| tier.number != number);
+    let mut best: Option<((Fit, bool), ModifierTiers)> = None;
     for (index, table) in tables.iter().enumerate() {
         if table.affix != affix {
             continue;
@@ -1336,7 +1394,9 @@ fn find(
                     item_level: Some(item_level),
                 } => tier.level <= item_level,
             })
-            .filter_map(|(index, tier)| Some((copied.fit(&values, tier)?, index)))
+            .filter_map(|(index, tier)| {
+                Some(((copied.fit(&values, tier)?, other_number(tier)), index))
+            })
             .min_by(|&(fit, index), &(other_fit, other)| {
                 let tier = match tie {
                     Tie::Best => index.cmp(&other),
@@ -1450,6 +1510,8 @@ struct Copied<'a> {
     /// The ranges the advanced copy gave for each value of the lines, in their order, as the
     /// game writes them: without their sign.
     ranges: Option<Vec<Range>>,
+    /// The tier the advanced copy wrote: of two tiers that hold the modifier as well, that one.
+    tier: Option<u32>,
 }
 
 impl<'a> Copied<'a> {
@@ -1489,7 +1551,11 @@ impl<'a> Copied<'a> {
         let ranges = ranges.filter(|ranges| {
             lines.iter().all(|line| line.written.is_none()) && ranges.len() == count
         });
-        Some(Self { lines, ranges })
+        Some(Self {
+            lines,
+            ranges,
+            tier: modifier.tier,
+        })
     }
 
     /// For each copied line, the index of the line of the same template in `lines`, the lines

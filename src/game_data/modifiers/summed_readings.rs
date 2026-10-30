@@ -229,6 +229,7 @@ fn placements<'a>(
                     .map(|line| line.copied.clone())
                     .collect(),
                 ranges: None,
+                tier: None,
             };
             let Some(order) = copied.order(&table.lines) else {
                 continue;

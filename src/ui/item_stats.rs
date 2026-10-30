@@ -245,11 +245,12 @@ impl<'a> TierRow<'a> {
         }
     }
 
-    /// The tier `found` for one affix of a line that can be either, "Prefix" after its ranges.
+    /// The tier `found` for one affix of a line that can be either, "Prefix" after its ranges;
+    /// without number for a modifier of one tier only.
     fn affix(found: &AffixTier) -> Self {
         Self {
             tier: ModifierTier {
-                number: Some(found.tier),
+                number: (!found.single).then_some(found.tier),
                 ranges: found.ranges.clone(),
             },
             better: None,
@@ -261,24 +262,28 @@ impl<'a> TierRow<'a> {
     /// The tiers of a part of a line that adds up two modifiers, over the range of both when
     /// they are two, with `word` and its `tip`.
     fn part(part: &PartTier, word: Option<Message>, tip: Option<WordTip<'a>>) -> Option<Self> {
-        Self::tiers(&part.tiers, part.ranges.clone(), word, tip)
+        Self::tiers(part, part.ranges.clone(), word, tip)
     }
 
-    /// The `tiers` a modifier may be, the best first (one, or two neighbouring ones), over
-    /// `ranges`, with `word` and its `tip`.
+    /// The tiers `part` may be, the best first (one, or two neighbouring ones), over `ranges`,
+    /// with `word` and its `tip`; without number for a modifier of one tier only.
     fn tiers(
-        tiers: &[u32],
+        part: &PartTier,
         ranges: Vec<Range>,
         word: Option<Message>,
         tip: Option<WordTip<'a>>,
     ) -> Option<Self> {
-        let worse = *tiers.last()?;
+        let worse = *part.tiers.last()?;
         Some(Self {
             tier: ModifierTier {
-                number: Some(worse),
+                number: (!part.single).then_some(worse),
                 ranges,
             },
-            better: tiers.first().copied().filter(|&better| better != worse),
+            better: part
+                .tiers
+                .first()
+                .copied()
+                .filter(|&better| better != worse && !part.single),
             word,
             tip,
         })
@@ -364,12 +369,7 @@ fn hybrid_row<'a>(
         ranges: whole.ranges.clone(),
         line: &modifier.lines.get(summed)?.text,
     };
-    TierRow::tiers(
-        &whole.tiers,
-        ranges,
-        Some(hybrid_word(whole, added)),
-        Some(tip),
-    )
+    TierRow::tiers(whole, ranges, Some(hybrid_word(whole, added)), Some(tip))
 }
 
 /// How the bar of a roll is drawn: a setting from step 18, which adds the zone searched.

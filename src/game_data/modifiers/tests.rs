@@ -37,6 +37,36 @@ fn a_table_rolls_on_the_bases_of_its_domain_only() {
     assert!(charges.rolls_on(base("Ultimate Life Flask")));
     assert!(!charges.rolls_on(base("Gold Ring")));
     assert!(!charges.rolls_on(base("Ruby")));
+
+    // A desecrated table rolls on the equipment and the jewels: the presence of Amanamu on
+    // the helmets, and a hybrid of the Abyss on the jewels.
+    let desecrated = |kind: &str| {
+        TABLES
+            .iter()
+            .find(|table| table.kind == kind && table.domain == Domain::Desecrated)
+            .expect(kind)
+    };
+    let presence = desecrated("PresenceRadius");
+    assert!(presence.rolls_on(base("Divine Crown")));
+    assert!(!presence.rolls_on(base("Gold Ring")));
+    let jewel = desecrated("HybridAbyssModJewelSpellDamageArmour");
+    assert!(jewel.rolls_on(base("Ruby")));
+    assert!(!jewel.rolls_on(base("Ultimate Life Flask")));
+}
+
+#[test]
+fn the_desecrated_tables_come_after_the_ordinary_ones() {
+    // Of two tables that hold a copied modifier as well, the first is taken: the ordinary one.
+    let first = TABLES
+        .iter()
+        .position(|table| table.domain == Domain::Desecrated)
+        .expect("desecrated tables");
+
+    assert!(TABLES.get(first..).is_some_and(|tables| {
+        tables
+            .iter()
+            .all(|table| table.domain == Domain::Desecrated)
+    }));
 }
 
 /// A tier number and the ranges of its values, as the game writes them.
@@ -55,8 +85,8 @@ fn tiers_of(text: &str, base_type: Option<&str>) -> Vec<(Option<TierRanges>, Tie
         })
         .map(|modifier| {
             let matches = modifier_stats(item.language(), modifier, None);
-            let found =
-                modifier_tiers(item.language(), base_type, modifier, &matches).and_then(|tiers| {
+            let found = modifier_tiers(item.language(), base_type, None, modifier, &matches)
+                .and_then(|tiers| {
                     let tier = tiers.tier()?;
                     Some((
                         tier.number,
@@ -135,19 +165,12 @@ fn the_tables_find_the_tier_written_by_the_advanced_copy() {
             }
         }
     }
-    assert_eq!(found, 37);
+    // With the two modifiers of Amanamu, a lord of the Abyss, among the desecrated tables.
+    assert_eq!(found, 39);
     // A line whose stat the tables have under another tier is a mistake; a line the tables
     // don't have isn't: the lightning damage of the mace, copied before a patch changed
-    // its ranges, and the two modifiers of Amanamu, a lord of the Abyss, desecrated with
-    // ranges of their own.
-    assert_eq!(
-        missing,
-        [
-            vec![range(1.0, 4.0), range(46.0, 66.0)],
-            vec![range(40.0, 50.0)],
-            vec![range(13.0, 17.0)],
-        ]
-    );
+    // its ranges.
+    assert_eq!(missing, [vec![range(1.0, 4.0), range(46.0, 66.0)]]);
 }
 
 #[test]
@@ -207,7 +230,7 @@ fn modifier(affix: Option<Affix>, lines: &[&str]) -> Modifier {
 /// The tiers of `modifier` on `base_type`, in English.
 fn tiers(base_type: &str, modifier: &Modifier) -> Option<ModifierTiers> {
     let matches = modifier_stats(Language::English, modifier, None);
-    modifier_tiers(Language::English, base_type, modifier, &matches)
+    modifier_tiers(Language::English, base_type, None, modifier, &matches)
 }
 
 #[test]
@@ -283,6 +306,7 @@ fn the_value_of_a_line_without_number_is_divided_as_its_table_shows_it() {
             written,
         }],
         ranges: None,
+        tier: None,
     };
     let number = |copied| {
         find(
@@ -328,6 +352,81 @@ fn the_modifiers_of_the_time_lost_jewels_arent_in_the_tables_yet() {
 }
 
 #[test]
+fn a_desecrated_table_is_a_modifier_of_one_tier_of_its_own() {
+    // The cost efficiency of Kurgal, written twice with the same range on the maces.
+    let efficiency = modifier(
+        Some(Affix::Suffix),
+        &["12% increased Cost Efficiency of Attacks"],
+    );
+    // The flask charges of Kurgal (10–15) and of Ulaman (10–18) on the belts.
+    let charges = |value: u32| {
+        modifier(
+            Some(Affix::Prefix),
+            &[&format!(
+                "{value}% chance for Flasks you use to not consume Charges"
+            )],
+        )
+    };
+    let only = |base_type: &str, modifier: &Modifier| {
+        tiers(base_type, modifier).map(|tiers| {
+            let ranges = tiers.tier().map(|tier| tier.ranges.clone());
+            (tiers.single(), ranges)
+        })
+    };
+
+    assert_eq!(
+        only("Temple Maul", &efficiency),
+        Some((true, Some(vec![range(8.0, 15.0)])))
+    );
+    // Not a T1 and a T2 of one modifier: each its own tier, the first of the file on a tie.
+    assert_eq!(
+        only("Heavy Belt", &charges(12)),
+        Some((true, Some(vec![range(10.0, 15.0)])))
+    );
+    assert_eq!(
+        only("Heavy Belt", &charges(17)),
+        Some((true, Some(vec![range(10.0, 18.0)])))
+    );
+}
+
+#[test]
+fn of_two_tiers_as_good_the_one_the_advanced_copy_wrote_is_taken() {
+    // A desecrated table of one tier first, then an ordinary one whose T3 has the same range.
+    let tables = read(concat!(
+        r##"{"type": "Lord", "affix": "prefix", "domain": "desecrated", "lines": [{"template": "# to maximum Life"}], "##,
+        r#""spawn": [["helmet", 1]], "tiers": [{"level": 65, "ranges": [[[10, 20]]]}]}"#,
+        "\n",
+        r##"{"type": "Life", "affix": "prefix", "lines": [{"template": "# to maximum Life"}], "##,
+        r#""spawn": [["helmet", 1]], "tiers": [{"level": 1, "ranges": [[[10, 20]]]}, {"level": 30, "ranges": [[[21, 30]]]}, {"level": 60, "ranges": [[[31, 40]]]}]}"#
+    ));
+    let copied = |tier| Copied {
+        lines: vec![CopiedLine {
+            template: "# to maximum Life",
+            values: vec![15.0],
+            written: None,
+        }],
+        ranges: Some(vec![range(10.0, 20.0)]),
+        tier,
+    };
+    let found = |tier| {
+        find(
+            &tables,
+            TableAffix::Prefix,
+            &equipment(&["helmet"]),
+            &copied(tier),
+            Tie::Best,
+        )
+        .and_then(|tiers| Some((tiers.single(), tiers.tier()?.number)))
+    };
+
+    // A T3 isn't hidden by the modifier of one tier before it.
+    assert_eq!(found(Some(3)), Some((false, 3)));
+    assert_eq!(found(Some(1)), Some((true, 1)));
+    // Without the number, the first of the file.
+    assert_eq!(found(None), Some((true, 1)));
+}
+
+#[test]
 fn two_tables_with_the_same_lines_in_another_order_are_two_modifiers() {
     let table = |kind: &str, lines: [&str; 2], level: u32| {
         format!(
@@ -356,6 +455,7 @@ fn two_tables_with_the_same_lines_in_another_order_are_two_modifiers() {
             },
         ],
         ranges: None,
+        tier: None,
     };
 
     let tiers = find(
@@ -770,7 +870,7 @@ fn as_in_game_trade(item: &Item, base_type: &str) -> (Vec<Modifier>, Vec<Written
             continue;
         }
         let matches = modifier_stats(item.language(), modifier, None);
-        let tier = modifier_tiers(item.language(), base_type, modifier, &matches)
+        let tier = modifier_tiers(item.language(), base_type, None, modifier, &matches)
             .and_then(|tiers| Some(tiers.tier()?.number));
         let rolls = modifier.lines.iter().flat_map(|line| &line.rolls);
         let within = rolls
@@ -862,7 +962,8 @@ fn the_tiers_found_from_the_values_alone_are_those_of_the_advanced_copy() {
             }
         }
     }
-    assert_eq!(found, 43);
+    // With the 4 modifiers of Amanamu, a lord of the Abyss, among the desecrated tables.
+    assert_eq!(found, 47);
     assert_eq!(
         without_tier,
         [
@@ -871,19 +972,13 @@ fn the_tiers_found_from_the_values_alone_are_those_of_the_advanced_copy() {
             "+3 to Level of all Attack Skills",
             // Copied before a patch changed its ranges.
             "Adds 1 to 50 Lightning Damage",
-            // Modifiers of Amanamu, a lord of the Abyss, outside the tables.
-            "Rajoute 41% des Dégâts sous forme de Dégâts de Chaos",
-            "+14% aux Résistances au feu et au chaos",
             // A sanctified value out of its tier, 29(30)%.
             "29% reduced Attribute Requirements",
             "29% de Réduction du prérequis d'Attributs",
-            // Amanamu again.
-            "35% increased Presence Area of Effect",
-            "Votre Présence a 35% d'Augmentation de Zone d'effet",
         ]
     );
-    // The rarity of the runeforged crown rolls as both, the line of Amanamu after it
-    // unknown: the crown seems to have room for a third prefix.
+    // The rarity of the runeforged crown rolls as both: with two prefixes and two other
+    // suffixes, the suffix of Amanamu among them, it has room for either.
     assert_eq!(
         unknown_affix,
         [
@@ -956,7 +1051,7 @@ fn the_lines_read_again_from_their_values_are_the_modifiers_of_the_advanced_copy
             |modifiers: &[Modifier]| -> Vec<String> { modifiers.iter().flat_map(texts).collect() };
         assert_eq!(lines(&read), lines(&modifiers));
     }
-    assert_eq!(read_again, 43);
+    assert_eq!(read_again, 47);
 }
 
 #[test]
@@ -1063,6 +1158,7 @@ fn the_lines_of_a_tiara_read_again_keep_the_tiers_of_the_affix_in_doubt() {
     let tier = |affix, min, max| AffixTier {
         affix,
         tier: 1,
+        single: false,
         ranges: vec![range(min, max)],
     };
     let desecrated = item.modifiers().len() - 1;
@@ -1133,6 +1229,7 @@ fn part(affix: Affix, tiers: &[u32], ranges: &[(f64, f64)]) -> PartTier {
     PartTier {
         affix,
         tiers: tiers.to_vec(),
+        single: false,
         ranges: ranges.iter().map(|&(min, max)| range(min, max)).collect(),
     }
 }
@@ -1357,6 +1454,28 @@ fn a_line_that_adds_up_a_prefix_and_a_suffix_is_explicit_without_affix() {
 }
 
 #[test]
+fn a_line_of_a_lord_and_of_an_ordinary_suffix_keeps_the_tier_of_each() {
+    // `+1` is the prefix of Amanamu, the only one, or the T2 of the suffix of a cannon.
+    let grenades = trade_lines(&["Grenade Skills have +1 Cooldown Use"]);
+
+    let read = read_again("Trarthan Cannon", 82, &grenades, (3, 3));
+
+    let tier = |affix, tier, single| AffixTier {
+        affix,
+        tier,
+        single,
+        ranges: vec![range(1.0, 1.0)],
+    };
+    assert_eq!(
+        read.first().and_then(|modifier| modifier.doubt.clone()),
+        Some(TierDoubt::EitherAffix {
+            prefix: tier(Affix::Prefix, 1, true),
+            suffix: tier(Affix::Suffix, 2, false),
+        })
+    );
+}
+
+#[test]
 fn a_value_in_several_tiers_takes_the_worst_without_the_ranges_of_the_copy() {
     let tables = read(concat!(
         r##"{"type": "Life", "affix": "prefix", "lines": [{"template": "# to maximum Life"}], "##,
@@ -1369,6 +1488,7 @@ fn a_value_in_several_tiers_takes_the_worst_without_the_ranges_of_the_copy() {
             written: None,
         }],
         ranges: None,
+        tier: None,
     };
     let number = |tie| {
         find(
@@ -1406,11 +1526,12 @@ fn the_tiers_of_the_hybrid_of_a_split_are_those_of_its_part() {
             },
         ],
         ranges: None,
+        tier: None,
     };
     let base = equipment(&["shield"]);
     // The tier and its neighbour found, by their numbers.
     let tiers = |armour, whole: PartTier| {
-        hybrid_tiers(&tables, &base, copied(armour), 1, &whole).map(|tiers| {
+        hybrid_tiers(&tables, &base, copied(armour), (1, &whole), None).map(|tiers| {
             let number = |index: usize| tiers.tiers.get(index).map(|tier| tier.number);
             (number(tiers.found), tiers.neighbour.and_then(number))
         })
@@ -1434,6 +1555,55 @@ fn the_tiers_of_the_hybrid_of_a_split_are_those_of_its_part() {
         tiers(25.0, part(Affix::Prefix, &[3], &[(30.0, 39.0)])),
         None
     );
+}
+
+#[test]
+fn the_hybrid_of_a_split_is_the_first_table_whose_tiers_of_its_part_the_item_level_allows() {
+    // Two hybrids of the same lines, both holding the Armour, the first with its own range of
+    // Armour: it rolls its T1 from level 80, or gives the Stun Threshold another range.
+    let table = |kind: &str, level: u32, armour: u32, stun: u32| {
+        format!(
+            r##"{{"type": "{kind}", "affix": "prefix", "lines": [{{"template": "#% increased Armour"}}, {{"template": "# to Stun Threshold"}}], "spawn": [["shield", 1]], "tiers": [{{"level": {level}, "ranges": [[[20, {armour}]], [[{stun}, 39]]]}}]}}"##
+        )
+    };
+    let copied = || Copied {
+        lines: vec![
+            CopiedLine {
+                template: "#% increased Armour",
+                values: vec![25.0],
+                written: None,
+            },
+            CopiedLine {
+                template: "# to Stun Threshold",
+                values: vec![100.0],
+                written: None,
+            },
+        ],
+        ranges: None,
+        tier: None,
+    };
+    let whole = part(Affix::Prefix, &[1], &[(30.0, 39.0)]);
+    // The range of the Armour of the tier found, which tells the table.
+    let armour = |tables: &[String], item_level| {
+        let tables = read(&tables.join("\n"));
+        hybrid_tiers(
+            &tables,
+            &equipment(&["shield"]),
+            copied(),
+            (1, &whole),
+            item_level,
+        )
+        .and_then(|tiers| tiers.tier()?.ranges.first().copied())
+    };
+    let high = [table("First", 80, 35, 30), table("Second", 1, 30, 30)];
+    let other = [table("First", 1, 35, 31), table("Second", 1, 30, 30)];
+
+    // The tier of the first above the item level, as `splits` reads it: the second.
+    assert_eq!(armour(&high, Some(50)), Some(range(20.0, 30.0)));
+    // Without the item level, any tier.
+    assert_eq!(armour(&high, None), Some(range(20.0, 35.0)));
+    // The first gives the summed line other ranges: the second.
+    assert_eq!(armour(&other, Some(82)), Some(range(20.0, 30.0)));
 }
 
 #[test]

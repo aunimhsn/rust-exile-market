@@ -19,7 +19,12 @@ fn rows(item: &Item) -> Vec<Row<'_>> {
         None,
     );
     let stats = LineStats::new(item.language(), item.modifiers(), None);
-    let tiers = TierRolls::new(item.language(), item.modifiers(), base_type(item));
+    let tiers = TierRolls::new(
+        item.language(),
+        item.modifiers(),
+        base_type(item),
+        item.item_level(),
+    );
     super::rows(item, &lines, &stats, &tiers, base_type(item))
 }
 
@@ -272,7 +277,12 @@ fn a_modifier_of_one_tier_only_shows_its_ranges_without_tier() {
         None,
     );
     let stats = LineStats::new(flask.language(), flask.modifiers(), None);
-    let tiers = TierRolls::new(flask.language(), flask.modifiers(), base);
+    let tiers = TierRolls::new(
+        flask.language(),
+        flask.modifiers(),
+        base,
+        flask.item_level(),
+    );
     let flask = row_texts(super::rows(&flask, &lines, &stats, &tiers, base));
     assert_eq!(
         flask[flask.len() - 2..],
@@ -326,6 +336,24 @@ fn a_line_of_the_in_game_trade_that_can_be_a_prefix_or_a_suffix_shows_the_tier_o
             "■ 18% increased Rarity of Items found ≥16 [T1 16–19 AffixPrefix / T1 15–18 AffixSuffix]",
             "Trade copy note",
         ]
+    );
+}
+
+#[test]
+fn a_line_that_can_be_a_modifier_of_one_tier_only_writes_no_tier_number_on_its_row() {
+    // `+1` is the prefix of Amanamu, the only one, or the T2 of the suffix of a cannon.
+    let cannon = parse(
+        "Item Class: Crossbows\nRarity: Rare\nDoom Bolt\nTrarthan Cannon\n--------\n\
+         Item Level: 82\n--------\nGrenade Skills have +1 Cooldown Use\n",
+    );
+
+    let texts = texts(&read_again(cannon));
+    assert!(
+        texts.contains(
+            &"■ Grenade Skills have +1 Cooldown Use ≥1 [1 AffixPrefix / T2 1 AffixSuffix]"
+                .to_owned()
+        ),
+        "{texts:?}"
     );
 }
 
@@ -1901,6 +1929,7 @@ fn the_active_filters_count_the_choices_of_the_player() {
         crossbow.language(),
         crossbow.modifiers(),
         base_type(&crossbow),
+        crossbow.item_level(),
     );
     let stats = Stats::new(&crossbow, &lines, &line_stats, &tiers, base_type(&crossbow));
     let keys: Vec<FilterKey> = stats
@@ -2218,6 +2247,7 @@ fn part(affix: Affix) -> PartTier {
     PartTier {
         affix,
         tiers: vec![1],
+        single: false,
         ranges: vec![Range { min: 1.0, max: 2.0 }],
     }
 }
@@ -2299,6 +2329,7 @@ fn a_modifier_counts_the_affixes_it_takes_in_the_room_of_its_item() {
     let tier = AffixTier {
         affix: Affix::Prefix,
         tier: 1,
+        single: false,
         ranges: Vec::new(),
     };
 

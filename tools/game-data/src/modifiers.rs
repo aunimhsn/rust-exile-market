@@ -1,7 +1,7 @@
 //! The modifier tables, from the RePoE fork (`mods.json`, `base_items.json` and
 //! `stat_translations/stat_descriptions.json`): the tiers of each prefix and suffix that rolls
-//! on the equipment, the jewels, the flasks and the charms, and the tags of each base that
-//! tell where a modifier rolls.
+//! on the equipment, the jewels, the flasks and the charms, also those a desecration reveals
+//! (the lords of the Abyss), and the tags of each base that tell where a modifier rolls.
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
@@ -13,9 +13,17 @@ use crate::Result;
 /// written.
 pub const EQUIPMENT: &str = "item";
 
-/// The domains of the modifiers kept: the equipment, the jewels, the flasks and the charms;
-/// each one a domain the application knows (`Domain` in `src/game_data/bases.rs`).
-const DOMAINS: [&str; 3] = [EQUIPMENT, "misc", "flask"];
+/// The domain of the modifiers of the jewels.
+const JEWELS: &str = "misc";
+
+/// The domain of the modifiers a desecration reveals on the equipment and the jewels: those of
+/// the lords of the Abyss (Amanamu, Kurgal, Ulaman), of one tier each.
+const DESECRATED: &str = "desecrated";
+
+/// The domains of the bases kept, and of their modifiers: the equipment, the jewels, the flasks
+/// and the charms; each one a domain the application knows (`Domain` in
+/// `src/game_data/bases.rs`), as is [`DESECRATED`], the domain of modifiers only.
+const DOMAINS: [&str; 3] = [EQUIPMENT, JEWELS, "flask"];
 
 /// Whether `tag` is one of the Time-Lost jewels: their modifiers are written by the game
 /// within `Small Passive Skills in Radius also grant …` or `Notable Passive Skills…`, which
@@ -91,7 +99,8 @@ pub struct Modifier {
     kind: String,
     affix: String,
     /// The domain of the bases it rolls on, written when it isn't `item`: a tag of every base,
-    /// `default`, rolls on the bases of its domain only (the charges of the flasks).
+    /// `default`, rolls on the bases of its domain only (the charges of the flasks); a
+    /// desecrated modifier rolls on the equipment and the jewels.
     #[serde(skip_serializing_if = "is_item")]
     domain: String,
     lines: Vec<Line>,
@@ -124,9 +133,16 @@ fn is_one(value: &i64) -> bool {
     *value == 1
 }
 
-/// Whether `domain` is one of the modifiers kept, which the application knows.
+/// Whether `domain` is one of the bases kept, which the application knows.
 pub fn is_kept(domain: &str) -> bool {
     DOMAINS.contains(&domain)
+}
+
+/// Whether a modifier of `domain` rolls on the bases of `base_domain`: those of its domain, the
+/// equipment and the jewels for a desecrated one (`Domain::rolls_on` in
+/// `src/game_data/bases.rs`).
+fn rolls_on(domain: &str, base_domain: &str) -> bool {
+    domain == base_domain || (domain == DESECRATED && [EQUIPMENT, JEWELS].contains(&base_domain))
 }
 
 /// Whether `domain` is that of the equipment, left unwritten.
@@ -209,7 +225,7 @@ pub fn reduce(
     }
     let mut grouped: BTreeMap<Key, Vec<Tier>> = BTreeMap::new();
     for (id, modifier) in modifiers {
-        let rolls = DOMAINS.contains(&modifier.domain.as_str())
+        let rolls = (is_kept(&modifier.domain) || modifier.domain == DESECRATED)
             && ["prefix", "suffix"].contains(&modifier.generation_type.as_str())
             && !modifier.is_essence_only
             && modifier
@@ -240,18 +256,22 @@ pub fn reduce(
         .values()
         .filter(|base| base.release_state == "released")
         .collect();
-    let tags_of_bases: BTreeSet<&String> = released.iter().flat_map(|base| &base.tags).collect();
     let mut tables = Vec::new();
     let mut unknown_lines = BTreeSet::new();
     for ((kind, affix, domain, lines, spawn), mut tiers) in grouped {
+        let tags_of_bases: BTreeSet<&String> = released
+            .iter()
+            .filter(|base| rolls_on(&domain, &base.domain))
+            .flat_map(|base| &base.tags)
+            .collect();
         // Only the tags of the bases matter, in their order: the first one a base has decides.
         let spawn: Vec<(String, u32)> = spawn
             .into_iter()
             .filter(|spawn| tags_of_bases.contains(&spawn.tag))
             .map(|spawn| (spawn.tag, spawn.weight))
             .collect();
-        // A modifier that rolls on no released base, e.g. one of Path of Exile left in the
-        // files.
+        // A modifier that rolls on no released base of its domains, e.g. one of Path of Exile
+        // left in the files, or a desecrated one of the waystones.
         if !spawn.iter().any(|&(_, weight)| weight > 0) {
             continue;
         }
@@ -274,6 +294,9 @@ pub fn reduce(
     for line in unknown_lines {
         println!("Modifier line without template, its modifier left out: {line}");
     }
+    // The desecrated tables last: of two tables that hold a copied modifier as well, the
+    // application takes the first of the file, the ordinary one.
+    tables.sort_by_key(|table| table.domain == DESECRATED);
     let base_tags = base_tags(&released, &tables);
     Ok((tables, base_tags))
 }
@@ -324,7 +347,17 @@ fn lines(
     let mut written = Vec::new();
     for stat in &modifier.stats {
         let Some(&index) = by_stat.get(stat.id.as_str()) else {
-            // A stat the game doesn't write, e.g. `dummy_stat_display_nothing`.
+            // A stat the game doesn't write, e.g. `dummy_stat_display_nothing`; one that rolls
+            // is written by a translation RePoE doesn't have (`minion_area_of_effect_+%` of a
+            // hybrid of the Abyss on the jewels), whose line can't be found.
+            if stat.min != stat.max {
+                lines.push(Line {
+                    template: stat.id.clone(),
+                    divisor: 1,
+                    known: false,
+                });
+                ranges.push(Vec::new());
+            }
             continue;
         };
         let Some(translation) = translations.get(index) else {
@@ -722,6 +755,78 @@ mod tests {
         assert_eq!(domains, [Some(serde_json::json!("flask")), None]);
     }
 
+    #[test]
+    fn a_desecrated_table_rolls_on_the_equipment_and_the_jewels_after_the_ordinary_ones() {
+        let bases = r#"{
+            "Ring": {"domain": "item", "name": "Ring", "release_state": "released", "tags": ["ring", "default"]},
+            "Ruby": {"domain": "misc", "name": "Ruby", "release_state": "released", "tags": ["strjewel", "default"]},
+            "Waystone": {"domain": "area", "name": "Waystone", "release_state": "released", "tags": ["map", "default"]}
+        }"#;
+        let desecrated = |spawn: &str| {
+            modifier(
+                "Leech",
+                65,
+                spawn,
+                r#"[{"id": "life_leech_+%", "min": 12, "max": 20}]"#,
+            )
+            .replace(r#""domain": "item""#, r#""domain": "desecrated""#)
+        };
+        let modifiers = format!(
+            // The tag of a lord comes after `default`, on no base.
+            r#"{{"Abyss": {}, "Lightless": {}, "MapAbyss": {}, "Ordinary": {}}}"#,
+            desecrated(
+                r#"[{"tag": "ring", "weight": 1}, {"tag": "default", "weight": 0}, {"tag": "kurgal_mod", "weight": 1}]"#
+            ),
+            desecrated(r#"[{"tag": "strjewel", "weight": 1}, {"tag": "default", "weight": 0}]"#),
+            desecrated(r#"[{"tag": "map", "weight": 1}, {"tag": "default", "weight": 0}]"#),
+            modifier(
+                "Leech",
+                1,
+                r#"[{"tag": "ring", "weight": 1}, {"tag": "default", "weight": 0}]"#,
+                r#"[{"id": "life_leech_+%", "min": 5, "max": 10}]"#
+            ),
+        );
+        let translations = r#"[{"ids": ["life_leech_+%"], "English": [{"string": "{0}% increased amount of Life Leeched", "index_handlers": [[]]}], "hidden": null}]"#;
+
+        let (tables, tags) = tables(
+            &modifiers,
+            bases,
+            translations,
+            &[(
+                "#% increased amount of Life Leeched",
+                "#% increased amount of Life Leeched",
+            )],
+        );
+
+        let spawns: Vec<_> = tables
+            .as_array()
+            .expect("tables")
+            .iter()
+            .map(|table| (table.get("domain").cloned(), table["spawn"].clone()))
+            .collect();
+        let desecrated = Some(serde_json::json!("desecrated"));
+        // Without the tag of the lord, nor the table of the waystones, a base of another
+        // domain.
+        assert_eq!(
+            spawns,
+            [
+                (None, serde_json::json!([["ring", 1], ["default", 0]])),
+                (
+                    desecrated.clone(),
+                    serde_json::json!([["ring", 1], ["default", 0]])
+                ),
+                (
+                    desecrated,
+                    serde_json::json!([["strjewel", 1], ["default", 0]])
+                ),
+            ]
+        );
+        assert_eq!(
+            tags.get("Ruby").map(|spawn| spawn.tags.clone()),
+            Some(vec!["strjewel".to_owned(), "default".to_owned()])
+        );
+    }
+
     /// The lines and the tiers of the one table of a modifier of `stats`, written by
     /// `translation`, with `templates`.
     fn one_table(
@@ -995,6 +1100,46 @@ mod tests {
         let (tables, _) = tables(&modifiers, BASES, translations, &[]);
 
         assert_eq!(tables, serde_json::json!([]));
+    }
+
+    #[test]
+    fn a_modifier_with_a_stat_that_rolls_without_translation_is_left_out() {
+        let ring = r#"[{"tag": "ring", "weight": 1}]"#;
+        let modifiers = format!(
+            r#"{{"Hybrid": {}, "Flag": {}}}"#,
+            modifier(
+                "MinionAreaAndLife",
+                1,
+                ring,
+                r#"[{"id": "minion_area_of_effect_+%", "min": 3, "max": 6}, {"id": "minion_maximum_life_+%", "min": 4, "max": 8}]"#
+            ),
+            modifier(
+                "MinionLife",
+                1,
+                ring,
+                r#"[{"id": "dummy_stat_display_nothing", "min": 1, "max": 1}, {"id": "minion_maximum_life_+%", "min": 5, "max": 15}]"#
+            ),
+        );
+        let translations = r#"[{"ids": ["minion_maximum_life_+%"], "English": [{"string": "Minions have {0}% increased maximum Life", "index_handlers": [[]]}], "hidden": null}]"#;
+
+        let (tables, _) = tables(
+            &modifiers,
+            BASES,
+            translations,
+            &[(
+                "Minions have #% increased maximum Life",
+                "Minions have #% increased maximum Life",
+            )],
+        );
+
+        // A stat without translation that doesn't roll is left out of its lines only.
+        let types: Vec<_> = tables
+            .as_array()
+            .expect("tables")
+            .iter()
+            .map(|table| table["type"].clone())
+            .collect();
+        assert_eq!(types, [serde_json::json!("MinionLife")]);
     }
 
     #[test]

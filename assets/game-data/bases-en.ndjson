@@ -23,7 +23,7 @@
 {"name":"Ancestral Mail","category":"Body Armour","tags":["str_dex_armour","body_armour","armour","default"]}
 {"name":"Ancestral Tiara","category":"Helmet","tags":["int_armour","helmet","armour","default"]}
 {"name":"Anchorite Garb","category":"Body Armour","tags":["dex_int_armour","body_armour","armour","default"]}
-{"name":"Ancient Buckler","category":"Buckler","tags":["dex_armour","shield","armour","default"]}
+{"name":"Ancient Buckler","category":"Buckler","tags":["dex_armour","dex_shield","shield","armour","default"]}
 {"name":"Ancient Cuffs","category":"Gloves","tags":["str_int_armour","gloves","armour","default"]}
 {"name":"Ancient Greatblade","category":"Two Hand Sword","tags":["sword","two_hand_weapon","weapon","default"]}
 {"name":"Ancient Leggings","category":"Boots","tags":["str_int_armour","boots","armour","default"]}
@@ -40,7 +40,7 @@
 {"name":"Arcing Quarterstaff","category":"Warstaff","tags":["warstaff","two_hand_weapon","weapon","default"]}
 {"name":"Armoured Cap","category":"Helmet","tags":["dex_armour","helmet","armour","default"]}
 {"name":"Armoured Vest","category":"Body Armour","tags":["dex_armour","body_armour","armour","default"]}
-{"name":"Array Buckler","category":"Buckler","tags":["dex_armour","shield","armour","default"]}
+{"name":"Array Buckler","category":"Buckler","tags":["dex_armour","dex_shield","shield","armour","default"]}
 {"name":"Arrayed Focus","category":"Focus","tags":["int_armour","focus","armour","default"]}
 {"name":"Artillery Bow","category":"Bow","tags":["bow","ranged","two_hand_weapon","weapon","default"]}
 {"name":"Ascetic Garb","category":"Body Armour","tags":["dex_int_armour","body_armour","armour","default"]}
@@ -81,7 +81,7 @@
 {"name":"Blacksteel Sabatons","category":"Boots","tags":["str_dex_armour","boots","armour","default"]}
 {"name":"Blacksteel Tower Shield","category":"Shield","tags":["str_armour","str_shield","shield","armour","default"]}
 {"name":"Bladed Quarterstaff","category":"Warstaff","tags":["warstaff","two_hand_weapon","weapon","default"]}
-{"name":"Bladeguard Buckler","category":"Buckler","tags":["dex_armour","shield","armour","default"]}
+{"name":"Bladeguard Buckler","category":"Buckler","tags":["dex_armour","dex_shield","shield","armour","default"]}
 {"name":"Blazon Crest Shield","category":"Shield","tags":["str_int_armour","str_int_shield","shield","armour","default"]}
 {"name":"Bleak Crossbow","category":"Crossbow","tags":["crossbow","ranged","two_hand_weapon","weapon","default"]}
 {"name":"Blessed Claymore","category":"Two Hand Sword","tags":["sword","two_hand_weapon","weapon","default"]}
@@ -147,7 +147,7 @@
 {"name":"Cleric Vestments","category":"Body Armour","tags":["str_int_armour","body_armour","armour","default"]}
 {"name":"Cloaked Mail","category":"Body Armour","tags":["str_dex_armour","body_armour","armour","default"]}
 {"name":"Closed Helm","category":"Helmet","tags":["str_dex_armour","helmet","armour","default"]}
-{"name":"Coiled Buckler","category":"Buckler","tags":["dex_armour","shield","armour","default"]}
+{"name":"Coiled Buckler","category":"Buckler","tags":["dex_armour","dex_shield","shield","armour","default"]}
 {"name":"Colossal Life Flask","category":"Flask","domain":"flask","tags":["life_flask","default"]}
 {"name":"Colossal Mana Flask","category":"Flask","domain":"flask","tags":["mana_flask","default"]}
 {"name":"Commander Gauntlets","category":"Gloves","tags":["str_dex_armour","gloves","armour","default"]}
@@ -203,7 +203,7 @@
 {"name":"Deerstalker Hood","category":"Helmet","tags":["dex_armour","helmet","armour","default"]}
 {"name":"Dekharan Crest Shield","category":"Shield","tags":["str_int_armour","str_int_shield","shield","armour","default"]}
 {"name":"Descry Crest Shield","category":"Shield","tags":["str_int_armour","str_int_shield","shield","armour","default"]}
-{"name":"Desert Buckler","category":"Buckler","tags":["dex_armour","shield","armour","default"]}
+{"name":"Desert Buckler","category":"Buckler","tags":["dex_armour","dex_shield","shield","armour","default"]}
 {"name":"Desert Cap","category":"Helmet","tags":["dex_armour","helmet","armour","default"]}
 {"name":"Desert Circlet","category":"Helmet","tags":["int_armour","helmet","armour","default"]}
 {"name":"Desolate Crossbow","category":"Crossbow","tags":["crossbow","ranged","two_hand_weapon","weapon","default"]}
@@ -230,7 +230,7 @@
 {"name":"Dusk Amulet","category":"Amulet","tags":["amulet","default"]}
 {"name":"Dusk Ring","category":"Ring","tags":["ring","default"]}
 {"name":"Dyad Crossbow","category":"Crossbow","tags":["crossbow","ranged","two_hand_weapon","weapon","default"]}
-{"name":"Edged Buckler","category":"Buckler","tags":["dex_armour","shield","armour","default"]}
+{"name":"Edged Buckler","category":"Buckler","tags":["dex_armour","dex_shield","shield","armour","default"]}
 {"name":"Effigial Tower Shield","category":"Shield","tags":["str_armour","str_shield","shield","armour","default"]}
 {"name":"Elegant Crossbow","category":"Crossbow","tags":["crossbow","ranged","two_hand_weapon","weapon","default"]}
 {"name":"Elegant Glaive","category":"Two Hand Axe","tags":["axe","two_hand_weapon","weapon","default"]}
@@ -361,7 +361,7 @@
 {"name":"Guardian Bow","category":"Bow","tags":["bow","ranged","two_hand_weapon","weapon","default"]}
 {"name":"Guardian Quarterstaff","category":"Warstaff","tags":["warstaff","two_hand_weapon","weapon","default"]}
 {"name":"Guardian Spear","category":"Spear","tags":["spear","one_hand_weapon","weapon","default"]}
-{"name":"Gutspike Buckler","category":"Buckler","tags":["dex_armour","shield","armour","default"]}
+{"name":"Gutspike Buckler","category":"Buckler","tags":["dex_armour","dex_shield","shield","armour","default"]}
 {"name":"Hallowed Crown","category":"Helmet","tags":["str_int_armour","helmet","armour","default"]}
 {"name":"Hallowed Focus","category":"Focus","tags":["int_armour","focus","armour","default"]}
 {"name":"Hardwood Spear","category":"Spear","tags":["spear","one_hand_weapon","weapon","default"]}
@@ -401,7 +401,7 @@
 {"name":"Intricate Crest Shield","category":"Shield","tags":["str_int_armour","str_int_shield","shield","armour","default"]}
 {"name":"Intricate Gloves","category":"Gloves","tags":["int_armour","gloves","armour","default"]}
 {"name":"Invoking Belt","category":"Belt","tags":["belt","default"]}
-{"name":"Iron Buckler","category":"Buckler","tags":["dex_armour","shield","armour","default"]}
+{"name":"Iron Buckler","category":"Buckler","tags":["dex_armour","dex_shield","shield","armour","default"]}
 {"name":"Iron Crown","category":"Helmet","tags":["str_int_armour","helmet","armour","default"]}
 {"name":"Iron Cuirass","category":"Body Armour","tags":["str_armour","body_armour","armour","default"]}
 {"name":"Iron Flail","category":"Flail","tags":["flail","one_hand_weapon","weapon","default"]}
@@ -422,7 +422,7 @@
 {"name":"Jagged Greataxe","category":"Two Hand Axe","tags":["axe","two_hand_weapon","weapon","default"]}
 {"name":"Jagged Spear","category":"Spear","tags":["spear","one_hand_weapon","weapon","default"]}
 {"name":"Jewelled Gloves","category":"Gloves","tags":["int_armour","gloves","armour","default"]}
-{"name":"Jingling Buckler","category":"Buckler","tags":["dex_armour","shield","armour","default"]}
+{"name":"Jingling Buckler","category":"Buckler","tags":["dex_armour","dex_shield","shield","armour","default"]}
 {"name":"Jingling Crest Shield","category":"Shield","tags":["str_int_armour","str_int_shield","shield","armour","default"]}
 {"name":"Jingling Focus","category":"Focus","tags":["int_armour","focus","armour","default"]}
 {"name":"Juggernaut Plate","category":"Body Armour","tags":["str_armour","body_armour","armour","default"]}
@@ -441,14 +441,14 @@
 {"name":"Laced Sandals","category":"Boots","tags":["int_armour","boots","armour","default"]}
 {"name":"Lamellar Mail","category":"Body Armour","tags":["str_dex_armour","body_armour","armour","default"]}
 {"name":"Lament Amulet","category":"Amulet","tags":["amulet","default"]}
-{"name":"Laminate Buckler","category":"Buckler","tags":["dex_armour","shield","armour","default"]}
+{"name":"Laminate Buckler","category":"Buckler","tags":["dex_armour","dex_shield","shield","armour","default"]}
 {"name":"Lapis Amulet","category":"Amulet","tags":["amulet","default"]}
 {"name":"Lattice Sandals","category":"Boots","tags":["int_armour","boots","armour","default"]}
 {"name":"Layered Gauntlets","category":"Gloves","tags":["str_dex_armour","gloves","armour","default"]}
 {"name":"Layered Vest","category":"Body Armour","tags":["dex_armour","body_armour","armour","default"]}
 {"name":"Lazuli Ring","category":"Ring","tags":["ring","default"]}
 {"name":"Leaden Greathammer","category":"Two Hand Mace","tags":["mace","two_hand_weapon","weapon","default"]}
-{"name":"Leather Buckler","category":"Buckler","tags":["dex_armour","shield","armour","default"]}
+{"name":"Leather Buckler","category":"Buckler","tags":["dex_armour","dex_shield","shield","armour","default"]}
 {"name":"Leather Vest","category":"Body Armour","tags":["dex_armour","body_armour","armour","default"]}
 {"name":"Leatherbound Hood","category":"Helmet","tags":["dex_armour","helmet","armour","default"]}
 {"name":"Lesser Life Flask","category":"Flask","domain":"flask","tags":["life_flask","default"]}
@@ -505,7 +505,7 @@
 {"name":"Noble Greathelm","category":"Helmet","tags":["str_armour","helmet","armour","default"]}
 {"name":"Noble Sabatons","category":"Boots","tags":["str_dex_armour","boots","armour","default"]}
 {"name":"Noble Tower Shield","category":"Shield","tags":["str_armour","str_shield","shield","armour","default"]}
-{"name":"Oak Buckler","category":"Buckler","tags":["dex_armour","shield","armour","default"]}
+{"name":"Oak Buckler","category":"Buckler","tags":["dex_armour","dex_shield","shield","armour","default"]}
 {"name":"Oak Greathammer","category":"Two Hand Mace","tags":["mace","two_hand_weapon","weapon","default"]}
 {"name":"Oak Mask","category":"Helmet","tags":["dex_int_armour","helmet","armour","default"]}
 {"name":"Obliterator Bow","category":"Bow","tags":["bow","ranged","two_hand_weapon","weapon","default"]}
@@ -520,7 +520,7 @@
 {"name":"Opulent Gloves","category":"Gloves","tags":["int_armour","gloves","armour","default"]}
 {"name":"Orichalcum Spear","category":"Spear","tags":["spear","one_hand_weapon","weapon","default"]}
 {"name":"Ornate Belt","category":"Belt","tags":["belt","default"]}
-{"name":"Ornate Buckler","category":"Buckler","tags":["dex_armour","shield","armour","default"]}
+{"name":"Ornate Buckler","category":"Buckler","tags":["dex_armour","dex_shield","shield","armour","default"]}
 {"name":"Ornate Cuffs","category":"Gloves","tags":["str_int_armour","gloves","armour","default"]}
 {"name":"Ornate Gauntlets","category":"Gloves","tags":["str_dex_armour","gloves","armour","default"]}
 {"name":"Ornate Greaves","category":"Boots","tags":["str_armour","boots","armour","default"]}
@@ -528,7 +528,7 @@
 {"name":"Ornate Plate","category":"Body Armour","tags":["str_armour","body_armour","armour","default"]}
 {"name":"Ornate Ringmail","category":"Body Armour","tags":["str_int_armour","body_armour","armour","default"]}
 {"name":"Padded Leggings","category":"Boots","tags":["str_int_armour","boots","armour","default"]}
-{"name":"Painted Buckler","category":"Buckler","tags":["dex_armour","shield","armour","default"]}
+{"name":"Painted Buckler","category":"Buckler","tags":["dex_armour","dex_shield","shield","armour","default"]}
 {"name":"Painted Crest Shield","category":"Shield","tags":["str_int_armour","str_int_shield","shield","armour","default"]}
 {"name":"Painted Crossbow","category":"Crossbow","tags":["crossbow","ranged","two_hand_weapon","weapon","default"]}
 {"name":"Painted Tower Shield","category":"Shield","tags":["str_armour","str_shield","shield","armour","default"]}
@@ -539,7 +539,7 @@
 {"name":"Patchwork Vest","category":"Body Armour","tags":["dex_armour","body_armour","armour","default"]}
 {"name":"Pathfinder Coat","category":"Body Armour","tags":["dex_armour","body_armour","armour","default"]}
 {"name":"Pauascale Gloves","category":"Gloves","tags":["int_armour","gloves","armour","default"]}
-{"name":"Pearl Buckler","category":"Buckler","tags":["dex_armour","shield","armour","default"]}
+{"name":"Pearl Buckler","category":"Buckler","tags":["dex_armour","dex_shield","shield","armour","default"]}
 {"name":"Pearl Ring","category":"Ring","tags":["ring","default"]}
 {"name":"Pearlescent Amulet","category":"Amulet","tags":["amulet","default"]}
 {"name":"Pelage Targe","category":"Shield","tags":["str_dex_armour","str_dex_shield","shield","armour","default"]}
@@ -554,7 +554,7 @@
 {"name":"Pilgrim Vestments","category":"Body Armour","tags":["str_int_armour","body_armour","armour","default"]}
 {"name":"Plate Belt","category":"Belt","tags":["belt","default"]}
 {"name":"Plate Gauntlets","category":"Gloves","tags":["str_dex_armour","gloves","armour","default"]}
-{"name":"Plated Buckler","category":"Buckler","tags":["dex_armour","shield","armour","default"]}
+{"name":"Plated Buckler","category":"Buckler","tags":["dex_armour","dex_shield","shield","armour","default"]}
 {"name":"Plated Greaves","category":"Boots","tags":["str_armour","boots","armour","default"]}
 {"name":"Plated Mace","category":"One Hand Mace","tags":["mace","one_hand_weapon","weapon","default"]}
 {"name":"Plated Mitts","category":"Gloves","tags":["str_armour","gloves","armour","default"]}
@@ -598,12 +598,12 @@
 {"name":"Revered Vestments","category":"Body Armour","tags":["str_int_armour","body_armour","armour","default"]}
 {"name":"Rhoahide Coat","category":"Body Armour","tags":["dex_armour","body_armour","armour","default"]}
 {"name":"Rider Bow","category":"Bow","tags":["bow","ranged","two_hand_weapon","weapon","default"]}
-{"name":"Ridged Buckler","category":"Buckler","tags":["dex_armour","shield","armour","default"]}
+{"name":"Ridged Buckler","category":"Buckler","tags":["dex_armour","dex_shield","shield","armour","default"]}
 {"name":"Riding Coat","category":"Body Armour","tags":["dex_armour","body_armour","armour","default"]}
 {"name":"Ring","category":"Ring","tags":["ring","default"]}
 {"name":"Ring Flail","category":"Flail","tags":["flail","one_hand_weapon","weapon","default"]}
 {"name":"Ring Mail","category":"Body Armour","tags":["str_dex_armour","body_armour","armour","default"]}
-{"name":"Ringed Buckler","category":"Buckler","tags":["dex_armour","shield","armour","default"]}
+{"name":"Ringed Buckler","category":"Buckler","tags":["dex_armour","dex_shield","shield","armour","default"]}
 {"name":"Ringmail Gauntlets","category":"Gloves","tags":["str_dex_armour","gloves","armour","default"]}
 {"name":"Rippled Greatsword","category":"Two Hand Sword","tags":["sword","two_hand_weapon","weapon","default"]}
 {"name":"River Raiment","category":"Body Armour","tags":["int_armour","body_armour","armour","default"]}
@@ -631,7 +631,7 @@
 {"name":"Runeforged Ancestral Mail","category":"Body Armour","tags":["str_dex_armour","body_armour","armour","default"]}
 {"name":"Runeforged Ancestral Tiara","category":"Helmet","tags":["int_armour","helmet","armour","default"]}
 {"name":"Runeforged Anchorite Garb","category":"Body Armour","tags":["dex_int_armour","body_armour","armour","default"]}
-{"name":"Runeforged Ancient Buckler","category":"Buckler","tags":["dex_armour","shield","armour","default"]}
+{"name":"Runeforged Ancient Buckler","category":"Buckler","tags":["dex_armour","dex_shield","shield","armour","default"]}
 {"name":"Runeforged Ancient Cuffs","category":"Gloves","tags":["str_int_armour","gloves","armour","default"]}
 {"name":"Runeforged Ancient Mitts","category":"Gloves","tags":["str_armour","gloves","armour","default"]}
 {"name":"Runeforged Antler Focus","category":"Focus","tags":["int_armour","focus","armour","default"]}
@@ -651,7 +651,7 @@
 {"name":"Runeforged Blacksteel Crest Shield","category":"Shield","tags":["str_int_armour","str_int_shield","shield","armour","default"]}
 {"name":"Runeforged Blacksteel Gauntlets","category":"Gloves","tags":["str_dex_armour","gloves","armour","default"]}
 {"name":"Runeforged Blacksteel Sabatons","category":"Boots","tags":["str_dex_armour","boots","armour","default"]}
-{"name":"Runeforged Bladeguard Buckler","category":"Buckler","tags":["dex_armour","shield","armour","default"]}
+{"name":"Runeforged Bladeguard Buckler","category":"Buckler","tags":["dex_armour","dex_shield","shield","armour","default"]}
 {"name":"Runeforged Blazon Crest Shield","category":"Shield","tags":["str_int_armour","str_int_shield","shield","armour","default"]}
 {"name":"Runeforged Bolstered Mitts","category":"Gloves","tags":["str_armour","gloves","armour","default"]}
 {"name":"Runeforged Bone Raiment","category":"Body Armour","tags":["int_armour","body_armour","armour","default"]}
@@ -712,7 +712,7 @@
 {"name":"Runeforged Death Mantle","category":"Body Armour","tags":["str_int_armour","body_armour","armour","default"]}
 {"name":"Runeforged Deerstalker Hood","category":"Helmet","tags":["dex_armour","helmet","armour","default"]}
 {"name":"Runeforged Dekharan Crest Shield","category":"Shield","tags":["str_int_armour","str_int_shield","shield","armour","default"]}
-{"name":"Runeforged Desert Buckler","category":"Buckler","tags":["dex_armour","shield","armour","default"]}
+{"name":"Runeforged Desert Buckler","category":"Buckler","tags":["dex_armour","dex_shield","shield","armour","default"]}
 {"name":"Runeforged Desert Cap","category":"Helmet","tags":["dex_armour","helmet","armour","default"]}
 {"name":"Runeforged Detailed Mitts","category":"Gloves","tags":["str_armour","gloves","armour","default"]}
 {"name":"Runeforged Divine Crown","category":"Helmet","tags":["str_int_armour","helmet","armour","default"]}
@@ -724,7 +724,7 @@
 {"name":"Runeforged Dualstring Bow","category":"Bow","tags":["bow","ranged","two_hand_weapon","weapon","default"]}
 {"name":"Runeforged Dunerunner Sandals","category":"Boots","tags":["int_armour","boots","armour","default"]}
 {"name":"Runeforged Dyad Crossbow","category":"Crossbow","tags":["crossbow","ranged","two_hand_weapon","weapon","default"]}
-{"name":"Runeforged Edged Buckler","category":"Buckler","tags":["dex_armour","shield","armour","default"]}
+{"name":"Runeforged Edged Buckler","category":"Buckler","tags":["dex_armour","dex_shield","shield","armour","default"]}
 {"name":"Runeforged Effigial Tower Shield","category":"Shield","tags":["str_armour","str_shield","shield","armour","default"]}
 {"name":"Runeforged Elegant Greathelm","category":"Helmet","tags":["str_armour","helmet","armour","default"]}
 {"name":"Runeforged Elegant Greaves","category":"Boots","tags":["str_armour","boots","armour","default"]}
@@ -781,7 +781,7 @@
 {"name":"Runeforged Grim Gloves","category":"Gloves","tags":["int_armour","gloves","armour","default"]}
 {"name":"Runeforged Grinning Mask","category":"Helmet","tags":["dex_int_armour","helmet","armour","default"]}
 {"name":"Runeforged Guarded Helm","category":"Helmet","tags":["str_dex_armour","helmet","armour","default"]}
-{"name":"Runeforged Gutspike Buckler","category":"Buckler","tags":["dex_armour","shield","armour","default"]}
+{"name":"Runeforged Gutspike Buckler","category":"Buckler","tags":["dex_armour","dex_shield","shield","armour","default"]}
 {"name":"Runeforged Hallowed Crown","category":"Helmet","tags":["str_int_armour","helmet","armour","default"]}
 {"name":"Runeforged Hallowed Focus","category":"Focus","tags":["int_armour","focus","armour","default"]}
 {"name":"Runeforged Hardwood Spear","category":"Spear","tags":["spear","one_hand_weapon","weapon","default"]}
@@ -804,7 +804,7 @@
 {"name":"Runeforged Inquisitor Crown","category":"Helmet","tags":["str_int_armour","helmet","armour","default"]}
 {"name":"Runeforged Intricate Crest Shield","category":"Shield","tags":["str_int_armour","str_int_shield","shield","armour","default"]}
 {"name":"Runeforged Intricate Gloves","category":"Gloves","tags":["int_armour","gloves","armour","default"]}
-{"name":"Runeforged Iron Buckler","category":"Buckler","tags":["dex_armour","shield","armour","default"]}
+{"name":"Runeforged Iron Buckler","category":"Buckler","tags":["dex_armour","dex_shield","shield","armour","default"]}
 {"name":"Runeforged Iron Crown","category":"Helmet","tags":["str_int_armour","helmet","armour","default"]}
 {"name":"Runeforged Iron Cuirass","category":"Body Armour","tags":["str_armour","body_armour","armour","default"]}
 {"name":"Runeforged Iron Greaves","category":"Boots","tags":["str_armour","boots","armour","default"]}
@@ -813,7 +813,7 @@
 {"name":"Runeforged Itinerant Jacket","category":"Body Armour","tags":["dex_int_armour","body_armour","armour","default"]}
 {"name":"Runeforged Jade Tiara","category":"Helmet","tags":["int_armour","helmet","armour","default"]}
 {"name":"Runeforged Jewelled Gloves","category":"Gloves","tags":["int_armour","gloves","armour","default"]}
-{"name":"Runeforged Jingling Buckler","category":"Buckler","tags":["dex_armour","shield","armour","default"]}
+{"name":"Runeforged Jingling Buckler","category":"Buckler","tags":["dex_armour","dex_shield","shield","armour","default"]}
 {"name":"Runeforged Jingling Crest Shield","category":"Shield","tags":["str_int_armour","str_int_shield","shield","armour","default"]}
 {"name":"Runeforged Juggernaut Plate","category":"Body Armour","tags":["str_armour","body_armour","armour","default"]}
 {"name":"Runeforged Jungle Tiara","category":"Helmet","tags":["int_armour","helmet","armour","default"]}
@@ -825,12 +825,12 @@
 {"name":"Runeforged Knightly Mitts","category":"Gloves","tags":["str_armour","gloves","armour","default"]}
 {"name":"Runeforged Lace Hood","category":"Helmet","tags":["dex_armour","helmet","armour","default"]}
 {"name":"Runeforged Laced Boots","category":"Boots","tags":["dex_armour","boots","armour","default"]}
-{"name":"Runeforged Laminate Buckler","category":"Buckler","tags":["dex_armour","shield","armour","default"]}
+{"name":"Runeforged Laminate Buckler","category":"Buckler","tags":["dex_armour","dex_shield","shield","armour","default"]}
 {"name":"Runeforged Lattice Sandals","category":"Boots","tags":["int_armour","boots","armour","default"]}
 {"name":"Runeforged Layered Gauntlets","category":"Gloves","tags":["str_dex_armour","gloves","armour","default"]}
 {"name":"Runeforged Layered Vest","category":"Body Armour","tags":["dex_armour","body_armour","armour","default"]}
 {"name":"Runeforged Leaden Greathammer","category":"Two Hand Mace","tags":["mace","two_hand_weapon","weapon","default"]}
-{"name":"Runeforged Leather Buckler","category":"Buckler","tags":["dex_armour","shield","armour","default"]}
+{"name":"Runeforged Leather Buckler","category":"Buckler","tags":["dex_armour","dex_shield","shield","armour","default"]}
 {"name":"Runeforged Leather Vest","category":"Body Armour","tags":["dex_armour","body_armour","armour","default"]}
 {"name":"Runeforged Leatherbound Hood","category":"Helmet","tags":["dex_armour","helmet","armour","default"]}
 {"name":"Runeforged Leyline Focus","category":"Focus","tags":["int_armour","focus","armour","default"]}
@@ -861,7 +861,7 @@
 {"name":"Runeforged Occultist Mantle","category":"Body Armour","tags":["str_int_armour","body_armour","armour","default"]}
 {"name":"Runeforged Omen Crest Shield","category":"Shield","tags":["str_int_armour","str_int_shield","shield","armour","default"]}
 {"name":"Runeforged Opulent Gloves","category":"Gloves","tags":["int_armour","gloves","armour","default"]}
-{"name":"Runeforged Ornate Buckler","category":"Buckler","tags":["dex_armour","shield","armour","default"]}
+{"name":"Runeforged Ornate Buckler","category":"Buckler","tags":["dex_armour","dex_shield","shield","armour","default"]}
 {"name":"Runeforged Ornate Cuffs","category":"Gloves","tags":["str_int_armour","gloves","armour","default"]}
 {"name":"Runeforged Ornate Greaves","category":"Boots","tags":["str_armour","boots","armour","default"]}
 {"name":"Runeforged Ornate Mitts","category":"Gloves","tags":["str_armour","gloves","armour","default"]}
@@ -872,13 +872,13 @@
 {"name":"Runeforged Pariah Mask","category":"Helmet","tags":["dex_int_armour","helmet","armour","default"]}
 {"name":"Runeforged Pathfinder Coat","category":"Body Armour","tags":["dex_armour","body_armour","armour","default"]}
 {"name":"Runeforged Pauascale Gloves","category":"Gloves","tags":["int_armour","gloves","armour","default"]}
-{"name":"Runeforged Pearl Buckler","category":"Buckler","tags":["dex_armour","shield","armour","default"]}
+{"name":"Runeforged Pearl Buckler","category":"Buckler","tags":["dex_armour","dex_shield","shield","armour","default"]}
 {"name":"Runeforged Pelage Targe","category":"Shield","tags":["str_dex_armour","str_dex_shield","shield","armour","default"]}
 {"name":"Runeforged Pelt Leggings","category":"Boots","tags":["str_int_armour","boots","armour","default"]}
 {"name":"Runeforged Pelt Mantle","category":"Body Armour","tags":["str_int_armour","body_armour","armour","default"]}
 {"name":"Runeforged Pilgrim Vestments","category":"Body Armour","tags":["str_int_armour","body_armour","armour","default"]}
 {"name":"Runeforged Plate Gauntlets","category":"Gloves","tags":["str_dex_armour","gloves","armour","default"]}
-{"name":"Runeforged Plated Buckler","category":"Buckler","tags":["dex_armour","shield","armour","default"]}
+{"name":"Runeforged Plated Buckler","category":"Buckler","tags":["dex_armour","dex_shield","shield","armour","default"]}
 {"name":"Runeforged Plated Vestments","category":"Body Armour","tags":["str_int_armour","body_armour","armour","default"]}
 {"name":"Runeforged Plumed Focus","category":"Focus","tags":["int_armour","focus","armour","default"]}
 {"name":"Runeforged Pointed Maul","category":"Two Hand Mace","tags":["mace","two_hand_weapon","weapon","default"]}
@@ -895,8 +895,8 @@
 {"name":"Runeforged Reefsteel Greaves","category":"Boots","tags":["str_armour","boots","armour","default"]}
 {"name":"Runeforged Refined Bracers","category":"Gloves","tags":["dex_armour","gloves","armour","default"]}
 {"name":"Runeforged Rhoahide Coat","category":"Body Armour","tags":["dex_armour","body_armour","armour","default"]}
-{"name":"Runeforged Ridged Buckler","category":"Buckler","tags":["dex_armour","shield","armour","default"]}
-{"name":"Runeforged Ringed Buckler","category":"Buckler","tags":["dex_armour","shield","armour","default"]}
+{"name":"Runeforged Ridged Buckler","category":"Buckler","tags":["dex_armour","dex_shield","shield","armour","default"]}
+{"name":"Runeforged Ringed Buckler","category":"Buckler","tags":["dex_armour","dex_shield","shield","armour","default"]}
 {"name":"Runeforged Ringmail Gauntlets","category":"Gloves","tags":["str_dex_armour","gloves","armour","default"]}
 {"name":"Runeforged River Raiment","category":"Body Armour","tags":["int_armour","body_armour","armour","default"]}
 {"name":"Runeforged Riveted Mitts","category":"Gloves","tags":["str_armour","gloves","armour","default"]}
@@ -953,9 +953,9 @@
 {"name":"Runeforged Sombre Gloves","category":"Gloves","tags":["int_armour","gloves","armour","default"]}
 {"name":"Runeforged Sorcerous Tiara","category":"Helmet","tags":["int_armour","helmet","armour","default"]}
 {"name":"Runeforged Spiked Bracers","category":"Gloves","tags":["dex_armour","gloves","armour","default"]}
-{"name":"Runeforged Spiked Buckler","category":"Buckler","tags":["dex_armour","shield","armour","default"]}
+{"name":"Runeforged Spiked Buckler","category":"Buckler","tags":["dex_armour","dex_shield","shield","armour","default"]}
 {"name":"Runeforged Spiked Club","category":"One Hand Mace","tags":["mace","one_hand_weapon","weapon","default"]}
-{"name":"Runeforged Spikeward Buckler","category":"Buckler","tags":["dex_armour","shield","armour","default"]}
+{"name":"Runeforged Spikeward Buckler","category":"Buckler","tags":["dex_armour","dex_shield","shield","armour","default"]}
 {"name":"Runeforged Spined Bracers","category":"Gloves","tags":["dex_armour","gloves","armour","default"]}
 {"name":"Runeforged Spiral Wraps","category":"Gloves","tags":["dex_int_armour","gloves","armour","default"]}
 {"name":"Runeforged Spired Greathelm","category":"Helmet","tags":["str_armour","helmet","armour","default"]}
@@ -1038,7 +1038,7 @@
 {"name":"Runeforged Wicker Tiara","category":"Helmet","tags":["int_armour","helmet","armour","default"]}
 {"name":"Runeforged Winged Spear","category":"Spear","tags":["spear","one_hand_weapon","weapon","default"]}
 {"name":"Runeforged Wolfskin Mantle","category":"Body Armour","tags":["str_int_armour","body_armour","armour","default"]}
-{"name":"Runeforged Wooden Buckler","category":"Buckler","tags":["dex_armour","shield","armour","default"]}
+{"name":"Runeforged Wooden Buckler","category":"Buckler","tags":["dex_armour","dex_shield","shield","armour","default"]}
 {"name":"Runeforged Wooden Club","category":"One Hand Mace","tags":["mace","one_hand_weapon","weapon","default"]}
 {"name":"Runeforged Woven Cap","category":"Helmet","tags":["dex_armour","helmet","armour","default"]}
 {"name":"Runeforged Woven Focus","category":"Focus","tags":["int_armour","focus","armour","default"]}
@@ -1060,7 +1060,7 @@
 {"name":"Runemastered Antler Focus","category":"Focus","tags":["int_armour","focus","armour","default"]}
 {"name":"Runemastered Armoured Cap","category":"Helmet","tags":["dex_armour","helmet","armour","default"]}
 {"name":"Runemastered Armoured Vest","category":"Body Armour","tags":["dex_armour","body_armour","armour","default"]}
-{"name":"Runemastered Array Buckler","category":"Buckler","tags":["dex_armour","shield","armour","default"]}
+{"name":"Runemastered Array Buckler","category":"Buckler","tags":["dex_armour","dex_shield","shield","armour","default"]}
 {"name":"Runemastered Assassin Garb","category":"Body Armour","tags":["dex_int_armour","body_armour","armour","default"]}
 {"name":"Runemastered Barricade Tower Shield","category":"Shield","tags":["str_armour","str_shield","shield","armour","default"]}
 {"name":"Runemastered Beaded Circlet","category":"Helmet","tags":["int_armour","helmet","armour","default"]}
@@ -1139,7 +1139,7 @@
 {"name":"Runemastered Hunting Shoes","category":"Boots","tags":["dex_int_armour","boots","armour","default"]}
 {"name":"Runemastered Intricate Crest Shield","category":"Shield","tags":["str_int_armour","str_int_shield","shield","armour","default"]}
 {"name":"Runemastered Intricate Gloves","category":"Gloves","tags":["int_armour","gloves","armour","default"]}
-{"name":"Runemastered Iron Buckler","category":"Buckler","tags":["dex_armour","shield","armour","default"]}
+{"name":"Runemastered Iron Buckler","category":"Buckler","tags":["dex_armour","dex_shield","shield","armour","default"]}
 {"name":"Runemastered Iron Crown","category":"Helmet","tags":["str_int_armour","helmet","armour","default"]}
 {"name":"Runemastered Iron Cuirass","category":"Body Armour","tags":["str_armour","body_armour","armour","default"]}
 {"name":"Runemastered Iron Greaves","category":"Boots","tags":["str_armour","boots","armour","default"]}
@@ -1153,7 +1153,7 @@
 {"name":"Runemastered Laced Boots","category":"Boots","tags":["dex_armour","boots","armour","default"]}
 {"name":"Runemastered Lattice Sandals","category":"Boots","tags":["int_armour","boots","armour","default"]}
 {"name":"Runemastered Layered Gauntlets","category":"Gloves","tags":["str_dex_armour","gloves","armour","default"]}
-{"name":"Runemastered Leather Buckler","category":"Buckler","tags":["dex_armour","shield","armour","default"]}
+{"name":"Runemastered Leather Buckler","category":"Buckler","tags":["dex_armour","dex_shield","shield","armour","default"]}
 {"name":"Runemastered Leather Vest","category":"Body Armour","tags":["dex_armour","body_armour","armour","default"]}
 {"name":"Runemastered Leatherbound Hood","category":"Helmet","tags":["dex_armour","helmet","armour","default"]}
 {"name":"Runemastered Linen Wraps","category":"Gloves","tags":["dex_int_armour","gloves","armour","default"]}
@@ -1169,14 +1169,14 @@
 {"name":"Runemastered Nettle Talisman","category":"Talisman","tags":["talisman","two_hand_weapon","weapon","default"]}
 {"name":"Runemastered Oak Greathammer","category":"Two Hand Mace","tags":["mace","two_hand_weapon","weapon","default"]}
 {"name":"Runemastered Omen Crest Shield","category":"Shield","tags":["str_int_armour","str_int_shield","shield","armour","default"]}
-{"name":"Runemastered Ornate Buckler","category":"Buckler","tags":["dex_armour","shield","armour","default"]}
+{"name":"Runemastered Ornate Buckler","category":"Buckler","tags":["dex_armour","dex_shield","shield","armour","default"]}
 {"name":"Runemastered Ornate Ringmail","category":"Body Armour","tags":["str_int_armour","body_armour","armour","default"]}
 {"name":"Runemastered Painted Tower Shield","category":"Shield","tags":["str_armour","str_shield","shield","armour","default"]}
 {"name":"Runemastered Pathfinder Coat","category":"Body Armour","tags":["dex_armour","body_armour","armour","default"]}
 {"name":"Runemastered Pauascale Gloves","category":"Gloves","tags":["int_armour","gloves","armour","default"]}
 {"name":"Runemastered Pilgrim Vestments","category":"Body Armour","tags":["str_int_armour","body_armour","armour","default"]}
 {"name":"Runemastered Plate Gauntlets","category":"Gloves","tags":["str_dex_armour","gloves","armour","default"]}
-{"name":"Runemastered Plated Buckler","category":"Buckler","tags":["dex_armour","shield","armour","default"]}
+{"name":"Runemastered Plated Buckler","category":"Buckler","tags":["dex_armour","dex_shield","shield","armour","default"]}
 {"name":"Runemastered Plated Raiment","category":"Body Armour","tags":["int_armour","body_armour","armour","default"]}
 {"name":"Runemastered Plumed Focus","category":"Focus","tags":["int_armour","focus","armour","default"]}
 {"name":"Runemastered Primal Markings","category":"Body Armour","tags":["dex_int_armour","body_armour","armour","default"]}
@@ -1184,7 +1184,7 @@
 {"name":"Runemastered Rampart Tower Shield","category":"Shield","tags":["str_armour","str_shield","shield","armour","default"]}
 {"name":"Runemastered Revered Vestments","category":"Body Armour","tags":["str_int_armour","body_armour","armour","default"]}
 {"name":"Runemastered Rhoahide Coat","category":"Body Armour","tags":["dex_armour","body_armour","armour","default"]}
-{"name":"Runemastered Ridged Buckler","category":"Buckler","tags":["dex_armour","shield","armour","default"]}
+{"name":"Runemastered Ridged Buckler","category":"Buckler","tags":["dex_armour","dex_shield","shield","armour","default"]}
 {"name":"Runemastered Ringmail Gauntlets","category":"Gloves","tags":["str_dex_armour","gloves","armour","default"]}
 {"name":"Runemastered Riveted Mitts","category":"Gloves","tags":["str_armour","gloves","armour","default"]}
 {"name":"Runemastered Rogue Armour","category":"Body Armour","tags":["str_dex_armour","body_armour","armour","default"]}
@@ -1212,7 +1212,7 @@
 {"name":"Runemastered Soldier Greathelm","category":"Helmet","tags":["str_armour","helmet","armour","default"]}
 {"name":"Runemastered Solid Mask","category":"Helmet","tags":["dex_int_armour","helmet","armour","default"]}
 {"name":"Runemastered Sombre Gloves","category":"Gloves","tags":["int_armour","gloves","armour","default"]}
-{"name":"Runemastered Spiked Buckler","category":"Buckler","tags":["dex_armour","shield","armour","default"]}
+{"name":"Runemastered Spiked Buckler","category":"Buckler","tags":["dex_armour","dex_shield","shield","armour","default"]}
 {"name":"Runemastered Spined Bracers","category":"Gloves","tags":["dex_armour","gloves","armour","default"]}
 {"name":"Runemastered Spiral Wraps","category":"Gloves","tags":["dex_int_armour","gloves","armour","default"]}
 {"name":"Runemastered Spired Greathelm","category":"Helmet","tags":["str_armour","helmet","armour","default"]}
@@ -1262,7 +1262,7 @@
 {"name":"Runemastered Waxed Jacket","category":"Body Armour","tags":["dex_int_armour","body_armour","armour","default"]}
 {"name":"Runemastered Wayfarer Jacket","category":"Body Armour","tags":["dex_int_armour","body_armour","armour","default"]}
 {"name":"Runemastered Wicker Tiara","category":"Helmet","tags":["int_armour","helmet","armour","default"]}
-{"name":"Runemastered Wooden Buckler","category":"Buckler","tags":["dex_armour","shield","armour","default"]}
+{"name":"Runemastered Wooden Buckler","category":"Buckler","tags":["dex_armour","dex_shield","shield","armour","default"]}
 {"name":"Runemastered Wooden Club","category":"One Hand Mace","tags":["mace","one_hand_weapon","weapon","default"]}
 {"name":"Runemastered Woven Focus","category":"Focus","tags":["int_armour","focus","armour","default"]}
 {"name":"Runemastered Wrapped Greathelm","category":"Helmet","tags":["str_armour","helmet","armour","default"]}
@@ -1355,10 +1355,10 @@
 {"name":"Sombre Gloves","category":"Gloves","tags":["int_armour","gloves","armour","default"]}
 {"name":"Sorcerous Tiara","category":"Helmet","tags":["int_armour","helmet","armour","default"]}
 {"name":"Spiked Bracers","category":"Gloves","tags":["dex_armour","gloves","armour","default"]}
-{"name":"Spiked Buckler","category":"Buckler","tags":["dex_armour","shield","armour","default"]}
+{"name":"Spiked Buckler","category":"Buckler","tags":["dex_armour","dex_shield","shield","armour","default"]}
 {"name":"Spiked Club","category":"One Hand Mace","tags":["mace","one_hand_weapon","weapon","default"]}
 {"name":"Spiked Spear","category":"Spear","tags":["spear","one_hand_weapon","weapon","default"]}
-{"name":"Spikeward Buckler","category":"Buckler","tags":["dex_armour","shield","armour","default"]}
+{"name":"Spikeward Buckler","category":"Buckler","tags":["dex_armour","dex_shield","shield","armour","default"]}
 {"name":"Spined Bracers","category":"Gloves","tags":["dex_armour","gloves","armour","default"]}
 {"name":"Spiny Talisman","category":"Talisman","tags":["talisman","two_hand_weapon","weapon","default"]}
 {"name":"Spiral Wraps","category":"Gloves","tags":["dex_int_armour","gloves","armour","default"]}
@@ -1524,7 +1524,7 @@
 {"name":"Winged Spear","category":"Spear","tags":["spear","one_hand_weapon","weapon","default"]}
 {"name":"Withered Wand","category":"Wand","tags":["no_fire_spell_mods","no_cold_spell_mods","no_lightning_spell_mods","no_physical_spell_mods","wand","default"]}
 {"name":"Wolfskin Mantle","category":"Body Armour","tags":["str_int_armour","body_armour","armour","default"]}
-{"name":"Wooden Buckler","category":"Buckler","tags":["dex_armour","shield","armour","default"]}
+{"name":"Wooden Buckler","category":"Buckler","tags":["dex_armour","dex_shield","shield","armour","default"]}
 {"name":"Wooden Club","category":"One Hand Mace","tags":["mace","one_hand_weapon","weapon","default"]}
 {"name":"Wool Cap","category":"Helmet","tags":["dex_armour","helmet","armour","default"]}
 {"name":"Woven Cap","category":"Helmet","tags":["dex_armour","helmet","armour","default"]}
