@@ -51,7 +51,7 @@ const bowTierStats = [
   { mod: "Adds 21 to 38 Physical Damage", check: false, tier: 2, range: "21–31 · 36–53", over: overTiers([21, 38], BOW_ADDED_PHYSICAL) },
   { mod: "Adds 3 to 140 Lightning Damage", check: false, tier: 3, range: "1–8 · 111–152", over: overTiers([3, 140], BOW_ADDED_LIGHTNING) },
   { group: "Suffixes", fill: "2 of 3 · 1 open" },
-  { mod: "+3 to Level of all Projectile Skills", check: true, min: 3, tier: 2, range: "3–3", over: overTiers([3], one(BOW_PROJECTILE_LEVEL)), ...rollsOver(BOW_PROJECTILE_LEVEL) },
+  { mod: "+3 to Level of all Projectile Skills", check: true, min: 3, tier: 2, tierOnly: true, over: overTiers([3], one(BOW_PROJECTILE_LEVEL)), ...rollsOver(BOW_PROJECTILE_LEVEL) },
   { mod: "14% increased Attack Speed", check: false, min: 13, tier: 2, range: "14–16", over: overTiers([14], one(BOW_ATTACK_SPEED)), ...rollsOver(BOW_ATTACK_SPEED) },
 ];
 SECTIONS.push(["Roll bar over every tier (13j2): the bar of a rare or magic modifier", [

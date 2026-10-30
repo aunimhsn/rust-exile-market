@@ -49,7 +49,7 @@ const TREAD_FILTERS = [
   // Corrupted: no socket can be added any more, so the one it has counts.
   ...itemFilters({ base: "Lattice Sandals", level: { value: 80, check: false }, sockets: { value: 1, check: true } }),
   { group: "Prefixes", fill: "1 of 3 · 2 open" },
-  { mod: "30% increased Movement Speed", check: true, min: 27, tier: 1, range: "30–30", noBar: true },
+  { mod: "30% increased Movement Speed", check: true, min: 27, tier: 1, tierOnly: true, noBar: true },
   { group: "Suffixes", fill: "1 of 3 · 2 open" },
   { mod: "+38% to Cold Resistance", check: true, min: 34, tier: 2, range: "36–40", noBar: true },
   { note: "Corrupted offers only, like this item." },

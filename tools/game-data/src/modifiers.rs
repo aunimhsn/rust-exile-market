@@ -1017,7 +1017,7 @@ mod tests {
                 true
             )
         );
-        // Without a tag of the tree that rolls, the tags as they are.
+        // A tag of the tree at 0 left out, the others as they are.
         let ordinary = spawn(&[("genesis_tree_minion", 0), ("ring", 1), ("default", 0)]);
         assert_eq!(
             spawn_on_bases(&ordinary),

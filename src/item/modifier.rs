@@ -173,7 +173,7 @@ pub struct AffixTier {
     /// Whether the number of its tier isn't written: its modifier has one tier only on the base
     /// of the item, whose T1 would read as "the best" while it is "the only one", or a tier the
     /// game doesn't write (the Genesis tree).
-    pub single: bool,
+    pub hides_number: bool,
     /// The range of each value its stats count, in their order, as the game writes it:
     /// without its sign.
     pub ranges: Vec<Range>,
@@ -213,7 +213,7 @@ pub struct PartTier {
     pub tiers: Vec<u32>,
     /// Whether the number of its tiers isn't written: its modifier has one tier only on the base
     /// of the item, or a tier the game doesn't write (the Genesis tree).
-    pub single: bool,
+    pub hides_number: bool,
     /// The range over these tiers of each value of that line its stat counts, in their order,
     /// as the game writes it: without its sign.
     pub ranges: Vec<Range>,

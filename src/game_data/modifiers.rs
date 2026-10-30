@@ -724,7 +724,7 @@ fn part_tier(
     Some(PartTier {
         affix,
         tiers: tiers.possible().map(|tier| tier.number).collect(),
-        single: tiers.hides_number(),
+        hides_number: tiers.hides_number(),
         ranges: spanned_ranges(language, parts, tiers, line)?
             .into_iter()
             .flatten()
@@ -808,7 +808,7 @@ fn affix_tier(
     Some(AffixTier {
         affix,
         tier: tiers.tier()?.number,
-        single: tiers.hides_number(),
+        hides_number: tiers.hides_number(),
         ranges: ranged
             .lines
             .iter()

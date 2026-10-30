@@ -120,7 +120,7 @@ const bowTradeStats = [
   { group: "Suffixes", fill: "4 of 4" },
   { mod: "+5% to Critical Hit Chance", check: true, min: 5, tier: 1, range: "4.41–5", over: { share: 1 }, origin: "fractured" },
   { mod: "+25% to Critical Damage Bonus", check: true, min: 23, tier: 1, range: "23–25", over: { share: 1 } },
-  { mod: "+4 to Level of all Projectile Skills", check: true, min: 4, tier: 1, range: "4", over: { share: 1 } },
+  { mod: "+4 to Level of all Projectile Skills", check: true, min: 4, tier: 1, tierOnly: true, over: { share: 1 } },
   { mod: "+181% Surpassing chance to fire an additional Arrow", check: true, min: 163, tier: 1, range: "175–200", over: { share: .89 } },
   DEDUCED_NOTE,
 ];
@@ -153,7 +153,7 @@ const bowTradeStatsFr = [
   { group: "Suffixes", fill: "4 sur 4" },
   { mod: "+5% aux Chances de Touche critique", check: true, min: 5, tier: 1, range: "4.41–5", over: { share: 1 }, origin: "fractured", originLabel: "Fissuré" },
   { mod: "+25% au Bonus de Dégâts Critiques", check: true, min: 23, tier: 1, range: "23–25", over: { share: 1 } },
-  { mod: "+4 au Niveau de toutes les Aptitudes à Projectiles", check: true, min: 4, tier: 1, range: "4", over: { share: 1 } },
+  { mod: "+4 au Niveau de toutes les Aptitudes à Projectiles", check: true, min: 4, tier: 1, tierOnly: true, over: { share: 1 } },
   { mod: "+200% de chances Cumulatives de tirer une Flèche supplémentaire", check: true, min: 180, tier: 1, range: "175–200", over: { share: 1 } },
   DEDUCED_NOTE_FR,
 ];

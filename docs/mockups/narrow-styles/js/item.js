@@ -157,7 +157,9 @@ function item(it, unfolded = false) {
       const tip = row.tip ? `${plain}\n${row.tip}` : plain;
       const text = `<span class="text" title="${tip.replace(/"/g, "&quot;")}">${mod}</span>`;
       if (box) {
-        const rollTop = row.range ? `<div class="roll2">${bar}<span class="range">${tier}${row.range}${after(row.after)}${origin}</span>${radius}</div>`
+        // A tier without range (`row.tierOnly`, 13k3b2): a fixed value of a modifier of several tiers, which
+        // the advanced copy writes without range, "T2" in both copies (owner's choice on 2026-10-30).
+        const rollTop = row.range || row.tierOnly ? `<div class="roll2">${bar}<span class="range">${tier}${row.range || ""}${after(row.after)}${origin}</span>${radius}</div>`
           : bar || radius ? `<div class="roll2">${bar}${radius}</div>`
           // A word without tier nor range (13k2e4b): a summed line split two ways; or the origin alone
           // (13k2e5: the Vaal modifier of a unique copied from the in-game trade, without range).

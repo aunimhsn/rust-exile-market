@@ -43,7 +43,7 @@ const BOW_FILTERS = [
   { mod: "Adds 21 to 38 Physical Damage", check: false, tier: 4, range: "18–42", share: .45 },
   { mod: "Adds 3 to 71 Lightning Damage", check: false, tier: 3, range: "2–80", share: .6 },
   { group: "Suffixes", fill: "3 of 3" },
-  { mod: "+3 to Level of all Projectile Skills", check: true, min: 3, tier: 1, range: "3–3", share: 1 },
+  { mod: "+3 to Level of all Projectile Skills", check: true, min: 3, tier: 1, tierOnly: true, over: { share: 1 } },
   { mod: "14% increased Attack Speed", check: false, min: 13, tier: 2, range: "11–15", share: .82 },
   { mod: "+312 to Accuracy Rating", check: true, min: 281, tier: 4, range: "296–344", share: .5 },
 ];

@@ -1192,7 +1192,7 @@ fn the_lines_of_a_tiara_read_again_keep_the_tiers_of_the_affix_in_doubt() {
     let tier = |affix, min, max| AffixTier {
         affix,
         tier: 1,
-        single: false,
+        hides_number: false,
         ranges: vec![range(min, max)],
     };
     let desecrated = item.modifiers().len() - 1;
@@ -1263,7 +1263,7 @@ fn part(affix: Affix, tiers: &[u32], ranges: &[(f64, f64)]) -> PartTier {
     PartTier {
         affix,
         tiers: tiers.to_vec(),
-        single: false,
+        hides_number: false,
         ranges: ranges.iter().map(|&(min, max)| range(min, max)).collect(),
     }
 }
@@ -1499,10 +1499,10 @@ fn a_desecrated_line_of_a_lord_and_of_an_ordinary_suffix_keeps_the_tier_of_each(
 
     let read = read_again("Trarthan Cannon", 82, &grenades, (3, 3));
 
-    let tier = |affix, tier, single| AffixTier {
+    let tier = |affix, tier, hides_number| AffixTier {
         affix,
         tier,
-        single,
+        hides_number,
         ranges: vec![range(1.0, 1.0)],
     };
     assert_eq!(

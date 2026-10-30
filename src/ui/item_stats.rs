@@ -246,11 +246,11 @@ impl<'a> TierRow<'a> {
     }
 
     /// The tier `found` for one affix of a line that can be either, "Prefix" after its ranges;
-    /// without number for a modifier of one tier only.
+    /// without number for a modifier of one tier only, or whose tier the game doesn't write.
     fn affix(found: &AffixTier) -> Self {
         Self {
             tier: ModifierTier {
-                number: (!found.single).then_some(found.tier),
+                number: (!found.hides_number).then_some(found.tier),
                 ranges: found.ranges.clone(),
             },
             better: None,
@@ -266,7 +266,8 @@ impl<'a> TierRow<'a> {
     }
 
     /// The tiers `part` may be, the best first (one, or two neighbouring ones), over `ranges`,
-    /// with `word` and its `tip`; without number for a modifier of one tier only.
+    /// with `word` and its `tip`; without number for a modifier of one tier only, or whose tier
+    /// the game doesn't write.
     fn tiers(
         part: &PartTier,
         ranges: Vec<Range>,
@@ -276,7 +277,7 @@ impl<'a> TierRow<'a> {
         let worse = *part.tiers.last()?;
         Some(Self {
             tier: ModifierTier {
-                number: (!part.single).then_some(worse),
+                number: (!part.hides_number).then_some(worse),
                 ranges,
             },
             better: part
@@ -1210,12 +1211,7 @@ fn affix_stats<'a>(item: &'a Item, affix: Option<Affix>, reading: &Reading<'_>) 
                             // value is fixed.
                             let single = reading.tiers.single(index);
                             let number = modifier.tier.filter(|_| !single);
-                            let ranges: Vec<Range> = modifier
-                                .lines
-                                .iter()
-                                .flat_map(|line| magnitudes(line, &copied_ranges(line)))
-                                .map(|(_, range)| range)
-                                .collect();
+                            let ranges = tier_ranges(modifier);
                             (number.is_some() || (single && !ranges.is_empty()))
                                 .then(|| TierRow::plain(ModifierTier { number, ranges }))
                         }
@@ -1440,6 +1436,27 @@ fn unique_stat<'a>(
         roll: Some(roll),
         ..fixed
     }
+}
+
+/// The ranges written under the last line of a prefix or suffix, those the copy writes, in their
+/// order; none for a fixed value, each range of one value, the value itself (`50(50)% reduced
+/// Amount Recovered`, or the range the tables put on a line of the in-game trade, `+2 to Level of
+/// all Minion Skills`): "T2", not "T2 2", as the advanced copy most often writes it without
+/// range (owner's choice on 2026-10-30); not `29(30)%` of a sanctified item ("T2 30").
+fn tier_ranges(modifier: &Modifier) -> Vec<Range> {
+    let magnitudes: Vec<(f64, Range)> = modifier
+        .lines
+        .iter()
+        .flat_map(|line| magnitudes(line, &copied_ranges(line)))
+        .collect();
+    let fixed = magnitudes.iter().all(|(value, range)| {
+        (range.max - range.min).abs() < f64::EPSILON
+            && (value.abs() - range.min).abs() < f64::EPSILON
+    });
+    if fixed {
+        return Vec::new();
+    }
+    magnitudes.into_iter().map(|(_, range)| range).collect()
 }
 
 /// The range of each number of a line, from the advanced copy.

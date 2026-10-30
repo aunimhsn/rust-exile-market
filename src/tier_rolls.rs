@@ -3,9 +3,11 @@
 //! stays in and the rolls its tooltip tells. Read once when the item is copied, for a modifier
 //! whose header tells its affix and its tier, and for the other lines of a hybrid whose part a
 //! line adds up, over the tiers of the hybrid; not for that line, a sum over no tiers. A
-//! modifier of one tier only on the base has no tier to tell: its lines roll over that tier, or
-//! over the ranges of the advanced copy when its header writes no tier (`Reinforcing` of the
-//! Genesis tree), which the tables needn't know.
+//! modifier of one tier only on the base has no tier to tell: its lines roll over that tier. Nor
+//! has a modifier whose tier the game doesn't write, of the Genesis tree: its lines roll over the
+//! ranges of the advanced copy (`Reinforcing`, `Minions have 21(19-22)% increased maximum
+//! Life`), or over the tier the tables find for a fixed value, which the copy writes without
+//! range (`of the Despot` of a belt, `+2 to Level of all Minion Skills`).
 //!
 //! The ranges of a tier follow the values of each line match of the modifier, and the values
 //! of a match the numbers its stat counts on its lines, in their order: the numbers are read
@@ -73,7 +75,7 @@ impl TierRolls {
             };
             let summed = match &modifier.doubt {
                 Some(TierDoubt::Split { line, .. }) => Some(*line),
-                _ if modifier.tier.is_some() => None,
+                _ if modifier.tier.is_some() || fixed_without_tier(modifier) => None,
                 _ => continue,
             };
             let matches = game_data::modifier_stats(language, modifier, None);
@@ -82,9 +84,23 @@ impl TierRolls {
             else {
                 continue;
             };
+            // A fixed value without tier: only of a modifier whose tier the game doesn't write,
+            // over that tier, as a line of the in-game trade read in it (not one of an essence,
+            // whose tables aren't known yet).
+            let unwritten = modifier.tier.is_none() && summed.is_none();
+            let rolled = if unwritten {
+                match tiers.tier().filter(|_| tiers.tier_unwritten) {
+                    Some(tier) => std::slice::from_ref(tier),
+                    None => continue,
+                }
+            } else {
+                tiers.tiers.as_slice()
+            };
             // The hybrid of a split line of one tier only too: its other lines tell no tiers.
-            let one_tier = tiers.single();
-            if one_tier && summed.is_none() {
+            let one_tier = tiers.single() || unwritten;
+            if unwritten {
+                single.push(index);
+            } else if one_tier && summed.is_none() {
                 match modifier.tier {
                     Some(1) => single.push(index),
                     // The game knows more tiers than the data, e.g. after a patch: the tier
@@ -104,7 +120,7 @@ impl TierRolls {
                             continue;
                         }
                         let rolls = modifier.lines.get(line).map_or(0, |line| line.rolls.len());
-                        if let Some(mut rolls) = line_rolls(&tiers.tiers, &values, rolls) {
+                        if let Some(mut rolls) = line_rolls(rolled, &values, rolls) {
                             if one_tier {
                                 // "T1–T1" would tell nothing.
                                 rolls.tiers = None;
@@ -153,6 +169,20 @@ fn written_without_tier(modifier: &Modifier) -> bool {
             .lines
             .iter()
             .any(|line| line.rolls.iter().any(|roll| roll.range.is_some()))
+}
+
+/// Whether the advanced copy writes `modifier`, a prefix or suffix, without tier nor range: a
+/// fixed value of a modifier whose tier the game doesn't write (`of the Despot` of the Genesis
+/// tree on a belt, `+2 to Level of all Minion Skills`), or of an essence.
+fn fixed_without_tier(modifier: &Modifier) -> bool {
+    matches!(modifier.kind, ModifierKind::Explicit(Some(_)))
+        && modifier.tier.is_none()
+        && modifier.doubt.is_none()
+        && !modifier.unrevealed
+        && modifier
+            .lines
+            .iter()
+            .all(|line| line.rolls.iter().all(|roll| roll.range.is_none()))
 }
 
 /// The rolls of each line of the modifier `index`, `modifier`, over the ranges the advanced copy
@@ -360,6 +390,39 @@ mod tests {
     }
 
     #[test]
+    fn a_fixed_value_without_tier_rolls_over_its_tier_only_on_the_genesis_tree() {
+        // `of the Despot` of the Genesis tree on a belt, the best of its two tiers (+1, +2),
+        // which the copy writes without tier nor range: fixed in its tier.
+        let belt = rolls_of(
+            "Item Class: Belts\nRarity: Rare\nGrip Clasp\nHeavy Belt\n--------\n\
+             Item Level: 79\n--------\n\
+             { Suffix Modifier \"of the Despot\" — Minion, Gem }\n\
+             +2 to Level of all Minion Skills",
+        );
+        assert!(belt.single(0));
+        let fixed = LineRolls {
+            ranges: vec![Some(range(2.0, 2.0))],
+            tiers: None,
+        };
+        assert_eq!(belt.get(key(0, 0)), Some(&fixed));
+
+        // The same without tier on a quiver, a modifier of the tables, of one tier there, but
+        // not of the tree (of an essence, whose tables aren't known yet): no rolls.
+        let quiver = |header: &str| {
+            rolls_of(&format!(
+                "Item Class: Quivers\nRarity: Rare\nStorm Song\nFire Quiver\n--------\n\
+                 Item Level: 79\n--------\n\
+                 {{ Suffix Modifier {header} — Attack, Gem }}\n\
+                 +1 to Level of all Projectile Skills"
+            ))
+        };
+        assert!(quiver("\"of the Archer\" (Tier: 1)").single(0));
+        let essence = quiver("\"of the Essence\"");
+        assert!(!essence.single(0));
+        assert_eq!(essence.get(key(0, 0)), None);
+    }
+
+    #[test]
     fn a_modifier_written_without_tier_rolls_over_its_copied_range() {
         let rolls = rolls_of(
             "Item Class: Rings\nRarity: Rare\nGlyph Circle\nBreach Ring\n--------\n\
@@ -488,7 +551,7 @@ mod tests {
         let part = |tiers: Vec<u32>, min, max| PartTier {
             affix: Affix::Prefix,
             tiers,
-            single: false,
+            hides_number: false,
             ranges: vec![range(min, max)],
         };
         // 258% is a pure T1 (170–179) and the hybrid T1 (75–79) with the accuracy.
@@ -550,7 +613,7 @@ mod tests {
         let part = |min, max| PartTier {
             affix: Affix::Prefix,
             tiers: vec![1],
-            single: true,
+            hides_number: true,
             ranges: vec![range(min, max)],
         };
         // The hybrid of Kurgal (110–154, and 15% reduced Attack Speed), desecrated, and a pure

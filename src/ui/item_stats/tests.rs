@@ -261,7 +261,8 @@ fn a_modifier_of_one_tier_only_shows_its_ranges_without_tier() {
         Some("■ +1 to Level of all Projectile Skills")
     );
 
-    // A hybrid of one tier only, a line without number: the ranges under its last line.
+    // A hybrid of one tier only, a line without number and a fixed value, `50(50)%`: nothing
+    // under its last line, as under any fixed value.
     let flask = parse(
         "Item Class: Life Flasks\nRarity: Magic\nSaturated Ultimate Life Flask\n\
          --------\nItem Level: 82\n--------\n\
@@ -286,7 +287,7 @@ fn a_modifier_of_one_tier_only_shows_its_ranges_without_tier() {
     let flask = row_texts(super::rows(&flask, &lines, &stats, &tiers, base));
     assert_eq!(
         flask[flask.len() - 2..],
-        ["■ Instant Recovery", "■ 50% reduced Amount Recovered [50]"]
+        ["■ Instant Recovery", "■ 50% reduced Amount Recovered"]
     );
 
     // Copied from the in-game trade: its tier found from its value.
@@ -438,6 +439,36 @@ fn a_minion_modifier_of_the_genesis_tree_found_from_its_value_shows_no_tier_and_
             "Trade copy note",
         ]
     );
+}
+
+#[test]
+fn a_fixed_value_shows_the_same_in_both_copies() {
+    // `+2 to Level of all Minion Skills`: the ordinary T2 of 3 of an amulet, `of the Despot` of
+    // the Genesis tree on a belt, whose tier the game doesn't write; the advanced copy writes no
+    // range for a fixed value, the in-game trade none at all.
+    let advanced = |class: &str, base: &str, header: &str| {
+        format!(
+            "Item Class: {class}\nRarity: Rare\nDoom Idol\n{base}\n--------\nItem Level: 79\n\
+             --------\n{{ Suffix Modifier \"of the Despot\"{header} — Minion, Gem }}\n\
+             +2 to Level of all Minion Skills"
+        )
+    };
+    let in_game_trade = |text: &str| {
+        let lines: Vec<&str> = text.lines().filter(|line| !line.starts_with('{')).collect();
+        read_again(parse(&lines.join("\n")))
+    };
+    let last = |item: &Item| texts(item).into_iter().rfind(|text| text.starts_with('■'));
+
+    // A tier without range: the bar over the three tiers, "T2", the field from 2.
+    let amulet = advanced("Amulets", "Gold Amulet", " (Tier: 2)");
+    let t2 = Some("■ +2 to Level of all Minion Skills ≥2 [0.50 T2]".to_owned());
+    assert_eq!(last(&parse(&amulet)), t2);
+    assert_eq!(last(&in_game_trade(&amulet)), t2);
+    // Fixed in its tier, which the game doesn't write: no field, nothing under it.
+    let belt = advanced("Belts", "Heavy Belt", "");
+    let fixed = Some("■ +2 to Level of all Minion Skills".to_owned());
+    assert_eq!(last(&parse(&belt)), fixed);
+    assert_eq!(last(&in_game_trade(&belt)), fixed);
 }
 
 #[test]
@@ -2111,8 +2142,8 @@ fn a_part_of_a_summed_line_of_one_tier_only_writes_no_tier_number() {
     let mut modifiers = bow.modifiers().to_vec();
     for modifier in &mut modifiers {
         if let Some(TierDoubt::Split { whole, added, .. }) = &mut modifier.doubt {
-            whole.single = true;
-            added.single = true;
+            whole.hides_number = true;
+            added.hides_number = true;
         }
     }
     bow.set_modifiers(modifiers);
@@ -2300,7 +2331,7 @@ fn part(affix: Affix) -> PartTier {
     PartTier {
         affix,
         tiers: vec![1],
-        single: false,
+        hides_number: false,
         ranges: vec![Range { min: 1.0, max: 2.0 }],
     }
 }
@@ -2382,7 +2413,7 @@ fn a_modifier_counts_the_affixes_it_takes_in_the_room_of_its_item() {
     let tier = AffixTier {
         affix: Affix::Prefix,
         tier: 1,
-        single: false,
+        hides_number: false,
         ranges: Vec::new(),
     };
 
