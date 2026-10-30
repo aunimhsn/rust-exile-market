@@ -35,7 +35,8 @@ struct Table {
     tiers: Vec<TableTier>,
 }
 
-#[derive(Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
+/// The prefix first, as the two pure modifiers of a split line are read.
+#[derive(Deserialize, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 #[serde(rename_all = "lowercase")]
 enum TableAffix {
     Prefix,
@@ -111,6 +112,11 @@ pub struct ModifierTiers {
     pub tiers: Vec<Tier>,
     /// The index in `tiers` of the tier of the copied modifier.
     pub found: usize,
+    /// The index in `tiers` of the tier above `found` the copied modifier may be as well: a
+    /// part of a line that adds up two modifiers, in either of two neighbouring tiers while the
+    /// other part is sure (the pure T1 or T2 of the `248% increased Physical Damage` of a bow,
+    /// with the hybrid T1 on `+195 to Accuracy Rating`); none otherwise.
+    pub neighbour: Option<usize>,
     /// The number of values of each line match given, in their order: the ranges of a tier
     /// follow them (two for `Adds # to # Physical Damage`; for a line without number, one
     /// when its string gives the value, `Loads an additional bolt`, none otherwise).
@@ -122,6 +128,22 @@ impl ModifierTiers {
     #[must_use]
     pub fn tier(&self) -> Option<&Tier> {
         self.tiers.get(self.found)
+    }
+
+    /// The tiers the copied modifier may be: its tier, then the neighbouring one.
+    pub fn possible(&self) -> impl Iterator<Item = &Tier> {
+        let neighbour = self.neighbour.and_then(|index| self.tiers.get(index));
+        self.tier().into_iter().chain(neighbour)
+    }
+
+    /// These tiers, the copied modifier in its tier or in `other`, a neighbouring one: the
+    /// worse of both found, the better its neighbour.
+    fn or_tier(&self, other: usize) -> Self {
+        Self {
+            found: self.found.max(other),
+            neighbour: Some(self.found.min(other)),
+            ..self.clone()
+        }
     }
 }
 
@@ -180,7 +202,9 @@ pub struct FoundTiers {
     pub affixes: Vec<(Affix, ModifierTiers)>,
     /// For a line that adds up two modifiers of its stat, the other one: a pure modifier of
     /// that line (the pure 170–179 of the `258% increased Physical Damage` of a bow, the 75–79
-    /// of the hybrid with `+195 to Accuracy Rating` in `affixes`).
+    /// of the hybrid with `+195 to Accuracy Rating` in `affixes`); of two pure modifiers of a
+    /// prefix and a suffix, the suffix. One of both may be in two neighbouring tiers
+    /// ([`ModifierTiers::neighbour`]).
     pub added: Option<AddedTiers>,
 }
 
@@ -221,11 +245,13 @@ pub struct AddedTiers {
 /// split counts two affixes, and a reading with fewer split lines is better: a line a modifier
 /// holds alone is split only when the room of the item needs it, or when the other line of the
 /// hybrid has no tier alone (the `9% increased Armour` of a body armour, under every pure tier,
-/// with `+100 to maximum Life`: the hybrid T6 and the pure T7). A line that two readings as
-/// good split in other ways (a rarity of a prefix of tier 1 and a suffix of tier 2, or of tier
-/// 2 and tier 1) stays without tier, with the other lines of its hybrids, while the other
-/// modifiers are read as the best of these readings does, with its room. No line of a
-/// `sanctified` item is split: its values can leave their tiers.
+/// with `+100 to maximum Life`: the hybrid T6 and the pure T7). Two ways to split a line that
+/// differ only by the tier of one of its modifiers, two neighbouring tiers, are one, that
+/// modifier in both (`248%` with `+195 to Accuracy Rating`: the hybrid T1 and the pure T1 or
+/// T2). A line that two readings as good split in other ways (a rarity of a prefix of tier 1
+/// and a suffix of tier 2, or of tier 2 and tier 1) stays without tier, with the other lines of
+/// its hybrids, while the other modifiers are read as the best of these readings does, with its
+/// room. No line of a `sanctified` item is split: its values can leave their tiers.
 ///
 /// A line stays without tier too, with the other lines of its hybrids, when another reading
 /// fits the item as well ([`summed_readings::doubts`]), with a line adding up several
@@ -612,7 +638,10 @@ fn candidates(
 /// A way a copied line adds up two modifiers of its stat: the modifier of every copied line,
 /// with the summed one, pure or a hybrid, of `affix` with its `tiers`, and a pure modifier of
 /// another type of the summed line only.
+#[derive(Clone)]
 struct Split {
+    /// The indexes among the tables of both modifiers, the summed one first.
+    tables: (usize, usize),
     affix: Affix,
     tiers: ModifierTiers,
     added: AddedTiers,
@@ -623,7 +652,9 @@ struct Split {
 /// the modifier `owner` of the item, adds up two modifiers of its stat on a base with `tags`:
 /// the modifier of every copied line, and a pure modifier of another type of the summed line
 /// only, whose values add up on that line, their tiers among those `item_level` allows. Only
-/// the ways that fit best; none for a line without number.
+/// the ways that fit best, those of two neighbouring tiers of one modifier made one
+/// ([`neighbours_joined`]); none for a line without number. Of two pure modifiers, the prefix
+/// is the summed one, as [`TierDoubt::EitherAffix`] reads a prefix first.
 fn splits(
     tables: &[Table],
     tags: &[String],
@@ -675,8 +706,12 @@ fn splits(
         };
         let values = copied.values(&whole.lines, &order);
         for (added_index, added, added_tiers) in &pure {
-            // Each pair of pure modifiers once.
-            if added.kind == whole.kind || (whole.lines.len() == 1 && *added_index <= whole_index) {
+            // Each pair of pure modifiers once, the prefix first.
+            let order = |table: &Table, index| (table.affix, index);
+            if added.kind == whole.kind
+                || (whole.lines.len() == 1
+                    && order(added, *added_index) <= order(whole, whole_index))
+            {
                 continue;
             }
             for (found, whole_tier) in whole_tiers.iter().enumerate() {
@@ -689,10 +724,12 @@ fn splits(
                         continue;
                     };
                     ways.push(Split {
+                        tables: (whole_index, *added_index),
                         affix: whole.affix.into(),
                         tiers: ModifierTiers {
                             tiers: whole_tiers.clone(),
                             found,
+                            neighbour: None,
                             counts: counts.clone(),
                         },
                         added: AddedTiers {
@@ -701,6 +738,7 @@ fn splits(
                             tiers: ModifierTiers {
                                 tiers: added_tiers.clone(),
                                 found: added_found,
+                                neighbour: None,
                                 counts: vec![line.count()],
                             },
                         },
@@ -712,7 +750,45 @@ fn splits(
     }
     let best = ways.iter().map(|way| way.fit).min();
     ways.retain(|way| Some(way.fit) == best);
-    ways
+    neighbours_joined(&ways)
+}
+
+/// The `ways` a line adds up two modifiers, those of the same two modifiers following each
+/// other, with the two ways of a pair of modifiers that differ only by the tier of one of them,
+/// two neighbouring tiers, made one (the pure T1 or T2 of the `248% increased Physical Damage`
+/// of a bow, with the hybrid T1 on `+195 to Accuracy Rating`). More ways of a pair, or two that
+/// differ by both tiers (the `33% increased Rarity of Items found` of a tiara, a prefix T1 and a
+/// suffix T2, or a T2 and a T1), stay apart.
+fn neighbours_joined(ways: &[Split]) -> Vec<Split> {
+    let mut joined = Vec::new();
+    for pair in ways.chunk_by(|one, other| one.tables == other.tables) {
+        match pair {
+            [one, other] => match one.with_neighbour(other) {
+                Some(way) => joined.push(way),
+                None => joined.extend([one.clone(), other.clone()]),
+            },
+            _ => joined.extend(pair.iter().cloned()),
+        }
+    }
+    joined
+}
+
+impl Split {
+    /// The way this one and `other`, of the same modifiers, make when they differ only by the
+    /// tier of one modifier, two neighbouring tiers.
+    fn with_neighbour(&self, other: &Self) -> Option<Self> {
+        let (whole, added) = (&self.tiers, &self.added.tiers);
+        let (other_whole, other_added) = (&other.tiers, &other.added.tiers);
+        let mut way = self.clone();
+        if whole.found == other_whole.found && added.found.abs_diff(other_added.found) == 1 {
+            way.added.tiers = added.or_tier(other_added.found);
+        } else if added.found == other_added.found && whole.found.abs_diff(other_whole.found) == 1 {
+            way.tiers = whole.or_tier(other_whole.found);
+        } else {
+            return None;
+        }
+        Some(way)
+    }
 }
 
 /// Whether no table of `tables` before the one at `index` holds its modifier: each modifier
@@ -1029,6 +1105,7 @@ fn find(
                 ModifierTiers {
                     tiers,
                     found,
+                    neighbour: None,
                     counts,
                 },
             ));

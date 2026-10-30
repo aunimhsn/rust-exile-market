@@ -446,6 +446,23 @@ fn added(modifiers: &[Modifier], found: &[FoundTiers]) -> Added {
         .collect()
 }
 
+/// For each part of a line split in two neighbouring tiers, the tier number of its tier and
+/// of the neighbouring one.
+fn neighbours(found: &[FoundTiers]) -> Vec<(u32, u32)> {
+    found
+        .iter()
+        .flat_map(|found| {
+            let added = found.added.as_ref().map(|added| &added.tiers);
+            found.affixes.iter().map(|(_, tiers)| tiers).chain(added)
+        })
+        .filter_map(|tiers| {
+            let mut possible = tiers.possible().map(|tier| tier.number);
+            let (tier, neighbour) = (possible.next()?, possible.next()?);
+            Some((tier, neighbour))
+        })
+        .collect()
+}
+
 /// For each modifier read from its values, how many lines it has and the tier number of
 /// each affix it can be: the same in every language.
 fn summary(modifiers: &[Modifier], found: &[FoundTiers]) -> Vec<(usize, AffixTiers)> {
@@ -1244,13 +1261,14 @@ fn a_line_no_tier_holds_is_split_only_when_one_way_fits() {
     };
 
     // The rarity rolls as a suffix (6–10, 11–14, 15–18) and as a prefix (8–11, 12–15,
-    // 16–19): 37% is the suffix T1 at 18 and the prefix T1 at 19 only.
+    // 16–19): 37% is the suffix T1 at 18 and the prefix T1 at 19 only, the prefix first,
+    // though the suffix comes first in the tables.
     let rarity = |value| format!("{value}% increased Rarity of Items found");
     assert_eq!(
         read(&rarity(37)),
-        (vec![(1, vec![(Suffix, 1)])], vec![(rarity(37), Prefix, 1)])
+        (vec![(1, vec![(Prefix, 1)])], vec![(rarity(37), Suffix, 1)])
     );
-    // 33% is also T1 and T2, or T2 and T1: without tier.
+    // 33% is also T1 and T2, or T2 and T1, both parts in doubt: without tier.
     assert_eq!(read(&rarity(33)), (vec![], vec![]));
     // 18% fits one modifier: not split, though two would hold it too.
     assert_eq!(
@@ -1365,14 +1383,25 @@ fn a_line_a_modifier_holds_alone_is_split_when_the_room_needs_it() {
         )
     );
 
-    // 50% splits in two ways as good: the armour and the stun threshold without tier,
-    // also alone.
+    // 50% is the same hybrid with the pure T7 or T6: one split, the pure modifier in both.
     let modifiers = greaves(50);
-    assert_eq!(greaves_read(&modifiers, 82), (resistances.to_vec(), vec![]));
+    let hybrid = vec![
+        "50% increased Armour".to_owned(),
+        "+30 to Stun Threshold".to_owned(),
+    ];
+    let mut expected = vec![(hybrid, vec![(Prefix, 4)])];
+    expected.extend(resistances);
+    assert_eq!(
+        greaves_read(&modifiers, 82),
+        (
+            expected,
+            vec![("50% increased Armour".to_owned(), Prefix, 7)]
+        )
+    );
 }
 
 #[test]
-fn the_other_line_of_the_hybrid_of_a_line_split_in_two_ways_has_no_tier() {
+fn a_part_of_a_split_line_in_two_neighbouring_tiers_keeps_both() {
     let item = parse(BOW_EN);
     // The pure part, 169–173, is a T2 at 169 or a T1, with the same hybrid T1 at 75–79.
     let modifiers = [
@@ -1380,10 +1409,23 @@ fn the_other_line_of_the_hybrid_of_a_line_split_in_two_ways_has_no_tier() {
         modifier(None, &["+195 to Accuracy Rating"]),
     ];
 
-    let found = found_tiers(&item, &modifiers, (3, 3));
+    // The other readings with three prefixes are the same as the best one but for the tier
+    // of the pure part.
+    let found = found_tiers(&item, &modifiers, (2, 3));
+    assert_eq!(summary(&modifiers, &found), [(2, vec![(Affix::Prefix, 1)])]);
+    assert_eq!(
+        added(&modifiers, &found),
+        [(
+            "248% increased Physical Damage".to_owned(),
+            Affix::Prefix,
+            2
+        )]
+    );
+    assert_eq!(neighbours(&found), [(2, 1)]);
 
-    // Read alone, the accuracy would be a pure prefix of tier 5.
-    assert_eq!(found, []);
+    // With a prefix open, the accuracy could add up a pure modifier too: without tier, the
+    // accuracy too, which a pure prefix of tier 5 would hold alone.
+    assert_eq!(found_tiers(&item, &modifiers, (3, 3)), []);
 }
 
 #[test]
@@ -1416,7 +1458,7 @@ fn a_line_held_alone_is_split_when_the_other_line_of_the_hybrid_has_no_tier_alon
 }
 
 #[test]
-fn a_line_split_in_two_ways_as_good_takes_its_room_from_a_line_in_doubt() {
+fn a_line_in_doubt_takes_its_room() {
     use Affix::{Prefix, Suffix};
     let item = parse(TIARA_EN);
     let lines = |mana: bool| {
@@ -1429,10 +1471,11 @@ fn a_line_split_in_two_ways_as_good_takes_its_room_from_a_line_in_doubt() {
             .collect::<Vec<_>>()
     };
 
-    // The hybrid T6 (6–13 · 7–10) with a pure T3 or T2, two prefixes either way, without
-    // tier: with the mana, the prefixes are full, the rarity a suffix. The mana has no tier
-    // either: the energy shield may be the hybrid with the mana, whose line adds up a pure
-    // mana, the life a pure modifier, three prefixes too.
+    // The energy shield, under every pure tier, is the hybrid T6 (6–13 · 7–10) with the
+    // life, whose line adds up a pure T3 or T2: two prefixes. With the mana, the prefixes are
+    // full, the rarity a suffix; but the energy shield may be the hybrid with the mana, whose
+    // line adds up a pure mana, the life a pure modifier, three prefixes too: the three lines
+    // without tier.
     let modifiers = lines(true);
     let found = found_tiers(&item, &modifiers, (3, 3));
     assert_eq!(summary(&modifiers, &found), [(1, vec![(Suffix, 1)])]);
@@ -1443,8 +1486,9 @@ fn a_line_split_in_two_ways_as_good_takes_its_room_from_a_line_in_doubt() {
     let found = found_tiers(&item, &modifiers, (3, 3));
     assert_eq!(
         summary(&modifiers, &found),
-        [(1, vec![(Prefix, 1), (Suffix, 1)])]
+        [(2, vec![(Prefix, 6)]), (1, vec![(Prefix, 1), (Suffix, 1)])]
     );
+    assert_eq!(neighbours(&found), [(3, 2)]);
 }
 
 #[test]
@@ -1772,6 +1816,7 @@ fn candidate(modifiers: std::ops::Range<usize>, affixes: &[Affix], fractured: bo
     let tiers = ModifierTiers {
         tiers: Vec::new(),
         found: 0,
+        neighbour: None,
         counts: Vec::new(),
     };
     Candidate {
@@ -1782,6 +1827,76 @@ fn candidate(modifiers: std::ops::Range<usize>, affixes: &[Affix], fractured: bo
             .map(|&affix| (affix, tiers.clone()))
             .collect(),
         added: None,
+    }
+}
+
+/// A way to split a line into the modifiers of the tables `tables`, in the tiers of indexes
+/// `found`, without ranges.
+fn way(tables: (usize, usize), (found, added_found): (usize, usize)) -> Split {
+    let tiers = |found| ModifierTiers {
+        tiers: Vec::new(),
+        found,
+        neighbour: None,
+        counts: Vec::new(),
+    };
+    Split {
+        tables,
+        affix: Affix::Prefix,
+        tiers: tiers(found),
+        added: AddedTiers {
+            line: 0,
+            affix: Affix::Prefix,
+            tiers: tiers(added_found),
+        },
+        fit: Fit::Within,
+    }
+}
+
+/// The tables of each way, and the index of the tier of each of its modifiers with its
+/// neighbour.
+type WayTiers = (
+    (usize, usize),
+    (usize, Option<usize>),
+    (usize, Option<usize>),
+);
+
+fn way_tiers(ways: &[Split]) -> Vec<WayTiers> {
+    ways.iter()
+        .map(|way| {
+            let tiers = |tiers: &ModifierTiers| (tiers.found, tiers.neighbour);
+            (way.tables, tiers(&way.tiers), tiers(&way.added.tiers))
+        })
+        .collect()
+}
+
+#[test]
+fn two_ways_that_differ_by_a_neighbouring_tier_of_one_modifier_are_one() {
+    let joined = |ways: &[Split]| way_tiers(&neighbours_joined(ways));
+
+    // The added modifier in the tier of index 1 or 0, or the summed one: the worse found,
+    // the better its neighbour.
+    assert_eq!(
+        joined(&[way((0, 1), (0, 0)), way((0, 1), (0, 1))]),
+        [((0, 1), (0, None), (1, Some(0)))]
+    );
+    assert_eq!(
+        joined(&[way((0, 1), (2, 1)), way((0, 1), (1, 1))]),
+        [((0, 1), (2, Some(1)), (1, None))]
+    );
+    // Both modifiers in other tiers, tiers that aren't neighbours, three ways, or two pairs
+    // of modifiers: apart.
+    let apart = [
+        vec![way((0, 1), (0, 1)), way((0, 1), (1, 0))],
+        vec![way((0, 1), (0, 0)), way((0, 1), (0, 2))],
+        vec![
+            way((0, 1), (0, 0)),
+            way((0, 1), (0, 1)),
+            way((0, 1), (1, 0)),
+        ],
+        vec![way((0, 1), (0, 0)), way((0, 2), (0, 1))],
+    ];
+    for ways in apart {
+        assert_eq!(joined(&ways), way_tiers(&ways));
     }
 }
 
