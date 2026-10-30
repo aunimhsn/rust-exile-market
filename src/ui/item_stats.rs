@@ -1200,20 +1200,18 @@ fn affix_stats<'a>(item: &'a Item, affix: Option<Affix>, reading: &Reading<'_>) 
                         }) => hybrid_row(modifier, *line, whole, added),
                         _ => {
                             // A modifier of one tier only: the ranges of that tier without its
-                            // number, also when the copy writes no tier.
+                            // number, also when the copy writes no tier; nothing when its
+                            // value is fixed.
                             let single = reading.tiers.single(index);
-                            (single || modifier.tier.is_some()).then(|| {
-                                let ranges = modifier
-                                    .lines
-                                    .iter()
-                                    .flat_map(|line| magnitudes(line, &copied_ranges(line)))
-                                    .map(|(_, range)| range)
-                                    .collect();
-                                TierRow::plain(ModifierTier {
-                                    number: modifier.tier.filter(|_| !single),
-                                    ranges,
-                                })
-                            })
+                            let number = modifier.tier.filter(|_| !single);
+                            let ranges: Vec<Range> = modifier
+                                .lines
+                                .iter()
+                                .flat_map(|line| magnitudes(line, &copied_ranges(line)))
+                                .map(|(_, range)| range)
+                                .collect();
+                            (number.is_some() || (single && !ranges.is_empty()))
+                                .then(|| TierRow::plain(ModifierTier { number, ranges }))
                         }
                     };
                     let origin = modifier.origin.filter(|_| line_index == origin_line);

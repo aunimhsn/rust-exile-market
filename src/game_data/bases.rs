@@ -151,18 +151,27 @@ struct BaseData {
 /// What tells the modifiers that roll on a base.
 #[derive(Deserialize, Debug, PartialEq)]
 pub(super) struct BaseSpawn {
-    /// The domain of its modifiers in RePoE: `item` for the equipment (when the generator
-    /// writes none), `flask` for the flasks and the charms, `misc` for the jewels.
-    #[serde(default = "item")]
-    pub domain: String,
+    #[serde(default)]
+    pub domain: Domain,
     /// E.g. `crossbow`, `two_hand_weapon`: only those that tell where a modifier rolls, also
     /// the kind of a flask (`life_flask`, `mana_flask`), its category on the trade site.
     #[serde(default)]
     pub tags: Vec<String>,
 }
 
-fn item() -> String {
-    "item".to_owned()
+/// The domain of the modifiers of a base in RePoE, and of a modifier table: a table rolls on
+/// the bases of its domain only. A domain the application doesn't know leaves its line of the
+/// data unread, and the tests that read every line fail.
+#[derive(Deserialize, Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[serde(rename_all = "lowercase")]
+pub(super) enum Domain {
+    /// The equipment, when the generator writes none.
+    #[default]
+    Item,
+    /// The flasks and the charms.
+    Flask,
+    /// The jewels.
+    Misc,
 }
 
 static ENGLISH: LazyLock<HashMap<String, BaseData>> =
@@ -272,18 +281,18 @@ mod tests {
 
     #[test]
     fn a_base_has_the_domain_of_its_modifiers() {
-        let domain = |language, name| spawn(language, name).map(|spawn| spawn.domain.as_str());
+        let domain = |language, name| spawn(language, name).map(|spawn| spawn.domain);
 
-        assert_eq!(domain(Language::English, "Gemini Bow"), Some("item"));
+        assert_eq!(domain(Language::English, "Gemini Bow"), Some(Domain::Item));
         assert_eq!(
             domain(Language::English, "Ultimate Life Flask"),
-            Some("flask")
+            Some(Domain::Flask)
         );
         assert_eq!(
             domain(Language::French, "Charme en améthyste"),
-            Some("flask")
+            Some(Domain::Flask)
         );
-        assert_eq!(domain(Language::English, "Ruby"), Some("misc"));
+        assert_eq!(domain(Language::English, "Ruby"), Some(Domain::Misc));
         assert_eq!(domain(Language::English, "Mystery Ring"), None);
     }
 

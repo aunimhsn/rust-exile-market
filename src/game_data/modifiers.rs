@@ -6,7 +6,7 @@ use std::sync::LazyLock;
 
 use serde::Deserialize;
 
-use super::bases::{self, BaseSpawn};
+use super::bases::{self, BaseSpawn, Domain};
 use super::lines::{LineMatch, StatSource, modifier_stats};
 use crate::item::{
     Affix, AffixTier, Modifier, ModifierKind, ModifierOrigin, PartTier, Range, TierDoubt,
@@ -30,10 +30,10 @@ struct Table {
     #[serde(rename = "type")]
     kind: String,
     affix: TableAffix,
-    /// The domain of the bases it rolls on (`item` when the generator writes none): `default`,
-    /// a tag of every base, rolls on those of its domain only (the charges of a flask).
-    #[serde(default = "item")]
-    domain: String,
+    /// The domain of the bases it rolls on: `default`, a tag of every base, rolls on those of
+    /// its domain only (the charges of a flask).
+    #[serde(default)]
+    domain: Domain,
     lines: Vec<TableLine>,
     /// Each tag and its weight: the first tag of the list a base has tells whether the
     /// modifier rolls on it (above zero) or not.
@@ -63,10 +63,6 @@ struct TableLine {
 
 fn one() -> f64 {
     1.0
-}
-
-fn item() -> String {
-    "item".to_owned()
 }
 
 #[derive(Deserialize)]

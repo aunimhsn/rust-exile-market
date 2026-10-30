@@ -3,7 +3,7 @@
 //! added to, and the bound of the search.
 
 use super::*;
-use crate::game_data::bases;
+use crate::game_data::bases::{self, Domain};
 use crate::game_data::lines::modifier_stats;
 use crate::game_data::modifiers::{AddedTiers, ModifierTiers, TableAffix, TableLine, Tier};
 use crate::item::{ModifierKind, StatLine};
@@ -205,7 +205,7 @@ fn a_modifier_sits_on_lines_of_its_templates_of_one_origin() {
     let table = |templates: &[&str]| Table {
         kind: "Kind".to_owned(),
         affix: TableAffix::Prefix,
-        domain: "item".to_owned(),
+        domain: Domain::Item,
         lines: templates
             .iter()
             .map(|template| TableLine {

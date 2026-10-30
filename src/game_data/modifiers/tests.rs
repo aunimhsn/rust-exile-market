@@ -19,7 +19,7 @@ fn range(min: f64, max: f64) -> Range {
 /// A base of the equipment with `tags`.
 fn equipment(tags: &[&str]) -> BaseSpawn {
     BaseSpawn {
-        domain: "item".to_owned(),
+        domain: Domain::Item,
         tags: tags.iter().map(|&tag| tag.to_owned()).collect(),
     }
 }

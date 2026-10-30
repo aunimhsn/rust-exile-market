@@ -9,8 +9,13 @@ use serde::{Deserialize, Serialize};
 
 use crate::Result;
 
-/// The domains of the modifiers kept: the equipment, the jewels, the flasks and the charms.
-const DOMAINS: [&str; 3] = ["item", "misc", "flask"];
+/// The domain of the modifiers of the equipment, which the application takes when none is
+/// written.
+pub const EQUIPMENT: &str = "item";
+
+/// The domains of the modifiers kept: the equipment, the jewels, the flasks and the charms;
+/// each one a domain the application knows (`Domain` in `src/game_data/bases.rs`).
+const DOMAINS: [&str; 3] = [EQUIPMENT, "misc", "flask"];
 
 /// Whether `tag` is one of the Time-Lost jewels: their modifiers are written by the game
 /// within `Small Passive Skills in Radius also grant …` or `Notable Passive Skills…`, which
@@ -119,10 +124,9 @@ fn is_one(value: &i64) -> bool {
     *value == 1
 }
 
-/// Whether `domain` is that of the equipment, the one the application takes when none is
-/// written.
+/// Whether `domain` is that of the equipment, left unwritten.
 pub fn is_item(domain: &String) -> bool {
-    domain == "item"
+    domain == EQUIPMENT
 }
 
 #[derive(Serialize, PartialEq, Eq, PartialOrd, Ord)]

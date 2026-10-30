@@ -476,7 +476,7 @@ fn reduce_bases(source: &str, spawns: &modifiers::BaseTags) -> Result<Vec<Base>>
             .ok_or("a base without category")?;
         let english = english_names.get(&name).unwrap_or(&name);
         let (domain, tags) = spawns.get(english).map_or_else(
-            || ("item".to_owned(), Vec::new()),
+            || (modifiers::EQUIPMENT.to_owned(), Vec::new()),
             |spawn| (spawn.domain.clone(), spawn.tags.clone()),
         );
         if tags.is_empty() {

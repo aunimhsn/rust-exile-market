@@ -243,6 +243,43 @@ fn a_modifier_of_one_tier_only_shows_its_ranges_without_tier() {
             "□ +76 to maximum Mana ≥68 [0.39 T7 65–79]",
         ]
     );
+
+    // A fixed value of one tier only: nothing under it.
+    let quiver = texts(&parse(
+        "Item Class: Quivers\nRarity: Rare\nStorm Song\nFire Quiver\n\
+         --------\nItem Level: 40\n--------\n\
+         { Suffix Modifier \"of the Archer\" (Tier: 1) — Attack, Gem }\n\
+         +1 to Level of all Projectile Skills",
+    ));
+    assert_eq!(
+        quiver.last().map(String::as_str),
+        Some("■ +1 to Level of all Projectile Skills")
+    );
+
+    // Copied from the in-game trade: its tier found from its value.
+    let jewel = texts(&read_again(parse(
+        "Item Class: Jewels\nRarity: Rare\nViper Glimmer\nRuby\n--------\n\
+         Item Level: 43\n--------\nMinions have 12% increased maximum Life",
+    )));
+    assert!(
+        jewel.contains(&"■ Minions have 12% increased maximum Life ≥11 [0.70 5–15]".to_owned()),
+        "{jewel:?}"
+    );
+
+    // The essences of a bow, written without tier.
+    let bow = texts(&parse(include_str!(
+        "../../item/test-items/en-rare-bow-fractured.txt"
+    )));
+    assert!(
+        bow.iter().any(|text| text
+            .starts_with("■ 20% chance to gain Onslaught on Killing Hits with this Weapon ≥")
+            && text.ends_with(" [0.00 20–25]")),
+        "{bow:?}"
+    );
+    assert!(
+        bow.contains(&"■ +3 to Level of all Attack Skills ≥3".to_owned()),
+        "{bow:?}"
+    );
 }
 
 #[test]

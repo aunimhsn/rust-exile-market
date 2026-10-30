@@ -50,17 +50,18 @@ impl TierRolls {
     /// site).
     #[must_use]
     pub fn new(language: Language, modifiers: &[Modifier], base_type: Option<&str>) -> Self {
-        let Some(base_type) = base_type else {
-            return Self::default();
-        };
         let mut lines = Vec::new();
         let mut single = Vec::new();
         for (index, modifier) in modifiers.iter().enumerate() {
+            // Its copied ranges, whatever its base.
             if written_without_tier(modifier) {
                 single.push(index);
                 lines.extend(copied_rolls(index, modifier));
                 continue;
             }
+            let Some(base_type) = base_type else {
+                continue;
+            };
             let summed = match &modifier.doubt {
                 Some(TierDoubt::Split { line, .. }) => Some(*line),
                 _ if modifier.tier.is_some() => None,
@@ -73,7 +74,15 @@ impl TierRolls {
             };
             let one_tier = summed.is_none() && tiers.tiers.len() == 1;
             if one_tier {
-                single.push(index);
+                match modifier.tier {
+                    Some(1) => single.push(index),
+                    // The game knows more tiers than the data, e.g. after a patch: the tier
+                    // the copy writes is kept.
+                    tier => log::warn!(
+                        "Game data, one tier only for a modifier copied as tier {tier:?}: {}",
+                        modifier.lines.first().map_or("", |line| line.text.as_str())
+                    ),
+                }
             }
             let mut start = 0;
             for (found, &count) in matches.iter().zip(&tiers.counts) {
@@ -292,6 +301,45 @@ mod tests {
     }
 
     #[test]
+    fn a_modifier_copied_with_another_tier_than_the_only_one_of_the_data_keeps_it() {
+        // After a patch that adds a tier the data doesn't know yet.
+        let rolls = rolls_of(
+            "Item Class: Jewels\nRarity: Rare\nViper Glimmer\nRuby\n--------\n\
+             Item Level: 43\n--------\n\
+             { Prefix Modifier \"Brutish\" (Tier: 2) — Minion, Life }\n\
+             Minions have 12(5-15)% increased maximum Life",
+        );
+
+        assert!(!rolls.single(0));
+    }
+
+    #[test]
+    fn a_hybrid_of_one_tier_only_has_no_tier_to_tell() {
+        let flask = "Item Class: Life Flasks\nRarity: Magic\nSaturated Ultimate Life Flask\n\
+                     --------\nItem Level: 82\n--------\n\
+                     { Prefix Modifier \"Saturated\" (Tier: 1) — Life }\n\
+                     Instant Recovery\n50(50)% reduced Amount Recovered";
+        let item = Item::parse(&CopiedItem::from_text(flask).expect("an item")).expect("read");
+        // The base of a magic item, from the names of the trade site.
+        let rolls = TierRolls::new(
+            item.language(),
+            item.modifiers(),
+            Some("Ultimate Life Flask"),
+        );
+
+        assert!(rolls.single(0));
+        // A line without number has no rolls.
+        assert_eq!(rolls.get(key(0, 0)), None);
+        assert_eq!(
+            rolls.get(key(0, 1)),
+            Some(&LineRolls {
+                ranges: vec![Some(range(50.0, 50.0))],
+                tiers: None,
+            })
+        );
+    }
+
+    #[test]
     fn a_modifier_written_without_tier_rolls_over_its_copied_range() {
         let rolls = rolls_of(
             "Item Class: Rings\nRarity: Rare\nGlyph Circle\nBreach Ring\n--------\n\
@@ -326,6 +374,23 @@ mod tests {
         );
         assert!(!rolls.single(0));
         assert_eq!(rolls.get(key(0, 0)), None);
+
+        // In French, and before the base is known (a magic item before the names of the trade
+        // site): its copied range needs no base.
+        let french = "Classe d'objet: Bagues\nRareté: Rare\nCercle glyphe\nBague de Brèche\n\
+                      --------\nNiveau de l'objet: 77\n--------\n\
+                      { Préfixe : « Renforçant » — Vie, Créature }\n\
+                      Les Créatures ont 21(19-22)% d'Augmentation de Vie maximale";
+        let item = Item::parse(&CopiedItem::from_text(french).expect("an item")).expect("read");
+        let rolls = TierRolls::new(item.language(), item.modifiers(), None);
+        assert!(rolls.single(0));
+        assert_eq!(
+            rolls.get(key(0, 0)),
+            Some(&LineRolls {
+                ranges: vec![Some(range(19.0, 22.0))],
+                tiers: None,
+            })
+        );
     }
 
     #[test]
