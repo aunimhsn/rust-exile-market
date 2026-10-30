@@ -1,6 +1,7 @@
 //! The prices of the fixed-name items of a league, from the price database: the uniques and
 //! the items of the currency exchange, in Exalted Orbs, with the rates of the Chaos and Divine
-//! Orbs to show them in the three currencies.
+//! Orbs to show them in the three currencies; and the modifiers of each unique with their
+//! ranges, the rolls of a unique copied without them.
 
 use std::time::{Duration, SystemTime};
 
@@ -85,6 +86,18 @@ pub struct UniquePrice {
     pub name: String,
     pub base_type: String,
     pub price: Price,
+    /// Its modifiers with their ranges, in English: the rolls of a unique copied without them,
+    /// from the in-game trade.
+    pub modifiers: UniqueModifiers,
+}
+
+/// The modifiers of a unique with their ranges, e.g. `+(17-23)% to Chaos Resistance`: those
+/// of its base (implicit), and its own (explicit), apart so that a line is only matched with
+/// the modifiers of its kind.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub struct UniqueModifiers {
+    pub implicit: Vec<String>,
+    pub explicit: Vec<String>,
 }
 
 /// An item of the currency exchange: currency, fragments, essences, runes…

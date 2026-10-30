@@ -9,7 +9,7 @@ use crate::logging;
 use crate::prices::PriceList;
 
 /// Changed with the shape of [`PriceList`]: a file of another version is downloaded again.
-const VERSION: u32 = 5;
+const VERSION: u32 = 6;
 
 /// The files of the cache.
 pub struct PriceCache {
@@ -89,7 +89,7 @@ fn file_name(league: &League) -> String {
 mod tests {
     use super::*;
     use crate::files::TestDirectory;
-    use crate::prices::{CurrencyPrice, Price, Rates};
+    use crate::prices::{CurrencyPrice, Price, Rates, UniqueModifiers, UniquePrice};
     use std::fs;
     use std::time::{Duration, SystemTime};
 
@@ -101,7 +101,21 @@ mod tests {
                 chaos: 75.4,
                 divine: 754.0,
             },
-            uniques: Vec::new(),
+            uniques: vec![UniquePrice {
+                name: "Soul Tether".to_owned(),
+                base_type: "Long Belt".to_owned(),
+                price: Price {
+                    exalted: 12.0,
+                    quantity: 40,
+                    history: Vec::new(),
+                },
+                modifiers: UniqueModifiers {
+                    implicit: vec!["(15-20)% increased Charm Effect Duration".to_owned()],
+                    explicit: vec![
+                        "You lose (5-5)% of maximum Energy Shield per second".to_owned(),
+                    ],
+                },
+            }],
             currencies: vec![CurrencyPrice {
                 name: "Divine Orb".to_owned(),
                 exchange_id: "divine".to_owned(),
