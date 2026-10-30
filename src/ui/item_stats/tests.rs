@@ -256,6 +256,29 @@ fn a_modifier_of_one_tier_only_shows_its_ranges_without_tier() {
         Some("■ +1 to Level of all Projectile Skills")
     );
 
+    // A hybrid of one tier only, a line without number: the ranges under its last line.
+    let flask = parse(
+        "Item Class: Life Flasks\nRarity: Magic\nSaturated Ultimate Life Flask\n\
+         --------\nItem Level: 82\n--------\n\
+         { Prefix Modifier \"Saturated\" (Tier: 1) — Life }\n\
+         Instant Recovery\n50(50)% reduced Amount Recovered",
+    );
+    // The base of a magic item, from the names of the trade site.
+    let base = Some("Ultimate Life Flask");
+    let lines = CopiedLines::new(
+        flask.language(),
+        flask.modifiers(),
+        &LineStats::default(),
+        None,
+    );
+    let stats = LineStats::new(flask.language(), flask.modifiers(), None);
+    let tiers = TierRolls::new(flask.language(), flask.modifiers(), base);
+    let flask = row_texts(super::rows(&flask, &lines, &stats, &tiers, base));
+    assert_eq!(
+        flask[flask.len() - 2..],
+        ["■ Instant Recovery", "■ 50% reduced Amount Recovered [50]"]
+    );
+
     // Copied from the in-game trade: its tier found from its value.
     let jewel = texts(&read_again(parse(
         "Item Class: Jewels\nRarity: Rare\nViper Glimmer\nRuby\n--------\n\

@@ -479,6 +479,10 @@ fn reduce_bases(source: &str, spawns: &modifiers::BaseTags) -> Result<Vec<Base>>
             || (modifiers::EQUIPMENT.to_owned(), Vec::new()),
             |spawn| (spawn.domain.clone(), spawn.tags.clone()),
         );
+        // The application reads the domains of the modifiers kept only.
+        if !modifiers::is_kept(&domain) {
+            return Err(format!("unknown domain {domain} of {name}").into());
+        }
         if tags.is_empty() {
             println!("Without tags: {name}");
         }
@@ -583,6 +587,28 @@ mod tests {
 
     fn base(name: &str, category: &str) -> (String, String) {
         (name.to_owned(), category.to_owned())
+    }
+
+    #[test]
+    fn a_base_of_a_domain_the_application_doesnt_know_stops_the_generator() {
+        let spawn = |domain: &str| modifiers::BaseSpawn {
+            domain: domain.to_owned(),
+            tags: vec!["ring".to_owned()],
+        };
+        let ring =
+            r#"{"name": "Gold Ring", "namespace": "ITEM", "craftable": {"category": "Ring"}}"#;
+        let reduced = |domain| {
+            reduce_bases(
+                ring,
+                &BTreeMap::from([("Gold Ring".to_owned(), spawn(domain))]),
+            )
+        };
+
+        assert!(reduced("item").is_ok());
+        assert_eq!(
+            reduced("area").err().map(|error| error.to_string()),
+            Some("unknown domain area of Gold Ring".to_owned())
+        );
     }
 
     #[test]

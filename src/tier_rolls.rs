@@ -29,7 +29,9 @@ pub struct TierSpan {
 pub struct LineRolls {
     /// For each number of the line, in its order, from the lowest roll of its worst tier to
     /// the highest of tier 1, as the game writes it: without its sign; none for a number its
-    /// stat doesn't count (the 3 of `#% chance to gain Onslaught for 3 seconds`).
+    /// stat doesn't count (the 3 of `#% chance to gain Onslaught for 3 seconds`), except for a
+    /// modifier written without tier, the range the copy writes of every number, those its
+    /// stat doesn't count left out by the reader (`Reading::pick` in `src/ui/item_stats.rs`).
     pub ranges: Vec<Option<Range>>,
     /// The tiers of its lowest and highest rolls, for a line of one number its stat counts.
     pub tiers: Option<TierSpan>,
@@ -311,6 +313,8 @@ mod tests {
         );
 
         assert!(!rolls.single(0));
+        // Nor "T1–T1" against its T2.
+        assert_eq!(rolls.get(key(0, 0)).map(|rolls| rolls.tiers), Some(None));
     }
 
     #[test]

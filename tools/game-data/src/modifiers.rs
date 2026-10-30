@@ -124,6 +124,11 @@ fn is_one(value: &i64) -> bool {
     *value == 1
 }
 
+/// Whether `domain` is one of the modifiers kept, which the application knows.
+pub fn is_kept(domain: &str) -> bool {
+    DOMAINS.contains(&domain)
+}
+
 /// Whether `domain` is that of the equipment, left unwritten.
 pub fn is_item(domain: &String) -> bool {
     domain == EQUIPMENT
