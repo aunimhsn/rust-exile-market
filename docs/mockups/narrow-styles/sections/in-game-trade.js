@@ -115,7 +115,7 @@ const bowTradeStats = [
   { mod: "258% increased Physical Damage", check: false, min: 232,
     affixes: [[1, "170–179"], [1, "75–79", { label: "Hybrid", tip: "With +195 to Accuracy Rating", hover: true }]] },
   { mod: "+195 to Accuracy Rating", check: true, min: 176, tier: 1, range: "175–200", over: { share: .97 },
-    after: { label: "Hybrid", tip: "With 75–79% of 258% increased Physical Damage" } },
+    after: { label: "Hybrid", tip: "With 75–79 of 258% increased Physical Damage" } },
   { mod: "Adds 36 to 56 Physical Damage", check: false, tier: 1, range: "26–39 · 44–66", over: { share: .88 }, origin: "desecrated" },
   { group: "Suffixes", fill: "4 of 4" },
   { mod: "+5% to Critical Hit Chance", check: true, min: 5, tier: 1, range: "4.41–5", over: { share: 1 }, origin: "fractured" },

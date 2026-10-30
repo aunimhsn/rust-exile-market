@@ -211,6 +211,16 @@ affix-prefix = Prefix
 affix-suffix = Suffix
 # The tooltip of "Suffix" under a line that adds up a prefix and a suffix of the same stat, the prefix written above it.
 added-up-with-prefix = Added up with the prefix on this line
+# After the range of the part of a hybrid in a line that adds up two modifiers of the same stat, and under its other lines, in gray; with its affix when the other part is of the other affix (a hybrid prefix added up with a pure suffix).
+hybrid = Hybrid
+hybrid-prefix = Hybrid prefix
+hybrid-suffix = Hybrid suffix
+# The tooltip of "Hybrid" on the line that adds up the part of a hybrid: the other lines of the hybrid, e.g. "With +195 to Accuracy Rating".
+hybrid-with = With { $lines }
+# Two other lines of a hybrid in the tooltip above: "+38 to Armour and +35 to Evasion Rating".
+hybrid-lines-and = { $first } and { $second }
+# The tooltip of "Hybrid" under the other lines of the hybrid: the range of its part on the line that adds it up, then that line, e.g. "With 75–79 of 258% increased Physical Damage".
+hybrid-part = With { $ranges } of { $line }
 
 ## Price block
 

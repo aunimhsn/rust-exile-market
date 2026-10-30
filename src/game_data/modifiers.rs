@@ -161,6 +161,9 @@ impl ModifierTiers {
 /// ranges are in no tier: a modifier of the lords of the Abyss is desecrated, like some
 /// ordinary ones, and rolls its own range.
 ///
+/// For a line that adds up two modifiers ([`TierDoubt::Split`]), the tiers of the modifier of
+/// every line ([`split_tiers`]).
+///
 /// With the ranges of the advanced copy, only a tier with those ranges: the tier that holds the
 /// copied values first, then the one that holds them give or take the rounding of the game, then
 /// the one whose values left it (any value out of its tier, e.g. on a sanctified item). Without
@@ -173,6 +176,9 @@ pub fn modifier_tiers(
     modifier: &Modifier,
     matches: &[LineMatch<'_>],
 ) -> Option<ModifierTiers> {
+    if let Some(TierDoubt::Split { line, whole, .. }) = &modifier.doubt {
+        return split_tiers(language, base_type, modifier, matches, (*line, whole));
+    }
     let affix = match modifier.kind {
         ModifierKind::Explicit(Some(Affix::Prefix)) => TableAffix::Prefix,
         ModifierKind::Explicit(Some(Affix::Suffix)) => TableAffix::Suffix,
@@ -181,6 +187,91 @@ pub fn modifier_tiers(
     let tags = bases::tags(language, base_type)?;
     let copied = Copied::of(modifier, matches)?;
     find(&TABLES, affix, tags, &copied, Tie::Best)
+}
+
+/// The tiers of the modifier of every line of `modifier`, whose line `line` adds up its part
+/// `whole` and a pure modifier ([`hybrid_tiers`]).
+fn split_tiers(
+    language: Language,
+    base_type: &str,
+    modifier: &Modifier,
+    matches: &[LineMatch<'_>],
+    (line, whole): (usize, &PartTier),
+) -> Option<ModifierTiers> {
+    let tags = bases::tags(language, base_type)?;
+    let copied = Copied::of(modifier, matches)?;
+    let summed = matches
+        .iter()
+        .position(|found| found.lines == (line..line + 1))?;
+    hybrid_tiers(&TABLES, tags, copied, summed, whole)
+}
+
+/// The tiers among `tables`, on a base with `tags`, of the modifier of every line of `copied`,
+/// whose line `summed` adds up its part `whole` and a pure modifier: found from the values of
+/// its other lines, that line taken at the lowest roll of its part, the sum being in no tier;
+/// the tiers of `whole`, the worse found and the better its neighbour. None when the tiers of
+/// `whole` in that table don't give that line the ranges of `whole`: another table, whose
+/// rolls would be wrong. The first table that holds the values is the one of the split:
+/// another one holding them as well would have been a second way to split the line
+/// ([`splits`]), which leaves it without tier; but `splits` only takes the tiers the item
+/// level allows, which `find` doesn't (no two tables share the templates of a hybrid on one
+/// base today).
+fn hybrid_tiers(
+    tables: &[Table],
+    tags: &[String],
+    mut copied: Copied<'_>,
+    summed: usize,
+    whole: &PartTier,
+) -> Option<ModifierTiers> {
+    let affix = match whole.affix {
+        Affix::Prefix => TableAffix::Prefix,
+        Affix::Suffix => TableAffix::Suffix,
+    };
+    // The values of that line among those of every line, in their order.
+    let offset: usize = copied
+        .lines
+        .iter()
+        .take(summed)
+        .map(CopiedLine::count)
+        .sum();
+    let values = &mut copied.lines.get_mut(summed)?.values;
+    if values.len() != whole.ranges.len() {
+        return None;
+    }
+    for (value, range) in values.iter_mut().zip(&whole.ranges) {
+        // The ranges as the game writes them, the values with the sign of the stat.
+        *value = range.min.copysign(*value);
+    }
+    // The summed line has no range: the tier is found by the values.
+    copied.ranges = None;
+    let table = find(tables, affix, tags, &copied, Tie::Best)?;
+    let index = |number: &u32| table.tiers.iter().position(|tier| tier.number == *number);
+    let worse = index(whole.tiers.last()?)?;
+    let better = match whole.tiers.as_slice() {
+        [better, _] => Some(index(better)?),
+        _ => None,
+    };
+    let part = [Some(worse), better].into_iter().flatten();
+    for (position, expected) in whole.ranges.iter().enumerate() {
+        let mut spanned: Option<Range> = None;
+        for tier in part.clone() {
+            let range = table
+                .tiers
+                .get(tier)?
+                .ranges
+                .get(offset + position)?
+                .magnitude()?;
+            spanned = Some(spanned.map_or(range, |spanned| spanned.spanning(range)));
+        }
+        if spanned != Some(*expected) {
+            return None;
+        }
+    }
+    Some(ModifierTiers {
+        found: worse,
+        neighbour: better,
+        ..table
+    })
 }
 
 /// How many prefixes and suffixes an item can have: those of its rarity, with those its runes
@@ -477,7 +568,8 @@ fn read_found(
 /// The modifiers `parts`, the first the modifier `first` of the item, made one modifier whose
 /// line `added.line` adds up the modifier `whole` (of every line of `parts`) and `added`
 /// (of that line only): of their affix, or explicit without affix for a prefix and a suffix,
-/// without tier nor range, with the tiers of each part.
+/// without tier, with the tiers of each part; the other lines of a hybrid `whole` with its
+/// ranges over its tiers, that line without range.
 fn read_split(
     language: Language,
     parts: &[Modifier],
@@ -490,7 +582,19 @@ fn read_split(
     // trade writes them, but the lines are counted.
     let line: usize = parts.iter().take(summed).map(|part| part.lines.len()).sum();
     let alone = parts.get(summed..=summed)?;
-    let joined = joined(parts)?;
+    let mut joined = joined(parts)?;
+    for (index, other) in joined.lines.iter_mut().enumerate() {
+        if index == line {
+            continue;
+        }
+        // When the tiers of the hybrid don't give a range to the same values of that line,
+        // it keeps its values without range, as the summed line has none.
+        if let Some(ranges) = spanned_ranges(language, parts, whole, index) {
+            for (roll, range) in other.rolls.iter_mut().zip(ranges) {
+                roll.range = range;
+            }
+        }
+    }
     Some(Modifier {
         kind: ModifierKind::Explicit((affix == added.affix).then_some(affix)),
         tier: None,
@@ -505,7 +609,7 @@ fn read_split(
 
 /// The tiers `tiers` may be (one, or two neighbouring ones) of the modifiers `parts` read as
 /// one modifier of `affix`, with the range over these tiers of each value of their line
-/// `line` its stat counts ([`with_ranges`]); none when the tiers don't give a range to the
+/// `line` its stat counts ([`spanned_ranges`]); none when the tiers don't give a range to the
 /// same values of that line, whose ranges then can't be told apart.
 fn part_tier(
     language: Language,
@@ -514,6 +618,25 @@ fn part_tier(
     tiers: &ModifierTiers,
     line: usize,
 ) -> Option<PartTier> {
+    Some(PartTier {
+        affix,
+        tiers: tiers.possible().map(|tier| tier.number).collect(),
+        ranges: spanned_ranges(language, parts, tiers, line)?
+            .into_iter()
+            .flatten()
+            .collect(),
+    })
+}
+
+/// For each value of the line `line` of the modifiers `parts` read as one, the range over the
+/// tiers `tiers` may be ([`with_ranges`]), none for a value its stat doesn't count; none when
+/// the tiers don't give a range to the same values.
+fn spanned_ranges(
+    language: Language,
+    parts: &[Modifier],
+    tiers: &ModifierTiers,
+    line: usize,
+) -> Option<Vec<Option<Range>>> {
     let mut ranges: Option<Vec<Option<Range>>> = None;
     for tier in tiers.possible() {
         let read = with_ranges(language, parts, tier, &tiers.counts)?;
@@ -531,20 +654,14 @@ fn part_tier(
                 .into_iter()
                 .zip(line_ranges)
                 .map(|pair| match pair {
-                    (Some(spanned), Some(range)) => {
-                        Some(Some(spanned.holding(range.min).holding(range.max)))
-                    }
+                    (Some(spanned), Some(range)) => Some(Some(spanned.spanning(range))),
                     (None, None) => Some(None),
                     _ => None,
                 })
                 .collect::<Option<_>>()?,
         });
     }
-    Some(PartTier {
-        affix,
-        tiers: tiers.possible().map(|tier| tier.number).collect(),
-        ranges: ranges?.into_iter().flatten().collect(),
-    })
+    ranges
 }
 
 /// The modifiers `parts` made one, with the lines of each in their order.

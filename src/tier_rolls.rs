@@ -1,7 +1,8 @@
 //! The rolls of each line of a prefix or suffix of the copied item over every tier of its
 //! modifier on the base of the item, from the modifier tables: its bar, the range its field
 //! stays in and the rolls its tooltip tells. Read once when the item is copied, for a modifier
-//! whose header tells its affix and its tier.
+//! whose header tells its affix and its tier, and for the other lines of a hybrid whose part a
+//! line adds up, over the tiers of the hybrid; not for that line, a sum over no tiers.
 //!
 //! The ranges of a tier follow the values of each line match of the modifier, and the values
 //! of a match the numbers its stat counts on its lines, in their order: the numbers are read
@@ -9,7 +10,7 @@
 
 use crate::filters::StatKey;
 use crate::game_data::{self, Tier};
-use crate::item::{Modifier, Range};
+use crate::item::{Modifier, Range, TierDoubt};
 use crate::language::Language;
 use crate::trade::stat_filters::counted_numbers;
 
@@ -48,9 +49,11 @@ impl TierRolls {
         };
         let mut lines = Vec::new();
         for (index, modifier) in modifiers.iter().enumerate() {
-            if modifier.tier.is_none() {
-                continue;
-            }
+            let summed = match &modifier.doubt {
+                Some(TierDoubt::Split { line, .. }) => Some(*line),
+                _ if modifier.tier.is_some() => None,
+                _ => continue,
+            };
             let matches = game_data::modifier_stats(language, modifier, None);
             let Some(tiers) = game_data::modifier_tiers(language, base_type, modifier, &matches)
             else {
@@ -61,6 +64,9 @@ impl TierRolls {
                 let numbers = counted_numbers(found, modifier);
                 if let Some(values) = share_values(start, count, &numbers) {
                     for (line, values) in found.lines.clone().zip(values) {
+                        if summed == Some(line) {
+                            continue;
+                        }
                         let rolls = modifier.lines.get(line).map_or(0, |line| line.rolls.len());
                         if let Some(rolls) = line_rolls(&tiers.tiers, &values, rolls) {
                             let key = StatKey {
@@ -124,10 +130,7 @@ fn line_rolls(tiers: &[Tier], values: &[(usize, usize)], rolls: usize) -> Option
             .map(|tier| tier.ranges.get(value)?.magnitude())
             .reduce(|over, range| {
                 let (over, range) = (over?, range?);
-                Some(Range {
-                    min: over.min.min(range.min),
-                    max: over.max.max(range.max),
-                })
+                Some(over.spanning(range))
             })
             .flatten()?;
         *ranges.get_mut(number)? = Some(over);
@@ -263,6 +266,66 @@ mod tests {
                         +86(85-99) to maximum Life";
         let item = Item::parse(&CopiedItem::from_text(advanced).expect("an item")).expect("read");
         let rolls = TierRolls::new(item.language(), item.modifiers(), None);
+        assert_eq!(rolls.get(key(0, 0)), None);
+    }
+
+    #[test]
+    fn the_other_line_of_a_hybrid_whose_part_a_line_adds_up_rolls_over_the_tiers_of_the_hybrid() {
+        use crate::item::{Affix, ModifierKind, PartTier, StatLine};
+
+        let part = |tiers: Vec<u32>, min, max| PartTier {
+            affix: Affix::Prefix,
+            tiers,
+            ranges: vec![range(min, max)],
+        };
+        // 258% is a pure T1 (170–179) and the hybrid T1 (75–79) with the accuracy.
+        let split = Modifier {
+            kind: ModifierKind::Explicit(Some(Affix::Prefix)),
+            origin: None,
+            name: None,
+            tier: None,
+            tags: Vec::new(),
+            unrevealed: false,
+            lines: vec![
+                StatLine::parse("258% increased Physical Damage"),
+                StatLine::parse("+195(175-200) to Accuracy Rating"),
+            ],
+            doubt: Some(TierDoubt::Split {
+                line: 0,
+                whole: part(vec![1], 75.0, 79.0),
+                added: part(vec![1], 170.0, 179.0),
+            }),
+        };
+
+        let rolls = TierRolls::new(
+            Language::English,
+            std::slice::from_ref(&split),
+            Some("Warmonger Bow"),
+        );
+
+        // A sum over no tiers; the accuracy over the 8 tiers of the hybrid.
+        assert_eq!(rolls.get(key(0, 0)), None);
+        assert_eq!(rolls.get(key(0, 1)), Some(&one(16.0, 200.0, 8, 1)));
+
+        // A part whose ranges the hybrid doesn't give the line: another table, no rolls.
+        let mut other = split.clone();
+        other.doubt = Some(TierDoubt::Split {
+            line: 0,
+            whole: part(vec![1], 76.0, 79.0),
+            added: part(vec![1], 170.0, 179.0),
+        });
+        let rolls = TierRolls::new(Language::English, &[other], Some("Warmonger Bow"));
+        assert_eq!(rolls.get(key(0, 1)), None);
+
+        // Two pure modifiers on one line: no rolls.
+        let mut pure = split;
+        pure.lines.truncate(1);
+        pure.doubt = Some(TierDoubt::Split {
+            line: 0,
+            whole: part(vec![1], 75.0, 79.0),
+            added: part(vec![1], 170.0, 179.0),
+        });
+        let rolls = TierRolls::new(Language::English, &[pure], Some("Warmonger Bow"));
         assert_eq!(rolls.get(key(0, 0)), None);
     }
 

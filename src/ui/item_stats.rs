@@ -83,6 +83,9 @@ const TOOLTIP_SMALL_LINE_GAP: f32 = 1.0;
 const UNSEARCHABLE_TOOLTIP_SHIFT: f32 = 4.0;
 /// The space between the rows of several tiers under a line.
 const TIER_ROW_GAP: f32 = 1.0;
+/// The widest tooltip of a word after the ranges of a tier, wrapped past it: the tooltip of
+/// "Hybrid" names a line of the item, which can be long.
+const WORD_TIP_WIDTH: f32 = 230.0;
 /// The lines of the text of a stat, at most; the whole text is in its tooltip.
 const MAX_LINES: usize = 2;
 /// The bar of a roll.
@@ -162,9 +165,9 @@ enum Group {
     Unique,
 }
 
-/// The roll of a stat.
+/// The roll of a stat, the lines its tooltips name borrowed from the item.
 #[derive(Debug, Clone, PartialEq)]
-enum Roll {
+enum Roll<'a> {
     /// Where its value falls in its ranges, from 0 to 1, and the ranges; then, under the last
     /// line of a Vaal modifier of a unique, its origin.
     Bar {
@@ -177,10 +180,11 @@ enum Roll {
     /// modifier, its tier and the ranges of that tier, of all its lines for a hybrid, so that it
     /// reads as one modifier, then its origin when it is desecrated, fractured or crafted. Also
     /// the origin alone under a line of a unique that never varies (a fixed Vaal modifier),
-    /// without bar nor tier.
+    /// without bar nor tier. Under the other lines of a hybrid whose part a line adds up, the
+    /// tier of the hybrid, "Hybrid" after its ranges. Boxed, so that a row stays small.
     Affix {
         share: Option<f32>,
-        tier: Option<ModifierTier>,
+        tier: Option<Box<TierRow<'a>>>,
         origin: Option<ModifierOrigin>,
     },
     /// Under the last line of a modifier copied from the in-game trade that can be a prefix or
@@ -189,7 +193,7 @@ enum Roll {
     /// whichever affix it is. The same under a line that adds up two modifiers, for the tier
     /// of each.
     Tiers {
-        rows: Vec<TierRow>,
+        rows: Vec<TierRow<'a>>,
         origin: Option<ModifierOrigin>,
     },
 }
@@ -203,20 +207,43 @@ struct ModifierTier {
     ranges: Vec<Range>,
 }
 
-/// A tier among several under a line, or two neighbouring ones, and the word after its ranges.
+/// A tier under a line, or two neighbouring ones, and the word after its ranges.
 #[derive(Debug, Clone, PartialEq)]
-struct TierRow {
+struct TierRow<'a> {
     /// The tier, or the worse of two neighbouring tiers.
     tier: ModifierTier,
     /// The better of two neighbouring tiers the modifier may be: `T1/T2`.
     better: Option<u32>,
-    /// In gray after the ranges: the affix of the tier ("Prefix").
+    /// In gray after the ranges: the affix of the tier ("Prefix"), or "Hybrid".
     word: Option<Message>,
     /// The tooltip of that word.
-    tip: Option<Message>,
+    tip: Option<WordTip<'a>>,
 }
 
-impl TierRow {
+/// The tooltip of the word after the ranges of a tier.
+#[derive(Debug, Clone, PartialEq)]
+enum WordTip<'a> {
+    /// A sentence: "Added up with the prefix on this line".
+    Text(Message),
+    /// On the line that adds up the part of a hybrid, its other lines: "With +195 to Accuracy
+    /// Rating".
+    HybridLines(Vec<&'a str>),
+    /// Under the other lines of that hybrid, the ranges of its part and the line that adds it
+    /// up: "With 75–79 of 258% increased Physical Damage".
+    HybridPart { ranges: Vec<Range>, line: &'a str },
+}
+
+impl<'a> TierRow<'a> {
+    /// The tier `tier` of a modifier, without word.
+    fn plain(tier: ModifierTier) -> Self {
+        Self {
+            tier,
+            better: None,
+            word: None,
+            tip: None,
+        }
+    }
+
     /// The tier `found` for one affix of a line that can be either, "Prefix" after its ranges.
     fn affix(found: &AffixTier) -> Self {
         Self {
@@ -232,18 +259,25 @@ impl TierRow {
 
     /// The tiers of a part of a line that adds up two modifiers, over the range of both when
     /// they are two, with `word` and its `tip`.
-    fn part(part: &PartTier, word: Option<Message>, tip: Option<Message>) -> Option<Self> {
-        let worse = *part.tiers.last()?;
+    fn part(part: &PartTier, word: Option<Message>, tip: Option<WordTip<'a>>) -> Option<Self> {
+        Self::tiers(&part.tiers, part.ranges.clone(), word, tip)
+    }
+
+    /// The `tiers` a modifier may be, the best first (one, or two neighbouring ones), over
+    /// `ranges`, with `word` and its `tip`.
+    fn tiers(
+        tiers: &[u32],
+        ranges: Vec<Range>,
+        word: Option<Message>,
+        tip: Option<WordTip<'a>>,
+    ) -> Option<Self> {
+        let worse = *tiers.last()?;
         Some(Self {
             tier: ModifierTier {
                 number: worse,
-                ranges: part.ranges.clone(),
+                ranges,
             },
-            better: part
-                .tiers
-                .first()
-                .copied()
-                .filter(|&better| better != worse),
+            better: tiers.first().copied().filter(|&better| better != worse),
             word,
             tip,
         })
@@ -261,19 +295,80 @@ fn affix_word(affix: Affix) -> Message {
 /// The tiers of the parts `whole` and `added` of a line that adds up two modifiers, one under
 /// the other: the prefix first, then, of two parts of one affix, the pure one (`added`) before
 /// the hybrid; "Prefix" and "Suffix" after the ranges of a prefix and a suffix, the tooltip of
-/// "Suffix" saying they are added up, which a line that can be either doesn't have.
-fn split_rows(whole: &PartTier, added: &PartTier) -> Vec<TierRow> {
+/// "Suffix" saying they are added up, which a line that can be either doesn't have. A hybrid
+/// `whole`, of the `others` lines, says "Hybrid" instead ([`hybrid_word`]), its tooltip naming
+/// them.
+fn split_rows<'a>(whole: &PartTier, added: &PartTier, others: &[&'a str]) -> Vec<TierRow<'a>> {
     let mut parts = [(added, false), (whole, true)];
     parts.sort_by_key(|&(part, is_whole)| (part.affix == Affix::Suffix, is_whole));
     let both = whole.affix != added.affix;
     parts
         .iter()
-        .filter_map(|&(part, _)| {
-            let word = both.then(|| affix_word(part.affix));
-            let tip = (both && part.affix == Affix::Suffix).then_some(Message::AddedUpWithPrefix);
+        .filter_map(|&(part, is_whole)| {
+            let (word, tip) = if is_whole && !others.is_empty() {
+                (
+                    Some(hybrid_word(whole, added)),
+                    Some(WordTip::HybridLines(others.to_vec())),
+                )
+            } else {
+                (
+                    both.then(|| affix_word(part.affix)),
+                    (both && part.affix == Affix::Suffix)
+                        .then_some(WordTip::Text(Message::AddedUpWithPrefix)),
+                )
+            };
             TierRow::part(part, word, tip)
         })
         .collect()
+}
+
+/// The word after the ranges of the hybrid `whole` whose part a line adds up with `added`,
+/// on that line and under its other lines: "Hybrid", with its affix when `added` is of the
+/// other affix ("Hybrid prefix"), the line then in Explicit.
+fn hybrid_word(whole: &PartTier, added: &PartTier) -> Message {
+    match whole.affix {
+        _ if whole.affix == added.affix => Message::Hybrid,
+        Affix::Prefix => Message::HybridPrefix,
+        Affix::Suffix => Message::HybridSuffix,
+    }
+}
+
+/// The lines of `modifier` other than its line `summed`, with their indexes: the other lines
+/// of the hybrid whose part that line adds up.
+fn other_lines(
+    modifier: &Modifier,
+    summed: usize,
+) -> impl DoubleEndedIterator<Item = (usize, &StatLine)> {
+    modifier
+        .lines
+        .iter()
+        .enumerate()
+        .filter(move |&(index, _)| index != summed)
+}
+
+/// The tier of the hybrid `whole` of `modifier`, whose line `summed` adds up its part with
+/// `added`, under the last of its other lines: the ranges of these lines over its tiers,
+/// "Hybrid" after them ([`hybrid_word`]), its tooltip naming that part and the line.
+fn hybrid_row<'a>(
+    modifier: &'a Modifier,
+    summed: usize,
+    whole: &PartTier,
+    added: &PartTier,
+) -> Option<TierRow<'a>> {
+    let ranges = other_lines(modifier, summed)
+        .flat_map(|(_, line)| magnitudes(line, &copied_ranges(line)))
+        .map(|(_, range)| range)
+        .collect();
+    let tip = WordTip::HybridPart {
+        ranges: whole.ranges.clone(),
+        line: &modifier.lines.get(summed)?.text,
+    };
+    TierRow::tiers(
+        &whole.tiers,
+        ranges,
+        Some(hybrid_word(whole, added)),
+        Some(tip),
+    )
 }
 
 /// How the bar of a roll is drawn: a setting from step 18, which adds the zone searched.
@@ -427,7 +522,7 @@ struct Stat<'a> {
     /// A line the trade site can't search, which would be a filter: the "not allowed" sign in
     /// place of its checkbox.
     unsearchable: bool,
-    roll: Option<Roll>,
+    roll: Option<Roll<'a>>,
 }
 
 /// A row of the stats.
@@ -1057,11 +1152,16 @@ fn affix_stats<'a>(item: &'a Item, affix: Option<Affix>, reading: &Reading<'_>) 
                 }];
             }
             let last = modifier.lines.len().saturating_sub(1);
-            // The origin under the tiers of a line that adds up two modifiers, the other lines
-            // of its hybrid without tier.
-            let origin_line = match &modifier.doubt {
-                Some(TierDoubt::Split { line, .. }) => *line,
-                _ => last,
+            // The origin under the tiers of a line that adds up two modifiers, the tier of the
+            // hybrid under the last of its other lines.
+            let (origin_line, tier_line) = match &modifier.doubt {
+                Some(TierDoubt::Split { line, .. }) => (
+                    *line,
+                    other_lines(modifier, *line)
+                        .next_back()
+                        .map(|(index, _)| index),
+                ),
+                _ => (last, Some(last)),
             };
             modifier
                 .lines
@@ -1072,15 +1172,21 @@ fn affix_stats<'a>(item: &'a Item, affix: Option<Affix>, reading: &Reading<'_>) 
                         modifier: index,
                         line: line_index,
                     };
-                    let tier = modifier.tier.filter(|_| line_index == last).map(|number| {
-                        let ranges = modifier
-                            .lines
-                            .iter()
-                            .flat_map(|line| magnitudes(line, &copied_ranges(line)))
-                            .map(|(_, range)| range)
-                            .collect();
-                        ModifierTier { number, ranges }
-                    });
+                    let tier = match &modifier.doubt {
+                        _ if tier_line != Some(line_index) => None,
+                        Some(TierDoubt::Split {
+                            line, whole, added, ..
+                        }) => hybrid_row(modifier, *line, whole, added),
+                        _ => modifier.tier.map(|number| {
+                            let ranges = modifier
+                                .lines
+                                .iter()
+                                .flat_map(|line| magnitudes(line, &copied_ranges(line)))
+                                .map(|(_, range)| range)
+                                .collect();
+                            TierRow::plain(ModifierTier { number, ranges })
+                        }),
+                    };
                     let origin = modifier.origin.filter(|_| line_index == origin_line);
                     let mut stat = affix_stat(key, line, tier, origin, reading);
                     let rows = match &modifier.doubt {
@@ -1089,7 +1195,12 @@ fn affix_stats<'a>(item: &'a Item, affix: Option<Affix>, reading: &Reading<'_>) 
                         }
                         Some(TierDoubt::Split {
                             line, whole, added, ..
-                        }) if line_index == *line => Some(split_rows(whole, added)),
+                        }) if line_index == *line => {
+                            let others: Vec<&str> = other_lines(modifier, *line)
+                                .map(|(_, other)| other.text.as_str())
+                                .collect();
+                            Some(split_rows(whole, added, &others))
+                        }
                         _ => None,
                     };
                     if let Some(rows) = rows {
@@ -1108,7 +1219,7 @@ fn affix_stats<'a>(item: &'a Item, affix: Option<Affix>, reading: &Reading<'_>) 
 fn affix_stat<'a>(
     key: StatKey,
     line: &'a StatLine,
-    tier: Option<ModifierTier>,
+    tier: Option<TierRow<'a>>,
     origin: Option<ModifierOrigin>,
     reading: &Reading<'_>,
 ) -> Stat<'a> {
@@ -1138,7 +1249,7 @@ fn affix_stat<'a>(
         unsearchable: false,
         roll: (share.is_some() || tier.is_some() || origin.is_some()).then_some(Roll::Affix {
             share,
-            tier,
+            tier: tier.map(Box::new),
             origin,
         }),
     }
@@ -1352,7 +1463,7 @@ fn average(values: impl Iterator<Item = f64>) -> Option<f64> {
 
 /// The bar of `rolls`, those whose range is wider than one value ([`varying_share`]), their
 /// ranges and the `origin` of their modifier; none when no roll varies.
-fn bar(rolls: Vec<(f64, Range)>, origin: Option<ModifierOrigin>) -> Option<Roll> {
+fn bar<'a>(rolls: Vec<(f64, Range)>, origin: Option<ModifierOrigin>) -> Option<Roll<'a>> {
     let share = varying_share(&rolls)?;
     Some(Roll::Bar {
         share,
@@ -1832,7 +1943,7 @@ fn roll_line(ui: &mut Ui, roll: &Roll, bar: RollBar, i18n: &Translator) {
                 roll_bar(ui, *share, bar);
             }
             if let Some(tier) = tier {
-                tier_label(ui, tier, None);
+                tier_row(ui, tier, i18n);
             }
             if let Some(origin) = origin {
                 origin_word(ui, *origin, i18n);
@@ -1842,15 +1953,7 @@ fn roll_line(ui: &mut Ui, roll: &Roll, bar: RollBar, i18n: &Translator) {
             ui.vertical(|ui| {
                 ui.spacing_mut().item_spacing.y = TIER_ROW_GAP;
                 for row in rows {
-                    roll_row(ui, |ui| {
-                        tier_label(ui, &row.tier, row.better);
-                        if let Some(word) = row.word {
-                            let response = small_word(ui, i18n.text(word), color::WEAK);
-                            if let Some(tip) = row.tip {
-                                response.on_hover_text(i18n.text(tip));
-                            }
-                        }
-                    });
+                    roll_row(ui, |ui| tier_row(ui, row, i18n));
                 }
                 // On a line of its own: the line has it whichever affix it is.
                 if let Some(origin) = origin {
@@ -1858,6 +1961,27 @@ fn roll_line(ui: &mut Ui, roll: &Roll, bar: RollBar, i18n: &Translator) {
                 }
             });
         }
+    }
+}
+
+/// A tier and its ranges ([`tier_label`]), then the word after them in gray, with its
+/// tooltip wrapped past [`WORD_TIP_WIDTH`].
+fn tier_row(ui: &mut Ui, row: &TierRow, i18n: &Translator) {
+    tier_label(ui, &row.tier, row.better);
+    let Some(word) = row.word else {
+        return;
+    };
+    let response = small_word(ui, i18n.text(word), color::WEAK);
+    if let Some(tip) = &row.tip {
+        let text = match tip {
+            WordTip::Text(message) => i18n.text(*message),
+            WordTip::HybridLines(lines) => i18n.hybrid_with(lines),
+            WordTip::HybridPart { ranges, line } => i18n.hybrid_part(&ranges_text(ranges), line),
+        };
+        response.on_hover_ui(|ui| {
+            ui.set_max_width(WORD_TIP_WIDTH);
+            ui.add(Label::new(text).wrap());
+        });
     }
 }
 

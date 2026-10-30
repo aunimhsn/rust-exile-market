@@ -1139,7 +1139,8 @@ fn a_split_line_is_read_with_the_other_lines_of_its_hybrid_and_the_tiers_of_each
     );
 
     // The hybrid T1 with the accuracy, and the pure T1: a prefix, two modifiers, without
-    // tier nor range on its lines, the ranges of each part on the summed line only.
+    // tier, the ranges of each part on the summed line only, the accuracy with the range of
+    // the hybrid.
     let split = split_of(&read);
     assert_eq!(
         texts(split),
@@ -1147,7 +1148,7 @@ fn a_split_line_is_read_with_the_other_lines_of_its_hybrid_and_the_tiers_of_each
     );
     assert_eq!(split.kind, ModifierKind::Explicit(Some(Affix::Prefix)));
     assert_eq!(split.tier, None);
-    assert_eq!(written_ranges(split), [None, None]);
+    assert_eq!(written_ranges(split), [None, Some(range(175.0, 200.0))]);
     assert_eq!(
         split.doubt,
         Some(TierDoubt::Split {
@@ -1260,6 +1261,58 @@ fn a_part_of_a_split_line_in_two_neighbouring_tiers_is_read_over_the_range_of_bo
 }
 
 #[test]
+fn a_hybrid_prefix_added_up_with_a_pure_suffix_is_explicit_with_its_other_line() {
+    let modifiers = trade_lines(&["35% increased Armour and Evasion", "+310 to Stun Threshold"]);
+
+    // The other prefixes and suffixes full: with room, a reading of three modifiers fits too.
+    let read = read_again("Avian Targe", 80, &modifiers, (1, 1));
+
+    // Above the highest pure roll (304), 310 is the hybrid T2 (64–94) with the 35% and the
+    // pure suffix T2 (207–253): explicit, the 35% with the range of the hybrid.
+    let split = split_of(&read);
+    assert_eq!(split.kind, ModifierKind::Explicit(None));
+    assert_eq!(written_ranges(split), [Some(range(33.0, 38.0)), None]);
+    assert_eq!(
+        split.doubt,
+        Some(TierDoubt::Split {
+            line: 1,
+            whole: part(Affix::Prefix, &[2], &[(64.0, 94.0)]),
+            added: part(Affix::Suffix, &[2], &[(207.0, 253.0)]),
+        })
+    );
+}
+
+#[test]
+fn a_line_that_adds_up_a_hybrid_of_three_lines_gives_both_other_lines_their_ranges() {
+    // The Armour and the Evasion in no tier of their hybrid of two lines, the other
+    // prefixes full.
+    let modifiers = trade_lines(&[
+        "+50 to Armour",
+        "+41 to Evasion Rating",
+        "115% increased Armour and Evasion",
+    ]);
+
+    let read = read_again("Ancestral Mail", 80, &modifiers, (2, 3));
+
+    // Above the highest pure roll (110), 115% is the pure T4 (68–79) and the hybrid T1
+    // (39–42) with the Armour (42–52) and the Evasion (40–50).
+    let split = split_of(&read);
+    assert_eq!(split.kind, ModifierKind::Explicit(Some(Affix::Prefix)));
+    assert_eq!(
+        written_ranges(split),
+        [Some(range(42.0, 52.0)), Some(range(40.0, 50.0)), None]
+    );
+    assert_eq!(
+        split.doubt,
+        Some(TierDoubt::Split {
+            line: 2,
+            whole: part(Affix::Prefix, &[1], &[(39.0, 42.0)]),
+            added: part(Affix::Prefix, &[4], &[(68.0, 79.0)]),
+        })
+    );
+}
+
+#[test]
 fn a_line_that_adds_up_a_prefix_and_a_suffix_is_explicit_without_affix() {
     let mut rarity = trade_lines(&["37% increased Rarity of Items found"]);
     rarity[0].origin = Some(ModifierOrigin::Desecrated);
@@ -1307,6 +1360,57 @@ fn a_value_in_several_tiers_takes_the_worst_without_the_ranges_of_the_copy() {
 
     assert_eq!(number(Tie::Best), Some(1));
     assert_eq!(number(Tie::Worst { item_level: None }), Some(2));
+}
+
+#[test]
+fn the_tiers_of_the_hybrid_of_a_split_are_those_of_its_part() {
+    // T2 at level 1, T1 at level 50, the Armour of both touching at 20.
+    let tables = read(concat!(
+        r##"{"type": "ArmourAndStun", "affix": "prefix", "lines": [{"template": "#% increased Armour"}, {"template": "# to Stun Threshold"}], "##,
+        r#""spawn": [["shield", 1]], "tiers": [{"level": 1, "ranges": [[[10, 20]], [[20, 29]]]}, {"level": 50, "ranges": [[[20, 29]], [[30, 39]]]}]}"#
+    ));
+    let copied = |armour: f64| Copied {
+        lines: vec![
+            CopiedLine {
+                template: "#% increased Armour",
+                values: vec![armour],
+                written: None,
+            },
+            CopiedLine {
+                template: "# to Stun Threshold",
+                values: vec![100.0],
+                written: None,
+            },
+        ],
+        ranges: None,
+    };
+    let tags = ["shield".to_owned()];
+    // The tier and its neighbour found, by their numbers.
+    let tiers = |armour, whole: PartTier| {
+        hybrid_tiers(&tables, &tags, copied(armour), 1, &whole).map(|tiers| {
+            let number = |index: usize| tiers.tiers.get(index).map(|tier| tier.number);
+            (number(tiers.found), tiers.neighbour.and_then(number))
+        })
+    };
+
+    assert_eq!(
+        tiers(25.0, part(Affix::Prefix, &[1], &[(30.0, 39.0)])),
+        Some((Some(1), None))
+    );
+    // In two neighbouring tiers, the Armour in both: the worse found, over the range of both.
+    assert_eq!(
+        tiers(20.0, part(Affix::Prefix, &[1, 2], &[(20.0, 39.0)])),
+        Some((Some(2), Some(1)))
+    );
+    // Ranges the tiers of that table don't give the summed line: another table.
+    assert_eq!(
+        tiers(25.0, part(Affix::Prefix, &[1], &[(31.0, 39.0)])),
+        None
+    );
+    assert_eq!(
+        tiers(25.0, part(Affix::Prefix, &[3], &[(30.0, 39.0)])),
+        None
+    );
 }
 
 #[test]

@@ -49,7 +49,7 @@ const summedBowA = pure => [
   { mod: "248% increased Physical Damage", check: false, min: 223,
     affixes: [pure, [1, "75–79", { label: "Hybrid", tip: "With +195 to Accuracy Rating" }]] },
   { mod: "+195 to Accuracy Rating", check: true, min: 176, tier: 1, range: "175–200", over: { share: .97 },
-    after: { label: "Hybrid", tip: "With 75–79% of 248% increased Physical Damage" } },
+    after: { label: "Hybrid", tip: "With 75–79 of 248% increased Physical Damage" } },
   { mod: "Adds 36 to 56 Physical Damage", check: false, tier: 1, range: "26–39 · 44–66", over: { share: .88 }, origin: "desecrated" },
   ...summedBowSuffixes,
 ];

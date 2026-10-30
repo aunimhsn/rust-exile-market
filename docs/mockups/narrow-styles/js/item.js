@@ -79,11 +79,6 @@ function item(it, unfolded = false) {
         const label = best === worst ? `T${best}` : `T${best}/T${worst}`;
         return `<span class="tier ${worst <= 3 ? "tier-top" : ""} t${worst}">${label}</span>`;
       };
-      // The tier and the ranges of a hybrid modifier, under all its lines: it reads as one modifier.
-      if (row.rollOnly) {
-        const rollOrigin = row.origin ? `<span class="app-origin">${row.originLabel || ORIGIN_LABEL[row.origin]}</span>` : "";
-        return `<div class="mod2 min-top${cls}"><span></span><div class="roll2" style="grid-column: 2"><span class="range">${tierBadge(row.tier)}${row.range}${rollOrigin}</span></div></div>`;
-      }
       // A word after the range (13k2e), like the origin: "Hybrid" on the part of a hybrid modifier (13k2e4,
       // its tooltip naming its other line), the affix of a line whose affix stays unknown; so that the tiers
       // stay aligned on the left (owner, 2026-10-29, against the word before the tier, and "with …" after the
@@ -91,8 +86,14 @@ function item(it, unfolded = false) {
       const after = word => {
         if (!word) return "";
         const tip = word.tip ? `<span class="app-tip">${word.tip}</span>` : "";
-        return `<span class="app-after${word.tip ? " app-has-tip" : ""}${word.hover ? " is-hovered" : ""}">${word.label}${tip}</span>`;
+        return `<span class="app-after${word.tip ? " app-has-tip" : ""}${word.end ? " app-tip-end" : ""}${word.hover ? " is-hovered" : ""}">${word.label}${tip}</span>`;
       };
+      // The tier and the ranges of a hybrid modifier, under all its lines: it reads as one modifier; a word
+      // after them for the other lines of a hybrid split from a summed line (13k2e4b3b).
+      if (row.rollOnly) {
+        const rollOrigin = row.origin ? `<span class="app-origin">${row.originLabel || ORIGIN_LABEL[row.origin]}</span>` : "";
+        return `<div class="mod2 min-top${cls}"><span></span><div class="roll2" style="grid-column: 2"><span class="range">${tierBadge(row.tier)}${row.range}${after(row.after)}${rollOrigin}</span></div></div>`;
+      }
       // A line whose affix stays unknown (13k2e), or a line that adds up two modifiers (13k2e4): the tier and
       // range of each, one under the other (`row.affixes`: [tier, range, word after the range]); its origin
       // on a line of its own under them, since the line has it whichever affix it is (owner, 2026-10-29,
