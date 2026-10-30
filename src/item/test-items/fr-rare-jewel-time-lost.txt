@@ -1,0 +1,19 @@
+Classe d'objet: Joyaux
+Rareté: Rare
+ Lueur vipérine
+Saphir perdu dans le temps
+--------
+Rayon: Petit
+--------
+Niveau de l'objet: 43
+--------
+{ Préfixe : « Prismatique » (Palier : 1) — Dégâts, Élémentaire, Feu, Froid, Foudre }
+Les Talents Mineurs dans le Rayon octroient également 2(1-2)% d'Augmentation des Dégâts élémentaires
+{ Préfixe : « Serein » (Palier : 1) — Bouclier d'énergie }
+Les Talents éminents dans le Rayon octroient également Le Démarrage de la Recharge du Bouclier d'énergie est 7(5-7)% plus rapide
+{ Suffixe : « de l'Énergie » (Palier : 1) — Mana }
+Les Talents Mineurs dans le Rayon octroient également 1(1-2)% d'Augmentation du Taux de Régénération de Mana
+{ Suffixe : « de l'Infusion » (Palier : 1) — Vie }
+Les Talents éminents dans le Rayon octroient également 1% des Dégâts subis sont Recouvrés sous forme de Vie
+--------
+Insérez ce Joyau dans une Châsse attribuée dans l'Arbre des Talents. Retirez-le à l'aide d'un clic droit.

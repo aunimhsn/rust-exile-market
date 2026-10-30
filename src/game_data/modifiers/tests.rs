@@ -342,14 +342,45 @@ fn a_line_without_value_is_found_with_the_other_lines_of_its_modifier() {
 }
 
 #[test]
-fn the_modifiers_of_the_time_lost_jewels_arent_in_the_tables_yet() {
-    // Written within "Small Passive Skills in Radius also grant…" by the game, step 13k.
-    let ailments = modifier(
+fn a_modifier_of_a_time_lost_jewel_is_found_within_the_words_of_the_passive_skills_it_grants() {
+    // Of one tier, granted by the notables in the radius of the jewel; the same line alone is
+    // a modifier of the other jewels, not of a Time-Lost one.
+    let granted = modifier(
+        Some(Affix::Suffix),
+        &["Notable Passive Skills in Radius also grant 5% increased chance to inflict Ailments"],
+    );
+    let alone = modifier(
         Some(Affix::Suffix),
         &["5% increased chance to inflict Ailments"],
     );
+    let found = |base_type: &str, modifier: &Modifier| {
+        tiers(base_type, modifier).map(|tiers| {
+            let ranges = tiers.tier().map(|tier| tier.ranges.clone());
+            (tiers.single(), ranges)
+        })
+    };
 
-    assert_eq!(tiers("Time-Lost Emerald", &ailments), None);
+    assert_eq!(
+        found("Time-Lost Emerald", &granted),
+        Some((true, Some(vec![range(3.0, 7.0)])))
+    );
+    assert_eq!(found("Time-Lost Emerald", &alone), None);
+    assert_eq!(found("Emerald", &granted), None);
+    assert_eq!(
+        found("Emerald", &alone),
+        Some((true, Some(vec![range(5.0, 15.0)])))
+    );
+}
+
+#[test]
+fn the_radius_of_a_time_lost_jewel_upgraded_to_medium_is_the_lower_of_two_tiers() {
+    // `Upgrades Radius to Medium` or `to Large`, of one type: never both on a jewel.
+    let medium = modifier(Some(Affix::Prefix), &["Upgrades Radius to Medium"]);
+
+    let tiers = tiers("Time-Lost Ruby", &medium).expect("its tiers");
+
+    assert_eq!(tiers.tiers.len(), 2);
+    assert_eq!(tiers.tier().map(|tier| tier.number), Some(2));
 }
 
 /// A modifier of `affix` with `lines`, the game marking it desecrated.
@@ -869,7 +900,7 @@ fn the_tiers_of_a_bow_copied_from_the_in_game_trade_are_found_from_its_values() 
 }
 
 /// The rare and magic items of the advanced copy, with the base type of a magic one.
-const ADVANCED_COPIES: [(&str, Option<&str>); 13] = [
+const ADVANCED_COPIES: [(&str, Option<&str>); 15] = [
     (
         include_str!("../../item/test-items/en-rare-crossbow-all-modifiers.txt"),
         None,
@@ -920,6 +951,14 @@ const ADVANCED_COPIES: [(&str, Option<&str>); 13] = [
     ),
     (
         include_str!("../../item/test-items/fr-rare-ring-breach.txt"),
+        None,
+    ),
+    (
+        include_str!("../../item/test-items/en-owner-rare-jewel-time-lost.txt"),
+        None,
+    ),
+    (
+        include_str!("../../item/test-items/fr-rare-jewel-time-lost.txt"),
         None,
     ),
 ];
@@ -1042,9 +1081,10 @@ fn the_tiers_found_from_the_values_alone_are_those_of_the_advanced_copy() {
             }
         }
     }
-    // With the 4 modifiers of Amanamu, a lord of the Abyss, among the desecrated tables, and
-    // `Reinforcing` of the Genesis tree on the Breach Rings.
-    assert_eq!(found, 59);
+    // With the 4 modifiers of Amanamu, a lord of the Abyss, among the desecrated tables,
+    // `Reinforcing` of the Genesis tree on the Breach Rings, and the 4 lines of the Time-Lost
+    // jewel, each within the words of the passive skills it grants.
+    assert_eq!(found, 67);
     assert_eq!(
         without_tier,
         [
@@ -1088,6 +1128,21 @@ fn written_ranges(modifier: &Modifier) -> Vec<Option<Range>> {
         .collect()
 }
 
+/// The ranges written under `modifier` ([`Range::unless_fixed`]): none for fixed values, as the
+/// advanced copy most often writes them.
+fn shown_ranges(modifier: &Modifier) -> Vec<Range> {
+    let rolls = modifier.lines.iter().flat_map(|line| &line.rolls);
+    let ranged: Vec<(f64, Range)> = rolls
+        .clone()
+        .filter_map(|roll| Some((roll.value, roll.range.and_then(Range::magnitude)?)))
+        .collect();
+    // A value without range is fixed too, but stays apart from one with a range.
+    if ranged.len() < rolls.count() {
+        return ranged.into_iter().map(|(_, range)| range).collect();
+    }
+    Range::unless_fixed(ranged)
+}
+
 #[test]
 fn the_lines_read_again_from_their_values_are_the_modifiers_of_the_advanced_copy() {
     let mut read_again = 0;
@@ -1128,7 +1183,10 @@ fn the_lines_read_again_from_their_values_are_the_modifiers_of_the_advanced_copy
             if written.within {
                 // Without tier when the copy writes none (`Reinforcing` of the Genesis tree).
                 assert_eq!(again.tier, modifier.tier.and(written.tier), "{text}");
-                assert_eq!(written_ranges(again), written_ranges(modifier), "{text}");
+                // As both copies show them: no range under a fixed value, which the advanced
+                // copy writes without range (`1% of Damage taken Recouped as Life` of a
+                // Time-Lost jewel), the tables with its range of one value.
+                assert_eq!(shown_ranges(again), shown_ranges(modifier), "{text}");
             }
             read_again += 1;
         }
@@ -1137,8 +1195,9 @@ fn the_lines_read_again_from_their_values_are_the_modifiers_of_the_advanced_copy
             |modifiers: &[Modifier]| -> Vec<String> { modifiers.iter().flat_map(texts).collect() };
         assert_eq!(lines(&read), lines(&modifiers));
     }
-    // With `Reinforcing` of the Breach Rings, read again without tier, as the copy writes it.
-    assert_eq!(read_again, 59);
+    // With `Reinforcing` of the Breach Rings, read again without tier, as the copy writes it,
+    // and the 4 lines of the Time-Lost jewel.
+    assert_eq!(read_again, 67);
 }
 
 #[test]

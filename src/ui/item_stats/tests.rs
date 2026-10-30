@@ -485,6 +485,33 @@ fn a_fixed_value_shows_the_same_in_both_copies() {
 }
 
 #[test]
+fn a_time_lost_jewel_shows_its_lines_over_their_ranges_in_both_copies() {
+    // The owner's Time-Lost Sapphire, every modifier of one tier: its bar and its field over
+    // the range of that tier, nothing under its fixed `1%`; the same from the in-game trade.
+    let text = include_str!("../../item/test-items/en-owner-rare-jewel-time-lost.txt");
+    let lines: Vec<&str> = text.lines().filter(|line| !line.starts_with('{')).collect();
+    let in_game_trade = read_again(parse(&lines.join("\n")));
+    let modifiers = [
+        "Prefixes 2/2",
+        "■ Small Passive Skills in Radius also grant 2% increased Elemental Damage ≥2 [1.00 1–2]",
+        "■ Notable Passive Skills in Radius also grant 7% faster start of Energy Shield Recharge ≥6 [1.00 5–7]",
+        "Suffixes 2/2",
+        "■ Small Passive Skills in Radius also grant 1% increased Mana Regeneration Rate ≥1 [0.00 1–2]",
+        "■ Notable Passive Skills in Radius also grant 1% of Damage taken Recouped as Life",
+    ];
+    let explicit = |texts: Vec<String>| -> Vec<String> {
+        texts
+            .into_iter()
+            .skip_while(|text| !text.starts_with("Prefixes"))
+            .take(modifiers.len())
+            .collect()
+    };
+
+    assert_eq!(explicit(texts(&parse(text))), modifiers);
+    assert_eq!(explicit(texts(&in_game_trade)), modifiers);
+}
+
+#[test]
 fn the_words_of_a_tier_name_the_lord_and_take_a_tier_without_range() {
     let row = |number: Option<u32>, ranges: Vec<Range>, affix, lord| TierRow {
         lord,
