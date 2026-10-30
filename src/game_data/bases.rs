@@ -172,6 +172,16 @@ pub(super) enum Domain {
     Flask,
     /// The jewels.
     Misc,
+    /// The modifiers a desecration reveals on the equipment and the jewels: those of the lords
+    /// of the Abyss, of one tier each; no base is of this domain.
+    Desecrated,
+}
+
+impl Domain {
+    /// Whether a modifier table of this domain rolls on the bases of `base`.
+    pub(super) fn rolls_on(self, base: Self) -> bool {
+        self == base || (self == Self::Desecrated && matches!(base, Self::Item | Self::Misc))
+    }
 }
 
 static ENGLISH: LazyLock<HashMap<String, BaseData>> =

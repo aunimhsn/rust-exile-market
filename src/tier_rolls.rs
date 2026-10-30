@@ -49,9 +49,15 @@ pub struct TierRolls {
 impl TierRolls {
     /// The rolls of the lines of `modifiers`, written in `language`, on the base `base_type`
     /// (the name its search looks for; none for a magic item before the names of the trade
-    /// site).
+    /// site) of an item of `item_level` (none when the copy doesn't write it), which the tiers
+    /// of a split line are among.
     #[must_use]
-    pub fn new(language: Language, modifiers: &[Modifier], base_type: Option<&str>) -> Self {
+    pub fn new(
+        language: Language,
+        modifiers: &[Modifier],
+        base_type: Option<&str>,
+        item_level: Option<u32>,
+    ) -> Self {
         let mut lines = Vec::new();
         let mut single = Vec::new();
         for (index, modifier) in modifiers.iter().enumerate() {
@@ -70,12 +76,14 @@ impl TierRolls {
                 _ => continue,
             };
             let matches = game_data::modifier_stats(language, modifier, None);
-            let Some(tiers) = game_data::modifier_tiers(language, base_type, modifier, &matches)
+            let Some(tiers) =
+                game_data::modifier_tiers(language, base_type, item_level, modifier, &matches)
             else {
                 continue;
             };
-            let one_tier = summed.is_none() && tiers.tiers.len() == 1;
-            if one_tier {
+            // The hybrid of a split line of one tier only too: its other lines tell no tiers.
+            let one_tier = tiers.single();
+            if one_tier && summed.is_none() {
                 match modifier.tier {
                     Some(1) => single.push(index),
                     // The game knows more tiers than the data, e.g. after a patch: the tier
@@ -249,7 +257,12 @@ mod tests {
 
     fn rolls_of(text: &str) -> TierRolls {
         let item = Item::parse(&CopiedItem::from_text(text).expect("an item")).expect("read");
-        TierRolls::new(item.language(), item.modifiers(), Some(item.base_type()))
+        TierRolls::new(
+            item.language(),
+            item.modifiers(),
+            Some(item.base_type()),
+            item.item_level(),
+        )
     }
 
     fn key(modifier: usize, line: usize) -> StatKey {
@@ -329,6 +342,7 @@ mod tests {
             item.language(),
             item.modifiers(),
             Some("Ultimate Life Flask"),
+            item.item_level(),
         );
 
         assert!(rolls.single(0));
@@ -386,7 +400,7 @@ mod tests {
                       { Préfixe : « Renforçant » — Vie, Créature }\n\
                       Les Créatures ont 21(19-22)% d'Augmentation de Vie maximale";
         let item = Item::parse(&CopiedItem::from_text(french).expect("an item")).expect("read");
-        let rolls = TierRolls::new(item.language(), item.modifiers(), None);
+        let rolls = TierRolls::new(item.language(), item.modifiers(), None, None);
         assert!(rolls.single(0));
         assert_eq!(
             rolls.get(key(0, 0)),
@@ -461,7 +475,7 @@ mod tests {
                         { Prefix Modifier \"Vigorous\" (Tier: 7) — Life }\n\
                         +86(85-99) to maximum Life";
         let item = Item::parse(&CopiedItem::from_text(advanced).expect("an item")).expect("read");
-        let rolls = TierRolls::new(item.language(), item.modifiers(), None);
+        let rolls = TierRolls::new(item.language(), item.modifiers(), None, None);
         assert_eq!(rolls.get(key(0, 0)), None);
     }
 
@@ -472,6 +486,7 @@ mod tests {
         let part = |tiers: Vec<u32>, min, max| PartTier {
             affix: Affix::Prefix,
             tiers,
+            single: false,
             ranges: vec![range(min, max)],
         };
         // 258% is a pure T1 (170–179) and the hybrid T1 (75–79) with the accuracy.
@@ -497,6 +512,7 @@ mod tests {
             Language::English,
             std::slice::from_ref(&split),
             Some("Warmonger Bow"),
+            None,
         );
 
         // A sum over no tiers; the accuracy over the 8 tiers of the hybrid.
@@ -510,7 +526,7 @@ mod tests {
             whole: part(vec![1], 76.0, 79.0),
             added: part(vec![1], 170.0, 179.0),
         });
-        let rolls = TierRolls::new(Language::English, &[other], Some("Warmonger Bow"));
+        let rolls = TierRolls::new(Language::English, &[other], Some("Warmonger Bow"), None);
         assert_eq!(rolls.get(key(0, 1)), None);
 
         // Two pure modifiers on one line: no rolls.
@@ -521,8 +537,53 @@ mod tests {
             whole: part(vec![1], 75.0, 79.0),
             added: part(vec![1], 170.0, 179.0),
         });
-        let rolls = TierRolls::new(Language::English, &[pure], Some("Warmonger Bow"));
+        let rolls = TierRolls::new(Language::English, &[pure], Some("Warmonger Bow"), None);
         assert_eq!(rolls.get(key(0, 0)), None);
+    }
+
+    #[test]
+    fn the_other_line_of_a_hybrid_of_one_tier_only_whose_part_a_line_adds_up_tells_no_tiers() {
+        use crate::item::{Affix, ModifierKind, ModifierOrigin, PartTier, StatLine};
+
+        let part = |min, max| PartTier {
+            affix: Affix::Prefix,
+            tiers: vec![1],
+            single: true,
+            ranges: vec![range(min, max)],
+        };
+        // The hybrid of Kurgal (110–154, and 15% reduced Attack Speed), desecrated, and a pure
+        // T1 (170–179) of a maul.
+        let split = Modifier {
+            kind: ModifierKind::Explicit(Some(Affix::Prefix)),
+            origin: Some(ModifierOrigin::Desecrated),
+            name: None,
+            tier: None,
+            tags: Vec::new(),
+            unrevealed: false,
+            lines: vec![
+                StatLine::parse("300% increased Physical Damage"),
+                StatLine::parse("15% reduced Attack Speed"),
+            ],
+            doubt: Some(TierDoubt::Split {
+                line: 0,
+                whole: part(110.0, 154.0),
+                added: part(170.0, 179.0),
+            }),
+        };
+
+        let rolls = TierRolls::new(
+            Language::English,
+            std::slice::from_ref(&split),
+            Some("Temple Maul"),
+            Some(82),
+        );
+
+        // Over its one tier, without "T1–T1"; the modifier not counted as one of one tier
+        // only, the split line having no tier.
+        let speed = rolls.get(key(0, 1)).expect("the rolls of the Attack Speed");
+        assert_eq!(speed.ranges, [Some(range(15.0, 15.0))]);
+        assert_eq!(speed.tiers, None);
+        assert!(!rolls.single(0));
     }
 
     #[test]

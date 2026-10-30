@@ -141,52 +141,52 @@
 {"name":"Baguette âcre","category":"Wand","tags":["wand","default"]}
 {"name":"Bardiche de ravageur","category":"Two Hand Axe","tags":["axe","two_hand_weapon","weapon","default"]}
 {"name":"Bardiche élégante","category":"Two Hand Axe","tags":["axe","two_hand_weapon","weapon","default"]}
-{"name":"Bocle annelé","category":"Buckler","tags":["dex_armour","shield","armour","default"]}
-{"name":"Bocle annelé runeforgé","category":"Buckler","tags":["dex_armour","shield","armour","default"]}
-{"name":"Bocle antique","category":"Buckler","tags":["dex_armour","shield","armour","default"]}
-{"name":"Bocle antique runeforgé","category":"Buckler","tags":["dex_armour","shield","armour","default"]}
-{"name":"Bocle d'éventration","category":"Buckler","tags":["dex_armour","shield","armour","default"]}
-{"name":"Bocle d'éventration runeforgé","category":"Buckler","tags":["dex_armour","shield","armour","default"]}
-{"name":"Bocle de garde-lame","category":"Buckler","tags":["dex_armour","shield","armour","default"]}
-{"name":"Bocle de garde-lame runeforgé","category":"Buckler","tags":["dex_armour","shield","armour","default"]}
-{"name":"Bocle du désert","category":"Buckler","tags":["dex_armour","shield","armour","default"]}
-{"name":"Bocle du désert runeforgé","category":"Buckler","tags":["dex_armour","shield","armour","default"]}
-{"name":"Bocle en arceaux","category":"Buckler","tags":["dex_armour","shield","armour","default"]}
-{"name":"Bocle en arceaux runomaîtrisé","category":"Buckler","tags":["dex_armour","shield","armour","default"]}
-{"name":"Bocle en bois","category":"Buckler","tags":["dex_armour","shield","armour","default"]}
-{"name":"Bocle en bois runeforgé","category":"Buckler","tags":["dex_armour","shield","armour","default"]}
-{"name":"Bocle en bois runomaîtrisé","category":"Buckler","tags":["dex_armour","shield","armour","default"]}
-{"name":"Bocle en chêne","category":"Buckler","tags":["dex_armour","shield","armour","default"]}
-{"name":"Bocle en cuir","category":"Buckler","tags":["dex_armour","shield","armour","default"]}
-{"name":"Bocle en cuir runeforgé","category":"Buckler","tags":["dex_armour","shield","armour","default"]}
-{"name":"Bocle en cuir runomaîtrisé","category":"Buckler","tags":["dex_armour","shield","armour","default"]}
-{"name":"Bocle en fer","category":"Buckler","tags":["dex_armour","shield","armour","default"]}
-{"name":"Bocle en fer runeforgé","category":"Buckler","tags":["dex_armour","shield","armour","default"]}
-{"name":"Bocle en fer runomaîtrisé","category":"Buckler","tags":["dex_armour","shield","armour","default"]}
-{"name":"Bocle laminé","category":"Buckler","tags":["dex_armour","shield","armour","default"]}
-{"name":"Bocle laminé runeforgé","category":"Buckler","tags":["dex_armour","shield","armour","default"]}
-{"name":"Bocle orné","category":"Buckler","tags":["dex_armour","shield","armour","default"]}
-{"name":"Bocle orné runeforgé","category":"Buckler","tags":["dex_armour","shield","armour","default"]}
-{"name":"Bocle orné runomaîtrisé","category":"Buckler","tags":["dex_armour","shield","armour","default"]}
-{"name":"Bocle peint","category":"Buckler","tags":["dex_armour","shield","armour","default"]}
-{"name":"Bocle perlé","category":"Buckler","tags":["dex_armour","shield","armour","default"]}
-{"name":"Bocle perlé runeforgé","category":"Buckler","tags":["dex_armour","shield","armour","default"]}
-{"name":"Bocle plaqué","category":"Buckler","tags":["dex_armour","shield","armour","default"]}
-{"name":"Bocle plaqué runeforgé","category":"Buckler","tags":["dex_armour","shield","armour","default"]}
-{"name":"Bocle plaqué runomaîtrisé","category":"Buckler","tags":["dex_armour","shield","armour","default"]}
-{"name":"Bocle strié","category":"Buckler","tags":["dex_armour","shield","armour","default"]}
-{"name":"Bocle strié runeforgé","category":"Buckler","tags":["dex_armour","shield","armour","default"]}
-{"name":"Bocle strié runomaîtrisé","category":"Buckler","tags":["dex_armour","shield","armour","default"]}
-{"name":"Bocle tintant","category":"Buckler","tags":["dex_armour","shield","armour","default"]}
-{"name":"Bocle tintant runeforgé","category":"Buckler","tags":["dex_armour","shield","armour","default"]}
-{"name":"Bocle à pointe protectrice","category":"Buckler","tags":["dex_armour","shield","armour","default"]}
-{"name":"Bocle à pointe protectrice runeforgé","category":"Buckler","tags":["dex_armour","shield","armour","default"]}
-{"name":"Bocle à pointes","category":"Buckler","tags":["dex_armour","shield","armour","default"]}
-{"name":"Bocle à pointes runeforgé","category":"Buckler","tags":["dex_armour","shield","armour","default"]}
-{"name":"Bocle à pointes runomaîtrisé","category":"Buckler","tags":["dex_armour","shield","armour","default"]}
-{"name":"Bocle à stries","category":"Buckler","tags":["dex_armour","shield","armour","default"]}
-{"name":"Bocle à tranchant","category":"Buckler","tags":["dex_armour","shield","armour","default"]}
-{"name":"Bocle à tranchant runeforgé","category":"Buckler","tags":["dex_armour","shield","armour","default"]}
+{"name":"Bocle annelé","category":"Buckler","tags":["dex_armour","dex_shield","shield","armour","default"]}
+{"name":"Bocle annelé runeforgé","category":"Buckler","tags":["dex_armour","dex_shield","shield","armour","default"]}
+{"name":"Bocle antique","category":"Buckler","tags":["dex_armour","dex_shield","shield","armour","default"]}
+{"name":"Bocle antique runeforgé","category":"Buckler","tags":["dex_armour","dex_shield","shield","armour","default"]}
+{"name":"Bocle d'éventration","category":"Buckler","tags":["dex_armour","dex_shield","shield","armour","default"]}
+{"name":"Bocle d'éventration runeforgé","category":"Buckler","tags":["dex_armour","dex_shield","shield","armour","default"]}
+{"name":"Bocle de garde-lame","category":"Buckler","tags":["dex_armour","dex_shield","shield","armour","default"]}
+{"name":"Bocle de garde-lame runeforgé","category":"Buckler","tags":["dex_armour","dex_shield","shield","armour","default"]}
+{"name":"Bocle du désert","category":"Buckler","tags":["dex_armour","dex_shield","shield","armour","default"]}
+{"name":"Bocle du désert runeforgé","category":"Buckler","tags":["dex_armour","dex_shield","shield","armour","default"]}
+{"name":"Bocle en arceaux","category":"Buckler","tags":["dex_armour","dex_shield","shield","armour","default"]}
+{"name":"Bocle en arceaux runomaîtrisé","category":"Buckler","tags":["dex_armour","dex_shield","shield","armour","default"]}
+{"name":"Bocle en bois","category":"Buckler","tags":["dex_armour","dex_shield","shield","armour","default"]}
+{"name":"Bocle en bois runeforgé","category":"Buckler","tags":["dex_armour","dex_shield","shield","armour","default"]}
+{"name":"Bocle en bois runomaîtrisé","category":"Buckler","tags":["dex_armour","dex_shield","shield","armour","default"]}
+{"name":"Bocle en chêne","category":"Buckler","tags":["dex_armour","dex_shield","shield","armour","default"]}
+{"name":"Bocle en cuir","category":"Buckler","tags":["dex_armour","dex_shield","shield","armour","default"]}
+{"name":"Bocle en cuir runeforgé","category":"Buckler","tags":["dex_armour","dex_shield","shield","armour","default"]}
+{"name":"Bocle en cuir runomaîtrisé","category":"Buckler","tags":["dex_armour","dex_shield","shield","armour","default"]}
+{"name":"Bocle en fer","category":"Buckler","tags":["dex_armour","dex_shield","shield","armour","default"]}
+{"name":"Bocle en fer runeforgé","category":"Buckler","tags":["dex_armour","dex_shield","shield","armour","default"]}
+{"name":"Bocle en fer runomaîtrisé","category":"Buckler","tags":["dex_armour","dex_shield","shield","armour","default"]}
+{"name":"Bocle laminé","category":"Buckler","tags":["dex_armour","dex_shield","shield","armour","default"]}
+{"name":"Bocle laminé runeforgé","category":"Buckler","tags":["dex_armour","dex_shield","shield","armour","default"]}
+{"name":"Bocle orné","category":"Buckler","tags":["dex_armour","dex_shield","shield","armour","default"]}
+{"name":"Bocle orné runeforgé","category":"Buckler","tags":["dex_armour","dex_shield","shield","armour","default"]}
+{"name":"Bocle orné runomaîtrisé","category":"Buckler","tags":["dex_armour","dex_shield","shield","armour","default"]}
+{"name":"Bocle peint","category":"Buckler","tags":["dex_armour","dex_shield","shield","armour","default"]}
+{"name":"Bocle perlé","category":"Buckler","tags":["dex_armour","dex_shield","shield","armour","default"]}
+{"name":"Bocle perlé runeforgé","category":"Buckler","tags":["dex_armour","dex_shield","shield","armour","default"]}
+{"name":"Bocle plaqué","category":"Buckler","tags":["dex_armour","dex_shield","shield","armour","default"]}
+{"name":"Bocle plaqué runeforgé","category":"Buckler","tags":["dex_armour","dex_shield","shield","armour","default"]}
+{"name":"Bocle plaqué runomaîtrisé","category":"Buckler","tags":["dex_armour","dex_shield","shield","armour","default"]}
+{"name":"Bocle strié","category":"Buckler","tags":["dex_armour","dex_shield","shield","armour","default"]}
+{"name":"Bocle strié runeforgé","category":"Buckler","tags":["dex_armour","dex_shield","shield","armour","default"]}
+{"name":"Bocle strié runomaîtrisé","category":"Buckler","tags":["dex_armour","dex_shield","shield","armour","default"]}
+{"name":"Bocle tintant","category":"Buckler","tags":["dex_armour","dex_shield","shield","armour","default"]}
+{"name":"Bocle tintant runeforgé","category":"Buckler","tags":["dex_armour","dex_shield","shield","armour","default"]}
+{"name":"Bocle à pointe protectrice","category":"Buckler","tags":["dex_armour","dex_shield","shield","armour","default"]}
+{"name":"Bocle à pointe protectrice runeforgé","category":"Buckler","tags":["dex_armour","dex_shield","shield","armour","default"]}
+{"name":"Bocle à pointes","category":"Buckler","tags":["dex_armour","dex_shield","shield","armour","default"]}
+{"name":"Bocle à pointes runeforgé","category":"Buckler","tags":["dex_armour","dex_shield","shield","armour","default"]}
+{"name":"Bocle à pointes runomaîtrisé","category":"Buckler","tags":["dex_armour","dex_shield","shield","armour","default"]}
+{"name":"Bocle à stries","category":"Buckler","tags":["dex_armour","dex_shield","shield","armour","default"]}
+{"name":"Bocle à tranchant","category":"Buckler","tags":["dex_armour","dex_shield","shield","armour","default"]}
+{"name":"Bocle à tranchant runeforgé","category":"Buckler","tags":["dex_armour","dex_shield","shield","armour","default"]}
 {"name":"Bottes cloutées","category":"Boots","tags":["dex_armour","boots","armour","default"]}
 {"name":"Bottes cloutées runeforgées","category":"Boots","tags":["dex_armour","boots","armour","default"]}
 {"name":"Bottes de cavalerie","category":"Boots","tags":["dex_armour","boots","armour","default"]}

@@ -116,7 +116,12 @@ impl ShownItem {
         }
         self.stats = LineStats::new(item.language(), item.modifiers(), trade);
         self.lines = CopiedLines::new(item.language(), item.modifiers(), &self.stats, trade);
-        self.tiers = TierRolls::new(item.language(), item.modifiers(), base_type.as_deref());
+        self.tiers = TierRolls::new(
+            item.language(),
+            item.modifiers(),
+            base_type.as_deref(),
+            item.item_level(),
+        );
         reshaped
     }
 
