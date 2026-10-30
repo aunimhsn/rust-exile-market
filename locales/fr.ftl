@@ -212,6 +212,8 @@ trade-copy-note = Copié depuis l'échange du jeu : les paliers sont trouvés d
 # Après la plage d'un palier trouvé d'après les valeurs, quand la ligne peut être un préfixe ou un suffixe : l'affixe de ce palier, en gris.
 affix-prefix = Préfixe
 affix-suffix = Suffixe
+# L'infobulle de « Suffixe » sous une ligne qui additionne un préfixe et un suffixe de la même stat, le préfixe écrit au-dessus.
+added-up-with-prefix = Additionné au préfixe sur cette ligne
 
 ## Bloc prix
 

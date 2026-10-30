@@ -67,7 +67,11 @@ fn shows_an_item_copied_from_the_in_game_trade() {
         .item()
         .and_then(|item| item.parsed().ok())
         .map(|item| item.modifiers().len());
-    assert_eq!(modifiers, Some(10), "3 runes and 7 explicit lines");
+    assert_eq!(
+        modifiers,
+        Some(9),
+        "3 runes and 7 explicit lines, the split 258% read with the accuracy of its hybrid"
+    );
 }
 
 #[test]

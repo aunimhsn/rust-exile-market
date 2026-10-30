@@ -25,7 +25,7 @@ use std::borrow::Cow;
 use egui::text::{LayoutJob, TextFormat};
 use egui::{
     Align, Align2, Area, Color32, CornerRadius, Frame, Id, Label, Layout, Margin, Order, Pos2,
-    Rect, RichText, Sense, Stroke, TextEdit, Ui, Vec2, pos2, vec2,
+    Rect, Response, RichText, Sense, Stroke, TextEdit, Ui, Vec2, pos2, vec2,
 };
 
 use super::number_field::NumberField;
@@ -36,8 +36,8 @@ use crate::format;
 use crate::game_data::{self, Category};
 use crate::i18n::{Message, Translator};
 use crate::item::{
-    Affix, AffixTier, Item, Modifier, ModifierKind, ModifierOrigin, Range, Rarity, StatLine,
-    TierDoubt,
+    Affix, AffixTier, Item, Modifier, ModifierKind, ModifierOrigin, PartTier, Range, Rarity,
+    StatLine, TierDoubt,
 };
 use crate::roll_difference::CopiedLines;
 use crate::tier_rolls::{LineRolls, TierRolls, TierSpan};
@@ -186,7 +186,8 @@ enum Roll {
     /// Under the last line of a modifier copied from the in-game trade that can be a prefix or
     /// a suffix: the tier of each and its ranges, one under the other, a word after the ranges
     /// ("Prefix"), without bar; then its origin on a line of its own, since the line has it
-    /// whichever affix it is.
+    /// whichever affix it is. The same under a line that adds up two modifiers, for the tier
+    /// of each.
     Tiers {
         rows: Vec<TierRow>,
         origin: Option<ModifierOrigin>,
@@ -202,11 +203,17 @@ struct ModifierTier {
     ranges: Vec<Range>,
 }
 
-/// A tier among several under a line, and the word after its ranges.
+/// A tier among several under a line, or two neighbouring ones, and the word after its ranges.
 #[derive(Debug, Clone, PartialEq)]
 struct TierRow {
+    /// The worse of two neighbouring tiers.
     tier: ModifierTier,
-    word: Message,
+    /// The better of two neighbouring tiers the modifier may be: `T1/T2`.
+    better: Option<u32>,
+    /// In gray after the ranges: the affix of the tier ("Prefix").
+    word: Option<Message>,
+    /// The tooltip of that word.
+    tip: Option<Message>,
 }
 
 impl TierRow {
@@ -217,12 +224,56 @@ impl TierRow {
                 number: found.tier,
                 ranges: found.ranges.clone(),
             },
-            word: match found.affix {
-                Affix::Prefix => Message::AffixPrefix,
-                Affix::Suffix => Message::AffixSuffix,
-            },
+            better: None,
+            word: Some(affix_word(found.affix)),
+            tip: None,
         }
     }
+
+    /// The tiers of a part of a line that adds up two modifiers, over the range of both when
+    /// they are two, with `word` and its `tip`.
+    fn part(part: &PartTier, word: Option<Message>, tip: Option<Message>) -> Option<Self> {
+        let worse = *part.tiers.last()?;
+        Some(Self {
+            tier: ModifierTier {
+                number: worse,
+                ranges: part.ranges.clone(),
+            },
+            better: part
+                .tiers
+                .first()
+                .copied()
+                .filter(|&better| better != worse),
+            word,
+            tip,
+        })
+    }
+}
+
+/// The word of an affix after the ranges of its tier.
+fn affix_word(affix: Affix) -> Message {
+    match affix {
+        Affix::Prefix => Message::AffixPrefix,
+        Affix::Suffix => Message::AffixSuffix,
+    }
+}
+
+/// The tiers of the parts `whole` and `added` of a line that adds up two modifiers, one under
+/// the other: the prefix first, then, of two parts of one affix, the pure one (`added`) before
+/// the hybrid; "Prefix" and "Suffix" after the ranges of a prefix and a suffix, the tooltip of
+/// "Suffix" saying they are added up, which a line that can be either doesn't have.
+fn split_rows(whole: &PartTier, added: &PartTier) -> Vec<TierRow> {
+    let mut parts = [(added, false), (whole, true)];
+    parts.sort_by_key(|&(part, is_whole)| (part.affix == Affix::Suffix, is_whole));
+    let both = whole.affix != added.affix;
+    parts
+        .iter()
+        .filter_map(|&(part, _)| {
+            let word = both.then(|| affix_word(part.affix));
+            let tip = (both && part.affix == Affix::Suffix).then_some(Message::AddedUpWithPrefix);
+            TierRow::part(part, word, tip)
+        })
+        .collect()
 }
 
 /// How the bar of a roll is drawn: a setting from step 18, which adds the zone searched.
@@ -517,13 +568,13 @@ fn rows<'a>(
     if unrevealed {
         rows.push(Row::UnrevealedNote);
     }
-    // Once a tier is found, also for a line that can be a prefix or a suffix: none before the
-    // names of the trade site tell the base of a magic item, nor on a base the game data
-    // doesn't know.
+    // Once a tier is found, also for a line that can be a prefix or a suffix, or that adds up
+    // two modifiers: none before the names of the trade site tell the base of a magic item, nor
+    // on a base the game data doesn't know.
     let found = item.modifiers().iter().any(|modifier| {
         let with_tier =
             matches!(modifier.kind, ModifierKind::Explicit(Some(_))) && modifier.tier.is_some();
-        let in_doubt = matches!(modifier.doubt, Some(TierDoubt::EitherAffix { .. }));
+        let in_doubt = modifier.doubt.is_some();
         with_tier || in_doubt
     });
     if item.has_tiers_from_values() && found {
@@ -833,6 +884,12 @@ fn affix_rows<'a>(item: &'a Item, reading: &Reading<'_>) -> Vec<Row<'a>> {
     let line_varies = |line: &StatLine, _: &Stat<'_>| varies(line);
     let prefixes = affix_stats(item, Some(Affix::Prefix), reading);
     let suffixes = affix_stats(item, Some(Affix::Suffix), reading);
+    let filled = |affix| {
+        item.modifiers()
+            .iter()
+            .map(|modifier| affix_count(modifier, affix))
+            .sum()
+    };
     let added_stat = |key, line| added(key, line, reading);
     let mut rows = Vec::new();
     push_group(
@@ -858,24 +915,20 @@ fn affix_rows<'a>(item: &'a Item, reading: &Reading<'_>) -> Vec<Row<'a>> {
     push_group(
         &mut rows,
         Group::Prefixes {
-            filled: prefixes.count,
+            filled: filled(Affix::Prefix),
             max: limits.prefixes,
         },
-        prefixes.stats,
+        prefixes,
     );
     push_group(
         &mut rows,
         Group::Suffixes {
-            filled: suffixes.count,
+            filled: filled(Affix::Suffix),
             max: limits.suffixes,
         },
-        suffixes.stats,
+        suffixes,
     );
-    push_group(
-        &mut rows,
-        Group::Explicit,
-        affix_stats(item, None, reading).stats,
-    );
+    push_group(&mut rows, Group::Explicit, affix_stats(item, None, reading));
     rows
 }
 
@@ -947,17 +1000,25 @@ fn comparable(value: f64, whole: bool, half: Half) -> f64 {
     if whole { limit.round() } else { limit }
 }
 
-/// The number of modifiers of an affix, and their stats.
-struct AffixStats<'a> {
-    count: u32,
-    stats: Vec<Stat<'a>>,
+/// The prefixes or suffixes of `affix` that `modifier` counts in the room of its item: one of
+/// its affix, two for a line that adds up two modifiers of that affix, one for a line that adds
+/// up a prefix and a suffix; none for a modifier whose affix is unknown.
+fn affix_count(modifier: &Modifier, affix: Affix) -> u32 {
+    match (&modifier.doubt, modifier.kind) {
+        (Some(TierDoubt::Split { whole, added, .. }), _) => {
+            u32::from(whole.affix == affix) + u32::from(added.affix == affix)
+        }
+        (_, ModifierKind::Explicit(Some(kind))) => u32::from(kind == affix),
+        _ => 0,
+    }
 }
 
 /// The explicit modifiers of `affix` (`None`: a header that doesn't tell it), those with a
 /// line that varies first and those not revealed yet last: each line with its bar over every
 /// tier of its modifier, and its tier and the ranges of that tier under its last line; the
-/// tier of each affix for a modifier copied from the in-game trade that can be either.
-fn affix_stats<'a>(item: &'a Item, affix: Option<Affix>, reading: &Reading<'_>) -> AffixStats<'a> {
+/// tier of each affix for a modifier copied from the in-game trade that can be either, and
+/// the tier of each part under a line that adds up two modifiers.
+fn affix_stats<'a>(item: &'a Item, affix: Option<Affix>, reading: &Reading<'_>) -> Vec<Stat<'a>> {
     let mut modifiers: Vec<(usize, &Modifier)> = item
         .modifiers()
         .iter()
@@ -977,7 +1038,7 @@ fn affix_stats<'a>(item: &'a Item, affix: Option<Affix>, reading: &Reading<'_>) 
             .any(|line| line_varies(index, line));
         (modifier.unrevealed, fixed)
     });
-    let stats = modifiers
+    modifiers
         .iter()
         .flat_map(|&(index, modifier)| -> Vec<Stat<'a>> {
             if modifier.unrevealed
@@ -996,6 +1057,12 @@ fn affix_stats<'a>(item: &'a Item, affix: Option<Affix>, reading: &Reading<'_>) 
                 }];
             }
             let last = modifier.lines.len().saturating_sub(1);
+            // The origin under the tiers of a line that adds up two modifiers, the other lines
+            // of its hybrid without tier.
+            let origin_line = match &modifier.doubt {
+                Some(TierDoubt::Split { line, .. }) => *line,
+                _ => last,
+            };
             modifier
                 .lines
                 .iter()
@@ -1014,25 +1081,25 @@ fn affix_stats<'a>(item: &'a Item, affix: Option<Affix>, reading: &Reading<'_>) 
                             .collect();
                         ModifierTier { number, ranges }
                     });
-                    let origin = modifier.origin.filter(|_| line_index == last);
+                    let origin = modifier.origin.filter(|_| line_index == origin_line);
                     let mut stat = affix_stat(key, line, tier, origin, reading);
-                    if line_index == last
-                        && let Some(TierDoubt::EitherAffix { prefix, suffix }) = &modifier.doubt
-                    {
-                        stat.roll = Some(Roll::Tiers {
-                            rows: vec![TierRow::affix(prefix), TierRow::affix(suffix)],
-                            origin,
-                        });
+                    let rows = match &modifier.doubt {
+                        Some(TierDoubt::EitherAffix { prefix, suffix }) if line_index == last => {
+                            Some(vec![TierRow::affix(prefix), TierRow::affix(suffix)])
+                        }
+                        Some(TierDoubt::Split {
+                            line, whole, added, ..
+                        }) if line_index == *line => Some(split_rows(whole, added)),
+                        _ => None,
+                    };
+                    if let Some(rows) = rows {
+                        stat.roll = Some(Roll::Tiers { rows, origin });
                     }
                     stat
                 })
                 .collect()
         })
-        .collect();
-    AffixStats {
-        count: len(&modifiers),
-        stats,
-    }
+        .collect()
 }
 
 /// The line `key` of a prefix or suffix, `line`: a filter that stays within the rolls of every
@@ -1765,7 +1832,7 @@ fn roll_line(ui: &mut Ui, roll: &Roll, bar: RollBar, i18n: &Translator) {
                 roll_bar(ui, *share, bar);
             }
             if let Some(tier) = tier {
-                tier_label(ui, tier);
+                tier_label(ui, tier, None);
             }
             if let Some(origin) = origin {
                 origin_word(ui, *origin, i18n);
@@ -1776,8 +1843,13 @@ fn roll_line(ui: &mut Ui, roll: &Roll, bar: RollBar, i18n: &Translator) {
                 ui.spacing_mut().item_spacing.y = TIER_ROW_GAP;
                 for row in rows {
                     roll_row(ui, |ui| {
-                        tier_label(ui, &row.tier);
-                        small_word(ui, i18n.text(row.word), color::WEAK);
+                        tier_label(ui, &row.tier, row.better);
+                        if let Some(word) = row.word {
+                            let response = small_word(ui, i18n.text(word), color::WEAK);
+                            if let Some(tip) = row.tip {
+                                response.on_hover_text(i18n.text(tip));
+                            }
+                        }
                     });
                 }
                 // On a line of its own: the line has it whichever affix it is.
@@ -1797,10 +1869,15 @@ fn roll_row(ui: &mut Ui, parts: impl FnOnce(&mut Ui)) {
     });
 }
 
-/// A tier, `T1` in its color, and its ranges.
-fn tier_label(ui: &mut Ui, tier: &ModifierTier) {
+/// A tier, `T1` in its color, and its ranges; or two neighbouring tiers, the `better` and
+/// `tier`, `T1/T2` in the color of the worse, and the ranges of both.
+fn tier_label(ui: &mut Ui, tier: &ModifierTier, better: Option<u32>) {
+    let label = match better {
+        Some(better) => format!("T{better}/T{}", tier.number),
+        None => format!("T{}", tier.number),
+    };
     ui.label(
-        RichText::new(format!("T{}", tier.number))
+        RichText::new(label)
             .font(text::tier())
             .color(tier_color(tier.number)),
     );
@@ -1817,10 +1894,10 @@ fn origin_word(ui: &mut Ui, origin: ModifierOrigin, i18n: &Translator) {
 
 /// A small word in `tint`: an origin, after the ranges of a tier or on a row of its own, or the
 /// affix of a tier among several ("Prefix") in gray, after its ranges.
-fn small_word(ui: &mut Ui, word: String, tint: Color32) {
+fn small_word(ui: &mut Ui, word: String, tint: Color32) -> Response {
     // The space before it only.
     ui.spacing_mut().item_spacing.x = ORIGIN_GAP;
-    ui.label(RichText::new(word).font(text::origin()).color(tint));
+    ui.label(RichText::new(word).font(text::origin()).color(tint))
 }
 
 /// The word of an origin, and its color.

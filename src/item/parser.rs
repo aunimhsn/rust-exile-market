@@ -432,7 +432,7 @@ fn read_headed(item: &mut Item, lines: &[&str], labels: &Labels) {
             Some(header) => {
                 item.modifiers.extend(current.take());
                 current = Some(match header {
-                    Header::Known(modifier) => modifier,
+                    Header::Known(modifier) => *modifier,
                     Header::Unknown => {
                         item.warnings.push(ParseWarning::UnknownModifierHeader);
                         Modifier::unknown()

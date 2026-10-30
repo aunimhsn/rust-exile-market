@@ -1075,6 +1075,161 @@ fn the_lines_of_a_tiara_read_again_keep_the_tiers_of_the_affix_in_doubt() {
     assert_eq!(written_ranges(&open), [None]);
 }
 
+/// Modifiers of one line each, as the in-game trade writes them, with their values.
+fn trade_lines(lines: &[&str]) -> Vec<Modifier> {
+    lines
+        .iter()
+        .map(|line| Modifier {
+            lines: vec![StatLine::parse(line)],
+            ..modifier(None, &[])
+        })
+        .collect()
+}
+
+/// `modifiers` of an item of `base_type` and `item_level`, in English, read again with the
+/// tiers found from their values, with at most `(prefixes, suffixes)`.
+fn read_again(
+    base_type: &str,
+    item_level: u32,
+    modifiers: &[Modifier],
+    (prefixes, suffixes): (u32, u32),
+) -> Vec<Modifier> {
+    let limits = AffixLimits { prefixes, suffixes };
+    with_trade_tiers(
+        Language::English,
+        base_type,
+        Some(item_level),
+        modifiers,
+        limits,
+        false,
+    )
+}
+
+/// A part of a split line of `affix`, in `tiers`, over `ranges`.
+fn part(affix: Affix, tiers: &[u32], ranges: &[(f64, f64)]) -> PartTier {
+    PartTier {
+        affix,
+        tiers: tiers.to_vec(),
+        ranges: ranges.iter().map(|&(min, max)| range(min, max)).collect(),
+    }
+}
+
+/// The modifier of `read` with a split line.
+fn split_of(read: &[Modifier]) -> &Modifier {
+    read.iter()
+        .find(|modifier| matches!(modifier.doubt, Some(TierDoubt::Split { .. })))
+        .expect("a split line")
+}
+
+#[test]
+fn a_split_line_is_read_with_the_other_lines_of_its_hybrid_and_the_tiers_of_each_part() {
+    let item = parse(BOW_EN);
+    let limits = AffixLimits {
+        prefixes: 3,
+        suffixes: 4,
+    };
+
+    let read = with_trade_tiers(
+        item.language(),
+        item.base_type(),
+        item.item_level(),
+        item.modifiers(),
+        limits,
+        false,
+    );
+
+    // The hybrid T1 with the accuracy, and the pure T1: a prefix, two modifiers, without
+    // tier nor range on its lines, the ranges of each part on the summed line only.
+    let split = split_of(&read);
+    assert_eq!(
+        texts(split),
+        ["258% increased Physical Damage", "+195 to Accuracy Rating"]
+    );
+    assert_eq!(split.kind, ModifierKind::Explicit(Some(Affix::Prefix)));
+    assert_eq!(split.tier, None);
+    assert_eq!(written_ranges(split), [None, None]);
+    assert_eq!(
+        split.doubt,
+        Some(TierDoubt::Split {
+            line: 0,
+            whole: part(Affix::Prefix, &[1], &[(75.0, 79.0)]),
+            added: part(Affix::Prefix, &[1], &[(170.0, 179.0)]),
+        })
+    );
+    // The other lines stay where they were.
+    let lines =
+        |modifiers: &[Modifier]| -> Vec<String> { modifiers.iter().flat_map(texts).collect() };
+    assert_eq!(lines(&read), lines(item.modifiers()));
+}
+
+#[test]
+fn a_split_line_after_the_other_line_of_its_hybrid_keeps_its_place() {
+    let modifiers = trade_lines(&["+195 to Accuracy Rating", "258% increased Physical Damage"]);
+
+    let read = read_again("Warmonger Bow", 82, &modifiers, (2, 3));
+
+    let split = split_of(&read);
+    assert_eq!(
+        texts(split),
+        ["+195 to Accuracy Rating", "258% increased Physical Damage"]
+    );
+    assert!(matches!(
+        split.doubt,
+        Some(TierDoubt::Split { line: 1, .. })
+    ));
+}
+
+#[test]
+fn a_part_of_a_split_line_in_two_neighbouring_tiers_is_read_over_the_range_of_both() {
+    let modifiers = trade_lines(&["248% increased Physical Damage", "+195 to Accuracy Rating"]);
+
+    let read = read_again("Warmonger Bow", 82, &modifiers, (2, 3));
+
+    // The pure T1 (170–179) or T2 (155–169), the best first, with the hybrid T1.
+    assert_eq!(
+        split_of(&read).doubt,
+        Some(TierDoubt::Split {
+            line: 0,
+            whole: part(Affix::Prefix, &[1], &[(75.0, 79.0)]),
+            added: part(Affix::Prefix, &[1, 2], &[(155.0, 179.0)]),
+        })
+    );
+
+    // The summed part in two tiers: at level 35, 18% of rarity is the suffix T3 (6–10) with
+    // the prefix T2 (12–15) or T3 (8–11).
+    let rarity = trade_lines(&["18% increased Rarity of Items found"]);
+    let read = read_again("Ancestral Tiara", 35, &rarity, (3, 3));
+    assert_eq!(
+        split_of(&read).doubt,
+        Some(TierDoubt::Split {
+            line: 0,
+            whole: part(Affix::Prefix, &[2, 3], &[(8.0, 15.0)]),
+            added: part(Affix::Suffix, &[3], &[(6.0, 10.0)]),
+        })
+    );
+}
+
+#[test]
+fn a_line_that_adds_up_a_prefix_and_a_suffix_is_explicit_without_affix() {
+    let mut rarity = trade_lines(&["37% increased Rarity of Items found"]);
+    rarity[0].origin = Some(ModifierOrigin::Desecrated);
+
+    let read = read_again("Ancestral Tiara", 82, &rarity, (3, 3));
+
+    // The prefix T1 (16–19) first, the suffix T1 (15–18); its origin kept.
+    let split = split_of(&read);
+    assert_eq!(split.kind, ModifierKind::Explicit(None));
+    assert_eq!(split.origin, Some(ModifierOrigin::Desecrated));
+    assert_eq!(
+        split.doubt,
+        Some(TierDoubt::Split {
+            line: 0,
+            whole: part(Affix::Prefix, &[1], &[(16.0, 19.0)]),
+            added: part(Affix::Suffix, &[1], &[(15.0, 18.0)]),
+        })
+    );
+}
+
 #[test]
 fn a_value_in_several_tiers_takes_the_worst_without_the_ranges_of_the_copy() {
     let tables = read(concat!(

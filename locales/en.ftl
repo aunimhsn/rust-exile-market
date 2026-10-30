@@ -209,6 +209,8 @@ trade-copy-note = Copied from the in-game trade: the tiers are found from the va
 # After the range of a tier found from the values, when the line can be a prefix or a suffix: the affix of that tier, in gray.
 affix-prefix = Prefix
 affix-suffix = Suffix
+# The tooltip of "Suffix" under a line that adds up a prefix and a suffix of the same stat, the prefix written above it.
+added-up-with-prefix = Added up with the prefix on this line
 
 ## Price block
 

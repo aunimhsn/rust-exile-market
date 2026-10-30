@@ -179,6 +179,31 @@ pub enum TierDoubt {
         prefix: AffixTier,
         suffix: AffixTier,
     },
+    /// A line that adds up two modifiers of its stat (the `258% increased Physical Damage` of
+    /// a bow: a pure 170–179 and the 75–79 of the hybrid with `+195 to Accuracy Rating`): the
+    /// modifier holds the lines of the hybrid, or that line alone for two pure modifiers,
+    /// without tier; of their affix, or explicit without affix for a prefix and a suffix.
+    Split {
+        /// The index among the lines of the modifier of the line that adds them up.
+        line: usize,
+        /// The modifier of every line: a pure modifier of that line, or a hybrid with the
+        /// others; of two pure modifiers of a prefix and a suffix, the prefix.
+        whole: PartTier,
+        /// The pure modifier of that line only, of another type.
+        added: PartTier,
+    },
+}
+
+/// The tiers of a part of a line that adds up two modifiers of its stat, found from the value
+/// of that line: a pure prefix of tier 1 or 2, 155–179.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PartTier {
+    pub affix: Affix,
+    /// The tiers it may be, the best first: one, or two neighbouring tiers.
+    pub tiers: Vec<u32>,
+    /// The range over these tiers of each value of that line its stat counts, in their order,
+    /// as the game writes it: without its sign.
+    pub ranges: Vec<Range>,
 }
 
 /// A modifier, with one line or more.
@@ -204,7 +229,7 @@ pub struct Modifier {
 /// What a header line of the advanced copy tells.
 #[derive(Debug, PartialEq)]
 pub(super) enum Header {
-    Known(Modifier),
+    Known(Box<Modifier>),
     /// A header whose kind isn't in the labels: its lines make a modifier of their own.
     Unknown,
 }
@@ -267,7 +292,10 @@ impl Header {
     /// when the line isn't a header.
     pub(super) fn parse(line: &str, labels: &Labels) -> Option<Self> {
         let body = line.trim().strip_prefix('{')?.strip_suffix('}')?.trim();
-        Some(Self::read(body, labels).map_or(Self::Unknown, Self::Known))
+        Some(
+            Self::read(body, labels)
+                .map_or(Self::Unknown, |modifier| Self::Known(Box::new(modifier))),
+        )
     }
 
     fn read(body: &str, labels: &Labels) -> Option<Modifier> {
@@ -427,7 +455,7 @@ mod tests {
 
     fn header(line: &str, language: Language) -> Modifier {
         match Header::parse(line, Labels::of(language)) {
-            Some(Header::Known(modifier)) => modifier,
+            Some(Header::Known(modifier)) => *modifier,
             other => panic!("{line}: {other:?}"),
         }
     }

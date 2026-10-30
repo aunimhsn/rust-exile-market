@@ -8,7 +8,9 @@ use serde::Deserialize;
 
 use super::bases;
 use super::lines::{LineMatch, StatSource, modifier_stats};
-use crate::item::{Affix, AffixTier, Modifier, ModifierKind, ModifierOrigin, Range, TierDoubt};
+use crate::item::{
+    Affix, AffixTier, Modifier, ModifierKind, ModifierOrigin, PartTier, Range, TierDoubt,
+};
 use crate::language::Language;
 
 mod summed_readings;
@@ -386,7 +388,9 @@ pub fn trade_tiers(
 /// copy writes them: the lines of a hybrid made one modifier, a prefix or a suffix, its tier,
 /// and on each value its stat counts the range of that tier. A modifier that can be a prefix
 /// or a suffix stays explicit, without affix nor tier, with the tier of each
-/// ([`TierDoubt::EitherAffix`]); one that no tier holds stays as it was.
+/// ([`TierDoubt::EitherAffix`]); a line that adds up two modifiers is one modifier with the
+/// other lines of its hybrid, without tier, with the tiers of each part
+/// ([`TierDoubt::Split`]); one that no tier holds stays as it was.
 #[must_use]
 pub fn with_trade_tiers(
     language: Language,
@@ -421,11 +425,20 @@ pub fn with_trade_tiers(
 }
 
 /// The modifiers `parts`, read as one modifier in `found`: of its affix with its tier; or, when
-/// `found` has both affixes, explicit with the tier of each. A line that adds up two modifiers
-/// stays as it was until step 13k2e4b shows them.
+/// `found` has both affixes, explicit with the tier of each; or, for a line that adds up two
+/// modifiers, with the tiers of each part.
 fn read_found(language: Language, parts: &[Modifier], found: &FoundTiers) -> Option<Modifier> {
-    if found.added.is_some() {
-        return None;
+    if let Some(added) = &found.added {
+        let [(affix, tiers)] = found.affixes.as_slice() else {
+            return None;
+        };
+        return read_split(
+            language,
+            parts,
+            found.modifiers.start,
+            (*affix, tiers),
+            added,
+        );
     }
     match found.affixes.as_slice() {
         [(affix, tiers)] => with_tier(language, parts, *affix, tiers),
@@ -438,6 +451,70 @@ fn read_found(language: Language, parts: &[Modifier], found: &FoundTiers) -> Opt
         }),
         _ => None,
     }
+}
+
+/// The modifiers `parts`, the first the modifier `first` of the item, made one modifier whose
+/// line `added.line` adds up the modifier `whole` (of every line of `parts`) and `added`
+/// (of that line only): of their affix, or explicit without affix for a prefix and a suffix,
+/// without tier nor range, with the tiers of each part.
+fn read_split(
+    language: Language,
+    parts: &[Modifier],
+    first: usize,
+    (affix, whole): (Affix, &ModifierTiers),
+    added: &AddedTiers,
+) -> Option<Modifier> {
+    let summed = added.line.checked_sub(first)?;
+    // The index of that line among the lines of `parts`: each has one line, as the in-game
+    // trade writes them, but the lines are counted.
+    let line: usize = parts.iter().take(summed).map(|part| part.lines.len()).sum();
+    let alone = parts.get(summed..=summed)?;
+    let joined = joined(parts)?;
+    Some(Modifier {
+        kind: ModifierKind::Explicit((affix == added.affix).then_some(affix)),
+        tier: None,
+        doubt: Some(TierDoubt::Split {
+            line,
+            whole: part_tier(language, parts, affix, whole, line)?,
+            added: part_tier(language, alone, added.affix, &added.tiers, 0)?,
+        }),
+        ..joined
+    })
+}
+
+/// The tiers `tiers` may be (one, or two neighbouring ones) of the modifiers `parts` read as
+/// one modifier of `affix`, with the range over these tiers of each value of their line
+/// `line` its stat counts ([`with_ranges`]).
+fn part_tier(
+    language: Language,
+    parts: &[Modifier],
+    affix: Affix,
+    tiers: &ModifierTiers,
+    line: usize,
+) -> Option<PartTier> {
+    let mut ranges: Option<Vec<Range>> = None;
+    for tier in tiers.possible() {
+        let read = with_ranges(language, parts, tier, &tiers.counts)?;
+        let line_ranges = read
+            .lines
+            .get(line)?
+            .rolls
+            .iter()
+            .filter_map(|roll| roll.range);
+        ranges = Some(match ranges {
+            None => line_ranges.collect(),
+            Some(spanned) => spanned
+                .into_iter()
+                .zip(line_ranges)
+                .map(|(spanned, range)| spanned.holding(range.min).holding(range.max))
+                .collect(),
+        });
+    }
+    Some(PartTier {
+        affix,
+        tiers: tiers.possible().map(|tier| tier.number).collect(),
+        ranges: ranges?,
+    })
 }
 
 /// The modifiers `parts` made one, with the lines of each in their order.
@@ -462,7 +539,7 @@ fn with_tier(
     Some(Modifier {
         kind: ModifierKind::Explicit(Some(affix)),
         tier: Some(tiers.tier()?.number),
-        ..with_ranges(language, parts, tiers)?
+        ..with_ranges(language, parts, tiers.tier()?, &tiers.counts)?
     })
 }
 
@@ -474,7 +551,7 @@ fn affix_tier(
     affix: Affix,
     tiers: &ModifierTiers,
 ) -> Option<AffixTier> {
-    let ranged = with_ranges(language, parts, tiers)?;
+    let ranged = with_ranges(language, parts, tiers.tier()?, &tiers.counts)?;
     Some(AffixTier {
         affix,
         tier: tiers.tier()?.number,
@@ -487,16 +564,21 @@ fn affix_tier(
     })
 }
 
-/// The modifiers `parts` made one, with the ranges of the tier of `tiers` on the values their
-/// stats count, in their order, without their sign. A line whose counted values aren't as many
-/// as those of its stat in the tables (none for `Loads an additional bolt`, whose string gives
-/// the value) keeps them without range, as does a range across zero, which needs its sign.
-fn with_ranges(language: Language, parts: &[Modifier], tiers: &ModifierTiers) -> Option<Modifier> {
-    let tier = tiers.tier()?;
+/// The modifiers `parts` made one, with the ranges of `tier` on the values their stats count,
+/// in their order, without their sign, `counts` giving the number of values of each line match
+/// ([`ModifierTiers::counts`]). A line whose counted values aren't as many as those of its stat
+/// in the tables (none for `Loads an additional bolt`, whose string gives the value) keeps them
+/// without range, as does a range across zero, which needs its sign.
+fn with_ranges(
+    language: Language,
+    parts: &[Modifier],
+    tier: &Tier,
+    counts: &[usize],
+) -> Option<Modifier> {
     let mut joined = joined(parts)?;
     // The ranges and `counts` follow the line matches of each part, in their order.
     let mut ranges = tier.ranges.iter();
-    let mut counts = tiers.counts.iter();
+    let mut counts = counts.iter();
     let mut offset = 0;
     for part in parts {
         for line_match in modifier_stats(language, part, None) {
