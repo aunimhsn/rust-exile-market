@@ -410,6 +410,55 @@ fn a_desecrated_table_is_a_modifier_of_one_tier_of_its_own() {
 }
 
 #[test]
+fn no_line_in_doubt_can_be_the_modifier_of_two_lords_of_one_affix() {
+    // A line in doubt names the lord of each affix it can be: the modifiers of two lords of one
+    // affix that hold it as well name none, but show the range of the first; none on 2026-10-30
+    // (the flask charges of Kurgal and Ulaman on the belts are prefixes only). Checked on every
+    // pair of lords' tables with the same lines, a tag of a base in common and ranges that meet,
+    // whose lines a table of the other affix holds too.
+    let tags = |table: &Table| -> Vec<String> {
+        table
+            .spawn
+            .iter()
+            .filter(|(_, weight)| *weight > 0)
+            .map(|(tag, _)| tag.clone())
+            .collect()
+    };
+    let meet = |one: &[f64; 2], other: &[f64; 2]| {
+        one[0].min(one[1]) <= other[0].max(other[1]) && other[0].min(other[1]) <= one[0].max(one[1])
+    };
+    let overlap = |one: &Table, other: &Table| {
+        one.tiers.iter().any(|tier| {
+            other.tiers.iter().any(|other| {
+                tier.ranges.iter().zip(&other.ranges).all(|(line, other)| {
+                    line.iter().zip(other).all(|(one, other)| meet(one, other))
+                })
+            })
+        })
+    };
+    for (index, one) in TABLES.iter().enumerate() {
+        let Some(lord) = one.lord else {
+            continue;
+        };
+        let either = TABLES
+            .iter()
+            .any(|table| table.affix != one.affix && table.lines == one.lines);
+        for other in TABLES.iter().skip(index + 1) {
+            let two_lords = other.lord.is_some_and(|other| other != lord)
+                && other.affix == one.affix
+                && other.lines == one.lines;
+            let on_one_base = tags(one).iter().any(|tag| tags(other).contains(tag));
+            assert!(
+                !(two_lords && on_one_base && overlap(one, other) && either),
+                "{} and {}",
+                one.kind,
+                other.kind
+            );
+        }
+    }
+}
+
+#[test]
 fn of_two_tiers_as_good_the_one_the_advanced_copy_wrote_is_taken() {
     // A desecrated table of one tier first, then an ordinary one whose T3 has the same range.
     let tables = read(concat!(

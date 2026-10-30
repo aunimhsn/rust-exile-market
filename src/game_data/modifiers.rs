@@ -183,7 +183,9 @@ pub struct ModifierTiers {
     /// Whether the game writes the modifier without tier, one of the Genesis tree: it is read
     /// as the advanced copy writes it, the ranges of its tier without number.
     pub tier_unwritten: bool,
-    /// The lord of the Abyss whose modifier it is.
+    /// The lord of the Abyss whose modifier it is: none for another modifier, or when the
+    /// modifiers of two lords hold the copied one as well (`find`; a split, `splits`, takes the
+    /// lord of its table, never shown).
     pub lord: Option<Lord>,
 }
 
@@ -1510,7 +1512,9 @@ fn find(
         {
             // The modifiers of two lords hold it as well: neither is named (the flask charges
             // of Kurgal, `10–15`, and of Ulaman, `10–18`, on the belts). An ordinary table comes
-            // before them, so a lord never takes its place.
+            // before them, so a lord never takes its place; the desecrated tables of the Genesis
+            // tree come after them, but share no line and base with a lord's in a range of both
+            // (the exposure of the rings, `10–15` of Kurgal, `25–35` of the tree).
             best_tiers.lord = None;
         }
     }

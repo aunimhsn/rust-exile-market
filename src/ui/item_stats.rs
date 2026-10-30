@@ -244,7 +244,8 @@ impl<'a> TierRow<'a> {
     /// in doubt, the other rows keeping the color of their tier ("T1 Hybrid suffix" under the
     /// other line of a hybrid split from a summed line, whose T1 the summed line writes too).
     fn quiet_tier(&self) -> bool {
-        self.quiet && self.word.is_some() && self.tier.ranges.is_empty() && self.better.is_none()
+        // Set by `TierRow::affix` only: a word, no ranges, one tier.
+        self.quiet
     }
 
     /// The tier `tier` of a modifier, without word.

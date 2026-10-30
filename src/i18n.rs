@@ -1078,6 +1078,34 @@ mod tests {
     }
 
     #[test]
+    fn the_affix_of_a_lord_names_him_in_each_language() {
+        for language in Language::ALL {
+            let translator = Translator::new(language);
+            for lord in [Lord::Amanamu, Lord::Kurgal, Lord::Ulaman] {
+                for affix in [Affix::Prefix, Affix::Suffix] {
+                    let text = translator.lord_affix(affix, lord);
+                    assert!(text.contains(lord.name()), "{text} in {language:?}");
+                }
+            }
+        }
+        let english = Translator::new(Language::English);
+        assert_eq!(
+            english.lord_affix(Affix::Prefix, Lord::Amanamu),
+            "Amanamu Prefix"
+        );
+        // The elision of the French: "de Kurgal", "d'Amanamu".
+        let french = Translator::new(Language::French);
+        assert_eq!(
+            french.lord_affix(Affix::Prefix, Lord::Kurgal),
+            "Préfixe de Kurgal"
+        );
+        assert_eq!(
+            french.lord_affix(Affix::Suffix, Lord::Amanamu),
+            "Suffixe d'Amanamu"
+        );
+    }
+
+    #[test]
     fn every_message_formats_without_errors() {
         // The errors fail the `debug_assert` of `format`.
         for language in Language::ALL {
@@ -1108,12 +1136,6 @@ mod tests {
                 with.contains(lines[0]) && with.contains(lines[1]),
                 "{with} in {language:?}"
             );
-            for lord in [Lord::Amanamu, Lord::Kurgal, Lord::Ulaman] {
-                for affix in [Affix::Prefix, Affix::Suffix] {
-                    let text = translator.lord_affix(affix, lord);
-                    assert!(text.contains(lord.name()), "{text} in {language:?}");
-                }
-            }
             let part = translator.hybrid_part("75–79", "258% increased");
             assert!(
                 part.contains("75–79") && part.contains("258% increased"),
