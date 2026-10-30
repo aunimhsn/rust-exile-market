@@ -12,7 +12,9 @@ use super::{
 use crate::item::{Modifier, ModifierOrigin};
 
 /// The most steps the search of the other readings takes: some fifty on a random rare item, a
-/// few hundred on the most tangled ones (1,349 at most on 5,600 items drawn, 2026-10-29).
+/// few hundred on the most tangled ones (1,349 at most on 5,600 items drawn, 2026-10-29; with
+/// the desecrated tables, 1,405 at most on 5,600 items of 14 bases with a third of their
+/// modifiers desecrated, 2,734 with all of them, 2026-10-30).
 const MAX_STEPS: usize = 50_000;
 
 /// The best reading of the lines of an item, as [`super::trade_tiers`] found it.
@@ -218,10 +220,11 @@ fn placements<'a>(
     let allowed = |level: u32| item_level.is_none_or(|item_level| level <= item_level);
     let mut placements = Vec::new();
     for (index, table) in tables.iter().enumerate() {
-        if !first_of_its_modifier(tables, index) {
-            continue;
-        }
         for mapped in mappings(table, lines) {
+            let origin = mapped
+                .first()
+                .and_then(|&line| lines.get(line))
+                .and_then(|line| line.origin);
             let copied = Copied {
                 lines: mapped
                     .iter()
@@ -230,10 +233,17 @@ fn placements<'a>(
                     .collect(),
                 ranges: None,
                 tier: None,
+                desecrated: origin == Some(ModifierOrigin::Desecrated),
             };
+            if !copied.may_be(table) {
+                continue;
+            }
             let Some(order) = copied.order(&table.lines) else {
                 continue;
             };
+            if !first_of_its_modifier(tables, index) {
+                continue;
+            }
             // The value of a line without number is that of its stat: divided, it would differ
             // from a modifier to another (no such line rolls on a base, 2026-10-28; the best
             // reading isn't met then, and every line is in doubt).

@@ -341,16 +341,17 @@ fn a_line_of_the_in_game_trade_that_can_be_a_prefix_or_a_suffix_shows_the_tier_o
 
 #[test]
 fn a_line_that_can_be_a_modifier_of_one_tier_only_writes_no_tier_number_on_its_row() {
-    // `+1` is the prefix of Amanamu, the only one, or the T2 of the suffix of a cannon.
+    // `+1` desecrated is the prefix of Amanamu, the only one, or the T2 of the suffix of a
+    // cannon.
     let cannon = parse(
         "Item Class: Crossbows\nRarity: Rare\nDoom Bolt\nTrarthan Cannon\n--------\n\
-         Item Level: 82\n--------\nGrenade Skills have +1 Cooldown Use\n",
+         Item Level: 82\n--------\nGrenade Skills have +1 Cooldown Use (desecrated)\n",
     );
 
     let texts = texts(&read_again(cannon));
     assert!(
         texts.contains(
-            &"■ Grenade Skills have +1 Cooldown Use ≥1 [1 AffixPrefix / T2 1 AffixSuffix]"
+            &"■ Grenade Skills have +1 Cooldown Use ≥1 [1 AffixPrefix / T2 1 AffixSuffix / Desecrated]"
                 .to_owned()
         ),
         "{texts:?}"
@@ -2078,6 +2079,38 @@ fn the_other_line_of_a_hybrid_whose_table_isnt_found_keeps_its_tier_without_bar(
             "□ 258% increased Physical Damage ≥232 [T1 170–179 / T1 76–79 Hybrid (with +195 to Accuracy Rating)]",
             "■ +195 to Accuracy Rating ≥176 [T1 175–200 Hybrid (with 76–79 of 258% increased Physical Damage)]",
         ]
+    );
+}
+
+#[test]
+fn a_part_of_a_summed_line_of_one_tier_only_writes_no_tier_number() {
+    let mut bow = read_again(parse(include_str!(
+        "../../item/test-items/en-owner-trade-rare-bow-mirrored.txt"
+    )));
+    // As if each part were a modifier of one tier only, a lord's.
+    let mut modifiers = bow.modifiers().to_vec();
+    for modifier in &mut modifiers {
+        if let Some(TierDoubt::Split { whole, added, .. }) = &mut modifier.doubt {
+            whole.single = true;
+            added.single = true;
+        }
+    }
+    bow.set_modifiers(modifiers);
+
+    // The ranges of each part without "T1", under the summed line and the other line of the
+    // hybrid.
+    let texts = texts_from(&bow, "Prefixes");
+    assert_eq!(
+        texts.get(1).map(String::as_str),
+        Some(
+            "□ 258% increased Physical Damage ≥232 [170–179 / 75–79 Hybrid (with +195 to Accuracy Rating)]"
+        )
+    );
+    assert!(
+        texts.get(2).is_some_and(|text| text
+            .ends_with(" 175–200 Hybrid (with 75–79 of 258% increased Physical Damage)]")
+            && !text.contains("T1")),
+        "{texts:?}"
     );
 }
 

@@ -20,7 +20,8 @@ mod summed_readings;
 const ROUNDING: f64 = 0.051;
 
 /// The most ways to read the lines of an item copied from the in-game trade that are looked
-/// at: a handful on a real item, each hybrid the lines may be doubling them.
+/// at: a handful on a real item, each hybrid the lines may be doubling them (42 at most on
+/// 5,600 items drawn with every modifier desecrated, 2026-10-30).
 const MAX_READINGS: usize = 4096;
 
 /// The tiers of a type of modifier that roll on the same bases, as the generator writes them.
@@ -99,7 +100,9 @@ impl Table {
     /// may roll the same lines on one base, a lord's own (the flask charges of Ulaman,
     /// `10–18`, and of Kurgal, `10–15`, on the belts), or the same range written twice (the
     /// cost efficiency of attacks of Kurgal on the maces), which merged would read as a T1 and
-    /// a T2.
+    /// a T2. Nothing tells two such tables apart but their place: `self` and `other` are tables
+    /// of one slice (`TABLES`, or the tables of a test), and a desecrated table is the same
+    /// modifier as itself only.
     fn same_modifier(&self, other: &Self) -> bool {
         if self.domain == Domain::Desecrated || other.domain == Domain::Desecrated {
             return std::ptr::eq(self, other);
@@ -234,12 +237,13 @@ fn split_tiers(
 }
 
 /// The tiers among `tables`, on `base`, of the modifier of every line of `copied`,
-/// whose line `summed` adds up its part `whole` and a pure modifier: those of the first table
-/// whose tiers of the numbers of `whole`, among those `item_level` allows, give that line the
-/// ranges of `whole` and hold the values of its other lines, that line taken at the lowest
-/// roll of its part, the sum being in no tier; the worse found and the better its neighbour.
-/// Another table holding them as well would have been a second way to split the line
-/// ([`splits`], which takes the same tiers), which leaves it without tier.
+/// whose line `summed` adds up its part `whole` and a pure modifier: those of the table whose
+/// tiers of the numbers of `whole`, among those `item_level` allows, give that line the ranges
+/// of `whole` and hold best the values of its other lines, that line taken at the lowest roll
+/// of its part, the sum being in no tier; the worse found and the better its neighbour. As
+/// [`splits`] takes the ways that fit best: another table holding them as well would have
+/// been a second way to split the line, which leaves it without tier; the first of the file
+/// on a tie, as `find` takes.
 fn hybrid_tiers(
     tables: &[Table],
     base: &BaseSpawn,
@@ -267,26 +271,42 @@ fn hybrid_tiers(
         *value = range.min.copysign(*value);
     }
     let counts: Vec<usize> = copied.lines.iter().map(CopiedLine::count).collect();
-    tables.iter().enumerate().find_map(|(index, table)| {
-        if table.affix != affix || !first_of_its_modifier(tables, index) {
-            return None;
+    let mut best: Option<(Fit, ModifierTiers)> = None;
+    for (index, table) in tables.iter().enumerate() {
+        if table.affix != affix || !copied.may_be(table) {
+            continue;
         }
-        let order = copied.order(&table.lines)?;
-        let tiers = tiers_on_base(tables, table, base, &order, &copied)?;
-        let (worse, better) = part_in(&tiers, whole, offset, item_level)?;
+        let Some(order) = copied.order(&table.lines) else {
+            continue;
+        };
+        if !first_of_its_modifier(tables, index) {
+            continue;
+        }
+        let Some(tiers) = tiers_on_base(tables, table, base, &order, &copied) else {
+            continue;
+        };
+        let Some((worse, better)) = part_in(&tiers, whole, offset, item_level) else {
+            continue;
+        };
         let values = copied.values(&table.lines, &order);
-        let holds_values = [Some(worse), better].into_iter().flatten().any(|tier| {
-            tiers
-                .get(tier)
-                .is_some_and(|tier| holds(&values, &tier.ranges).is_some())
-        });
-        holds_values.then(|| ModifierTiers {
-            tiers,
-            found: worse,
-            neighbour: better,
-            counts: counts.clone(),
-        })
-    })
+        let fit = [Some(worse), better]
+            .into_iter()
+            .flatten()
+            .filter_map(|tier| holds(&values, &tiers.get(tier)?.ranges))
+            .min();
+        if let Some(fit) = fit
+            && best.as_ref().is_none_or(|(best, _)| fit < *best)
+        {
+            let tiers = ModifierTiers {
+                tiers,
+                found: worse,
+                neighbour: better,
+                counts: counts.clone(),
+            };
+            best = Some((fit, tiers));
+        }
+    }
+    best.map(|(_, tiers)| tiers)
 }
 
 /// The indexes in `tiers` (the best first) of the tiers of `whole`, the part of a line from
@@ -890,6 +910,7 @@ fn candidates(
                 lines: lines.clone(),
                 ranges: None,
                 tier: None,
+                desecrated: first.origin == Some(ModifierOrigin::Desecrated),
             };
             let affixes: Vec<_> = [
                 (Affix::Prefix, TableAffix::Prefix),
@@ -966,6 +987,7 @@ fn splits(
         lines: vec![line.clone()],
         ranges: None,
         tier: None,
+        desecrated: copied.desecrated,
     };
     // The values of the summed line among those of every line, in their order.
     let offset: usize = copied
@@ -981,6 +1003,7 @@ fn splits(
     let pure: Vec<_> = tables
         .iter()
         .enumerate()
+        .filter(|(_, table)| alone.may_be(table))
         .filter_map(|(index, table)| {
             let order = alone.order(&table.lines)?;
             let tiers = tiers_on_base(tables, table, base, &order, &alone)?;
@@ -991,6 +1014,9 @@ fn splits(
     let rank = |table: &Table, index: usize| (table.affix, index);
     let mut ways = Vec::new();
     for (whole_index, whole) in tables.iter().enumerate() {
+        if !copied.may_be(whole) {
+            continue;
+        }
         let Some(order) = copied.order(&whole.lines) else {
             continue;
         };
@@ -1372,7 +1398,7 @@ fn find(
     let other_number = |tier: &Tier| copied.tier.is_some_and(|number| tier.number != number);
     let mut best: Option<((Fit, bool), ModifierTiers)> = None;
     for (index, table) in tables.iter().enumerate() {
-        if table.affix != affix {
+        if table.affix != affix || !copied.may_be(table) {
             continue;
         }
         let Some(order) = copied.order(&table.lines) else {
@@ -1512,6 +1538,11 @@ struct Copied<'a> {
     ranges: Option<Vec<Range>>,
     /// The tier the advanced copy wrote: of two tiers that hold the modifier as well, that one.
     tier: Option<u32>,
+    /// Whether the game marks the modifier desecrated (`Desecrated Prefix Modifier`, `
+    /// (desecrated)`): only such a modifier may be one of the desecrated tables, which the game
+    /// always marks (a desecrated modifier can't be fractured, owner's answer on 2026-10-30),
+    /// while a desecration also reveals ordinary modifiers.
+    desecrated: bool,
 }
 
 impl<'a> Copied<'a> {
@@ -1555,7 +1586,14 @@ impl<'a> Copied<'a> {
             lines,
             ranges,
             tier: modifier.tier,
+            desecrated: modifier.origin == Some(ModifierOrigin::Desecrated),
         })
+    }
+
+    /// Whether the modifier may be one of `table`: a desecrated table only for a modifier the
+    /// game marks desecrated.
+    fn may_be(&self, table: &Table) -> bool {
+        self.desecrated || table.domain != Domain::Desecrated
     }
 
     /// For each copied line, the index of the line of the same template in `lines`, the lines

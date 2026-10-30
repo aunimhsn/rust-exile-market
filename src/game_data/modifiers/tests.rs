@@ -307,6 +307,7 @@ fn the_value_of_a_line_without_number_is_divided_as_its_table_shows_it() {
         }],
         ranges: None,
         tier: None,
+        desecrated: false,
     };
     let number = |copied| {
         find(
@@ -351,17 +352,22 @@ fn the_modifiers_of_the_time_lost_jewels_arent_in_the_tables_yet() {
     assert_eq!(tiers("Time-Lost Emerald", &ailments), None);
 }
 
+/// A modifier of `affix` with `lines`, the game marking it desecrated.
+fn desecrated(affix: Affix, lines: &[&str]) -> Modifier {
+    Modifier {
+        origin: Some(ModifierOrigin::Desecrated),
+        ..modifier(Some(affix), lines)
+    }
+}
+
 #[test]
 fn a_desecrated_table_is_a_modifier_of_one_tier_of_its_own() {
     // The cost efficiency of Kurgal, written twice with the same range on the maces.
-    let efficiency = modifier(
-        Some(Affix::Suffix),
-        &["12% increased Cost Efficiency of Attacks"],
-    );
+    let efficiency = desecrated(Affix::Suffix, &["12% increased Cost Efficiency of Attacks"]);
     // The flask charges of Kurgal (10–15) and of Ulaman (10–18) on the belts.
     let charges = |value: u32| {
-        modifier(
-            Some(Affix::Prefix),
+        desecrated(
+            Affix::Prefix,
             &[&format!(
                 "{value}% chance for Flasks you use to not consume Charges"
             )],
@@ -387,6 +393,16 @@ fn a_desecrated_table_is_a_modifier_of_one_tier_of_its_own() {
         only("Heavy Belt", &charges(17)),
         Some((true, Some(vec![range(10.0, 18.0)])))
     );
+    // The presence of Amanamu on a helmet, which the game always marks desecrated.
+    let presence = ["30% increased Presence Area of Effect"];
+    assert_eq!(
+        only("Divine Crown", &desecrated(Affix::Suffix, &presence)),
+        Some((true, Some(vec![range(25.0, 35.0)])))
+    );
+    assert_eq!(
+        only("Divine Crown", &modifier(Some(Affix::Suffix), &presence)),
+        None
+    );
 }
 
 #[test]
@@ -407,6 +423,8 @@ fn of_two_tiers_as_good_the_one_the_advanced_copy_wrote_is_taken() {
         }],
         ranges: Some(vec![range(10.0, 20.0)]),
         tier,
+        // A desecrated line: an ordinary modifier, or a lord's.
+        desecrated: true,
     };
     let found = |tier| {
         find(
@@ -456,6 +474,7 @@ fn two_tables_with_the_same_lines_in_another_order_are_two_modifiers() {
         ],
         ranges: None,
         tier: None,
+        desecrated: false,
     };
 
     let tiers = find(
@@ -1454,9 +1473,12 @@ fn a_line_that_adds_up_a_prefix_and_a_suffix_is_explicit_without_affix() {
 }
 
 #[test]
-fn a_line_of_a_lord_and_of_an_ordinary_suffix_keeps_the_tier_of_each() {
-    // `+1` is the prefix of Amanamu, the only one, or the T2 of the suffix of a cannon.
-    let grenades = trade_lines(&["Grenade Skills have +1 Cooldown Use"]);
+fn a_desecrated_line_of_a_lord_and_of_an_ordinary_suffix_keeps_the_tier_of_each() {
+    // `+1` desecrated is the prefix of Amanamu, the only one, or the T2 of the suffix of a
+    // cannon, which a desecration reveals too.
+    let mut grenades = trade_lines(&["Grenade Skills have +1 Cooldown Use"]);
+    let ordinary = read_again("Trarthan Cannon", 82, &grenades, (3, 3));
+    grenades[0].origin = Some(ModifierOrigin::Desecrated);
 
     let read = read_again("Trarthan Cannon", 82, &grenades, (3, 3));
 
@@ -1473,6 +1495,48 @@ fn a_line_of_a_lord_and_of_an_ordinary_suffix_keeps_the_tier_of_each() {
             suffix: tier(Affix::Suffix, 2, false),
         })
     );
+    // Not marked, the line is no lord's: the T2 of the suffix.
+    let kind_and_tier = ordinary
+        .first()
+        .map(|modifier| (modifier.kind, modifier.tier, modifier.doubt.is_some()));
+    assert_eq!(
+        kind_and_tier,
+        Some((ModifierKind::Explicit(Some(Affix::Suffix)), Some(2), false))
+    );
+}
+
+#[test]
+fn the_lines_of_ordinary_modifiers_arent_read_as_a_lords() {
+    // A hybrid of the Abyss (`5–10` and `4–8`) or of Kurgal (`110–154` and `15% reduced
+    // Attack Speed`) would add up with them, leaving them in doubt.
+    let read = |base_type: &str, lines: &[&str], room| {
+        read_again(base_type, 82, &trade_lines(lines), room)
+            .iter()
+            .map(|modifier| (modifier.kind, modifier.tier))
+            .collect::<Vec<_>>()
+    };
+    let prefix = ModifierKind::Explicit(Some(Affix::Prefix));
+    let suffix = ModifierKind::Explicit(Some(Affix::Suffix));
+
+    assert_eq!(
+        read(
+            "Ruby",
+            &["6% increased Attack Damage", "17% increased Armour"],
+            (2, 2)
+        ),
+        [(prefix, Some(1)), (prefix, Some(1))]
+    );
+    let maul = read(
+        "Temple Maul",
+        &[
+            "130% increased Physical Damage",
+            "10% increased Attack Speed",
+        ],
+        (3, 3),
+    );
+    assert!(maul.iter().all(|(_, tier)| tier.is_some()), "{maul:?}");
+    assert_eq!(maul.first().map(|(kind, _)| *kind), Some(prefix));
+    assert_eq!(maul.get(1).map(|(kind, _)| *kind), Some(suffix));
 }
 
 #[test]
@@ -1489,6 +1553,7 @@ fn a_value_in_several_tiers_takes_the_worst_without_the_ranges_of_the_copy() {
         }],
         ranges: None,
         tier: None,
+        desecrated: false,
     };
     let number = |tie| {
         find(
@@ -1527,6 +1592,7 @@ fn the_tiers_of_the_hybrid_of_a_split_are_those_of_its_part() {
         ],
         ranges: None,
         tier: None,
+        desecrated: false,
     };
     let base = equipment(&["shield"]);
     // The tier and its neighbour found, by their numbers.
@@ -1581,6 +1647,7 @@ fn the_hybrid_of_a_split_is_the_first_table_whose_tiers_of_its_part_the_item_lev
         ],
         ranges: None,
         tier: None,
+        desecrated: false,
     };
     let whole = part(Affix::Prefix, &[1], &[(30.0, 39.0)]);
     // The range of the Armour of the tier found, which tells the table.
@@ -1604,6 +1671,51 @@ fn the_hybrid_of_a_split_is_the_first_table_whose_tiers_of_its_part_the_item_lev
     assert_eq!(armour(&high, None), Some(range(20.0, 35.0)));
     // The first gives the summed line other ranges: the second.
     assert_eq!(armour(&other, Some(82)), Some(range(20.0, 30.0)));
+    // The first holds the Armour give or take the rounding only, the second within its
+    // range: the second, as `splits` keeps the ways that fit best.
+    let rounded = [
+        table("First", 1, 35, 30).replace("[[20, 35]]", "[[20, 24.96]]"),
+        table("Second", 1, 30, 30),
+    ];
+    assert_eq!(armour(&rounded, Some(82)), Some(range(20.0, 30.0)));
+}
+
+#[test]
+fn two_hybrids_of_the_same_lines_that_split_a_line_are_two_ways() {
+    // Two hybrids of the same lines and Armour, other Stun Thresholds, and a pure Stun
+    // Threshold: `100` adds up the pure `50–70` with `30–39` or with `40–49`.
+    let hybrid = |kind: &str, stun: u32| {
+        format!(
+            r##"{{"type": "{kind}", "affix": "prefix", "lines": [{{"template": "#% increased Armour"}}, {{"template": "# to Stun Threshold"}}], "spawn": [["shield", 1]], "tiers": [{{"level": 1, "ranges": [[[20, 30]], [[{stun}, {}]]]}}]}}"##,
+            stun + 9
+        )
+    };
+    let pure = r##"{"type": "Stun", "affix": "suffix", "lines": [{"template": "# to Stun Threshold"}], "spawn": [["shield", 1]], "tiers": [{"level": 1, "ranges": [[[50, 70]]]}]}"##;
+    let tables = read(&[hybrid("First", 30), hybrid("Second", 40), pure.to_owned()].join("\n"));
+    let copied = Copied {
+        lines: vec![
+            CopiedLine {
+                template: "#% increased Armour",
+                values: vec![25.0],
+                written: None,
+            },
+            CopiedLine {
+                template: "# to Stun Threshold",
+                values: vec![100.0],
+                written: None,
+            },
+        ],
+        ranges: None,
+        tier: None,
+        desecrated: false,
+    };
+
+    let ways = splits(&tables, &equipment(&["shield"]), &copied, (1, 1), Some(82));
+
+    // Two ways as good, of two tables: the line is left without tier by the search, as two
+    // candidates split it (`the_lines_split_in_two_ways_as_good_keep_their_room`).
+    let pairs: Vec<_> = ways.iter().map(|way| way.tables).collect();
+    assert_eq!(pairs, [(0, 2), (1, 2)]);
 }
 
 #[test]

@@ -81,8 +81,9 @@ impl TierRolls {
             else {
                 continue;
             };
-            let one_tier = summed.is_none() && tiers.single();
-            if one_tier {
+            // The hybrid of a split line of one tier only too: its other lines tell no tiers.
+            let one_tier = tiers.single();
+            if one_tier && summed.is_none() {
                 match modifier.tier {
                     Some(1) => single.push(index),
                     // The game knows more tiers than the data, e.g. after a patch: the tier
@@ -538,6 +539,51 @@ mod tests {
         });
         let rolls = TierRolls::new(Language::English, &[pure], Some("Warmonger Bow"), None);
         assert_eq!(rolls.get(key(0, 0)), None);
+    }
+
+    #[test]
+    fn the_other_line_of_a_hybrid_of_one_tier_only_whose_part_a_line_adds_up_tells_no_tiers() {
+        use crate::item::{Affix, ModifierKind, ModifierOrigin, PartTier, StatLine};
+
+        let part = |min, max| PartTier {
+            affix: Affix::Prefix,
+            tiers: vec![1],
+            single: true,
+            ranges: vec![range(min, max)],
+        };
+        // The hybrid of Kurgal (110–154, and 15% reduced Attack Speed), desecrated, and a pure
+        // T1 (170–179) of a maul.
+        let split = Modifier {
+            kind: ModifierKind::Explicit(Some(Affix::Prefix)),
+            origin: Some(ModifierOrigin::Desecrated),
+            name: None,
+            tier: None,
+            tags: Vec::new(),
+            unrevealed: false,
+            lines: vec![
+                StatLine::parse("300% increased Physical Damage"),
+                StatLine::parse("15% reduced Attack Speed"),
+            ],
+            doubt: Some(TierDoubt::Split {
+                line: 0,
+                whole: part(110.0, 154.0),
+                added: part(170.0, 179.0),
+            }),
+        };
+
+        let rolls = TierRolls::new(
+            Language::English,
+            std::slice::from_ref(&split),
+            Some("Temple Maul"),
+            Some(82),
+        );
+
+        // Over its one tier, without "T1–T1"; the modifier not counted as one of one tier
+        // only, the split line having no tier.
+        let speed = rolls.get(key(0, 1)).expect("the rolls of the Attack Speed");
+        assert_eq!(speed.ranges, [Some(range(15.0, 15.0))]);
+        assert_eq!(speed.tiers, None);
+        assert!(!rolls.single(0));
     }
 
     #[test]

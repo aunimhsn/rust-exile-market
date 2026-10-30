@@ -283,7 +283,7 @@ impl<'a> TierRow<'a> {
                 .tiers
                 .first()
                 .copied()
-                .filter(|&better| better != worse && !part.single),
+                .filter(|&better| better != worse),
             word,
             tip,
         })
