@@ -119,7 +119,8 @@ struct Placement<'a> {
 /// hybrids of the owner's body armour, three prefixes either way, while the best reading splits
 /// no line): the best reading prefers fewer split lines, a modifier holding a line alone being
 /// likelier than two adding up, and a hybrid likelier than two pure modifiers only when one of
-/// them can't hold its line alone.
+/// them can't hold its line alone. A reading that differs from the best one only by the tier of
+/// a modifier of a split line, the neighbouring tier the best one gives it too, is the best one.
 pub(super) fn doubts(
     tags: &[String],
     item_level: Option<u32>,
@@ -361,19 +362,20 @@ fn mappings(table: &Table, lines: &[Line<'_>]) -> Vec<Vec<usize>> {
 }
 
 /// For each modifier of the item, the modifiers the `chosen` candidates of the best reading read
-/// on its line, each with the affixes it can be: a modifier, or the two of a split line.
+/// on its line, each with the affixes and tiers it can be: a modifier, or the two of a split
+/// line, one of which may be in two neighbouring tiers.
 fn best_shown(chosen: &[&Candidate], count: usize) -> Vec<Vec<Vec<Shown>>> {
     let mut shown = vec![Vec::new(); count];
     for candidate in chosen {
         let whole: Vec<Shown> = candidate
             .affixes
             .iter()
-            .filter_map(|(affix, tiers)| {
-                Some(Shown {
+            .flat_map(|(affix, tiers)| {
+                tiers.possible().map(|tier| Shown {
                     affix: *affix,
-                    tier: tiers.tier()?.number,
+                    tier: tier.number,
                     modifiers: candidate.modifiers.clone().collect(),
-                    ranges: tiers.tier()?.ranges.clone(),
+                    ranges: tier.ranges.clone(),
                 })
             })
             .collect();
@@ -385,37 +387,37 @@ fn best_shown(chosen: &[&Candidate], count: usize) -> Vec<Vec<Vec<Shown>>> {
         let Some(added) = &candidate.added else {
             continue;
         };
-        let Some(tier) = added.tiers.tier() else {
-            continue;
-        };
-        if let Some(shown) = shown.get_mut(added.line) {
-            shown.push(vec![Shown {
+        let options: Vec<Shown> = added
+            .tiers
+            .possible()
+            .map(|tier| Shown {
                 affix: added.affix,
                 tier: tier.number,
                 modifiers: vec![added.line],
                 ranges: tier.ranges.clone(),
-            }]);
+            })
+            .collect();
+        if let Some(shown) = shown.get_mut(added.line).filter(|_| !options.is_empty()) {
+            shown.push(options);
         }
     }
     shown
 }
 
 /// Whether the modifiers `other` are those `best` reads on a line: one for each, among the
-/// affixes it can be.
+/// affixes and tiers it can be, whatever their order. Each is matched against every one left,
+/// two modifiers of `best` being able to share an option (the best reading has two modifiers on
+/// a line at most).
 fn same(best: &[Vec<Shown>], other: &[&Shown]) -> bool {
-    if best.len() != other.len() {
-        return false;
-    }
-    let mut used = vec![false; other.len()];
-    best.iter().all(|options| {
-        let found = other
-            .iter()
-            .zip(&used)
-            .position(|(shown, &used)| !used && options.contains(shown));
-        found
-            .and_then(|index| used.get_mut(index))
-            .map(|used| *used = true)
-            .is_some()
+    let Some((options, rest)) = best.split_first() else {
+        return other.is_empty();
+    };
+    other.iter().enumerate().any(|(index, shown)| {
+        options.contains(shown) && {
+            let mut left = other.to_vec();
+            left.remove(index);
+            same(rest, &left)
+        }
     })
 }
 

@@ -5,7 +5,7 @@
 use super::*;
 use crate::game_data::bases;
 use crate::game_data::lines::modifier_stats;
-use crate::game_data::modifiers::{TableAffix, TableLine};
+use crate::game_data::modifiers::{AddedTiers, ModifierTiers, TableAffix, TableLine, Tier};
 use crate::item::{ModifierKind, StatLine};
 use crate::language::Language;
 
@@ -43,6 +43,46 @@ fn a_line_is_read_the_same_with_one_modifier_for_each_of_the_best_one() {
     // A line the best reading doesn't read.
     assert!(same(&[], &[]));
     assert!(!same(&[], &[&prefix]));
+}
+
+#[test]
+fn a_part_of_a_split_in_two_neighbouring_tiers_is_read_the_same_in_either() {
+    use Affix::Prefix;
+    let tier = |number| Tier {
+        number,
+        level: 1,
+        ranges: vec![range(1.0, 2.0)],
+    };
+    let tiers = |found, neighbour| ModifierTiers {
+        tiers: vec![tier(1), tier(2)],
+        found,
+        neighbour,
+        counts: vec![1],
+    };
+    // A line split into two pure prefixes, the first a T2 or a T1, the other a T1: no base
+    // rolls two pure prefixes of one stat today, but the comparison mustn't depend on the
+    // order the search reads them in.
+    let split = Candidate {
+        modifiers: 0..1,
+        fractured: false,
+        affixes: vec![(Prefix, tiers(1, Some(0)))],
+        added: Some(AddedTiers {
+            line: 0,
+            affix: Prefix,
+            tiers: tiers(0, None),
+        }),
+    };
+
+    let best = best_shown(&[&split], 1);
+
+    let (first, second) = (shown(Prefix, 1, &[0]), shown(Prefix, 2, &[0]));
+    let line = best.first().expect("the line");
+    assert!(same(line, &[&second, &first]));
+    assert!(same(line, &[&first, &second]));
+    assert!(same(line, &[&first, &first]));
+    assert!(!same(line, &[&second, &second]));
+    assert!(!same(line, &[&first]));
+    assert!(!same(line, &[&first, &first, &first]));
 }
 
 #[test]
