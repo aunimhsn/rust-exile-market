@@ -1168,15 +1168,45 @@ fn a_split_line_after_the_other_line_of_its_hybrid_keeps_its_place() {
 
     let read = read_again("Warmonger Bow", 82, &modifiers, (2, 3));
 
+    // The ranges of each part on the summed line, the second.
     let split = split_of(&read);
     assert_eq!(
         texts(split),
         ["+195 to Accuracy Rating", "258% increased Physical Damage"]
     );
-    assert!(matches!(
+    assert_eq!(
         split.doubt,
-        Some(TierDoubt::Split { line: 1, .. })
-    ));
+        Some(TierDoubt::Split {
+            line: 1,
+            whole: part(Affix::Prefix, &[1], &[(75.0, 79.0)]),
+            added: part(Affix::Prefix, &[1], &[(170.0, 179.0)]),
+        })
+    );
+}
+
+#[test]
+fn a_part_whose_two_tiers_give_its_line_other_ranges_isnt_read() {
+    let rarity = trade_lines(&["18% increased Rarity of Items found"]);
+    let tier = |number, ranges: Vec<Range>| Tier {
+        number,
+        level: 1,
+        ranges,
+    };
+    let tiers = |second: Vec<Range>| ModifierTiers {
+        tiers: vec![tier(1, vec![range(16.0, 19.0)]), tier(2, second)],
+        found: 1,
+        neighbour: Some(0),
+        counts: vec![1],
+    };
+    let read =
+        |tiers: &ModifierTiers| part_tier(Language::English, &rarity, Affix::Prefix, tiers, 0);
+
+    assert_eq!(
+        read(&tiers(vec![range(12.0, 15.0)])),
+        Some(part(Affix::Prefix, &[1, 2], &[(12.0, 19.0)]))
+    );
+    // A tier without the range of the value: the ranges of the line can't be told apart.
+    assert_eq!(read(&tiers(Vec::new())), None);
 }
 
 #[test]

@@ -1848,3 +1848,100 @@ fn a_line_that_adds_up_a_prefix_and_a_suffix_is_explicit_and_counts_in_both() {
         ]
     );
 }
+
+/// A part of a split line of `affix` in tier 1, over 1–2.
+fn part(affix: Affix) -> PartTier {
+    PartTier {
+        affix,
+        tiers: vec![1],
+        ranges: vec![Range { min: 1.0, max: 2.0 }],
+    }
+}
+
+/// The rows of the parts `whole` and `added` of a split line, as [`row_texts`] writes them,
+/// the ranges left out.
+fn split_texts(whole: Affix, added: Affix) -> Vec<String> {
+    split_rows(&part(whole), &part(added))
+        .iter()
+        .map(|row| format!("{:?} {:?} {:?}", row.tier.number, row.word, row.tip))
+        .collect()
+}
+
+#[test]
+fn the_parts_of_a_split_line_show_the_prefix_first_then_the_pure_one() {
+    // A pure prefix with a suffix hybrid: the prefix first, though it is the added part.
+    assert_eq!(
+        split_texts(Affix::Suffix, Affix::Prefix),
+        [
+            "1 Some(AffixPrefix) None",
+            "1 Some(AffixSuffix) Some(AddedUpWithPrefix)",
+        ]
+    );
+    let mut whole = part(Affix::Suffix);
+    whole.tiers = vec![2];
+    // Two suffixes: the pure part (`added`) first, without words.
+    let rows = split_rows(&whole, &part(Affix::Suffix));
+    let tiers: Vec<_> = rows.iter().map(|row| (row.tier.number, row.word)).collect();
+    assert_eq!(tiers, [(1, None), (2, None)]);
+}
+
+#[test]
+fn a_modifier_counts_the_affixes_it_takes_in_the_room_of_its_item() {
+    let modifier = |kind, doubt| Modifier {
+        kind,
+        origin: None,
+        name: None,
+        tier: None,
+        tags: Vec::new(),
+        unrevealed: false,
+        lines: Vec::new(),
+        doubt,
+    };
+    let split = |whole, added| {
+        Some(TierDoubt::Split {
+            line: 0,
+            whole: part(whole),
+            added: part(added),
+        })
+    };
+    let counts = |modifier: &Modifier| {
+        (
+            affix_count(modifier, Affix::Prefix),
+            affix_count(modifier, Affix::Suffix),
+        )
+    };
+    let tier = AffixTier {
+        affix: Affix::Prefix,
+        tier: 1,
+        ranges: Vec::new(),
+    };
+
+    let prefix = ModifierKind::Explicit(Some(Affix::Prefix));
+    let explicit = ModifierKind::Explicit(None);
+    assert_eq!(counts(&modifier(prefix, None)), (1, 0));
+    assert_eq!(
+        counts(&modifier(prefix, split(Affix::Prefix, Affix::Prefix))),
+        (2, 0)
+    );
+    assert_eq!(
+        counts(&modifier(explicit, split(Affix::Prefix, Affix::Suffix))),
+        (1, 1)
+    );
+    // A prefix or a suffix, and an affix unknown: not counted.
+    let either = TierDoubt::EitherAffix {
+        prefix: tier.clone(),
+        suffix: AffixTier {
+            affix: Affix::Suffix,
+            ..tier
+        },
+    };
+    assert_eq!(counts(&modifier(explicit, Some(either))), (0, 0));
+    assert_eq!(counts(&modifier(explicit, None)), (0, 0));
+    assert_eq!(counts(&modifier(ModifierKind::Implicit, None)), (0, 0));
+    // An unrevealed prefix takes its room.
+    let unrevealed = Modifier {
+        unrevealed: true,
+        ..modifier(prefix, None)
+    };
+    assert_eq!(counts(&unrevealed), (1, 0));
+}

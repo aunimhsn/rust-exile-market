@@ -206,7 +206,7 @@ struct ModifierTier {
 /// A tier among several under a line, or two neighbouring ones, and the word after its ranges.
 #[derive(Debug, Clone, PartialEq)]
 struct TierRow {
-    /// The worse of two neighbouring tiers.
+    /// The tier, or the worse of two neighbouring tiers.
     tier: ModifierTier,
     /// The better of two neighbouring tiers the modifier may be: `T1/T2`.
     better: Option<u32>,

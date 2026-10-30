@@ -432,13 +432,23 @@ fn read_found(language: Language, parts: &[Modifier], found: &FoundTiers) -> Opt
         let [(affix, tiers)] = found.affixes.as_slice() else {
             return None;
         };
-        return read_split(
+        let split = read_split(
             language,
             parts,
             found.modifiers.start,
             (*affix, tiers),
             added,
         );
+        if split.is_none() {
+            // Counted as two affixes by the reading, but left without tier.
+            let lines: Vec<&str> = parts
+                .iter()
+                .flat_map(|part| &part.lines)
+                .map(|line| line.text.as_str())
+                .collect();
+            log::warn!("Game data, in-game trade copy: a split of {lines:?} can't be read");
+        }
+        return split;
     }
     match found.affixes.as_slice() {
         [(affix, tiers)] => with_tier(language, parts, *affix, tiers),
@@ -484,7 +494,8 @@ fn read_split(
 
 /// The tiers `tiers` may be (one, or two neighbouring ones) of the modifiers `parts` read as
 /// one modifier of `affix`, with the range over these tiers of each value of their line
-/// `line` its stat counts ([`with_ranges`]).
+/// `line` its stat counts ([`with_ranges`]); none when the tiers don't give that line as many
+/// ranges, which then can't be told apart.
 fn part_tier(
     language: Language,
     parts: &[Modifier],
@@ -495,19 +506,21 @@ fn part_tier(
     let mut ranges: Option<Vec<Range>> = None;
     for tier in tiers.possible() {
         let read = with_ranges(language, parts, tier, &tiers.counts)?;
-        let line_ranges = read
+        let line_ranges: Vec<Range> = read
             .lines
             .get(line)?
             .rolls
             .iter()
-            .filter_map(|roll| roll.range);
+            .filter_map(|roll| roll.range)
+            .collect();
         ranges = Some(match ranges {
-            None => line_ranges.collect(),
-            Some(spanned) => spanned
+            None => line_ranges,
+            Some(spanned) if spanned.len() == line_ranges.len() => spanned
                 .into_iter()
                 .zip(line_ranges)
                 .map(|(spanned, range)| spanned.holding(range.min).holding(range.max))
                 .collect(),
+            Some(_) => return None,
         });
     }
     Some(PartTier {
