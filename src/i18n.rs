@@ -1086,7 +1086,10 @@ mod tests {
                 "{with} in {language:?}"
             );
             let part = translator.hybrid_part("75–79", "258% increased");
-            assert!(part.contains("75–79") && part.contains("258% increased"));
+            assert!(
+                part.contains("75–79") && part.contains("258% increased"),
+                "{part} in {language:?}"
+            );
             for count in [0, 1, 4, 23] {
                 assert!(translator.offers(count).contains(&count.to_string()));
                 assert_ne!(translator.uncertain(count), "");

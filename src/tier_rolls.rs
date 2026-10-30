@@ -130,10 +130,7 @@ fn line_rolls(tiers: &[Tier], values: &[(usize, usize)], rolls: usize) -> Option
             .map(|tier| tier.ranges.get(value)?.magnitude())
             .reduce(|over, range| {
                 let (over, range) = (over?, range?);
-                Some(Range {
-                    min: over.min.min(range.min),
-                    max: over.max.max(range.max),
-                })
+                Some(over.spanning(range))
             })
             .flatten()?;
         *ranges.get_mut(number)? = Some(over);

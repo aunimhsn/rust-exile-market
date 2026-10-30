@@ -1820,6 +1820,33 @@ fn a_line_that_adds_up_two_modifiers_shows_the_tier_of_each_and_counts_both() {
 }
 
 #[test]
+fn the_other_line_of_a_hybrid_whose_table_isnt_found_keeps_its_tier_without_bar() {
+    let mut bow = read_again(parse(include_str!(
+        "../../item/test-items/en-owner-trade-rare-bow-mirrored.txt"
+    )));
+    // A part whose ranges no tier of the hybrid gives the summed line: another table.
+    let mut modifiers = bow.modifiers().to_vec();
+    for modifier in &mut modifiers {
+        if let Some(TierDoubt::Split { whole, .. }) = &mut modifier.doubt {
+            whole.ranges = vec![Range {
+                min: 76.0,
+                max: 79.0,
+            }];
+        }
+    }
+    bow.set_modifiers(modifiers);
+
+    // Its tier, its range and "Hybrid" from the reading, without bar.
+    assert_eq!(
+        texts_from(&bow, "Prefixes")[1..3],
+        [
+            "□ 258% increased Physical Damage ≥232 [T1 170–179 / T1 76–79 Hybrid (with +195 to Accuracy Rating)]",
+            "■ +195 to Accuracy Rating ≥176 [T1 175–200 Hybrid (with 76–79 of 258% increased Physical Damage)]",
+        ]
+    );
+}
+
+#[test]
 fn a_part_of_a_summed_line_in_two_neighbouring_tiers_shows_both() {
     let bow = include_str!("../../item/test-items/en-owner-trade-rare-bow-mirrored.txt");
     // The 248% is a pure T1 or T2 with the hybrid T1.
@@ -1931,15 +1958,33 @@ fn a_pure_prefix_added_up_with_a_hybrid_suffix_says_hybrid_suffix_on_both_its_li
             ),
     ));
 
+    let accuracy = "■ +600 to Accuracy Rating ≥540 [T1/T2 451–650 AffixPrefix / T1 41–60 HybridSuffix (with 15% increased Light Radius)]";
+    let radius = "■ 15% increased Light Radius ≥14 [1.00 T1 15 HybridSuffix (with 41–60 of +600 to Accuracy Rating)]";
     assert_eq!(
         texts_from(&bow, "Explicit"),
         [
             "Explicit",
             // The prefix first, without tooltip; "Hybrid suffix" naming the other line.
-            "■ +600 to Accuracy Rating ≥540 [T1/T2 451–650 AffixPrefix / T1 41–60 HybridSuffix (with 15% increased Light Radius)]",
-            "■ 15% increased Light Radius ≥14 [1.00 T1 15 HybridSuffix (with 41–60 of +600 to Accuracy Rating)]",
+            accuracy,
+            radius,
             "Trade copy note",
         ]
+    );
+
+    // The summed line after the other line of its hybrid: the same tiers.
+    let reversed = include_str!("../../item/test-items/en-owner-trade-rare-bow-mirrored.txt");
+    let reversed = read_again(parse(
+        &reversed
+            .replace("258% increased Physical Damage\n", "")
+            .replace("+25% to Critical Damage Bonus\n", "")
+            .replace(
+                "+195 to Accuracy Rating\n",
+                "15% increased Light Radius\n+600 to Accuracy Rating\n",
+            ),
+    ));
+    assert_eq!(
+        texts_from(&reversed, "Explicit"),
+        ["Explicit", radius, accuracy, "Trade copy note"]
     );
 }
 

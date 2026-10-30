@@ -125,6 +125,12 @@ impl Range {
         }
     }
 
+    /// The range from the lowest to the highest value of both.
+    #[must_use]
+    pub fn spanning(self, other: Self) -> Self {
+        self.holding(other.min).holding(other.max)
+    }
+
     /// The range of the absolute values: the game shows a negative roll without its sign
     /// ("20% reduced"); none for a range across zero, which needs its sign.
     #[must_use]
@@ -451,6 +457,17 @@ mod tests {
             value,
             range: range.map(|(min, max)| Range { min, max }),
         }
+    }
+
+    #[test]
+    fn a_range_spanning_another_goes_from_the_lowest_to_the_highest_of_both() {
+        let range = |min, max| Range { min, max };
+        // Apart, in either order.
+        assert_eq!(range(1.0, 4.0).spanning(range(7.0, 9.0)), range(1.0, 9.0));
+        assert_eq!(range(7.0, 9.0).spanning(range(1.0, 4.0)), range(1.0, 9.0));
+        // One within the other.
+        assert_eq!(range(1.0, 9.0).spanning(range(3.0, 4.0)), range(1.0, 9.0));
+        assert_eq!(range(3.0, 4.0).spanning(range(1.0, 9.0)), range(1.0, 9.0));
     }
 
     fn header(line: &str, language: Language) -> Modifier {

@@ -1364,10 +1364,10 @@ fn a_value_in_several_tiers_takes_the_worst_without_the_ranges_of_the_copy() {
 
 #[test]
 fn the_tiers_of_the_hybrid_of_a_split_are_those_of_its_part() {
-    // T2 at level 1, T1 at level 50.
+    // T2 at level 1, T1 at level 50, the Armour of both touching at 20.
     let tables = read(concat!(
         r##"{"type": "ArmourAndStun", "affix": "prefix", "lines": [{"template": "#% increased Armour"}, {"template": "# to Stun Threshold"}], "##,
-        r#""spawn": [["shield", 1]], "tiers": [{"level": 1, "ranges": [[[10, 19]], [[20, 29]]]}, {"level": 50, "ranges": [[[20, 29]], [[30, 39]]]}]}"#
+        r#""spawn": [["shield", 1]], "tiers": [{"level": 1, "ranges": [[[10, 20]], [[20, 29]]]}, {"level": 50, "ranges": [[[20, 29]], [[30, 39]]]}]}"#
     ));
     let copied = |armour: f64| Copied {
         lines: vec![
@@ -1397,9 +1397,9 @@ fn the_tiers_of_the_hybrid_of_a_split_are_those_of_its_part() {
         tiers(25.0, part(Affix::Prefix, &[1], &[(30.0, 39.0)])),
         Some((Some(1), None))
     );
-    // In two neighbouring tiers, the worse found, over the range of both.
+    // In two neighbouring tiers, the Armour in both: the worse found, over the range of both.
     assert_eq!(
-        tiers(19.0, part(Affix::Prefix, &[1, 2], &[(20.0, 39.0)])),
+        tiers(20.0, part(Affix::Prefix, &[1, 2], &[(20.0, 39.0)])),
         Some((Some(2), Some(1)))
     );
     // Ranges the tiers of that table don't give the summed line: another table.

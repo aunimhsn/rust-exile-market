@@ -211,7 +211,11 @@ fn split_tiers(
 /// its other lines, that line taken at the lowest roll of its part, the sum being in no tier;
 /// the tiers of `whole`, the worse found and the better its neighbour. None when the tiers of
 /// `whole` in that table don't give that line the ranges of `whole`: another table, whose
-/// rolls would be wrong.
+/// rolls would be wrong. The first table that holds the values is the one of the split:
+/// another one holding them as well would have been a second way to split the line
+/// ([`splits`]), which leaves it without tier; but `splits` only takes the tiers the item
+/// level allows, which `find` doesn't (no two tables share the templates of a hybrid on one
+/// base today).
 fn hybrid_tiers(
     tables: &[Table],
     tags: &[String],
@@ -240,37 +244,33 @@ fn hybrid_tiers(
     }
     // The summed line has no range: the tier is found by the values.
     copied.ranges = None;
-    let found = find(tables, affix, tags, &copied, Tie::Best)?;
-    let index = |number: &u32| found.tiers.iter().position(|tier| tier.number == *number);
+    let table = find(tables, affix, tags, &copied, Tie::Best)?;
+    let index = |number: &u32| table.tiers.iter().position(|tier| tier.number == *number);
     let worse = index(whole.tiers.last()?)?;
     let better = match whole.tiers.as_slice() {
         [better, _] => Some(index(better)?),
         _ => None,
     };
     let part = [Some(worse), better].into_iter().flatten();
-    for (value, range) in whole.ranges.iter().enumerate() {
-        let spanned = part
-            .clone()
-            .map(|tier| {
-                found
-                    .tiers
-                    .get(tier)?
-                    .ranges
-                    .get(offset + value)?
-                    .magnitude()
-            })
-            .reduce(|spanned, range| {
-                let (spanned, range) = (spanned?, range?);
-                Some(spanned.holding(range.min).holding(range.max))
-            })??;
-        if spanned != *range {
+    for (position, expected) in whole.ranges.iter().enumerate() {
+        let mut spanned: Option<Range> = None;
+        for tier in part.clone() {
+            let range = table
+                .tiers
+                .get(tier)?
+                .ranges
+                .get(offset + position)?
+                .magnitude()?;
+            spanned = Some(spanned.map_or(range, |spanned| spanned.spanning(range)));
+        }
+        if spanned != Some(*expected) {
             return None;
         }
     }
     Some(ModifierTiers {
         found: worse,
         neighbour: better,
-        ..found
+        ..table
     })
 }
 
@@ -654,9 +654,7 @@ fn spanned_ranges(
                 .into_iter()
                 .zip(line_ranges)
                 .map(|pair| match pair {
-                    (Some(spanned), Some(range)) => {
-                        Some(Some(spanned.holding(range.min).holding(range.max)))
-                    }
+                    (Some(spanned), Some(range)) => Some(Some(spanned.spanning(range))),
                     (None, None) => Some(None),
                     _ => None,
                 })
