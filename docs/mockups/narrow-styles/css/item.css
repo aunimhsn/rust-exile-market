@@ -201,6 +201,8 @@
 .app-after .app-tip {
   left: -4px; right: auto; width: max-content; max-width: 230px; white-space: normal; font-weight: 400; line-height: 1.35;
 }
+/* A word near the right edge of the window: its tooltip ends with it, kept within the window as egui does. */
+.app-after.app-tip-end .app-tip { left: auto; right: -4px; }
 /* A line whose affix stays unknown, or that adds up two modifiers: the tier and range of each, one under
    the other. */
 .roll2.app-affixes { flex-direction: column; align-items: flex-start; gap: 1px; }

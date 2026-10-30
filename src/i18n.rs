@@ -116,6 +116,11 @@ pub enum Message {
     AffixSuffix,
     /// The tooltip of the suffix of a line that adds up a prefix and a suffix.
     AddedUpWithPrefix,
+    /// After the range of the part of a hybrid in a line that adds up two modifiers, and of
+    /// its other lines; with its affix when the other part is of the other affix.
+    Hybrid,
+    HybridPrefix,
+    HybridSuffix,
     OffersLabel,
     OffersSearchHint,
     OffersSearchTooltip,
@@ -142,7 +147,7 @@ pub enum Message {
 impl Message {
     /// Every message, for the tests.
     #[cfg(test)]
-    const ALL: [Self; 108] = [
+    const ALL: [Self; 111] = [
         Self::LeagueModeSoftcore,
         Self::LeagueModeHardcore,
         Self::LeagueLoading,
@@ -230,6 +235,9 @@ impl Message {
         Self::AffixPrefix,
         Self::AffixSuffix,
         Self::AddedUpWithPrefix,
+        Self::Hybrid,
+        Self::HybridPrefix,
+        Self::HybridSuffix,
         Self::OffersLabel,
         Self::OffersSearchHint,
         Self::OffersSearchTooltip,
@@ -344,6 +352,9 @@ impl Message {
             Self::AffixPrefix => "affix-prefix",
             Self::AffixSuffix => "affix-suffix",
             Self::AddedUpWithPrefix => "added-up-with-prefix",
+            Self::Hybrid => "hybrid",
+            Self::HybridPrefix => "hybrid-prefix",
+            Self::HybridSuffix => "hybrid-suffix",
             Self::OffersLabel => "offers-label",
             Self::OffersSearchHint => "offers-search-hint",
             Self::OffersSearchTooltip => "offers-search-tooltip",
@@ -429,6 +440,9 @@ const AFFIX_FILL: &str = "affix-fill";
 const AFFIX_FILL_OPEN: &str = "affix-fill-open";
 const ACTIVE_FILTERS: &str = "active-filters";
 const FILTER_ROLLS: &str = "filter-rolls";
+const HYBRID_WITH: &str = "hybrid-with";
+const HYBRID_LINES_AND: &str = "hybrid-lines-and";
+const HYBRID_PART: &str = "hybrid-part";
 const FILTER_BASE_TYPE: &str = "filter-base-type";
 const FILTER_ITEM_CLASS: &str = "filter-item-class";
 const FILTER_ITEM_LEVEL: &str = "filter-item-level";
@@ -603,6 +617,35 @@ impl Translator {
         args.set("low", low);
         args.set("high", high);
         self.format(FILTER_ROLLS, Some(&args))
+    }
+
+    /// The tooltip of "Hybrid" under the line that adds up the part of a hybrid: its other
+    /// `lines`, "With +195 to Accuracy Rating", two of them joined by "and".
+    #[must_use]
+    pub fn hybrid_with(&self, lines: &[String]) -> String {
+        let lines = lines
+            .iter()
+            .cloned()
+            .reduce(|first, second| {
+                let mut args = FluentArgs::new();
+                args.set("first", first);
+                args.set("second", second);
+                self.format(HYBRID_LINES_AND, Some(&args))
+            })
+            .unwrap_or_default();
+        let mut args = FluentArgs::new();
+        args.set("lines", lines);
+        self.format(HYBRID_WITH, Some(&args))
+    }
+
+    /// The tooltip of "Hybrid" under the other lines of a hybrid: the `ranges` of its part in
+    /// the `line` that adds it up, "With 75–79 of 258% increased Physical Damage".
+    #[must_use]
+    pub fn hybrid_part(&self, ranges: &str, line: &str) -> String {
+        let mut args = FluentArgs::new();
+        args.set("ranges", ranges);
+        args.set("line", line);
+        self.format(HYBRID_PART, Some(&args))
     }
 
     /// The filter of the base type of an item: "Base: Gemini Bow".
@@ -963,6 +1006,9 @@ mod tests {
                 AFFIX_FILL_OPEN,
                 ACTIVE_FILTERS,
                 FILTER_ROLLS,
+                HYBRID_WITH,
+                HYBRID_LINES_AND,
+                HYBRID_PART,
                 FILTER_BASE_TYPE,
                 FILTER_ITEM_CLASS,
                 FILTER_ITEM_LEVEL,
@@ -1033,6 +1079,14 @@ mod tests {
             }
             assert!(translator.stack_tag(7, 20).contains("7/20"), "{language:?}");
             assert!(translator.granted_skill("Skill").contains("Skill"));
+            let lines = ["+38 to Armour".to_owned(), "+35 to Evasion".to_owned()];
+            let with = translator.hybrid_with(&lines);
+            assert!(
+                with.contains(&lines[0]) && with.contains(&lines[1]),
+                "{with} in {language:?}"
+            );
+            let part = translator.hybrid_part("75–79", "258% increased");
+            assert!(part.contains("75–79") && part.contains("258% increased"));
             for count in [0, 1, 4, 23] {
                 assert!(translator.offers(count).contains(&count.to_string()));
                 assert_ne!(translator.uncertain(count), "");

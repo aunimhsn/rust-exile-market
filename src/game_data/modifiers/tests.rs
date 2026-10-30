@@ -1139,7 +1139,8 @@ fn a_split_line_is_read_with_the_other_lines_of_its_hybrid_and_the_tiers_of_each
     );
 
     // The hybrid T1 with the accuracy, and the pure T1: a prefix, two modifiers, without
-    // tier nor range on its lines, the ranges of each part on the summed line only.
+    // tier, the ranges of each part on the summed line only, the accuracy with the range of
+    // the hybrid.
     let split = split_of(&read);
     assert_eq!(
         texts(split),
@@ -1147,7 +1148,7 @@ fn a_split_line_is_read_with_the_other_lines_of_its_hybrid_and_the_tiers_of_each
     );
     assert_eq!(split.kind, ModifierKind::Explicit(Some(Affix::Prefix)));
     assert_eq!(split.tier, None);
-    assert_eq!(written_ranges(split), [None, None]);
+    assert_eq!(written_ranges(split), [None, Some(range(175.0, 200.0))]);
     assert_eq!(
         split.doubt,
         Some(TierDoubt::Split {
@@ -1255,6 +1256,58 @@ fn a_part_of_a_split_line_in_two_neighbouring_tiers_is_read_over_the_range_of_bo
             line: 0,
             whole: part(Affix::Prefix, &[2, 3], &[(8.0, 15.0)]),
             added: part(Affix::Suffix, &[3], &[(6.0, 10.0)]),
+        })
+    );
+}
+
+#[test]
+fn a_hybrid_prefix_added_up_with_a_pure_suffix_is_explicit_with_its_other_line() {
+    let modifiers = trade_lines(&["35% increased Armour and Evasion", "+310 to Stun Threshold"]);
+
+    // The other prefixes and suffixes full: with room, a reading of three modifiers fits too.
+    let read = read_again("Avian Targe", 80, &modifiers, (1, 1));
+
+    // Above the highest pure roll (304), 310 is the hybrid T2 (64–94) with the 35% and the
+    // pure suffix T2 (207–253): explicit, the 35% with the range of the hybrid.
+    let split = split_of(&read);
+    assert_eq!(split.kind, ModifierKind::Explicit(None));
+    assert_eq!(written_ranges(split), [Some(range(33.0, 38.0)), None]);
+    assert_eq!(
+        split.doubt,
+        Some(TierDoubt::Split {
+            line: 1,
+            whole: part(Affix::Prefix, &[2], &[(64.0, 94.0)]),
+            added: part(Affix::Suffix, &[2], &[(207.0, 253.0)]),
+        })
+    );
+}
+
+#[test]
+fn a_line_that_adds_up_a_hybrid_of_three_lines_gives_both_other_lines_their_ranges() {
+    // The Armour and the Evasion in no tier of their hybrid of two lines, the other
+    // prefixes full.
+    let modifiers = trade_lines(&[
+        "+50 to Armour",
+        "+41 to Evasion Rating",
+        "115% increased Armour and Evasion",
+    ]);
+
+    let read = read_again("Ancestral Mail", 80, &modifiers, (2, 3));
+
+    // Above the highest pure roll (110), 115% is the pure T4 (68–79) and the hybrid T1
+    // (39–42) with the Armour (42–52) and the Evasion (40–50).
+    let split = split_of(&read);
+    assert_eq!(split.kind, ModifierKind::Explicit(Some(Affix::Prefix)));
+    assert_eq!(
+        written_ranges(split),
+        [Some(range(42.0, 52.0)), Some(range(40.0, 50.0)), None]
+    );
+    assert_eq!(
+        split.doubt,
+        Some(TierDoubt::Split {
+            line: 2,
+            whole: part(Affix::Prefix, &[1], &[(39.0, 42.0)]),
+            added: part(Affix::Prefix, &[4], &[(68.0, 79.0)]),
         })
     );
 }

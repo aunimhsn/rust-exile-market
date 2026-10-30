@@ -214,6 +214,16 @@ affix-prefix = Préfixe
 affix-suffix = Suffixe
 # L'infobulle de « Suffixe » sous une ligne qui additionne un préfixe et un suffixe de la même stat, le préfixe écrit au-dessus.
 added-up-with-prefix = Additionné au préfixe sur cette ligne
+# Après la plage de la part d'un hybride dans une ligne qui additionne deux modificateurs de la même stat, et sous ses autres lignes, en gris ; avec son affixe quand l'autre part est de l'autre affixe (un préfixe hybride additionné à un suffixe pur).
+hybrid = Hybride
+hybrid-prefix = Préfixe hybride
+hybrid-suffix = Suffixe hybride
+# L'infobulle de « Hybride » sur la ligne qui additionne la part d'un hybride : les autres lignes de l'hybride, p. ex. « Avec +195 au Score de précision ».
+hybrid-with = Avec { $lines }
+# Deux autres lignes d'un hybride dans l'infobulle ci-dessus : « +38 à l'Armure et +35 au Score d'Évasion ».
+hybrid-lines-and = { $first } et { $second }
+# L'infobulle de « Hybride » sous les autres lignes de l'hybride : la plage de sa part sur la ligne qui l'additionne, puis cette ligne, p. ex. « Avec 75–79 des 258% d'Augmentation des Dégâts physiques ».
+hybrid-part = Avec { $ranges } des { $line }
 
 ## Bloc prix
 
