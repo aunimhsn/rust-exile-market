@@ -481,33 +481,6 @@ fn line(
         .english
         .first()
         .ok_or("a translation without text")?;
-    let strings: Vec<String> = translation
-        .english
-        .iter()
-        .map(|variant| template(&variant.string))
-        .collect();
-    let Some(template) = known_template(modifier, &strings, templates)?.cloned() else {
-        // Without template, the line can't be found: written as the game writes it, its string
-        // with the most numbers; one of the Time-Lost jewels, which the game writes within the
-        // words of the passive skills that grant it, saying so.
-        let string = translation
-            .english
-            .iter()
-            .rev()
-            .max_by_key(|variant| placeholders(&variant.string).len())
-            .unwrap_or(first);
-        let jewel = if on_radius_jewel(modifier) {
-            " (Time-Lost jewels: not known within the words of the passive skills, with its number)"
-        } else {
-            ""
-        };
-        let line = Line {
-            template: format!("{}{jewel}", template(&string.string)),
-            divisor: 1,
-            known: false,
-        };
-        return Ok((line, Vec::new()));
-    };
     // The values are those of the string that writes the most of them: `Loads {0} additional
     // bolts`, not `Loads an additional bolt` (`max_by_key` keeps the last of the maximums: the
     // variants reversed, the first one).
@@ -517,6 +490,27 @@ fn line(
         .rev()
         .max_by_key(|variant| placeholders(&variant.string).len())
         .unwrap_or(first);
+    let strings: Vec<String> = translation
+        .english
+        .iter()
+        .map(|variant| template(&variant.string))
+        .collect();
+    let Some(template) = known_template(modifier, &strings, templates)?.cloned() else {
+        // Without template, the line can't be found: written as the game writes it, its string
+        // with the most numbers; one of the Time-Lost jewels, which the game writes within the
+        // words of the passive skills that grant it, saying so.
+        let jewel = if on_radius_jewel(modifier) {
+            " (Time-Lost jewels: not known within the words of the passive skills, with its number)"
+        } else {
+            ""
+        };
+        let line = Line {
+            template: format!("{}{jewel}", template(&general.string)),
+            divisor: 1,
+            known: false,
+        };
+        return Ok((line, Vec::new()));
+    };
     let mut indexes = placeholders(&general.string);
     // A template with a value no string writes (`Upgrades Radius to #`, `Upgrades Radius to
     // Medium`) has the values of its stats, as Exiled Exchange 2 gives them; a template
@@ -618,9 +612,14 @@ fn known_template<'a>(
         &[words] => words,
         [_, _] if modifier.domain == DESECRATED => NOTABLE_GRANTS,
         _ => {
+            // Named by its string with a number, as the lines left out are printed.
+            let named = strings
+                .iter()
+                .find(|string| string.contains('#'))
+                .or(strings.first());
             return Err(format!(
                 "{} is known within the words of both kinds of passive skills",
-                strings.first().map_or("", String::as_str)
+                named.map_or("", String::as_str)
             )
             .into());
         }
@@ -1722,7 +1721,9 @@ mod tests {
 
         assert_eq!(
             error.as_deref(),
-            Some("Daze: Dazes on Hit is known within the words of both kinds of passive skills")
+            Some(
+                "Daze: #% chance to Daze on Hit is known within the words of both kinds of passive skills"
+            )
         );
     }
 
