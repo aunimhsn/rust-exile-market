@@ -17,7 +17,7 @@
 {"name":"Alpha Talisman","category":"Talisman","tags":["talisman","two_hand_weapon","weapon","default"]}
 {"name":"Altar Robe","category":"Body Armour","tags":["int_armour","body_armour","armour","default"]}
 {"name":"Amber Amulet","category":"Amulet","tags":["amulet","default"]}
-{"name":"Amethyst Charm","category":"Charm","tags":["utility_flask","default"]}
+{"name":"Amethyst Charm","category":"Charm","domain":"flask","tags":["utility_flask","default"]}
 {"name":"Amethyst Ring","category":"Ring","tags":["ring","default"]}
 {"name":"Ancestor Tower Shield","category":"Shield","tags":["str_armour","str_shield","shield","armour","default"]}
 {"name":"Ancestral Mail","category":"Body Armour","tags":["str_dex_armour","body_armour","armour","default"]}
@@ -30,7 +30,7 @@
 {"name":"Ancient Mail","category":"Body Armour","tags":["str_int_armour","body_armour","armour","default"]}
 {"name":"Ancient Mitts","category":"Gloves","tags":["str_armour","gloves","armour","default"]}
 {"name":"Ancient Visor","category":"Helmet","tags":["str_dex_armour","helmet","armour","default"]}
-{"name":"Antidote Charm","category":"Charm","tags":["utility_flask","default"]}
+{"name":"Antidote Charm","category":"Charm","domain":"flask","tags":["utility_flask","default"]}
 {"name":"Antler Focus","category":"Focus","tags":["int_armour","focus","armour","default"]}
 {"name":"Anvil Maul","category":"Two Hand Mace","tags":["mace","two_hand_weapon","weapon","default"]}
 {"name":"Apostle Leggings","category":"Boots","tags":["str_int_armour","boots","armour","default"]}
@@ -148,8 +148,8 @@
 {"name":"Cloaked Mail","category":"Body Armour","tags":["str_dex_armour","body_armour","armour","default"]}
 {"name":"Closed Helm","category":"Helmet","tags":["str_dex_armour","helmet","armour","default"]}
 {"name":"Coiled Buckler","category":"Buckler","tags":["dex_armour","shield","armour","default"]}
-{"name":"Colossal Life Flask","category":"Flask","tags":["life_flask","default"]}
-{"name":"Colossal Mana Flask","category":"Flask","tags":["mana_flask","default"]}
+{"name":"Colossal Life Flask","category":"Flask","domain":"flask","tags":["life_flask","default"]}
+{"name":"Colossal Mana Flask","category":"Flask","domain":"flask","tags":["mana_flask","default"]}
 {"name":"Commander Gauntlets","category":"Gloves","tags":["str_dex_armour","gloves","armour","default"]}
 {"name":"Commander Greathelm","category":"Helmet","tags":["str_armour","helmet","armour","default"]}
 {"name":"Commander Sword","category":"One Hand Sword","tags":["sword","one_hand_weapon","weapon","default"]}
@@ -208,14 +208,14 @@
 {"name":"Desert Circlet","category":"Helmet","tags":["int_armour","helmet","armour","default"]}
 {"name":"Desolate Crossbow","category":"Crossbow","tags":["crossbow","ranged","two_hand_weapon","weapon","default"]}
 {"name":"Detailed Mitts","category":"Gloves","tags":["str_armour","gloves","armour","default"]}
-{"name":"Diamond","category":"Jewel","tags":["strjewel","dexjewel","intjewel","default"]}
+{"name":"Diamond","category":"Jewel","domain":"misc","tags":["strjewel","dexjewel","intjewel","default"]}
 {"name":"Disintegrating Maul","category":"Two Hand Mace","tags":["mace","two_hand_weapon","weapon","default"]}
 {"name":"Distorted Amulet","category":"Amulet","tags":["amulet","default"]}
 {"name":"Divine Crown","category":"Helmet","tags":["str_int_armour","helmet","armour","default"]}
 {"name":"Domed Helm","category":"Helmet","tags":["str_dex_armour","helmet","armour","default"]}
 {"name":"Double Belt","category":"Belt","tags":["belt","default"]}
 {"name":"Doubled Gauntlets","category":"Gloves","tags":["str_dex_armour","gloves","armour","default"]}
-{"name":"Dousing Charm","category":"Charm","tags":["utility_flask","default"]}
+{"name":"Dousing Charm","category":"Charm","domain":"flask","tags":["utility_flask","default"]}
 {"name":"Dragonscale Boots","category":"Boots","tags":["dex_armour","boots","armour","default"]}
 {"name":"Drakeskin Boots","category":"Boots","tags":["dex_armour","boots","armour","default"]}
 {"name":"Dread Hatchet","category":"One Hand Axe","tags":["axe","one_hand_weapon","weapon","default"]}
@@ -247,7 +247,7 @@
 {"name":"Emblem Crest Shield","category":"Shield","tags":["str_int_armour","str_int_shield","shield","armour","default"]}
 {"name":"Embossed Boots","category":"Boots","tags":["dex_armour","boots","armour","default"]}
 {"name":"Embroidered Gloves","category":"Gloves","tags":["int_armour","gloves","armour","default"]}
-{"name":"Emerald","category":"Jewel","tags":["dexjewel","default"]}
+{"name":"Emerald","category":"Jewel","domain":"misc","tags":["dexjewel","default"]}
 {"name":"Emerald Ring","category":"Ring","tags":["ring","default"]}
 {"name":"Engraved Bracers","category":"Gloves","tags":["dex_armour","gloves","armour","default"]}
 {"name":"Engraved Crest Shield","category":"Shield","tags":["str_int_armour","str_int_shield","shield","armour","default"]}
@@ -310,15 +310,15 @@
 {"name":"Fury Cleaver","category":"One Hand Axe","tags":["axe","one_hand_weapon","weapon","default"]}
 {"name":"Fury Talisman","category":"Talisman","tags":["talisman","two_hand_weapon","weapon","default"]}
 {"name":"Galvanic Wand","category":"Wand","tags":["no_fire_spell_mods","no_cold_spell_mods","no_chaos_spell_mods","no_physical_spell_mods","wand","default"]}
-{"name":"Gargantuan Life Flask","category":"Flask","tags":["life_flask","default"]}
-{"name":"Gargantuan Mana Flask","category":"Flask","tags":["mana_flask","default"]}
+{"name":"Gargantuan Life Flask","category":"Flask","domain":"flask","tags":["life_flask","default"]}
+{"name":"Gargantuan Mana Flask","category":"Flask","domain":"flask","tags":["mana_flask","default"]}
 {"name":"Garment","category":"Body Armour","tags":["str_dex_int_armour","body_armour","armour","default"]}
 {"name":"Gauze Wraps","category":"Gloves","tags":["dex_int_armour","gloves","armour","default"]}
 {"name":"Gelid Staff","category":"Staff","tags":["no_fire_spell_mods","no_lightning_spell_mods","no_chaos_spell_mods","no_physical_spell_mods","staff","default"]}
 {"name":"Gemini Bow","category":"Bow","tags":["bow","ranged","two_hand_weapon","weapon","default"]}
 {"name":"Gemini Crossbow","category":"Crossbow","tags":["crossbow","ranged","two_hand_weapon","weapon","default"]}
-{"name":"Giant Life Flask","category":"Flask","tags":["life_flask","default"]}
-{"name":"Giant Mana Flask","category":"Flask","tags":["mana_flask","default"]}
+{"name":"Giant Life Flask","category":"Flask","domain":"flask","tags":["life_flask","default"]}
+{"name":"Giant Mana Flask","category":"Flask","domain":"flask","tags":["mana_flask","default"]}
 {"name":"Giant Maul","category":"Two Hand Mace","tags":["mace","two_hand_weapon","weapon","default"]}
 {"name":"Gilded Vestments","category":"Body Armour","tags":["str_int_armour","body_armour","armour","default"]}
 {"name":"Glacial Fortress","category":"Shield","tags":["str_armour","str_shield","shield","armour","default"]}
@@ -333,7 +333,7 @@
 {"name":"Gold Gloves","category":"Gloves","tags":["int_armour","gloves","armour","default"]}
 {"name":"Gold Ring","category":"Ring","tags":["ring","default"]}
 {"name":"Goldcast Cuffs","category":"Gloves","tags":["str_int_armour","gloves","armour","default"]}
-{"name":"Golden Charm","category":"Charm","tags":["utility_flask","default"]}
+{"name":"Golden Charm","category":"Charm","domain":"flask","tags":["utility_flask","default"]}
 {"name":"Golden Mail","category":"Body Armour","tags":["str_dex_armour","body_armour","armour","default"]}
 {"name":"Golden Targe","category":"Shield","tags":["str_dex_armour","str_dex_shield","shield","armour","default"]}
 {"name":"Golden Visage","category":"Helmet","tags":["helmet","armour","default"]}
@@ -342,8 +342,8 @@
 {"name":"Gothic Quarterstaff","category":"Warstaff","tags":["warstaff","two_hand_weapon","weapon","default"]}
 {"name":"Grand Bracers","category":"Gloves","tags":["dex_armour","gloves","armour","default"]}
 {"name":"Grand Cuisses","category":"Boots","tags":["str_dex_int_armour","boots","armour","default"]}
-{"name":"Grand Life Flask","category":"Flask","tags":["life_flask","default"]}
-{"name":"Grand Mana Flask","category":"Flask","tags":["mana_flask","default"]}
+{"name":"Grand Life Flask","category":"Flask","domain":"flask","tags":["life_flask","default"]}
+{"name":"Grand Mana Flask","category":"Flask","domain":"flask","tags":["mana_flask","default"]}
 {"name":"Grand Manchettes","category":"Gloves","tags":["str_dex_int_armour","gloves","armour","default"]}
 {"name":"Grand Regalia","category":"Body Armour","tags":["str_dex_int_armour","body_armour","armour","default"]}
 {"name":"Grand Spear","category":"Spear","tags":["spear","one_hand_weapon","weapon","default"]}
@@ -351,11 +351,11 @@
 {"name":"Grasping Mail","category":"Body Armour","tags":["str_dex_int_armour","body_armour","armour","default"]}
 {"name":"Grasping Ring","category":"Ring","tags":["ring","default"]}
 {"name":"Great Flail","category":"Flail","tags":["flail","one_hand_weapon","weapon","default"]}
-{"name":"Greater Life Flask","category":"Flask","tags":["life_flask","default"]}
-{"name":"Greater Mana Flask","category":"Flask","tags":["mana_flask","default"]}
+{"name":"Greater Life Flask","category":"Flask","domain":"flask","tags":["life_flask","default"]}
+{"name":"Greater Mana Flask","category":"Flask","domain":"flask","tags":["mana_flask","default"]}
 {"name":"Grim Gloves","category":"Gloves","tags":["int_armour","gloves","armour","default"]}
 {"name":"Grinning Mask","category":"Helmet","tags":["dex_int_armour","helmet","armour","default"]}
-{"name":"Grounding Charm","category":"Charm","tags":["utility_flask","default"]}
+{"name":"Grounding Charm","category":"Charm","domain":"flask","tags":["utility_flask","default"]}
 {"name":"Guarded Flail","category":"Flail","tags":["flail","one_hand_weapon","weapon","default"]}
 {"name":"Guarded Helm","category":"Helmet","tags":["str_dex_armour","helmet","armour","default"]}
 {"name":"Guardian Bow","category":"Bow","tags":["bow","ranged","two_hand_weapon","weapon","default"]}
@@ -451,8 +451,8 @@
 {"name":"Leather Buckler","category":"Buckler","tags":["dex_armour","shield","armour","default"]}
 {"name":"Leather Vest","category":"Body Armour","tags":["dex_armour","body_armour","armour","default"]}
 {"name":"Leatherbound Hood","category":"Helmet","tags":["dex_armour","helmet","armour","default"]}
-{"name":"Lesser Life Flask","category":"Flask","tags":["life_flask","default"]}
-{"name":"Lesser Mana Flask","category":"Flask","tags":["mana_flask","default"]}
+{"name":"Lesser Life Flask","category":"Flask","domain":"flask","tags":["life_flask","default"]}
+{"name":"Lesser Mana Flask","category":"Flask","domain":"flask","tags":["mana_flask","default"]}
 {"name":"Leyline Focus","category":"Focus","tags":["int_armour","focus","armour","default"]}
 {"name":"Light Halberd","category":"Two Hand Axe","tags":["axe","two_hand_weapon","weapon","default"]}
 {"name":"Linen Belt","category":"Belt","tags":["belt","default"]}
@@ -486,8 +486,8 @@
 {"name":"Massive Greathammer","category":"Two Hand Mace","tags":["mace","two_hand_weapon","weapon","default"]}
 {"name":"Massive Mitts","category":"Gloves","tags":["str_armour","gloves","armour","default"]}
 {"name":"Massive Spear","category":"Spear","tags":["spear","one_hand_weapon","weapon","default"]}
-{"name":"Medium Life Flask","category":"Flask","tags":["life_flask","default"]}
-{"name":"Medium Mana Flask","category":"Flask","tags":["mana_flask","default"]}
+{"name":"Medium Life Flask","category":"Flask","domain":"flask","tags":["life_flask","default"]}
+{"name":"Medium Mana Flask","category":"Flask","domain":"flask","tags":["mana_flask","default"]}
 {"name":"Mercenary Greathelm","category":"Helmet","tags":["str_armour","helmet","armour","default"]}
 {"name":"Mercenary Targe","category":"Shield","tags":["str_dex_armour","str_dex_shield","shield","armour","default"]}
 {"name":"Messer","category":"One Hand Sword","tags":["sword","one_hand_weapon","weapon","default"]}
@@ -615,8 +615,8 @@
 {"name":"Rotted Hood","category":"Helmet","tags":["dex_armour","helmet","armour","default"]}
 {"name":"Rough Greaves","category":"Boots","tags":["str_armour","boots","armour","default"]}
 {"name":"Royal Tower Shield","category":"Shield","tags":["str_armour","str_shield","shield","armour","default"]}
-{"name":"Ruby","category":"Jewel","tags":["strjewel","default"]}
-{"name":"Ruby Charm","category":"Charm","tags":["utility_flask","default"]}
+{"name":"Ruby","category":"Jewel","domain":"misc","tags":["strjewel","default"]}
+{"name":"Ruby Charm","category":"Charm","domain":"flask","tags":["utility_flask","default"]}
 {"name":"Ruby Ring","category":"Ring","tags":["ring","default"]}
 {"name":"Rugged Cuirass","category":"Body Armour","tags":["str_armour","body_armour","armour","default"]}
 {"name":"Ruination Maul","category":"Two Hand Mace","tags":["mace","two_hand_weapon","weapon","default"]}
@@ -1284,8 +1284,8 @@
 {"name":"Sandsworn Cuirass","category":"Body Armour","tags":["str_armour","body_armour","armour","default"]}
 {"name":"Sandsworn Sandals","category":"Boots","tags":["int_armour","boots","armour","default"]}
 {"name":"Sandsworn Tiara","category":"Helmet","tags":["int_armour","helmet","armour","default"]}
-{"name":"Sapphire","category":"Jewel","tags":["intjewel","default"]}
-{"name":"Sapphire Charm","category":"Charm","tags":["utility_flask","default"]}
+{"name":"Sapphire","category":"Jewel","domain":"misc","tags":["intjewel","default"]}
+{"name":"Sapphire Charm","category":"Charm","domain":"flask","tags":["utility_flask","default"]}
 {"name":"Sapphire Ring","category":"Ring","tags":["ring","default"]}
 {"name":"Savage Greataxe","category":"Two Hand Axe","tags":["axe","two_hand_weapon","weapon","default"]}
 {"name":"Scale Mail","category":"Body Armour","tags":["str_dex_armour","body_armour","armour","default"]}
@@ -1320,7 +1320,7 @@
 {"name":"Sigil Crest Shield","category":"Shield","tags":["str_int_armour","str_int_shield","shield","armour","default"]}
 {"name":"Silk Robe","category":"Body Armour","tags":["int_armour","body_armour","armour","default"]}
 {"name":"Silk Slippers","category":"Boots","tags":["int_armour","boots","armour","default"]}
-{"name":"Silver Charm","category":"Charm","tags":["utility_flask","default"]}
+{"name":"Silver Charm","category":"Charm","domain":"flask","tags":["utility_flask","default"]}
 {"name":"Silverbuckled Shoes","category":"Boots","tags":["dex_int_armour","boots","armour","default"]}
 {"name":"Simple Dagger","category":"Dagger","tags":["dagger","one_hand_weapon","weapon","default"]}
 {"name":"Sinew Belt","category":"Belt","tags":["belt","default"]}
@@ -1372,7 +1372,7 @@
 {"name":"Stalking Belt","category":"Belt","tags":["belt","default"]}
 {"name":"Stalking Bracers","category":"Gloves","tags":["dex_armour","gloves","armour","default"]}
 {"name":"Stalking Spear","category":"Spear","tags":["spear","one_hand_weapon","weapon","default"]}
-{"name":"Staunching Charm","category":"Charm","tags":["utility_flask","default"]}
+{"name":"Staunching Charm","category":"Charm","domain":"flask","tags":["utility_flask","default"]}
 {"name":"Steel Plate","category":"Body Armour","tags":["str_armour","body_armour","armour","default"]}
 {"name":"Steelhead Spear","category":"Spear","tags":["spear","one_hand_weapon","weapon","default"]}
 {"name":"Steelmail Gauntlets","category":"Gloves","tags":["str_dex_armour","gloves","armour","default"]}
@@ -1383,7 +1383,7 @@
 {"name":"Stitched Gloves","category":"Gloves","tags":["int_armour","gloves","armour","default"]}
 {"name":"Stocky Mitts","category":"Gloves","tags":["str_armour","gloves","armour","default"]}
 {"name":"Stoic Sceptre","category":"Sceptre","tags":["sceptre","default"]}
-{"name":"Stone Charm","category":"Charm","tags":["utility_flask","default"]}
+{"name":"Stone Charm","category":"Charm","domain":"flask","tags":["utility_flask","default"]}
 {"name":"Stone Cuirass","category":"Body Armour","tags":["str_armour","body_armour","armour","default"]}
 {"name":"Stone Flail","category":"Flail","tags":["flail","one_hand_weapon","weapon","default"]}
 {"name":"Stone Greatsword","category":"Two Hand Sword","tags":["sword","two_hand_weapon","weapon","default"]}
@@ -1425,26 +1425,26 @@
 {"name":"Tense Crossbow","category":"Crossbow","tags":["crossbow","ranged","two_hand_weapon","weapon","default"]}
 {"name":"Tethering Bands","category":"Gloves","tags":["str_int_armour","gloves","armour","default"]}
 {"name":"Thane Mail","category":"Body Armour","tags":["str_dex_armour","body_armour","armour","default"]}
-{"name":"Thawing Charm","category":"Charm","tags":["utility_flask","default"]}
+{"name":"Thawing Charm","category":"Charm","domain":"flask","tags":["utility_flask","default"]}
 {"name":"Threaded Shoes","category":"Boots","tags":["dex_int_armour","boots","armour","default"]}
 {"name":"Thunder Talisman","category":"Talisman","tags":["talisman","two_hand_weapon","weapon","default"]}
 {"name":"Tideseer Mantle","category":"Body Armour","tags":["str_int_armour","body_armour","armour","default"]}
-{"name":"Time-Lost Diamond","category":"Jewel","tags":["default"]}
-{"name":"Time-Lost Emerald","category":"Jewel","tags":["default"]}
-{"name":"Time-Lost Ruby","category":"Jewel","tags":["default"]}
-{"name":"Time-Lost Sapphire","category":"Jewel","tags":["default"]}
+{"name":"Time-Lost Diamond","category":"Jewel","domain":"misc","tags":["default"]}
+{"name":"Time-Lost Emerald","category":"Jewel","domain":"misc","tags":["default"]}
+{"name":"Time-Lost Ruby","category":"Jewel","domain":"misc","tags":["default"]}
+{"name":"Time-Lost Sapphire","category":"Jewel","domain":"misc","tags":["default"]}
 {"name":"Timeless Jewel","category":"Jewel"}
 {"name":"Titan Mitts","category":"Gloves","tags":["str_armour","gloves","armour","default"]}
 {"name":"Tonal Focus","category":"Focus","tags":["int_armour","focus","armour","default"]}
-{"name":"Topaz Charm","category":"Charm","tags":["utility_flask","default"]}
+{"name":"Topaz Charm","category":"Charm","domain":"flask","tags":["utility_flask","default"]}
 {"name":"Topaz Ring","category":"Ring","tags":["ring","default"]}
 {"name":"Torment Club","category":"One Hand Mace","tags":["mace","one_hand_weapon","weapon","default"]}
 {"name":"Torn Gloves","category":"Gloves","tags":["int_armour","gloves","armour","default"]}
 {"name":"Totemic Greatclub","category":"Two Hand Mace","tags":["mace","two_hand_weapon","weapon","default"]}
 {"name":"Toxic Quiver","category":"Quiver","tags":["quiver","default"]}
 {"name":"Trailblazer Armour","category":"Body Armour","tags":["str_dex_armour","body_armour","armour","default"]}
-{"name":"Transcendent Life Flask","category":"Flask","tags":["life_flask","default"]}
-{"name":"Transcendent Mana Flask","category":"Flask","tags":["mana_flask","default"]}
+{"name":"Transcendent Life Flask","category":"Flask","domain":"flask","tags":["life_flask","default"]}
+{"name":"Transcendent Mana Flask","category":"Flask","domain":"flask","tags":["mana_flask","default"]}
 {"name":"Trapper Hood","category":"Helmet","tags":["dex_armour","helmet","armour","default"]}
 {"name":"Trarthan Cannon","category":"Crossbow","tags":["cannon","crossbow","ranged","two_hand_weapon","weapon","default"]}
 {"name":"Treasured Blade","category":"One Hand Sword","tags":["sword","one_hand_weapon","weapon","default"]}
@@ -1461,8 +1461,8 @@
 {"name":"Twisted Wand","category":"Wand","tags":["wand","default"]}
 {"name":"Two-Point Quiver","category":"Quiver","tags":["quiver","default"]}
 {"name":"Two-Stone Ring","category":"Ring","tags":["ring","default"]}
-{"name":"Ultimate Life Flask","category":"Flask","tags":["life_flask","default"]}
-{"name":"Ultimate Mana Flask","category":"Flask","tags":["mana_flask","default"]}
+{"name":"Ultimate Life Flask","category":"Flask","domain":"flask","tags":["life_flask","default"]}
+{"name":"Ultimate Mana Flask","category":"Flask","domain":"flask","tags":["mana_flask","default"]}
 {"name":"Ultra Greatsword","category":"Two Hand Sword","tags":["sword","two_hand_weapon","weapon","default"]}
 {"name":"Unset Ring","category":"Ring","tags":["ring","default"]}
 {"name":"Utility Belt","category":"Belt","tags":["belt","default"]}

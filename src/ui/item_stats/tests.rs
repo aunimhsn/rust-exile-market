@@ -148,9 +148,10 @@ fn tier_row_text(row: &TierRow) -> String {
         .fold(tier, |text, part| format!("{text} {part}"))
 }
 
-/// A tier as [`row_texts`] writes it: `T1 15–18`.
+/// A tier as [`row_texts`] writes it: `T1 15–18`, `15–18` for a modifier of one tier only.
 fn tier_text(tier: &ModifierTier) -> String {
-    [format!("T{}", tier.number), ranges_text(&tier.ranges)]
+    let number = tier.number.map(|number| format!("T{number}"));
+    [number.unwrap_or_default(), ranges_text(&tier.ranges)]
         .into_iter()
         .filter(|part| !part.is_empty())
         .collect::<Vec<_>>()
@@ -200,6 +201,107 @@ fn an_item_copied_from_the_in_game_trade_shows_its_tiers_found_and_a_note() {
             "□ +40% to Cold Resistance ≥36 [0.87 T2 36–40]",
             "Trade copy note",
         ]
+    );
+}
+
+#[test]
+fn a_modifier_of_one_tier_only_shows_its_ranges_without_tier() {
+    let texts_of = |text: &str| {
+        let texts = texts(&parse(text));
+        let prefixes = texts
+            .iter()
+            .position(|text| text.starts_with("Prefixes"))
+            .expect("its prefixes");
+        texts[prefixes + 1..].to_vec()
+    };
+
+    // A jewel: every modifier of one tier.
+    let jewel = texts_of(
+        "Item Class: Jewels\nRarity: Rare\nViper Glimmer\nRuby\n--------\n\
+         Item Level: 43\n--------\n\
+         { Prefix Modifier \"Brutish\" (Tier: 1) — Minion, Life }\n\
+         Minions have 12(5-15)% increased maximum Life",
+    );
+    assert_eq!(
+        jewel,
+        ["■ Minions have 12% increased maximum Life ≥11 [0.70 5–15]"]
+    );
+
+    // The Genesis tree, written without tier, next to a modifier of several tiers.
+    let ring = texts_of(
+        "Item Class: Rings\nRarity: Rare\nGlyph Circle\nBreach Ring\n--------\n\
+         Item Level: 77\n--------\n\
+         { Prefix Modifier \"Reinforcing\" — Life, Minion }\n\
+         Minions have 21(19-22)% increased maximum Life\n\
+         { Prefix Modifier \"Aqua\" (Tier: 7) — Mana }\n\
+         +76(65-79) to maximum Mana",
+    );
+    assert_eq!(
+        ring,
+        [
+            "■ Minions have 21% increased maximum Life ≥19 [0.67 19–22]",
+            "□ +76 to maximum Mana ≥68 [0.39 T7 65–79]",
+        ]
+    );
+
+    // A fixed value of one tier only: nothing under it.
+    let quiver = texts(&parse(
+        "Item Class: Quivers\nRarity: Rare\nStorm Song\nFire Quiver\n\
+         --------\nItem Level: 40\n--------\n\
+         { Suffix Modifier \"of the Archer\" (Tier: 1) — Attack, Gem }\n\
+         +1 to Level of all Projectile Skills",
+    ));
+    assert_eq!(
+        quiver.last().map(String::as_str),
+        Some("■ +1 to Level of all Projectile Skills")
+    );
+
+    // A hybrid of one tier only, a line without number: the ranges under its last line.
+    let flask = parse(
+        "Item Class: Life Flasks\nRarity: Magic\nSaturated Ultimate Life Flask\n\
+         --------\nItem Level: 82\n--------\n\
+         { Prefix Modifier \"Saturated\" (Tier: 1) — Life }\n\
+         Instant Recovery\n50(50)% reduced Amount Recovered",
+    );
+    // The base of a magic item, from the names of the trade site.
+    let base = Some("Ultimate Life Flask");
+    let lines = CopiedLines::new(
+        flask.language(),
+        flask.modifiers(),
+        &LineStats::default(),
+        None,
+    );
+    let stats = LineStats::new(flask.language(), flask.modifiers(), None);
+    let tiers = TierRolls::new(flask.language(), flask.modifiers(), base);
+    let flask = row_texts(super::rows(&flask, &lines, &stats, &tiers, base));
+    assert_eq!(
+        flask[flask.len() - 2..],
+        ["■ Instant Recovery", "■ 50% reduced Amount Recovered [50]"]
+    );
+
+    // Copied from the in-game trade: its tier found from its value.
+    let jewel = texts(&read_again(parse(
+        "Item Class: Jewels\nRarity: Rare\nViper Glimmer\nRuby\n--------\n\
+         Item Level: 43\n--------\nMinions have 12% increased maximum Life",
+    )));
+    assert!(
+        jewel.contains(&"■ Minions have 12% increased maximum Life ≥11 [0.70 5–15]".to_owned()),
+        "{jewel:?}"
+    );
+
+    // The essences of a bow, written without tier.
+    let bow = texts(&parse(include_str!(
+        "../../item/test-items/en-rare-bow-fractured.txt"
+    )));
+    assert!(
+        bow.iter().any(|text| text
+            .starts_with("■ 20% chance to gain Onslaught on Killing Hits with this Weapon ≥")
+            && text.ends_with(" [0.00 20–25]")),
+        "{bow:?}"
+    );
+    assert!(
+        bow.contains(&"■ +3 to Level of all Attack Skills ≥3".to_owned()),
+        "{bow:?}"
     );
 }
 
@@ -2125,7 +2227,14 @@ fn part(affix: Affix) -> PartTier {
 fn split_texts(whole: Affix, added: Affix) -> Vec<String> {
     split_rows(&part(whole), &part(added), &[])
         .iter()
-        .map(|row| format!("{:?} {:?} {:?}", row.tier.number, row.word, row.tip))
+        .map(|row| {
+            format!(
+                "{:?} {:?} {:?}",
+                row.tier.number.unwrap_or_default(),
+                row.word,
+                row.tip
+            )
+        })
         .collect()
 }
 
@@ -2159,7 +2268,7 @@ fn the_parts_of_a_split_line_show_the_prefix_first_then_the_pure_one() {
     // Two suffixes: the pure part (`added`) first, though of a worse tier, without words.
     let rows = split_rows(&part(Affix::Suffix), &added, &[]);
     let tiers: Vec<_> = rows.iter().map(|row| (row.tier.number, row.word)).collect();
-    assert_eq!(tiers, [(2, None), (1, None)]);
+    assert_eq!(tiers, [(Some(2), None), (Some(1), None)]);
 }
 
 #[test]

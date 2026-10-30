@@ -3,7 +3,7 @@
 //! added to, and the bound of the search.
 
 use super::*;
-use crate::game_data::bases;
+use crate::game_data::bases::{self, Domain};
 use crate::game_data::lines::modifier_stats;
 use crate::game_data::modifiers::{AddedTiers, ModifierTiers, TableAffix, TableLine, Tier};
 use crate::item::{ModifierKind, StatLine};
@@ -205,6 +205,7 @@ fn a_modifier_sits_on_lines_of_its_templates_of_one_origin() {
     let table = |templates: &[&str]| Table {
         kind: "Kind".to_owned(),
         affix: TableAffix::Prefix,
+        domain: Domain::Item,
         lines: templates
             .iter()
             .map(|template| TableLine {
@@ -266,10 +267,10 @@ fn only_the_tiers_the_item_level_allows_are_placed() {
             values: 0..1,
         })
         .collect();
-    let tags = bases::tags(Language::English, "Warmonger Bow").expect("a base");
+    let base = bases::spawn(Language::English, "Warmonger Bow").expect("a base");
     // The pure T1 `170–179` needs the item level 82.
     let pure_t1 = |item_level| {
-        placements(&TABLES, tags, Some(item_level), &lines, &[175.0])
+        placements(&TABLES, base, Some(item_level), &lines, &[175.0])
             .iter()
             .any(|placement| placement.shown.ranges == [range(170.0, 179.0)])
     };
@@ -372,8 +373,8 @@ fn doubts_of(
         .iter()
         .map(|modifier| Copied::of(modifier, &modifier_stats(Language::English, modifier, None)))
         .collect();
-    let tags = bases::tags(Language::English, base_type).expect("a base");
-    let candidates = super::super::candidates(&modifiers, &copied, tags, Some(82), true);
+    let base = bases::spawn(Language::English, base_type).expect("a base");
+    let candidates = super::super::candidates(&modifiers, &copied, base, Some(82), true);
     let room = Room {
         prefixes: 3,
         suffixes: 3,
@@ -388,7 +389,7 @@ fn doubts_of(
         room,
         fits_room,
     };
-    doubts_within(tags, Some(82), &modifiers, &copied, &best, max_steps)
+    doubts_within(base, Some(82), &modifiers, &copied, &best, max_steps)
 }
 
 /// The lines of a bow with three prefixes, read one way only.

@@ -399,18 +399,18 @@
 {"name":"Ceinture tendineuse","category":"Belt","tags":["belt","default"]}
 {"name":"Ceinture utilitaire","category":"Belt","tags":["belt","default"]}
 {"name":"Ceinture à plaques","category":"Belt","tags":["belt","default"]}
-{"name":"Charme antidote","category":"Charm","tags":["utility_flask","default"]}
-{"name":"Charme d'extinction","category":"Charm","tags":["utility_flask","default"]}
-{"name":"Charme de cicatrisation","category":"Charm","tags":["utility_flask","default"]}
-{"name":"Charme de dégel","category":"Charm","tags":["utility_flask","default"]}
-{"name":"Charme de pierre","category":"Charm","tags":["utility_flask","default"]}
-{"name":"Charme doré","category":"Charm","tags":["utility_flask","default"]}
-{"name":"Charme en améthyste","category":"Charm","tags":["utility_flask","default"]}
-{"name":"Charme en argent","category":"Charm","tags":["utility_flask","default"]}
-{"name":"Charme en rubis","category":"Charm","tags":["utility_flask","default"]}
-{"name":"Charme en saphir","category":"Charm","tags":["utility_flask","default"]}
-{"name":"Charme en topaze","category":"Charm","tags":["utility_flask","default"]}
-{"name":"Charme paratonnerre","category":"Charm","tags":["utility_flask","default"]}
+{"name":"Charme antidote","category":"Charm","domain":"flask","tags":["utility_flask","default"]}
+{"name":"Charme d'extinction","category":"Charm","domain":"flask","tags":["utility_flask","default"]}
+{"name":"Charme de cicatrisation","category":"Charm","domain":"flask","tags":["utility_flask","default"]}
+{"name":"Charme de dégel","category":"Charm","domain":"flask","tags":["utility_flask","default"]}
+{"name":"Charme de pierre","category":"Charm","domain":"flask","tags":["utility_flask","default"]}
+{"name":"Charme doré","category":"Charm","domain":"flask","tags":["utility_flask","default"]}
+{"name":"Charme en améthyste","category":"Charm","domain":"flask","tags":["utility_flask","default"]}
+{"name":"Charme en argent","category":"Charm","domain":"flask","tags":["utility_flask","default"]}
+{"name":"Charme en rubis","category":"Charm","domain":"flask","tags":["utility_flask","default"]}
+{"name":"Charme en saphir","category":"Charm","domain":"flask","tags":["utility_flask","default"]}
+{"name":"Charme en topaze","category":"Charm","domain":"flask","tags":["utility_flask","default"]}
+{"name":"Charme paratonnerre","category":"Charm","domain":"flask","tags":["utility_flask","default"]}
 {"name":"Chaussures brodées","category":"Boots","tags":["dex_int_armour","boots","armour","default"]}
 {"name":"Chaussures brodées runeforgées","category":"Boots","tags":["dex_int_armour","boots","armour","default"]}
 {"name":"Chaussures brodées runomaîtrisées","category":"Boots","tags":["dex_int_armour","boots","armour","default"]}
@@ -549,8 +549,8 @@
 {"name":"Diadème perlé","category":"Helmet","tags":["int_armour","helmet","armour","default"]}
 {"name":"Diadème perlé runeforgé","category":"Helmet","tags":["int_armour","helmet","armour","default"]}
 {"name":"Diadème perlé runomaîtrisé","category":"Helmet","tags":["int_armour","helmet","armour","default"]}
-{"name":"Diamant","category":"Jewel","tags":["strjewel","dexjewel","intjewel","default"]}
-{"name":"Diamant perdu dans le temps","category":"Jewel","tags":["default"]}
+{"name":"Diamant","category":"Jewel","domain":"misc","tags":["strjewel","dexjewel","intjewel","default"]}
+{"name":"Diamant perdu dans le temps","category":"Jewel","domain":"misc","tags":["default"]}
 {"name":"Défenseur vénérable","category":"Shield","tags":["str_dex_armour","str_dex_shield","shield","armour","default"]}
 {"name":"Défenseur vénérable runomaîtrisé","category":"Shield","tags":["str_dex_armour","str_dex_shield","shield","armour","default"]}
 {"name":"Espadon affûté","category":"Two Hand Sword","tags":["sword","two_hand_weapon","weapon","default"]}
@@ -561,24 +561,24 @@
 {"name":"Espadon ondulé","category":"Two Hand Sword","tags":["sword","two_hand_weapon","weapon","default"]}
 {"name":"Fauchon","category":"One Hand Sword","tags":["sword","one_hand_weapon","weapon","default"]}
 {"name":"Fendoir allongé","category":"One Hand Axe","tags":["axe","one_hand_weapon","weapon","default"]}
-{"name":"Flacon de mana colossal","category":"Flask","tags":["mana_flask","default"]}
-{"name":"Flacon de mana considérable","category":"Flask","tags":["mana_flask","default"]}
-{"name":"Flacon de mana gargantuesque","category":"Flask","tags":["mana_flask","default"]}
-{"name":"Flacon de mana gigantesque","category":"Flask","tags":["mana_flask","default"]}
-{"name":"Flacon de mana immense","category":"Flask","tags":["mana_flask","default"]}
-{"name":"Flacon de mana mineur","category":"Flask","tags":["mana_flask","default"]}
-{"name":"Flacon de mana moyen","category":"Flask","tags":["mana_flask","default"]}
-{"name":"Flacon de mana transcendant","category":"Flask","tags":["mana_flask","default"]}
-{"name":"Flacon de mana ultime","category":"Flask","tags":["mana_flask","default"]}
-{"name":"Flacon de vie colossal","category":"Flask","tags":["life_flask","default"]}
-{"name":"Flacon de vie considérable","category":"Flask","tags":["life_flask","default"]}
-{"name":"Flacon de vie gargantuesque","category":"Flask","tags":["life_flask","default"]}
-{"name":"Flacon de vie gigantesque","category":"Flask","tags":["life_flask","default"]}
-{"name":"Flacon de vie immense","category":"Flask","tags":["life_flask","default"]}
-{"name":"Flacon de vie mineur","category":"Flask","tags":["life_flask","default"]}
-{"name":"Flacon de vie moyen","category":"Flask","tags":["life_flask","default"]}
-{"name":"Flacon de vie transcendant","category":"Flask","tags":["life_flask","default"]}
-{"name":"Flacon de vie ultime","category":"Flask","tags":["life_flask","default"]}
+{"name":"Flacon de mana colossal","category":"Flask","domain":"flask","tags":["mana_flask","default"]}
+{"name":"Flacon de mana considérable","category":"Flask","domain":"flask","tags":["mana_flask","default"]}
+{"name":"Flacon de mana gargantuesque","category":"Flask","domain":"flask","tags":["mana_flask","default"]}
+{"name":"Flacon de mana gigantesque","category":"Flask","domain":"flask","tags":["mana_flask","default"]}
+{"name":"Flacon de mana immense","category":"Flask","domain":"flask","tags":["mana_flask","default"]}
+{"name":"Flacon de mana mineur","category":"Flask","domain":"flask","tags":["mana_flask","default"]}
+{"name":"Flacon de mana moyen","category":"Flask","domain":"flask","tags":["mana_flask","default"]}
+{"name":"Flacon de mana transcendant","category":"Flask","domain":"flask","tags":["mana_flask","default"]}
+{"name":"Flacon de mana ultime","category":"Flask","domain":"flask","tags":["mana_flask","default"]}
+{"name":"Flacon de vie colossal","category":"Flask","domain":"flask","tags":["life_flask","default"]}
+{"name":"Flacon de vie considérable","category":"Flask","domain":"flask","tags":["life_flask","default"]}
+{"name":"Flacon de vie gargantuesque","category":"Flask","domain":"flask","tags":["life_flask","default"]}
+{"name":"Flacon de vie gigantesque","category":"Flask","domain":"flask","tags":["life_flask","default"]}
+{"name":"Flacon de vie immense","category":"Flask","domain":"flask","tags":["life_flask","default"]}
+{"name":"Flacon de vie mineur","category":"Flask","domain":"flask","tags":["life_flask","default"]}
+{"name":"Flacon de vie moyen","category":"Flask","domain":"flask","tags":["life_flask","default"]}
+{"name":"Flacon de vie transcendant","category":"Flask","domain":"flask","tags":["life_flask","default"]}
+{"name":"Flacon de vie ultime","category":"Flask","domain":"flask","tags":["life_flask","default"]}
 {"name":"Fléau d'armes abyssal","category":"Flail","tags":["flail","one_hand_weapon","weapon","default"]}
 {"name":"Fléau d'armes annulaire","category":"Flail","tags":["flail","one_hand_weapon","weapon","default"]}
 {"name":"Fléau d'armes déchirant","category":"Flail","tags":["flail","one_hand_weapon","weapon","default"]}
@@ -1229,8 +1229,8 @@
 {"name":"Robe à plumes runomaîtrisée","category":"Body Armour","tags":["int_armour","body_armour","armour","default"]}
 {"name":"Robe éclairée","category":"Body Armour","tags":["int_armour","body_armour","armour","default"]}
 {"name":"Robe éclairée runomaîtrisée","category":"Body Armour","tags":["int_armour","body_armour","armour","default"]}
-{"name":"Rubis","category":"Jewel","tags":["strjewel","default"]}
-{"name":"Rubis perdu dans le temps","category":"Jewel","tags":["default"]}
+{"name":"Rubis","category":"Jewel","domain":"misc","tags":["strjewel","default"]}
+{"name":"Rubis perdu dans le temps","category":"Jewel","domain":"misc","tags":["default"]}
 {"name":"Sabre d'abordage","category":"One Hand Sword","tags":["sword","one_hand_weapon","weapon","default"]}
 {"name":"Sandales de Sekhema","category":"Boots","tags":["int_armour","boots","armour","default"]}
 {"name":"Sandales de Sekhema runeforgées","category":"Boots","tags":["int_armour","boots","armour","default"]}
@@ -1256,8 +1256,8 @@
 {"name":"Sandales à plumes runomaîtrisées","category":"Boots","tags":["int_armour","boots","armour","default"]}
 {"name":"Sandales érodées par le sable","category":"Boots","tags":["int_armour","boots","armour","default"]}
 {"name":"Sandales érodées par le sable runeforgées","category":"Boots","tags":["int_armour","boots","armour","default"]}
-{"name":"Saphir","category":"Jewel","tags":["intjewel","default"]}
-{"name":"Saphir perdu dans le temps","category":"Jewel","tags":["default"]}
+{"name":"Saphir","category":"Jewel","domain":"misc","tags":["intjewel","default"]}
+{"name":"Saphir perdu dans le temps","category":"Jewel","domain":"misc","tags":["default"]}
 {"name":"Sceau abyssal","category":"Ring","tags":["ring","default"]}
 {"name":"Sceptre cliquetant","category":"Sceptre","tags":["sceptre","default"]}
 {"name":"Sceptre courroucé","category":"Sceptre","tags":["sceptre","default"]}
@@ -1523,8 +1523,8 @@
 {"name":"Écu tintant runomaîtrisé","category":"Shield","tags":["str_int_armour","str_int_shield","shield","armour","default"]}
 {"name":"Écu vaal","category":"Shield","tags":["str_int_armour","str_int_shield","shield","armour","default"]}
 {"name":"Écu vaal runeforgé","category":"Shield","tags":["str_int_armour","str_int_shield","shield","armour","default"]}
-{"name":"Émeraude","category":"Jewel","tags":["dexjewel","default"]}
-{"name":"Émeraude perdue dans le temps","category":"Jewel","tags":["default"]}
+{"name":"Émeraude","category":"Jewel","domain":"misc","tags":["dexjewel","default"]}
+{"name":"Émeraude perdue dans le temps","category":"Jewel","domain":"misc","tags":["default"]}
 {"name":"Épée courte","category":"One Hand Sword","tags":["sword","one_hand_weapon","weapon","default"]}
 {"name":"Épée courte roussie","category":"One Hand Sword","tags":["sword","one_hand_weapon","weapon","default"]}
 {"name":"Épée courte runique","category":"One Hand Sword","tags":["sword","one_hand_weapon","weapon","default"]}
