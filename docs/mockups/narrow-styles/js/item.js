@@ -74,7 +74,9 @@ function item(it, unfolded = false) {
       // (owner, 2026-10-29, step 13k2e3c2).
       // Two neighbouring tiers in doubt (13k2e4b, `[best, worst]`): "T1/T2", one or the other, in the color of
       // the worst (owner, 2026-10-29: a dash reads as a span of tiers, as "T13–T1" of the field's tooltip).
+      // No number for a modifier of one tier only (13k3b1): "1 Prefix" under a line in doubt.
       const tierBadge = number => {
+        if (number == null) return "";
         const [best, worst] = Array.isArray(number) ? number : [number, number];
         const label = best === worst ? `T${best}` : `T${best}/T${worst}`;
         return `<span class="tier ${worst <= 3 ? "tier-top" : ""} t${worst}">${label}</span>`;

@@ -1499,11 +1499,12 @@ fn a_desecrated_line_of_a_lord_and_of_an_ordinary_suffix_keeps_the_tier_of_each(
 
     let read = read_again("Trarthan Cannon", 82, &grenades, (3, 3));
 
+    // A fixed value: no range, as under any modifier.
     let tier = |affix, tier, hides_number| AffixTier {
         affix,
         tier,
         hides_number,
-        ranges: vec![range(1.0, 1.0)],
+        ranges: Vec::new(),
     };
     assert_eq!(
         read.first().and_then(|modifier| modifier.doubt.clone()),

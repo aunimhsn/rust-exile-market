@@ -147,10 +147,12 @@ fn tier_row_text(row: &TierRow) -> String {
             format!("(with {} of {line})", ranges_text(ranges))
         }
     });
-    [word, tip]
+    [Some(tier), word, tip]
         .into_iter()
         .flatten()
-        .fold(tier, |text, part| format!("{text} {part}"))
+        .filter(|part| !part.is_empty())
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 /// A tier as [`row_texts`] writes it: `T1 15–18`, `15–18` for a modifier of one tier only.
@@ -343,7 +345,7 @@ fn a_line_of_the_in_game_trade_that_can_be_a_prefix_or_a_suffix_shows_the_tier_o
 #[test]
 fn a_line_that_can_be_a_modifier_of_one_tier_only_writes_no_tier_number_on_its_row() {
     // `+1` desecrated is the prefix of Amanamu, the only one, or the T2 of the suffix of a
-    // cannon.
+    // cannon: a fixed value, without range under it.
     let cannon = parse(
         "Item Class: Crossbows\nRarity: Rare\nDoom Bolt\nTrarthan Cannon\n--------\n\
          Item Level: 82\n--------\nGrenade Skills have +1 Cooldown Use (desecrated)\n",
@@ -352,7 +354,7 @@ fn a_line_that_can_be_a_modifier_of_one_tier_only_writes_no_tier_number_on_its_r
     let texts = texts(&read_again(cannon));
     assert!(
         texts.contains(
-            &"■ Grenade Skills have +1 Cooldown Use ≥1 [1 AffixPrefix / T2 1 AffixSuffix / Desecrated]"
+            &"■ Grenade Skills have +1 Cooldown Use ≥1 [AffixPrefix / T2 AffixSuffix / Desecrated]"
                 .to_owned()
         ),
         "{texts:?}"
@@ -469,6 +471,33 @@ fn a_fixed_value_shows_the_same_in_both_copies() {
     let fixed = Some("■ +2 to Level of all Minion Skills".to_owned());
     assert_eq!(last(&parse(&belt)), fixed);
     assert_eq!(last(&in_game_trade(&belt)), fixed);
+}
+
+#[test]
+fn the_ranges_of_a_fixed_value_only_arent_written_under_it() {
+    let ranges = |text: &str| {
+        let item = parse(&format!(
+            "Item Class: Rings\nRarity: Rare\nGlyph Circle\nGold Ring\n--------\n\
+             Item Level: 80\n--------\n{{ Prefix Modifier \"Glinting\" (Tier: 3) — Damage }}\n{text}"
+        ));
+        item.modifiers()
+            .first()
+            .map(tier_ranges)
+            .unwrap_or_default()
+    };
+    let range = |min, max| Range { min, max };
+
+    // Every value fixed: nothing; one varies: the range of each.
+    assert_eq!(ranges("50(50)% reduced Amount Recovered"), []);
+    assert_eq!(
+        ranges("Adds 5(5) to 10(8-12) Physical Damage to Attacks"),
+        [range(5.0, 5.0), range(8.0, 12.0)]
+    );
+    // A sanctified value out of its range of one value: "T2 30".
+    assert_eq!(
+        ranges("29(30)% reduced Attribute Requirements"),
+        [range(30.0, 30.0)]
+    );
 }
 
 #[test]
@@ -2278,7 +2307,8 @@ fn a_pure_prefix_added_up_with_a_hybrid_suffix_says_hybrid_suffix_on_both_its_li
     ));
 
     let accuracy = "■ +600 to Accuracy Rating ≥540 [T1/T2 451–650 AffixPrefix / T1 41–60 HybridSuffix (with 15% increased Light Radius)]";
-    let radius = "■ 15% increased Light Radius ≥14 [1.00 T1 15 HybridSuffix (with 41–60 of +600 to Accuracy Rating)]";
+    // A fixed value, without range under it.
+    let radius = "■ 15% increased Light Radius ≥14 [1.00 T1 HybridSuffix (with 41–60 of +600 to Accuracy Rating)]";
     assert_eq!(
         texts_from(&bow, "Explicit"),
         [

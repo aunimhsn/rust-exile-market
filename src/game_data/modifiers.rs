@@ -809,12 +809,14 @@ fn affix_tier(
         affix,
         tier: tiers.tier()?.number,
         hides_number: tiers.hides_number(),
-        ranges: ranged
-            .lines
-            .iter()
-            .flat_map(|line| &line.rolls)
-            .filter_map(|roll| roll.range)
-            .collect(),
+        // None for a fixed value, as under any modifier: "T2 Suffix", not "T2 1 Suffix".
+        ranges: Range::unless_fixed(
+            ranged
+                .lines
+                .iter()
+                .flat_map(|line| &line.rolls)
+                .filter_map(|roll| Some((roll.value, roll.range?))),
+        ),
     })
 }
 

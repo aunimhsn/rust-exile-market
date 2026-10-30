@@ -362,10 +362,10 @@ fn hybrid_row<'a>(
     whole: &PartTier,
     added: &PartTier,
 ) -> Option<TierRow<'a>> {
-    let ranges = other_lines(modifier, summed)
-        .flat_map(|(_, line)| magnitudes(line, &copied_ranges(line)))
-        .map(|(_, range)| range)
-        .collect();
+    // As under any modifier, none for fixed values.
+    let ranges = Range::unless_fixed(
+        other_lines(modifier, summed).flat_map(|(_, line)| magnitudes(line, &copied_ranges(line))),
+    );
     let tip = WordTip::HybridPart {
         ranges: whole.ranges.clone(),
         line: &modifier.lines.get(summed)?.text,
@@ -1439,24 +1439,15 @@ fn unique_stat<'a>(
 }
 
 /// The ranges written under the last line of a prefix or suffix, those the copy writes, in their
-/// order; none for a fixed value, each range of one value, the value itself (`50(50)% reduced
-/// Amount Recovered`, or the range the tables put on a line of the in-game trade, `+2 to Level of
-/// all Minion Skills`): "T2", not "T2 2", as the advanced copy most often writes it without
-/// range (owner's choice on 2026-10-30); not `29(30)%` of a sanctified item ("T2 30").
+/// order; none for a fixed value ([`Range::unless_fixed`]: `50(50)% reduced Amount Recovered`, or
+/// the range the tables put on a line of the in-game trade, `+2 to Level of all Minion Skills`).
 fn tier_ranges(modifier: &Modifier) -> Vec<Range> {
-    let magnitudes: Vec<(f64, Range)> = modifier
-        .lines
-        .iter()
-        .flat_map(|line| magnitudes(line, &copied_ranges(line)))
-        .collect();
-    let fixed = magnitudes.iter().all(|(value, range)| {
-        (range.max - range.min).abs() < f64::EPSILON
-            && (value.abs() - range.min).abs() < f64::EPSILON
-    });
-    if fixed {
-        return Vec::new();
-    }
-    magnitudes.into_iter().map(|(_, range)| range).collect()
+    Range::unless_fixed(
+        modifier
+            .lines
+            .iter()
+            .flat_map(|line| magnitudes(line, &copied_ranges(line))),
+    )
 }
 
 /// The range of each number of a line, from the advanced copy.

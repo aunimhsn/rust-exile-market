@@ -73,9 +73,10 @@ impl TierRolls {
             let Some(base_type) = base_type else {
                 continue;
             };
+            let fixed = fixed_without_tier(modifier);
             let summed = match &modifier.doubt {
                 Some(TierDoubt::Split { line, .. }) => Some(*line),
-                _ if modifier.tier.is_some() || fixed_without_tier(modifier) => None,
+                _ if modifier.tier.is_some() || fixed => None,
                 _ => continue,
             };
             let matches = game_data::modifier_stats(language, modifier, None);
@@ -85,11 +86,18 @@ impl TierRolls {
                 continue;
             };
             // A fixed value without tier: only of a modifier whose tier the game doesn't write,
-            // over that tier, as a line of the in-game trade read in it (not one of an essence,
-            // whose tables aren't known yet).
-            let unwritten = modifier.tier.is_none() && summed.is_none();
-            let rolled = if unwritten {
-                match tiers.tier().filter(|_| tiers.tier_unwritten) {
+            // over that tier, as a line of the in-game trade read in it, a tier of fixed values
+            // too (not one of an essence, whose tables aren't known yet, whose value would fall
+            // in a tier of the tree that rolls, `19–22`).
+            let rolled = if fixed {
+                let of_the_tree = |tier: &&Tier| {
+                    tiers.tier_unwritten
+                        && tier
+                            .ranges
+                            .iter()
+                            .all(|range| (range.max - range.min).abs() < f64::EPSILON)
+                };
+                match tiers.tier().filter(of_the_tree) {
                     Some(tier) => std::slice::from_ref(tier),
                     None => continue,
                 }
@@ -97,8 +105,8 @@ impl TierRolls {
                 tiers.tiers.as_slice()
             };
             // The hybrid of a split line of one tier only too: its other lines tell no tiers.
-            let one_tier = tiers.single() || unwritten;
-            if unwritten {
+            let one_tier = tiers.single() || fixed;
+            if fixed {
                 single.push(index);
             } else if one_tier && summed.is_none() {
                 match modifier.tier {
@@ -420,6 +428,17 @@ mod tests {
         let essence = quiver("\"of the Essence\"");
         assert!(!essence.single(0));
         assert_eq!(essence.get(key(0, 0)), None);
+
+        // Nor a value of an essence that falls in a tier of the tree that rolls, `Reinforcing`
+        // (19–22), which the copy would write with its range.
+        let ring = rolls_of(
+            "Item Class: Rings\nRarity: Rare\nGlyph Circle\nBreach Ring\n--------\n\
+             Item Level: 77\n--------\n\
+             { Prefix Modifier \"of the Essence\" — Life, Minion }\n\
+             Minions have 21% increased maximum Life",
+        );
+        assert!(!ring.single(0));
+        assert_eq!(ring.get(key(0, 0)), None);
     }
 
     #[test]

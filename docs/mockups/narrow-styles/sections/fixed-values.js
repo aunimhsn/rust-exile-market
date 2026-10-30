@@ -59,17 +59,41 @@ const fixedBelt = (minionLevels, note) => {
 const FIXED_NOTE = { note: "The tiers are found from the values." };
 const fixedWindow = (it, stats) => win(topBar(), item({ ...it, stats }, true), price(RARE_ESTIMATE_BEFORE), foot());
 
-// Two sections, so that the windows of each fit the width of the page: the options first, then today put
-// above them.
+// A line in doubt (third code review of 13k3b2): a line of the in-game trade that can be a prefix or a
+// suffix writes the range of each tier, "1 Prefix", "T2 1 Suffix" under `Grenade Skills have +1 Cooldown
+// Use (desecrated)` of a cannon (the prefix of Amanamu, of one tier, or the T2 suffix; step 13k3b1); A
+// extended to it: "Prefix", "T2 Suffix", and so under the other lines of a hybrid split from a summed
+// line (`15% increased Light Radius`, "T1 Hybrid suffix"). Only the in-game trade writes such a line, so
+// both copies agree either way: one rule for every row. Chosen by the owner on 2026-10-30. Not the parts
+// of a summed line: the range of a part is the only amount known of it, never the value of the line.
+const FIXED_CANNON = { rarity: "rare", name: "Havoc Roar", base: "Trarthan Cannon", cls: "Crossbows",
+  tags: ["ilvl 82"], props: [["Physical DPS", "312"]], req: "Requires Level 79 · 98 Str · 98 Dex",
+  statsLabel: "Stats (4)", filters: "2 filters" };
+const fixedCannon = affixes => [
+  ...itemFilters({ base: "Trarthan Cannon", level: { value: 82, check: false } }),
+  { group: "Suffixes", fill: "1 of 3" },
+  { mod: "+28% to Fire Resistance", check: false, min: 25, tier: 4, range: "26–30", over: { share: .55 } },
+  { group: "Explicit" },
+  { mod: "Grenade Skills have +1 Cooldown Use", check: true, min: 1, origin: "desecrated", affixes },
+  FIXED_NOTE,
+];
+
+// Three sections, so that the windows of each fit the width of the page: the options first, then before
+// put above them, then the line in doubt, still open, at the top.
 SECTIONS.unshift(["Fixed values (13k3b2), the decision: A or B, each the same in both copies", [
   ["A · Chosen · Nothing under a fixed value, both copies: \"T2\" alone", fixedWindow(FIXED_AMULET, fixedAmulet({ tierOnly: true }, true))],
   ["A · Belt, both copies: no field, nothing under", fixedWindow(FIXED_BELT, fixedBelt({}, true))],
   ["B · The value under it, both copies: \"T2 2\"", fixedWindow(FIXED_AMULET, fixedAmulet({ range: "2" }, true))],
   ["B · Belt, both copies: no field, \"2\" under it", fixedWindow(FIXED_BELT, fixedBelt({ single: true, range: "2", noBar: true }, true))],
 ]]);
-SECTIONS.unshift(["Fixed values (13k3b2), today: +2 to Level of all Minion Skills differs between the copies", [
+SECTIONS.unshift(["Fixed values (13k3b2), before: +2 to Level of all Minion Skills differed between the copies", [
   ["Amulet, advanced copy: nothing after \"T2\"", fixedWindow(FIXED_AMULET, fixedAmulet({ tierOnly: true }, false))],
   ["Amulet, in-game trade: \"T2 2\"", fixedWindow(FIXED_AMULET, fixedAmulet({ range: "2" }, true))],
   ["Belt of the Genesis tree, advanced copy: a field, nothing under", fixedWindow(FIXED_BELT, fixedBelt({ min: 2 }, false))],
   ["Belt of the Genesis tree, in-game trade: no field, \"2\" under it", fixedWindow(FIXED_BELT, fixedBelt({ single: true, range: "2", noBar: true }, true))],
+]]);
+// The last decision, put first.
+SECTIONS.unshift(["Fixed values (13k3b2), a line in doubt: A extended to the tier of each affix", [
+  ["Before · \"1 Prefix\", \"T2 1 Suffix\"", fixedWindow(FIXED_CANNON, fixedCannon([[null, "1", { label: "Prefix" }], [2, "1", { label: "Suffix" }]]))],
+  ["A extended · Chosen · \"Prefix\", \"T2 Suffix\"", fixedWindow(FIXED_CANNON, fixedCannon([[null, "", { label: "Prefix" }], [2, "", { label: "Suffix" }]]))],
 ]]);

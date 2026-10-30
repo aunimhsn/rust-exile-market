@@ -144,6 +144,24 @@ impl Range {
             max: first.max(second),
         })
     }
+
+    /// The ranges of `rolls`, values without their sign each with its range, as written under
+    /// a line: none when each value is fixed, its range of one value being the value, as the
+    /// advanced copy most often writes it, without range ("T2", not "T2 2"; owner's choice on
+    /// 2026-10-30); a range of one value other than the value stays, `29(30)%` of a sanctified
+    /// item ("T2 30").
+    #[must_use]
+    pub fn unless_fixed(rolls: impl IntoIterator<Item = (f64, Self)>) -> Vec<Self> {
+        let rolls: Vec<(f64, Self)> = rolls.into_iter().collect();
+        let fixed = rolls.iter().all(|(value, range)| {
+            (range.max - range.min).abs() < f64::EPSILON
+                && (value.abs() - range.min).abs() < f64::EPSILON
+        });
+        if fixed {
+            return Vec::new();
+        }
+        rolls.into_iter().map(|(_, range)| range).collect()
+    }
 }
 
 /// A value of a line, with the range of its tier when the item was copied with its advanced
@@ -175,7 +193,7 @@ pub struct AffixTier {
     /// game doesn't write (the Genesis tree).
     pub hides_number: bool,
     /// The range of each value its stats count, in their order, as the game writes it:
-    /// without its sign.
+    /// without its sign; none for fixed values ([`Range::unless_fixed`]).
     pub ranges: Vec<Range>,
 }
 
