@@ -10,7 +10,7 @@
 use std::fmt;
 
 use super::labels::{Labels, marker};
-use super::modifier::{Header, Marker, Modifier, ModifierKind};
+use super::modifier::{Header, Marker, Modifier, ModifierKind, StatLine};
 use super::weapon::{self, DamageKind, Weapon};
 use super::{CopiedItem, Item, ItemState, Property, QualityKind, Rarity, Requirements, Stack};
 use crate::game_data;
@@ -129,7 +129,7 @@ pub(super) fn parse(copied: &CopiedItem) -> Result<Item, ParseError> {
 
     let recognized: Vec<Recognized<'_>> = sections.map(|lines| recognize(lines, labels)).collect();
     let with_headers = is_headed(&recognized);
-    for section in resolve_plain_sections(recognized, item.rarity) {
+    for section in resolve_plain_sections(recognized, item.rarity, copied.language()) {
         fill(&mut item, section, labels);
     }
     join_written_stats(&mut item.modifiers, copied.language(), with_headers);
@@ -253,17 +253,43 @@ fn recognize<'a>(lines: Vec<&'a str>, labels: &Labels) -> Recognized<'a> {
         Section::States(states)
     } else if lines.iter().any(|line| line.starts_with('{')) {
         Section::Headed(lines)
-    } else if let (_, Some(marker)) = Marker::take(first)
-        && let Some(kind) = marker.kind()
-        && lines
-            .iter()
-            .all(|line| Marker::take(line).1 == Some(marker))
-    {
+    } else if let Some(kind) = marked_kind(&lines) {
         Section::Marked(lines, kind)
     } else {
         return Recognized::Plain(lines);
     };
     Recognized::Section(section)
+}
+
+/// The kind of the modifiers of a section without header that a marker of a kind tells
+/// (` (implicit)`, ` (rune)`, ` (enchant)`): one line marked so at least, every other line
+/// marked the same or not at all, as the in-game trade may mark a modifier of several lines on
+/// its last line only (`Adds Irradiated to a Map` then `10 uses remaining (implicit)`).
+fn marked_kind(lines: &[&str]) -> Option<ModifierKind> {
+    let mut markers = lines.iter().filter_map(|line| Marker::take(line).1);
+    let marker = markers.next()?;
+    let kind = marker.kind()?;
+    markers.all(|other| other == marker).then_some(kind)
+}
+
+/// Whether a line has a marker of a kind, which no explicit modifier has.
+fn has_kind_marker(line: &str) -> bool {
+    Marker::take(line).1.and_then(Marker::kind).is_some()
+}
+
+/// Whether every line of a section copied without header is a stat of the game data, read as
+/// explicit modifiers: the only modifier of a magic waystone has no number (`Area has patches
+/// of Ignited Ground`), unlike nearly every other, and no description is a stat.
+fn is_known_stats(lines: &[&str], language: Language) -> bool {
+    let mut modifier = Modifier::unknown();
+    modifier.lines.extend(
+        lines
+            .iter()
+            .map(|line| StatLine::parse(Marker::take(line).0)),
+    );
+    game_data::modifier_stats(language, &modifier, None)
+        .iter()
+        .all(|found| found.stat.is_some())
 }
 
 fn has_digit(line: &str) -> bool {
@@ -285,8 +311,12 @@ fn state(line: &str, labels: &Labels) -> Option<ItemState> {
 /// Phase 2: the first plain section, right after the header, is the properties; the other
 /// plain sections (flavour text, descriptions) aren't read, but for the explicit modifiers of
 /// an item copied without any header ([`explicit_section`]).
-fn resolve_plain_sections(recognized: Vec<Recognized<'_>>, rarity: Rarity) -> Vec<Section<'_>> {
-    let explicit = explicit_section(&recognized, rarity);
+fn resolve_plain_sections(
+    recognized: Vec<Recognized<'_>>,
+    rarity: Rarity,
+    language: Language,
+) -> Vec<Section<'_>> {
+    let explicit = explicit_section(&recognized, rarity, language);
     recognized
         .into_iter()
         .enumerate()
@@ -316,17 +346,22 @@ fn is_unidentified(recognized: &[Recognized<'_>]) -> bool {
 }
 
 /// The index of the explicit modifiers of an identified item copied without any `{ … }`
-/// header, its first plain section after the item level. Two copies have none: an item copied
-/// from the trade of the game (another player's listing), its lines without affix, tier nor
-/// range, those of a fractured, desecrated or Vaal modifier marked (` (fractured)`), and a
-/// unique whose lines have no header in either copy, the same on every copy (`Reflects
-/// opposite Ring` of Kalandra's Touch).
+/// header, its first plain section after the item level without a marker of a kind (an
+/// implicit, a rune or an enchantment that [`marked_kind`] didn't take, its markers mixed).
+/// Two copies have none: an item copied from the trade of the game (another player's
+/// listing), its lines without affix, tier nor range, those of a fractured, desecrated or Vaal
+/// modifier marked (` (fractured)`), and a unique whose lines have no header in either copy,
+/// the same on every copy (`Reflects opposite Ring` of Kalandra's Touch).
 ///
 /// A modifier has a number in nearly every line, unlike a description: a magic item whose only
-/// modifier was removed keeps its description, which isn't taken for it. The lines without
-/// number of a unique are taken when another plain section, its flavour text, follows them; a
-/// flavour text alone never is.
-fn explicit_section(recognized: &[Recognized<'_>], rarity: Rarity) -> Option<usize> {
+/// modifier was removed keeps its description, which isn't taken for it. Lines without number
+/// are taken when each is a stat of the game data ([`is_known_stats`]), or, for a unique, when
+/// another plain section, its flavour text, follows them; a flavour text alone never is.
+fn explicit_section(
+    recognized: &[Recognized<'_>],
+    rarity: Rarity,
+    language: Language,
+) -> Option<usize> {
     if !rarity.has_explicit_modifiers() || is_headed(recognized) || is_unidentified(recognized) {
         return None;
     }
@@ -338,12 +373,17 @@ fn explicit_section(recognized: &[Recognized<'_>], rarity: Rarity) -> Option<usi
         .enumerate()
         .skip(item_level + 1)
         .filter_map(|(index, r)| match r {
-            Recognized::Plain(lines) => Some((index, lines)),
-            Recognized::Section(_) => None,
+            Recognized::Plain(lines) if !lines.iter().any(|line| has_kind_marker(line)) => {
+                Some((index, lines))
+            }
+            Recognized::Plain(_) | Recognized::Section(_) => None,
         });
     let (first, lines) = plain.next()?;
     let numbered = lines.iter().any(|line| has_digit(line));
-    (numbered || (rarity == Rarity::Unique && plain.next().is_some())).then_some(first)
+    (numbered
+        || is_known_stats(lines, language)
+        || (rarity == Rarity::Unique && plain.next().is_some()))
+    .then_some(first)
 }
 
 /// Phase 3: what a section adds to the item.

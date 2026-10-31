@@ -1222,6 +1222,78 @@ fn joins_the_lines_of_one_stat_written_without_header() {
 }
 
 #[test]
+fn reads_a_modifier_of_several_lines_marked_on_its_last_line_only() {
+    // The implicit of a tablet, as the in-game trade may copy it: one modifier, before the
+    // explicit one, which stays read.
+    for (text, lines, explicit_line) in [
+        (
+            "Item Class: Tablet\nRarity: Magic\nBountiful Irradiated Tablet\n--------\n\
+             Item Level: 77\n--------\nAdds Irradiated to a Map\n10 uses remaining (implicit)\n\
+             --------\n30% increased Gold found in Map\n--------\n\
+             Can be used in a personal Map Device to add modifiers to a Map.",
+            ["Adds Irradiated to a Map", "10 uses remaining"],
+            "30% increased Gold found in Map",
+        ),
+        (
+            "Classe d'objet: Tablette\nRareté: Magique\nTablette irradiée Généreuse\n--------\n\
+             Niveau de l'objet: 77\n--------\nAjoute Irradiation à une Carte\n\
+             10 utilisations restantes (implicit)\n--------\n\
+             30% d'Augmentation de l'Or trouvé dans la Carte\n--------\n\
+             À utiliser dans votre Dispositif cartographique pour ajouter des modificateurs à \
+             une Carte.",
+            [
+                "Ajoute Irradiation à une Carte",
+                "10 utilisations restantes",
+            ],
+            "30% d'Augmentation de l'Or trouvé dans la Carte",
+        ),
+    ] {
+        let tablet = item(text);
+        let implicit = of_kind(&tablet, ModifierKind::Implicit);
+        let texts: Vec<&str> = implicit
+            .iter()
+            .flat_map(|modifier| modifier.lines.iter().map(|line| line.text.as_str()))
+            .collect();
+        assert_eq!((implicit.len(), texts), (1, lines.to_vec()), "{text}");
+        assert_eq!(explicit_texts(&tablet), [explicit_line], "{text}");
+    }
+    let tablet = item(
+        "Item Class: Tablet\nRarity: Magic\nIrradiated Tablet\n--------\nItem Level: 77\n\
+         --------\nAdds Irradiated to a Map\n10 uses remaining (implicit)",
+    );
+    assert_eq!(
+        stat_id(of_kind(&tablet, ModifierKind::Implicit)[0]),
+        Some("tower_add_irradiated_to_X_maps")
+    );
+
+    // A rune of two lines, then a rune of one line.
+    let robe = item(
+        "Item Class: Body Armours\nRarity: Normal\nVile Robe\n--------\nItem Level: 81\n\
+         --------\nGain 2% of Damage as Extra Damage of a random Element per\n\
+         Rune Socketed in Equipped Items (rune)\n+12% to Fire Resistance (rune)",
+    );
+    let runes = of_kind(&robe, ModifierKind::Rune);
+    let lines: Vec<usize> = runes.iter().map(|m| m.lines.len()).collect();
+    assert_eq!(lines, [2, 1]);
+    assert!(stat_id(runes[0]).is_some());
+}
+
+#[test]
+fn reads_no_section_of_mixed_markers_as_the_explicit_modifiers() {
+    // A rune and an enchantment in one section, a format not seen: the explicit modifiers
+    // after it stay read.
+    let ring = item(
+        "Item Class: Rings\nRarity: Rare\nTest Loop\nGold Ring\n--------\nItem Level: 80\n\
+         --------\n+12% to Fire Resistance (rune)\n45% increased Armour (enchant)\n\
+         --------\n+40 to maximum Life\n+30% to Cold Resistance (crafted)",
+    );
+    assert_eq!(
+        explicit_texts(&ring),
+        ["+40 to maximum Life", "+30% to Cold Resistance"]
+    );
+}
+
+#[test]
 fn keeps_apart_the_lines_of_other_modifiers() {
     // Another origin: two modifiers.
     let rare = item(
@@ -1275,13 +1347,35 @@ fn a_french_unique_without_header_is_read_before_a_note_with_a_number() {
 }
 
 #[test]
-fn loses_the_explicit_lines_without_number_of_a_magic_item_without_headers() {
-    // A known limit (step 13k5): a line without number can't be told from a description.
-    let waystone = item(
+fn reads_the_explicit_lines_without_number_of_a_magic_item_without_headers() {
+    // The only modifier of a magic waystone, a stat of the game data, and its description.
+    for (text, line) in [
+        (
+            "Item Class: Waystones\nRarity: Magic\nBurning Waystone (Tier 15)\n--------\n\
+             Item Level: 80\n--------\nArea has patches of Ignited Ground\n--------\n\
+             Can be used in a Map Device, allowing you to enter a Map. Waystones can only be \
+             used once.",
+            "Area has patches of Ignited Ground",
+        ),
+        (
+            "Classe d'objet: Pierres de téléportation\nRareté: Magique\n\
+             Pierre de téléportation ardente (Palier 15)\n--------\n\
+             Niveau de l'objet: 80\n--------\nLa Zone a des surfaces de Sol embrasant\n\
+             --------\nPeut être utilisée dans un Dispositif cartographique, vous permettant \
+             d'entrer dans une Carte.",
+            "La Zone a des surfaces de Sol embrasant",
+        ),
+    ] {
+        assert_eq!(explicit_texts(&item(text)), [line], "{text}");
+    }
+    let english = item(
         "Item Class: Waystones\nRarity: Magic\nBurning Waystone (Tier 15)\n--------\n\
          Item Level: 80\n--------\nArea has patches of Ignited Ground",
     );
-    assert_eq!(waystone.modifiers(), []);
+    assert_eq!(
+        stat_id(explicit(&english)[0]),
+        Some("map_base_ground_fire_damage_to_deal_per_10_seconds")
+    );
 }
 
 #[test]
@@ -1295,7 +1389,11 @@ fn an_advanced_copy_never_has_its_explicit_modifiers_found_without_header() {
             .map(|lines| recognize(lines, labels))
             .collect();
         let rarity = item(&text).rarity();
-        assert_eq!(explicit_section(&recognized, rarity), None, "{text}");
+        assert_eq!(
+            explicit_section(&recognized, rarity, copied.language()),
+            None,
+            "{text}"
+        );
     }
 }
 
@@ -1665,19 +1763,8 @@ fn every_advanced_copy_is_read_the_same_from_the_in_game_trade() {
         lines.sort_by_cached_key(|line| format!("{line:?}"));
         lines
     };
-    // An implicit of two lines marked on the last only: its first line read as the explicit
-    // modifiers, the real ones lost (step 13k5b).
-    let implicit_of_two_lines = [
-        EN_MAGIC_TABLET,
-        FR_MAGIC_TABLET,
-        EN_RARE_AMULET_CATALYST,
-        FR_RARE_AMULET_CATALYST,
-    ];
     let mut read = 0;
-    for text in ALL
-        .into_iter()
-        .filter(|text| text.contains("\n{ ") && !implicit_of_two_lines.contains(text))
-    {
+    for text in ALL.into_iter().filter(|text| text.contains("\n{ ")) {
         let Some(in_game_trade) = as_in_game_trade(text) else {
             continue;
         };
