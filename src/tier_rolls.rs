@@ -15,8 +15,8 @@
 //! from the same matches as the tiers, so that each range lands on its number.
 
 use crate::filters::StatKey;
-use crate::game_data::{self, Currency, Tier};
-use crate::item::{Modifier, ModifierKind, Range, TierDoubt};
+use crate::game_data::{self, LineMatch, ModifierTiers, Tier};
+use crate::item::{Currency, Modifier, ModifierKind, Range, TierDoubt};
 use crate::language::Language;
 use crate::trade::stat_filters::counted_numbers;
 
@@ -46,7 +46,7 @@ pub struct TierRolls {
     lines: Vec<(StatKey, LineRolls)>,
     /// The index of each modifier without tier to tell: of one tier only on the base of the
     /// item, whose T1 would read as "the best" while it is "the only one", or whose tier the game
-    /// doesn't write (the Genesis tree).
+    /// doesn't write (the Genesis tree, an essence, an alloy).
     single: Vec<usize>,
     /// The index of each modifier a currency adds, written without tier, and that currency.
     currencies: Vec<(usize, Currency)>,
@@ -68,35 +68,28 @@ impl TierRolls {
         let mut single = Vec::new();
         let mut currencies = Vec::new();
         for (index, modifier) in modifiers.iter().enumerate() {
-            // Its copied ranges, whatever its base; the currency that adds it, from the tables.
-            if written_without_tier(modifier) {
-                single.push(index);
-                lines.extend(copied_rolls(index, modifier));
-                let matches = game_data::modifier_stats(language, modifier, None);
-                let currency = base_type.and_then(|base_type| {
-                    game_data::modifier_tiers(language, base_type, item_level, modifier, &matches)?
-                        .currency
-                });
-                currencies.extend(currency.map(|currency| (index, currency)));
-                continue;
-            }
-            let Some(base_type) = base_type else {
-                continue;
-            };
+            let without_tier = written_without_tier(modifier);
             let fixed = fixed_without_tier(modifier);
             let summed = match &modifier.doubt {
                 Some(TierDoubt::Split { line, .. }) => Some(*line),
-                _ if modifier.tier.is_some() || fixed => None,
+                _ if without_tier || modifier.tier.is_some() || fixed => None,
                 _ => continue,
             };
-            let matches = game_data::modifier_stats(language, modifier, None);
-            let Some(tiers) =
-                game_data::modifier_tiers(language, base_type, item_level, modifier, &matches)
-            else {
+            let found = base_type
+                .and_then(|base_type| tables_of(language, base_type, item_level, modifier));
+            // Its copied ranges, whatever its base; the currency that adds it, from the tables.
+            if without_tier {
+                single.push(index);
+                lines.extend(copied_rolls(index, modifier));
+                let currency = found.and_then(|(_, tiers)| tiers.currency);
+                currencies.extend(currency.map(|currency| (index, currency)));
+                continue;
+            }
+            let Some((matches, tiers)) = found else {
                 continue;
             };
             // A fixed value without tier: only of a modifier whose tier the game doesn't write
-            // (the Genesis tree, an essence), over that tier, as a line of the in-game trade
+            // (the Genesis tree, an essence, an alloy), over that tier, as a line of the in-game trade
             // read in it, a tier of fixed values too (not a value of a modifier whose tier the
             // game writes, nor one that falls in a tier of the tree that rolls, `19–22`).
             let rolled = if fixed {
@@ -183,6 +176,19 @@ impl TierRolls {
             .find(|&&(modifier, _)| modifier == index)
             .map(|&(_, currency)| currency)
     }
+}
+
+/// The line matches of `modifier` and its tiers among the modifier tables, on the base
+/// `base_type` of an item of `item_level`; none when no table holds it.
+fn tables_of(
+    language: Language,
+    base_type: &str,
+    item_level: Option<u32>,
+    modifier: &Modifier,
+) -> Option<(Vec<LineMatch<'static>>, ModifierTiers)> {
+    let matches = game_data::modifier_stats(language, modifier, None);
+    let tiers = game_data::modifier_tiers(language, base_type, item_level, modifier, &matches)?;
+    Some((matches, tiers))
 }
 
 /// Whether the advanced copy writes `modifier`, a prefix or suffix, with its ranges but without
@@ -623,6 +629,7 @@ mod tests {
             tiers,
             hides_number: false,
             ranges: vec![range(min, max)],
+            currency: None,
         };
         // 258% is a pure T1 (170–179) and the hybrid T1 (75–79) with the accuracy.
         let split = Modifier {
@@ -685,6 +692,7 @@ mod tests {
             tiers: vec![1],
             hides_number: true,
             ranges: vec![range(min, max)],
+            currency: None,
         };
         // The hybrid of Kurgal (110–154, and 15% reduced Attack Speed), desecrated, and a pure
         // T1 (170–179) of a maul.

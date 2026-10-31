@@ -159,7 +159,8 @@ fn tier_row_text(row: &TierRow) -> String {
             format!("(with {} of {line})", ranges_text(ranges))
         }
     });
-    let text = [Some(tier), word, tip]
+    let currency = row.currency.map(|currency| format!("{currency:?}"));
+    let text = [Some(tier), word, tip, currency]
         .into_iter()
         .flatten()
         .filter(|part| !part.is_empty())
@@ -2603,6 +2604,7 @@ fn part(affix: Affix) -> PartTier {
         tiers: vec![1],
         hides_number: false,
         ranges: vec![Range { min: 1.0, max: 2.0 }],
+        currency: None,
     }
 }
 
@@ -2716,4 +2718,47 @@ fn a_modifier_counts_the_affixes_it_takes_in_the_room_of_its_item() {
         ..modifier(prefix, None)
     };
     assert_eq!(counts(&unrevealed), (1, 0));
+}
+
+#[test]
+fn the_part_of_an_alloy_in_a_summed_line_names_its_currency() {
+    let bow = include_str!("../../item/test-items/en-owner-trade-rare-bow-mirrored.txt");
+    // Two prefixes open: +800 is a pure prefix T2 or T3 (347–550) and the accuracy of the
+    // hybrid of the Celestial Alloy (327–427), with its attack speed (5–8), both crafted.
+    let bow = read_again(parse(
+        &bow.replace("258% increased Physical Damage\n", "")
+            .replace("+25% to Critical Damage Bonus\n", "")
+            .replace(
+                "+195 to Accuracy Rating\n",
+                "+800 to Accuracy Rating (crafted)\n6% increased Attack Speed (crafted)\n",
+            ),
+    ));
+
+    let texts = texts(&bow);
+    // "Alloy" after the part of the alloy, in place of "Crafted" under the line.
+    assert!(
+        texts.contains(&"■ +800 to Accuracy Rating ≥720 [T2/T3 347–550 / 327–427 Hybrid (with 6% increased Attack Speed) Alloy]".to_owned()),
+        "{texts:?}"
+    );
+    assert!(
+        texts.contains(&"□ 6% increased Attack Speed ≥5 [0.33 5–8 Hybrid (with 327–427 of +800 to Accuracy Rating) Alloy]".to_owned()),
+        "{texts:?}"
+    );
+}
+
+#[test]
+fn a_line_of_the_in_game_trade_also_an_ordinary_tier_names_no_currency() {
+    // `+3 to Level of all Spell Skills` on a wand: the ordinary T2 of 4, or the essence.
+    let wand = texts(&read_again(parse(
+        "Item Class: Wands\nRarity: Rare\nStorm Song\nAcrid Wand\n--------\n\
+         Item Level: 82\n--------\n+3 to Level of all Spell Skills",
+    )));
+    let line = wand
+        .iter()
+        .find(|text| text.contains("+3 to Level of all Spell Skills"))
+        .expect("the line");
+    assert!(
+        line.contains(" T2") && !line.contains("Essence"),
+        "{wand:?}"
+    );
 }

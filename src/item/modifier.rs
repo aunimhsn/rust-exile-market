@@ -35,6 +35,14 @@ pub enum ModifierOrigin {
     Vaal,
 }
 
+/// The currency that adds a modifier of its own, whose tier the game doesn't write: named after
+/// the ranges of its line, so that a line without tier says why.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Currency {
+    Essence,
+    Alloy,
+}
+
 /// A lord of the Abyss whose modifier a desecration reveals, of one tier on its base: named
 /// before the affix of a line that can be his or an ordinary modifier ("Amanamu Prefix"), so
 /// that its row without tier number reads as "the only one", not as an unknown tier.
@@ -261,11 +269,13 @@ pub struct PartTier {
     /// The tiers it may be, the best first: one, or two neighbouring tiers.
     pub tiers: Vec<u32>,
     /// Whether the number of its tiers isn't written: its modifier has one tier only on the base
-    /// of the item, or a tier the game doesn't write (the Genesis tree).
+    /// of the item, or a tier the game doesn't write (the Genesis tree, an essence, an alloy).
     pub hides_number: bool,
     /// The range over these tiers of each value of that line its stat counts, in their order,
     /// as the game writes it: without its sign.
     pub ranges: Vec<Range>,
+    /// The currency that adds its modifier, an essence or an alloy, named after its ranges.
+    pub currency: Option<Currency>,
 }
 
 /// A modifier, with one line or more.

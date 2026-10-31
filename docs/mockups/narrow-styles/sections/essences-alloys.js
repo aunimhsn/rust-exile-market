@@ -10,6 +10,33 @@
 // - C, both "Crafted", as the trade site files them.
 // Chosen by the owner on 2026-10-31: B, "so that we know where the affix comes from"; the other options
 // kept below it, for the record.
+// Then, from the code review of 13k3d2: the part of an alloy in a line that adds up two modifiers, copied
+// from the in-game trade, names its currency after "Hybrid", and the line no longer says "Crafted" under
+// its tiers; the in-game trade marks a line of an alloy ` (crafted)` (the owner, 2026-10-30), so only such a
+// line is read in a table of an alloy.
+
+// A bow from the in-game trade, two prefixes open: +800 is a pure prefix T2 or T3 (347–550) and the accuracy
+// of the hybrid of the Celestial Alloy (327–427), with its attack speed (5–8), both lines marked crafted. As
+// the application shows it (test `the_part_of_an_alloy_in_a_summed_line_names_its_currency`).
+const ALLOY_BOW = { rarity: "rare", name: "Storm Volley", base: "Warmonger Bow", cls: "Bows",
+  tags: ["Mirrored", "Q 30%", "ilvl 82"], props: [["Physical DPS", "720"]], req: "Requires Level 77 · 163 Dex",
+  statsLabel: "Stats (9)", filters: "5 filters" };
+const alloyBowStats = [
+  { group: "Item", min: true },
+  { mod: "Base: Warmonger Bow", check: true },
+  { mod: "Item level: 82", check: false, min: 82 },
+  { group: "Prefixes", fill: "3 of 3" },
+  { mod: "+800 to Accuracy Rating", check: true, min: 720,
+    affixes: [[[2, 3], "347–550"], [null, "327–427", { label: "Hybrid", tip: "With 6% increased Attack Speed" }, "Alloy"]] },
+  { mod: "6% increased Attack Speed", check: false, min: 5, single: true, range: "5–8", share: .33,
+    after: { label: "Hybrid", tip: "With 327–427 of +800 to Accuracy Rating" }, origin: "crafted", originLabel: "Alloy" },
+  { mod: "Adds 36 to 56 Physical Damage", check: false, min: 41, tier: 1, range: "26–39 · 44–66", over: { share: .88 }, origin: "desecrated" },
+  { group: "Suffixes", fill: "3 of 4 · 1 open" },
+  { mod: "+5% to Critical Hit Chance", check: true, min: 5, tier: 1, range: "4.41–5", over: { share: 1 }, origin: "fractured" },
+  { mod: "+4 to Level of all Projectile Skills", check: true, min: 4, tier: 1, over: { share: 1 } },
+  { mod: "+181% Surpassing chance to fire an additional Arrow", check: true, min: 163, tier: 1, range: "175–200", over: { share: .89 } },
+  SUMMED_NOTE,
+];
 
 // The owner's gloves (`inputs/verisium.txt`), with a suffix of an essence of Greed added.
 const ALLOY_GLOVES = { rarity: "rare", name: "Pandemonium Grip", base: "Adorned Wraps", cls: "Gloves",
@@ -52,6 +79,7 @@ const gloves = (essence, alloy) => win(topBar(), item({ ...ALLOY_GLOVES, stats: 
 const glovesFr = (essence, alloy) => win(topBar(), item({ ...ALLOY_GLOVES_FR, stats: alloyGlovesStatsFr({ essence, alloy }) }, true), price(RARE_ESTIMATE_BEFORE), foot());
 
 SECTIONS.unshift(["Essences and alloys (13k3d2): the word after a modifier of an essence or an alloy", [
+  ["Code review · the part of an alloy in a summed line", win(topBar(), item({ ...ALLOY_BOW, stats: alloyBowStats }, true), price(RARE_ESTIMATE_BEFORE), foot())],
   ["Chosen · B, the currency named: \"Essence\", \"Alloy\"", gloves({ ...CRAFTED, originLabel: "Essence" }, { ...CRAFTED, originLabel: "Alloy" })],
   ["Chosen · B, French", glovesFr({ ...CRAFTED, originLabel: "Essence" }, { ...CRAFTED, originLabel: "Alliage" })],
   ["A, before: essence without word, alloy \"Crafted\"", gloves({}, CRAFTED)],

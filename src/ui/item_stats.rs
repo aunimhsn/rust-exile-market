@@ -35,11 +35,11 @@ use super::theme::{self, color, size, text};
 use super::widgets;
 use crate::filters::{self, Filter, FilterKey, Filters, Half, Property, StatKey};
 use crate::format;
-use crate::game_data::{self, Category, Currency};
+use crate::game_data::{self, Category};
 use crate::i18n::{Message, Translator};
 use crate::item::{
-    Affix, AffixTier, Item, Lord, Modifier, ModifierKind, ModifierOrigin, PartTier, Range, Rarity,
-    StatLine, TierDoubt,
+    Affix, AffixTier, Currency, Item, Lord, Modifier, ModifierKind, ModifierOrigin, PartTier,
+    Range, Rarity, StatLine, TierDoubt,
 };
 use crate::roll_difference::CopiedLines;
 use crate::tier_rolls::{LineRolls, TierRolls, TierSpan};
@@ -191,6 +191,24 @@ impl Origin {
             (origin, _) => origin.map(Self::Written),
         }
     }
+
+    /// The word after the prefix or suffix `modifier` that `currency` adds ([`Self::of_affix`]);
+    /// for a line that adds up two modifiers, the currency of a part follows the tier of that
+    /// part, in place of "Crafted" under the line.
+    fn of_modifier(modifier: &Modifier, currency: Option<Currency>) -> Option<Self> {
+        match &modifier.doubt {
+            Some(TierDoubt::Split { whole, added, .. })
+                if whole.currency.or(added.currency).is_some() =>
+            {
+                let crafted = Some(ModifierOrigin::Crafted);
+                modifier
+                    .origin
+                    .filter(|&origin| Some(origin) != crafted)
+                    .map(Self::Written)
+            }
+            _ => Self::of_affix(modifier.origin, currency),
+        }
+    }
 }
 
 impl std::fmt::Debug for Origin {
@@ -262,6 +280,9 @@ struct TierRow<'a> {
     quiet: bool,
     /// The tooltip of that word.
     tip: Option<WordTip<'a>>,
+    /// The currency that adds the part of a line that adds up two modifiers, an essence or an
+    /// alloy, named last, as after the ranges of any modifier it adds.
+    currency: Option<Currency>,
 }
 
 /// The tooltip of the word after the ranges of a tier.
@@ -295,6 +316,7 @@ impl<'a> TierRow<'a> {
             lord: None,
             quiet: false,
             tip: None,
+            currency: None,
         }
     }
 
@@ -311,6 +333,7 @@ impl<'a> TierRow<'a> {
             lord: found.lord,
             quiet: found.ranges.is_empty(),
             tip: None,
+            currency: None,
         }
     }
 
@@ -344,6 +367,7 @@ impl<'a> TierRow<'a> {
             lord: None,
             quiet: false,
             tip,
+            currency: part.currency,
         })
     }
 }
@@ -1332,6 +1356,7 @@ fn affix_stats<'a>(item: &'a Item, affix: Option<Affix>, reading: &Reading<'_>) 
                 }];
             }
             let last = modifier.lines.len().saturating_sub(1);
+            let origin = Origin::of_modifier(modifier, reading.tiers.currency(index));
             // The origin under the tiers of a line that adds up two modifiers, the tier of the
             // hybrid under the last of its other lines.
             let (origin_line, tier_line) = match &modifier.doubt {
@@ -1368,8 +1393,7 @@ fn affix_stats<'a>(item: &'a Item, affix: Option<Affix>, reading: &Reading<'_>) 
                                 .then(|| TierRow::plain(ModifierTier { number, ranges }))
                         }
                     };
-                    let origin = Origin::of_affix(modifier.origin, reading.tiers.currency(index))
-                        .filter(|_| line_index == origin_line);
+                    let origin = origin.filter(|_| line_index == origin_line);
                     let mut stat = affix_stat(key, line, tier, origin, reading);
                     let rows = match &modifier.doubt {
                         Some(TierDoubt::EitherAffix { prefix, suffix }) if line_index == last => {
@@ -2197,20 +2221,24 @@ fn tier_row(ui: &mut Ui, row: &TierRow, i18n: &Translator) {
     if !row.quiet_tier() {
         tier_label(ui, &row.tier, row.better);
     }
-    let Some(word) = word else {
-        return;
-    };
-    let response = small_word(ui, word, color::WEAK);
-    if let Some(tip) = &row.tip {
-        let text = match tip {
-            WordTip::Text(message) => i18n.text(*message),
-            WordTip::HybridLines(lines) => i18n.hybrid_with(lines),
-            WordTip::HybridPart { ranges, line } => i18n.hybrid_part(&ranges_text(ranges), line),
-        };
-        response.on_hover_ui(|ui| {
-            ui.set_max_width(WORD_TIP_WIDTH);
-            ui.add(Label::new(text).wrap());
-        });
+    if let Some(word) = word {
+        let response = small_word(ui, word, color::WEAK);
+        if let Some(tip) = &row.tip {
+            let text = match tip {
+                WordTip::Text(message) => i18n.text(*message),
+                WordTip::HybridLines(lines) => i18n.hybrid_with(lines),
+                WordTip::HybridPart { ranges, line } => {
+                    i18n.hybrid_part(&ranges_text(ranges), line)
+                }
+            };
+            response.on_hover_ui(|ui| {
+                ui.set_max_width(WORD_TIP_WIDTH);
+                ui.add(Label::new(text).wrap());
+            });
+        }
+    }
+    if let Some(currency) = row.currency {
+        origin_word(ui, Origin::Currency(currency), i18n);
     }
 }
 

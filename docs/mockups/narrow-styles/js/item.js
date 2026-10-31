@@ -105,8 +105,10 @@ function item(it, unfolded = false) {
         const check = `<span class="check ${row.check ? "on" : ""}">${row.check ? ICON.check(11) : ""}</span>`;
         const field = `<span class="input app-range"><input value="${row.min ?? ""}" inputmode="decimal" aria-label="Minimum"><i>–</i><input value="" inputmode="decimal" aria-label="Maximum"><span class="app-tip"></span></span>`;
         const affixOrigin = row.origin ? `<span class="app-origin">${row.originLabel || ORIGIN_LABEL[row.origin]}</span>` : "";
-        const lines = row.affixes.map(([number, range, word]) =>
-          `<span class="range">${tierBadge(number)}${range}${after(word)}</span>`).join("")
+        // The currency of a part (13k3d2: "Alloy"), after its word, in the cyan of the crafted modifiers.
+        const currency = label => label ? `<span class="app-origin app-origin-crafted">${label}</span>` : "";
+        const lines = row.affixes.map(([number, range, word, part]) =>
+          `<span class="range">${tierBadge(number)}${range}${after(word)}${currency(part)}</span>`).join("")
           + (affixOrigin ? `<span class="range app-origin-alone">${affixOrigin}</span>` : "");
         return `<div class="mod2 min-top${cls}">${check}<span class="text">${row.mod}</span>${field}<div class="roll2 app-affixes">${lines}</div></div>`;
       }

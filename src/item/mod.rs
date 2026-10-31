@@ -26,8 +26,8 @@ mod weapon;
 
 pub use copied::CopiedItem;
 pub use modifier::{
-    Affix, AffixTier, Lord, Modifier, ModifierKind, ModifierOrigin, PartTier, Range, StatLine,
-    TierDoubt,
+    Affix, AffixTier, Currency, Lord, Modifier, ModifierKind, ModifierOrigin, PartTier, Range,
+    StatLine, TierDoubt,
 };
 pub use parser::{ParseError, ParseWarning};
 pub use weapon::{DamageKind, Weapon};

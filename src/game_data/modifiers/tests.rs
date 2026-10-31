@@ -317,7 +317,7 @@ fn the_value_of_a_line_without_number_is_divided_as_its_table_shows_it() {
         }],
         ranges: None,
         tier: CopiedTier::Unknown,
-        desecrated: false,
+        origin: None,
     };
     let number = |copied| {
         find(
@@ -547,7 +547,7 @@ fn of_two_tiers_as_good_the_one_the_advanced_copy_wrote_is_taken() {
         ranges: Some(vec![range(10.0, 20.0)]),
         tier: tier.map_or(CopiedTier::Unknown, CopiedTier::Written),
         // A desecrated line: an ordinary modifier, or a lord's.
-        desecrated: true,
+        origin: Some(ModifierOrigin::Desecrated),
     };
     let found = |tier| {
         find(
@@ -597,7 +597,7 @@ fn two_tables_with_the_same_lines_in_another_order_are_two_modifiers() {
         ],
         ranges: None,
         tier: CopiedTier::Unknown,
-        desecrated: false,
+        origin: None,
     };
 
     let tiers = find(
@@ -1424,6 +1424,7 @@ fn part(affix: Affix, tiers: &[u32], ranges: &[(f64, f64)]) -> PartTier {
         tiers: tiers.to_vec(),
         hides_number: false,
         ranges: ranges.iter().map(|&(min, max)| range(min, max)).collect(),
+        currency: None,
     }
 }
 
@@ -1861,8 +1862,13 @@ fn a_modifier_of_an_essence_written_without_tier_is_not_the_ordinary_tier_of_its
 
 #[test]
 fn a_modifier_of_an_alloy_is_one_of_its_own_whose_tier_the_game_doesnt_write() {
+    // Written crafted, as the game writes it.
+    let crafted = |affix, lines: &[&str]| Modifier {
+        origin: Some(ModifierOrigin::Crafted),
+        ..modifier(Some(affix), lines)
+    };
     let found = |base_type: &str, affix, lines: &[&str]| {
-        tiers(base_type, &modifier(Some(affix), lines)).map(|tiers| {
+        tiers(base_type, &crafted(affix, lines)).map(|tiers| {
             let ranges = tiers.tier().map(|tier| tier.ranges.clone());
             (
                 tiers.tiers.len(),
@@ -1929,8 +1935,11 @@ fn a_modifier_of_an_alloy_is_one_of_its_own_whose_tier_the_game_doesnt_write() {
 
 #[test]
 fn a_line_of_an_alloy_copied_from_the_in_game_trade_gets_its_affix_and_range() {
+    // Marked crafted, as the game writes it.
     let read = |base_type: &str, level: u32, line: &str| {
-        explicit_tiers(&read_again(base_type, level, &trade_lines(&[line]), (3, 3)))
+        let mut lines = trade_lines(&[line]);
+        lines[0].origin = Some(ModifierOrigin::Crafted);
+        explicit_tiers(&read_again(base_type, level, &lines, (3, 3)))
     };
 
     // Without tier, as the advanced copy writes it.
@@ -1945,6 +1954,12 @@ fn a_line_of_an_alloy_copied_from_the_in_game_trade_gets_its_affix_and_range() {
             None,
             vec![Some(range(10.0, 15.0))]
         )]
+    );
+    // Unmarked, no alloy's: the line stays as it was.
+    let unmarked = trade_lines(&["11% increased Attack Speed while missing Runic Ward"]);
+    assert_eq!(
+        explicit_tiers(&read_again("Adorned Wraps", 80, &unmarked, (3, 3))),
+        [(ModifierKind::Explicit(None), None, vec![None])]
     );
     // Whatever the level of the item, below the 25 of the modifier in RePoE: a helmet of level
     // 7 on the trade site (2026-10-31).
@@ -2037,7 +2052,7 @@ fn a_value_in_several_tiers_takes_the_worst_without_the_ranges_of_the_copy() {
         }],
         ranges: None,
         tier: CopiedTier::Unknown,
-        desecrated: false,
+        origin: None,
     };
     let number = |tie| {
         find(
@@ -2076,7 +2091,7 @@ fn the_tiers_of_the_hybrid_of_a_split_are_those_of_its_part() {
         ],
         ranges: None,
         tier: CopiedTier::Unknown,
-        desecrated: false,
+        origin: None,
     };
     let base = equipment(&["shield"]);
     // The tier and its neighbour found, by their numbers.
@@ -2131,7 +2146,7 @@ fn the_hybrid_of_a_split_is_the_first_table_whose_tiers_of_its_part_the_item_lev
         ],
         ranges: None,
         tier: CopiedTier::Unknown,
-        desecrated: false,
+        origin: None,
     };
     let whole = part(Affix::Prefix, &[1], &[(30.0, 39.0)]);
     // The range of the Armour of the tier found, which tells the table.
@@ -2191,7 +2206,7 @@ fn two_hybrids_of_the_same_lines_that_split_a_line_are_two_ways() {
         ],
         ranges: None,
         tier: CopiedTier::Unknown,
-        desecrated: false,
+        origin: None,
     };
 
     let ways = splits(&tables, &equipment(&["shield"]), &copied, (1, 1), Some(82));
@@ -3155,5 +3170,130 @@ fn a_modifier_without_line_isnt_read() {
     assert_eq!(
         found.first().map(|found| found.modifiers.clone()),
         Some(0..1)
+    );
+}
+
+#[test]
+fn a_desecrated_line_is_never_one_of_a_currency() {
+    let mut infusions = trade_lines(&["+1 to maximum number of Elemental Infusions"]);
+    infusions[0].origin = Some(ModifierOrigin::Desecrated);
+    let mut defences = trade_lines(&["22% increased Global Armour, Evasion and Energy Shield"]);
+    defences[0].origin = Some(ModifierOrigin::Desecrated);
+
+    // On a staff, the prefix of Kurgal (1–2), not the suffix of an alloy (1) as well.
+    assert_eq!(
+        explicit_tiers(&read_again("Ashen Staff", 82, &infusions, (3, 3))),
+        [(
+            ModifierKind::Explicit(Some(Affix::Prefix)),
+            Some(1),
+            vec![Some(range(1.0, 2.0))]
+        )]
+    );
+    // On an amulet, the 15–25 of Amanamu, not the 20–30 of an essence, before it in the file.
+    assert_eq!(
+        explicit_tiers(&read_again("Gold Amulet", 82, &defences, (3, 3))),
+        [(
+            ModifierKind::Explicit(Some(Affix::Prefix)),
+            Some(1),
+            vec![Some(range(15.0, 25.0))]
+        )]
+    );
+}
+
+#[test]
+fn a_line_an_essence_and_an_alloy_hold_as_well_names_no_currency() {
+    let table = |source: &str| {
+        format!(
+            r##"{{"type": "Speed{source}", "affix": "suffix", "lines": [{{"template": "#% increased Attack Speed"}}], "spawn": [["bow", 1]], "source": "{source}", "tiers": [{{"level": 1, "ranges": [[[5, 10]]]}}]}}"##
+        )
+    };
+    let essence = read(&table("essence"));
+    let both = read(&format!("{}\n{}", table("essence"), table("alloy")));
+    // Crafted, as the game writes the modifier of an alloy.
+    let suffix = Modifier {
+        origin: Some(ModifierOrigin::Crafted),
+        ..modifier(Some(Affix::Suffix), &["8% increased Attack Speed"])
+    };
+    let matches = modifier_stats(Language::English, &suffix, None);
+    let copied = Copied::of(&suffix, &matches).expect("copied");
+    let currency = |tables: &[Table]| {
+        find(
+            tables,
+            TableAffix::Suffix,
+            &equipment(&["bow"]),
+            &copied,
+            Tie::Best,
+        )
+        .map(|tiers| tiers.currency)
+    };
+
+    assert_eq!(currency(&essence), Some(Some(Currency::Essence)));
+    assert_eq!(currency(&both), Some(None));
+}
+
+#[test]
+fn only_lines_marked_crafted_may_be_a_hybrid_of_an_alloy() {
+    // The Celestial Alloy on a wand, `+1 to Level of all Spell Skills` and `+142–188 to
+    // maximum Mana`, both lines marked crafted from the in-game trade: its hybrid, or two
+    // crafted ordinary modifiers, the mana maybe adding up a pure one and the part of the
+    // alloy; every reading as good, both lines stay without tier.
+    let mut lines = trade_lines(&["+1 to Level of all Spell Skills", "+160 to maximum Mana"]);
+    let read = |lines: &[Modifier]| {
+        explicit_tiers(&read_again("Acrid Wand", 82, lines, (3, 3)))
+            .into_iter()
+            .map(|(kind, tier, _)| (kind, tier.is_some()))
+            .collect::<Vec<_>>()
+    };
+    let unmarked = read(&lines);
+    for line in &mut lines {
+        line.origin = Some(ModifierOrigin::Crafted);
+    }
+
+    assert_eq!(
+        read(&lines),
+        [
+            (ModifierKind::Explicit(None), false),
+            (ModifierKind::Explicit(None), false),
+        ]
+    );
+    // Unmarked, two ordinary modifiers, the T4 of the spell levels and the T1 of the mana:
+    // the mana as the sum of a pure one and of the part of the alloy would put them in doubt.
+    assert_eq!(
+        unmarked,
+        [
+            (ModifierKind::Explicit(Some(Affix::Suffix)), true),
+            (ModifierKind::Explicit(Some(Affix::Prefix)), true),
+        ]
+    );
+}
+
+#[test]
+fn the_tiers_of_two_tables_of_one_level_are_numbered_by_their_ranges() {
+    // The cast speed and cold damage of the Transcendent Alloy on a wand, crafted: the values
+    // of the staves, the better, T1; the one-handed ones T2.
+    let suffix = Modifier {
+        origin: Some(ModifierOrigin::Crafted),
+        ..modifier(
+            Some(Affix::Suffix),
+            &[
+                "28% increased Cast Speed",
+                "Gain 9% of Elemental Damage as Extra Cold Damage",
+            ],
+        )
+    };
+    let numbers: Option<Vec<_>> = tiers("Acrid Wand", &suffix).map(|tiers| {
+        tiers
+            .tiers
+            .iter()
+            .map(|tier| (tier.number, tier.ranges.first().copied()))
+            .collect()
+    });
+
+    assert_eq!(
+        numbers,
+        Some(vec![
+            (1, Some(range(39.0, 47.0))),
+            (2, Some(range(26.0, 31.0)))
+        ])
     );
 }
