@@ -74,7 +74,7 @@ const FR_UNIQUE_CHARM: &str = test_item!("fr-unique-charm.txt");
 const EN_GEM_SKILL: &str = test_item!("en-owner-skill-gem.txt");
 const FR_GEM_SKILL: &str = test_item!("fr-skill-gem.txt");
 const EN_CURRENCY_UNCUT_GEM_LEVEL_2: &str = test_item!("en-owner-currency-uncut-gem.txt");
-const FR_CURRENCY_UNCUT_GEM: &str = test_item!("fr-currency-uncut-gem.txt");
+const FR_CURRENCY_UNCUT_GEM_LEVEL_4: &str = test_item!("fr-currency-uncut-gem.txt");
 
 const ALL: [&str; 62] = [
     FR_RARE_STAFF,
@@ -138,7 +138,7 @@ const ALL: [&str; 62] = [
     EN_GEM_SKILL,
     FR_GEM_SKILL,
     EN_CURRENCY_UNCUT_GEM_LEVEL_2,
-    FR_CURRENCY_UNCUT_GEM,
+    FR_CURRENCY_UNCUT_GEM_LEVEL_4,
 ];
 
 const PREFIX: ModifierKind = ModifierKind::Explicit(Some(Affix::Prefix));
@@ -1525,7 +1525,7 @@ fn reads_the_owners_other_kinds_of_items() {
             Vec::new(),
         ),
         (
-            [EN_CURRENCY_UNCUT_GEM_LEVEL_2, FR_CURRENCY_UNCUT_GEM],
+            [EN_CURRENCY_UNCUT_GEM_LEVEL_2, FR_CURRENCY_UNCUT_GEM_LEVEL_4],
             Rarity::Currency,
             [
                 "Uncut Skill Gem (Level 2)",
@@ -1658,7 +1658,8 @@ fn every_advanced_copy_is_read_the_same_from_the_in_game_trade() {
                     .map(move |line| (kind, modifier.origin, line.text.clone()))
             })
             .collect();
-        lines.sort_by(|a, b| a.2.cmp(&b.2));
+        // The whole line as key, so that two lines of the same text compare in one order.
+        lines.sort_by_key(|line| format!("{line:?}"));
         lines
     };
     // An implicit of two lines marked on the last only: its first line read as the explicit

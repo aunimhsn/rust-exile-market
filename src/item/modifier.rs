@@ -89,7 +89,7 @@ impl Marker {
         Self::Mutated,
     ];
 
-    fn suffix(self) -> &'static str {
+    pub fn suffix(self) -> &'static str {
         match self {
             Self::Implicit => " (implicit)",
             Self::Enchant => " (enchant)",
