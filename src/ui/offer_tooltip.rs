@@ -238,7 +238,8 @@ fn quality_line(offer: &ItemOffer, item: &Item, i18n: &Translator) -> Option<Lin
 
 /// The lines of the properties of an offer of waystone, when the copied `item` is a
 /// waystone, in the order of the game: each with its difference from the item, gray; a
-/// property of the item that the offer lacks, faint at 0, with its loss. Every property is
+/// property of the item that the offer lacks, faint at 0, with its loss, unless a property of
+/// the offer couldn't be read: it may be that one, under another name. Every property is
 /// better higher: a buyer pays for the bonuses of the map.
 fn waystone_lines(offer: &ItemOffer, item: &Item, i18n: &Translator) -> Vec<Line> {
     if !item.is_waystone() {
@@ -256,7 +257,7 @@ fn waystone_lines(offer: &ItemOffer, item: &Item, i18n: &Translator) -> Vec<Line
         .filter_map(|property| {
             let offered = value_of(&offer.item.waystone_properties, property);
             let copied = value_of(&copied, property);
-            if offered.is_none() && copied.is_none() {
+            if offered.is_none() && (copied.is_none() || offer.item.waystone_unread) {
                 return None;
             }
             let value = offered.unwrap_or(0);

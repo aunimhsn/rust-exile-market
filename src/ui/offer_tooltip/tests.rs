@@ -42,6 +42,7 @@ fn amulet(value: u32, catalyst: Catalyst, words: &str, modifiers: &[&str]) -> It
                 }),
             }),
             waystone_properties: Vec::new(),
+            waystone_unread: false,
             modifiers: modifiers
                 .iter()
                 .map(|text| OfferModifier {
@@ -223,6 +224,7 @@ fn waystone(base_type: &str, properties: &[(WaystoneProperty, i32)]) -> ItemOffe
                 .iter()
                 .map(|&(property, value)| WaystoneValue { property, value })
                 .collect(),
+            waystone_unread: false,
             modifiers: Vec::new(),
         },
     }
@@ -303,6 +305,22 @@ fn the_properties_of_an_offer_of_waystone_show_their_difference_from_the_copied_
             Verdict::Better,
         ]
     );
+}
+
+#[test]
+fn an_offer_with_a_property_that_cant_be_read_shows_no_loss() {
+    use WaystoneProperty::{DropChance, ItemRarity};
+
+    let i18n = Translator::new(crate::language::Language::English);
+    // A property renamed by a patch: the monster rarity of the offer may be that one.
+    let mut offer = waystone("Waystone (Tier 12)", &[(ItemRarity, 14), (DropChance, 62)]);
+    offer.item.waystone_unread = true;
+
+    let texts: Vec<String> = waystone_texts(&offer, &owners_waystone(), &i18n)
+        .into_iter()
+        .map(|(text, ..)| text)
+        .collect();
+    assert_eq!(texts, ["Item rarity: +14%", "Waystone drop chance: +62%"]);
 }
 
 #[test]

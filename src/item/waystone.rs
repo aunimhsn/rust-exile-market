@@ -70,11 +70,19 @@ impl Item {
 }
 
 /// The property of a waystone named `name` as the game writes it in `language`, of the value
-/// `value` (`+11%`), as the trade site lists it; none for another property, or a value that
-/// can't be read.
-#[must_use]
-pub fn waystone_property(language: Language, name: &str, value: &str) -> Option<WaystoneValue> {
-    read_property(Labels::of(language), name, value).ok()
+/// `value` (`+11%`), as the trade site lists it; the warning of another name, or of a value
+/// that can't be read.
+///
+/// # Errors
+///
+/// [`ParseWarning::UnknownWaystoneProperty`] for a name not in the labels,
+/// [`ParseWarning::InvalidValue`] for a value that isn't a whole number.
+pub fn waystone_property(
+    language: Language,
+    name: &str,
+    value: &str,
+) -> Result<WaystoneValue, ParseWarning> {
+    read_property(Labels::of(language), name, value)
 }
 
 /// The property of a waystone named `name`, of the value `value`, in the words of `labels`;

@@ -143,6 +143,7 @@ mod tests {
                 corrupted: false,
                 quality: None,
                 waystone_properties: Vec::new(),
+                waystone_unread: false,
                 modifiers: Vec::new(),
             },
         }
