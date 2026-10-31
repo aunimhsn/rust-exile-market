@@ -106,8 +106,9 @@ enum Section<'a> {
     States(Vec<ItemState>),
     /// Modifiers with the headers of the advanced copy.
     Headed(Vec<&'a str>),
-    /// Modifiers without header, all of one kind, which their marker tells (` (rune)`…) or
-    /// phase 2 finds; each line of the origin its own marker tells (` (fractured)`…).
+    /// Modifiers without header, all of one kind, which the marker of one line at least tells
+    /// (` (rune)`…, [`marked_kind`]) or phase 2 finds; each line of the origin its own marker
+    /// tells (` (fractured)`…).
     Marked(Vec<&'a str>, ModifierKind),
     /// Flavour text, descriptions or note.
     Unread,
@@ -262,9 +263,11 @@ fn recognize<'a>(lines: Vec<&'a str>, labels: &Labels) -> Recognized<'a> {
 }
 
 /// The kind of the modifiers of a section without header that a marker of a kind tells
-/// (` (implicit)`, ` (rune)`, ` (enchant)`): one line marked so at least, every other line
-/// marked the same or not at all, as the in-game trade may mark a modifier of several lines on
-/// its last line only (`Adds Irradiated to a Map` then `10 uses remaining (implicit)`).
+/// (` (implicit)`, ` (rune)`, ` (enchant)`): one line marked so at least, on any line, every
+/// other line marked the same or not at all, as the in-game trade may mark a modifier of
+/// several lines on its last line only (`Adds Irradiated to a Map` then `10 uses remaining
+/// (implicit)`). An unmarked line anywhere is of that kind too: a section of these kinds never
+/// holds the explicit modifiers, so that it never takes their place.
 fn marked_kind(lines: &[&str]) -> Option<ModifierKind> {
     let mut markers = lines.iter().filter_map(|line| Marker::take(line).1);
     let marker = markers.next()?;

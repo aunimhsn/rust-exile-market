@@ -1266,31 +1266,70 @@ fn reads_a_modifier_of_several_lines_marked_on_its_last_line_only() {
         Some("tower_add_irradiated_to_X_maps")
     );
 
-    // A rune of two lines, then a rune of one line.
+    // A rune of two lines, then a rune of one line, on a rare item: its explicit modifiers
+    // after them stay read.
+    for (text, explicit_line) in [
+        (
+            "Item Class: Body Armours\nRarity: Rare\nTest Shell\nVile Robe\n--------\n\
+             Item Level: 81\n--------\nGain 2% of Damage as Extra Damage of a random Element \
+             per\nRune Socketed in Equipped Items (rune)\n+12% to Fire Resistance (rune)\n\
+             --------\n+40 to maximum Life",
+            "+40 to maximum Life",
+        ),
+        (
+            "Classe d'objet: Armures\nRareté: Rare\nTest Coquille\nRobe vile\n--------\n\
+             Niveau de l'objet: 81\n--------\nRajoutez 2% de vos Dégâts sous forme de Dégâts \
+             d'un Élément aléatoire par\nRune Enchâssée dans les objets Équipés (rune)\n\
+             +12% à la Résistance au feu (rune)\n--------\n+40 de Vie maximale",
+            "+40 de Vie maximale",
+        ),
+    ] {
+        let robe = item(text);
+        let runes = of_kind(&robe, ModifierKind::Rune);
+        let lines: Vec<usize> = runes.iter().map(|m| m.lines.len()).collect();
+        assert_eq!(lines, [2, 1], "{text}");
+        assert_eq!(explicit_texts(&robe), [explicit_line], "{text}");
+    }
     let robe = item(
         "Item Class: Body Armours\nRarity: Normal\nVile Robe\n--------\nItem Level: 81\n\
          --------\nGain 2% of Damage as Extra Damage of a random Element per\n\
-         Rune Socketed in Equipped Items (rune)\n+12% to Fire Resistance (rune)",
+         Rune Socketed in Equipped Items (rune)",
     );
-    let runes = of_kind(&robe, ModifierKind::Rune);
-    let lines: Vec<usize> = runes.iter().map(|m| m.lines.len()).collect();
-    assert_eq!(lines, [2, 1]);
-    assert!(stat_id(runes[0]).is_some());
+    assert!(stat_id(of_kind(&robe, ModifierKind::Rune)[0]).is_some());
+
+    // A line marked anywhere tells the kind of the whole section: a section of implicit
+    // modifiers never holds the explicit ones, which follow it.
+    let ring = item(
+        "Item Class: Rings\nRarity: Rare\nTest Loop\nGold Ring\n--------\nItem Level: 80\n\
+         --------\n+10 to Strength (implicit)\n+12% to Fire Resistance\n--------\n\
+         +40 to maximum Life",
+    );
+    assert_eq!(of_kind(&ring, ModifierKind::Implicit).len(), 2);
+    assert_eq!(explicit_texts(&ring), ["+40 to maximum Life"]);
 }
 
 #[test]
 fn reads_no_section_of_mixed_markers_as_the_explicit_modifiers() {
     // A rune and an enchantment in one section, a format not seen: the explicit modifiers
     // after it stay read.
-    let ring = item(
-        "Item Class: Rings\nRarity: Rare\nTest Loop\nGold Ring\n--------\nItem Level: 80\n\
-         --------\n+12% to Fire Resistance (rune)\n45% increased Armour (enchant)\n\
-         --------\n+40 to maximum Life\n+30% to Cold Resistance (crafted)",
-    );
-    assert_eq!(
-        explicit_texts(&ring),
-        ["+40 to maximum Life", "+30% to Cold Resistance"]
-    );
+    for (text, explicit_lines) in [
+        (
+            "Item Class: Rings\nRarity: Rare\nTest Loop\nGold Ring\n--------\n\
+             Item Level: 80\n--------\n+12% to Fire Resistance (rune)\n\
+             45% increased Armour (enchant)\n--------\n+40 to maximum Life\n\
+             +30% to Cold Resistance (crafted)",
+            ["+40 to maximum Life", "+30% to Cold Resistance"],
+        ),
+        (
+            "Classe d'objet: Bagues\nRareté: Rare\nTest Boucle\nBague en or\n--------\n\
+             Niveau de l'objet: 80\n--------\n+12% à la Résistance au feu (rune)\n\
+             45% d'Augmentation de l'Armure (enchant)\n--------\n+40 de Vie maximale\n\
+             +30% à la Résistance au froid (crafted)",
+            ["+40 de Vie maximale", "+30% à la Résistance au froid"],
+        ),
+    ] {
+        assert_eq!(explicit_texts(&item(text)), explicit_lines, "{text}");
+    }
 }
 
 #[test]
@@ -1376,6 +1415,26 @@ fn reads_the_explicit_lines_without_number_of_a_magic_item_without_headers() {
         stat_id(explicit(&english)[0]),
         Some("map_base_ground_fire_damage_to_deal_per_10_seconds")
     );
+    // Two modifiers without number: both read.
+    let two = item(
+        "Item Class: Waystones\nRarity: Magic\nBurning Waystone of Frost (Tier 15)\n\
+         --------\nItem Level: 80\n--------\nArea has patches of Ignited Ground\n\
+         Area has patches of Chilled Ground",
+    );
+    assert_eq!(
+        explicit_texts(&two),
+        [
+            "Area has patches of Ignited Ground",
+            "Area has patches of Chilled Ground"
+        ]
+    );
+    // A stat, then a line without number that is none: a description, not read.
+    let described = item(
+        "Item Class: Waystones\nRarity: Magic\nBurning Waystone (Tier 15)\n--------\n\
+         Item Level: 80\n--------\nArea has patches of Ignited Ground\n\
+         Can be used in a Map Device.",
+    );
+    assert_eq!(described.modifiers(), []);
 }
 
 #[test]
