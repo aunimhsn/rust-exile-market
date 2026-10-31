@@ -7,11 +7,14 @@
 
 use std::time::Duration;
 
+use egui::text::{LayoutJob, TextFormat};
 use egui::{
     Align2, Area, Color32, CornerRadius, Frame, Id, Margin, Order, Pos2, Rect, Response, Sense,
     Stroke, Ui, Vec2, pos2, vec2,
 };
 
+use super::item_block::waystone_tier_color;
+use super::item_stats::property_value;
 use super::offers_block::{RowPrice, offer_price};
 use super::price_block::orb;
 use super::theme::{self, color, size, text};
@@ -19,7 +22,7 @@ use super::widgets;
 use crate::filters::Property;
 use crate::format;
 use crate::i18n::{Message, NumberTag, Translator};
-use crate::item::{Catalyst, Item};
+use crate::item::{self, Catalyst, Item, WaystoneProperty, WaystoneValue};
 use crate::roll_difference::{CopiedLines, Difference, Verdict};
 use crate::trade::offers::{ItemOffer, ModifierKind, SellerStatus};
 
@@ -39,6 +42,7 @@ const LINE_GAP: f32 = 3.0;
 /// The space between a modifier and its difference.
 const DIFFERENCE_GAP: f32 = 10.0;
 const META_GAP: f32 = 2.0;
+const SEPARATOR: &str = " · ";
 const WARNING_GAP: f32 = 8.0;
 const FOOT_GAP: f32 = 10.0;
 const ORB: f32 = 18.0;
@@ -233,6 +237,95 @@ fn quality_line(offer: &ItemOffer, item: &Item, i18n: &Translator) -> Option<Lin
     })
 }
 
+/// The lines of the properties of an offer of waystone, when the copied `item` is a
+/// waystone, in the order of the game: each with its difference from the item, gray; a
+/// property of the item that the offer lacks, faint at 0, with its loss. Every property is
+/// better higher: a buyer pays for the bonuses of the map.
+fn waystone_lines(offer: &ItemOffer, item: &Item, i18n: &Translator) -> Vec<Line> {
+    if !item.is_waystone() {
+        return Vec::new();
+    }
+    let copied = item.waystone_properties();
+    let value_of = |values: &[WaystoneValue], property| {
+        values
+            .iter()
+            .find(|found| found.property == property)
+            .map(|found| found.value)
+    };
+    WaystoneProperty::ALL
+        .into_iter()
+        .filter_map(|property| {
+            let offered = value_of(&offer.item.waystone, property);
+            let copied = value_of(&copied, property);
+            if offered.is_none() && copied.is_none() {
+                return None;
+            }
+            let value = f64::from(offered.unwrap_or(0));
+            let text = i18n.filter_property(
+                Property::Waystone(property),
+                &property_value(Property::Waystone(property), value),
+            );
+            let difference = Some(value - f64::from(copied.unwrap_or(0)))
+                .filter(|difference| *difference != 0.0)
+                .map(|value| Difference {
+                    value,
+                    verdict: if value > 0.0 {
+                        Verdict::Better
+                    } else {
+                        Verdict::Worse
+                    },
+                });
+            Some(Line {
+                text,
+                tint: if offered.is_some() {
+                    color::WEAK
+                } else {
+                    color::FAINT
+                },
+                difference,
+            })
+        })
+        .collect()
+}
+
+/// The base type of the offer, its item level and its corruption, wrapped at `width`. An
+/// offer of waystone, when the copied `item` is one, writes its tier short, in its color, as
+/// the item block does: "Waystone · T12".
+fn meta(offer: &ItemOffer, item: &Item, i18n: &Translator, width: f32) -> LayoutJob {
+    let offered = &offer.item;
+    let font = text::note();
+    let mut job = LayoutJob::default();
+    job.wrap.max_width = width;
+    let mut append = |text: &str, font: &egui::FontId, tint| {
+        job.append(text, 0.0, TextFormat::simple(font.clone(), tint));
+    };
+    let waystone =
+        item::base_and_tier(item.language(), &offered.base_type).filter(|_| item.is_waystone());
+    if let Some((name, tier)) = waystone {
+        append(name, &font, color::WEAK);
+        append(SEPARATOR, &font, color::WEAK);
+        append(
+            &format!("T{tier}"),
+            &text::tooltip_tier(),
+            waystone_tier_color(tier),
+        );
+    } else {
+        append(&offered.base_type, &font, color::WEAK);
+    }
+    let mut rest = Vec::new();
+    if let Some(level) = offered.item_level {
+        rest.push(i18n.tag(NumberTag::ItemLevel, level));
+    }
+    if offered.corrupted {
+        rest.push(i18n.text(Message::TagCorrupted));
+    }
+    for part in rest {
+        append(SEPARATOR, &font, color::WEAK);
+        append(&part, &font, color::WEAK);
+    }
+    job
+}
+
 impl OfferTooltip<'_> {
     /// The id of the area of the tooltip of the offer `id`.
     #[must_use]
@@ -279,17 +372,14 @@ impl OfferTooltip<'_> {
 
     fn content(&self, ui: &mut Ui) -> bool {
         let i18n = self.i18n;
-        let item = &self.offer.item;
         self.head(ui);
         ui.add_space(META_GAP);
-        let mut meta = vec![item.base_type.clone()];
-        if let Some(level) = item.item_level {
-            meta.push(i18n.tag(NumberTag::ItemLevel, level));
-        }
-        if item.corrupted {
-            meta.push(i18n.text(Message::TagCorrupted));
-        }
-        text_block(ui, &meta.join(" · "), text::note(), color::WEAK);
+        let galley =
+            ui.painter()
+                .layout_job(meta(self.offer, self.item, i18n, ui.available_width()));
+        let (rect, _) =
+            ui.allocate_exact_size(vec2(ui.available_width(), galley.size().y), Sense::hover());
+        ui.painter().galley(rect.min, galley, color::WEAK);
         if self.suspicious {
             ui.add_space(WARNING_GAP);
             text_block(
@@ -313,6 +403,10 @@ impl OfferTooltip<'_> {
         }
         if let Some(line) = quality_line(self.offer, self.item, i18n) {
             group(ui, &[line]);
+        }
+        let waystone = waystone_lines(self.offer, self.item, i18n);
+        if !waystone.is_empty() {
+            group(ui, &waystone);
         }
         for kind in [
             ModifierKind::Enchant,
@@ -586,389 +680,4 @@ fn paint_price(ui: &Ui, price: &RowPrice, left_center: Pos2) {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    const OFFERS: [&str; 3] = ["a", "b", "c"];
-
-    fn at(time: f64) -> Pointer<'static> {
-        Pointer {
-            time,
-            ..Pointer::default()
-        }
-    }
-
-    fn hovering(id: &'static str, time: f64) -> Pointer<'static> {
-        Pointer {
-            hovered: Some(id),
-            ..at(time)
-        }
-    }
-
-    /// An amulet offered with the quality of a catalyst of `catalyst`, `value` %, and its
-    /// `modifiers` (`+20% to Maximum Quality`).
-    fn amulet(value: u32, catalyst: Catalyst, words: &str, modifiers: &[&str]) -> ItemOffer {
-        use crate::item::QualityKind;
-        use crate::trade::offers::{OfferItem, OfferModifier, OfferQuality};
-
-        ItemOffer {
-            id: "a".to_owned(),
-            price: None,
-            seller: SellerStatus::Online,
-            listed: None,
-            whisper: String::new(),
-            item: OfferItem {
-                rarity: None,
-                name: None,
-                base_type: "Solar Amulet".to_owned(),
-                item_level: None,
-                corrupted: false,
-                quality: Some(OfferQuality {
-                    value,
-                    kind: Some(QualityKind {
-                        catalyst: Some(catalyst),
-                        words: words.to_owned(),
-                    }),
-                }),
-                modifiers: modifiers
-                    .iter()
-                    .map(|text| OfferModifier {
-                        kind: ModifierKind::Explicit,
-                        text: (*text).to_owned(),
-                        stat: Some("explicit.stat_2039822488".to_owned()),
-                    })
-                    .collect(),
-            },
-        }
-    }
-
-    #[test]
-    fn the_quality_of_an_offer_is_white_at_its_maximum_and_red_of_another_kind() {
-        use crate::item::CopiedItem;
-
-        let i18n = Translator::new(crate::language::Language::English);
-        // The owner's amulet: 40 % of mana quality.
-        let copied = Item::parse(
-            &CopiedItem::from_text(include_str!(
-                "../item/test-items/en-owner-rare-amulet-catalyst.txt"
-            ))
-            .unwrap(),
-        )
-        .unwrap();
-        let essence = ["+20% to Maximum Quality"];
-        let line = |offer: &ItemOffer| quality_line(offer, &copied, &i18n).unwrap();
-        let difference = |value, verdict| Some(Difference { value, verdict });
-
-        // Below its maximum of 40 %: gray, with its difference.
-        let below = line(&amulet(30, Catalyst::Mana, "Mana Modifiers", &essence));
-        assert_eq!(below.text, "Mana quality: 30%");
-        assert_eq!(below.tint, color::WEAK);
-        assert_eq!(below.difference, difference(-10.0, Verdict::Worse));
-        // At its maximum: white.
-        let at_maximum = line(&amulet(40, Catalyst::Mana, "Mana Modifiers", &essence));
-        assert_eq!(at_maximum.tint, color::TEXT);
-        assert_eq!(at_maximum.difference, None);
-        // Left beyond its maximum once its essence was removed: white too.
-        let beyond = line(&amulet(50, Catalyst::Mana, "Mana Modifiers", &[]));
-        assert_eq!(beyond.tint, color::TEXT);
-        assert_eq!(beyond.difference, difference(10.0, Verdict::Better));
-        // Another kind: red, without difference.
-        let attack = line(&amulet(50, Catalyst::Attack, "Attack Modifiers", &[]));
-        assert_eq!(attack.text, "Attack quality: 50%");
-        assert_eq!(attack.tint, color::FALL);
-        assert_eq!(attack.difference, None);
-    }
-
-    #[test]
-    fn a_kind_that_cant_be_told_apart_is_never_red() {
-        use crate::item::{CopiedItem, QualityKind};
-        use crate::trade::offers::OfferQuality;
-
-        let i18n = Translator::new(crate::language::Language::English);
-        let parse = |words: &str| {
-            let text = include_str!("../item/test-items/en-owner-rare-amulet-catalyst.txt")
-                .replace("Mana Modifiers", words);
-            Item::parse(&CopiedItem::from_text(&text).unwrap()).unwrap()
-        };
-        let mana = parse("Mana Modifiers");
-        let line = |offer: &ItemOffer, item: &Item| quality_line(offer, item, &i18n);
-
-        // The copied item of a kind the application doesn't know.
-        let strange = parse("Strange Modifiers");
-        let attack = amulet(50, Catalyst::Attack, "Attack Modifiers", &[]);
-        let of_strange = line(&attack, &strange).unwrap();
-        assert_eq!(of_strange.text, "Attack quality: 50%");
-        assert_eq!(of_strange.tint, color::TEXT, "beyond its maximum");
-        assert_eq!(
-            of_strange.difference,
-            Some(Difference {
-                value: 10.0,
-                verdict: Verdict::Better
-            })
-        );
-        // Below its maximum: gray.
-        let below = line(
-            &amulet(15, Catalyst::Attack, "Attack Modifiers", &[]),
-            &strange,
-        )
-        .unwrap();
-        assert_eq!(below.tint, color::WEAK);
-        // An offer of a kind the application doesn't know: its words.
-        let mut unknown = amulet(30, Catalyst::Mana, "", &[]);
-        unknown.item.quality = Some(OfferQuality {
-            value: 30,
-            kind: Some(QualityKind {
-                catalyst: None,
-                words: "Strange Modifiers".to_owned(),
-            }),
-        });
-        let of_unknown = line(&unknown, &mana).unwrap();
-        assert_eq!(of_unknown.text, "Quality (Strange Modifiers): 30%");
-        assert_eq!(of_unknown.tint, color::TEXT);
-        assert_eq!(
-            of_unknown.difference,
-            Some(Difference {
-                value: -10.0,
-                verdict: Verdict::Worse
-            })
-        );
-        // The quality of the base.
-        let mut base = amulet(10, Catalyst::Mana, "", &[]);
-        base.item.quality = Some(OfferQuality {
-            value: 10,
-            kind: None,
-        });
-        let of_base = line(&base, &mana).unwrap();
-        assert_eq!(of_base.text, "Quality: 10%");
-        assert_eq!(of_base.tint, color::WEAK);
-        assert_eq!(
-            of_base.difference,
-            Some(Difference {
-                value: -30.0,
-                verdict: Verdict::Worse
-            })
-        );
-        // No quality.
-        base.item.quality = None;
-        assert_eq!(line(&base, &mana), None);
-    }
-
-    #[test]
-    fn an_item_without_the_quality_of_a_catalyst_has_no_quality_line() {
-        use crate::item::CopiedItem;
-
-        let i18n = Translator::new(crate::language::Language::English);
-        let bow = Item::parse(
-            &CopiedItem::from_text(include_str!("../item/test-items/en-rare-bow-fractured.txt"))
-                .unwrap(),
-        )
-        .unwrap();
-
-        assert_eq!(
-            quality_line(
-                &amulet(40, Catalyst::Mana, "Mana Modifiers", &[]),
-                &bow,
-                &i18n
-            ),
-            None
-        );
-    }
-
-    #[test]
-    fn hovering_a_row_opens_its_tooltip_which_lingers_after_the_pointer_leaves() {
-        let mut state = TooltipState::default();
-
-        state.update(&hovering("a", 0.0), &OFFERS);
-        assert_eq!(state.open(), Some("a"));
-
-        let redraw = state.update(&at(1.0), &OFFERS);
-        assert_eq!(state.open(), Some("a"), "still open a moment");
-        assert_eq!(redraw, Some(Duration::from_secs_f64(LINGER)));
-
-        state.update(&at(1.0 + LINGER), &OFFERS);
-        assert_eq!(state.open(), None);
-    }
-
-    #[test]
-    fn the_tooltip_stays_while_the_pointer_is_inside_it() {
-        let mut state = TooltipState::default();
-        state.update(&hovering("a", 0.0), &OFFERS);
-        state.update(&at(0.1), &OFFERS);
-
-        let inside = Pointer {
-            over_tooltip: true,
-            ..at(5.0)
-        };
-        state.update(&inside, &OFFERS);
-        state.update(&inside, &OFFERS);
-
-        assert_eq!(state.open(), Some("a"));
-    }
-
-    #[test]
-    fn hovering_another_row_moves_the_tooltip_at_once() {
-        let mut state = TooltipState::default();
-        state.update(&hovering("a", 0.0), &OFFERS);
-        state.update(&at(0.1), &OFFERS);
-
-        state.update(&hovering("b", 0.15), &OFFERS);
-
-        assert_eq!(state.open(), Some("b"));
-    }
-
-    #[test]
-    fn a_click_pins_the_tooltip_until_a_click_elsewhere_or_escape() {
-        let mut state = TooltipState::default();
-        let click = Pointer {
-            clicked: Some("a"),
-            any_click: true,
-            ..hovering("a", 0.0)
-        };
-        state.update(&click, &OFFERS);
-
-        state.update(&at(10.0), &OFFERS);
-        state.update(&hovering("b", 11.0), &OFFERS);
-        assert_eq!(
-            state.open(),
-            Some("a"),
-            "pinned: neither leaving nor hovering"
-        );
-
-        let click_inside = Pointer {
-            any_click: true,
-            over_tooltip: true,
-            ..at(12.0)
-        };
-        state.update(&click_inside, &OFFERS);
-        assert_eq!(state.open(), Some("a"), "Copy whisper keeps it");
-
-        let click_elsewhere = Pointer {
-            any_click: true,
-            ..at(13.0)
-        };
-        state.update(&click_elsewhere, &OFFERS);
-        assert_eq!(state.open(), None);
-
-        state.update(&click, &OFFERS);
-        let escape = Pointer {
-            escape: true,
-            ..at(14.0)
-        };
-        state.update(&escape, &OFFERS);
-        assert_eq!(state.open(), None);
-    }
-
-    #[test]
-    fn the_pointer_reaches_the_tooltip_over_the_edge_of_the_next_row() {
-        let mut state = TooltipState::default();
-        state.update(&hovering("b", 0.0), &OFFERS);
-
-        // Between the row and the tooltip, the pointer is on the edge of the row above.
-        let gap = Pointer {
-            over_tooltip: true,
-            ..hovering("a", 0.05)
-        };
-        state.update(&gap, &OFFERS);
-        assert_eq!(state.open(), Some("b"));
-
-        let inside = Pointer {
-            over_tooltip: true,
-            ..at(0.1)
-        };
-        let redraw = state.update(&inside, &OFFERS);
-        assert_eq!(state.open(), Some("b"));
-        assert_eq!(redraw, None, "nothing to wait for");
-    }
-
-    #[test]
-    fn coming_back_to_the_row_keeps_the_tooltip_open() {
-        let mut state = TooltipState::default();
-        state.update(&hovering("a", 0.0), &OFFERS);
-        state.update(&at(0.1), &OFFERS);
-
-        state.update(&hovering("a", 0.2), &OFFERS);
-        state.update(&at(0.35), &OFFERS);
-
-        assert_eq!(
-            state.open(),
-            Some("a"),
-            "the wait starts again from when it left"
-        );
-    }
-
-    #[test]
-    fn a_click_on_another_row_pins_its_tooltip() {
-        let mut state = TooltipState::default();
-        let click = |id: &'static str, time| Pointer {
-            clicked: Some(id),
-            any_click: true,
-            ..hovering(id, time)
-        };
-        state.update(&click("a", 0.0), &OFFERS);
-
-        state.update(&click("b", 1.0), &OFFERS);
-        state.update(&at(5.0), &OFFERS);
-
-        assert_eq!(state.open(), Some("b"));
-    }
-
-    #[test]
-    fn a_click_inside_an_unpinned_tooltip_keeps_it_open() {
-        let mut state = TooltipState::default();
-        state.update(&hovering("a", 0.0), &OFFERS);
-
-        let click_inside = Pointer {
-            any_click: true,
-            over_tooltip: true,
-            ..at(0.1)
-        };
-        state.update(&click_inside, &OFFERS);
-
-        assert_eq!(state.open(), Some("a"));
-    }
-
-    #[test]
-    fn the_tooltip_of_an_offer_gone_closes() {
-        let mut state = TooltipState::default();
-        state.update(&hovering("a", 0.0), &OFFERS);
-
-        state.update(&at(0.0), &["d"]);
-
-        assert_eq!(state.open(), None);
-    }
-
-    #[test]
-    fn the_pill_reads_copied_for_two_seconds() {
-        let mut state = TooltipState::default();
-        state.copied("a", 1.0);
-
-        assert!(state.shows_copied("a", 2.9));
-        assert!(!state.shows_copied("b", 2.9));
-        assert!(!state.shows_copied("a", 3.0));
-        let redraw = state.update(&at(2.0), &OFFERS);
-        assert_eq!(redraw, Some(Duration::from_secs_f64(1.0)));
-    }
-
-    #[test]
-    fn the_gap_to_the_row_is_on_the_side_of_the_tooltip() {
-        let row = Rect::from_min_max(pos2(0.0, 100.0), pos2(420.0, 128.0));
-        let above = Rect::from_min_max(pos2(110.0, 20.0), pos2(410.0, 94.0));
-        let below = Rect::from_min_max(pos2(110.0, 134.0), pos2(410.0, 200.0));
-
-        assert_eq!(
-            reach(above, row),
-            Rect::from_min_max(pos2(0.0, 94.0), pos2(420.0, 100.0))
-        );
-        assert_eq!(
-            reach(below, row),
-            Rect::from_min_max(pos2(0.0, 128.0), pos2(420.0, 134.0))
-        );
-    }
-
-    #[test]
-    fn a_difference_is_written_with_its_sign() {
-        assert_eq!(signed(6.0), "+6");
-        assert_eq!(signed(-7.0), "−7");
-        assert_eq!(signed(3.5), "+3.5");
-    }
-}
+mod tests;

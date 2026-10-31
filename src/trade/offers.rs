@@ -9,7 +9,9 @@ use serde::de::{self, Deserializer};
 use serde_json::Value;
 
 use crate::format::Currency;
-use crate::item::{Catalyst, QualityKind, Rarity, read_quality, whole_percent};
+use crate::item::{
+    Catalyst, QualityKind, Rarity, WaystoneValue, read_quality, waystone_property, whole_percent,
+};
 use crate::language::Language;
 
 /// The highest quality of a catalyst on a ring, an amulet or a jewel, without a modifier
@@ -72,6 +74,8 @@ pub struct OfferItem {
     pub item_level: Option<u32>,
     pub corrupted: bool,
     pub quality: Option<OfferQuality>,
+    /// The properties of a waystone, in the order of the trade site; none for another item.
+    pub waystone: Vec<WaystoneValue>,
     pub modifiers: Vec<OfferModifier>,
 }
 
@@ -257,17 +261,26 @@ struct ApiProperty {
 }
 
 impl ApiProperty {
+    /// The property of a waystone, named as the game writes it in `language`:
+    /// `[ItemRarity|Item Rarity]`, `+11%`; none for another property.
+    fn waystone(&self, language: Language) -> Option<WaystoneValue> {
+        waystone_property(language, &plain_text(&self.name), self.first_value())
+    }
+
+    /// The text of its first value: `+11%`; empty without value.
+    fn first_value(&self) -> &str {
+        self.values
+            .first()
+            .and_then(|value| value.get(0))
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+    }
+
     /// The quality, read as the game writes it in `language`: `Quality (Attack Modifiers):
     /// +20%`; the line of a quality that can't be read, its value or its name, as an error;
     /// `None` for another property.
     fn quality(&self, language: Language) -> Option<Result<OfferQuality, String>> {
-        let value = self
-            .values
-            .first()
-            .and_then(|value| value.get(0))
-            .and_then(Value::as_str)
-            .unwrap_or_default();
-        let line = format!("{}: {value}", plain_text(&self.name));
+        let line = format!("{}: {}", plain_text(&self.name), self.first_value());
         match read_quality(&line, language) {
             Some((kind, Some(value))) => Some(Ok(OfferQuality { value, kind })),
             Some((_, None)) => Some(Err(line)),
@@ -384,6 +397,11 @@ impl ApiListed {
             Some(Err(line)) => (None, Some(line)),
             None => (None, None),
         };
+        let waystone = item
+            .properties
+            .iter()
+            .filter_map(|property| property.waystone(language))
+            .collect();
         let modifiers = [
             (ModifierKind::Enchant, item.enchant_mods),
             (ModifierKind::Rune, item.rune_mods),
@@ -415,6 +433,7 @@ impl ApiListed {
                 item_level: item.ilvl,
                 corrupted: item.corrupted,
                 quality,
+                waystone,
                 modifiers,
             },
         };
@@ -841,6 +860,80 @@ mod tests {
         );
         assert_eq!(caster.item.max_catalyst_quality(), 40);
         assert_eq!(caster.other_quality(Catalyst::Mana), Some(Catalyst::Caster));
+    }
+
+    /// Two waystones of `/fetch` on 2026-10-31, shortened: an English one with the names seen
+    /// that day, without monster rarity, and a French one of the French trade site; then a ring,
+    /// whose properties aren't those of a waystone.
+    const WAYSTONES: &str = r#"{"result": [
+        {"id": "w1", "listing": {"account": {}}, "item": {
+            "typeLine": "Waystone (Tier 12)", "rarity": "Rare",
+            "properties": [
+                {"name": "[LimitedRespawn|Revives Available]", "values": [["0", 1]], "displayMode": 0, "type": 98},
+                {"name": "[ItemRarity|Item Rarity]", "values": [["+14%", 1]], "displayMode": 0, "type": 3},
+                {"name": "[Pack|Pack Size]", "values": [["+8%", 1]], "displayMode": 0, "type": 4},
+                {"name": "[MonsterEffectiveness|Monster Effectiveness]", "values": [["+26%", 1]], "displayMode": 0, "type": 102},
+                {"name": "Waystone Drop Chance", "values": [["+62%", 1]], "displayMode": 0, "type": 66}
+            ]
+        }},
+        {"id": "w2", "listing": {"account": {}}, "item": {
+            "typeLine": "Pierre de téléportation (Palier 15)", "rarity": "Rare",
+            "properties": [
+                {"name": "[LimitedRespawn|Résurrections disponibles]", "values": [["0", 1]], "displayMode": 0, "type": 98},
+                {"name": "[ItemRarity|Rareté des objets]", "values": [["+28%", 1]], "displayMode": 0, "type": 3},
+                {"name": "[Pack|Taille des Groupes]", "values": [["+7%", 1]], "displayMode": 0, "type": 4},
+                {"name": "[MonsterRarity|Rareté des Monstres]", "values": [["+19%", 1]], "displayMode": 0, "type": 103},
+                {"name": "[MonsterEffectiveness|Efficacité des Monstres]", "values": [["+26%", 1]], "displayMode": 0, "type": 102},
+                {"name": "Chances de trouver des Pierres de téléportation", "values": [["+85%", 1]], "displayMode": 0, "type": 66}
+            ]
+        }},
+        {"id": "r1", "listing": {"account": {}}, "item": {
+            "typeLine": "Gold Ring", "rarity": "Rare",
+            "properties": [{"name": "[Quality]", "values": [["+20%", 1]], "displayMode": 0, "type": 6}]
+        }}
+    ]}"#;
+
+    #[test]
+    fn the_properties_of_an_offer_of_waystone_are_read_in_both_languages() {
+        use crate::item::WaystoneProperty::{
+            DropChance, ItemRarity, MonsterEffectiveness, MonsterRarity, PackSize, Revives,
+        };
+        let fetch = || serde_json::from_str::<ApiFetch>(WAYSTONES).expect("read");
+        let properties = |offer: &ItemOffer| {
+            offer
+                .item
+                .waystone
+                .iter()
+                .map(|found| (found.property, found.value))
+                .collect::<Vec<_>>()
+        };
+
+        let english = fetch().offers(Language::English);
+        assert_eq!(
+            properties(&english[0]),
+            [
+                (Revives, 0),
+                (ItemRarity, 14),
+                (PackSize, 8),
+                (MonsterEffectiveness, 26),
+                (DropChance, 62),
+            ]
+        );
+        assert_eq!(properties(&english[2]), [], "a ring");
+        let french = fetch().offers(Language::French);
+        assert_eq!(
+            properties(&french[1]),
+            [
+                (Revives, 0),
+                (ItemRarity, 28),
+                (PackSize, 7),
+                (MonsterRarity, 19),
+                (MonsterEffectiveness, 26),
+                (DropChance, 85),
+            ]
+        );
+        // The names of another language aren't read.
+        assert_eq!(properties(&french[0]), [], "the English names");
     }
 
     #[test]

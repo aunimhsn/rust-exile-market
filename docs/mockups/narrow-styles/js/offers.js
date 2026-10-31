@@ -6,7 +6,8 @@ function offerTooltip(t) {
     const tier = m.tier ? `<span class="tt-tier"><span class="tier ${m.tier <= 3 ? "tier-top" : ""} t${m.tier}">T${m.tier}</span></span>` : "";
     // A quality of another kind than the copied item's (13k4, `m.other`): its text in red, without difference;
     // a quality at the maximum of its item (`m.max`): its text in white.
-    return `<div class="tt-mod ${kind} ${m.other ? "is-other" : m.max ? "is-max" : ""}"><span>${tier}${m.text}</span>${m.other ? "" : delta}</div>`;
+    // A property of the copied waystone that the offer lacks (13k5c2, `m.lacking`): faint, at 0.
+    return `<div class="tt-mod ${kind} ${m.other ? "is-other" : m.max ? "is-max" : m.lacking ? "is-lacking" : ""}"><span>${tier}${m.text}</span>${m.other ? "" : delta}</div>`;
   }).join("");
   return `<div class="offer-tooltip ${t.pinned ? "pinned" : ""} ${t.below ? "below" : ""}">
     <div class="tt-head"><span class="rarity-${t.rarity || "unique"} tt-name">${t.name}</span><span class="tt-price">${t.price} ${orb(t.currency)}</span></div>

@@ -23,6 +23,16 @@ pub enum WaystoneProperty {
 }
 
 impl WaystoneProperty {
+    /// Every property, in the order of the game.
+    pub const ALL: [Self; 6] = [
+        Self::Revives,
+        Self::ItemRarity,
+        Self::PackSize,
+        Self::MonsterRarity,
+        Self::MonsterEffectiveness,
+        Self::DropChance,
+    ];
+
     /// Written in percent with its sign (`+11%`); the revives are a number of their own.
     #[must_use]
     pub fn is_percent(self) -> bool {
@@ -57,6 +67,14 @@ impl Item {
             .filter_map(|written| read_property(labels, &written.name, &written.value).ok())
             .collect()
     }
+}
+
+/// The property of a waystone named `name` as the game writes it in `language`, of the value
+/// `value` (`+11%`), as the trade site lists it; none for another property, or a value that
+/// can't be read.
+#[must_use]
+pub fn waystone_property(language: Language, name: &str, value: &str) -> Option<WaystoneValue> {
+    read_property(Labels::of(language), name, value).ok()
 }
 
 /// The property of a waystone named `name`, of the value `value`, in the words of `labels`;

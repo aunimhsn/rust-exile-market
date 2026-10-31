@@ -33,7 +33,10 @@ pub use modifier::{
     StatLine, TierDoubt,
 };
 pub use parser::{ParseError, ParseWarning, read_quality, whole_percent};
-pub use waystone::{MAX_WAYSTONE_TIER, WaystoneProperty, base_and_tier, without_tier};
+pub use waystone::{
+    MAX_WAYSTONE_TIER, WaystoneProperty, WaystoneValue, base_and_tier, waystone_property,
+    without_tier,
+};
 pub use weapon::{DamageKind, Weapon};
 
 use crate::language::Language;
