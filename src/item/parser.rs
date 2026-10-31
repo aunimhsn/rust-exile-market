@@ -11,9 +11,9 @@ use std::fmt;
 
 use super::labels::{Labels, marker};
 use super::modifier::{Header, Marker, Modifier, ModifierKind, StatLine};
-use super::waystone;
 use super::weapon::{self, DamageKind, Weapon};
 use super::{CopiedItem, Item, ItemState, Property, QualityKind, Rarity, Requirements, Stack};
+use super::{gem, waystone};
 use crate::game_data;
 use crate::language::Language;
 
@@ -558,7 +558,7 @@ fn read_properties(item: &mut Item, lines: &[&str], labels: &Labels) {
             }
         }
         if item.rarity == Rarity::Gem && name == labels.gem_level {
-            item.gem_level = gem_level(value);
+            item.gem_level = gem::read_level(value);
             if item.gem_level.is_none() {
                 item.warnings
                     .push(ParseWarning::InvalidValue(Field::GemLevel));
@@ -694,12 +694,6 @@ fn number_after(line: &str, label: &str) -> Option<u32> {
 
 /// The number made of all the digits of a text: `+20%` gives 20, `1,234` gives 1234; `None`
 /// without digits or when too large.
-/// The level of a gem, its number only: `20 (Max)` gives 20, as the trade site writes it
-/// (French `20 (Maxi)`).
-fn gem_level(value: &str) -> Option<u32> {
-    value.split_whitespace().next()?.parse().ok()
-}
-
 fn digits(text: &str) -> Option<u32> {
     let digits: String = text.chars().filter(char::is_ascii_digit).collect();
     digits.parse().ok()

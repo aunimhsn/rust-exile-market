@@ -1576,4 +1576,26 @@ mod tests {
             }
         }
     }
+
+    #[test]
+    fn the_level_and_the_sockets_of_a_gem_are_named_in_each_language() {
+        let english = Translator::new(Language::English);
+        let french = Translator::new(Language::French);
+        assert_eq!(english.filter_property(Property::GemLevel, "2"), "Level: 2");
+        assert_eq!(
+            french.filter_property(Property::GemLevel, "2"),
+            "Niveau\u{a0}: 2"
+        );
+        // The same words as the sockets of another item.
+        assert_eq!(
+            english.filter_property(Property::GemSockets, "5"),
+            "Sockets: 5"
+        );
+        assert_eq!(
+            french.filter_property(Property::GemSockets, "5"),
+            "Châsses\u{a0}: 5"
+        );
+        assert_eq!(english.gem_level(21), "Level\u{a0}21");
+        assert_eq!(french.gem_level(21), "Niveau\u{a0}21");
+    }
 }

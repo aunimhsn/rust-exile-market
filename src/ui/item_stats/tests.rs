@@ -3512,6 +3512,57 @@ fn a_skill_gem_is_searched_by_its_level_quality_and_sockets() {
         bounds(&gem(22, 25, 6)),
         [(1.0, 22.0), (0.0, 25.0), (0.0, 6.0)]
     );
+    // A quality of zero searches nothing: no filter.
+    assert_eq!(
+        texts(&gem(15, 0, 2)),
+        ["Gem", "■ GemLevel: 15 ≥15", "□ GemSockets: 2 ≥2"]
+    );
+}
+
+#[test]
+fn the_search_of_a_skill_gem_sends_its_name_and_its_checked_properties() {
+    for (text, name) in [
+        (
+            include_str!("../../item/test-items/en-owner-skill-gem.txt"),
+            "Flame Wall",
+        ),
+        (
+            include_str!("../../item/test-items/fr-skill-gem.txt"),
+            "Mur de flammes",
+        ),
+    ] {
+        let item = parse(text);
+        let lines = CopiedLines::default();
+        let line_stats = LineStats::new(item.language(), item.modifiers(), None);
+        let tiers = TierRolls::default();
+        let target = link::target(&item, None, None).expect("a target");
+        assert_eq!(target, link::TradeTarget::Base { base_type: name });
+        let stats = Stats::new(&item, &lines, &line_stats, &tiers, target.base_type());
+        let crate::trade::query::Query::Items(query) = link::query(
+            &item,
+            &target,
+            line_stats.search_filters(&stats.filters(&Filters::default())),
+        ) else {
+            panic!("an item search");
+        };
+        let json = query.to_json();
+
+        // Its level, checked; its 2 sockets, unchecked, aren't sent; no base type filter.
+        assert_eq!(json["query"]["type"], name, "{json}");
+        assert_eq!(
+            json["query"]["filters"]["misc_filters"],
+            serde_json::json!({ "filters": {
+                "gem_level": { "min": 2.0 },
+                "corrupted": { "option": "false" }
+            } }),
+            "{json}"
+        );
+        assert_eq!(
+            json["query"]["filters"]["type_filters"],
+            serde_json::json!({ "filters": { "rarity": { "option": "nonunique" } } }),
+            "{json}"
+        );
+    }
 }
 
 #[test]

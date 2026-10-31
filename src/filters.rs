@@ -1,7 +1,7 @@
 //! The filters of the offers search, as the player sets them: whether each stat of the item,
-//! or its base type, item level, sockets, quality, required level, DPS, properties of a
-//! waystone or of a gem or pseudo totals, is searched, its minimum and its maximum, and the state tags the
-//! player lit. They are kept for the item shown, until an item is copied, even the same one
+//! or its base type, item level, sockets, quality, required level, DPS, the properties of a
+//! waystone or of a gem, or pseudo totals, is searched, its minimum and its maximum, and the
+//! state tags the player lit. They are kept for the item shown, until an item is copied, even the same one
 //! after another text; a stat the player didn't touch keeps the choice made for it by default.
 //!
 //! The minimum and the maximum searched stay within the range of the stat, whatever the

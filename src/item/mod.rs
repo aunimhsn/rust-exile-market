@@ -19,6 +19,7 @@
 )]
 
 mod copied;
+mod gem;
 mod labels;
 mod modifier;
 mod parser;
@@ -28,6 +29,7 @@ mod waystone;
 mod weapon;
 
 pub use copied::CopiedItem;
+pub use gem::{MAX_GEM_LEVEL, MAX_GEM_QUALITY, MAX_GEM_SOCKETS, TOP_GEM_LEVEL, TOP_GEM_QUALITY};
 pub use modifier::{
     Affix, AffixTier, Currency, Lord, Modifier, ModifierKind, ModifierOrigin, PartTier, Range,
     StatLine, TierDoubt,
@@ -337,6 +339,13 @@ impl Item {
     #[must_use]
     pub fn gem_level(&self) -> Option<u32> {
         self.gem_level
+    }
+
+    /// A skill gem, which has a level: priced from its similar offers, never an item of the
+    /// currency exchange, unlike a lineage support gem or an uncut gem.
+    #[must_use]
+    pub fn is_skill_gem(&self) -> bool {
+        self.rarity == Rarity::Gem && self.gem_level.is_some()
     }
 
     /// The quality, in percent.

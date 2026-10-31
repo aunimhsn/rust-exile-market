@@ -43,8 +43,9 @@ use crate::format;
 use crate::game_data::{self, Category};
 use crate::i18n::{Message, Translator};
 use crate::item::{
-    self, Affix, AffixTier, Currency, Item, Lord, MAX_WAYSTONE_TIER, Modifier, ModifierKind,
-    ModifierOrigin, PartTier, QualityKind, Range, Rarity, StatLine, TierDoubt, WaystoneProperty,
+    self, Affix, AffixTier, Currency, Item, Lord, MAX_GEM_LEVEL, MAX_GEM_QUALITY, MAX_GEM_SOCKETS,
+    MAX_WAYSTONE_TIER, Modifier, ModifierKind, ModifierOrigin, PartTier, QualityKind, Range,
+    Rarity, StatLine, TierDoubt, WaystoneProperty,
 };
 use crate::roll_difference::CopiedLines;
 use crate::tier_rolls::{LineRolls, TierRolls, TierSpan};
@@ -130,22 +131,10 @@ const SOCKETS: Range = Range { min: 0.0, max: 6.0 };
 /// of the quality stays within the highest quality of the base ([`Category::max_quality`]), or
 /// within this one.
 const MAX_QUALITY: u32 = 75;
-/// The levels of a gem: 20 from the gem, 21 raised by the corruption. Checked on the trade site
-/// on 2026-11-01: none above 21.
-const GEM_LEVELS: Range = Range {
-    min: 1.0,
-    max: 21.0,
-};
-/// The sockets of a gem, for its support gems. Checked on the trade site on 2026-11-01: none
-/// above 5, and 2 on every gem.
-const GEM_SOCKETS: Range = Range { min: 0.0, max: 5.0 };
-/// The highest quality of a gem, corrupted, in percent (checked on the trade site on
-/// 2026-10-31).
-const MAX_GEM_QUALITY: u32 = 23;
 /// The quality from which the quality of a gem is checked, like Exiled Exchange 2, in percent.
 const GEM_QUALITY: u32 = 16;
 /// The sockets from which the sockets of a gem are checked: every gem has 2.
-const GEM_SOCKETS_CHECKED: u32 = 3;
+const GEM_SOCKETS: u32 = 3;
 /// The required levels: the field of the required level stays within them. Checked on the
 /// trade site on 2026-10-28: offers requiring level 90, none above.
 const REQUIRED_LEVELS: Range = Range {
@@ -1027,11 +1016,16 @@ fn waystone_filters(item: &Item) -> Vec<Stat<'static>> {
 /// checked from 16 %, like Exiled Exchange 2; its sockets, checked from 3, every gem having 2.
 /// None for a support gem, which has no level.
 fn gem_filters(item: &Item) -> Vec<Stat<'static>> {
-    let Some(level) = item.gem_level() else {
+    let Some(level) = item.gem_level().filter(|_| item.is_skill_gem()) else {
         return Vec::new();
     };
-    let filter = |property, value: u32, bounds, checked| {
+    // Within the values a gem can take, from `min` to `max`.
+    let filter = |property, value: u32, (min, max): (u32, u32), checked| {
         let value = f64::from(value);
+        let bounds = Range {
+            min: f64::from(min),
+            max: f64::from(max),
+        };
         property_filter(
             property,
             value,
@@ -1043,20 +1037,17 @@ fn gem_filters(item: &Item) -> Vec<Stat<'static>> {
         .quality()
         .filter(|&quality| quality > 0)
         .map(|quality| {
-            let bounds = Range {
-                min: 0.0,
-                max: f64::from(MAX_GEM_QUALITY),
-            };
-            filter(Property::Quality, quality, bounds, quality >= GEM_QUALITY)
+            let checked = quality >= GEM_QUALITY;
+            filter(Property::Quality, quality, (0, MAX_GEM_QUALITY), checked)
         });
     let sockets = item
         .sockets()
         .filter(|&sockets| sockets > 0)
         .map(|sockets| {
-            let checked = sockets >= GEM_SOCKETS_CHECKED;
-            filter(Property::GemSockets, sockets, GEM_SOCKETS, checked)
+            let checked = sockets >= GEM_SOCKETS;
+            filter(Property::GemSockets, sockets, (0, MAX_GEM_SOCKETS), checked)
         });
-    [filter(Property::GemLevel, level, GEM_LEVELS, true)]
+    [filter(Property::GemLevel, level, (1, MAX_GEM_LEVEL), true)]
         .into_iter()
         .chain(quality)
         .chain(sockets)

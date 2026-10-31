@@ -49,9 +49,7 @@ pub fn fixed_price<'a>(
     names: Option<&'a ItemNames>,
 ) -> Result<FixedPrice<'a>, NoFixedPrice> {
     let rarity = item.rarity();
-    // A skill gem, which has a level, isn't an item of the currency exchange.
-    if matches!(rarity, Rarity::Normal | Rarity::Magic | Rarity::Rare) || item.gem_level().is_some()
-    {
+    if rarity.has_item_filters() || item.is_skill_gem() {
         return Err(NoFixedPrice::NotFixedName);
     }
     let prices = prices.ok_or(NoFixedPrice::PricesUnknown)?;

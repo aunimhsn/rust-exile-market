@@ -113,8 +113,8 @@ tag-sockets = { $value ->
 }
 tag-item-level = ilvl { $value }
 tag-stack = Stack { $size }/{ $max }
-# The level of a gem, after its item class under its name: "Skill Gems · Level 2".
-gem-level = Level { $value }
+# The level of a gem, after its item class under its name: "Skill Gems · Level 2"; a no-break space keeps the word with its number.
+gem-level = Level { $value }
 # The main values of the base, each followed by its number in bold: the DPS of a weapon,
 # the defences of an armour piece or a shield.
 dps-physical = Physical DPS

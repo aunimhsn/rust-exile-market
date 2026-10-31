@@ -17,7 +17,10 @@ use super::theme::{color, size, text};
 use super::widgets;
 use crate::filters::Filters;
 use crate::i18n::{Message, NumberTag, Requirement, Translator};
-use crate::item::{self, DamageKind, Item, ItemState, Rarity, WaystoneProperty};
+use crate::item::{
+    self, DamageKind, Item, ItemState, MAX_GEM_SOCKETS, Rarity, TOP_GEM_LEVEL, TOP_GEM_QUALITY,
+    WaystoneProperty,
+};
 use crate::roll_difference::CopiedLines;
 use crate::tier_rolls::TierRolls;
 use crate::trade::stat_filters::LineStats;
@@ -56,11 +59,6 @@ const TAG_PADDING: Vec2 = vec2(7.0, 1.0);
 pub(super) const SEPARATOR: &str = " · ";
 /// The largest DPS shown: far over any weapon, under the largest `u32`.
 const MAX_DPS: f64 = 1e6;
-/// The highest level and quality of a gem without corruption, which raises them to 21 and 23 %.
-const GEM_TOP_LEVEL: u32 = 20;
-const GEM_TOP_QUALITY: u32 = 20;
-/// The most sockets a gem has, also corrupted (checked on the trade site on 2026-11-01).
-const GEM_MOST_SOCKETS: u32 = 5;
 
 /// What the player did in the item block.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -729,8 +727,8 @@ pub(super) fn waystone_tier_color(tier: u32) -> Color32 {
 /// from the gem) the orange of tier 1, 21 (raised by the corruption) the corrupted red.
 fn gem_level_color(level: u32) -> Color32 {
     match level {
-        ..GEM_TOP_LEVEL => color::TEXT,
-        GEM_TOP_LEVEL => color::TIER_1,
+        ..TOP_GEM_LEVEL => color::TEXT,
+        TOP_GEM_LEVEL => color::TIER_1,
         _ => color::VAAL,
     }
 }
@@ -740,13 +738,13 @@ fn gem_level_color(level: u32) -> Color32 {
 /// red; its 5 sockets, the most, the orange. None for the other items, where a quality of 20 %
 /// is usual.
 fn top_color(item: &Item, number: NumberTag, value: u32) -> Option<Color32> {
-    if item.rarity() != Rarity::Gem {
+    if !item.is_skill_gem() {
         return None;
     }
     match number {
-        NumberTag::Quality if value > GEM_TOP_QUALITY => Some(color::VAAL),
-        NumberTag::Quality if value == GEM_TOP_QUALITY => Some(color::TIER_1),
-        NumberTag::Sockets if value >= GEM_MOST_SOCKETS => Some(color::TIER_1),
+        NumberTag::Quality if value > TOP_GEM_QUALITY => Some(color::VAAL),
+        NumberTag::Quality if value == TOP_GEM_QUALITY => Some(color::TIER_1),
+        NumberTag::Sockets if value >= MAX_GEM_SOCKETS => Some(color::TIER_1),
         _ => None,
     }
 }
@@ -1170,7 +1168,7 @@ mod tests {
             include_str!("../item/test-items/en-owner-skill-gem.txt"),
             Language::English,
         );
-        assert_eq!(base.text, "Skill Gems · Level 2");
+        assert_eq!(base.text, "Skill Gems · Level\u{a0}2");
         assert_eq!(
             base.sections.last().map(|s| s.format.color),
             Some(color::TEXT)
@@ -1180,7 +1178,7 @@ mod tests {
             include_str!("../item/test-items/fr-skill-gem.txt"),
             Language::French,
         );
-        assert_eq!(base.text, "Gemmes d'aptitude · Niveau 2");
+        assert_eq!(base.text, "Gemmes d'aptitude · Niveau\u{a0}2");
     }
 
     #[test]
