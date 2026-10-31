@@ -259,7 +259,7 @@ impl<T: Transport> TradeClient<T> {
             body: None,
         };
         let answer: ApiFetch = self.send(Policy::Fetch, &request)?;
-        Ok(answer.offers())
+        Ok(answer.offers(language))
     }
 
     /// Searches the offers of the item of the currency exchange `want` in `league`, on the

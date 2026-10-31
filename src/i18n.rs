@@ -150,6 +150,8 @@ pub enum Message {
     OffersIdentify,
     OffersMoreTooltip,
     OffersSuspicious,
+    /// Under the name of an offer of another kind of quality, while the quality is searched.
+    OffersOtherQuality,
     SellerOnline,
     SellerAway,
     SellerOffline,
@@ -160,7 +162,7 @@ pub enum Message {
 impl Message {
     /// Every message, for the tests.
     #[cfg(test)]
-    const ALL: [Self; 117] = [
+    const ALL: [Self; 118] = [
         Self::LeagueModeSoftcore,
         Self::LeagueModeHardcore,
         Self::LeagueLoading,
@@ -273,6 +275,7 @@ impl Message {
         Self::OffersIdentify,
         Self::OffersMoreTooltip,
         Self::OffersSuspicious,
+        Self::OffersOtherQuality,
         Self::SellerOnline,
         Self::SellerAway,
         Self::SellerOffline,
@@ -396,6 +399,7 @@ impl Message {
             Self::OffersIdentify => "offers-identify",
             Self::OffersMoreTooltip => "offers-more-tooltip",
             Self::OffersSuspicious => "offers-suspicious",
+            Self::OffersOtherQuality => "offers-other-quality",
             Self::SellerOnline => "seller-online",
             Self::SellerAway => "seller-away",
             Self::SellerOffline => "seller-offline",
@@ -458,6 +462,10 @@ const SIMILAR: &str = "similar";
 const ESTIMATE_UNCERTAIN: &str = "estimate-uncertain";
 const ESTIMATE_MEDIAN: &str = "estimate-median";
 const ESTIMATE_MEDIAN_CHEAPEST: &str = "estimate-median-cheapest";
+const ESTIMATE_MEDIAN_OF: &str = "estimate-median-of";
+const ESTIMATE_MEDIAN_CHEAPEST_OF: &str = "estimate-median-cheapest-of";
+const QUALITY_OF_KIND: &str = "quality-of-kind";
+const OFFER_QUALITY_KIND: &str = "offer-quality-kind";
 const PRICES_DOWNLOADING: &str = "prices-downloading";
 const NO_PRICE_FOUND: &str = "no-price-found";
 const SHOW_STATS: &str = "show-stats";
@@ -810,16 +818,38 @@ impl Translator {
         self.format_number(ESTIMATE_UNCERTAIN, "count", counted)
     }
 
-    /// How an estimate from all the `counted` offers is made.
+    /// How an estimate from all the `counted` offers is made, of the kind of the quality of a
+    /// catalyst searched: "Median of the 3 similar offers of mana quality."
     #[must_use]
-    pub fn estimate_median(&self, counted: usize) -> String {
-        self.format_number(ESTIMATE_MEDIAN, "count", counted)
+    pub fn estimate_median(&self, counted: usize, searched_catalyst: Option<Catalyst>) -> String {
+        self.format_estimate(
+            ESTIMATE_MEDIAN,
+            ESTIMATE_MEDIAN_OF,
+            counted,
+            searched_catalyst,
+        )
     }
 
-    /// How an estimate from the `counted` cheapest offers is made.
+    /// How an estimate from the `counted` cheapest offers is made, of the kind of the quality
+    /// of a catalyst searched.
     #[must_use]
-    pub fn estimate_median_cheapest(&self, counted: usize) -> String {
-        self.format_number(ESTIMATE_MEDIAN_CHEAPEST, "count", counted)
+    pub fn estimate_median_cheapest(
+        &self,
+        counted: usize,
+        searched_catalyst: Option<Catalyst>,
+    ) -> String {
+        self.format_estimate(
+            ESTIMATE_MEDIAN_CHEAPEST,
+            ESTIMATE_MEDIAN_CHEAPEST_OF,
+            counted,
+            searched_catalyst,
+        )
+    }
+
+    /// The kind of the quality of an offer, after its price in the list: "Attack".
+    #[must_use]
+    pub fn offer_quality_kind(&self, catalyst: Catalyst) -> String {
+        self.format_kind(OFFER_QUALITY_KIND, catalyst)
     }
 
     /// The price block while the prices of `league` are downloading.
@@ -982,6 +1012,29 @@ impl Translator {
         self.format(id, Some(&args))
     }
 
+    /// The note of an estimate, `id`, or `of_kind` with the kind of the quality searched.
+    fn format_estimate(
+        &self,
+        id: &str,
+        of_kind: &str,
+        counted: usize,
+        searched_catalyst: Option<Catalyst>,
+    ) -> String {
+        let Some(catalyst) = searched_catalyst else {
+            return self.format_number(id, "count", counted);
+        };
+        let mut args = FluentArgs::new();
+        args.set("count", counted);
+        args.set("quality", self.format_kind(QUALITY_OF_KIND, catalyst));
+        self.format(of_kind, Some(&args))
+    }
+
+    fn format_kind(&self, id: &str, catalyst: Catalyst) -> String {
+        let mut args = FluentArgs::new();
+        args.set("kind", catalyst_id(catalyst));
+        self.format(id, Some(&args))
+    }
+
     fn format_age(&self, id: &str, age: &str) -> String {
         let mut args = FluentArgs::new();
         args.set("age", age);
@@ -1114,6 +1167,10 @@ mod tests {
                 ESTIMATE_UNCERTAIN,
                 ESTIMATE_MEDIAN,
                 ESTIMATE_MEDIAN_CHEAPEST,
+                ESTIMATE_MEDIAN_OF,
+                ESTIMATE_MEDIAN_CHEAPEST_OF,
+                QUALITY_OF_KIND,
+                OFFER_QUALITY_KIND,
                 PRICES_DOWNLOADING,
                 NO_PRICE_FOUND,
                 STATUS_TRADE,
@@ -1205,9 +1262,9 @@ mod tests {
             }
             for count in [1, 4] {
                 assert_ne!(translator.estimate_uncertain(count), "");
-                assert_ne!(translator.estimate_median(count), "");
+                assert_ne!(translator.estimate_median(count, None), "");
             }
-            assert!(translator.estimate_median_cheapest(5).contains('5'));
+            assert!(translator.estimate_median_cheapest(5, None).contains('5'));
             assert!(translator.show_stats(1).contains('1'));
             assert!(translator.show_stats(6).contains('6'));
             assert!(translator.affix_fill(3, 3).contains('3'));
@@ -1321,8 +1378,11 @@ mod tests {
     fn an_estimate_from_one_offer_is_its_price() {
         for language in Language::ALL {
             let translator = Translator::new(language);
-            assert!(!translator.estimate_median(1).contains('1'), "{language:?}");
-            assert!(translator.estimate_median(3).contains('3'));
+            assert!(
+                !translator.estimate_median(1, None).contains('1'),
+                "{language:?}"
+            );
+            assert!(translator.estimate_median(3, None).contains('3'));
         }
         assert_eq!(
             Translator::new(Language::English).estimate_uncertain(3),
@@ -1395,6 +1455,34 @@ mod tests {
     }
 
     #[test]
+    fn the_note_of_an_estimate_names_the_kind_of_quality_searched() {
+        let english = Translator::new(Language::English);
+        let french = Translator::new(Language::French);
+
+        assert_eq!(
+            english.estimate_median_cheapest(5, Some(Catalyst::Mana)),
+            "Median of the 5 cheapest similar offers of mana quality."
+        );
+        assert_eq!(
+            english.estimate_median_cheapest(5, None),
+            "Median of the 5 cheapest similar offers."
+        );
+        assert_eq!(
+            english.estimate_median(1, Some(Catalyst::Attack)),
+            "Price of the only similar offer of attack quality."
+        );
+        assert_eq!(
+            french.estimate_median_cheapest(5, Some(Catalyst::Mana)),
+            "Médiane des 5 offres similaires les moins chères de qualité de mana."
+        );
+        assert_eq!(
+            french.estimate_median(3, Some(Catalyst::Attack)),
+            "Médiane des 3 offres similaires de qualité d'attaque."
+        );
+        assert_eq!(french.offer_quality_kind(Catalyst::Caster), "Sorts");
+    }
+
+    #[test]
     fn every_kind_of_catalyst_has_its_text_in_every_language() {
         for language in [Language::English, Language::French] {
             let translator = Translator::new(language);
@@ -1408,6 +1496,15 @@ mod tests {
                 assert!(
                     !text.contains("the words") && text.contains("40%"),
                     "{catalyst:?} in {language:?}: {text}"
+                );
+                // Not the default variants.
+                let note = translator.estimate_median(3, Some(catalyst));
+                let word = translator.offer_quality_kind(catalyst);
+                assert!(
+                    !["Other", "Autre"].contains(&word.as_str())
+                        && !note.ends_with(" of quality.")
+                        && !note.ends_with(" de qualité."),
+                    "{catalyst:?} in {language:?}: {word}, {note}"
                 );
             }
         }

@@ -225,8 +225,10 @@ static FRENCH: Labels = Labels {
     stack_size: "Taille de l'ensemble: ",
     quality: "Qualité: ",
     catalyst_quality: ("Qualité (", "): "),
-    // Seen in the owner's copies: Mana and Froid; the others from the French tags of Exiled
-    // Exchange 2, unchecked (a wrong one keeps the words of the game); the defences unknown.
+    // Seen in the owner's copies: Mana and Froid; on the French trade site on 2026-10-31, which
+    // writes them as the game does: Mana, Lanceur de sorts and Créature; the others from the
+    // French tags of Exiled Exchange 2, unchecked (a wrong one keeps the words of the game);
+    // the defences unknown.
     catalysts: &[
         ("Modificateurs de Vie", Catalyst::Life),
         ("Modificateurs de Mana", Catalyst::Mana),

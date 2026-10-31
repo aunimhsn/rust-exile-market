@@ -215,7 +215,7 @@ pseudo-unrevealed-modifiers = Modificateurs non révélés : { $value }
 filter-unsearchable = Le site d'échange ne peut pas chercher cette ligne.
 filter-unsearchable-hint = Il se peut que les offres ne l'aient pas.
 # L'infobulle du filtre de la qualité d'un catalyseur : le site d'échange ne distingue pas les types.
-filter-any-quality-kind = Le site d'échange cherche tout type de qualité.
+filter-any-quality-kind = Le site d'échange cherche tout type de qualité : les offres d'un autre type ne comptent pas dans l'estimation.
 # Après la plage du palier d'un modificateur : comment il a été ajouté à l'objet, dans sa couleur.
 origin-desecrated = Profané
 origin-fractured = Fissuré
@@ -299,6 +299,29 @@ estimate-median = { $count ->
    *[other] Médiane des { $count } offres similaires.
 }
 estimate-median-cheapest = Médiane des { $count } offres similaires les moins chères.
+# La même, quand la qualité d'un catalyseur est cherchée : les offres d'un autre type de qualité ($quality, quality-of-kind) ne comptent pas.
+estimate-median-of = { $count ->
+    [one] Prix de la seule offre similaire de { $quality }.
+   *[other] Médiane des { $count } offres similaires de { $quality }.
+}
+estimate-median-cheapest-of = Médiane des { $count } offres similaires les moins chères de { $quality }.
+# Le type de la qualité d'un catalyseur, dans une phrase.
+quality-of-kind = { $kind ->
+        [life] qualité de vie
+        [mana] qualité de mana
+        [defence] qualité de défense
+        [physical] qualité physique
+        [fire] qualité de feu
+        [cold] qualité de froid
+        [lightning] qualité de foudre
+        [chaos] qualité de chaos
+        [attack] qualité d'attaque
+        [caster] qualité de sorts
+        [speed] qualité de vitesse
+        [attribute] qualité d'attributs
+        [minion] qualité de créatures
+       *[other] qualité
+    }
 # Un unique non identifié dont la base a plusieurs uniques.
 identify-to-price = Identifiez l'objet pour obtenir son prix.
 possible-uniques = Uniques possibles
@@ -349,6 +372,25 @@ offers-more-tooltip = Afficher plus d'offres
 # L'infobulle d'une offre : un prix très en dessous du marché, le statut du vendeur, et la
 # pastille qui copie le message (whisper) du site d'échange.
 offers-suspicious = Attention : très en dessous du prix du marché.
+# Sous le nom d'une offre dont la qualité d'un catalyseur est d'un autre type que celle de l'objet, quand sa qualité est cherchée.
+offers-other-quality = Qualité d'un autre type : cette offre ne compte pas dans l'estimation.
+# Après le prix d'une telle offre, dans la liste : son type de qualité.
+offer-quality-kind = { $kind ->
+        [life] Vie
+        [mana] Mana
+        [defence] Défense
+        [physical] Physique
+        [fire] Feu
+        [cold] Froid
+        [lightning] Foudre
+        [chaos] Chaos
+        [attack] Attaque
+        [caster] Sorts
+        [speed] Vitesse
+        [attribute] Attributs
+        [minion] Créatures
+       *[other] Autre
+    }
 seller-online = En ligne
 seller-away = Absent
 seller-offline = Hors ligne

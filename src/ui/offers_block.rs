@@ -23,7 +23,7 @@ use super::widgets;
 use crate::estimate::Reference;
 use crate::format::{self, Currency};
 use crate::i18n::{Message, Translator};
-use crate::item::Item;
+use crate::item::{Catalyst, Item};
 use crate::offers::{LONG_WAIT, Offers, OffersState};
 use crate::roll_difference::CopiedLines;
 use crate::trade::offers::{ExchangeOffer, ItemOffer, Price, SellerStatus, currency};
@@ -72,6 +72,10 @@ const DOT_RADIUS: f32 = 3.0;
 const DOT_GAP: f32 = 6.0;
 /// The "?" after a suspicious price.
 const SUSPICIOUS_GAP: f32 = 2.0;
+/// The orb of an offer of another kind of quality, faint, and the space before its kind,
+/// beyond the space after the orb.
+const OTHER_QUALITY_ORB: u8 = 115;
+const OTHER_QUALITY_GAP: f32 = 4.0;
 /// The double chevron under the list: its height, the space above it, how high it is
 /// raised to look centered, and how far it slides down under the pointer.
 const MORE_HEIGHT: f32 = 32.0;
@@ -114,6 +118,9 @@ struct Row {
     price: Option<RowPrice>,
     /// Far below the reference price: usually bait or a mistake.
     suspicious: bool,
+    /// The kind of the quality of a catalyst of an offer, when it isn't the kind searched:
+    /// it isn't counted in the estimate.
+    other_quality: Option<Catalyst>,
     /// The stock of an offer of the currency exchange.
     stock: Option<u64>,
     away: bool,
@@ -148,24 +155,37 @@ fn listed_since(listed: Option<SystemTime>, now: SystemTime) -> Option<Duration>
     listed.map(|listed| now.duration_since(listed).unwrap_or_default())
 }
 
-/// The rows of the offers of a search of items, at `now`.
-fn item_rows(offers: &[ItemOffer], reference: Option<Reference>, now: SystemTime) -> Vec<Row> {
+/// The rows of the offers of a search of items, at `now`; with the `searched_catalyst`, the
+/// kind of the quality of a catalyst searched, the offers of another kind are marked, and
+/// never suspicious: their market isn't the item's.
+fn item_rows(
+    offers: &[ItemOffer],
+    reference: Option<Reference>,
+    searched_catalyst: Option<Catalyst>,
+    now: SystemTime,
+) -> Vec<Row> {
     offers
         .iter()
-        .map(|offer| Row {
-            price: offer
-                .price
-                .as_ref()
-                .map(|price| row_price(price.amount, &price.currency)),
-            suspicious: offer
-                .price
-                .as_ref()
-                .is_some_and(|Price { amount, currency }| {
-                    is_suspicious(*amount, currency, reference)
-                }),
-            stock: None,
-            away: offer.seller == SellerStatus::Away,
-            listed: listed_since(offer.listed, now),
+        .map(|offer| {
+            let other_quality =
+                searched_catalyst.and_then(|catalyst| offer.other_quality(catalyst));
+            Row {
+                price: offer
+                    .price
+                    .as_ref()
+                    .map(|price| row_price(price.amount, &price.currency)),
+                suspicious: other_quality.is_none()
+                    && offer
+                        .price
+                        .as_ref()
+                        .is_some_and(|Price { amount, currency }| {
+                            is_suspicious(*amount, currency, reference)
+                        }),
+                other_quality,
+                stock: None,
+                away: offer.seller == SellerStatus::Away,
+                listed: listed_since(offer.listed, now),
+            }
         })
         .collect()
 }
@@ -183,6 +203,7 @@ fn exchange_rows(
             Row {
                 price: Some(row_price(unit, &offer.pay.currency)),
                 suspicious: is_suspicious(unit, &offer.pay.currency, reference),
+                other_quality: None,
                 stock: Some(offer.stock),
                 away: offer.seller == SellerStatus::Away,
                 listed: listed_since(offer.listed, now),
@@ -315,7 +336,12 @@ impl<'a> OffersBlock<'a> {
                 searched,
                 ..
             } => {
-                let rows = item_rows(offers, self.reference, now);
+                let rows = item_rows(
+                    offers,
+                    self.reference,
+                    self.offers.searched_catalyst(self.item),
+                    now,
+                );
                 let list = List {
                     rows: &rows,
                     items: Some(offers),
@@ -720,6 +746,8 @@ impl<'a> OffersBlock<'a> {
         {
             let tooltip = OfferTooltip {
                 offer,
+                item: self.item,
+                searched_catalyst: self.offers.searched_catalyst(self.item),
                 lines: self.lines,
                 name_color: rarity_color(offer.item.rarity.unwrap_or(self.item.rarity())),
                 suspicious: row.suspicious,
@@ -745,7 +773,7 @@ impl<'a> OffersBlock<'a> {
             let galley = widgets::text_line(ui, price.text(), text::list_amount());
             let size = galley.size();
             let top = center_y - size.y / 2.0;
-            let tint = if row.suspicious {
+            let tint = if row.suspicious || row.other_quality.is_some() {
                 color::FAINT
             } else {
                 color::TEXT
@@ -764,8 +792,24 @@ impl<'a> OffersBlock<'a> {
                     pos2(right + ORB_GAP, center_y - ROW_ORB / 2.0),
                     Vec2::splat(ROW_ORB),
                 );
-                orb(currency, ROW_ORB).paint_at(ui, orb_rect);
+                let orb = orb(currency, ROW_ORB);
+                if row.other_quality.is_some() {
+                    orb.tint(Color32::from_white_alpha(OTHER_QUALITY_ORB))
+                } else {
+                    orb
+                }
+                .paint_at(ui, orb_rect);
                 right = orb_rect.right();
+            }
+            if let Some(catalyst) = row.other_quality {
+                let kind =
+                    widgets::text_line(ui, self.i18n.offer_quality_kind(catalyst), text::note());
+                let top = center_y - kind.size().y / 2.0;
+                painter.galley(
+                    pos2(right + ORB_GAP + OTHER_QUALITY_GAP, top),
+                    kind,
+                    color::WEAK,
+                );
             }
             if row.suspicious {
                 let mark = widgets::text_line(ui, "?", text::list_amount());
@@ -1034,6 +1078,7 @@ mod tests {
                 base_type: "Heavy Belt".to_owned(),
                 item_level: None,
                 corrupted: true,
+                quality: None,
                 modifiers: Vec::new(),
             },
         }
@@ -1049,7 +1094,7 @@ mod tests {
         ];
         let now = SystemTime::UNIX_EPOCH + Duration::from_hours(2);
 
-        let rows = item_rows(&offers, Some(REFERENCE), now);
+        let rows = item_rows(&offers, Some(REFERENCE), None, now);
 
         let suspicious: Vec<bool> = rows.iter().map(|row| row.suspicious).collect();
         assert_eq!(suspicious, [true, true, true, false]);
@@ -1061,13 +1106,14 @@ mod tests {
                     currency: Ok(Currency::Divine),
                 }),
                 suspicious: false,
+                other_quality: None,
                 stock: None,
                 away: true,
                 listed: Some(Duration::from_hours(2)),
             }
         );
         assert!(
-            item_rows(&offers, None, now)
+            item_rows(&offers, None, None, now)
                 .iter()
                 .all(|row| !row.suspicious),
             "without a market price, nothing tells"
@@ -1075,10 +1121,45 @@ mod tests {
     }
 
     #[test]
+    fn an_offer_of_another_kind_of_quality_is_marked_while_the_quality_is_searched() {
+        use crate::item::QualityKind;
+        use crate::trade::offers::OfferQuality;
+
+        let of_kind = |amount, catalyst| {
+            let mut offer = offer(amount, "divine", SellerStatus::Online);
+            offer.item.quality = Some(OfferQuality {
+                value: 40,
+                kind: Some(QualityKind {
+                    catalyst: Some(catalyst),
+                    words: String::new(),
+                }),
+            });
+            offer
+        };
+        // An attack amulet far below the market of the mana amulets: another market, not
+        // bait.
+        let offers = [
+            of_kind(1.0, Catalyst::Attack),
+            of_kind(12.0, Catalyst::Mana),
+        ];
+        let now = SystemTime::UNIX_EPOCH;
+
+        let searched = item_rows(&offers, Some(REFERENCE), Some(Catalyst::Mana), now);
+        let unsearched = item_rows(&offers, Some(REFERENCE), None, now);
+
+        assert_eq!(searched[0].other_quality, Some(Catalyst::Attack));
+        assert!(!searched[0].suspicious);
+        assert_eq!(searched[1].other_quality, None);
+        assert_eq!(unsearched[0].other_quality, None, "every offer counts");
+        assert!(unsearched[0].suspicious);
+    }
+
+    #[test]
     fn another_currency_is_written_by_its_name_and_never_suspicious() {
         let rows = item_rows(
             &[offer(1.0, "annul", SellerStatus::Online)],
             Some(REFERENCE),
+            None,
             SystemTime::UNIX_EPOCH,
         );
 
@@ -1123,6 +1204,7 @@ mod tests {
                     currency: Ok(Currency::Exalted),
                 }),
                 suspicious: false,
+                other_quality: None,
                 stock: Some(40),
                 away: false,
                 listed: None,

@@ -24,6 +24,19 @@ impl Query {
             Self::Exchange(_) => SearchKind::Exchange,
         }
     }
+
+    /// Whether the query searches `property`: with a limit, since a filter without limits
+    /// isn't sent.
+    #[must_use]
+    pub fn searches(&self, property: Property) -> bool {
+        match self {
+            Self::Items(query) => query
+                .properties
+                .iter()
+                .any(|filter| filter.property == property && filter.limits_anything()),
+            Self::Exchange(_) => false,
+        }
+    }
 }
 
 /// The kinds of searches, whose limits differ.
@@ -77,11 +90,7 @@ impl SearchFilters {
     /// limit.
     #[must_use]
     pub fn narrows(&self) -> bool {
-        !self.stats.is_empty()
-            || self
-                .properties
-                .iter()
-                .any(|property| property.minimum.is_some() || property.maximum.is_some())
+        !self.stats.is_empty() || self.properties.iter().any(PropertyFilter::limits_anything)
     }
 }
 
@@ -94,6 +103,12 @@ pub struct PropertyFilter {
 }
 
 impl PropertyFilter {
+    /// Whether it has a limit: without limits, it filters nothing and isn't sent.
+    #[must_use]
+    pub fn limits_anything(&self) -> bool {
+        self.minimum.is_some() || self.maximum.is_some()
+    }
+
     /// The group of the filters of the trade site the property is in, and its id there.
     fn id(&self) -> (&'static str, &'static str) {
         match self.property {
@@ -181,13 +196,17 @@ impl ItemQuery {
             };
             add("type_filters", "rarity", json!({ "option": option }));
         }
-        for property in &self.properties {
+        for property in self
+            .properties
+            .iter()
+            .filter(|property| property.limits_anything())
+        {
             let (group, id) = property.id();
-            let value = limits(property.minimum, property.maximum);
-            // Without limits, it filters nothing.
-            if !value.is_empty() {
-                add(group, id, Value::Object(value));
-            }
+            add(
+                group,
+                id,
+                Value::Object(limits(property.minimum, property.maximum)),
+            );
         }
         let states = self.states;
         for (id, state) in [

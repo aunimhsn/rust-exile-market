@@ -16,7 +16,10 @@ use super::offers_block::{RowPrice, offer_price};
 use super::price_block::orb;
 use super::theme::{self, color, size, text};
 use super::widgets;
+use crate::filters::Property;
+use crate::format;
 use crate::i18n::{Message, NumberTag, Translator};
+use crate::item::{Catalyst, Item};
 use crate::roll_difference::{CopiedLines, Difference, Verdict};
 use crate::trade::offers::{ItemOffer, ModifierKind, SellerStatus};
 
@@ -162,6 +165,11 @@ impl TooltipState {
 /// What the tooltip shows of an offer.
 pub struct OfferTooltip<'a> {
     pub offer: &'a ItemOffer,
+    /// The copied item, whose quality of a catalyst the offer's is compared with.
+    pub item: &'a Item,
+    /// The kind of the quality of a catalyst searched: an offer of another kind isn't
+    /// counted in the estimate.
+    pub searched_catalyst: Option<Catalyst>,
     /// The modifier lines of the copied item, to compare the rolls.
     pub lines: &'a CopiedLines,
     pub name_color: Color32,
@@ -170,10 +178,59 @@ pub struct OfferTooltip<'a> {
     pub i18n: &'a Translator,
 }
 
-/// A modifier line of the offer, with its difference from the copied item.
+/// A line of the offer, with its difference from the copied item.
+#[derive(Debug, Clone, PartialEq)]
 struct Line {
     text: String,
+    tint: Color32,
     difference: Option<Difference>,
+}
+
+/// The line of the quality of an offer, when the copied `item` has the quality of a
+/// catalyst, of a known kind or not. Of another known kind than the item's: red, without
+/// difference. Else, with its difference from the item: white at the maximum of the offer (20
+/// %, more with its modifiers `+#% to Maximum Quality`) or beyond it, gray below it. The
+/// quality of the base, or a kind the application doesn't know, is never of another kind.
+fn quality_line(offer: &ItemOffer, item: &Item, i18n: &Translator) -> Option<Line> {
+    let copied = item.quality_kind()?;
+    let quality = offer.item.quality.as_ref()?;
+    let value = format::number(f64::from(quality.value));
+    let text = match &quality.kind {
+        Some(kind) => i18n.filter_catalyst_quality(kind, &value),
+        None => i18n.filter_property(Property::Quality, &value),
+    };
+    if copied
+        .catalyst
+        .is_some_and(|catalyst| offer.has_other_quality(catalyst))
+    {
+        return Some(Line {
+            text,
+            tint: color::FALL,
+            difference: None,
+        });
+    }
+    let tint = if quality.value >= offer.item.max_catalyst_quality() {
+        color::TEXT
+    } else {
+        color::WEAK
+    };
+    let difference = item
+        .quality()
+        .map(|copied| f64::from(quality.value) - f64::from(copied))
+        .filter(|difference| *difference != 0.0)
+        .map(|value| Difference {
+            value,
+            verdict: if value > 0.0 {
+                Verdict::Better
+            } else {
+                Verdict::Worse
+            },
+        });
+    Some(Line {
+        text,
+        tint,
+        difference,
+    })
 }
 
 impl OfferTooltip<'_> {
@@ -242,6 +299,21 @@ impl OfferTooltip<'_> {
                 color::WARNING,
             );
         }
+        if self
+            .searched_catalyst
+            .is_some_and(|catalyst| self.offer.has_other_quality(catalyst))
+        {
+            ui.add_space(WARNING_GAP);
+            text_block(
+                ui,
+                &i18n.text(Message::OffersOtherQuality),
+                text::note(),
+                color::WEAK,
+            );
+        }
+        if let Some(line) = quality_line(self.offer, self.item, i18n) {
+            group(ui, &[line]);
+        }
         for kind in [
             ModifierKind::Enchant,
             ModifierKind::Rune,
@@ -296,6 +368,7 @@ impl OfferTooltip<'_> {
             .flat_map(|modifier| modifier.text.lines())
             .map(|line| Line {
                 text: line.to_owned(),
+                tint: color::MODIFIER,
                 difference: self.lines.difference(line, kind),
             })
             .collect()
@@ -462,7 +535,7 @@ fn group(ui: &mut Ui, lines: &[Line]) {
             .first()
             .map_or(galley.size().y, |row| row.rect().height());
         let painter = ui.painter();
-        painter.galley(rect.min, galley, color::MODIFIER);
+        painter.galley(rect.min, galley, line.tint);
         if let Some((delta, tint)) = delta {
             let size = delta.size();
             painter.galley(
@@ -530,6 +603,175 @@ mod tests {
             hovered: Some(id),
             ..at(time)
         }
+    }
+
+    /// An amulet offered with the quality of a catalyst of `catalyst`, `value` %, and its
+    /// `modifiers` (`+20% to Maximum Quality`).
+    fn amulet(value: u32, catalyst: Catalyst, words: &str, modifiers: &[&str]) -> ItemOffer {
+        use crate::item::QualityKind;
+        use crate::trade::offers::{OfferItem, OfferModifier, OfferQuality};
+
+        ItemOffer {
+            id: "a".to_owned(),
+            price: None,
+            seller: SellerStatus::Online,
+            listed: None,
+            whisper: String::new(),
+            item: OfferItem {
+                rarity: None,
+                name: None,
+                base_type: "Solar Amulet".to_owned(),
+                item_level: None,
+                corrupted: false,
+                quality: Some(OfferQuality {
+                    value,
+                    kind: Some(QualityKind {
+                        catalyst: Some(catalyst),
+                        words: words.to_owned(),
+                    }),
+                }),
+                modifiers: modifiers
+                    .iter()
+                    .map(|text| OfferModifier {
+                        kind: ModifierKind::Explicit,
+                        text: (*text).to_owned(),
+                        stat: Some("explicit.stat_2039822488".to_owned()),
+                    })
+                    .collect(),
+            },
+        }
+    }
+
+    #[test]
+    fn the_quality_of_an_offer_is_white_at_its_maximum_and_red_of_another_kind() {
+        use crate::item::CopiedItem;
+
+        let i18n = Translator::new(crate::language::Language::English);
+        // The owner's amulet: 40 % of mana quality.
+        let copied = Item::parse(
+            &CopiedItem::from_text(include_str!(
+                "../item/test-items/en-owner-rare-amulet-catalyst.txt"
+            ))
+            .unwrap(),
+        )
+        .unwrap();
+        let essence = ["+20% to Maximum Quality"];
+        let line = |offer: &ItemOffer| quality_line(offer, &copied, &i18n).unwrap();
+        let difference = |value, verdict| Some(Difference { value, verdict });
+
+        // Below its maximum of 40 %: gray, with its difference.
+        let below = line(&amulet(30, Catalyst::Mana, "Mana Modifiers", &essence));
+        assert_eq!(below.text, "Mana quality: 30%");
+        assert_eq!(below.tint, color::WEAK);
+        assert_eq!(below.difference, difference(-10.0, Verdict::Worse));
+        // At its maximum: white.
+        let at_maximum = line(&amulet(40, Catalyst::Mana, "Mana Modifiers", &essence));
+        assert_eq!(at_maximum.tint, color::TEXT);
+        assert_eq!(at_maximum.difference, None);
+        // Left beyond its maximum once its essence was removed: white too.
+        let beyond = line(&amulet(50, Catalyst::Mana, "Mana Modifiers", &[]));
+        assert_eq!(beyond.tint, color::TEXT);
+        assert_eq!(beyond.difference, difference(10.0, Verdict::Better));
+        // Another kind: red, without difference.
+        let attack = line(&amulet(50, Catalyst::Attack, "Attack Modifiers", &[]));
+        assert_eq!(attack.text, "Attack quality: 50%");
+        assert_eq!(attack.tint, color::FALL);
+        assert_eq!(attack.difference, None);
+    }
+
+    #[test]
+    fn a_kind_that_cant_be_told_apart_is_never_red() {
+        use crate::item::{CopiedItem, QualityKind};
+        use crate::trade::offers::OfferQuality;
+
+        let i18n = Translator::new(crate::language::Language::English);
+        let parse = |words: &str| {
+            let text = include_str!("../item/test-items/en-owner-rare-amulet-catalyst.txt")
+                .replace("Mana Modifiers", words);
+            Item::parse(&CopiedItem::from_text(&text).unwrap()).unwrap()
+        };
+        let mana = parse("Mana Modifiers");
+        let line = |offer: &ItemOffer, item: &Item| quality_line(offer, item, &i18n);
+
+        // The copied item of a kind the application doesn't know.
+        let strange = parse("Strange Modifiers");
+        let attack = amulet(50, Catalyst::Attack, "Attack Modifiers", &[]);
+        let of_strange = line(&attack, &strange).unwrap();
+        assert_eq!(of_strange.text, "Attack quality: 50%");
+        assert_eq!(of_strange.tint, color::TEXT, "beyond its maximum");
+        assert_eq!(
+            of_strange.difference,
+            Some(Difference {
+                value: 10.0,
+                verdict: Verdict::Better
+            })
+        );
+        // Below its maximum: gray.
+        let below = line(
+            &amulet(15, Catalyst::Attack, "Attack Modifiers", &[]),
+            &strange,
+        )
+        .unwrap();
+        assert_eq!(below.tint, color::WEAK);
+        // An offer of a kind the application doesn't know: its words.
+        let mut unknown = amulet(30, Catalyst::Mana, "", &[]);
+        unknown.item.quality = Some(OfferQuality {
+            value: 30,
+            kind: Some(QualityKind {
+                catalyst: None,
+                words: "Strange Modifiers".to_owned(),
+            }),
+        });
+        let of_unknown = line(&unknown, &mana).unwrap();
+        assert_eq!(of_unknown.text, "Quality (Strange Modifiers): 30%");
+        assert_eq!(of_unknown.tint, color::TEXT);
+        assert_eq!(
+            of_unknown.difference,
+            Some(Difference {
+                value: -10.0,
+                verdict: Verdict::Worse
+            })
+        );
+        // The quality of the base.
+        let mut base = amulet(10, Catalyst::Mana, "", &[]);
+        base.item.quality = Some(OfferQuality {
+            value: 10,
+            kind: None,
+        });
+        let of_base = line(&base, &mana).unwrap();
+        assert_eq!(of_base.text, "Quality: 10%");
+        assert_eq!(of_base.tint, color::WEAK);
+        assert_eq!(
+            of_base.difference,
+            Some(Difference {
+                value: -30.0,
+                verdict: Verdict::Worse
+            })
+        );
+        // No quality.
+        base.item.quality = None;
+        assert_eq!(line(&base, &mana), None);
+    }
+
+    #[test]
+    fn an_item_without_the_quality_of_a_catalyst_has_no_quality_line() {
+        use crate::item::CopiedItem;
+
+        let i18n = Translator::new(crate::language::Language::English);
+        let bow = Item::parse(
+            &CopiedItem::from_text(include_str!("../item/test-items/en-rare-bow-fractured.txt"))
+                .unwrap(),
+        )
+        .unwrap();
+
+        assert_eq!(
+            quality_line(
+                &amulet(40, Catalyst::Mana, "Mana Modifiers", &[]),
+                &bow,
+                &i18n
+            ),
+            None
+        );
     }
 
     #[test]

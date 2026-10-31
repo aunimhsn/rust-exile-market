@@ -1,7 +1,7 @@
 //! The offers of the trade site, read from its answers: the listed items of a search, and the
 //! offers of the currency exchange.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::time::{Duration, SystemTime};
 
 use serde::Deserialize;
@@ -9,7 +9,18 @@ use serde::de::{self, Deserializer};
 use serde_json::Value;
 
 use crate::format::Currency;
-use crate::item::Rarity;
+use crate::item::{Catalyst, QualityKind, Rarity, read_quality, whole_percent};
+use crate::language::Language;
+
+/// The highest quality of a catalyst on a ring, an amulet or a jewel, without a modifier
+/// `+#% to Maximum Quality`.
+const CATALYST_QUALITY: u32 = 20;
+/// The stat of `+#% to Maximum Quality` (the Essence of the Breach, the implicit of a Breach
+/// Ring), whatever its kind (`explicit.`, `implicit.`…).
+const MAXIMUM_QUALITY_STAT: &str = "stat_2039822488";
+/// The type of the quality among the properties of `/fetch`, whatever its kind or its language
+/// (seen on 2026-10-31, as in the API of Path of Exile 1).
+const QUALITY_PROPERTY: u64 = 6;
 
 /// The status of a seller.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -60,7 +71,57 @@ pub struct OfferItem {
     pub base_type: String,
     pub item_level: Option<u32>,
     pub corrupted: bool,
+    pub quality: Option<OfferQuality>,
     pub modifiers: Vec<OfferModifier>,
+}
+
+/// The quality of a listed item.
+#[derive(Debug, Clone, PartialEq)]
+pub struct OfferQuality {
+    pub value: u32,
+    /// The kind of the quality of a catalyst, as the trade site writes it (`Quality (Attack
+    /// Modifiers)`); none for the quality of the base.
+    pub kind: Option<QualityKind>,
+}
+
+impl ItemOffer {
+    /// The kind of the quality of a catalyst of the item, when it is another kind than
+    /// `catalyst`: its filter searches any kind. A kind the application doesn't know can't be
+    /// told apart.
+    #[must_use]
+    pub fn other_quality(&self, catalyst: Catalyst) -> Option<Catalyst> {
+        self.item
+            .quality
+            .as_ref()
+            .and_then(|quality| quality.kind.as_ref()?.catalyst)
+            .filter(|&kind| kind != catalyst)
+    }
+
+    /// Whether the item has the quality of a catalyst of another kind than `catalyst`.
+    #[must_use]
+    pub fn has_other_quality(&self, catalyst: Catalyst) -> bool {
+        self.other_quality(catalyst).is_some()
+    }
+}
+
+impl OfferItem {
+    /// The highest quality of a catalyst on the item: 20 %, more with its modifiers `+#% to
+    /// Maximum Quality`. A quality left beyond it when such a modifier was removed stays (seen
+    /// on the trade site on 2026-10-31: amulets of 50 % without it).
+    #[must_use]
+    pub fn max_catalyst_quality(&self) -> u32 {
+        self.modifiers
+            .iter()
+            .filter(|modifier| {
+                modifier
+                    .stat
+                    .as_deref()
+                    .is_some_and(|stat| stat.rsplit('.').next() == Some(MAXIMUM_QUALITY_STAT))
+            })
+            // `+20% to Maximum Quality`, `+20% à la Qualité maximale`.
+            .filter_map(|modifier| whole_percent(modifier.text.split_whitespace().next()?))
+            .fold(CATALYST_QUALITY, u32::saturating_add)
+    }
 }
 
 /// A modifier line of an offer, without the markup of the trade site.
@@ -158,6 +219,9 @@ struct ApiItem {
     ilvl: Option<u32>,
     #[serde(default)]
     corrupted: bool,
+    /// `[Quality]`, `Quality (Attack Modifiers)`…, each with its values, `[["+20%", 1]]`.
+    #[serde(default)]
+    properties: Vec<ApiProperty>,
     /// `Unique`, `Rare`…
     rarity: Option<String>,
     /// 0 normal, 1 magic, 2 rare, 3 unique, as in the API of Path of Exile 1.
@@ -176,6 +240,49 @@ struct ApiItem {
     fractured_mods: Vec<ApiModifier>,
     #[serde(default)]
     desecrated_mods: Vec<ApiModifier>,
+}
+
+/// A property as `/fetch` gives it: its values are pairs of a text and a display mode, only
+/// the text is read.
+#[derive(Debug, Deserialize)]
+struct ApiProperty {
+    #[serde(default)]
+    name: String,
+    #[serde(default)]
+    values: Vec<Value>,
+    /// 6 for the quality; none for most of the others. Read loosely: it only tells a quality
+    /// that can't be read, which mustn't fail the whole answer.
+    #[serde(rename = "type", default)]
+    kind: Value,
+}
+
+impl ApiProperty {
+    /// The quality, read as the game writes it in `language`: `Quality (Attack Modifiers):
+    /// +20%`; the line of a quality that can't be read, its value or its name, as an error;
+    /// `None` for another property.
+    fn quality(&self, language: Language) -> Option<Result<OfferQuality, String>> {
+        let value = self
+            .values
+            .first()
+            .and_then(|value| value.get(0))
+            .and_then(Value::as_str)
+            .unwrap_or_default();
+        let line = format!("{}: {value}", plain_text(&self.name));
+        match read_quality(&line, language) {
+            Some((kind, Some(value))) => Some(Ok(OfferQuality { value, kind })),
+            Some((_, None)) => Some(Err(line)),
+            None => self.is_quality().then_some(Err(line)),
+        }
+    }
+
+    /// Whether its type is that of the quality, `6` or `"6"`.
+    fn is_quality(&self) -> bool {
+        let kind = self
+            .kind
+            .as_u64()
+            .or_else(|| self.kind.as_str()?.parse().ok());
+        kind == Some(QUALITY_PROPERTY)
+    }
 }
 
 /// A modifier as `/fetch` gives it: with its stat on 2026-10-26, a plain text in the API of
@@ -238,20 +345,45 @@ struct ApiExchangeSide {
 }
 
 impl ApiFetch {
-    /// The offers, in the order of the ids asked; an offer gone since the search is left
-    /// out.
-    pub fn offers(self) -> Vec<ItemOffer> {
-        self.result
+    /// The offers, in the order of the ids asked, from the trade site of `language`; an offer
+    /// gone since the search is left out.
+    pub fn offers(self, language: Language) -> Vec<ItemOffer> {
+        let (offers, unreadable): (Vec<ItemOffer>, BTreeSet<Option<String>>) = self
+            .result
             .into_iter()
             .flatten()
-            .map(ApiListed::offer)
-            .collect()
+            .map(|listed| listed.offer(language))
+            .unzip();
+        // Once per page, not per offer.
+        for line in unreadable.into_iter().flatten() {
+            log::warn!("Trade site: a quality that can't be read, {line}");
+        }
+        let unknown: BTreeSet<&str> = offers
+            .iter()
+            .filter_map(|offer| offer.item.quality.as_ref()?.kind.as_ref())
+            .filter(|kind| kind.catalyst.is_none())
+            .map(|kind| kind.words.as_str())
+            .collect();
+        for words in unknown {
+            log::warn!("Trade site: an unknown kind of quality, {words}");
+        }
+        offers
     }
 }
 
 impl ApiListed {
-    fn offer(self) -> ItemOffer {
+    /// The offer, and the line of its quality when it can't be read.
+    fn offer(self, language: Language) -> (ItemOffer, Option<String>) {
         let item = self.item;
+        let (quality, unreadable) = match item
+            .properties
+            .iter()
+            .find_map(|property| property.quality(language))
+        {
+            Some(Ok(quality)) => (Some(quality), None),
+            Some(Err(line)) => (None, Some(line)),
+            None => (None, None),
+        };
         let modifiers = [
             (ModifierKind::Enchant, item.enchant_mods),
             (ModifierKind::Rune, item.rune_mods),
@@ -267,7 +399,7 @@ impl ApiListed {
                 .map(move |modifier| modifier.offer_modifier(kind))
         })
         .collect();
-        ItemOffer {
+        let offer = ItemOffer {
             id: self.id,
             price: self.listing.price.map(|price| Price {
                 amount: price.amount,
@@ -282,9 +414,11 @@ impl ApiListed {
                 base_type: item.base_type.unwrap_or(item.type_line),
                 item_level: item.ilvl,
                 corrupted: item.corrupted,
+                quality,
                 modifiers,
             },
-        }
+        };
+        (offer, unreadable)
     }
 }
 
@@ -493,7 +627,7 @@ mod tests {
     fn the_listed_items_are_read_in_their_order() {
         let fetch: ApiFetch = serde_json::from_str(FETCH).expect("read");
 
-        let offers = fetch.offers();
+        let offers = fetch.offers(Language::English);
 
         assert_eq!(offers.len(), 2, "the offer gone is left out");
         let ring = &offers[0];
@@ -538,6 +672,175 @@ mod tests {
         assert!(away.item.corrupted);
         assert_eq!(away.item.name, None);
         assert_eq!(away.item.base_type, "Gold Ring");
+    }
+
+    /// Two amulets of `/fetch` on 2026-10-31, shortened: a quality of a catalyst raised by
+    /// the Essence of the Breach, and one left at 50 % without it; a bow with the quality of
+    /// its base; and an amulet of a kind the application doesn't know.
+    const QUALITIES: &str = r#"{"result": [
+        {"id": "a1", "listing": {"account": {}}, "item": {
+            "typeLine": "Absent Amulet", "rarity": "Rare",
+            "properties": [{"name": "Quality (Caster Modifiers)", "values": [["+50%", 1]], "displayMode": 0, "type": 6}],
+            "explicitMods": [{"description": "+20% to Maximum [Quality]", "hash": "stat.explicit.stat_2039822488"}]
+        }},
+        {"id": "a2", "listing": {"account": {}}, "item": {
+            "typeLine": "Solar Amulet", "rarity": "Rare",
+            "properties": [{"name": "Quality (Mana Modifiers)", "values": [["+50%", 1]], "displayMode": 0, "type": 6}],
+            "explicitMods": [{"description": "+5% to [Quality] of all Skills", "hash": "stat.explicit.stat_3655769732"}]
+        }},
+        {"id": "b1", "listing": {"account": {}}, "item": {
+            "typeLine": "Gemini Bow", "rarity": "Rare",
+            "properties": [{"name": "[Bow]", "values": [], "displayMode": 0}, {"name": "[Quality]", "values": [["+20%", 1]], "displayMode": 0, "type": 6}]
+        }},
+        {"id": "a3", "listing": {"account": {}}, "item": {
+            "typeLine": "Gold Amulet", "rarity": "Rare",
+            "properties": [{"name": "Quality (Strange Modifiers)", "values": [["+20%", 1]], "displayMode": 0, "type": 6}]
+        }}
+    ]}"#;
+
+    /// An amulet of `/fetch` on the French trade site on 2026-10-31, shortened.
+    const FRENCH_QUALITY: &str = r#"{"result": [
+        {"id": "f1", "listing": {"account": {}}, "item": {
+            "typeLine": "Amulette de l'absence", "rarity": "Rare",
+            "properties": [
+                {"name": "Amulette", "values": [], "displayMode": 0},
+                {"name": "Qualité (Modificateurs de Lanceur de sorts)", "values": [["+50%", 1]], "displayMode": 0, "type": 6}
+            ],
+            "explicitMods": [{"description": "+20% à la [Quality|Qualité] maximale", "hash": "stat.explicit.stat_2039822488"}]
+        }}
+    ]}"#;
+
+    #[test]
+    fn the_quality_of_an_offer_is_read_with_its_kind_and_its_maximum() {
+        let fetch: ApiFetch = serde_json::from_str(QUALITIES).expect("read");
+
+        let offers = fetch.offers(Language::English);
+
+        let caster = &offers[0];
+        let quality = caster.item.quality.as_ref().expect("a quality");
+        assert_eq!(quality.value, 50);
+        assert_eq!(
+            quality.kind,
+            Some(QualityKind {
+                catalyst: Some(Catalyst::Caster),
+                words: "Caster Modifiers".to_owned(),
+            })
+        );
+        assert_eq!(caster.item.max_catalyst_quality(), 40, "with its essence");
+        assert!(caster.has_other_quality(Catalyst::Mana));
+        assert!(!caster.has_other_quality(Catalyst::Caster));
+        // Left at 50 % once its modifier was removed: beyond its maximum. The quality of the
+        // skills isn't the maximum quality.
+        let mana = &offers[1];
+        assert_eq!(
+            mana.item.quality.as_ref().map(|quality| quality.value),
+            Some(50)
+        );
+        assert_eq!(mana.item.max_catalyst_quality(), 20);
+        let bow = &offers[2];
+        assert_eq!(
+            bow.item.quality,
+            Some(OfferQuality {
+                value: 20,
+                kind: None
+            })
+        );
+        assert!(
+            !bow.has_other_quality(Catalyst::Mana),
+            "the quality of the base"
+        );
+        // A kind the application doesn't know can't be told apart from any kind.
+        let strange = &offers[3];
+        let kind = strange
+            .item
+            .quality
+            .as_ref()
+            .and_then(|quality| quality.kind.as_ref());
+        assert_eq!(
+            kind.map(|kind| (kind.catalyst, kind.words.as_str())),
+            Some((None, "Strange Modifiers"))
+        );
+        for catalyst in Catalyst::ALL {
+            assert_eq!(strange.other_quality(catalyst), None, "{catalyst:?}");
+        }
+    }
+
+    #[test]
+    fn a_quality_that_cant_be_read_fails_neither_the_answer_nor_its_offer() {
+        let property = |json: &str| -> ApiProperty { serde_json::from_str(json).expect("read") };
+        let quality = |json: &str| property(json).quality(Language::English);
+
+        // A type written as a text, and a name the application doesn't know.
+        assert_eq!(
+            quality(
+                r#"{"name": "Kwality (Mana Modifiers)", "values": [["+20%", 1]], "type": "6"}"#
+            ),
+            Some(Err("Kwality (Mana Modifiers): +20%".to_owned()))
+        );
+        // A name read, without type, and a value that isn't a whole percentage.
+        assert_eq!(
+            quality(r#"{"name": "Quality (Mana Modifiers)", "values": [["+12.5%", 1]]}"#),
+            Some(Err("Quality (Mana Modifiers): +12.5%".to_owned()))
+        );
+        // Another property, of another type or without type.
+        assert_eq!(
+            quality(r#"{"name": "[Amulet]", "values": [], "displayMode": 0}"#),
+            None
+        );
+        assert_eq!(
+            quality(r#"{"name": "Spirit", "values": [["100", 1]], "type": 26}"#),
+            None
+        );
+        // The offer is read, without quality.
+        let fetch: ApiFetch = serde_json::from_str(
+            r#"{"result": [{"id": "k1", "listing": {"account": {}}, "item": {
+                "typeLine": "Gold Amulet",
+                "properties": [{"name": "Kwality (Mana Modifiers)", "values": [["+20%", 1]], "type": "6"}]
+            }}]}"#,
+        )
+        .expect("read");
+        let offers = fetch.offers(Language::English);
+        assert_eq!(offers.len(), 1);
+        assert_eq!(offers[0].item.quality, None);
+    }
+
+    #[test]
+    fn every_maximum_quality_of_an_offer_adds_up() {
+        // A Breach Ring with the Essence of the Breach: 20 % and both modifiers.
+        let fetch: ApiFetch = serde_json::from_str(
+            r#"{"result": [{"id": "r1", "listing": {"account": {}}, "item": {
+                "typeLine": "Breach Ring", "rarity": "Rare",
+                "properties": [{"name": "Quality (Attack Modifiers)", "values": [["+60%", 1]], "type": 6}],
+                "implicitMods": [{"description": "+20% to Maximum [Quality]", "hash": "stat.implicit.stat_2039822488"}],
+                "explicitMods": [
+                    {"description": "+20% to Maximum [Quality]", "hash": "stat.explicit.stat_2039822488"},
+                    {"description": "+12.5% to Maximum [Quality]", "hash": "stat.explicit.stat_2039822488"},
+                    {"description": "+5% to [Quality] of all Skills", "hash": "stat.explicit.stat_3655769732"}
+                ]
+            }}]}"#,
+        )
+        .expect("read");
+
+        let offers = fetch.offers(Language::English);
+
+        assert_eq!(offers[0].item.max_catalyst_quality(), 60, "not a decimal");
+    }
+
+    #[test]
+    fn the_quality_of_an_offer_of_the_french_trade_site_is_read_with_its_kind() {
+        let fetch: ApiFetch = serde_json::from_str(FRENCH_QUALITY).expect("read");
+
+        let offers = fetch.offers(Language::French);
+
+        let caster = &offers[0];
+        let quality = caster.item.quality.as_ref().expect("a quality");
+        assert_eq!(quality.value, 50);
+        assert_eq!(
+            quality.kind.as_ref().and_then(|kind| kind.catalyst),
+            Some(Catalyst::Caster)
+        );
+        assert_eq!(caster.item.max_catalyst_quality(), 40);
+        assert_eq!(caster.other_quality(Catalyst::Mana), Some(Catalyst::Caster));
     }
 
     #[test]

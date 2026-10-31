@@ -2,12 +2,16 @@
 //! price, and the estimated price of an item without a market price (a rare, magic or
 //! normal item, a jewel), the median of its cheapest similar offers.
 //!
+//! When the quality of a catalyst is searched, which the trade site searches of any kind, the
+//! offers of another kind are left out: their quality raises other modifiers.
+//!
 //! The estimate is itself the reference of its offers: the median of the first page of
 //! offers, the answer to the search, tells the suspicious ones, which it leaves out. That
 //! median holds as long as fewer than half the offers of the page are bait, and doesn't move
 //! when the next offers load.
 
 use crate::format::Currency;
+use crate::item::Catalyst;
 use crate::prices::Rates;
 use crate::trade::offers::{ItemOffer, currency};
 
@@ -57,15 +61,24 @@ pub struct Estimate {
     pub total: u64,
     /// The median of the first page of offers, which tells the suspicious ones.
     pub reference: Reference,
+    /// The kind of the quality of a catalyst of the offers counted, when it was searched.
+    pub searched_catalyst: Option<Catalyst>,
 }
 
 /// The estimate from the `first_page` of offers of a search of items, the cheapest first, of
-/// the `total` found, with the `rates` of the currencies; `None` without an offer priced in
-/// one of the three currencies.
+/// the `total` found, with the `rates` of the currencies; the offers with the quality of a
+/// catalyst of another kind than `searched_catalyst`, when it was searched, are left out. `None`
+/// without an offer priced in one of the three currencies.
 #[must_use]
-pub fn estimate(first_page: &[ItemOffer], total: u64, rates: Rates) -> Option<Estimate> {
+pub fn estimate(
+    first_page: &[ItemOffer],
+    total: u64,
+    rates: Rates,
+    searched_catalyst: Option<Catalyst>,
+) -> Option<Estimate> {
     let mut prices: Vec<f64> = first_page
         .iter()
+        .filter(|offer| searched_catalyst.is_none_or(|catalyst| !offer.has_other_quality(catalyst)))
         .filter_map(|offer| offer.price.as_ref())
         .filter_map(|price| in_exalted(price.amount, &price.currency, rates))
         .collect();
@@ -85,6 +98,7 @@ pub fn estimate(first_page: &[ItemOffer], total: u64, rates: Rates) -> Option<Es
         counted: counted.len(),
         total,
         reference,
+        searched_catalyst,
     })
 }
 
@@ -103,7 +117,8 @@ mod tests {
     use std::time::SystemTime;
 
     use super::*;
-    use crate::trade::offers::{OfferItem, Price, SellerStatus};
+    use crate::item::QualityKind;
+    use crate::trade::offers::{OfferItem, OfferQuality, Price, SellerStatus};
 
     const RATES: Rates = Rates {
         chaos: 70.0,
@@ -126,6 +141,7 @@ mod tests {
                 base_type: "Gemini Bow".to_owned(),
                 item_level: None,
                 corrupted: false,
+                quality: None,
                 modifiers: Vec::new(),
             },
         }
@@ -144,7 +160,7 @@ mod tests {
         let mut offers = vec![offer(300.0, "exalted")];
         offers.extend(divines(&[2.0, 2.2, 2.4, 2.5, 3.0, 3.1, 3.5, 4.0, 4.2]));
 
-        let bow = estimate(&offers, 18, RATES).unwrap();
+        let bow = estimate(&offers, 18, RATES, None).unwrap();
 
         assert!((bow.exalted - 2.4 * 700.0).abs() < 1e-9);
         assert_eq!(bow.counted, 5);
@@ -164,7 +180,7 @@ mod tests {
             offer(1.0, "chaos"),
         ];
 
-        let magic = estimate(&offers, 3, RATES).unwrap();
+        let magic = estimate(&offers, 3, RATES, None).unwrap();
 
         assert!((magic.exalted - 70.0).abs() < 1e-9);
         assert_eq!(magic.counted, 3);
@@ -179,14 +195,14 @@ mod tests {
             offer(1.1, "divine"),
         ];
 
-        let sorted = estimate(&offers, 3, RATES).unwrap();
+        let sorted = estimate(&offers, 3, RATES, None).unwrap();
 
         assert!((sorted.exalted - 700.0).abs() < 1e-9);
     }
 
     #[test]
     fn an_even_count_of_offers_gives_the_mean_of_the_two_middle_ones() {
-        let even = estimate(&divines(&[1.0, 2.0, 3.0, 5.0]), 4, RATES).unwrap();
+        let even = estimate(&divines(&[1.0, 2.0, 3.0, 5.0]), 4, RATES, None).unwrap();
 
         assert!((even.exalted - 2.5 * 700.0).abs() < 1e-9);
         assert_eq!(even.counted, 4);
@@ -198,7 +214,7 @@ mod tests {
         let mut offers = vec![offer(10.0, "exalted"), offer(20.0, "exalted")];
         offers.extend(divines(&[1.0, 1.2, 1.4, 1.6]));
 
-        let baited = estimate(&offers, 6, RATES).unwrap();
+        let baited = estimate(&offers, 6, RATES, None).unwrap();
 
         assert_eq!(baited.counted, 4);
         assert_eq!(baited.total, 6);
@@ -211,13 +227,47 @@ mod tests {
         offers[0].price = None;
         offers.push(offer(3.0, "annul"));
 
-        assert_eq!(estimate(&[offer(1.0, "annul")], 1, RATES), None);
-        assert_eq!(estimate(&[], 0, RATES), None);
+        assert_eq!(estimate(&[offer(1.0, "annul")], 1, RATES, None), None);
+        assert_eq!(estimate(&[], 0, RATES, None), None);
 
-        let known = estimate(&offers, 3, RATES).unwrap();
+        let known = estimate(&offers, 3, RATES, None).unwrap();
 
         assert_eq!(known.counted, 1);
         assert!((known.exalted - 2.0 * 700.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn the_offers_of_another_kind_of_quality_are_left_out_when_it_is_searched() {
+        // The amulet of mana quality of the mock-up: three offers of another kind among the
+        // eight cheapest.
+        let mut offers = divines(&[1.5, 2.0, 2.4, 2.5, 3.0, 3.2, 3.5, 4.0]);
+        let with = |offer: &mut ItemOffer, catalyst| {
+            offer.item.quality = Some(OfferQuality {
+                value: 40,
+                kind: Some(QualityKind {
+                    catalyst: Some(catalyst),
+                    words: String::new(),
+                }),
+            });
+        };
+        for (index, catalyst) in [
+            (0, Catalyst::Caster),
+            (1, Catalyst::Attack),
+            (4, Catalyst::Minion),
+        ] {
+            with(&mut offers[index], catalyst);
+        }
+        with(&mut offers[2], Catalyst::Mana);
+
+        let mana = estimate(&offers, 27, RATES, Some(Catalyst::Mana)).unwrap();
+        let any = estimate(&offers, 27, RATES, None).unwrap();
+
+        assert!((mana.exalted - 3.2 * 700.0).abs() < 1e-9);
+        assert_eq!(mana.counted, 5);
+        assert_eq!(mana.searched_catalyst, Some(Catalyst::Mana));
+        assert_eq!(mana.total, 27, "every offer found");
+        assert!((any.exalted - 2.4 * 700.0).abs() < 1e-9);
+        assert_eq!(any.searched_catalyst, None);
     }
 
     #[test]
