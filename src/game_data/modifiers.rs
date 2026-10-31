@@ -147,7 +147,7 @@ impl Table {
         match origin {
             Some(ModifierOrigin::Desecrated) => self.currency().is_none(),
             Some(_) => self.domain != Domain::Desecrated,
-            None => self.domain != Domain::Desecrated && self.currency() != Some(Currency::Alloy),
+            None => self.domain != Domain::Desecrated && self.source != Some(TableSource::Alloy),
         }
     }
 
@@ -1616,16 +1616,12 @@ fn tiers_on_base(
     // level, the higher ranges last, the better (`Upgrades Radius to Large` of a Time-Lost jewel,
     // T1, after `to Medium`), also from two tables (the cast speed of the Transcendent Alloy on a
     // wand, `39–47%` of the staves, T1, after the `26–31%` of the one-handed weapons).
+    // The values of the game are never NaN: two ranges always compare.
     tiers.sort_by(|tier, other| {
-        let ranges = |tier: &TableTier| tier.ranges.iter().flatten().flatten().copied().collect();
-        let (ranges, other_ranges): (Vec<f64>, Vec<f64>) = (ranges(tier), ranges(other));
         tier.level.cmp(&other.level).then_with(|| {
-            ranges
-                .iter()
-                .zip(&other_ranges)
-                .map(|(value, other)| value.total_cmp(other))
-                .find(|order| order.is_ne())
-                .unwrap_or_else(|| ranges.len().cmp(&other_ranges.len()))
+            range_values(tier)
+                .partial_cmp(range_values(other))
+                .unwrap_or(std::cmp::Ordering::Equal)
         })
     });
     tiers
@@ -1640,6 +1636,11 @@ fn tiers_on_base(
             })
         })
         .collect()
+}
+
+/// The bounds of every range of `tier`, in the order of its lines.
+fn range_values(tier: &TableTier) -> impl Iterator<Item = f64> + '_ {
+    tier.ranges.iter().flatten().flatten().copied()
 }
 
 /// The ranges of `tier` in the order of the copied lines.

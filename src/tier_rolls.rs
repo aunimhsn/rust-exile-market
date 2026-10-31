@@ -89,9 +89,9 @@ impl TierRolls {
                 continue;
             };
             // A fixed value without tier: only of a modifier whose tier the game doesn't write
-            // (the Genesis tree, an essence, an alloy), over that tier, as a line of the in-game trade
-            // read in it, a tier of fixed values too (not a value of a modifier whose tier the
-            // game writes, nor one that falls in a tier of the tree that rolls, `19–22`).
+            // (the Genesis tree, an essence, an alloy), over that tier, as a line of the in-game
+            // trade read in it, a tier of fixed values too (not a value of a modifier whose tier
+            // the game writes, nor one that falls in a tier of the tree that rolls, `19–22`).
             let rolled = if fixed {
                 let unwritten = |tier: &&Tier| {
                     tiers.tier_unwritten && tier.ranges.iter().all(|range| range.is_one_value())
