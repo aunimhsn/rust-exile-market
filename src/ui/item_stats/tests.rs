@@ -130,6 +130,7 @@ fn row_texts<'a>(rows: impl IntoIterator<Item = Row<'a>>) -> Vec<String> {
                             .collect();
                         format!(" [{}]", rows.join(" / "))
                     }
+                    Some(Roll::WaystoneTier(tier)) => format!(" [Waystone T{tier}]"),
                 };
                 let radius = text
                     .radius_skills()
@@ -2882,23 +2883,24 @@ fn a_waystone_shows_its_modifiers_over_their_ranges_in_both_copies() {
             .skip_while(|text| !text.starts_with("Prefixes"))
             .collect()
     };
+    // Unchecked: the buyer of a waystone pays for its properties, not for its monsters.
     let english_modifiers = [
         "Prefixes 2/3",
-        "■ Monsters have 91% increased Stun Buildup ≥90 [0.10 90–100]",
-        "■ 18% increased Monster Damage ≥16 [0.75 15–19]",
+        "□ Monsters have 91% increased Stun Buildup ≥90 [0.10 90–100]",
+        "□ 18% increased Monster Damage ≥16 [0.75 15–19]",
         "Suffixes 1/3",
-        "■ Monster have 106% increased Elemental Ailment Application ≥100 [0.32 100–119]",
+        "□ Monster have 106% increased Elemental Ailment Application ≥100 [0.32 100–119]",
     ];
     let french_modifiers = [
         "Prefixes 2/3",
-        "■ Les Monstres ont 13% d'Augmentation de la Vitesse dAttaque, d'incantation et de \
+        "□ Les Monstres ont 13% d'Augmentation de la Vitesse dAttaque, d'incantation et de \
          déplacement ≥12 [0.60 10–15]",
-        "■ 24% Davantage de Vie des Monstres ≥22 [0.80 20–25]",
+        "□ 24% Davantage de Vie des Monstres ≥22 [0.80 20–25]",
         "Suffixes 2/3",
-        "■ Les Monstres ont 101% d'Augmentation d'Application des Altérations Élémentaires ≥100 \
+        "□ Les Monstres ont 101% d'Augmentation d'Application des Altérations Élémentaires ≥100 \
          [0.05 100–119]",
         // Written with a `+` the template of Exiled Exchange 2 doesn't have.
-        "■ +33% à la Résistance élémentaire des Monstres ≥30 [0.75 30–34]",
+        "□ +33% à la Résistance élémentaire des Monstres ≥30 [0.75 30–34]",
     ];
     let with_note = |modifiers: &[&str]| {
         let mut texts: Vec<String> = modifiers.iter().map(|&text| text.to_owned()).collect();
@@ -2916,6 +2918,176 @@ fn a_waystone_shows_its_modifiers_over_their_ranges_in_both_copies() {
         explicit(in_game_trade(french)),
         with_note(&french_modifiers)
     );
+}
+
+#[test]
+fn a_waystone_is_searched_by_its_properties_and_its_tier() {
+    // The owner's waystones of tier 12: the base without its tier, a bar of the tier under it;
+    // the properties in a group of their own, the item rarity and the drop chance checked, a
+    // percentage from 90 % of its value, rounded down, the revives from their number.
+    let english = parse(include_str!(
+        "../../item/test-items/en-owner-rare-waystone.txt"
+    ));
+    let french = parse(include_str!("../../item/test-items/fr-rare-waystone.txt"));
+    let properties = |texts: Vec<String>| -> Vec<String> {
+        texts
+            .into_iter()
+            .take_while(|text| !text.starts_with("Prefixes"))
+            .collect()
+    };
+
+    assert_eq!(
+        properties(texts(&english)),
+        [
+            "Item",
+            "■ Base: Waystone [Waystone T12]",
+            "□ ItemLevel: 80 ≥80",
+            "Waystone",
+            "□ Waystone(Revives): 3 ≥3",
+            "■ Waystone(ItemRarity): 11 ≥9",
+            "□ Waystone(MonsterRarity): 25 ≥22",
+            "□ Waystone(MonsterEffectiveness): 13 ≥11",
+            "■ Waystone(DropChance): 50 ≥45",
+        ]
+    );
+    assert_eq!(
+        properties(texts(&french)),
+        [
+            "Item",
+            "■ Base: Pierre de téléportation [Waystone T12]",
+            "□ ItemLevel: 78 ≥78",
+            "Waystone",
+            "□ Waystone(Revives): 2 ≥2",
+            "■ Waystone(ItemRarity): 25 ≥22",
+            "□ Waystone(PackSize): 9 ≥8",
+            "□ Waystone(MonsterRarity): 23 ≥20",
+            "■ Waystone(DropChance): 65 ≥58",
+        ]
+    );
+
+    // A corrupted waystone raised to tier 16, without revives left: a property of zero
+    // searches nothing.
+    let corrupted = parse(
+        "Item Class: Waystones\nRarity: Normal\nWaystone (Tier 16)\n--------\n\
+         Revives Available: 0 (augmented)\nItem Rarity: +38% (augmented)\n--------\n\
+         Item Level: 82\n--------\nCorrupted",
+    );
+    assert_eq!(
+        properties(texts(&corrupted)),
+        [
+            "Item",
+            "■ Base: Waystone [Waystone T16]",
+            "■ ItemLevel: 82 ≥82",
+            "Waystone",
+            "■ Waystone(ItemRarity): 38 ≥34",
+        ]
+    );
+}
+
+#[test]
+fn a_waystone_searches_its_base_and_its_checked_properties() {
+    // From the copied waystone to the query sent: the whole base type, with its tier; the
+    // item rarity and the drop chance among the endgame filters; no modifier.
+    for (text, base_type, item_rarity, drop_chance) in [
+        (
+            include_str!("../../item/test-items/en-owner-rare-waystone.txt"),
+            "Waystone (Tier 12)",
+            9.0,
+            45.0,
+        ),
+        (
+            include_str!("../../item/test-items/fr-rare-waystone.txt"),
+            "Pierre de téléportation (Palier 12)",
+            22.0,
+            58.0,
+        ),
+    ] {
+        let item = parse(text);
+        let lines = CopiedLines::new(
+            item.language(),
+            item.modifiers(),
+            &LineStats::default(),
+            None,
+        );
+        let line_stats = LineStats::new(item.language(), item.modifiers(), None);
+        let tiers = TierRolls::new(
+            item.language(),
+            item.modifiers(),
+            Some(base_type),
+            item.item_level(),
+        );
+        let stats = Stats::new(&item, &lines, &line_stats, &tiers, Some(base_type));
+        let target = link::target(&item, None, None).expect("a target");
+        let query = |filters: &Filters| match link::query(
+            &item,
+            &target,
+            line_stats.search_filters(&stats.filters(filters)),
+        ) {
+            crate::trade::query::Query::Items(items) => items.to_json(),
+            crate::trade::query::Query::Exchange(_) => panic!("an item search"),
+        };
+        let mut filters = Filters::default();
+
+        let json = query(&filters);
+        assert_eq!(json["query"]["type"], base_type);
+        assert_eq!(
+            json["query"]["filters"]["map_filters"],
+            serde_json::json!({ "filters": {
+                "map_iir": { "min": item_rarity },
+                "map_bonus": { "min": drop_chance }
+            } })
+        );
+        assert!(json["query"].get("stats").is_none(), "{json}");
+
+        // The base unchecked: any waystone, of any tier.
+        let (_, mut base) = stats
+            .filters(&filters)
+            .into_iter()
+            .find(|(key, _)| *key == FilterKey::BaseType)
+            .expect("the filter of the base");
+        base.checked = false;
+        filters.set(FilterKey::BaseType, base);
+        let json = query(&filters);
+        assert!(json["query"].get("type").is_none(), "{json}");
+        assert_eq!(
+            json["query"]["filters"]["type_filters"]["filters"]["category"],
+            serde_json::json!({ "option": "map.waystone" })
+        );
+    }
+}
+
+#[test]
+fn the_filter_of_a_waystone_property_writes_its_value_as_the_game() {
+    let english = Translator::new(Language::English);
+    let french = Translator::new(Language::French);
+    let text = |property, value, i18n| {
+        StatText::Property(Property::Waystone(property), value)
+            .text(i18n)
+            .into_owned()
+    };
+
+    assert_eq!(
+        text(WaystoneProperty::ItemRarity, 11.0, &english),
+        "Item rarity: +11%"
+    );
+    assert_eq!(
+        text(WaystoneProperty::Revives, 3.0, &english),
+        "Revives available: 3"
+    );
+    assert_eq!(
+        text(WaystoneProperty::DropChance, 65.0, &french),
+        "Chances de trouver des pierres de téléportation\u{a0}: +65%"
+    );
+}
+
+#[test]
+fn the_bar_of_the_tier_of_a_waystone_goes_from_tier_1_to_tier_16() {
+    assert!(waystone_tier_share(1).abs() < f32::EPSILON);
+    assert!((waystone_tier_share(16) - 1.0).abs() < f32::EPSILON);
+    assert!((waystone_tier_share(12) - 11.0 / 15.0).abs() < 1e-6);
+    // Never out of the bar.
+    assert!(waystone_tier_share(0).abs() < f32::EPSILON);
+    assert!((waystone_tier_share(17) - 1.0).abs() < f32::EPSILON);
 }
 
 #[test]
@@ -3020,7 +3192,7 @@ fn a_french_line_finds_the_table_of_its_english_stat() {
         explicit_rows(waystone),
         [
             "Suffixes 1/3",
-            "■ -8% aux Résistances maximales des joueurs ≥-8 [1.00 6–8]",
+            "□ -8% aux Résistances maximales des joueurs ≥-8 [1.00 6–8]",
             "Trade copy note",
         ]
     );
@@ -3044,12 +3216,12 @@ fn a_corrupted_waystone_shows_the_count_of_its_affixes_alone() {
         explicit_rows(corrupted),
         [
             "Suffixes 6",
-            "■ 47% less effect of Curses on Monsters ≥42 [0.70 40–50]",
-            "■ Players have 25% less Cooldown Recovery Rate ≤28 [0.00 25–30]",
-            "■ Players have 40% less Recovery Rate of Life and Energy Shield ≤40 [1.00 36–40]",
-            "■ Area has patches of Shocked Ground",
-            "■ Monsters are Evasive",
-            "■ Monsters are Armoured",
+            "□ 47% less effect of Curses on Monsters ≥42 [0.70 40–50]",
+            "□ Players have 25% less Cooldown Recovery Rate ≤28 [0.00 25–30]",
+            "□ Players have 40% less Recovery Rate of Life and Energy Shield ≤40 [1.00 36–40]",
+            "□ Area has patches of Shocked Ground",
+            "□ Monsters are Evasive",
+            "□ Monsters are Armoured",
             "Trade copy note",
         ]
     );

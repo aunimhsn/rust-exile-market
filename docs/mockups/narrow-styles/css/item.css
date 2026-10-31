@@ -215,3 +215,15 @@
 .app-after.app-has-tip:is(:hover, .is-hovered) .app-tip { display: block; }
 /* A word alone, without tier nor range: on the left edge of the roll. */
 .range > .app-after:first-child { margin-left: 0; }
+/* The tier of a waystone (13k5c, the owner's choice), in bold: after its name, "Waystone · T12", and after the
+   bar of its tier on the filter of its base, the bar in the same color: T1 to T5 in white, T6 to T10 in the
+   yellow of the warning band, T11 to T15 in the orange of tier 1, T16 (a corrupted waystone raised one tier)
+   in the corrupted red. */
+.app-waystone-tier { color: var(--text); font-weight: 700; }
+.app-waystone-tier.is-mid { color: var(--warn); }
+.app-waystone-tier.is-high { color: var(--tier-1); }
+.app-waystone-tier.is-top { color: var(--corrupted); }
+.app-tier-bar-low .bar i { background: var(--text); }
+.app-tier-bar-mid .bar i { background: var(--warn); }
+.app-tier-bar-high .bar i { background: var(--tier-1); }
+.app-tier-bar-top .bar i { background: var(--corrupted); }

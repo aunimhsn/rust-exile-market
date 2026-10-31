@@ -11,6 +11,7 @@ use std::fmt;
 
 use super::labels::{Labels, marker};
 use super::modifier::{Header, Marker, Modifier, ModifierKind, StatLine};
+use super::waystone;
 use super::weapon::{self, DamageKind, Weapon};
 use super::{CopiedItem, Item, ItemState, Property, QualityKind, Rarity, Requirements, Stack};
 use crate::game_data;
@@ -57,6 +58,9 @@ pub enum ParseWarning {
     /// A section without header whose lines mix a marker of a kind (` (rune)`) with another
     /// marker (` (enchant)`, ` (crafted)`), a format not seen: its lines aren't read.
     MixedMarkers,
+    /// A property of a waystone whose name isn't in the labels, maybe added or renamed by a
+    /// patch: it is neither shown nor searched.
+    UnknownWaystoneProperty,
 }
 
 /// A line of the item with a value to read.
@@ -66,6 +70,7 @@ pub enum Field {
     Stack,
     Quality,
     Requirements,
+    WaystoneProperty,
 }
 
 impl fmt::Display for Field {
@@ -75,6 +80,7 @@ impl fmt::Display for Field {
             Self::Stack => "stack size",
             Self::Quality => "quality",
             Self::Requirements => "requirements",
+            Self::WaystoneProperty => "property of a waystone",
         })
     }
 }
@@ -87,6 +93,7 @@ impl fmt::Display for ParseWarning {
             Self::ModifierWithoutHeader => formatter.write_str("modifier lines without header"),
             Self::UnknownQualityKind => formatter.write_str("unknown kind of quality"),
             Self::MixedMarkers => formatter.write_str("modifier lines of mixed markers"),
+            Self::UnknownWaystoneProperty => formatter.write_str("unknown property of a waystone"),
         }
     }
 }
@@ -513,7 +520,7 @@ fn read_headed(item: &mut Item, lines: &[&str], labels: &Labels) {
 }
 
 /// The lines `Name: value` of the properties section, and the quality and the damage of a
-/// weapon among them.
+/// weapon among them; on a waystone, a warning for a property it can't read.
 fn read_properties(item: &mut Item, lines: &[&str], labels: &Labels) {
     let mut damage = Vec::new();
     let mut attacks_per_second = None;
@@ -546,6 +553,11 @@ fn read_properties(item: &mut Item, lines: &[&str], labels: &Labels) {
             if !physical || name == labels.physical_damage {
                 damage.extend(ranges);
             }
+        }
+        if item.class == labels.waystones
+            && let Err(warning) = waystone::read_property(labels, name, value)
+        {
+            item.warnings.push(warning);
         }
         item.properties.push(Property {
             name: name.to_owned(),

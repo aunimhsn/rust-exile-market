@@ -123,6 +123,16 @@ defence-evasion = Évasion
 defence-energy-shield = Bouclier d'énergie
 defence-block = Blocage
 defence-runic-ward = Sauvegarde runique
+# Les propriétés d'une pierre de téléportation, comme le jeu les nomme, chacune suivie de sa valeur en gras ;
+# les noms -full, dans l'infobulle d'un nom raccourci, sont ceux du jeu.
+waystone-revives = Résurrections
+waystone-revives-full = Résurrections disponibles
+waystone-item-rarity = Rareté des objets
+waystone-pack-size = Taille des Groupes
+waystone-monster-rarity = Rareté des Monstres
+waystone-monster-effectiveness = Efficacité des Monstres
+waystone-drop-chance = Pierres trouvées
+waystone-drop-chance-full = Chances de trouver des Pierres de téléportation
 # Le résumé d'un objet qui octroie des aptitudes, par exemple « Niveau 18 Sceau de puissance », jointes par « · ».
 granted-skill = Octroie l'aptitude : { $skill }
 # La ligne des prérequis, ses parties jointes par « · » : « Requiert niveau 65 · 145 Dex ».
@@ -152,6 +162,7 @@ group-unique = Unique
 # Les filtres du type de base, du niveau d'objet, des châsses, de la qualité et du niveau requis d'un objet rare, magique ou normal.
 group-item = Objet
 group-weapon = Arme
+group-waystone = Pierre de téléportation
 # Les totaux que le site d'échange additionne sur plusieurs modificateurs.
 group-pseudo = Pseudo
 # À côté de Préfixes et Suffixes : combien l'objet en a, sur le maximum possible.
@@ -200,6 +211,13 @@ filter-catalyst-quality = { $kind ->
 filter-required-level = Niveau requis : { $value }
 filter-physical-dps = DPS physique : { $value }
 filter-elemental-dps = DPS élémentaire : { $value }
+# Les filtres des propriétés d'une pierre de téléportation ; $value a son signe pour un pourcentage (« +11 »).
+filter-waystone-revives = Résurrections disponibles : { $value }
+filter-waystone-item-rarity = Rareté des objets : { $value }%
+filter-waystone-pack-size = Taille des groupes : { $value }%
+filter-waystone-monster-rarity = Rareté des monstres : { $value }%
+filter-waystone-monster-effectiveness = Efficacité des monstres : { $value }%
+filter-waystone-drop-chance = Chances de trouver des pierres de téléportation : { $value }%
 # Les filtres des totaux pseudo, avec leur valeur.
 pseudo-elemental-resistance = +{ $value }% aux Résistances Élémentaires au total
 pseudo-chaos-resistance = +{ $value }% à la Résistance au chaos au total

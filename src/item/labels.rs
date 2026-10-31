@@ -4,7 +4,7 @@
 //! here. The markers at the end of the lines (`(augmented)`, `(rune)`, `(implicit)`…) are in
 //! English in every language.
 
-use super::{Affix, Catalyst, ItemState, ModifierKind, ModifierOrigin, Rarity};
+use super::{Affix, Catalyst, ItemState, ModifierKind, ModifierOrigin, Rarity, WaystoneProperty};
 use crate::language::Language;
 
 /// The words of one language. The labels of the `Label: value` lines end with their
@@ -43,6 +43,13 @@ pub(super) struct Labels {
     pub block: &'static str,
     /// The defence of a runeforged base, without attribute.
     pub runic_ward: &'static str,
+    /// The item class of the waystones.
+    pub waystones: &'static str,
+    /// The words before the tier of a waystone in its base type, `(Tier ` in `Waystone (Tier
+    /// 12)`; the tier ends at the next `)`.
+    pub waystone_tier: &'static str,
+    /// The names of the properties of a waystone, without their separator.
+    pub waystone_properties: &'static [(&'static str, WaystoneProperty)],
     /// The note of a priced item; unknown in some languages.
     pub note: Option<&'static str>,
     /// The state lines at the end of the item; "Unidentified" may be followed by a tier.
@@ -176,6 +183,20 @@ static ENGLISH: Labels = Labels {
     energy_shield: "Energy Shield",
     block: "Block chance",
     runic_ward: "Runic Ward",
+    waystones: "Waystones",
+    waystone_tier: "(Tier ",
+    // The owner's waystones, and the client strings of Exiled Exchange 2 (commit cca3066).
+    waystone_properties: &[
+        ("Revives Available", WaystoneProperty::Revives),
+        ("Item Rarity", WaystoneProperty::ItemRarity),
+        ("Pack Size", WaystoneProperty::PackSize),
+        ("Monster Rarity", WaystoneProperty::MonsterRarity),
+        (
+            "Monster Effectiveness",
+            WaystoneProperty::MonsterEffectiveness,
+        ),
+        ("Waystone Drop Chance", WaystoneProperty::DropChance),
+    ],
     note: Some("Note: "),
     states: &[
         ("Corrupted", ItemState::Corrupted),
@@ -257,6 +278,24 @@ static FRENCH: Labels = Labels {
     energy_shield: "Bouclier d'énergie",
     block: "Chances de Blocage",
     runic_ward: "Sauvegarde runique",
+    waystones: "Pierres de téléportation",
+    waystone_tier: "(Palier ",
+    // The owner's waystone, and the client strings of Exiled Exchange 2 (commit cca3066) for
+    // `Efficacité des Monstres`, not seen in a copy yet.
+    waystone_properties: &[
+        ("Résurrections disponibles", WaystoneProperty::Revives),
+        ("Rareté des objets", WaystoneProperty::ItemRarity),
+        ("Taille des Groupes", WaystoneProperty::PackSize),
+        ("Rareté des Monstres", WaystoneProperty::MonsterRarity),
+        (
+            "Efficacité des Monstres",
+            WaystoneProperty::MonsterEffectiveness,
+        ),
+        (
+            "Chances de trouver des Pierres de téléportation",
+            WaystoneProperty::DropChance,
+        ),
+    ],
     note: None,
     states: &[
         ("Corrompu", ItemState::Corrupted),

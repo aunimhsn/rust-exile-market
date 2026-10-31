@@ -9,7 +9,7 @@ use std::time::Duration;
 use fluent_bundle::{FluentArgs, FluentBundle, FluentResource, FluentValue};
 
 use crate::filters::Property;
-use crate::item::{Affix, Catalyst, Lord, QualityKind};
+use crate::item::{Affix, Catalyst, Lord, QualityKind, WaystoneProperty};
 use crate::language::Language;
 use crate::prices::Direction;
 use crate::trade::pseudo::Pseudo;
@@ -90,11 +90,22 @@ pub enum Message {
     DefenceEnergyShield,
     DefenceBlock,
     DefenceRunicWard,
+    /// The properties of a waystone in the item block, two of them written short, their name
+    /// of the game in their tooltip (`…Full`).
+    WaystoneRevives,
+    WaystoneRevivesFull,
+    WaystoneItemRarity,
+    WaystonePackSize,
+    WaystoneMonsterRarity,
+    WaystoneMonsterEffectiveness,
+    WaystoneDropChance,
+    WaystoneDropChanceFull,
     GroupEnchant,
     GroupRunes,
     GroupUnique,
     GroupItem,
     GroupWeapon,
+    GroupWaystone,
     GroupPseudo,
     ShowFilters,
     HideFilters,
@@ -162,7 +173,7 @@ pub enum Message {
 impl Message {
     /// Every message, for the tests.
     #[cfg(test)]
-    const ALL: [Self; 118] = [
+    const ALL: [Self; 127] = [
         Self::LeagueModeSoftcore,
         Self::LeagueModeHardcore,
         Self::LeagueLoading,
@@ -227,11 +238,20 @@ impl Message {
         Self::DefenceEnergyShield,
         Self::DefenceBlock,
         Self::DefenceRunicWard,
+        Self::WaystoneRevives,
+        Self::WaystoneRevivesFull,
+        Self::WaystoneItemRarity,
+        Self::WaystonePackSize,
+        Self::WaystoneMonsterRarity,
+        Self::WaystoneMonsterEffectiveness,
+        Self::WaystoneDropChance,
+        Self::WaystoneDropChanceFull,
         Self::GroupEnchant,
         Self::GroupRunes,
         Self::GroupUnique,
         Self::GroupItem,
         Self::GroupWeapon,
+        Self::GroupWaystone,
         Self::GroupPseudo,
         Self::ShowFilters,
         Self::HideFilters,
@@ -351,11 +371,20 @@ impl Message {
             Self::DefenceEnergyShield => "defence-energy-shield",
             Self::DefenceBlock => "defence-block",
             Self::DefenceRunicWard => "defence-runic-ward",
+            Self::WaystoneRevives => "waystone-revives",
+            Self::WaystoneRevivesFull => "waystone-revives-full",
+            Self::WaystoneItemRarity => "waystone-item-rarity",
+            Self::WaystonePackSize => "waystone-pack-size",
+            Self::WaystoneMonsterRarity => "waystone-monster-rarity",
+            Self::WaystoneMonsterEffectiveness => "waystone-monster-effectiveness",
+            Self::WaystoneDropChance => "waystone-drop-chance",
+            Self::WaystoneDropChanceFull => "waystone-drop-chance-full",
             Self::GroupEnchant => "group-enchant",
             Self::GroupRunes => "group-runes",
             Self::GroupUnique => "group-unique",
             Self::GroupItem => "group-item",
             Self::GroupWeapon => "group-weapon",
+            Self::GroupWaystone => "group-waystone",
             Self::GroupPseudo => "group-pseudo",
             Self::ShowFilters => "show-filters",
             Self::HideFilters => "hide-filters",
@@ -487,6 +516,12 @@ const FILTER_CATALYST_QUALITY: &str = "filter-catalyst-quality";
 const FILTER_REQUIRED_LEVEL: &str = "filter-required-level";
 const FILTER_PHYSICAL_DPS: &str = "filter-physical-dps";
 const FILTER_ELEMENTAL_DPS: &str = "filter-elemental-dps";
+const FILTER_WAYSTONE_REVIVES: &str = "filter-waystone-revives";
+const FILTER_WAYSTONE_ITEM_RARITY: &str = "filter-waystone-item-rarity";
+const FILTER_WAYSTONE_PACK_SIZE: &str = "filter-waystone-pack-size";
+const FILTER_WAYSTONE_MONSTER_RARITY: &str = "filter-waystone-monster-rarity";
+const FILTER_WAYSTONE_MONSTER_EFFECTIVENESS: &str = "filter-waystone-monster-effectiveness";
+const FILTER_WAYSTONE_DROP_CHANCE: &str = "filter-waystone-drop-chance";
 const PSEUDO_ELEMENTAL_RESISTANCE: &str = "pseudo-elemental-resistance";
 const PSEUDO_CHAOS_RESISTANCE: &str = "pseudo-chaos-resistance";
 const PSEUDO_LIFE: &str = "pseudo-life";
@@ -716,7 +751,8 @@ impl Translator {
     }
 
     /// The filter of a property of an item, with its `value` written by
-    /// [`crate::format::number`]: "Item level: 81", "Quality: 24%", "Physical DPS: 245".
+    /// [`crate::format::number`]: "Item level: 81", "Quality: 24%", "Physical DPS: 245"; a
+    /// percentage of a waystone with its sign, "Item rarity: +11%".
     #[must_use]
     pub fn filter_property(&self, property: Property, value: &str) -> String {
         let id = match property {
@@ -726,6 +762,14 @@ impl Translator {
             Property::RequiredLevel => FILTER_REQUIRED_LEVEL,
             Property::PhysicalDps => FILTER_PHYSICAL_DPS,
             Property::ElementalDps => FILTER_ELEMENTAL_DPS,
+            Property::Waystone(property) => match property {
+                WaystoneProperty::Revives => FILTER_WAYSTONE_REVIVES,
+                WaystoneProperty::ItemRarity => FILTER_WAYSTONE_ITEM_RARITY,
+                WaystoneProperty::PackSize => FILTER_WAYSTONE_PACK_SIZE,
+                WaystoneProperty::MonsterRarity => FILTER_WAYSTONE_MONSTER_RARITY,
+                WaystoneProperty::MonsterEffectiveness => FILTER_WAYSTONE_MONSTER_EFFECTIVENESS,
+                WaystoneProperty::DropChance => FILTER_WAYSTONE_DROP_CHANCE,
+            },
         };
         let mut args = FluentArgs::new();
         args.set("value", value);
@@ -1147,6 +1191,12 @@ mod tests {
                 FILTER_REQUIRED_LEVEL,
                 FILTER_PHYSICAL_DPS,
                 FILTER_ELEMENTAL_DPS,
+                FILTER_WAYSTONE_REVIVES,
+                FILTER_WAYSTONE_ITEM_RARITY,
+                FILTER_WAYSTONE_PACK_SIZE,
+                FILTER_WAYSTONE_MONSTER_RARITY,
+                FILTER_WAYSTONE_MONSTER_EFFECTIVENESS,
+                FILTER_WAYSTONE_DROP_CHANCE,
                 PSEUDO_ELEMENTAL_RESISTANCE,
                 PSEUDO_CHAOS_RESISTANCE,
                 PSEUDO_LIFE,
