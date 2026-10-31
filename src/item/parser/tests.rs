@@ -1310,8 +1310,8 @@ fn reads_a_modifier_of_several_lines_marked_on_its_last_line_only() {
 
 #[test]
 fn reads_no_section_of_mixed_markers_as_the_explicit_modifiers() {
-    // A rune and an enchantment in one section, a format not seen: the explicit modifiers
-    // after it stay read.
+    // A rune and an enchantment in one section, a format not seen: its lines aren't read, a
+    // warning tells it, and the explicit modifiers after it stay read.
     for (text, explicit_lines) in [
         (
             "Item Class: Rings\nRarity: Rare\nTest Loop\nGold Ring\n--------\n\
@@ -1328,8 +1328,20 @@ fn reads_no_section_of_mixed_markers_as_the_explicit_modifiers() {
             ["+40 de Vie maximale", "+30% à la Résistance au froid"],
         ),
     ] {
-        assert_eq!(explicit_texts(&item(text)), explicit_lines, "{text}");
+        let ring = try_parse(text).expect("the item is read");
+        assert_eq!(explicit_texts(&ring), explicit_lines, "{text}");
+        assert_eq!(kinds(&ring).len(), 2, "{text}");
+        assert_eq!(ring.warnings(), [ParseWarning::MixedMarkers], "{text}");
     }
+    // A marker of a kind with a marker of an origin: the same.
+    let ring = try_parse(
+        "Item Class: Rings\nRarity: Rare\nTest Loop\nGold Ring\n--------\nItem Level: 80\n\
+         --------\n+10 to Strength (implicit)\n+12% to Fire Resistance (crafted)\n--------\n\
+         +40 to maximum Life",
+    )
+    .expect("the item is read");
+    assert_eq!(explicit_texts(&ring), ["+40 to maximum Life"]);
+    assert_eq!(ring.warnings(), [ParseWarning::MixedMarkers]);
 }
 
 #[test]

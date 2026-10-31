@@ -54,6 +54,9 @@ pub enum ParseWarning {
     /// The quality of a catalyst of a kind not in the labels: it is kept with the words of
     /// the game.
     UnknownQualityKind,
+    /// A section without header whose lines mix a marker of a kind (` (rune)`) with another
+    /// marker (` (enchant)`, ` (crafted)`), a format not seen: its lines aren't read.
+    MixedMarkers,
 }
 
 /// A line of the item with a value to read.
@@ -83,6 +86,7 @@ impl fmt::Display for ParseWarning {
             Self::UnknownModifierHeader => formatter.write_str("unknown modifier header"),
             Self::ModifierWithoutHeader => formatter.write_str("modifier lines without header"),
             Self::UnknownQualityKind => formatter.write_str("unknown kind of quality"),
+            Self::MixedMarkers => formatter.write_str("modifier lines of mixed markers"),
         }
     }
 }
@@ -110,6 +114,9 @@ enum Section<'a> {
     /// (` (rune)`…, [`marked_kind`]) or phase 2 finds; each line of the origin its own marker
     /// tells (` (fractured)`…).
     Marked(Vec<&'a str>, ModifierKind),
+    /// Lines without header whose markers of a kind [`marked_kind`] can't tell: not read, and
+    /// never taken for the explicit modifiers.
+    MixedMarkers,
     /// Flavour text, descriptions or note.
     Unread,
 }
@@ -256,6 +263,8 @@ fn recognize<'a>(lines: Vec<&'a str>, labels: &Labels) -> Recognized<'a> {
         Section::Headed(lines)
     } else if let Some(kind) = marked_kind(&lines) {
         Section::Marked(lines, kind)
+    } else if lines.iter().any(|line| has_kind_marker(line)) {
+        Section::MixedMarkers
     } else {
         return Recognized::Plain(lines);
     };
@@ -349,9 +358,8 @@ fn is_unidentified(recognized: &[Recognized<'_>]) -> bool {
 }
 
 /// The index of the explicit modifiers of an identified item copied without any `{ … }`
-/// header, its first plain section after the item level without a marker of a kind (an
-/// implicit, a rune or an enchantment that [`marked_kind`] didn't take, its markers mixed).
-/// Two copies have none: an item copied from the trade of the game (another player's
+/// header, its first plain section after the item level: a section with a marker of a kind
+/// is never plain ([`Section::Marked`], [`Section::MixedMarkers`]). Two copies have none: an item copied from the trade of the game (another player's
 /// listing), its lines without affix, tier nor range, those of a fractured, desecrated or Vaal
 /// modifier marked (` (fractured)`), and a unique whose lines have no header in either copy,
 /// the same on every copy (`Reflects opposite Ring` of Kalandra's Touch).
@@ -376,10 +384,8 @@ fn explicit_section(
         .enumerate()
         .skip(item_level + 1)
         .filter_map(|(index, r)| match r {
-            Recognized::Plain(lines) if !lines.iter().any(|line| has_kind_marker(line)) => {
-                Some((index, lines))
-            }
-            Recognized::Plain(_) | Recognized::Section(_) => None,
+            Recognized::Plain(lines) => Some((index, lines)),
+            Recognized::Section(_) => None,
         });
     let (first, lines) = plain.next()?;
     let numbered = lines.iter().any(|line| has_digit(line));
@@ -426,6 +432,7 @@ fn fill(item: &mut Item, section: Section<'_>, labels: &Labels) {
         Section::Marked(lines, kind) => item
             .modifiers
             .extend(lines.iter().map(|line| Modifier::marked(line, kind))),
+        Section::MixedMarkers => item.warnings.push(ParseWarning::MixedMarkers),
         Section::Unread => {}
     }
 }
