@@ -16,9 +16,6 @@ use super::{CopiedItem, Modifier, ModifierKind, ModifierOrigin};
 /// or a modifier not revealed yet.
 pub fn as_in_game_trade(text: &str) -> Option<String> {
     let labels = Labels::of(CopiedItem::from_text(text)?.language());
-    // The headers of the French texts put no-break spaces around the punctuation, as the
-    // parser reads them.
-    let text = text.replace(['\u{a0}', '\u{202f}'], " ");
     let mut sections = Vec::new();
     for section in text.split("\n--------\n") {
         if !section.lines().any(|line| line.starts_with('{')) {
@@ -32,7 +29,11 @@ pub fn as_in_game_trade(text: &str) -> Option<String> {
             .map(str::trim)
             .filter(|line| !line.is_empty())
         {
-            if let Some(header) = Header::parse(line, labels) {
+            // The headers of the French texts put no-break spaces around the punctuation, read
+            // as plain spaces as the parser does; the other lines keep them, as the game
+            // writes them.
+            if let Some(header) = Header::parse(&line.replace(['\u{a0}', '\u{202f}'], " "), labels)
+            {
                 let modifier = match header {
                     Header::Known(modifier) => *modifier,
                     Header::Unknown => Modifier::unknown(),

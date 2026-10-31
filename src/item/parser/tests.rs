@@ -1659,7 +1659,7 @@ fn every_advanced_copy_is_read_the_same_from_the_in_game_trade() {
             })
             .collect();
         // The whole line as key, so that two lines of the same text compare in one order.
-        lines.sort_by_key(|line| format!("{line:?}"));
+        lines.sort_by_cached_key(|line| format!("{line:?}"));
         lines
     };
     // An implicit of two lines marked on the last only: its first line read as the explicit
