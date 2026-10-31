@@ -929,11 +929,11 @@ fn searchable(stat: &mut Stat<'_>, line: Option<&LineStat>) {
 
 /// The filters of the properties of a rare, magic or normal item, like Exiled Exchange 2: its
 /// base type, checked (unchecked, its item class is searched in its place), the base of a
-/// waystone without its tier, a bar of its tier under it; its item level,
-/// checked on a normal item only (a player who checks it on another usually looks for a level
-/// of crafting), with the level of the item as its minimum; then its sockets, its quality and
-/// its required level when they are filters, and the number of its unrevealed modifiers, checked
-/// with that number as its minimum.
+/// waystone written without its tier, a bar of its tier under it; its item level, checked on a
+/// normal item only (a player who checks it on another usually looks for a level of crafting),
+/// with the level of the item as its minimum; then its sockets, its quality and its required
+/// level when they are filters, and the number of its unrevealed modifiers, checked with that
+/// number as its minimum.
 fn item_filters<'a>(item: &'a Item, base_type: Option<&'a str>) -> Vec<Stat<'a>> {
     let base_type_filter = base_type.map(|base_type| {
         let waystone = if item.is_waystone() {

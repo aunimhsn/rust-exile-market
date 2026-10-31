@@ -3,6 +3,7 @@
 
 use super::Item;
 use super::labels::Labels;
+use super::parser::{Field, ParseWarning};
 use crate::language::Language;
 
 /// The highest tier of a waystone: a corrupted waystone of tier 15 raised one tier.
@@ -53,18 +54,26 @@ impl Item {
         let labels = Labels::of(self.language);
         self.properties
             .iter()
-            .filter_map(|written| {
-                let &(_, property) = labels
-                    .waystone_properties
-                    .iter()
-                    .find(|&&(name, _)| name == written.name)?;
-                Some(WaystoneValue {
-                    property,
-                    value: signed_number(&written.value)?,
-                })
-            })
+            .filter_map(|written| read_property(labels, &written.name, &written.value).ok())
             .collect()
     }
+}
+
+/// The property of a waystone named `name`, of the value `value`, in the words of `labels`;
+/// the warning of a name not in the labels (a property added or renamed by a patch), or of a
+/// value that can't be read.
+pub(super) fn read_property(
+    labels: &Labels,
+    name: &str,
+    value: &str,
+) -> Result<WaystoneValue, ParseWarning> {
+    let &(_, property) = labels
+        .waystone_properties
+        .iter()
+        .find(|&&(label, _)| label == name)
+        .ok_or(ParseWarning::UnknownWaystoneProperty)?;
+    let value = signed_number(value).ok_or(ParseWarning::InvalidValue(Field::WaystoneProperty))?;
+    Ok(WaystoneValue { property, value })
 }
 
 /// `text` without the tier of a waystone, in `language`, and that tier: `Waystone (Tier 12)` is
@@ -73,35 +82,37 @@ impl Item {
 /// téléportation (Palier 15) incendiaire` is `Pierre de téléportation incendiaire`.
 #[must_use]
 pub fn without_tier(language: Language, text: &str) -> Option<(String, u32)> {
-    let (before, rest) = text.split_once(Labels::of(language).waystone_tier)?;
-    let (tier, after) = rest.split_once(')')?;
-    let tier = tier.parse().ok().filter(|&tier| tier > 0)?;
-    let name = [before.trim_end(), after.trim_start()]
-        .into_iter()
-        .filter(|part| !part.is_empty())
-        .collect::<Vec<_>>()
-        .join(" ");
-    (!name.is_empty()).then_some((name, tier))
+    let (before, tier, after) = split_tier(language, text)?;
+    let name = match (before, after) {
+        ("", "") => return None,
+        (name, "") | ("", name) => name.to_owned(),
+        (before, after) => format!("{before} {after}"),
+    };
+    Some((name, tier))
 }
 
 /// The base type of a waystone, in `language`, split into its name and its tier: `Waystone
-/// (Tier 12)` is `Waystone` of tier 12.
+/// (Tier 12)` is `Waystone` of tier 12; none when anything follows the tier.
 #[must_use]
 pub fn base_and_tier(language: Language, base_type: &str) -> Option<(&str, u32)> {
-    let (name, rest) = base_type.split_once(Labels::of(language).waystone_tier)?;
-    let tier = rest
-        .strip_suffix(')')?
-        .parse()
-        .ok()
-        .filter(|&tier| tier > 0)?;
-    let name = name.trim_end();
-    (!name.is_empty()).then_some((name, tier))
+    match split_tier(language, base_type)? {
+        (name, tier, "") if !name.is_empty() => Some((name, tier)),
+        _ => None,
+    }
+}
+
+/// `text` around the tier of a waystone, in `language`: the words before it, the tier, the
+/// words after it, without the spaces next to the tier.
+fn split_tier(language: Language, text: &str) -> Option<(&str, u32, &str)> {
+    let (before, rest) = text.split_once(Labels::of(language).waystone_tier)?;
+    let (tier, after) = rest.split_once(')')?;
+    let tier = tier.parse().ok().filter(|&tier| tier > 0)?;
+    Some((before.trim_end(), tier, after.trim_start()))
 }
 
 /// A whole number, with or without its sign and its percent: `3`, `+11%`, `-5%`.
 fn signed_number(value: &str) -> Option<i32> {
-    let value = value.strip_suffix('%').unwrap_or(value);
-    value.strip_prefix('+').unwrap_or(value).parse().ok()
+    value.strip_suffix('%').unwrap_or(value).parse().ok()
 }
 
 #[cfg(test)]
@@ -162,6 +173,40 @@ mod tests {
     }
 
     #[test]
+    fn a_property_of_a_waystone_that_cant_be_read_is_logged() {
+        let warnings = |line: &str| {
+            let text = format!(
+                "Item Class: Waystones\nRarity: Normal\nWaystone (Tier 3)\n--------\n\
+                 {line}\n--------\nItem Level: 66"
+            );
+            let item = Item::parse(&crate::item::CopiedItem::from_text(&text).expect("an item"))
+                .expect("read");
+            (item.waystone_properties().len(), item.warnings().to_vec())
+        };
+
+        // A name not in the labels, maybe renamed by a patch, so that it can be added.
+        assert_eq!(
+            warnings("Monster Quantity: +5% (augmented)"),
+            (0, vec![ParseWarning::UnknownWaystoneProperty])
+        );
+        assert_eq!(
+            warnings("Item Rarity: +1.5% (augmented)"),
+            (0, vec![ParseWarning::InvalidValue(Field::WaystoneProperty)])
+        );
+        // A negative value is read: it isn't a filter.
+        assert_eq!(warnings("Item Rarity: -5% (augmented)"), (1, vec![]));
+        // The owner's waystones, read without warning.
+        for text in [
+            include_str!("test-items/en-owner-rare-waystone.txt"),
+            include_str!("test-items/fr-rare-waystone.txt"),
+        ] {
+            let item = Item::parse(&crate::item::CopiedItem::from_text(text).expect("an item"))
+                .expect("read");
+            assert_eq!(item.warnings(), [], "{text}");
+        }
+    }
+
+    #[test]
     fn the_tier_of_a_waystone_is_read_from_its_base_or_its_magic_name() {
         let english = |text| without_tier(Language::English, text);
         let french = |text| without_tier(Language::French, text);
@@ -172,6 +217,11 @@ mod tests {
         assert_eq!(
             english("Burning Waystone (Tier 15)"),
             Some(("Burning Waystone".to_owned(), 15))
+        );
+        // An English magic waystone with a prefix and a suffix, the suffix after the tier.
+        assert_eq!(
+            english("Burning Waystone (Tier 15) of Ruin"),
+            Some(("Burning Waystone of Ruin".to_owned(), 15))
         );
         assert_eq!(
             french("Pierre de téléportation (Palier 15) incendiaire"),
@@ -214,6 +264,7 @@ mod tests {
         assert_eq!(signed_number("+11%"), Some(11));
         assert_eq!(signed_number("-5%"), Some(-5));
         assert_eq!(signed_number("+1.5%"), None);
+        assert_eq!(signed_number("++11%"), None);
         assert_eq!(signed_number(""), None);
     }
 }

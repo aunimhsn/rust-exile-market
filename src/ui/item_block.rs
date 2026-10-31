@@ -1,6 +1,7 @@
 //! The item block: the name of the copied item in its rarity color, the Check on trade pill,
-//! its base type and class (the base and the tier of a waystone), then its facts (the main values of its base, the skills it
-//! grants, its requirements, its tags), and the pill of its stats. A click on a state tag
+//! its base type and class (the base and the tier of a waystone), then its facts (the main
+//! values of its base, the skills it grants, its requirements, its tags), and the pill of its
+//! stats. A click on a state tag
 //! (Corrupted, Fractured…) lights it: the offers of that state only.
 
 use std::borrow::Cow;
@@ -843,6 +844,63 @@ mod tests {
             Language::French,
         );
         assert_eq!(name, "Pierre de téléportation incendiaire");
+    }
+
+    #[test]
+    fn a_waystone_shows_its_values_in_the_language_of_the_interface() {
+        // A French waystone in the English interface: the words of the interface, the base
+        // and its tier in the words of the item.
+        let (name, base, values) = waystone(
+            include_str!("../item/test-items/fr-rare-waystone.txt"),
+            "Pierre de téléportation (Palier 12)",
+            Language::English,
+        );
+        assert_eq!(name, "Intention génitrice");
+        assert_eq!(base, "Pierre de téléportation · T12");
+        assert_eq!(
+            values,
+            [
+                "Revives 2 (Revives Available)",
+                "Item Rarity +25%",
+                "Pack Size +9%",
+                "Monster Rarity +23%",
+                "Waystone Drop Chance +65%",
+            ]
+        );
+        // A negative property with its sign, as the game writes it.
+        let (_, _, values) = waystone(
+            "Item Class: Waystones\nRarity: Normal\nWaystone (Tier 3)\n--------\n\
+             Item Rarity: -5% (augmented)\n--------\nItem Level: 66",
+            "Waystone (Tier 3)",
+            Language::English,
+        );
+        assert_eq!(values, ["Item Rarity -5%"]);
+    }
+
+    #[test]
+    fn a_magic_waystone_of_an_unknown_base_keeps_the_name_of_the_game() {
+        // The names of the trade site not downloaded yet: no base to write under the name,
+        // which keeps its tier, the class alone under it, as any magic item.
+        let item = Item::parse(
+            &CopiedItem::from_text(
+                "Item Class: Waystones\nRarity: Magic\nBurning Waystone (Tier 15)\n\
+                 --------\nItem Level: 80",
+            )
+            .expect("an item"),
+        )
+        .expect("read");
+        let i18n = Translator::new(Language::English);
+        let mut filters = Filters::default();
+        let (lines, stats, tiers) = (
+            CopiedLines::default(),
+            LineStats::default(),
+            TierRolls::default(),
+        );
+        let block =
+            ItemBlock::new(&item, &lines, &stats, &tiers, &mut filters, &i18n).stats(false, None);
+
+        assert_eq!(block.title(), "Burning Waystone (Tier 15)");
+        assert_eq!(block.base_and_class().text, "Waystones");
     }
 
     #[test]

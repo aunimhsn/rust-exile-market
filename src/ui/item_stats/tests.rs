@@ -2985,6 +2985,78 @@ fn a_waystone_is_searched_by_its_properties_and_its_tier() {
 }
 
 #[test]
+fn a_waystone_searches_its_base_and_its_checked_properties() {
+    // From the copied waystone to the query sent: the whole base type, with its tier; the
+    // item rarity and the drop chance among the endgame filters; no modifier.
+    for (text, base_type, item_rarity, drop_chance) in [
+        (
+            include_str!("../../item/test-items/en-owner-rare-waystone.txt"),
+            "Waystone (Tier 12)",
+            9.0,
+            45.0,
+        ),
+        (
+            include_str!("../../item/test-items/fr-rare-waystone.txt"),
+            "Pierre de téléportation (Palier 12)",
+            22.0,
+            58.0,
+        ),
+    ] {
+        let item = parse(text);
+        let lines = CopiedLines::new(
+            item.language(),
+            item.modifiers(),
+            &LineStats::default(),
+            None,
+        );
+        let line_stats = LineStats::new(item.language(), item.modifiers(), None);
+        let tiers = TierRolls::new(
+            item.language(),
+            item.modifiers(),
+            Some(base_type),
+            item.item_level(),
+        );
+        let stats = Stats::new(&item, &lines, &line_stats, &tiers, Some(base_type));
+        let target = link::target(&item, None, None).expect("a target");
+        let query = |filters: &Filters| match link::query(
+            &item,
+            &target,
+            line_stats.search_filters(&stats.filters(filters)),
+        ) {
+            crate::trade::query::Query::Items(items) => items.to_json(),
+            crate::trade::query::Query::Exchange(_) => panic!("an item search"),
+        };
+        let mut filters = Filters::default();
+
+        let json = query(&filters);
+        assert_eq!(json["query"]["type"], base_type);
+        assert_eq!(
+            json["query"]["filters"]["map_filters"],
+            serde_json::json!({ "filters": {
+                "map_iir": { "min": item_rarity },
+                "map_bonus": { "min": drop_chance }
+            } })
+        );
+        assert!(json["query"].get("stats").is_none(), "{json}");
+
+        // The base unchecked: any waystone, of any tier.
+        let (_, mut base) = stats
+            .filters(&filters)
+            .into_iter()
+            .find(|(key, _)| *key == FilterKey::BaseType)
+            .expect("the filter of the base");
+        base.checked = false;
+        filters.set(FilterKey::BaseType, base);
+        let json = query(&filters);
+        assert!(json["query"].get("type").is_none(), "{json}");
+        assert_eq!(
+            json["query"]["filters"]["type_filters"]["filters"]["category"],
+            serde_json::json!({ "option": "map.waystone" })
+        );
+    }
+}
+
+#[test]
 fn the_filter_of_a_waystone_property_writes_its_value_as_the_game() {
     let english = Translator::new(Language::English);
     let french = Translator::new(Language::French);

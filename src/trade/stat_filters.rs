@@ -356,9 +356,8 @@ impl LineStats {
     #[must_use]
     pub fn affix_limits(&self, item: &Item) -> AffixLimits {
         let category = game_data::category(item.language(), item.base_type());
-        let corrupted_waystone = item.rarity() == Rarity::Rare
-            && item.is_corrupted()
-            && category == Some(game_data::Category::Waystone);
+        let corrupted_waystone =
+            item.rarity() == Rarity::Rare && item.is_corrupted() && item.is_waystone();
         let usual = match item.rarity() {
             Rarity::Magic => 1,
             _ if item.is_jewel() || category == Some(game_data::Category::Tablet) => 2,

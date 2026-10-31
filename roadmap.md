@@ -19,6 +19,7 @@ Path of Exile 2 leaves early access with its version 1.0 on 2026-12-11. The modi
 
 - copy real items again (English and French) and rerun the parser tests;
 - check the stat ids, the pseudo stats and the filters of the trade site, and the categories of poe2scout;
+- check the names of the properties of a waystone (`waystone_properties` in `src/item/labels.rs`; French `Efficacité des Monstres` only from Exiled Exchange 2, not seen in a copy yet) and their ids among the `map_filters` of the trade site (`/data/filters`; `map_rare_monsters` is "Monster Rarity" and `map_magic_monsters` "Monster Effectiveness", checked by two searches on 2026-10-31): an unknown name is logged (`ParseWarning::UnknownWaystoneProperty`);
 - check the tiers and ranges given by the advanced copy, and generate the game data again (stat ids and modifier tables);
 - check the bases of the modifiers of the essences and of the alloys (`ESSENCES` and `ALLOYS` in `tools/game-data/src/modifiers.rs`) against Craft of Exile, poe2db and the trade site, and add the new ones;
 - compare the crafts of the game (the crafted modifiers that aren't an alloy's, e.g. the `Motivating` of the owner's sceptre) with the lines of the alloys: crafts have no table, so a line marked crafted from the in-game trade that only an alloy holds is named "Alloy" (`Table::may_hold` in `src/game_data/modifiers.rs`; no case known on 2026-10-31, second code review of 13k3d2); if a craft shares a line and a range with an alloy on a base, name no currency for that line.
