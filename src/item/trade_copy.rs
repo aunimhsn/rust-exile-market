@@ -3,8 +3,7 @@
 //! headers nor ranges, each implicit, enchantment, crafted, fractured, desecrated or Vaal
 //! modifier marked (` (fractured)`), the fractured and Vaal modifiers first and the
 //! desecrated ones last. A modifier of several lines has its last line only marked, the
-//! form the parser must also read (step 13k5b), the game possibly marking a stat written on
-//! several lines so.
+//! form the parser also reads, the game possibly marking a stat written on several lines so.
 
 use super::labels::Labels;
 use super::modifier::{Header, Marker};
