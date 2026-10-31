@@ -7,6 +7,8 @@
 
 use std::time::{Duration, Instant, SystemTime};
 
+use crate::filters::Property;
+use crate::item::{Catalyst, Item};
 use crate::trade::offers::{ExchangeOffer, ItemOffer};
 use crate::trade::query::SearchKind;
 use crate::trade::search::{Answer, NextSearch, Order, Outcome, Search};
@@ -38,6 +40,9 @@ pub enum OffersState {
         /// The next offers couldn't come: the trade site can't be reached. Refused by its
         /// limits, the waiting block tells it already.
         more_failed: bool,
+        /// The search filtered the quality, which the trade site searches of any kind: the
+        /// offers of a catalyst of another kind than the item's aren't counted.
+        quality_searched: bool,
         searched: SystemTime,
     },
     /// The offers of the currency exchange, all of them, the first `shown` shown.
@@ -66,6 +71,8 @@ struct Pending {
     order: PendingOrder,
     /// Asked for the item shown: no item was copied since.
     shown: bool,
+    /// A search that filters the quality.
+    quality_searched: bool,
 }
 
 /// The offers of the item shown, and the searches.
@@ -86,6 +93,19 @@ impl Offers {
     #[must_use]
     pub fn state(&self) -> &OffersState {
         &self.state
+    }
+
+    /// The kind of the quality of a catalyst of `item`, the item shown, when its offers shown
+    /// were searched with its quality: the offers of another kind aren't counted.
+    #[must_use]
+    pub fn catalyst(&self, item: &Item) -> Option<Catalyst> {
+        match self.state {
+            OffersState::Items {
+                quality_searched: true,
+                ..
+            } => item.quality_kind()?.catalyst,
+            _ => None,
+        }
     }
 
     /// When the last search was answered with its offers, for any item.
@@ -129,6 +149,7 @@ impl Offers {
         self.pending = Some(Pending {
             order: PendingOrder::Search(kind),
             shown: true,
+            quality_searched: search.query.searches(Property::Quality),
         });
         self.state = OffersState::Searching;
         Some(Order::Search(search))
@@ -155,6 +176,7 @@ impl Offers {
                 self.pending = Some(Pending {
                     order: PendingOrder::More,
                     shown: true,
+                    quality_searched: false,
                 });
                 Some(Order::More)
             }
@@ -236,6 +258,7 @@ impl Offers {
                 more,
                 loading_more: false,
                 more_failed: false,
+                quality_searched: pending.quality_searched,
                 searched: now,
             },
             (Outcome::Exchange { offers, total }, _) => OffersState::Exchange {
@@ -250,6 +273,7 @@ impl Offers {
                     mut offers,
                     total,
                     first_page,
+                    quality_searched,
                     searched,
                     ..
                 },
@@ -262,6 +286,7 @@ impl Offers {
                     more,
                     loading_more: false,
                     more_failed: false,
+                    quality_searched,
                     searched,
                 }
             }
@@ -273,6 +298,7 @@ impl Offers {
                     total,
                     first_page,
                     more,
+                    quality_searched,
                     searched,
                     ..
                 },
@@ -283,6 +309,7 @@ impl Offers {
                 more,
                 loading_more: false,
                 more_failed: matches!(failure, Outcome::Unreachable),
+                quality_searched,
                 searched,
             },
             (Outcome::Unreachable, _) => OffersState::Unreachable,
@@ -343,6 +370,7 @@ mod tests {
                 base_type: "Gold Ring".to_owned(),
                 item_level: None,
                 corrupted: false,
+                quality: None,
                 modifiers: Vec::new(),
             },
         }

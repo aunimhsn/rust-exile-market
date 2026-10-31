@@ -212,7 +212,7 @@ pseudo-unrevealed-modifiers = Unrevealed modifiers: { $value }
 filter-unsearchable = The trade site can't search this line.
 filter-unsearchable-hint = The offers may not have it.
 # The tooltip of the filter of the quality of a catalyst: the trade site doesn't tell the kinds apart.
-filter-any-quality-kind = The trade site searches any kind of quality.
+filter-any-quality-kind = The trade site searches any kind of quality: the offers of another kind aren't counted in the estimate.
 # After the range of the tier of a modifier: how it was added to the item, in its color.
 origin-desecrated = Desecrated
 origin-fractured = Fractured
@@ -290,6 +290,29 @@ estimate-median = { $count ->
    *[other] Median of the { $count } similar offers.
 }
 estimate-median-cheapest = Median of the { $count } cheapest similar offers.
+# The same, when the quality of a catalyst is searched: the offers of another kind of quality ($quality, quality-of-kind) aren't counted.
+estimate-median-of = { $count ->
+    [one] Price of the only similar offer of { $quality }.
+   *[other] Median of the { $count } similar offers of { $quality }.
+}
+estimate-median-cheapest-of = Median of the { $count } cheapest similar offers of { $quality }.
+# The kind of the quality of a catalyst, within a sentence.
+quality-of-kind = { $kind ->
+        [life] life quality
+        [mana] mana quality
+        [defence] defence quality
+        [physical] physical quality
+        [fire] fire quality
+        [cold] cold quality
+        [lightning] lightning quality
+        [chaos] chaos quality
+        [attack] attack quality
+        [caster] caster quality
+        [speed] speed quality
+        [attribute] attribute quality
+        [minion] minion quality
+       *[other] quality
+    }
 # An unidentified unique whose base type has several uniques.
 identify-to-price = Identify the item to get its price.
 possible-uniques = Possible uniques
@@ -340,6 +363,25 @@ offers-more-tooltip = Show more offers
 # The tooltip of an offer: a price far below the market, the seller status, and the pill
 # that copies the whisper message of the trade site.
 offers-suspicious = Be careful: far below the market price.
+# Under the name of an offer whose quality of a catalyst is of another kind than the item's, while its quality is searched.
+offers-other-quality = Another kind of quality: not counted in the estimate.
+# After the price of such an offer, in the list: its kind of quality.
+offer-quality-kind = { $kind ->
+        [life] Life
+        [mana] Mana
+        [defence] Defence
+        [physical] Physical
+        [fire] Fire
+        [cold] Cold
+        [lightning] Lightning
+        [chaos] Chaos
+        [attack] Attack
+        [caster] Caster
+        [speed] Speed
+        [attribute] Attribute
+        [minion] Minion
+       *[other] Other
+    }
 seller-online = Online
 seller-away = Away
 seller-offline = Offline

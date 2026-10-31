@@ -9,7 +9,15 @@ use serde::de::{self, Deserializer};
 use serde_json::Value;
 
 use crate::format::Currency;
-use crate::item::Rarity;
+use crate::item::{Catalyst, QualityKind, Rarity, read_quality};
+use crate::language::Language;
+
+/// The highest quality of a catalyst on a ring, an amulet or a jewel, without a modifier
+/// `+#% to Maximum Quality`.
+const CATALYST_QUALITY: u32 = 20;
+/// The stat of `+#% to Maximum Quality` (the Essence of the Breach, the implicit of a Breach
+/// Ring), whatever its kind (`explicit.`, `implicit.`…).
+const MAXIMUM_QUALITY_STAT: &str = "stat_2039822488";
 
 /// The status of a seller.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -60,7 +68,59 @@ pub struct OfferItem {
     pub base_type: String,
     pub item_level: Option<u32>,
     pub corrupted: bool,
+    pub quality: Option<OfferQuality>,
     pub modifiers: Vec<OfferModifier>,
+}
+
+/// The quality of a listed item.
+#[derive(Debug, Clone, PartialEq)]
+pub struct OfferQuality {
+    pub value: u32,
+    /// The kind of the quality of a catalyst, as the trade site writes it (`Quality (Attack
+    /// Modifiers)`); none for the quality of the base.
+    pub kind: Option<QualityKind>,
+}
+
+impl ItemOffer {
+    /// Whether the item has the quality of a catalyst of another kind than `catalyst`: its
+    /// filter searches any kind. A kind the application doesn't know can't be told apart.
+    #[must_use]
+    pub fn has_other_quality(&self, catalyst: Catalyst) -> bool {
+        self.item
+            .quality
+            .as_ref()
+            .and_then(|quality| quality.kind.as_ref()?.catalyst)
+            .is_some_and(|kind| kind != catalyst)
+    }
+}
+
+impl OfferItem {
+    /// The highest quality of a catalyst on the item: 20 %, more with its modifiers `+#% to
+    /// Maximum Quality`. A quality left beyond it when such a modifier was removed stays (seen
+    /// on the trade site on 2026-10-31: amulets of 50 % without it).
+    #[must_use]
+    pub fn max_catalyst_quality(&self) -> u32 {
+        self.modifiers
+            .iter()
+            .filter(|modifier| {
+                modifier
+                    .stat
+                    .as_deref()
+                    .is_some_and(|stat| stat.ends_with(MAXIMUM_QUALITY_STAT))
+            })
+            .filter_map(|modifier| first_number(&modifier.text))
+            .fold(CATALYST_QUALITY, u32::saturating_add)
+    }
+}
+
+/// The first whole number of a text: 20 in `+20% to Maximum Quality`.
+fn first_number(text: &str) -> Option<u32> {
+    let start = text.find(|c: char| c.is_ascii_digit())?;
+    let digits: String = text[start..]
+        .chars()
+        .take_while(char::is_ascii_digit)
+        .collect();
+    digits.parse().ok()
 }
 
 /// A modifier line of an offer, without the markup of the trade site.
@@ -158,6 +218,9 @@ struct ApiItem {
     ilvl: Option<u32>,
     #[serde(default)]
     corrupted: bool,
+    /// `[Quality]`, `Quality (Attack Modifiers)`…, each with its values, `[["+20%", 1]]`.
+    #[serde(default)]
+    properties: Vec<ApiProperty>,
     /// `Unique`, `Rare`…
     rarity: Option<String>,
     /// 0 normal, 1 magic, 2 rare, 3 unique, as in the API of Path of Exile 1.
@@ -176,6 +239,30 @@ struct ApiItem {
     fractured_mods: Vec<ApiModifier>,
     #[serde(default)]
     desecrated_mods: Vec<ApiModifier>,
+}
+
+/// A property as `/fetch` gives it: its values are pairs of a text and a display mode, only
+/// the text is read.
+#[derive(Debug, Deserialize)]
+struct ApiProperty {
+    #[serde(default)]
+    name: String,
+    #[serde(default)]
+    values: Vec<Value>,
+}
+
+impl ApiProperty {
+    /// The quality, read as the game writes it in `language`: `Quality (Attack Modifiers):
+    /// +20%`.
+    fn quality(&self, language: Language) -> Option<OfferQuality> {
+        let value = self.values.first()?.get(0)?.as_str()?;
+        let line = format!("{}: {value}", plain_text(&self.name));
+        let (kind, value) = read_quality(&line, language)?;
+        if kind.as_ref().is_some_and(|kind| kind.catalyst.is_none()) {
+            log::warn!("Trade site: an unknown kind of quality, {line}");
+        }
+        Some(OfferQuality { value, kind })
+    }
 }
 
 /// A modifier as `/fetch` gives it: with its stat on 2026-10-26, a plain text in the API of
@@ -238,20 +325,24 @@ struct ApiExchangeSide {
 }
 
 impl ApiFetch {
-    /// The offers, in the order of the ids asked; an offer gone since the search is left
-    /// out.
-    pub fn offers(self) -> Vec<ItemOffer> {
+    /// The offers, in the order of the ids asked, from the trade site of `language`; an offer
+    /// gone since the search is left out.
+    pub fn offers(self, language: Language) -> Vec<ItemOffer> {
         self.result
             .into_iter()
             .flatten()
-            .map(ApiListed::offer)
+            .map(|listed| listed.offer(language))
             .collect()
     }
 }
 
 impl ApiListed {
-    fn offer(self) -> ItemOffer {
+    fn offer(self, language: Language) -> ItemOffer {
         let item = self.item;
+        let quality = item
+            .properties
+            .iter()
+            .find_map(|property| property.quality(language));
         let modifiers = [
             (ModifierKind::Enchant, item.enchant_mods),
             (ModifierKind::Rune, item.rune_mods),
@@ -282,6 +373,7 @@ impl ApiListed {
                 base_type: item.base_type.unwrap_or(item.type_line),
                 item_level: item.ilvl,
                 corrupted: item.corrupted,
+                quality,
                 modifiers,
             },
         }
@@ -493,7 +585,7 @@ mod tests {
     fn the_listed_items_are_read_in_their_order() {
         let fetch: ApiFetch = serde_json::from_str(FETCH).expect("read");
 
-        let offers = fetch.offers();
+        let offers = fetch.offers(Language::English);
 
         assert_eq!(offers.len(), 2, "the offer gone is left out");
         let ring = &offers[0];
@@ -538,6 +630,67 @@ mod tests {
         assert!(away.item.corrupted);
         assert_eq!(away.item.name, None);
         assert_eq!(away.item.base_type, "Gold Ring");
+    }
+
+    /// Two amulets of `/fetch` on 2026-10-31, shortened: a quality of a catalyst raised by
+    /// the Essence of the Breach, and one left at 50 % without it; and a bow with the quality
+    /// of its base.
+    const QUALITIES: &str = r#"{"result": [
+        {"id": "a1", "listing": {"account": {}}, "item": {
+            "typeLine": "Absent Amulet", "rarity": "Rare",
+            "properties": [{"name": "Quality (Caster Modifiers)", "values": [["+50%", 1]], "displayMode": 0, "type": 6}],
+            "explicitMods": [{"description": "+20% to Maximum [Quality]", "hash": "stat.explicit.stat_2039822488"}]
+        }},
+        {"id": "a2", "listing": {"account": {}}, "item": {
+            "typeLine": "Solar Amulet", "rarity": "Rare",
+            "properties": [{"name": "Quality (Mana Modifiers)", "values": [["+50%", 1]], "displayMode": 0, "type": 6}],
+            "explicitMods": [{"description": "+5% to [Quality] of all Skills", "hash": "stat.explicit.stat_3655769732"}]
+        }},
+        {"id": "b1", "listing": {"account": {}}, "item": {
+            "typeLine": "Gemini Bow", "rarity": "Rare",
+            "properties": [{"name": "[Bow]", "values": [], "displayMode": 0}, {"name": "[Quality]", "values": [["+20%", 1]], "displayMode": 0, "type": 6}]
+        }}
+    ]}"#;
+
+    #[test]
+    fn the_quality_of_an_offer_is_read_with_its_kind_and_its_maximum() {
+        let fetch: ApiFetch = serde_json::from_str(QUALITIES).expect("read");
+
+        let offers = fetch.offers(Language::English);
+
+        let caster = &offers[0];
+        let quality = caster.item.quality.as_ref().expect("a quality");
+        assert_eq!(quality.value, 50);
+        assert_eq!(
+            quality.kind,
+            Some(QualityKind {
+                catalyst: Some(Catalyst::Caster),
+                words: "Caster Modifiers".to_owned(),
+            })
+        );
+        assert_eq!(caster.item.max_catalyst_quality(), 40, "with its essence");
+        assert!(caster.has_other_quality(Catalyst::Mana));
+        assert!(!caster.has_other_quality(Catalyst::Caster));
+        // Left at 50 % once its modifier was removed: beyond its maximum. The quality of the
+        // skills isn't the maximum quality.
+        let mana = &offers[1];
+        assert_eq!(
+            mana.item.quality.as_ref().map(|quality| quality.value),
+            Some(50)
+        );
+        assert_eq!(mana.item.max_catalyst_quality(), 20);
+        let bow = &offers[2];
+        assert_eq!(
+            bow.item.quality,
+            Some(OfferQuality {
+                value: 20,
+                kind: None
+            })
+        );
+        assert!(
+            !bow.has_other_quality(Catalyst::Mana),
+            "the quality of the base"
+        );
     }
 
     #[test]

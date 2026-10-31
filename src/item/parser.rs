@@ -590,6 +590,15 @@ fn quality<'a>(line: &'a str, labels: &Labels) -> Option<(Option<QualityKind>, &
     Some((Some(kind), value))
 }
 
+/// The quality of a property written as the game writes it in `language`, `Quality (Mana
+/// Modifiers): +40%` or `Quality: +20%`: its kind, none for the quality of the base, and its
+/// value; `None` for another property, or a value that can't be read.
+#[must_use]
+pub fn read_quality(line: &str, language: Language) -> Option<(Option<QualityKind>, u32)> {
+    let (kind, value) = quality(line, Labels::of(language))?;
+    Some((kind, digits(value)?))
+}
+
 /// The number after a label, e.g. `Item Level: 80` or `Quality: +20%`.
 fn number_after(line: &str, label: &str) -> Option<u32> {
     digits(line.strip_prefix(label)?)

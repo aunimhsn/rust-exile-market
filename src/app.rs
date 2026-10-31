@@ -257,7 +257,7 @@ impl ExileMarketApp {
         let tradable = self.session.tradable(item);
         let must_identify = self.session.must_identify(item);
         let fixed_price = self.session.fixed_price(item);
-        let estimate = shown_estimate(&self.offers, &fixed_price, self.session.rates());
+        let estimate = shown_estimate(&self.offers, item, &fixed_price, self.session.rates());
         // Without a fixed price, the estimate tells the suspicious offers.
         let reference = reference(&fixed_price).or(estimate.map(|estimate| estimate.reference));
         let to_top = std::mem::take(&mut self.scroll_to_top);
@@ -472,16 +472,18 @@ fn reference(fixed_price: &Result<(FixedPrice, Rates), NoFixedPrice>) -> Option<
     Some(Reference { exalted, rates })
 }
 
-/// The estimated price of the item shown, without a fixed price, from the `offers` of its
-/// search and the `rates` of the prices of the league.
+/// The estimated price of `item`, the item shown, without a fixed price, from the `offers` of
+/// its search and the `rates` of the prices of the league.
 fn shown_estimate(
     offers: &Offers,
+    item: &Item,
     fixed_price: &Result<(FixedPrice, Rates), NoFixedPrice>,
     rates: Option<Rates>,
 ) -> Option<Estimate> {
     let Err(NoFixedPrice::NotFixedName) = fixed_price else {
         return None;
     };
+    let quality = offers.catalyst(item);
     let OffersState::Items {
         offers,
         total,
@@ -492,7 +494,7 @@ fn shown_estimate(
         return None;
     };
     // The next offers loaded don't move it.
-    estimate::estimate(&offers[..*first_page], *total, rates?)
+    estimate::estimate(&offers[..*first_page], *total, rates?, quality)
 }
 
 /// The state of the trade site in the status bar, at `now`: the long wait before the next
@@ -610,52 +612,62 @@ mod tests {
         );
     }
 
-    #[test]
-    fn the_estimate_counts_the_answer_to_the_search_of_an_item_without_a_fixed_price() {
-        use crate::trade::offers::{ItemOffer, OfferItem, Price, SellerStatus};
-        use crate::trade::query::{ItemQuery, Query, StateFilters};
-        use crate::trade::search::{Answer, NextSearch, Outcome};
+    const RATES: Rates = Rates {
+        chaos: 70.0,
+        divine: 700.0,
+    };
 
-        let rates = Rates {
-            chaos: 70.0,
-            divine: 700.0,
-        };
-        let divines = |amounts: &[f64]| -> Vec<ItemOffer> {
-            amounts
-                .iter()
-                .map(|&amount| ItemOffer {
-                    id: "a".to_owned(),
-                    price: Some(Price {
-                        amount,
-                        currency: "divine".to_owned(),
-                    }),
-                    seller: SellerStatus::Online,
-                    listed: None,
-                    whisper: String::new(),
-                    item: OfferItem {
-                        rarity: None,
-                        name: None,
-                        base_type: "Gemini Bow".to_owned(),
-                        item_level: None,
-                        corrupted: false,
-                        modifiers: Vec::new(),
-                    },
-                })
-                .collect()
-        };
-        let now = Instant::now();
-        let next_search = NextSearch {
-            items: now,
-            exchange: now,
-        };
-        let search = || Search {
+    /// Offers of a bow for `amounts` Divine Orbs.
+    fn divines(amounts: &[f64]) -> Vec<crate::trade::offers::ItemOffer> {
+        use crate::trade::offers::{ItemOffer, OfferItem, Price, SellerStatus};
+
+        amounts
+            .iter()
+            .map(|&amount| ItemOffer {
+                id: "a".to_owned(),
+                price: Some(Price {
+                    amount,
+                    currency: "divine".to_owned(),
+                }),
+                seller: SellerStatus::Online,
+                listed: None,
+                whisper: String::new(),
+                item: OfferItem {
+                    rarity: None,
+                    name: None,
+                    base_type: "Gemini Bow".to_owned(),
+                    item_level: None,
+                    corrupted: false,
+                    quality: None,
+                    modifiers: Vec::new(),
+                },
+            })
+            .collect()
+    }
+
+    /// The owner's amulet of mana quality.
+    fn amulet() -> Item {
+        Item::parse(
+            &CopiedItem::from_text(include_str!(
+                "item/test-items/en-owner-rare-amulet-catalyst.txt"
+            ))
+            .unwrap(),
+        )
+        .unwrap()
+    }
+
+    /// A search of items with the filters of `properties`.
+    fn searched(properties: Vec<crate::trade::query::PropertyFilter>) -> Search {
+        use crate::trade::query::{ItemQuery, Query, StateFilters};
+
+        Search {
             language: crate::language::Language::English,
             league: League::new("Standard"),
             query: Query::Items(ItemQuery {
                 name: None,
                 base_type: Some("Gemini Bow".to_owned()),
                 category: None,
-                properties: Vec::new(),
+                properties,
                 rarity: None,
                 states: StateFilters {
                     corrupted: Some(false),
@@ -663,23 +675,52 @@ mod tests {
                 },
                 stats: Vec::new(),
             }),
-        };
+        }
+    }
+
+    /// The answer to a search: `offers` of the `total` found, 10 at most; the next search
+    /// allowed from `now`.
+    fn answer(
+        offers: Vec<crate::trade::offers::ItemOffer>,
+        total: u64,
+        more: bool,
+        now: Instant,
+    ) -> crate::trade::search::Answer {
+        use crate::trade::search::{Answer, NextSearch, Outcome};
+
+        Answer {
+            outcome: Outcome::Items {
+                offers,
+                total,
+                more,
+            },
+            next_search: NextSearch {
+                items: now,
+                exchange: now,
+            },
+        }
+    }
+
+    #[test]
+    fn the_estimate_counts_the_answer_to_the_search_of_an_item_without_a_fixed_price() {
+        use crate::trade::search::{Answer, NextSearch, Outcome};
+
+        let amulet = amulet();
+        let now = Instant::now();
         let rare = Err(NoFixedPrice::NotFixedName);
         let mut offers = Offers::default();
-        let _ = offers.search(search(), now);
+        let _ = offers.search(searched(Vec::new()), now);
         // One offer of the first ten was gone since the search.
         offers.apply(
-            Answer {
-                outcome: Outcome::Items {
-                    offers: divines(&[1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8]),
-                    total: 30,
-                    more: true,
-                },
-                next_search,
-            },
+            answer(
+                divines(&[1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8]),
+                30,
+                true,
+                now,
+            ),
             SystemTime::now(),
         );
-        let first = shown_estimate(&offers, &rare, Some(rates)).unwrap();
+        let first = shown_estimate(&offers, &amulet, &rare, Some(RATES)).unwrap();
         let _ = offers.more();
         // Counted, the first of them would lower the estimate to 1.1 div.
         offers.apply(
@@ -688,26 +729,75 @@ mod tests {
                     offers: divines(&[0.5; 10]),
                     more: true,
                 },
-                next_search,
+                next_search: NextSearch {
+                    items: now,
+                    exchange: now,
+                },
             },
             SystemTime::now(),
         );
 
-        assert_eq!(shown_estimate(&offers, &rare, Some(rates)), Some(first));
+        assert_eq!(
+            shown_estimate(&offers, &amulet, &rare, Some(RATES)),
+            Some(first)
+        );
         assert!((first.exalted - 1.2 * 700.0).abs() < 1e-9);
         assert_eq!(first.total, 30);
-        assert_eq!(shown_estimate(&offers, &rare, None), None, "no rates yet");
         assert_eq!(
-            shown_estimate(&offers, &Err(NoFixedPrice::NotPriced), Some(rates)),
+            shown_estimate(&offers, &amulet, &rare, None),
+            None,
+            "no rates yet"
+        );
+        assert_eq!(
+            shown_estimate(&offers, &amulet, &Err(NoFixedPrice::NotPriced), Some(RATES)),
             None,
             "a fixed-name item isn't estimated"
         );
-        let _ = offers.search(search(), now);
+        let _ = offers.search(searched(Vec::new()), now);
         assert_eq!(
-            shown_estimate(&offers, &rare, Some(rates)),
+            shown_estimate(&offers, &amulet, &rare, Some(RATES)),
             None,
             "while searching"
         );
+    }
+
+    #[test]
+    fn the_estimate_leaves_out_another_kind_of_quality_only_when_the_quality_is_searched() {
+        use crate::filters::Property;
+        use crate::item::{Catalyst, QualityKind};
+        use crate::trade::offers::OfferQuality;
+        use crate::trade::query::PropertyFilter;
+
+        let amulet = amulet();
+        // The cheapest offer, of attack quality.
+        let mut first_page = divines(&[1.0, 1.1, 1.2]);
+        first_page[0].item.quality = Some(OfferQuality {
+            value: 40,
+            kind: Some(QualityKind {
+                catalyst: Some(Catalyst::Attack),
+                words: "Attack Modifiers".to_owned(),
+            }),
+        });
+        let quality = PropertyFilter {
+            property: Property::Quality,
+            minimum: Some(40.0),
+            maximum: None,
+        };
+
+        for (properties, counted) in [(vec![quality], 2), (Vec::new(), 3)] {
+            let mut offers = Offers::default();
+            let now = Instant::now();
+            let _ = offers.search(searched(properties), now);
+            offers.apply(answer(first_page.clone(), 3, false, now), SystemTime::now());
+            let estimate = shown_estimate(
+                &offers,
+                &amulet,
+                &Err(NoFixedPrice::NotFixedName),
+                Some(RATES),
+            )
+            .unwrap();
+            assert_eq!(estimate.counted, counted);
+        }
     }
 
     #[test]

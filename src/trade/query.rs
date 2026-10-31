@@ -24,6 +24,18 @@ impl Query {
             Self::Exchange(_) => SearchKind::Exchange,
         }
     }
+
+    /// Whether the query searches `property`, with or without a limit.
+    #[must_use]
+    pub fn searches(&self, property: Property) -> bool {
+        match self {
+            Self::Items(query) => query
+                .properties
+                .iter()
+                .any(|filter| filter.property == property),
+            Self::Exchange(_) => false,
+        }
+    }
 }
 
 /// The kinds of searches, whose limits differ.
