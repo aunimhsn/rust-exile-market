@@ -3264,20 +3264,31 @@ fn the_tiers_of_two_tables_of_one_level_are_numbered_by_their_ranges() {
 
 #[test]
 fn every_template_of_the_tables_is_reached_by_a_french_stat() {
-    // A table no French line reaches would leave that line of a French copy without tier.
-    let french: Vec<&str> = Stats::of(Language::French)
-        .all()
-        .flat_map(|stat| {
-            [TradeGroup::Explicit, TradeGroup::Desecrated]
-                .into_iter()
-                .flat_map(|group| Stats::english_references(stat, group))
-        })
-        .collect();
+    // A table no French line reaches would leave that line of a French copy without tier. A
+    // line is read with the ids of its group ([`TradeGroup::of`]): crafted for an alloy,
+    // explicit for the others, also desecrated or fractured.
+    let reached = |group| -> std::collections::BTreeSet<&str> {
+        Stats::of(Language::French)
+            .all()
+            .flat_map(|stat| Stats::english_references(stat, group))
+            .collect()
+    };
+    let explicit = reached(TradeGroup::Explicit);
+    let crafted = reached(TradeGroup::Crafted);
     let missed: std::collections::BTreeSet<&str> = TABLES
         .iter()
-        .flat_map(|table| &table.lines)
-        .map(|line| line.template.as_str())
-        .filter(|template| !french.contains(template))
+        .flat_map(|table| {
+            let reached = if table.source == Some(TableSource::Alloy) {
+                &crafted
+            } else {
+                &explicit
+            };
+            table
+                .lines
+                .iter()
+                .map(|line| line.template.as_str())
+                .filter(|template| !reached.contains(template))
+        })
         .collect();
 
     assert!(missed.is_empty(), "{missed:?}");

@@ -989,10 +989,7 @@ fn known_template<'a>(
         strings
             .iter()
             .find_map(|string| templates.get(string))
-            .map(|template| Known {
-                template,
-                unsigned: None,
-            })
+            .map(Known::exact)
             .or_else(|| {
                 strings.iter().find_map(|string| {
                     let template = templates.get(&string.replace("+#", "#"))?;
@@ -1002,10 +999,6 @@ fn known_template<'a>(
                     })
                 })
             })
-    };
-    let within_words = |template| Known {
-        template,
-        unsigned: None,
     };
     if !on_radius_jewel(modifier) {
         return Ok(alone());
@@ -1039,7 +1032,7 @@ fn known_template<'a>(
         .iter()
         .filter(|string| !numbered || string.contains('#'))
         .find_map(|string| within(words, string))
-        .map(within_words))
+        .map(Known::exact))
 }
 
 /// The template of Exiled Exchange 2 [`known_template`] finds, and the string of the game it
@@ -1047,6 +1040,16 @@ fn known_template<'a>(
 struct Known<'a> {
     template: &'a String,
     unsigned: Option<String>,
+}
+
+impl<'a> Known<'a> {
+    /// A template known as the game writes the line.
+    fn exact(template: &'a String) -> Self {
+        Self {
+            template,
+            unsigned: None,
+        }
+    }
 }
 
 /// Whether `modifier` rolls on a Time-Lost jewel.

@@ -2901,8 +2901,21 @@ fn a_french_line_finds_the_table_of_its_english_stat() {
             "Trade copy note",
         ]
     );
-    // One French line of two English stats: the mana recovery of the flasks of a belt, and of
-    // the jewels.
+    // One French line of two English stats: the mana recovery of the flasks of a belt, a
+    // prefix of six tiers, and of the jewels, a suffix of one tier.
+    let belt = texts(&read_again(parse(
+        "Classe d'objet: Ceintures\nRareté: Rare\nLien sinistre\nCeinture ample\n--------\n\
+         Niveau de l'objet: 80\n--------\n\
+         25% d'Augmentation de la Récupération de Mana des Flacons",
+    )));
+    assert_eq!(
+        explicit_rows(belt),
+        [
+            "Prefixes 1/3",
+            "■ 25% d'Augmentation de la Récupération de Mana des Flacons ≥23 [0.57 T3 23–28]",
+            "Trade copy note",
+        ]
+    );
     let jewel = texts(&read_again(parse(
         "Classe d'objet: Joyaux\nRareté: Rare\nÉclat sinistre\nÉmeraude\n--------\n\
          Niveau de l'objet: 80\n--------\n\

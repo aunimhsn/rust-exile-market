@@ -104,13 +104,22 @@ const REWARDS: &[&str] = &[
     "monster packs",
     "pack of monsters",
     "packs of monsters",
+    "additional packs",
+    "additional waves",
     "pack size",
     "monster rarity",
     "monster density",
     "monster markers",
-    "magic monsters",
-    "rare monster",
-    "rare monsters",
+    "increased magic monsters",
+    "reduced magic monsters",
+    "number of rare monsters",
+    "increased rare monsters",
+    "reduced rare monsters",
+    "additional rare monsters",
+    "rare expedition monsters",
+    "will be rare monsters",
+    "slaying rare monsters",
+    "duplicate runic monsters",
     "unique monster to the map",
     "additional monsters",
     "increased monsters",
@@ -129,6 +138,9 @@ const REWARDS: &[&str] = &[
     "experience",
     "tribute",
     "reward progress",
+    // The French lines without English twin (their strings don't line up).
+    "cédés par",
+    "au moins magiques",
 ];
 /// The conversions, in lowercase: their better side depends on the build.
 const BUILD_DEPENDENT: &[&str] = &["taken as", "converted to", "requirements to"];
@@ -212,7 +224,10 @@ fn average(numbers: impl ExactSizeIterator<Item = f64>) -> Option<f64> {
 fn direction(template: &str) -> Direction {
     let template = template.to_lowercase();
     let has_any = |words: &[&str]| words.iter().any(|word| has_word(&template, word));
-    let other_subject = has_any(OTHER_SUBJECTS) && !has_any(PLAYER_TARGETS) && !has_any(REWARDS);
+    // A French reward without English twin written with "de Réduction", a word that also
+    // writes a bonus, keeps an unknown side: no word reads it lower.
+    let reward = has_any(REWARDS) && !has_word(&template, "de réduction");
+    let other_subject = has_any(OTHER_SUBJECTS) && !has_any(PLAYER_TARGETS) && !reward;
     if other_subject || has_any(BUILD_DEPENDENT) {
         return Direction::Unknown;
     }
