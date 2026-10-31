@@ -4,12 +4,15 @@ function offerTooltip(t) {
     const diff = m.yours === undefined ? "" : m.value - m.yours;
     const delta = diff === "" || diff === 0 ? "" : `<span class="delta ${diff > 0 ? "up" : "down"}">${diff > 0 ? "+" : "−"}${Math.abs(diff)}</span>`;
     const tier = m.tier ? `<span class="tt-tier"><span class="tier ${m.tier <= 3 ? "tier-top" : ""} t${m.tier}">T${m.tier}</span></span>` : "";
-    return `<div class="tt-mod ${kind}"><span>${tier}${m.text}</span>${delta}</div>`;
+    // A quality of another kind than the copied item's (13k4, `m.other`): its text in red, without difference;
+    // a quality at the maximum of its item (`m.max`): its text in white.
+    return `<div class="tt-mod ${kind} ${m.other ? "is-other" : m.max ? "is-max" : ""}"><span>${tier}${m.text}</span>${m.other ? "" : delta}</div>`;
   }).join("");
   return `<div class="offer-tooltip ${t.pinned ? "pinned" : ""} ${t.below ? "below" : ""}">
     <div class="tt-head"><span class="rarity-${t.rarity || "unique"} tt-name">${t.name}</span><span class="tt-price">${t.price} ${orb(t.currency)}</span></div>
     <div class="tt-meta">${t.meta}</div>
     ${t.suspicious ? `<div class="tt-warn">Be careful: far below the market price.</div>` : ""}
+    ${t.note ? `<div class="tt-note">${t.note}</div>` : ""}
     ${[[t.props, "prop"], [t.implicit, ""], [t.mods, ""]].filter(([list]) => list && list.length).map(([list, kind]) => `<div class="tt-mods">${compare(list, kind)}</div>`).join("")}
     <div class="tt-foot">
       <span class="status s-${t.status}"><i></i>${{ online: "Online", away: "Away", offline: "Offline" }[t.status]}</span>
@@ -49,12 +52,13 @@ function offers(o, lang = "en") {
   const again = o.ready
     ? `<div class="again ready" title="Search again">${ICON.refresh(18)}</div>`
     : `<div class="again waiting" title="Next search in 8s">8s</div>`;
-  const rows = o.rows.map((r, i) => `<div class="row-o ${r.sus ? "sus" : ""} ${o.hover === i ? "hovered" : ""}">
-      <span class="p">${r.v} ${orb(r.k)}</span>${three ? `<span>${r.stock}</span>` : ""}<span><i class="online ${r.away ? "away" : ""}"></i>${r.when}</span>${o.hover === i ? offerTooltip(o.tooltip) : ""}</div>`).join("");
+  // An offer of another kind of quality (13k4, `r.other`: the kind): its price faint, the kind after it.
+  const rows = o.rows.map((r, i) => `<div class="row-o ${r.sus ? "sus" : ""} ${r.other ? "is-other" : ""} ${o.hover === i ? "hovered" : ""}">
+      <span class="p">${r.v} ${orb(r.k)}${r.other ? `<span class="app-other-kind">${r.other}</span>` : ""}</span>${three ? `<span>${r.stock}</span>` : ""}<span><i class="online ${r.away ? "away" : ""}"></i>${r.when}</span>${o.hover === i ? offerTooltip(o.tooltip) : ""}</div>`).join("");
   return `<div class="band b">
     <div class="head flat-head"><span class="title-stack"><span class="label">${label}</span><span class="age">${o.age || "searched 2min ago"}</span></span><span class="right">${o.count}</span>${again}</div>
     <div class="offers ${three ? "three" : ""}"><div class="cols">${o.columns.map(c => `<span>${c}</span>`).join("")}</div>${rows}</div>
-    ${more(o.more, fr)}</div>`;
+    ${o.footNote ? `<div class="more-note">${o.footNote}</div>` : ""}${more(o.more, fr)}</div>`;
 }
 
 // Under the list: the double chevron; the spinner while the next offers come; when they couldn't come, the

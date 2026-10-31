@@ -1,0 +1,31 @@
+Classe d'objet: Bagues
+Rareté: Rare
+ Cercle courroucé
+Bague prismatique
+--------
+Qualité (Modificateurs de Froid): +20% (augmented)
+--------
+Prérequis : Niveau 63
+--------
+Niveau de l'objet: 82
+--------
+{ Amélioration de Corruption — Attribut }
++14(10-15) de Dextérité
+--------
+{ Modificateur Implicite — Élémentaire, Feu, Froid, Foudre, Résistance — Augmentation : 20% }
++10(7-10)% à toutes les Résistances Élémentaires
+--------
+{ Préfixe : « Électrocutant » (Palier : 1) — Dégâts, Élémentaire, Foudre, Attaque }
+Ajoute 1(1-4) à 65(60-71) Dégâts de Foudre aux Attaques
+{ Profané Préfixe : « Déphasé » (Palier : 4) — Évasion }
++125(108-141) au Score d'Évasion
+{ Préfixe : « Acéré » (Palier : 3) — Dégâts, Physique, Attaque }
+Ajoute 8(7-11) à 20(14-20) Dégâts Physiques aux Attaques
+{ Suffixe : « de l'Archéologie » (Palier : 1) — Cession }
+16(15-18)% d'Augmentation de la Rareté des Objets cédés
+{ Suffixe : « du Jaguar » (Palier : 2) — Attribut }
++28(28-30) de Dextérité
+{ Suffixe : « du Nirvana » (Palier : 1) — Mana }
+67(60-69)% d'Augmentation du Taux de Régénération de Mana
+--------
+Double Corruption

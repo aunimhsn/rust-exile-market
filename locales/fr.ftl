@@ -180,6 +180,23 @@ filter-item-class = Classe cherchée : { $class }
 filter-item-level = Niveau de l'objet : { $value }
 filter-sockets = Châsses : { $value }
 filter-quality = Qualité : { $value }%
+# La qualité d'un catalyseur sur une bague, une amulette ou un joyau, courte avec son type ; un type que l'application ne connaît pas garde les mots du jeu ($words).
+filter-catalyst-quality = { $kind ->
+        [life] Qualité de vie
+        [mana] Qualité de mana
+        [defence] Qualité de défense
+        [physical] Qualité physique
+        [fire] Qualité de feu
+        [cold] Qualité de froid
+        [lightning] Qualité de foudre
+        [chaos] Qualité de chaos
+        [attack] Qualité d'attaque
+        [caster] Qualité de sorts
+        [speed] Qualité de vitesse
+        [attribute] Qualité d'attributs
+        [minion] Qualité de créatures
+       *[other] Qualité ({ $words })
+    } : { $value }%
 filter-required-level = Niveau requis : { $value }
 filter-physical-dps = DPS physique : { $value }
 filter-elemental-dps = DPS élémentaire : { $value }
@@ -197,6 +214,8 @@ pseudo-unrevealed-modifiers = Modificateurs non révélés : { $value }
 # L'infobulle d'une ligne que le site d'échange ne peut pas chercher (un modificateur ajouté par un patch), sur deux lignes.
 filter-unsearchable = Le site d'échange ne peut pas chercher cette ligne.
 filter-unsearchable-hint = Il se peut que les offres ne l'aient pas.
+# L'infobulle du filtre de la qualité d'un catalyseur : le site d'échange ne distingue pas les types.
+filter-any-quality-kind = Le site d'échange cherche tout type de qualité.
 # Après la plage du palier d'un modificateur : comment il a été ajouté à l'objet, dans sa couleur.
 origin-desecrated = Profané
 origin-fractured = Fissuré

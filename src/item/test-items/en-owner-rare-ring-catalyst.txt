@@ -1,0 +1,31 @@
+Item Class: Rings
+Rarity: Rare
+Wrath Circle
+Prismatic Ring
+--------
+Quality (Cold Modifiers): +20% (augmented)
+--------
+Requires: Level 63
+--------
+Item Level: 82
+--------
+{ Corruption Enhancement — Attribute }
++14(10-15) to Dexterity
+--------
+{ Implicit Modifier — Elemental, Fire, Cold, Lightning, Resistance — 20% Increased }
++10(7-10)% to all Elemental Resistances
+--------
+{ Prefix Modifier "Electrocuting" (Tier: 1) — Damage, Elemental, Lightning, Attack }
+Adds 1(1-4) to 65(60-71) Lightning damage to Attacks
+{ Desecrated Prefix Modifier "Phased" (Tier: 4) — Evasion }
++125(108-141) to Evasion Rating
+{ Prefix Modifier "Razor-sharp" (Tier: 3) — Damage, Physical, Attack }
+Adds 8(7-11) to 20(14-20) Physical Damage to Attacks
+{ Suffix Modifier "of Archaeology" (Tier: 1) }
+16(15-18)% increased Rarity of Items found
+{ Suffix Modifier "of the Jaguar" (Tier: 2) — Attribute }
++28(28-30) to Dexterity
+{ Suffix Modifier "of Nirvana" (Tier: 1) — Mana }
+67(60-69)% increased Mana Regeneration Rate
+--------
+Twice Corrupted

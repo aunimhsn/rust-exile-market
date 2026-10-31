@@ -177,6 +177,23 @@ filter-item-class = Class searched: { $class }
 filter-item-level = Item level: { $value }
 filter-sockets = Sockets: { $value }
 filter-quality = Quality: { $value }%
+# The quality of a catalyst on a ring, an amulet or a jewel, short with its kind; a kind the application doesn't know keeps the words of the game ($words).
+filter-catalyst-quality = { $kind ->
+        [life] Life quality
+        [mana] Mana quality
+        [defence] Defence quality
+        [physical] Physical quality
+        [fire] Fire quality
+        [cold] Cold quality
+        [lightning] Lightning quality
+        [chaos] Chaos quality
+        [attack] Attack quality
+        [caster] Caster quality
+        [speed] Speed quality
+        [attribute] Attribute quality
+        [minion] Minion quality
+       *[other] Quality ({ $words })
+    }: { $value }%
 filter-required-level = Required level: { $value }
 filter-physical-dps = Physical DPS: { $value }
 filter-elemental-dps = Elemental DPS: { $value }
@@ -194,6 +211,8 @@ pseudo-unrevealed-modifiers = Unrevealed modifiers: { $value }
 # The tooltip of a line the trade site can't search (a modifier added by a patch), on two lines.
 filter-unsearchable = The trade site can't search this line.
 filter-unsearchable-hint = The offers may not have it.
+# The tooltip of the filter of the quality of a catalyst: the trade site doesn't tell the kinds apart.
+filter-any-quality-kind = The trade site searches any kind of quality.
 # After the range of the tier of a modifier: how it was added to the item, in its color.
 origin-desecrated = Desecrated
 origin-fractured = Fractured

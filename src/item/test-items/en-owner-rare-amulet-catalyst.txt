@@ -1,0 +1,32 @@
+Item Class: Amulets
+Rarity: Rare
+Doom Idol
+Gloam Amulet
+--------
+Quality (Mana Modifiers): +40% (augmented)
+--------
+Requires: Level 56
+--------
+Item Level: 79
+--------
+{ Enhancement }
+Allocates Arcane Intensity — Unscalable Value
+--------
+{ Implicit Modifier }
+-1 Prefix Modifier allowed
++1 Suffix Modifier allowed
+--------
+{ Desecrated Prefix Modifier "Dauntless" (Tier: 3) — Energy Shield }
+36(33-38)% increased maximum Energy Shield
+{ Desecrated Prefix Modifier "Scintillating" (Tier: 2) — Energy Shield }
++75(71-79) to maximum Energy Shield
+{ Desecrated Suffix Modifier "of Exile" (Tier: 2) — Chaos, Resistance }
++22(20-23)% to Chaos Resistance
+{ Desecrated Suffix Modifier "of the Maelstrom" (Tier: 3) — Elemental, Lightning, Resistance }
++33(31-35)% to Lightning Resistance
+{ Desecrated Suffix Modifier "of the Narwhal" (Tier: 6) — Elemental, Cold, Resistance }
++19(16-20)% to Cold Resistance
+{ Desecrated Suffix Modifier "of the Despot" (Tier: 2) — Minion, Gem }
++2 to Level of all Minion Skills
+--------
+Corrupted
