@@ -1,0 +1,15 @@
+Classe d'objet: Bâtons de combat
+Rareté: Normal
+Exceptionnel Bâton de combat d'écraseur de crânes
+--------
+Qualité: +25% (augmented)
+Dégâts Physiques: 74-153 (augmented)
+Chances de Touche critique: 10.00%
+Attaques par seconde: 1.30
+--------
+Prérequis : Niveau 75, 127 (unmet) Dex, 50 Int
+--------
+Niveau de l'objet: 80
+--------
+{ Modificateur Implicite }
+27(20-50)% de chances d'Hébéter au Toucher

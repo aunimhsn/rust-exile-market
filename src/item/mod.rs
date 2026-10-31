@@ -22,6 +22,8 @@ mod copied;
 mod labels;
 mod modifier;
 mod parser;
+#[cfg(test)]
+pub(crate) mod trade_copy;
 mod weapon;
 
 pub use copied::CopiedItem;

@@ -1,0 +1,28 @@
+Item Class: Two Hand Maces
+Rarity: Rare
+Blight Crack
+Leaden Greathammer
+--------
+Physical Damage: 118-175 (augmented)
+Cold Damage: 2-6 (cold)
+Critical Hit Chance: 5.00%
+Attacks per Second: 1.10
+--------
+Requires: Level 33, 60 (unmet) Str
+--------
+Item Level: 39
+--------
+{ Prefix Modifier "Honed" (Tier: 6) — Damage, Physical, Attack }
+Adds 12(11-17) to 26(20-30) Physical Damage
+{ Prefix Modifier "Frosted" (Tier: 10) — Damage, Elemental, Cold, Attack }
+Adds 2(2-3) to 6(4-6) Cold Damage
+{ Prefix Modifier "Wicked" (Tier: 6) — Damage, Physical, Attack }
+68(65-84)% increased Physical Damage
+{ Fractured Suffix Modifier "of Absorption" (Tier: 8) — Mana }
+Gain 3(2-3) Mana per enemy killed
+{ Suffix Modifier "of Anger" (Tier: 5) — Damage, Attack, Critical }
++12(12-13)% to Critical Damage Bonus
+{ Suffix Modifier "of Conflict" (Tier: 3) — Attack }
++3 to Level of all Melee Skills
+--------
+Fractured Item

@@ -1,0 +1,22 @@
+Item Class: Helmets
+Rarity: Rare
+Gloom Guardian
+Divine Crown
+--------
+Armour: 333 (augmented)
+Energy Shield: 93 (augmented)
+--------
+Requires: Level 75, 59 (unmet) Str, 59 Int
+--------
+Item Level: 80
+--------
+{ Prefix Modifier "Gentian" (Tier: 3) — Mana }
++94(90-104) to maximum Mana
+{ Prefix Modifier "Inculcated" (Tier: 3) — Armour, Energy Shield }
+69(68-79)% increased Armour and Energy Shield
+{ Suffix Modifier "of the Walrus" (Tier: 4) — Elemental, Cold, Resistance }
++28(26-30)% to Cold Resistance
+{ Suffix Modifier "of Archaeology" (Tier: 1) }
+15(15-18)% increased Rarity of Items found
+{ Desecrated Suffix Modifier "of Amanamu" (Tier: 1) — Aura }
+35(25-35)% increased Presence Area of Effect

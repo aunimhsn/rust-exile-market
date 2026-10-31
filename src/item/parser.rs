@@ -116,7 +116,12 @@ enum Section<'a> {
 pub(super) fn parse(copied: &CopiedItem) -> Result<Item, ParseError> {
     let labels = Labels::of(copied.language());
     // The French texts put no-break spaces around the punctuation: plain spaces for the parser.
-    let text = copied.text().replace(['\u{a0}', '\u{202f}'], " ");
+    // The marker of a fixed value, too long for the narrow layout, is left out of every line
+    // before the other markers are read, whatever their order.
+    let text = copied
+        .text()
+        .replace(['\u{a0}', '\u{202f}'], " ")
+        .replace(labels.fixed_value, "");
     let mut sections = split_sections(&text);
 
     let header = sections.next().unwrap_or_default();
@@ -451,8 +456,7 @@ fn read_headed(item: &mut Item, lines: &[&str], labels: &Labels) {
                     item.warnings.push(ParseWarning::ModifierWithoutHeader);
                     Modifier::unknown()
                 })
-                // The marker of a fixed value is too long for the narrow layout.
-                .push_line(&line.replacen(labels.fixed_value, "", 1), labels),
+                .push_line(line, labels),
         }
     }
     item.modifiers.extend(current);

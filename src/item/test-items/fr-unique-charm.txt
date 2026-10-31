@@ -1,0 +1,29 @@
+Classe d'objet: Charmes
+Rareté: Unique
+Espoir naissant
+Charme de dégel
+--------
+Qualité: +1% (augmented)
+Dure 3 (augmented) secondes
+Consomme 40 charges sur 40 par utilisation
+Contient actuellement 0 charges
+Octroie l'Immunité au Gel
+--------
+Prérequis : Niveau 12
+--------
+Niveau de l'objet: 81
+--------
+{ Modificateur Implicite }
+Est utilisé lorsque vous êtes Gelé — Valeur fixe
+--------
+{ Modificateur d'Objet unique — Charme }
+La Recharge du Bouclier d'énergie démarre à l'activation — Valeur fixe
+{ Modificateur d'Objet unique }
+22(20-25)% de chances de gagner une Charge lorsque vous Tuez un Ennemi
+--------
+« Même confrontée à I'Hiver du monde, 
+la vie s'est frayée un chemin. L'Esprit pourvoit toujours. »
+--------
+Utilisé automatiquement lorsque la condition est remplie. Il doit être équipé à votre ceinture pour pouvoir contenir des charges, et se remplit lorsque vous tuez des monstres ou utilisez un Puits.
+--------
+Corrompu

@@ -1,0 +1,30 @@
+Classe d'objet: Gemmes d'aptitude
+Rareté: Gemme
+Mur de flammes
+--------
+Sort, Zone d'effet, Feu, Durée, Répétable 
+Niveau: 2
+Coût: 12 de Mana
+Temps d'incantation: 1.00 sec.
+Chances de Touche critique: 5.00%
+--------
+Prérequis : Niveau 3, 9 Int
+--------
+Châsses: G G 
+--------
+Dresse un mur de Feu devant vous, qui Embrase toute chose se trouvant dans sa zone. Tous les Projectiles que vous et vos Alliés tirez à travers le Mur de flammes infligent de dégâts de Feu supplémentaires. Si possible, Consomme une Infusion de Foudre pour ajouter des dégâts de Foudre aux Projectiles.
+--------
+Mur
+--------
+Le mur inflige 2.3 de dégâts de feu par seconde
+Durée des murs : 4.6 secondes
+La longueur du mur est de 5.1 mètres
+Embrase comme s'il infligeait 7 à 11 Dégâts de Feu
+--------
+Dégâts de Projectile
+--------
+Les projectiles qui traversent le mur infligent 2 à 4 dégâts de feu supplémentaires
+Les projectiles traversant le mur imprégné infligent 1 à 6 dégâts de foudre supplémentaires
+La longueur du mur est de 5.1 mètres
+--------
+Les Aptitudes peuvent être gérées dans le Panneau des Aptitudes.

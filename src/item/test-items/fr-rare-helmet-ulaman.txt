@@ -1,0 +1,26 @@
+Classe d'objet: Casques
+Rareté: Rare
+ Pic de ronces
+Capuche de trappeur
+--------
+Score d'Évasion: 463 (augmented)
+--------
+Prérequis : Niveau 75, 107 (unmet) Dex
+--------
+Châsses: S 
+--------
+Niveau de l'objet: 82
+--------
+{ Préfixe : « du Cerf » (Palier : 1) — Vie, Évasion }
+42(39-42)% d'Augmentation du Score d'Évasion
++42(42-49) de Vie maximale
+{ Préfixe : « Marine » (Palier : 1) — Mana }
++126(125-149) de Mana maximal
+{ Préfixe : « Fécond » (Palier : 1) — Vie }
++159(150-174) de Vie maximale
+{ Suffixe : « d'Ephij » (Palier : 1) — Élémentaire, Foudre, Résistance }
++42(41-45)% à la Résistance à la foudre
+{ Suffixe : « de la Glace » (Palier : 2) — Élémentaire, Froid, Résistance }
++39(36-40)% à la Résistance au froid
+{ Profané Suffixe : « d'Ulaman » (Palier : 1) — Dégâts, Critique }
+16(13-20)% d'Augmentation du Bonus de Dégâts Critiques

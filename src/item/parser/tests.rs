@@ -3,6 +3,7 @@
 use super::*;
 use crate::game_data;
 use crate::item::modifier::{Range, Roll, StatLine};
+use crate::item::trade_copy::as_in_game_trade;
 use crate::item::{Affix, Catalyst, Defences, ModifierOrigin, QualityKind};
 use crate::language::Language;
 
@@ -54,8 +55,28 @@ const EN_RARE_AMULET_CATALYST: &str = test_item!("en-owner-rare-amulet-catalyst.
 const FR_RARE_AMULET_CATALYST: &str = test_item!("fr-rare-amulet-catalyst.txt");
 const EN_RARE_RING_CATALYST: &str = test_item!("en-owner-rare-ring-catalyst.txt");
 const FR_RARE_RING_CATALYST: &str = test_item!("fr-rare-ring-catalyst.txt");
+const EN_RARE_MACE_FRACTURED: &str = test_item!("en-owner-rare-two-hand-mace-fractured.txt");
+const FR_RARE_MACE_FRACTURED: &str = test_item!("fr-rare-two-hand-mace-fractured.txt");
+const EN_NORMAL_QUARTERSTAFF: &str = test_item!("en-owner-normal-quarterstaff-exceptional.txt");
+const FR_NORMAL_QUARTERSTAFF: &str = test_item!("fr-normal-quarterstaff-exceptional.txt");
+const EN_NORMAL_QUARTERSTAFF_RUNE: &str = test_item!("en-owner-normal-quarterstaff-rune.txt");
+const FR_NORMAL_QUARTERSTAFF_RUNE: &str = test_item!("fr-normal-quarterstaff-rune.txt");
+const EN_NORMAL_RING_IMPLICIT: &str = test_item!("en-owner-normal-ring-implicit.txt");
+const FR_RARE_RING_IMPLICIT: &str = test_item!("fr-rare-ring-implicit.txt");
+const EN_RARE_HELMET_ULAMAN: &str = test_item!("en-owner-rare-helmet-ulaman.txt");
+const FR_RARE_HELMET_ULAMAN: &str = test_item!("fr-rare-helmet-ulaman.txt");
+const EN_RARE_FOCUS_KURGAL: &str = test_item!("en-owner-rare-focus-kurgal.txt");
+const FR_RARE_FOCUS_KURGAL: &str = test_item!("fr-rare-focus-kurgal.txt");
+const EN_RARE_HELMET_AMANAMU: &str = test_item!("en-owner-rare-helmet-amanamu.txt");
+const FR_RARE_HELMET_AMANAMU: &str = test_item!("fr-rare-helmet-amanamu.txt");
+const EN_UNIQUE_CHARM: &str = test_item!("en-owner-unique-charm.txt");
+const FR_UNIQUE_CHARM: &str = test_item!("fr-unique-charm.txt");
+const EN_GEM_SKILL: &str = test_item!("en-owner-skill-gem.txt");
+const FR_GEM_SKILL: &str = test_item!("fr-skill-gem.txt");
+const EN_CURRENCY_UNCUT_GEM_LEVEL_2: &str = test_item!("en-owner-currency-uncut-gem.txt");
+const FR_CURRENCY_UNCUT_GEM: &str = test_item!("fr-currency-uncut-gem.txt");
 
-const ALL: [&str; 42] = [
+const ALL: [&str; 62] = [
     FR_RARE_STAFF,
     FR_RARE_BODY_ARMOUR,
     FR_UNIQUE_CROSSBOW,
@@ -98,6 +119,26 @@ const ALL: [&str; 42] = [
     FR_RARE_AMULET_CATALYST,
     EN_RARE_RING_CATALYST,
     FR_RARE_RING_CATALYST,
+    EN_RARE_MACE_FRACTURED,
+    FR_RARE_MACE_FRACTURED,
+    EN_NORMAL_QUARTERSTAFF,
+    FR_NORMAL_QUARTERSTAFF,
+    EN_NORMAL_QUARTERSTAFF_RUNE,
+    FR_NORMAL_QUARTERSTAFF_RUNE,
+    EN_NORMAL_RING_IMPLICIT,
+    FR_RARE_RING_IMPLICIT,
+    EN_RARE_HELMET_ULAMAN,
+    FR_RARE_HELMET_ULAMAN,
+    EN_RARE_FOCUS_KURGAL,
+    FR_RARE_FOCUS_KURGAL,
+    EN_RARE_HELMET_AMANAMU,
+    FR_RARE_HELMET_AMANAMU,
+    EN_UNIQUE_CHARM,
+    FR_UNIQUE_CHARM,
+    EN_GEM_SKILL,
+    FR_GEM_SKILL,
+    EN_CURRENCY_UNCUT_GEM_LEVEL_2,
+    FR_CURRENCY_UNCUT_GEM,
 ];
 
 const PREFIX: ModifierKind = ModifierKind::Explicit(Some(Affix::Prefix));
@@ -1413,4 +1454,235 @@ fn an_implicit_raised_by_the_quality_of_a_catalyst_is_read_as_usual() {
             "{text}"
         );
     }
+}
+
+#[test]
+fn reads_the_owners_other_kinds_of_items() {
+    use ModifierKind::{Implicit, Rune};
+    use ModifierOrigin::{Desecrated, Fractured};
+    let unique = ModifierKind::Explicit(None);
+    // Three prefixes and three suffixes, the last desecrated.
+    let desecrated = [
+        [(PREFIX, None); 3].as_slice(),
+        &[(SUFFIX, None); 2],
+        &[(SUFFIX, Some(Desecrated))],
+    ]
+    .concat();
+    let mace = [
+        [(PREFIX, None); 3].as_slice(),
+        &[(SUFFIX, Some(Fractured))],
+        &[(SUFFIX, None); 2],
+    ]
+    .concat();
+    for (texts, rarity, base_types, expected) in [
+        (
+            [EN_RARE_MACE_FRACTURED, FR_RARE_MACE_FRACTURED],
+            Rarity::Rare,
+            ["Leaden Greathammer", "Grand marteau en plomb"],
+            mace,
+        ),
+        (
+            [EN_NORMAL_QUARTERSTAFF, FR_NORMAL_QUARTERSTAFF],
+            Rarity::Normal,
+            [
+                "Skullcrusher Quarterstaff",
+                "Bâton de combat d'écraseur de crânes",
+            ],
+            vec![(Implicit, None)],
+        ),
+        (
+            [EN_NORMAL_QUARTERSTAFF_RUNE, FR_NORMAL_QUARTERSTAFF_RUNE],
+            Rarity::Normal,
+            [
+                "Skullcrusher Quarterstaff",
+                "Bâton de combat d'écraseur de crânes",
+            ],
+            vec![(Rune, None), (Implicit, None)],
+        ),
+        (
+            [EN_RARE_HELMET_ULAMAN, FR_RARE_HELMET_ULAMAN],
+            Rarity::Rare,
+            ["Trapper Hood", "Capuche de trappeur"],
+            desecrated.clone(),
+        ),
+        (
+            [EN_RARE_FOCUS_KURGAL, FR_RARE_FOCUS_KURGAL],
+            Rarity::Rare,
+            ["Sacred Focus", "Focus sacré"],
+            desecrated.clone(),
+        ),
+        (
+            [EN_UNIQUE_CHARM, FR_UNIQUE_CHARM],
+            Rarity::Unique,
+            ["Thawing Charm", "Charme de dégel"],
+            vec![(Implicit, None), (unique, None), (unique, None)],
+        ),
+        // Their properties, their description and the lines of their skill are no modifiers.
+        (
+            [EN_GEM_SKILL, FR_GEM_SKILL],
+            Rarity::Gem,
+            ["Flame Wall", "Mur de flammes"],
+            Vec::new(),
+        ),
+        (
+            [EN_CURRENCY_UNCUT_GEM_LEVEL_2, FR_CURRENCY_UNCUT_GEM],
+            Rarity::Currency,
+            [
+                "Uncut Skill Gem (Level 2)",
+                "Gemme d'aptitude brute (Niveau 4)",
+            ],
+            Vec::new(),
+        ),
+    ] {
+        for (text, base_type) in texts.into_iter().zip(base_types) {
+            let item = item(text);
+            assert_eq!(
+                (item.rarity(), item.base_type()),
+                (rarity, base_type),
+                "{text}"
+            );
+            assert_eq!(kinds(&item), expected, "{text}");
+        }
+    }
+}
+
+#[test]
+fn reads_the_details_of_the_owners_other_kinds_of_items() {
+    use ModifierKind::Implicit;
+    // The desecrated Presence of Amanamu, among two prefixes and three suffixes.
+    for text in [EN_RARE_HELMET_AMANAMU, FR_RARE_HELMET_AMANAMU] {
+        let helmet = item(text);
+        assert_eq!(
+            kinds(&helmet),
+            [
+                [(PREFIX, None); 2].as_slice(),
+                &[(SUFFIX, None); 2],
+                &[(SUFFIX, Some(ModifierOrigin::Desecrated))],
+            ]
+            .concat(),
+            "{text}"
+        );
+    }
+    // The desecrated suffix of Kurgal, one stat written on two lines.
+    let focus = item(EN_RARE_FOCUS_KURGAL);
+    assert_eq!(
+        explicit(&focus).last().map(|kurgal| kurgal.lines.len()),
+        Some(2)
+    );
+    // An exceptional quarterstaff of quality 25 %, its rune in its socket.
+    let quarterstaff = item(FR_NORMAL_QUARTERSTAFF_RUNE);
+    assert!(quarterstaff.is_exceptional());
+    assert_eq!(
+        (quarterstaff.quality(), quarterstaff.sockets()),
+        (Some(25), Some(1))
+    );
+    // The implicit of an Unset Ring, a line without number: normal in English, rare in French.
+    let english = item(EN_NORMAL_RING_IMPLICIT);
+    assert_eq!(
+        (english.rarity(), kinds(&english)),
+        (Rarity::Normal, vec![(Implicit, None)])
+    );
+    assert_eq!(
+        first_line(&english.modifiers()[0]).text,
+        "Grants 1 additional Skill Slot"
+    );
+    let french = item(FR_RARE_RING_IMPLICIT);
+    assert_eq!(
+        kinds(&french),
+        [
+            [(Implicit, None)].as_slice(),
+            &[(PREFIX, None); 2],
+            &[(SUFFIX, None); 3],
+        ]
+        .concat()
+    );
+}
+
+#[test]
+fn reads_the_lines_of_fixed_value_of_a_unique_charm_without_their_marker_in_both_copies() {
+    // The owner's charm, and the same copied from the in-game trade: if it keeps the markers
+    // of the fixed values, they are left out too, also before the marker of an implicit.
+    for (text, expected) in [
+        (
+            EN_UNIQUE_CHARM,
+            [
+                "Used when you become Frozen",
+                "Energy Shield Recharge starts on use",
+                "22% Chance to gain a Charge when you kill an enemy",
+            ],
+        ),
+        (
+            FR_UNIQUE_CHARM,
+            [
+                "Est utilisé lorsque vous êtes Gelé",
+                "La Recharge du Bouclier d'énergie démarre à l'activation",
+                "22% de chances de gagner une Charge lorsque vous Tuez un Ennemi",
+            ],
+        ),
+    ] {
+        let in_game_trade = as_in_game_trade(text).expect("a known copy");
+        let marked_before = in_game_trade.replace(
+            " — Unscalable Value (implicit)",
+            " (implicit) — Unscalable Value",
+        );
+        let marked_before =
+            marked_before.replace(" — Valeur fixe (implicit)", " (implicit) — Valeur fixe");
+        for text in [text.to_owned(), in_game_trade, marked_before] {
+            let charm = item(&text);
+            let texts: Vec<&str> = charm
+                .modifiers()
+                .iter()
+                .map(|modifier| first_line(modifier).text.as_str())
+                .collect();
+            assert_eq!(texts, expected, "{text}");
+        }
+    }
+}
+
+#[test]
+fn every_advanced_copy_is_read_the_same_from_the_in_game_trade() {
+    // Each line with its kind, without affix, its origin and its text, in any order: the
+    // in-game trade writes the fractured modifiers first and the desecrated ones last.
+    let lines = |item: &Item| {
+        let mut lines: Vec<(ModifierKind, Option<ModifierOrigin>, String)> = item
+            .modifiers()
+            .iter()
+            .flat_map(|modifier| {
+                let kind = match modifier.kind {
+                    ModifierKind::Explicit(_) => ModifierKind::Explicit(None),
+                    kind => kind,
+                };
+                modifier
+                    .lines
+                    .iter()
+                    .map(move |line| (kind, modifier.origin, line.text.clone()))
+            })
+            .collect();
+        lines.sort_by(|a, b| a.2.cmp(&b.2));
+        lines
+    };
+    // An implicit of two lines marked on the last only: its first line read as the explicit
+    // modifiers, the real ones lost (step 13k5b).
+    let implicit_of_two_lines = [
+        EN_MAGIC_TABLET,
+        FR_MAGIC_TABLET,
+        EN_RARE_AMULET_CATALYST,
+        FR_RARE_AMULET_CATALYST,
+    ];
+    let mut read = 0;
+    for text in ALL
+        .into_iter()
+        .filter(|text| text.contains("\n{ ") && !implicit_of_two_lines.contains(text))
+    {
+        let Some(in_game_trade) = as_in_game_trade(text) else {
+            continue;
+        };
+        assert_eq!(
+            lines(&item(&in_game_trade)),
+            lines(&item(text)),
+            "{in_game_trade}"
+        );
+        read += 1;
+    }
+    assert!(read >= 30, "{read} items");
 }

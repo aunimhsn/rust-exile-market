@@ -1,0 +1,22 @@
+Classe d'objet: Casques
+Rareté: Rare
+ Garde obscure
+Couronne divine
+--------
+Armure: 333 (augmented)
+Bouclier d'énergie: 93 (augmented)
+--------
+Prérequis : Niveau 75, 59 (unmet) For, 59 Int
+--------
+Niveau de l'objet: 80
+--------
+{ Préfixe : « Magenta » (Palier : 3) — Mana }
++94(90-104) de Mana maximal
+{ Préfixe : « Inculquée » (Palier : 3) — Armure, Bouclier d'énergie }
+69(68-79)% d'Augmentation de l'Armure et du Bouclier d'énergie
+{ Suffixe : « du Morse » (Palier : 4) — Élémentaire, Froid, Résistance }
++28(26-30)% à la Résistance au froid
+{ Suffixe : « de l'Archéologie » (Palier : 1) — Cession }
+15(15-18)% d'Augmentation de la Rareté des Objets cédés
+{ Profané Suffixe : « d'Amanamu » (Palier : 1) — Aura }
+Votre Présence a 35(25-35)% d'Augmentation de Zone d'effet

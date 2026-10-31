@@ -1,0 +1,20 @@
+Item Class: Quarterstaves
+Rarity: Normal
+Exceptional Skullcrusher Quarterstaff
+--------
+Quality: +25% (augmented)
+Physical Damage: 74-153 (augmented)
+Fire Damage: 13-16 (fire)
+Critical Hit Chance: 10.00%
+Attacks per Second: 1.30
+--------
+Requires: Level 75, 127 (unmet) Dex, 50 Int
+--------
+Sockets: S 
+--------
+Item Level: 80
+--------
+Adds 13 to 16 Fire Damage (rune)
+--------
+{ Implicit Modifier }
+27(20-50)% chance to Daze on Hit
