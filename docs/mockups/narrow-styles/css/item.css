@@ -33,6 +33,10 @@
 .tag { padding: 1px 7px; border-radius: var(--radius); background: var(--control); color: var(--text); font-size: 12px; }
 .tag.corrupted { color: #fff; background: #351417; }   /* the background of the hardcore league */
 .tag.t1 { color: var(--tier-1); }   /* the number of prefixes and suffixes at tier 1 */
+/* A number of a gem at its top (13k5d1): the highest without corruption in the orange of tier 1, beyond it in
+   the corrupted red, as its level. */
+.tag.app-tag-high { color: var(--tier-1); }
+.tag.app-tag-top { color: var(--corrupted); }
 .summary { font-size: 13px; }
 /* The item block in two groups: what it is (name, base and class), then its facts (base values,
    requirements, tags), 12 px apart; the lines of a group 6 px apart. */

@@ -44,6 +44,8 @@ pub fn target<'a>(
             Some(name) => TradeTarget::Unique { name, base_type },
             None => TradeTarget::UnidentifiedUnique { base_type },
         },
+        // Never on the exchange: priced from its similar offers ([`Item::is_skill_gem`]).
+        Rarity::Gem if item.is_skill_gem() => TradeTarget::Base { base_type },
         Rarity::Currency | Rarity::Gem => {
             let id = names
                 .and_then(|names| names.exchange_id(language, base_type))
@@ -57,7 +59,8 @@ pub fn target<'a>(
                 });
             match id {
                 Some(id) => TradeTarget::Exchange { id },
-                // A skill gem, or an item missing from the exchange.
+                // A gem without level missing from the exchange, or another item missing
+                // from it.
                 None => TradeTarget::Base { base_type },
             }
         }

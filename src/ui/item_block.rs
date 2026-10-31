@@ -17,7 +17,10 @@ use super::theme::{color, size, text};
 use super::widgets;
 use crate::filters::Filters;
 use crate::i18n::{Message, NumberTag, Requirement, Translator};
-use crate::item::{self, DamageKind, Item, ItemState, Rarity, WaystoneProperty};
+use crate::item::{
+    self, DamageKind, Item, ItemState, MAX_GEM_SOCKETS, Rarity, TOP_GEM_LEVEL, TOP_GEM_QUALITY,
+    WaystoneProperty,
+};
 use crate::roll_difference::CopiedLines;
 use crate::tier_rolls::TierRolls;
 use crate::trade::stat_filters::LineStats;
@@ -69,6 +72,8 @@ pub enum ItemBlockAction {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum TagKind {
     Plain,
+    /// A number of a gem at its top, in the color of its level there.
+    Top(Color32),
     /// A state of the item, a filter of the search: gray, the offers with or without that
     /// state; lit by a click, the offers of that state only.
     State(ItemState, StateTag),
@@ -349,7 +354,8 @@ impl<'a> ItemBlock<'a> {
     /// The base type of a rare or unique item, then its class in gray: "Wanderer Coat · Body
     /// Armours"; the class alone for the other items, named by their base. A waystone, of any
     /// rarity, writes its base and its tier, in its color, without its class, which only repeats
-    /// it: "Waystone · T12".
+    /// it: "Waystone · T12". A gem writes its level after its class, in the color of its level:
+    /// "Skill Gems · Level 2".
     fn base_and_class(&self) -> LayoutJob {
         let mut job = LayoutJob::default();
         let font = text::item_line();
@@ -369,6 +375,15 @@ impl<'a> ItemBlock<'a> {
             append(&mut job, SEPARATOR, &font, color::WEAK);
         }
         append(&mut job, self.item.class(), &font, color::WEAK);
+        if let Some(level) = self.item.skill_gem_level() {
+            append(&mut job, SEPARATOR, &font, color::WEAK);
+            append(
+                &mut job,
+                &self.i18n.gem_level(level),
+                &text::base_value(),
+                gem_level_color(level),
+            );
+        }
         job
     }
 
@@ -414,6 +429,9 @@ impl<'a> ItemBlock<'a> {
                 match *kind {
                     TagKind::Plain => {
                         tag(ui, label, Sense::hover(), |_| (color::CONTROL, color::TEXT));
+                    }
+                    TagKind::Top(tint) => {
+                        tag(ui, label, Sense::hover(), |_| (color::CONTROL, tint));
                     }
                     TagKind::State(state, state_tag) => {
                         let lit = self.filters.is_lit(state);
@@ -561,7 +579,11 @@ impl<'a> ItemBlock<'a> {
         ];
         for (number, value) in numbers {
             if let Some(value) = value {
-                tags.push((i18n.tag(number, value), TagKind::Plain));
+                let kind = match top_color(item, number, value) {
+                    Some(tint) => TagKind::Top(tint),
+                    None => TagKind::Plain,
+                };
+                tags.push((i18n.tag(number, value), kind));
             }
         }
         if let Some(stack) = item.stack() {
@@ -698,6 +720,32 @@ pub(super) fn waystone_tier_color(tier: u32) -> Color32 {
         6..=10 => color::WARNING,
         11..=15 => color::TIER_1,
         _ => color::VAAL,
+    }
+}
+
+/// The color of the level of a gem, as the tier of a waystone: up to 19 white, 20 (the highest
+/// from the gem) the orange of tier 1, 21 (raised by the corruption) the corrupted red.
+fn gem_level_color(level: u32) -> Color32 {
+    match level {
+        ..TOP_GEM_LEVEL => color::TEXT,
+        TOP_GEM_LEVEL => color::TIER_1,
+        _ => color::VAAL,
+    }
+}
+
+/// The color of the tag of `number` of `item` at its top, in the colors of the level of a gem:
+/// for a gem only, its quality of 20 % the orange of tier 1, above it (corrupted) the corrupted
+/// red; its 5 sockets, the most, the orange. None for the other items, where a quality of 20 %
+/// is usual.
+fn top_color(item: &Item, number: NumberTag, value: u32) -> Option<Color32> {
+    if !item.is_skill_gem() {
+        return None;
+    }
+    match number {
+        NumberTag::Quality if value > TOP_GEM_QUALITY => Some(color::VAAL),
+        NumberTag::Quality if value == TOP_GEM_QUALITY => Some(color::TIER_1),
+        NumberTag::Sockets if value >= MAX_GEM_SOCKETS => Some(color::TIER_1),
+        _ => None,
     }
 }
 
@@ -1048,7 +1096,7 @@ mod tests {
             .tags()
             .into_iter()
             .map(|(label, kind)| match kind {
-                TagKind::Plain => (label, None),
+                TagKind::Plain | TagKind::Top(_) => (label, None),
                 TagKind::State(state, _) => (label, Some(state)),
             })
             .collect();
@@ -1097,5 +1145,85 @@ mod tests {
         assert_eq!(rounded(0.4), None);
         assert_eq!(rounded(244.6), Some(245));
         assert_eq!(rounded(2e6), None);
+    }
+
+    /// The base line of `text` and its tags with their kind, in the interface `language`.
+    fn gem(text: &str, language: Language) -> (LayoutJob, Vec<(String, TagKind)>) {
+        let item = Item::parse(&CopiedItem::from_text(text).expect("an item")).expect("read");
+        let i18n = Translator::new(language);
+        let mut filters = Filters::default();
+        let (lines, stats, tiers) = (
+            CopiedLines::default(),
+            LineStats::default(),
+            TierRolls::default(),
+        );
+        let block =
+            ItemBlock::new(&item, &lines, &stats, &tiers, &mut filters, &i18n).stats(false, None);
+        (block.base_and_class(), block.tags())
+    }
+
+    #[test]
+    fn a_skill_gem_writes_its_level_after_its_class() {
+        let (base, tags) = gem(
+            include_str!("../item/test-items/en-owner-skill-gem.txt"),
+            Language::English,
+        );
+        assert_eq!(base.text, "Skill Gems · Level\u{a0}2");
+        assert_eq!(
+            base.sections.last().map(|s| s.format.color),
+            Some(color::TEXT)
+        );
+        assert_eq!(tags, [("2 sockets".to_owned(), TagKind::Plain)]);
+        let (base, _) = gem(
+            include_str!("../item/test-items/fr-skill-gem.txt"),
+            Language::French,
+        );
+        assert_eq!(base.text, "Gemmes d'aptitude · Niveau\u{a0}2");
+    }
+
+    #[test]
+    fn the_level_quality_and_sockets_of_a_gem_at_their_top_have_their_color() {
+        assert_eq!(gem_level_color(1), color::TEXT);
+        assert_eq!(gem_level_color(19), color::TEXT);
+        assert_eq!(gem_level_color(20), color::TIER_1);
+        assert_eq!(gem_level_color(21), color::VAAL);
+        let comet = |level: u32, quality: u32, sockets: usize| {
+            let sockets = "G ".repeat(sockets);
+            format!(
+                "Item Class: Skill Gems\nRarity: Gem\nComet\n--------\nLevel: {level}\n\
+                 Quality: +{quality}% (augmented)\n--------\nSockets: {sockets}"
+            )
+        };
+        let (base, tags) = gem(&comet(21, 23, 5), Language::English);
+        assert_eq!(
+            base.sections.last().map(|s| s.format.color),
+            Some(color::VAAL)
+        );
+        assert_eq!(
+            tags,
+            [
+                ("Q 23%".to_owned(), TagKind::Top(color::VAAL)),
+                ("5 sockets".to_owned(), TagKind::Top(color::TIER_1)),
+            ]
+        );
+        let (_, tags) = gem(&comet(20, 20, 4), Language::English);
+        assert_eq!(
+            tags,
+            [
+                ("Q 20%".to_owned(), TagKind::Top(color::TIER_1)),
+                ("4 sockets".to_owned(), TagKind::Plain),
+            ]
+        );
+        let (_, tags) = gem(&comet(19, 19, 3), Language::English);
+        assert!(tags.iter().all(|(_, kind)| *kind == TagKind::Plain));
+        // Not on another item, where a quality of 20 % is usual.
+        let (base, tags) = gem(
+            "Item Class: Bows\nRarity: Normal\nGemini Bow\n--------\n\
+             Quality: +20% (augmented)\n--------\nSockets: S S S S S \n--------\n\
+             Item Level: 81",
+            Language::English,
+        );
+        assert_eq!(base.text, "Bows");
+        assert!(tags.iter().all(|(_, kind)| *kind == TagKind::Plain));
     }
 }

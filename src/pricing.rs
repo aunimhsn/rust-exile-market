@@ -28,7 +28,8 @@ pub struct Candidate<'a> {
 /// Why an item has no fixed price.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NoFixedPrice {
-    /// A rare, magic or normal item: its price is estimated from similar offers.
+    /// A rare, magic or normal item, or a skill gem: its price is estimated from similar
+    /// offers.
     NotFixedName,
     /// The prices of the league aren't known yet.
     PricesUnknown,
@@ -48,7 +49,7 @@ pub fn fixed_price<'a>(
     names: Option<&'a ItemNames>,
 ) -> Result<FixedPrice<'a>, NoFixedPrice> {
     let rarity = item.rarity();
-    if matches!(rarity, Rarity::Normal | Rarity::Magic | Rarity::Rare) {
+    if rarity.has_item_filters() || item.is_skill_gem() {
         return Err(NoFixedPrice::NotFixedName);
     }
     let prices = prices.ok_or(NoFixedPrice::PricesUnknown)?;
@@ -265,10 +266,13 @@ mod tests {
     #[test]
     fn a_lineage_gem_is_found_on_the_currency_exchange_and_a_skill_gem_isnt() {
         let lineage = "Item Class: Support Gems\nRarity: Gem\nGarukhan's Resolve";
-        let skill = "Item Class: Skill Gems\nRarity: Gem\nFireball";
+        let skill = "Item Class: Skill Gems\nRarity: Gem\nFireball\n--------\nLevel: 20 (Max)";
+        let without_level = "Item Class: Skill Gems\nRarity: Gem\nFireball";
 
         assert_eq!(found(lineage, None), ok("garukhans-resolve"));
-        assert_eq!(found(skill, None), Err(NoFixedPrice::NotPriced));
+        // Priced from its similar offers, like a rare.
+        assert_eq!(found(skill, None), Err(NoFixedPrice::NotFixedName));
+        assert_eq!(found(without_level, None), Err(NoFixedPrice::NotPriced));
     }
 
     #[test]

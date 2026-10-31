@@ -11,9 +11,9 @@ use std::fmt;
 
 use super::labels::{Labels, marker};
 use super::modifier::{Header, Marker, Modifier, ModifierKind, StatLine};
-use super::waystone;
 use super::weapon::{self, DamageKind, Weapon};
 use super::{CopiedItem, Item, ItemState, Property, QualityKind, Rarity, Requirements, Stack};
+use super::{gem, waystone};
 use crate::game_data;
 use crate::language::Language;
 
@@ -68,6 +68,7 @@ pub enum ParseWarning {
 pub enum Field {
     ItemLevel,
     Stack,
+    GemLevel,
     Quality,
     Requirements,
     WaystoneProperty,
@@ -78,6 +79,7 @@ impl fmt::Display for Field {
         formatter.write_str(match self {
             Self::ItemLevel => "item level",
             Self::Stack => "stack size",
+            Self::GemLevel => "level of a gem",
             Self::Quality => "quality",
             Self::Requirements => "requirements",
             Self::WaystoneProperty => "property of a waystone",
@@ -209,6 +211,7 @@ fn read_header(lines: &[&str], language: Language, labels: &Labels) -> Result<It
         exceptional,
         stack: None,
         item_level: None,
+        gem_level: None,
         quality: None,
         quality_kind: None,
         sockets: None,
@@ -519,8 +522,8 @@ fn read_headed(item: &mut Item, lines: &[&str], labels: &Labels) {
     item.modifiers.extend(current);
 }
 
-/// The lines `Name: value` of the properties section, and the quality and the damage of a
-/// weapon among them; on a waystone, a warning for a property it can't read.
+/// The lines `Name: value` of the properties section, and the quality, the damage of a weapon
+/// and the level of a gem among them; on a waystone, a warning for a property it can't read.
 fn read_properties(item: &mut Item, lines: &[&str], labels: &Labels) {
     let mut damage = Vec::new();
     let mut attacks_per_second = None;
@@ -552,6 +555,13 @@ fn read_properties(item: &mut Item, lines: &[&str], labels: &Labels) {
                 .any(|range| range.kind == DamageKind::Physical);
             if !physical || name == labels.physical_damage {
                 damage.extend(ranges);
+            }
+        }
+        if item.rarity == Rarity::Gem && name == labels.gem_level {
+            item.gem_level = gem::read_level(value);
+            if item.gem_level.is_none() {
+                item.warnings
+                    .push(ParseWarning::InvalidValue(Field::GemLevel));
             }
         }
         if item.class == labels.waystones

@@ -19,6 +19,7 @@
 )]
 
 mod copied;
+mod gem;
 mod labels;
 mod modifier;
 mod parser;
@@ -28,6 +29,7 @@ mod waystone;
 mod weapon;
 
 pub use copied::CopiedItem;
+pub use gem::{MAX_GEM_LEVEL, MAX_GEM_QUALITY, MAX_GEM_SOCKETS, TOP_GEM_LEVEL, TOP_GEM_QUALITY};
 pub use modifier::{
     Affix, AffixTier, Currency, Lord, Modifier, ModifierKind, ModifierOrigin, PartTier, Range,
     StatLine, TierDoubt,
@@ -181,6 +183,8 @@ pub struct Item {
         reason = "the game calls it the item level"
     )]
     item_level: Option<u32>,
+    /// The level of a gem, `Level: 2`; none for a support gem, which has no level.
+    gem_level: Option<u32>,
     quality: Option<u32>,
     /// The kind of the quality of a catalyst; none for the quality of the base.
     quality_kind: Option<QualityKind>,
@@ -329,6 +333,19 @@ impl Item {
     #[must_use]
     pub fn item_level(&self) -> Option<u32> {
         self.item_level
+    }
+
+    /// The level of a skill gem; none for another item, a support gem among them.
+    #[must_use]
+    pub fn skill_gem_level(&self) -> Option<u32> {
+        self.gem_level.filter(|_| self.rarity == Rarity::Gem)
+    }
+
+    /// A skill gem, which has a level: priced from its similar offers, never an item of the
+    /// currency exchange, unlike a lineage support gem or an uncut gem.
+    #[must_use]
+    pub fn is_skill_gem(&self) -> bool {
+        self.skill_gem_level().is_some()
     }
 
     /// The quality, in percent.

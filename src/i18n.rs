@@ -73,6 +73,7 @@ pub enum Message {
     NoOffers,
     SearchToEstimate,
     NoMarketPriceRare,
+    NoMarketPriceSkillGem,
     NoMarketPriceMagic,
     NoMarketPriceNormal,
     FrenchNamesDownloading,
@@ -106,6 +107,7 @@ pub enum Message {
     GroupItem,
     GroupWeapon,
     GroupWaystone,
+    GroupGem,
     GroupPseudo,
     ShowFilters,
     HideFilters,
@@ -173,7 +175,7 @@ pub enum Message {
 impl Message {
     /// Every message, for the tests.
     #[cfg(test)]
-    const ALL: [Self; 127] = [
+    const ALL: [Self; 129] = [
         Self::LeagueModeSoftcore,
         Self::LeagueModeHardcore,
         Self::LeagueLoading,
@@ -221,6 +223,7 @@ impl Message {
         Self::NoOffers,
         Self::SearchToEstimate,
         Self::NoMarketPriceRare,
+        Self::NoMarketPriceSkillGem,
         Self::NoMarketPriceMagic,
         Self::NoMarketPriceNormal,
         Self::FrenchNamesDownloading,
@@ -252,6 +255,7 @@ impl Message {
         Self::GroupItem,
         Self::GroupWeapon,
         Self::GroupWaystone,
+        Self::GroupGem,
         Self::GroupPseudo,
         Self::ShowFilters,
         Self::HideFilters,
@@ -354,6 +358,7 @@ impl Message {
             Self::NoOffers => "no-offers",
             Self::SearchToEstimate => "search-to-estimate",
             Self::NoMarketPriceRare => "no-market-price-rare",
+            Self::NoMarketPriceSkillGem => "no-market-price-skill-gem",
             Self::NoMarketPriceMagic => "no-market-price-magic",
             Self::NoMarketPriceNormal => "no-market-price-normal",
             Self::FrenchNamesDownloading => "french-names-downloading",
@@ -385,6 +390,7 @@ impl Message {
             Self::GroupItem => "group-item",
             Self::GroupWeapon => "group-weapon",
             Self::GroupWaystone => "group-waystone",
+            Self::GroupGem => "group-gem",
             Self::GroupPseudo => "group-pseudo",
             Self::ShowFilters => "show-filters",
             Self::HideFilters => "hide-filters",
@@ -474,6 +480,7 @@ const TAG_QUALITY: &str = "tag-quality";
 const TAG_SOCKETS: &str = "tag-sockets";
 const TAG_ITEM_LEVEL: &str = "tag-item-level";
 const TAG_STACK: &str = "tag-stack";
+const GEM_LEVEL: &str = "gem-level";
 const GRANTED_SKILL: &str = "granted-skill";
 const REQUIRES: &str = "requires";
 const REQUIREMENT_LEVEL: &str = "requirement-level";
@@ -511,6 +518,7 @@ const FILTER_BASE_TYPE: &str = "filter-base-type";
 const FILTER_ITEM_CLASS: &str = "filter-item-class";
 const FILTER_ITEM_LEVEL: &str = "filter-item-level";
 const FILTER_SOCKETS: &str = "filter-sockets";
+const FILTER_GEM_LEVEL: &str = "filter-gem-level";
 const FILTER_QUALITY: &str = "filter-quality";
 const FILTER_CATALYST_QUALITY: &str = "filter-catalyst-quality";
 const FILTER_REQUIRED_LEVEL: &str = "filter-required-level";
@@ -757,7 +765,8 @@ impl Translator {
     pub fn filter_property(&self, property: Property, value: &str) -> String {
         let id = match property {
             Property::ItemLevel => FILTER_ITEM_LEVEL,
-            Property::Sockets => FILTER_SOCKETS,
+            Property::Sockets | Property::GemSockets => FILTER_SOCKETS,
+            Property::GemLevel => FILTER_GEM_LEVEL,
             Property::Quality => FILTER_QUALITY,
             Property::RequiredLevel => FILTER_REQUIRED_LEVEL,
             Property::PhysicalDps => FILTER_PHYSICAL_DPS,
@@ -918,6 +927,12 @@ impl Translator {
             NumberTag::ItemLevel => TAG_ITEM_LEVEL,
         };
         self.format_number(id, "value", value)
+    }
+
+    /// The level of a gem, after its item class under its name: "Level 2".
+    #[must_use]
+    pub fn gem_level(&self, level: u32) -> String {
+        self.format_number(GEM_LEVEL, "value", level)
     }
 
     /// The stack tag of the item block: its size and its largest size.
@@ -1166,6 +1181,7 @@ mod tests {
                 TAG_SOCKETS,
                 TAG_ITEM_LEVEL,
                 TAG_STACK,
+                GEM_LEVEL,
                 GRANTED_SKILL,
                 REQUIRES,
                 REQUIREMENT_LEVEL,
@@ -1186,6 +1202,7 @@ mod tests {
                 FILTER_ITEM_CLASS,
                 FILTER_ITEM_LEVEL,
                 FILTER_SOCKETS,
+                FILTER_GEM_LEVEL,
                 FILTER_QUALITY,
                 FILTER_CATALYST_QUALITY,
                 FILTER_REQUIRED_LEVEL,
@@ -1558,5 +1575,27 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn the_level_and_the_sockets_of_a_gem_are_named_in_each_language() {
+        let english = Translator::new(Language::English);
+        let french = Translator::new(Language::French);
+        assert_eq!(english.filter_property(Property::GemLevel, "2"), "Level: 2");
+        assert_eq!(
+            french.filter_property(Property::GemLevel, "2"),
+            "Niveau\u{a0}: 2"
+        );
+        // The same words as the sockets of another item.
+        assert_eq!(
+            english.filter_property(Property::GemSockets, "5"),
+            "Sockets: 5"
+        );
+        assert_eq!(
+            french.filter_property(Property::GemSockets, "5"),
+            "Châsses\u{a0}: 5"
+        );
+        assert_eq!(english.gem_level(21), "Level\u{a0}21");
+        assert_eq!(french.gem_level(21), "Niveau\u{a0}21");
     }
 }

@@ -475,3 +475,35 @@ fn an_item_of_the_exchange_is_never_filtered_by_its_corrupted_state() {
         Query::Exchange("transmute".to_owned())
     );
 }
+
+#[test]
+fn a_skill_gem_is_searched_as_an_item_even_if_its_name_were_on_the_exchange() {
+    // Its level, quality and sockets make its price, which the exchange doesn't tell apart.
+    let names = |name: &str| crate::item_names::Names {
+        exchange: [(name.to_owned(), "flame-wall".to_owned())].into(),
+        base_types: Vec::new(),
+        stats: Vec::new(),
+    };
+    let names = ItemNames::new(
+        std::time::SystemTime::UNIX_EPOCH,
+        names("Flame Wall"),
+        names("Mur de flammes"),
+        Vec::new(),
+    );
+    for (text, base_type) in [
+        (
+            include_str!("../../item/test-items/en-owner-skill-gem.txt"),
+            "Flame Wall",
+        ),
+        (
+            include_str!("../../item/test-items/fr-skill-gem.txt"),
+            "Mur de flammes",
+        ),
+    ] {
+        assert_eq!(
+            target(&parse(text), Some(&names), None),
+            Some(TradeTarget::Base { base_type }),
+            "{text}"
+        );
+    }
+}

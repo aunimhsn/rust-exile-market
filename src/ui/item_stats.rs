@@ -43,8 +43,9 @@ use crate::format;
 use crate::game_data::{self, Category};
 use crate::i18n::{Message, Translator};
 use crate::item::{
-    self, Affix, AffixTier, Currency, Item, Lord, MAX_WAYSTONE_TIER, Modifier, ModifierKind,
-    ModifierOrigin, PartTier, QualityKind, Range, Rarity, StatLine, TierDoubt, WaystoneProperty,
+    self, Affix, AffixTier, Currency, Item, Lord, MAX_GEM_LEVEL, MAX_GEM_QUALITY, MAX_GEM_SOCKETS,
+    MAX_WAYSTONE_TIER, Modifier, ModifierKind, ModifierOrigin, PartTier, QualityKind, Range,
+    Rarity, StatLine, TierDoubt, WaystoneProperty,
 };
 use crate::roll_difference::CopiedLines;
 use crate::tier_rolls::{LineRolls, TierRolls, TierSpan};
@@ -125,11 +126,15 @@ const ITEM_LEVELS: Range = Range {
 /// The augmentable sockets an item can have: the field of the sockets stays within them. No
 /// offer had 7 or more on the trade site on 2026-10-28.
 const SOCKETS: Range = Range { min: 0.0, max: 6.0 };
-/// The highest quality of an item whose base the game data doesn't know (a gem): the highest
-/// of any item, the 75 % of a Refined Breach Ring (checked on the trade site on 2026-10-31).
-/// The field of the quality stays within the highest quality of the base
-/// ([`Category::max_quality`]), or within this one.
+/// The highest quality of an item whose base the game data doesn't know: the highest of any
+/// item, the 75 % of a Refined Breach Ring (checked on the trade site on 2026-10-31). The field
+/// of the quality stays within the highest quality of the base ([`Category::max_quality`]), or
+/// within this one.
 const MAX_QUALITY: u32 = 75;
+/// The quality from which the quality of a gem is checked, like Exiled Exchange 2, in percent.
+const GEM_QUALITY: u32 = 16;
+/// The sockets from which the sockets of a gem are checked: every gem has 2.
+const GEM_SOCKETS: u32 = 3;
 /// The required levels: the field of the required level stays within them. Checked on the
 /// trade site on 2026-10-28: offers requiring level 90, none above.
 const REQUIRED_LEVELS: Range = Range {
@@ -154,6 +159,8 @@ enum Group {
     Weapon,
     /// The properties of a waystone.
     Waystone,
+    /// The level, the quality and the sockets of a skill gem.
+    Gem,
     /// The totals the trade site adds up from several lines.
     Pseudo,
     /// The enchantments, and the modifiers added by the corruption.
@@ -842,6 +849,7 @@ fn rows<'a>(
         push_group(&mut rows, Group::Waystone, waystone_filters(item));
         dps_filters(item, !unrevealed)
     } else {
+        push_group(&mut rows, Group::Gem, gem_filters(item));
         Vec::new()
     };
     let pseudo = if matches!(item.rarity(), Rarity::Magic | Rarity::Rare) {
@@ -1000,6 +1008,49 @@ fn waystone_filters(item: &Item) -> Vec<Stat<'static>> {
                 checked,
             )
         })
+        .collect()
+}
+
+/// The filters of a skill gem, each with its value as its minimum: its level, always checked, so
+/// that a gem of level 15 isn't compared with gems of level 1 sold for nothing; its quality,
+/// checked from 16 %, like Exiled Exchange 2; its sockets, checked from 3, every gem having 2.
+/// None for a support gem, which has no level.
+fn gem_filters(item: &Item) -> Vec<Stat<'static>> {
+    let Some(level) = item.skill_gem_level() else {
+        return Vec::new();
+    };
+    // Within the values a gem can take, from `min` to `max`.
+    let filter = |property, value: u32, (min, max): (u32, u32), checked| {
+        let value = f64::from(value);
+        let bounds = Range {
+            min: f64::from(min),
+            max: f64::from(max),
+        };
+        property_filter(
+            property,
+            value,
+            Limit::minimum(value).within(bounds),
+            checked,
+        )
+    };
+    let quality = item
+        .quality()
+        .filter(|&quality| quality > 0)
+        .map(|quality| {
+            let checked = quality >= GEM_QUALITY;
+            filter(Property::Quality, quality, (0, MAX_GEM_QUALITY), checked)
+        });
+    let sockets = item
+        .sockets()
+        .filter(|&sockets| sockets > 0)
+        .map(|sockets| {
+            let checked = sockets >= GEM_SOCKETS;
+            filter(Property::GemSockets, sockets, (0, MAX_GEM_SOCKETS), checked)
+        });
+    [filter(Property::GemLevel, level, (1, MAX_GEM_LEVEL), true)]
+        .into_iter()
+        .chain(quality)
+        .chain(sockets)
         .collect()
 }
 
@@ -1892,6 +1943,7 @@ fn group_title(ui: &mut Ui, group: Group, range: bool, i18n: &Translator) {
         Group::Item => (Message::GroupItem, None),
         Group::Weapon => (Message::GroupWeapon, None),
         Group::Waystone => (Message::GroupWaystone, None),
+        Group::Gem => (Message::GroupGem, None),
         Group::Pseudo => (Message::GroupPseudo, None),
         Group::Enchant => (Message::GroupEnchant, None),
         Group::Runes => (Message::GroupRunes, None),
