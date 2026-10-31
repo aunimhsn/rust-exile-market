@@ -1,0 +1,25 @@
+Item Class: Foci
+Rarity: Rare
+Skull Anthem
+Sacred Focus
+--------
+Energy Shield: 167 (augmented)
+--------
+Requires: Level 75, 107 Int
+--------
+Item Level: 79
+--------
+{ Prefix Modifier "Heavenly" (Tier: 2) — Mana, Energy Shield }
+38(33-38)% increased Energy Shield
++27(27-32) to maximum Mana
+{ Prefix Modifier "Radiating" (Tier: 6) — Energy Shield }
++40(36-41) to maximum Energy Shield
+{ Prefix Modifier "Azure" (Tier: 9) — Mana }
++32(25-34) to maximum Mana
+{ Suffix Modifier "of the Ice" (Tier: 2) — Elemental, Cold, Resistance }
++37(36-40)% to Cold Resistance
+{ Suffix Modifier "of the Augur" (Tier: 5) — Attribute }
++17(17-20) to Intelligence
+{ Desecrated Suffix Modifier "of Kurgal" (Tier: 1) }
+23(15-25)% chance when collecting an Elemental Infusion to gain an
+additional Elemental Infusion of the same type

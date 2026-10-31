@@ -222,6 +222,7 @@ pub mod tests {
                 &[
                     ("Divine Orb", "divine"),
                     ("Orb of Transmutation", "transmute"),
+                    ("Uncut Skill Gem (Level 2)", "uncut-skill-gem-2"),
                 ],
                 &["Maul", "Temple Maul", "Ruby Ring", "Emerald"],
             ),
@@ -229,6 +230,7 @@ pub mod tests {
                 &[
                     ("Orbe divin", "divine"),
                     ("Orbe de transmutation", "transmute"),
+                    ("Gemme d'aptitude brute (Niveau 4)", "uncut-skill-gem-4"),
                 ],
                 &["Massue", "Massue du temple", "Bague de rubis", "Émeraude"],
             ),

@@ -4,6 +4,7 @@
 //! in doubt and the notes.
 
 use super::*;
+use crate::item::trade_copy::as_in_game_trade;
 use crate::item::{CopiedItem, ItemState};
 use crate::language::Language;
 
@@ -1358,13 +1359,16 @@ fn a_unique_has_no_pseudo_totals() {
 
 #[test]
 fn a_jewel_has_two_prefixes_and_two_suffixes_at_most() {
+    // A modifier of a jewel has one tier.
     let english = parse(
         "Item Class: Jewels\nRarity: Rare\nGlow Spark\nRuby\n--------\n\
-         { Prefix Modifier \"Hale\" (Tier: 2) — Life }\n+12(10-14) to maximum Life",
+         { Prefix Modifier \"Brutish\" (Tier: 1) — Minion, Life }\n\
+         Minions have 12(5-15)% increased maximum Life",
     );
     let french = parse(
         "Classe d'objet: Joyaux\nRareté: Rare\nÉclat\nRubis\n--------\n\
-         { Préfixe : « Sain » (Palier : 2) — Vie }\n+12(10-14) de Vie maximale",
+         { Préfixe : « Brutal » (Palier : 1) — Créature, Vie }\n\
+         Les Créatures ont 12(5-15)% d'Augmentation de Vie maximale",
     );
 
     assert!(english.is_jewel());
@@ -1373,10 +1377,8 @@ fn a_jewel_has_two_prefixes_and_two_suffixes_at_most() {
         [
             "Item",
             "■ Base: Ruby",
-            "Pseudo",
-            "■ Life: 12 ≥11",
             "Prefixes 1/2",
-            "□ +12 to maximum Life ≥11 [T2 10–14]"
+            "■ Minions have 12% increased maximum Life ≥11 [0.70 5–15]"
         ]
     );
     assert_eq!(
@@ -1384,10 +1386,8 @@ fn a_jewel_has_two_prefixes_and_two_suffixes_at_most() {
         [
             "Item",
             "■ Base: Rubis",
-            "Pseudo",
-            "■ Life: 12 ≥11",
             "Prefixes 1/2",
-            "□ +12 de Vie maximale ≥11 [T2 10–14]"
+            "■ Les Créatures ont 12% d'Augmentation de Vie maximale ≥11 [0.70 5–15]"
         ]
     );
 }
@@ -3065,4 +3065,205 @@ fn explicit_rows(texts: Vec<String>) -> Vec<String> {
                 .any(|group| text.starts_with(group))
         })
         .collect()
+}
+
+/// The rows of `text`, an advanced copy, and of the same copied from the in-game trade, its
+/// tiers found from its values.
+fn both(text: &str) -> (Vec<String>, Vec<String>) {
+    (
+        texts(&parse(text)),
+        texts(&read_again(parse(
+            &as_in_game_trade(text).expect("a known copy"),
+        ))),
+    )
+}
+
+#[test]
+fn the_owners_rare_items_show_the_same_rows_from_the_in_game_trade() {
+    // A fractured suffix among modifiers of several tiers: the same rows from the in-game
+    // trade, every tier found from its value.
+    let mace = [
+        "Prefixes 3/3",
+        "□ Adds 12 to 26 Physical Damage ≥17 [0.21 T6 11–17 · 20–30]",
+        "□ Adds 2 to 6 Cold Damage ≥4 [0.01 T10 2–3 · 4–6]",
+        "□ 68% increased Physical Damage ≥61 [0.20 T6 65–84]",
+        "Suffixes 3/3",
+        "■ Gain 3 Mana per enemy killed ≥3 [0.02 T8 2–3 Fractured]",
+        "■ +12% to Critical Damage Bonus ≥11 [0.13 T5 12–13]",
+        "■ +3 to Level of all Melee Skills ≥3 [0.33 T3]",
+    ];
+    let (advanced, in_game_trade) = both(include_str!(
+        "../../item/test-items/en-owner-rare-two-hand-mace-fractured.txt"
+    ));
+    assert_eq!(explicit_rows(advanced), mace);
+    assert_eq!(
+        explicit_rows(in_game_trade),
+        [mace.as_slice(), &["Trade copy note"]].concat()
+    );
+
+    // The desecrated modifier of each lord, over its range without tier, in both copies and
+    // both languages; the stat of Kurgal written on two lines.
+    for (text, desecrated) in [
+        (
+            include_str!("../../item/test-items/en-owner-rare-helmet-ulaman.txt"),
+            "■ 16% increased Critical Damage Bonus ≥14 [0.43 13–20 Desecrated]",
+        ),
+        (
+            include_str!("../../item/test-items/fr-rare-helmet-ulaman.txt"),
+            "■ 16% d'Augmentation du Bonus de Dégâts Critiques ≥14 [0.43 13–20 Desecrated]",
+        ),
+        (
+            include_str!("../../item/test-items/en-owner-rare-focus-kurgal.txt"),
+            "additional Elemental Infusion of the same type [15–25 Desecrated]",
+        ),
+        (
+            include_str!("../../item/test-items/fr-rare-focus-kurgal.txt"),
+            "Infusion élémentaire supplémentaire du même type [15–25 Desecrated]",
+        ),
+        (
+            include_str!("../../item/test-items/en-owner-rare-helmet-amanamu.txt"),
+            "■ 35% increased Presence Area of Effect ≥32 [1.00 25–35 Desecrated]",
+        ),
+        (
+            include_str!("../../item/test-items/fr-rare-helmet-amanamu.txt"),
+            "■ Votre Présence a 35% d'Augmentation de Zone d'effet ≥32 [1.00 25–35 Desecrated]",
+        ),
+    ] {
+        let (advanced, in_game_trade) = both(text);
+        assert!(advanced.contains(&desecrated.to_owned()), "{advanced:?}");
+        assert!(
+            in_game_trade.contains(&desecrated.to_owned()),
+            "{in_game_trade:?}"
+        );
+    }
+}
+
+#[test]
+fn the_owners_unset_ring_and_helmet_of_amanamu_show_their_rows_from_the_in_game_trade() {
+    // The French Unset Ring, rare: its implicit without number, then its modifiers.
+    let (advanced, in_game_trade) = both(include_str!(
+        "../../item/test-items/fr-rare-ring-implicit.txt"
+    ));
+    let ring = [
+        "Implicit",
+        "■ Octroie 1 Emplacement d'Aptitude supplémentaire",
+        "Prefixes 2/3",
+        "■ +210 au Score de Précision ≥189 [0.45 T3 168–236]",
+        "□ +79 de Mana maximal ≥71 [0.41 T7 65–79]",
+        "Suffixes 3/3",
+        "□ +13% à toutes les Résistances Élémentaires ≥12 [0.77 T2 12–14]",
+        "■ 49% d'Augmentation du Taux de Régénération de Mana ≥44 [0.66 T3 40–49]",
+        "□ +32% à la Résistance au froid ≥29 [0.67 T3 31–35]",
+    ];
+    let from_implicit = |texts: Vec<String>| -> Vec<String> {
+        texts
+            .into_iter()
+            .skip_while(|text| text != "Implicit")
+            .collect()
+    };
+    assert_eq!(from_implicit(advanced), ring);
+    assert_eq!(
+        from_implicit(in_game_trade),
+        [ring.as_slice(), &["Trade copy note"]].concat()
+    );
+
+    // From the in-game trade, the rarity of the helmet of Amanamu, at the top of a prefix and
+    // the bottom of a suffix, with room for both: in doubt.
+    let (_, in_game_trade) = both(include_str!(
+        "../../item/test-items/en-owner-rare-helmet-amanamu.txt"
+    ));
+    assert_eq!(
+        explicit_rows(in_game_trade),
+        [
+            "Prefixes 2/3",
+            "□ +94 to maximum Mana ≥85 [0.60 T3 90–104]",
+            "■ 69% increased Armour and Energy Shield ≥62 [0.64 T3 68–79]",
+            "Suffixes 2/3",
+            "□ +28% to Cold Resistance ≥25 [0.56 T4 26–30]",
+            "■ 35% increased Presence Area of Effect ≥32 [1.00 25–35 Desecrated]",
+            "Explicit",
+            "■ 15% increased Rarity of Items found ≥14 [T2 12–15 AffixPrefix / T1 15–18 \
+             AffixSuffix]",
+            "Trade copy note",
+        ]
+    );
+}
+
+#[test]
+fn the_owners_normal_items_unique_charm_and_gems_show_their_rows() {
+    // A normal quarterstaff: its rune, unchecked, and its implicit over its range, without it
+    // from the in-game trade.
+    let (advanced, in_game_trade) = both(include_str!(
+        "../../item/test-items/fr-normal-quarterstaff-rune.txt"
+    ));
+    let quarterstaff = |implicit: &str| {
+        [
+            "Item",
+            "■ Base: Bâton de combat d'écraseur de crânes",
+            "■ ItemLevel: 80 ≥80",
+            "■ Sockets: 1 ≥1",
+            "■ Quality: 25 ≥25",
+            "Weapon",
+            "■ PhysicalDps: 148 ≥132",
+            "□ ElementalDps: 19 ≥16",
+            "Runes",
+            "□ Ajoute 13 à 16 Dégâts de Feu ≥14.5",
+            "Implicit",
+            implicit,
+        ]
+        .map(str::to_owned)
+    };
+    assert_eq!(
+        advanced,
+        quarterstaff("■ 27% de chances d'Hébéter au Toucher ≥24 [20–50 0.23]")
+    );
+    assert_eq!(
+        in_game_trade,
+        quarterstaff("■ 27% de chances d'Hébéter au Toucher ≥24")
+    );
+    // The implicit of an Unset Ring, without number: searched without limit, in both copies.
+    let (advanced, in_game_trade) = both(include_str!(
+        "../../item/test-items/en-owner-normal-ring-implicit.txt"
+    ));
+    assert_eq!(advanced, in_game_trade);
+    assert_eq!(
+        advanced[advanced.len() - 2..],
+        ["Implicit", "■ Grants 1 additional Skill Slot"]
+    );
+
+    // A unique charm: its lines of fixed value without filter, its other line over its range;
+    // from the in-game trade, unchecked without range until the prices give it, as the other
+    // uniques.
+    let charm = include_str!("../../item/test-items/en-owner-unique-charm.txt");
+    assert_eq!(
+        texts(&parse(charm)),
+        [
+            "Implicit",
+            "Used when you become Frozen",
+            "Unique",
+            "■ 22% Chance to gain a Charge when you kill an enemy ≥22 [20–25 0.40]",
+            "Energy Shield Recharge starts on use",
+        ]
+    );
+    assert_eq!(
+        texts(&parse(&as_in_game_trade(charm).expect("a known copy"))),
+        [
+            "Implicit",
+            "Used when you become Frozen",
+            "Unique",
+            "□ 22% Chance to gain a Charge when you kill an enemy ≥22",
+            "Energy Shield Recharge starts on use",
+        ]
+    );
+
+    // A skill gem and an uncut gem: no filter (the level, quality and sockets of a skill
+    // gem in step 13k5d).
+    for text in [
+        include_str!("../../item/test-items/en-owner-skill-gem.txt"),
+        include_str!("../../item/test-items/fr-skill-gem.txt"),
+        include_str!("../../item/test-items/en-owner-currency-uncut-gem.txt"),
+        include_str!("../../item/test-items/fr-currency-uncut-gem.txt"),
+    ] {
+        assert_eq!(texts(&parse(text)), Vec::<String>::new(), "{text}");
+    }
 }

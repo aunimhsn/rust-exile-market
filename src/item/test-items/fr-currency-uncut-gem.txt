@@ -1,0 +1,7 @@
+Classe d'objet: Gemmes d'aptitude brutes
+Rareté: Objet monétaire
+Gemme d'aptitude brute (Niveau 4)
+--------
+Crée une Gemme d'aptitude ou fait passer une Gemme existante au niveau 4
+--------
+Effectuez un clic droit sur cet objet pour graver une Gemme d'aptitude.

@@ -1,0 +1,25 @@
+Classe d'objet: Foci
+Rareté: Rare
+ Hymne du crâne
+Focus sacré
+--------
+Bouclier d'énergie: 167 (augmented)
+--------
+Prérequis : Niveau 75, 107 Int
+--------
+Niveau de l'objet: 79
+--------
+{ Préfixe : « Merveilleux » (Palier : 2) — Mana, Bouclier d'énergie }
+38(33-38)% d'Augmentation du Bouclier d'énergie
++27(27-32) de Mana maximal
+{ Préfixe : « Rayonnant » (Palier : 6) — Bouclier d'énergie }
++40(36-41) de Bouclier d'énergie maximal
+{ Préfixe : « Azur » (Palier : 9) — Mana }
++32(25-34) de Mana maximal
+{ Suffixe : « de la Glace » (Palier : 2) — Élémentaire, Froid, Résistance }
++37(36-40)% à la Résistance au froid
+{ Suffixe : « du Devin » (Palier : 5) — Attribut }
++17(17-20) d'Intelligence
+{ Profané Suffixe : « de Kurgal » (Palier : 1) }
+Lorsque vous collectez une Infusion élémentaire, vous avez 23(15-25)% de chances de gagner une
+Infusion élémentaire supplémentaire du même type

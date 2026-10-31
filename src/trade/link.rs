@@ -281,6 +281,43 @@ mod tests {
     }
 
     #[test]
+    fn an_uncut_gem_is_an_item_of_the_exchange_and_a_skill_gem_is_searched_by_its_name() {
+        let names = item_names();
+        for (text, id) in [
+            (
+                include_str!("../item/test-items/en-owner-currency-uncut-gem.txt"),
+                "uncut-skill-gem-2",
+            ),
+            (
+                include_str!("../item/test-items/fr-currency-uncut-gem.txt"),
+                "uncut-skill-gem-4",
+            ),
+        ] {
+            assert_eq!(
+                target(&parse(text), Some(&names), None),
+                Some(TradeTarget::Exchange { id }),
+                "{text}"
+            );
+        }
+        for (text, base_type) in [
+            (
+                include_str!("../item/test-items/en-owner-skill-gem.txt"),
+                "Flame Wall",
+            ),
+            (
+                include_str!("../item/test-items/fr-skill-gem.txt"),
+                "Mur de flammes",
+            ),
+        ] {
+            assert_eq!(
+                target(&parse(text), Some(&names), None),
+                Some(TradeTarget::Base { base_type }),
+                "{text}"
+            );
+        }
+    }
+
+    #[test]
     fn the_other_items_are_searched_by_their_base_type() {
         let names = item_names();
         let mace = parse(include_str!("../item/test-items/en-magic-mace.txt"));

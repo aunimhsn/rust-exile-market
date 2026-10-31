@@ -1,0 +1,26 @@
+Item Class: Helmets
+Rarity: Rare
+Bramble Peak
+Trapper Hood
+--------
+Evasion Rating: 463 (augmented)
+--------
+Requires: Level 75, 107 (unmet) Dex
+--------
+Sockets: S 
+--------
+Item Level: 82
+--------
+{ Prefix Modifier "Stag's" (Tier: 1) — Life, Evasion }
+42(39-42)% increased Evasion Rating
++42(42-49) to maximum Life
+{ Prefix Modifier "Mazarine" (Tier: 1) — Mana }
++126(125-149) to maximum Mana
+{ Prefix Modifier "Fecund" (Tier: 1) — Life }
++159(150-174) to maximum Life
+{ Suffix Modifier "of Ephij" (Tier: 1) — Elemental, Lightning, Resistance }
++42(41-45)% to Lightning Resistance
+{ Suffix Modifier "of the Ice" (Tier: 2) — Elemental, Cold, Resistance }
++39(36-40)% to Cold Resistance
+{ Desecrated Suffix Modifier "of Ulaman" (Tier: 1) — Damage, Critical }
+16(13-20)% increased Critical Damage Bonus

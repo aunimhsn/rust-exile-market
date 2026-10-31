@@ -1,0 +1,22 @@
+Classe d'objet: Bagues
+Rareté: Rare
+ Prise vengeresse
+Bague inachevée
+--------
+Prérequis : Niveau 48
+--------
+Niveau de l'objet: 78
+--------
+{ Modificateur Implicite }
+Octroie 1 Emplacement d'Aptitude supplémentaire
+--------
+{ Préfixe : « Régulière » (Palier : 3) — Attaque }
++210(168-236) au Score de Précision
+{ Préfixe : « Aqua » (Palier : 7) — Mana }
++79(65-79) de Mana maximal
+{ Suffixe : « de la Bigarrure » (Palier : 2) — Élémentaire, Feu, Froid, Foudre, Résistance }
++13(12-14)% à toutes les Résistances Élémentaires
+{ Suffixe : « de l'Exultation » (Palier : 3) — Mana }
+49(40-49)% d'Augmentation du Taux de Régénération de Mana
+{ Suffixe : « de l'Ours polaire » (Palier : 3) — Élémentaire, Froid, Résistance }
++32(31-35)% à la Résistance au froid

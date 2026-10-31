@@ -1,0 +1,28 @@
+Classe d'objet: Masses à deux mains
+Rareté: Rare
+ Fissure du fléau
+Grand marteau en plomb
+--------
+Dégâts Physiques: 118-175 (augmented)
+Dégâts de froid: 2-6 (cold)
+Chances de Touche critique: 5.00%
+Attaques par seconde: 1.10
+--------
+Prérequis : Niveau 33, 60 (unmet) For
+--------
+Niveau de l'objet: 39
+--------
+{ Préfixe : « Affûté » (Palier : 6) — Dégâts, Physique, Attaque }
+Ajoute 12(11-17) à 26(20-30) Dégâts Physiques
+{ Préfixe : « Froid » (Palier : 10) — Dégâts, Élémentaire, Froid, Attaque }
+Ajoute 2(2-3) à 6(4-6) Dégâts de Froid
+{ Préfixe : « Malfaisant » (Palier : 6) — Dégâts, Physique, Attaque }
+68(65-84)% d'Augmentation des Dégâts Physiques
+{ Fissuré Suffixe : « de l'Absorption » (Palier : 8) — Mana }
+Vous gagnez 3(2-3) de Mana par Ennemi Tué
+{ Suffixe : « de la Colère » (Palier : 5) — Dégâts, Attaque, Critique }
++12(12-13)% au Bonus de Dégâts Critiques
+{ Suffixe : « du Conflit » (Palier : 3) — Attaque }
++3 au Niveau de toutes les Aptitudes de Mêlée
+--------
+Objet fissuré

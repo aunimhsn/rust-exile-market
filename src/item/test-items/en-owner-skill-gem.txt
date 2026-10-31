@@ -1,0 +1,30 @@
+Item Class: Skill Gems
+Rarity: Gem
+Flame Wall
+--------
+Spell, AoE, Fire, Duration, Repeatable
+Level: 2
+Cost: 12 Mana
+Cast Time: 1.00s
+Critical Hit Chance: 5.00%
+--------
+Requires: Level 3, 9 Int
+--------
+Sockets: G G 
+--------
+Create a wall of Fire in front of you, which Ignites everything within its area. Any Projectiles fired through the wall by you and Allies deal added Fire damage. Consumes a Lightning Infusion if possible to also add Lightning damage to the Projectiles.
+--------
+Wall
+--------
+Wall deals 2.3 Fire Damage per second
+Wall duration is 4.6 seconds
+Wall length is 5.1 metres
+Ignites as though dealing 7 to 11 Fire damage
+--------
+Projectile Damage
+--------
+Projectiles which pass through the wall deal 2 to 4 Added Fire Damage
+Projectiles which pass through the Infused wall deal 1 to 6 Added Lightning Damage
+Wall length is 5.1 metres
+--------
+Skills can be managed in the Skills Panel.
