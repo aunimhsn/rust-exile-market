@@ -3,7 +3,7 @@
 use super::*;
 use crate::game_data;
 use crate::item::modifier::{Range, Roll, StatLine};
-use crate::item::{Affix, Defences, ModifierOrigin};
+use crate::item::{Affix, Catalyst, Defences, ModifierOrigin, QualityKind};
 use crate::language::Language;
 
 macro_rules! test_item {
@@ -50,8 +50,12 @@ const EN_RARE_WAYSTONE: &str = test_item!("en-owner-rare-waystone.txt");
 const FR_RARE_WAYSTONE: &str = test_item!("fr-rare-waystone.txt");
 const EN_MAGIC_TABLET: &str = test_item!("en-owner-magic-tablet.txt");
 const FR_MAGIC_TABLET: &str = test_item!("fr-magic-tablet.txt");
+const EN_RARE_AMULET_CATALYST: &str = test_item!("en-owner-rare-amulet-catalyst.txt");
+const FR_RARE_AMULET_CATALYST: &str = test_item!("fr-rare-amulet-catalyst.txt");
+const EN_RARE_RING_CATALYST: &str = test_item!("en-owner-rare-ring-catalyst.txt");
+const FR_RARE_RING_CATALYST: &str = test_item!("fr-rare-ring-catalyst.txt");
 
-const ALL: [&str; 38] = [
+const ALL: [&str; 42] = [
     FR_RARE_STAFF,
     FR_RARE_BODY_ARMOUR,
     FR_UNIQUE_CROSSBOW,
@@ -90,6 +94,10 @@ const ALL: [&str; 38] = [
     FR_RARE_WAYSTONE,
     EN_MAGIC_TABLET,
     FR_MAGIC_TABLET,
+    EN_RARE_AMULET_CATALYST,
+    FR_RARE_AMULET_CATALYST,
+    EN_RARE_RING_CATALYST,
+    FR_RARE_RING_CATALYST,
 ];
 
 const PREFIX: ModifierKind = ModifierKind::Explicit(Some(Affix::Prefix));
@@ -1287,5 +1295,54 @@ fn tells_a_unique_copied_from_the_in_game_trade() {
         EN_TRADE_RARE_HELMET,
     ] {
         assert!(!item(text).has_rolls_from_prices(), "{text}");
+    }
+}
+
+#[test]
+fn reads_the_quality_of_a_catalyst_with_its_kind() {
+    for (text, quality, catalyst) in [
+        (EN_RARE_AMULET_CATALYST, 40, Catalyst::Mana),
+        (FR_RARE_AMULET_CATALYST, 40, Catalyst::Mana),
+        (EN_RARE_RING_CATALYST, 20, Catalyst::Cold),
+        (FR_RARE_RING_CATALYST, 20, Catalyst::Cold),
+    ] {
+        let item = item(text);
+        assert_eq!(item.quality(), Some(quality), "{text}");
+        assert_eq!(
+            item.quality_kind(),
+            Some(&QualityKind::Catalyst(catalyst)),
+            "{text}"
+        );
+    }
+    // The quality of a base has no kind.
+    assert_eq!(item(FR_RARE_STAFF).quality_kind(), None);
+}
+
+#[test]
+fn a_kind_of_catalyst_the_application_doesnt_know_keeps_the_words_of_the_game() {
+    let item = item(
+        "Item Class: Rings\nRarity: Rare\nWoe Loop\nGold Ring\n--------\n\
+         Quality (Speedy Modifiers): +20% (augmented)\n--------\nItem Level: 80",
+    );
+
+    assert_eq!(item.quality(), Some(20));
+    assert_eq!(
+        item.quality_kind(),
+        Some(&QualityKind::Other("Speedy Modifiers".to_owned()))
+    );
+}
+
+#[test]
+fn an_implicit_raised_by_the_quality_of_a_catalyst_is_read_as_usual() {
+    for text in [EN_RARE_RING_CATALYST, FR_RARE_RING_CATALYST] {
+        let ring = item(text);
+        let implicit = of_kind(&ring, ModifierKind::Implicit);
+
+        assert_eq!(implicit.len(), 1, "{text}");
+        assert_eq!(
+            first_line(implicit[0]).rolls,
+            [roll(10.0, 7.0, 10.0)],
+            "{text}"
+        );
     }
 }

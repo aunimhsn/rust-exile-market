@@ -4,7 +4,7 @@
 //! here. The markers at the end of the lines (`(augmented)`, `(rune)`, `(implicit)`…) are in
 //! English in every language.
 
-use super::{Affix, ItemState, ModifierKind, ModifierOrigin, Rarity};
+use super::{Affix, Catalyst, ItemState, ModifierKind, ModifierOrigin, Rarity};
 use crate::language::Language;
 
 /// The words of one language. The labels of the `Label: value` lines end with their
@@ -18,6 +18,12 @@ pub(super) struct Labels {
     pub item_level: &'static str,
     pub stack_size: &'static str,
     pub quality: &'static str,
+    /// The words around the kind of the quality of a catalyst, `Quality (` and `): ` in
+    /// `Quality (Mana Modifiers): +40%`.
+    pub catalyst_quality: (&'static str, &'static str),
+    /// The kinds of the quality of a catalyst, as the game writes them between the
+    /// parentheses.
+    pub catalysts: &'static [(&'static str, Catalyst)],
     pub sockets: &'static str,
     pub requires: &'static str,
     pub level: &'static str,
@@ -137,6 +143,25 @@ static ENGLISH: Labels = Labels {
     item_level: "Item Level: ",
     stack_size: "Stack Size: ",
     quality: "Quality: ",
+    catalyst_quality: ("Quality (", "): "),
+    // Seen on the trade site on 2026-10-31: Life, Mana, Defence, Fire, Cold, Lightning, Attack,
+    // Caster, Attribute and Minion; Physical, Chaos and Speed from the tags of Exiled
+    // Exchange 2 (`CATALYST_TO_TAG`).
+    catalysts: &[
+        ("Life Modifiers", Catalyst::Life),
+        ("Mana Modifiers", Catalyst::Mana),
+        ("Defence Modifiers", Catalyst::Defence),
+        ("Physical Modifiers", Catalyst::Physical),
+        ("Fire Modifiers", Catalyst::Fire),
+        ("Cold Modifiers", Catalyst::Cold),
+        ("Lightning Modifiers", Catalyst::Lightning),
+        ("Chaos Modifiers", Catalyst::Chaos),
+        ("Attack Modifiers", Catalyst::Attack),
+        ("Caster Modifiers", Catalyst::Caster),
+        ("Speed Modifiers", Catalyst::Speed),
+        ("Attribute Modifiers", Catalyst::Attribute),
+        ("Minion Modifiers", Catalyst::Minion),
+    ],
     sockets: "Sockets: ",
     requires: "Requires: ",
     level: "Level ",
@@ -199,6 +224,23 @@ static FRENCH: Labels = Labels {
     item_level: "Niveau de l'objet: ",
     stack_size: "Taille de l'ensemble: ",
     quality: "Qualité: ",
+    catalyst_quality: ("Qualité (", "): "),
+    // Seen in the owner's copies: Mana and Froid; the others from the French tags of Exiled
+    // Exchange 2, unchecked (a wrong one keeps the words of the game); the defences unknown.
+    catalysts: &[
+        ("Modificateurs de Vie", Catalyst::Life),
+        ("Modificateurs de Mana", Catalyst::Mana),
+        ("Modificateurs de Physique", Catalyst::Physical),
+        ("Modificateurs de Feu", Catalyst::Fire),
+        ("Modificateurs de Froid", Catalyst::Cold),
+        ("Modificateurs de Foudre", Catalyst::Lightning),
+        ("Modificateurs de Chaos", Catalyst::Chaos),
+        ("Modificateurs d'Attaque", Catalyst::Attack),
+        ("Modificateurs de Lanceur de sorts", Catalyst::Caster),
+        ("Modificateurs de Vitesse", Catalyst::Speed),
+        ("Modificateurs d'Attribut", Catalyst::Attribute),
+        ("Modificateurs de Créature", Catalyst::Minion),
+    ],
     sockets: "Châsses: ",
     requires: "Prérequis : ",
     level: "Niveau ",

@@ -1,0 +1,32 @@
+Classe d'objet: Amulettes
+Rareté: Rare
+ Idole condamnée
+Amulette du couchant
+--------
+Qualité (Modificateurs de Mana): +40% (augmented)
+--------
+Prérequis : Niveau 56
+--------
+Niveau de l'objet: 79
+--------
+{ Amélioration }
+Attribue Intensité arcanique — Valeur fixe
+--------
+{ Modificateur Implicite }
+-1 Modificateur préfixe autorisé
++1 Modificateur suffixe autorisé
+--------
+{ Profané Préfixe : « Impavide » (Palier : 3) — Bouclier d'énergie }
+36(33-38)% d'Augmentation du Bouclier d'énergie maximal
+{ Profané Préfixe : « Scintillante » (Palier : 2) — Bouclier d'énergie }
++75(71-79) de Bouclier d'énergie maximal
+{ Profané Suffixe : « de l'Exil » (Palier : 2) — Chaos, Résistance }
++22(20-23)% à la Résistance au chaos
+{ Profané Suffixe : « du Maelström » (Palier : 3) — Élémentaire, Foudre, Résistance }
++33(31-35)% à la Résistance à la foudre
+{ Profané Suffixe : « du Narval » (Palier : 6) — Élémentaire, Froid, Résistance }
++19(16-20)% à la Résistance au froid
+{ Profané Suffixe : « du Despote » (Palier : 2) — Créature, Gemme }
++2 au Niveau de toutes les Aptitudes de Créatures
+--------
+Corrompu

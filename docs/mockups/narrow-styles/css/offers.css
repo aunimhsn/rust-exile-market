@@ -8,6 +8,10 @@
 .offers .row-o .p { display: flex; align-items: center; gap: 6px; font-family: var(--font-number); font-weight: 600; }
 .offers .row-o img { width: 18px; height: 18px; }
 .offers .row-o.sus .p { color: var(--faint); text-decoration: line-through; }
+/* An offer of another kind of quality (13k4): its price faint, the kind after it in weak text. */
+.offers .row-o.is-other .p { color: var(--faint); }
+.offers .row-o.is-other img { opacity: .45; }
+.app-other-kind { margin-left: 4px; color: var(--weak); font: 500 12px var(--font-body); }
 .offers .row-o.sus .p::after { content: "?"; color: var(--warn); text-decoration: none; display: inline-block; margin-left: 2px; }
 /* Offer hovered: the row lights up and the tooltip of its item opens next to it. */
 .offers .row-o { position: relative; }
@@ -18,6 +22,10 @@
 }
 /* No room above the row (the first offers): the tooltip opens below it. */
 .offer-tooltip.below { bottom: auto; top: calc(100% + 6px); }
+.tt-note { margin-top: 8px; color: var(--weak); font-size: 12px; }
+.tt-mod.prop.is-other span { color: var(--fall); }
+/* A quality at the maximum of its item (13k4): in white, no catalyst needed any more. */
+.tt-mod.prop.is-max span { color: var(--text); }
 .tt-warn { margin-top: 8px; color: var(--warn); font-size: 12px; }
 .tt-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
 .tt-name { font-weight: 700; font-size: 14px; }

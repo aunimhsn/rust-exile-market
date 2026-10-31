@@ -142,6 +142,9 @@ fn row_texts<'a>(rows: impl IntoIterator<Item = Row<'a>>) -> Vec<String> {
                     StatText::Property(property, value) => {
                         format!("{property:?}: {}", format::number(value))
                     }
+                    StatText::CatalystQuality(kind, value) => {
+                        format!("{kind:?} quality: {}", format::number(value))
+                    }
                     StatText::Pseudo(pseudo, value) => {
                         format!("{pseudo:?}: {}", format::number(value))
                     }
@@ -1655,9 +1658,10 @@ fn the_fields_of_the_properties_stay_within_the_values_of_the_game() {
         settled(&crossbow, Property::Sockets, Half::Minimum, "9"),
         "6"
     );
+    // Up to the 30 % of an exceptional base or of a Vaal Infuser.
     assert_eq!(
         settled(&leveling, Property::Quality, Half::Minimum, "80"),
-        "75"
+        "30"
     );
     assert_eq!(
         settled(&leveling, Property::RequiredLevel, Half::Maximum, "95"),
@@ -1867,6 +1871,74 @@ fn the_sockets_of_a_base_the_data_doesnt_know_are_checked_only_on_a_corrupted_it
         sockets(&armour("\n--------\nCorrupted")).as_deref(),
         Some("■ Sockets: 3 ≥3")
     );
+}
+
+#[test]
+fn the_quality_of_a_catalyst_is_a_filter_with_its_kind_unchecked() {
+    let amulet = parse(include_str!(
+        "../../item/test-items/en-owner-rare-amulet-catalyst.txt"
+    ));
+    let ring = parse(include_str!(
+        "../../item/test-items/fr-rare-ring-catalyst.txt"
+    ));
+
+    assert_eq!(
+        item_group(&amulet),
+        [
+            "■ Base: Gloam Amulet",
+            "□ ItemLevel: 79 ≥79",
+            "□ Catalyst(Mana) quality: 40 ≥40",
+        ]
+    );
+    // 20 %, a quality a base of a ring has only from a catalyst, is a filter too.
+    assert_eq!(
+        item_group(&ring),
+        [
+            "■ Base: Bague prismatique",
+            "□ ItemLevel: 82 ≥82",
+            "□ Catalyst(Cold) quality: 20 ≥20",
+        ]
+    );
+    // Its text says that the trade site searches any kind.
+    let catalyst = rows(&amulet)
+        .into_iter()
+        .find_map(|row| match row {
+            Row::Stat(stat) if matches!(stat.text, StatText::CatalystQuality(..)) => {
+                Some(stat.text)
+            }
+            _ => None,
+        })
+        .expect("the filter of the quality");
+    assert_eq!(catalyst.tip(), Some(Message::FilterAnyQualityKind));
+}
+
+#[test]
+fn the_field_of_the_quality_stays_within_the_highest_quality_of_the_base() {
+    // A normal item, whose quality is a filter.
+    let normal = |class: &str, base: &str| {
+        parse(&format!(
+            "Item Class: {class}\nRarity: Normal\n{base}\n--------\n\
+             Quality: +10% (augmented)\n--------\nItem Level: 80"
+        ))
+    };
+    let highest = |item: &Item| settled(item, Property::Quality, Half::Minimum, "99");
+    assert_eq!(highest(&normal("Bows", "Gemini Bow")), "30");
+    assert_eq!(highest(&normal("One Hand Maces", "Flanged Mace")), "40");
+    assert_eq!(highest(&normal("Life Flasks", "Ultimate Life Flask")), "23");
+    assert_eq!(
+        highest(&parse(include_str!(
+            "../../item/test-items/en-owner-rare-amulet-catalyst.txt"
+        ))),
+        "50"
+    );
+    assert_eq!(
+        highest(&parse(include_str!(
+            "../../item/test-items/en-owner-rare-ring-catalyst.txt"
+        ))),
+        "75"
+    );
+    // A base the game data doesn't know: the highest quality of any item.
+    assert_eq!(highest(&normal("Rings", "Mystery Ring")), "75");
 }
 
 #[test]

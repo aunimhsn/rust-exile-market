@@ -12,7 +12,7 @@ use std::fmt;
 use super::labels::{Labels, marker};
 use super::modifier::{Header, Marker, Modifier, ModifierKind};
 use super::weapon::{self, DamageKind, Weapon};
-use super::{CopiedItem, Item, ItemState, Property, Rarity, Requirements, Stack};
+use super::{CopiedItem, Item, ItemState, Property, QualityKind, Rarity, Requirements, Stack};
 use crate::game_data;
 use crate::language::Language;
 
@@ -186,6 +186,7 @@ fn read_header(lines: &[&str], language: Language, labels: &Labels) -> Result<It
         stack: None,
         item_level: None,
         quality: None,
+        quality_kind: None,
         sockets: None,
         requirements: Requirements::default(),
         granted_skills: Vec::new(),
@@ -469,6 +470,13 @@ fn read_properties(item: &mut Item, lines: &[&str], labels: &Labels) {
                 item.warnings
                     .push(ParseWarning::InvalidValue(Field::Quality));
             }
+        } else if let Some((kind, value)) = catalyst_quality(line, labels) {
+            item.quality = digits(value);
+            if item.quality.is_none() {
+                item.warnings
+                    .push(ParseWarning::InvalidValue(Field::Quality));
+            }
+            item.quality_kind = Some(kind);
         }
         let (name, value) = line.split_once(':').unwrap_or((line, ""));
         let (name, value) = (name.trim(), value.trim());
@@ -555,6 +563,22 @@ fn read_stack(line: &str, labels: &Labels) -> Option<Stack> {
         size: digits(size)?,
         max: digits(max)?,
     })
+}
+
+/// The quality of a catalyst, `Quality (Mana Modifiers): +40%`: its kind, and the text of its
+/// value.
+fn catalyst_quality<'a>(line: &'a str, labels: &Labels) -> Option<(QualityKind, &'a str)> {
+    let (open, close) = labels.catalyst_quality;
+    let (words, value) = line.strip_prefix(open)?.split_once(close)?;
+    let kind = labels
+        .catalysts
+        .iter()
+        .find(|&&(known, _)| known == words)
+        .map_or_else(
+            || QualityKind::Other(words.to_owned()),
+            |&(_, catalyst)| QualityKind::Catalyst(catalyst),
+        );
+    Some((kind, value))
 }
 
 /// The number after a label, e.g. `Item Level: 80` or `Quality: +20%`.

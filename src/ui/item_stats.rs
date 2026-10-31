@@ -27,7 +27,7 @@ use std::borrow::Cow;
 use egui::text::{LayoutJob, TextFormat};
 use egui::{
     Align, Align2, Area, Color32, CornerRadius, Frame, Id, Label, Layout, Margin, Order, Pos2,
-    Rect, Response, RichText, Sense, Stroke, TextEdit, Ui, Vec2, pos2, vec2,
+    Rect, Response, RichText, Sense, Stroke, TextEdit, Ui, UiBuilder, Vec2, pos2, vec2,
 };
 
 use super::number_field::NumberField;
@@ -39,7 +39,7 @@ use crate::game_data::{self, Category};
 use crate::i18n::{Message, Translator};
 use crate::item::{
     Affix, AffixTier, Currency, Item, Lord, Modifier, ModifierKind, ModifierOrigin, PartTier,
-    Range, Rarity, StatLine, TierDoubt,
+    QualityKind, Range, Rarity, StatLine, TierDoubt,
 };
 use crate::roll_difference::CopiedLines;
 use crate::tier_rolls::{LineRolls, TierRolls, TierSpan};
@@ -66,14 +66,10 @@ const WIDE_HALF_WIDTH: f32 = 31.0;
 const WIDE_CHARACTERS: usize = 4;
 /// The space around the halves of a range field.
 const RANGE_PADDING: Margin = Margin::symmetric(2, 1);
-/// The range field raised by 1 px on the line of its checkbox: taller than the checkbox, it
-/// looked too low (tuned by eye by the owner on the mock-up). The row keeps its height.
-const RANGE_RAISE: Margin = Margin {
-    left: 0,
-    right: 0,
-    top: -1,
-    bottom: 1,
-};
+/// How far the range field is raised on the line of its checkbox: taller than the checkbox, it
+/// looked too low (tuned by eye by the owner on the mock-up, 2.5 px since step 13k4). The row
+/// keeps its height.
+const RANGE_RAISE: f32 = 2.5;
 /// The space between a range field and its tooltip, under it.
 const TOOLTIP_GAP: f32 = 8.0;
 /// The space around the text of the tooltip of a range field, and between its lines.
@@ -119,13 +115,11 @@ const ITEM_LEVELS: Range = Range {
 /// The augmentable sockets an item can have: the field of the sockets stays within them. No
 /// offer had 7 or more on the trade site on 2026-10-28.
 const SOCKETS: Range = Range { min: 0.0, max: 6.0 };
-/// The qualities, of any item: the field of the quality stays within them. Checked on the trade
-/// site on 2026-10-28: Breach rings of 75 % (the quality of a catalyst), none above; the
-/// quality of each kind of item (20 %, an exceptional base, a catalyst) is left to step 13k.
-const QUALITIES: Range = Range {
-    min: 0.0,
-    max: 75.0,
-};
+/// The highest quality of an item whose base the game data doesn't know (a gem): the highest
+/// of any item, the 75 % of a Refined Breach Ring (checked on the trade site on 2026-10-31).
+/// The field of the quality stays within the highest quality of the base
+/// ([`Category::max_quality`]), or within this one.
+const MAX_QUALITY: u32 = 75;
 /// The required levels: the field of the required level stays within them. Checked on the
 /// trade site on 2026-10-28: offers requiring level 90, none above.
 const REQUIRED_LEVELS: Range = Range {
@@ -638,6 +632,8 @@ enum StatText<'a> {
     },
     /// A property of the item, with its value.
     Property(Property, f64),
+    /// The quality of a catalyst, with its kind.
+    CatalystQuality(&'a QualityKind, f64),
     Pseudo(Pseudo, f64),
     /// A desecrated modifier not revealed yet, of its affix.
     Unrevealed(Affix),
@@ -676,12 +672,21 @@ impl<'a> StatText<'a> {
         }
     }
 
+    /// The tooltip of the text: the quality of a catalyst, whose kinds the trade site doesn't
+    /// tell apart.
+    fn tip(self) -> Option<Message> {
+        matches!(self, Self::CatalystQuality(..)).then_some(Message::FilterAnyQualityKind)
+    }
+
     fn text(self, i18n: &Translator) -> Cow<'a, str> {
         match self {
             Self::Line(text) | Self::RadiusLine { line: text, .. } => Cow::Borrowed(text),
             Self::BaseType { base_type, .. } => Cow::Owned(i18n.filter_base_type(base_type)),
             Self::Property(property, value) => {
                 Cow::Owned(i18n.filter_property(property, &format::number(value)))
+            }
+            Self::CatalystQuality(kind, value) => {
+                Cow::Owned(i18n.filter_catalyst_quality(kind, &format::number(value)))
             }
             Self::Pseudo(pseudo, value) => {
                 Cow::Owned(i18n.filter_pseudo(pseudo, &format::number(value)))
@@ -971,11 +976,30 @@ fn sockets_filter(item: &Item, category: Option<Category>) -> Option<Stat<'stati
 }
 
 /// The filter of the quality of an item of the base `category`, with its value as its minimum,
-/// like Exiled Exchange 2: for a charm, checked from 10 %; for a flask from 20 %, checked above;
-/// for any other item above 20 % (an exceptional quality), checked except on a rare, whose craft
-/// is usually done; and on a normal item that has quality, unchecked.
-fn quality_filter(item: &Item, category: Option<Category>) -> Option<Stat<'static>> {
+/// within the highest quality of the base: the quality of a catalyst, with its kind, unchecked
+/// (the trade site doesn't tell the kinds apart); like Exiled Exchange 2, for a charm, checked
+/// from 10 %; for a flask from 20 %, checked above; for any other item above 20 % (an
+/// exceptional quality), checked except on a rare, whose craft is usually done; and on a normal
+/// item that has quality, unchecked.
+fn quality_filter(item: &Item, category: Option<Category>) -> Option<Stat<'_>> {
     let quality = item.quality().filter(|&quality| quality > 0)?;
+    let max = category.map_or(MAX_QUALITY, Category::max_quality);
+    let limit = Limit::minimum(f64::from(quality)).within(Range {
+        min: 0.0,
+        max: f64::from(max),
+    });
+    if let Some(kind) = item.quality_kind() {
+        return Some(Stat {
+            key: FilterKey::Property(Property::Quality),
+            text: StatText::CatalystQuality(kind, f64::from(quality)),
+            filter: Some(StatFilter {
+                checked: false,
+                limit: Some(limit),
+            }),
+            unsearchable: false,
+            roll: None,
+        });
+    }
     let checked = match category {
         Some(Category::Charm) => quality >= CHARM_QUALITY,
         Some(Category::Flask) if quality >= MAX_USUAL_QUALITY => quality > MAX_USUAL_QUALITY,
@@ -983,11 +1007,10 @@ fn quality_filter(item: &Item, category: Option<Category>) -> Option<Stat<'stati
         _ if item.rarity() == Rarity::Normal => false,
         _ => return None,
     };
-    let quality = f64::from(quality);
     Some(property_filter(
         Property::Quality,
-        quality,
-        Limit::minimum(quality).within(QUALITIES),
+        f64::from(quality),
+        limit,
         checked,
     ))
 }
@@ -1937,7 +1960,13 @@ fn stat_text(
 ) {
     ui.allocate_ui_with_layout(vec2(width, 0.0), Layout::top_down(Align::Min), |ui| {
         ui.set_width(width);
-        ui.add(Label::new(clamped(&stat.text.text(i18n))).wrap());
+        let response = ui.add(Label::new(clamped(&stat.text.text(i18n))).wrap());
+        if let Some(tip) = stat.text.tip() {
+            response.on_hover_ui(|ui| {
+                ui.set_max_width(WORD_TIP_WIDTH);
+                ui.add(Label::new(i18n.text(tip)).wrap());
+            });
+        }
         let skills = stat.text.radius_skills();
         if let Some(roll) = &stat.roll {
             ui.add_space(ROLL_GAP);
@@ -1975,13 +2004,18 @@ fn range_field(ui: &mut Ui, key: FilterKey, choice: &mut Filter, limit: Limit, i
     let stroke = Stroke::new(1.0, line);
     let dash_width =
         column - 2.0 * (f32::from(RANGE_PADDING.left) + stroke.width) - 2.0 * half_width;
+    // The row keeps the room of the field; the field is drawn raised in it.
+    let field_height = ui.fonts_mut(|fonts| fonts.row_height(&text::range_field()))
+        + 2.0 * (f32::from(RANGE_PADDING.top) + stroke.width);
+    let (_, slot) = ui.allocate_space(vec2(column, field_height));
+    let mut raised =
+        ui.new_child(UiBuilder::new().max_rect(slot.translate(vec2(0.0, -RANGE_RAISE))));
     let field = Frame::NONE
         .fill(color::CONTROL)
         .stroke(stroke)
         .corner_radius(CornerRadius::same(size::RADIUS))
         .inner_margin(RANGE_PADDING)
-        .outer_margin(RANGE_RAISE)
-        .show(ui, |ui| {
+        .show(&mut raised, |ui| {
             // The halves and the dash one line of numbers high, the dash in the middle.
             ui.spacing_mut().item_spacing.x = 0.0;
             ui.spacing_mut().interact_size.y = 0.0;
@@ -2013,8 +2047,7 @@ fn range_field(ui: &mut Ui, key: FilterKey, choice: &mut Filter, limit: Limit, i
                 }
             }
         });
-    // The field as it is drawn, without the margin that raises it.
-    let rect = field.response.rect - RANGE_RAISE;
+    let rect = field.response.rect;
     if ui.rect_contains_pointer(rect) {
         field_tooltip(ui, key, rect, limit, i18n);
     }

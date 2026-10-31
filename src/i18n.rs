@@ -9,7 +9,7 @@ use std::time::Duration;
 use fluent_bundle::{FluentArgs, FluentBundle, FluentResource, FluentValue};
 
 use crate::filters::Property;
-use crate::item::{Affix, Lord};
+use crate::item::{Affix, Catalyst, Lord, QualityKind};
 use crate::language::Language;
 use crate::prices::Direction;
 use crate::trade::pseudo::Pseudo;
@@ -102,6 +102,8 @@ pub enum Message {
     FilterLowerBetter,
     FilterUnsearchable,
     FilterUnsearchableHint,
+    /// The tooltip of the filter of the quality of a catalyst.
+    FilterAnyQualityKind,
     OriginDesecrated,
     OriginFractured,
     OriginCrafted,
@@ -158,7 +160,7 @@ pub enum Message {
 impl Message {
     /// Every message, for the tests.
     #[cfg(test)]
-    const ALL: [Self; 116] = [
+    const ALL: [Self; 117] = [
         Self::LeagueModeSoftcore,
         Self::LeagueModeHardcore,
         Self::LeagueLoading,
@@ -235,6 +237,7 @@ impl Message {
         Self::FilterLowerBetter,
         Self::FilterUnsearchable,
         Self::FilterUnsearchableHint,
+        Self::FilterAnyQualityKind,
         Self::OriginDesecrated,
         Self::OriginFractured,
         Self::OriginCrafted,
@@ -357,6 +360,7 @@ impl Message {
             Self::FilterLowerBetter => "filter-lower-better",
             Self::FilterUnsearchable => "filter-unsearchable",
             Self::FilterUnsearchableHint => "filter-unsearchable-hint",
+            Self::FilterAnyQualityKind => "filter-any-quality-kind",
             Self::OriginDesecrated => "origin-desecrated",
             Self::OriginFractured => "origin-fractured",
             Self::OriginCrafted => "origin-crafted",
@@ -471,6 +475,7 @@ const FILTER_ITEM_CLASS: &str = "filter-item-class";
 const FILTER_ITEM_LEVEL: &str = "filter-item-level";
 const FILTER_SOCKETS: &str = "filter-sockets";
 const FILTER_QUALITY: &str = "filter-quality";
+const FILTER_CATALYST_QUALITY: &str = "filter-catalyst-quality";
 const FILTER_REQUIRED_LEVEL: &str = "filter-required-level";
 const FILTER_PHYSICAL_DPS: &str = "filter-physical-dps";
 const FILTER_ELEMENTAL_DPS: &str = "filter-elemental-dps";
@@ -717,6 +722,22 @@ impl Translator {
         let mut args = FluentArgs::new();
         args.set("value", value);
         self.format(id, Some(&args))
+    }
+
+    /// The filter of the quality of a catalyst, short with its kind, its `value` written by
+    /// [`crate::format::number`]: "Mana quality: 40%"; a kind the application doesn't know
+    /// with the words of the game, "Quality (Speed Modifiers): 20%".
+    #[must_use]
+    pub fn filter_catalyst_quality(&self, kind: &QualityKind, value: &str) -> String {
+        let (id, words) = match kind {
+            QualityKind::Catalyst(catalyst) => (catalyst_id(*catalyst), ""),
+            QualityKind::Other(words) => ("other", words.as_str()),
+        };
+        let mut args = FluentArgs::new();
+        args.set("kind", id);
+        args.set("words", words);
+        args.set("value", value);
+        self.format(FILTER_CATALYST_QUALITY, Some(&args))
     }
 
     /// The filter of a pseudo stat, with its `value` written by [`crate::format::number`]:
@@ -991,6 +1012,25 @@ impl Translator {
     }
 }
 
+/// The selector of a kind of catalyst in the messages.
+fn catalyst_id(catalyst: Catalyst) -> &'static str {
+    match catalyst {
+        Catalyst::Life => "life",
+        Catalyst::Mana => "mana",
+        Catalyst::Defence => "defence",
+        Catalyst::Physical => "physical",
+        Catalyst::Fire => "fire",
+        Catalyst::Cold => "cold",
+        Catalyst::Lightning => "lightning",
+        Catalyst::Chaos => "chaos",
+        Catalyst::Attack => "attack",
+        Catalyst::Caster => "caster",
+        Catalyst::Speed => "speed",
+        Catalyst::Attribute => "attribute",
+        Catalyst::Minion => "minion",
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1053,6 +1093,7 @@ mod tests {
                 FILTER_ITEM_LEVEL,
                 FILTER_SOCKETS,
                 FILTER_QUALITY,
+                FILTER_CATALYST_QUALITY,
                 FILTER_REQUIRED_LEVEL,
                 FILTER_PHYSICAL_DPS,
                 FILTER_ELEMENTAL_DPS,
@@ -1319,6 +1360,33 @@ mod tests {
         assert_eq!(
             french.offers_limit(Duration::from_secs(240)),
             "Limite du site d'échange\u{a0}: recherche dans 4min."
+        );
+    }
+
+    #[test]
+    fn the_quality_of_a_catalyst_is_short_with_its_kind() {
+        let english = Translator::new(Language::English);
+        let french = Translator::new(Language::French);
+        let mana = QualityKind::Catalyst(Catalyst::Mana);
+        let attack = QualityKind::Catalyst(Catalyst::Attack);
+        let unknown = QualityKind::Other("Speedy Modifiers".to_owned());
+
+        assert_eq!(
+            english.filter_catalyst_quality(&mana, "40"),
+            "Mana quality: 40%"
+        );
+        assert_eq!(
+            french.filter_catalyst_quality(&mana, "40"),
+            "Qualité de mana\u{a0}: 40%"
+        );
+        assert_eq!(
+            french.filter_catalyst_quality(&attack, "20"),
+            "Qualité d'attaque\u{a0}: 20%"
+        );
+        // A kind the application doesn't know keeps the words of the game.
+        assert_eq!(
+            english.filter_catalyst_quality(&unknown, "20"),
+            "Quality (Speedy Modifiers): 20%"
         );
     }
 }

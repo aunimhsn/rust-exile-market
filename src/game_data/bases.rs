@@ -98,6 +98,47 @@ impl Category {
         }
     }
 
+    /// The highest quality of an item of the category, in percent: 20 % for every item, beyond
+    /// only by an exceptional base (30 %), a Vaal Infuser (10 % beyond the maximum), Serle's
+    /// Grit and its rune (`Maximum Quality is 40%`) and the modifiers `+#% to Maximum Quality`
+    /// of the jewellery (the Essence of the Breach, the Breach Rings); a corruption gives a
+    /// flask or a charm 3 % more. Checked on the trade site on 2026-10-31 (the first offers
+    /// sorted by quality, leagues Runes of Aldur and Standard), poe2db and Craft of Exile: no
+    /// quality on a belt, a waystone or a tablet.
+    #[must_use]
+    pub fn max_quality(self) -> u32 {
+        match self {
+            Self::Ring => 75,
+            Self::Amulet => 50,
+            Self::OneHandMace => 40,
+            Self::BodyArmour
+            | Self::Boots
+            | Self::Bow
+            | Self::Buckler
+            | Self::Crossbow
+            | Self::Dagger
+            | Self::Flail
+            | Self::Focus
+            | Self::Gloves
+            | Self::Helmet
+            | Self::OneHandAxe
+            | Self::OneHandSword
+            | Self::Quiver
+            | Self::Sceptre
+            | Self::Shield
+            | Self::Spear
+            | Self::Staff
+            | Self::Talisman
+            | Self::TwoHandAxe
+            | Self::TwoHandMace
+            | Self::TwoHandSword
+            | Self::Wand
+            | Self::Warstaff => 30,
+            Self::Charm | Self::Flask => 23,
+            Self::Belt | Self::Jewel | Self::Tablet | Self::Waystone => 20,
+        }
+    }
+
     /// The id of the category on the trade site (`weapon.bow`), as Exiled Exchange 2 maps it
     /// (`CATEGORY_TO_TRADE_ID`); a flask by the `tags` of its base, since the trade site tells
     /// the life flasks from the mana flasks. Checked on the trade site on 2026-10-28, the

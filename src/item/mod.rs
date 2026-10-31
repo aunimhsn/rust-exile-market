@@ -70,6 +70,34 @@ pub enum ItemState {
     Unidentified,
 }
 
+/// The kind of the quality of a catalyst, on a ring, an amulet or a jewel, which raises the
+/// modifiers of that kind instead of the base: `Quality (Mana Modifiers): +40%`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum QualityKind {
+    Catalyst(Catalyst),
+    /// A kind the application doesn't know, with the words of the game between the
+    /// parentheses (`Speed Modifiers`, `Modificateurs de Vitesse`).
+    Other(String),
+}
+
+/// The modifiers the quality of a catalyst raises, named after the tags of the modifiers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Catalyst {
+    Life,
+    Mana,
+    Defence,
+    Physical,
+    Fire,
+    Cold,
+    Lightning,
+    Chaos,
+    Attack,
+    Caster,
+    Speed,
+    Attribute,
+    Minion,
+}
+
 /// The size of a stack, and the largest stack of this item.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Stack {
@@ -126,6 +154,8 @@ pub struct Item {
     )]
     item_level: Option<u32>,
     quality: Option<u32>,
+    /// The kind of the quality of a catalyst; none for the quality of the base.
+    quality_kind: Option<QualityKind>,
     sockets: Option<u32>,
     requirements: Requirements,
     granted_skills: Vec<String>,
@@ -277,6 +307,12 @@ impl Item {
     #[must_use]
     pub fn quality(&self) -> Option<u32> {
         self.quality
+    }
+
+    /// The kind of the quality of a catalyst, on a ring, an amulet or a jewel.
+    #[must_use]
+    pub fn quality_kind(&self) -> Option<&QualityKind> {
+        self.quality_kind.as_ref()
     }
 
     /// The number of rune sockets.
