@@ -26,6 +26,8 @@
 .tt-mod.prop.is-other span { color: var(--fall); }
 /* A quality at the maximum of its item (13k4): in white, no catalyst needed any more. */
 .tt-mod.prop.is-max span { color: var(--text); }
+/* A property of the copied waystone that the offer lacks (13k5c2): faint, at 0, its loss in red. */
+.tt-mod.prop.is-lacking span { color: var(--faint); }
 .tt-warn { margin-top: 8px; color: var(--warn); font-size: 12px; }
 .tt-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
 .tt-name { font-weight: 700; font-size: 14px; }

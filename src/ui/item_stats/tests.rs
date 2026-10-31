@@ -3078,6 +3078,20 @@ fn the_filter_of_a_waystone_property_writes_its_value_as_the_game() {
         text(WaystoneProperty::DropChance, 65.0, &french),
         "Chances de trouver des pierres de téléportation\u{a0}: +65%"
     );
+    // A zero, as the tooltip of an offer writes a property it lacks, and a negative value,
+    // without a sign of their own.
+    assert_eq!(
+        text(WaystoneProperty::PackSize, 0.0, &english),
+        "Pack size: 0%"
+    );
+    assert_eq!(
+        text(WaystoneProperty::ItemRarity, -5.0, &english),
+        "Item rarity: -5%"
+    );
+    assert_eq!(
+        text(WaystoneProperty::Revives, 0.0, &english),
+        "Revives available: 0"
+    );
 }
 
 #[test]

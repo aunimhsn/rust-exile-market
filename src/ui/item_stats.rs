@@ -482,7 +482,7 @@ fn hybrid_row<'a>(
     TierRow::tiers(whole, ranges, Some(hybrid_word(whole, added)), Some(tip))
 }
 
-/// How the bar of a roll is drawn: a setting from step 18, which adds the zone searched.
+/// How the bar of a roll is drawn: a setting from step 19, which adds the zone searched.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum RollBar {
     /// Filled up to where the roll falls in its range, also on a line better lower, so that
@@ -655,10 +655,10 @@ enum StatText<'a> {
 }
 
 /// The value of `property` in its filter: a percentage of a waystone with its sign, as the
-/// game writes it (`+11`).
-fn property_value(property: Property, value: f64) -> String {
+/// game writes it (`+11`), a zero without.
+pub(super) fn property_value(property: Property, value: f64) -> String {
     match property {
-        Property::Waystone(waystone) if waystone.is_percent() && value >= 0.0 => {
+        Property::Waystone(waystone) if waystone.is_percent() && value > 0.0 => {
             format!("+{}", format::number(value))
         }
         _ => format::number(value),

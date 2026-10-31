@@ -235,6 +235,12 @@ pub mod text {
         fonts::text(14.0, Weight::ExtraBold)
     }
 
+    /// The tier of a waystone in the tooltip of an offer, after its base.
+    #[must_use]
+    pub fn tooltip_tier() -> FontId {
+        fonts::text(12.0, Weight::ExtraBold)
+    }
+
     /// A modifier line in the tooltip of an offer.
     #[must_use]
     pub fn tooltip_line() -> FontId {

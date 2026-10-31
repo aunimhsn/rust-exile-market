@@ -804,7 +804,7 @@ mod tests {
     ];
 
     /// The lines the game data doesn't know yet: the French data of Exiled Exchange 2 writes
-    /// the notable with its English name, `Attribue Paragon` (step 20).
+    /// the notable with its English name, `Attribue Paragon` (step 21).
     const UNKNOWN_LINES: [&str; 1] = ["Attribue Parangon"];
 
     /// Every modifier line of the copied items of the parser tests finds its stat, and an

@@ -9,7 +9,10 @@ use serde::de::{self, Deserializer};
 use serde_json::Value;
 
 use crate::format::Currency;
-use crate::item::{Catalyst, QualityKind, Rarity, read_quality, whole_percent};
+use crate::item::{
+    Catalyst, ParseWarning, QualityKind, Rarity, WaystoneValue, read_quality, waystone_property,
+    whole_percent, without_tier,
+};
 use crate::language::Language;
 
 /// The highest quality of a catalyst on a ring, an amulet or a jewel, without a modifier
@@ -72,6 +75,11 @@ pub struct OfferItem {
     pub item_level: Option<u32>,
     pub corrupted: bool,
     pub quality: Option<OfferQuality>,
+    /// The properties of a waystone, in the order of the trade site; none for another item.
+    pub waystone_properties: Vec<WaystoneValue>,
+    /// Whether a property of the waystone couldn't be read: a property it seems to lack may be
+    /// that one, under another name.
+    pub waystone_unread: bool,
     pub modifiers: Vec<OfferModifier>,
 }
 
@@ -257,17 +265,35 @@ struct ApiProperty {
 }
 
 impl ApiProperty {
+    /// The property of a waystone, named as the game writes it in `language`:
+    /// `[ItemRarity|Item Rarity]`, `+11%`; what can't be read of another one.
+    fn waystone(&self, language: Language) -> Result<WaystoneValue, UnreadProperty> {
+        let name = plain_text(&self.name);
+        waystone_property(language, &name, self.first_value()).map_err(|warning| match warning {
+            ParseWarning::UnknownWaystoneProperty => UnreadProperty::Name(name),
+            _ => UnreadProperty::Value(self.line()),
+        })
+    }
+
+    /// Its name without the markup of the trade site and its first value: `Item Rarity: +11%`.
+    fn line(&self) -> String {
+        format!("{}: {}", plain_text(&self.name), self.first_value())
+    }
+
+    /// The text of its first value: `+11%`; empty without value.
+    fn first_value(&self) -> &str {
+        self.values
+            .first()
+            .and_then(|value| value.get(0))
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+    }
+
     /// The quality, read as the game writes it in `language`: `Quality (Attack Modifiers):
     /// +20%`; the line of a quality that can't be read, its value or its name, as an error;
     /// `None` for another property.
     fn quality(&self, language: Language) -> Option<Result<OfferQuality, String>> {
-        let value = self
-            .values
-            .first()
-            .and_then(|value| value.get(0))
-            .and_then(Value::as_str)
-            .unwrap_or_default();
-        let line = format!("{}: {value}", plain_text(&self.name));
+        let line = self.line();
         match read_quality(&line, language) {
             Some((kind, Some(value))) => Some(Ok(OfferQuality { value, kind })),
             Some((_, None)) => Some(Err(line)),
@@ -348,15 +374,14 @@ impl ApiFetch {
     /// The offers, in the order of the ids asked, from the trade site of `language`; an offer
     /// gone since the search is left out.
     pub fn offers(self, language: Language) -> Vec<ItemOffer> {
-        let (offers, unreadable): (Vec<ItemOffer>, BTreeSet<Option<String>>) = self
+        let (offers, unreadable): (Vec<ItemOffer>, Vec<Unreadable>) = self
             .result
             .into_iter()
             .flatten()
             .map(|listed| listed.offer(language))
             .unzip();
-        // Once per page, not per offer.
-        for line in unreadable.into_iter().flatten() {
-            log::warn!("Trade site: a quality that can't be read, {line}");
+        for warning in warnings(&unreadable) {
+            log::warn!("{warning}");
         }
         let unknown: BTreeSet<&str> = offers
             .iter()
@@ -371,11 +396,57 @@ impl ApiFetch {
     }
 }
 
+/// What can't be read of an offer, to log: a name or a value the application doesn't know,
+/// maybe changed by a patch.
+#[derive(Debug, Default, PartialEq)]
+struct Unreadable {
+    /// The line of its quality.
+    quality: Option<String>,
+    /// The properties of an offer of waystone that can't be read. Every property of a
+    /// waystone listed by the trade site is one of the properties the application knows: one
+    /// it doesn't read was renamed, or its value changed form.
+    waystone_properties: Vec<UnreadProperty>,
+}
+
+/// A property of an offer of waystone that can't be read.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+enum UnreadProperty {
+    /// A name the application doesn't know: `Monster Quantity`.
+    Name(String),
+    /// A value that can't be read, with its name: `Item Rarity: +1.5%`.
+    Value(String),
+}
+
+/// The warnings of what can't be read of the offers of a page, each once: a name the
+/// application doesn't know once, whatever its values.
+fn warnings(unreadable: &[Unreadable]) -> Vec<String> {
+    let qualities: BTreeSet<&String> = unreadable
+        .iter()
+        .filter_map(|lines| lines.quality.as_ref())
+        .collect();
+    let properties: BTreeSet<&UnreadProperty> = unreadable
+        .iter()
+        .flat_map(|lines| &lines.waystone_properties)
+        .collect();
+    qualities
+        .into_iter()
+        .map(|line| format!("Trade site: a quality that can't be read, {line}"))
+        .chain(properties.into_iter().map(|property| match property {
+            UnreadProperty::Name(name) => {
+                format!("Trade site: an unknown property of a waystone, {name}")
+            }
+            UnreadProperty::Value(line) => {
+                format!("Trade site: a property of a waystone that can't be read, {line}")
+            }
+        }))
+        .collect()
+}
+
 impl ApiListed {
-    /// The offer, and the line of its quality when it can't be read.
-    fn offer(self, language: Language) -> (ItemOffer, Option<String>) {
+    /// The offer, and its lines that can't be read.
+    fn offer(self, language: Language) -> (ItemOffer, Unreadable) {
         let item = self.item;
-        let (quality, unreadable) = match item
+        let (quality, unreadable_quality) = match item
             .properties
             .iter()
             .find_map(|property| property.quality(language))
@@ -384,6 +455,17 @@ impl ApiListed {
             Some(Err(line)) => (None, Some(line)),
             None => (None, None),
         };
+        let base_type = item.base_type.unwrap_or(item.type_line);
+        let mut waystone_properties = Vec::new();
+        let mut unreadable_waystone = Vec::new();
+        if without_tier(language, &base_type).is_some() {
+            for property in &item.properties {
+                match property.waystone(language) {
+                    Ok(found) => waystone_properties.push(found),
+                    Err(unread) => unreadable_waystone.push(unread),
+                }
+            }
+        }
         let modifiers = [
             (ModifierKind::Enchant, item.enchant_mods),
             (ModifierKind::Rune, item.rune_mods),
@@ -411,12 +493,18 @@ impl ApiListed {
             item: OfferItem {
                 rarity: rarity(item.rarity.as_deref(), item.frame_type),
                 name: Some(item.name).filter(|name| !name.is_empty()),
-                base_type: item.base_type.unwrap_or(item.type_line),
+                base_type,
                 item_level: item.ilvl,
                 corrupted: item.corrupted,
                 quality,
+                waystone_properties,
+                waystone_unread: !unreadable_waystone.is_empty(),
                 modifiers,
             },
+        };
+        let unreadable = Unreadable {
+            quality: unreadable_quality,
+            waystone_properties: unreadable_waystone,
         };
         (offer, unreadable)
     }
@@ -841,6 +929,167 @@ mod tests {
         );
         assert_eq!(caster.item.max_catalyst_quality(), 40);
         assert_eq!(caster.other_quality(Catalyst::Mana), Some(Catalyst::Caster));
+    }
+
+    /// Two waystones of `/fetch` on 2026-10-31, shortened: an English one with the names seen
+    /// that day, without pack size, and a French one of the French trade site; a ring, whose
+    /// properties aren't those of a waystone; and a magic waystone with a property renamed, a
+    /// value that can't be read and a property without value.
+    const WAYSTONES: &str = r#"{"result": [
+        {"id": "w1", "listing": {"account": {}}, "item": {
+            "typeLine": "Waystone (Tier 12)", "rarity": "Rare",
+            "properties": [
+                {"name": "[LimitedRespawn|Revives Available]", "values": [["0", 1]], "displayMode": 0, "type": 98},
+                {"name": "[ItemRarity|Item Rarity]", "values": [["+14%", 1]], "displayMode": 0, "type": 3},
+                {"name": "[MonsterRarity|Monster Rarity]", "values": [["+31%", 1]], "displayMode": 0, "type": 103},
+                {"name": "[MonsterEffectiveness|Monster Effectiveness]", "values": [["+26%", 1]], "displayMode": 0, "type": 102},
+                {"name": "Waystone Drop Chance", "values": [["+62%", 1]], "displayMode": 0, "type": 66}
+            ]
+        }},
+        {"id": "w2", "listing": {"account": {}}, "item": {
+            "typeLine": "Pierre de téléportation (Palier 15)", "rarity": "Rare",
+            "properties": [
+                {"name": "[LimitedRespawn|Résurrections disponibles]", "values": [["0", 1]], "displayMode": 0, "type": 98},
+                {"name": "[ItemRarity|Rareté des objets]", "values": [["+28%", 1]], "displayMode": 0, "type": 3},
+                {"name": "[Pack|Taille des Groupes]", "values": [["+7%", 1]], "displayMode": 0, "type": 4},
+                {"name": "[MonsterRarity|Rareté des Monstres]", "values": [["+19%", 1]], "displayMode": 0, "type": 103},
+                {"name": "[MonsterEffectiveness|Efficacité des Monstres]", "values": [["+26%", 1]], "displayMode": 0, "type": 102},
+                {"name": "Chances de trouver des Pierres de téléportation", "values": [["+85%", 1]], "displayMode": 0, "type": 66}
+            ]
+        }},
+        {"id": "r1", "listing": {"account": {}}, "item": {
+            "typeLine": "Gold Ring", "rarity": "Rare",
+            "properties": [{"name": "[Quality]", "values": [["+20%", 1]], "displayMode": 0, "type": 6}]
+        }},
+        {"id": "w3", "listing": {"account": {}}, "item": {
+            "typeLine": "Burning Waystone (Tier 15)", "rarity": "Magic",
+            "properties": [
+                {"name": "[MonsterQuantity|Monster Quantity]", "values": [["+5%", 1]], "displayMode": 0},
+                {"name": "[ItemRarity|Item Rarity]", "values": [["+1.5%", 1]], "displayMode": 0, "type": 3},
+                {"name": "Waystone Drop Chance", "values": [["+20%", 1]], "displayMode": 0, "type": 66},
+                {"name": "[Pack|Pack Size]", "values": [], "displayMode": 0, "type": 4}
+            ]
+        }}
+    ]}"#;
+
+    #[test]
+    fn the_properties_of_an_offer_of_waystone_are_read_in_both_languages() {
+        use crate::item::WaystoneProperty::{
+            DropChance, ItemRarity, MonsterEffectiveness, MonsterRarity, PackSize, Revives,
+        };
+        let fetch = || serde_json::from_str::<ApiFetch>(WAYSTONES).expect("read");
+        let properties = |offer: &ItemOffer| {
+            offer
+                .item
+                .waystone_properties
+                .iter()
+                .map(|found| (found.property, found.value))
+                .collect::<Vec<_>>()
+        };
+
+        let english = fetch().offers(Language::English);
+        assert_eq!(
+            properties(&english[0]),
+            [
+                (Revives, 0),
+                (ItemRarity, 14),
+                (MonsterRarity, 31),
+                (MonsterEffectiveness, 26),
+                (DropChance, 62),
+            ]
+        );
+        assert_eq!(properties(&english[2]), [], "a ring");
+        let french = fetch().offers(Language::French);
+        assert_eq!(
+            properties(&french[1]),
+            [
+                (Revives, 0),
+                (ItemRarity, 28),
+                (PackSize, 7),
+                (MonsterRarity, 19),
+                (MonsterEffectiveness, 26),
+                (DropChance, 85),
+            ]
+        );
+        // The names of another language aren't read.
+        assert_eq!(properties(&french[0]), [], "the English names");
+        // Without base type, from the name of a magic waystone; the property renamed and the
+        // value that can't be read left out.
+        assert_eq!(properties(&english[3]), [(DropChance, 20)]);
+    }
+
+    #[test]
+    fn a_property_of_an_offer_of_waystone_that_cant_be_read_is_kept_to_log() {
+        use UnreadProperty::{Name, Value};
+
+        let read = |language| {
+            let fetch: ApiFetch = serde_json::from_str(WAYSTONES).expect("read");
+            fetch
+                .result
+                .into_iter()
+                .flatten()
+                .map(|listed| listed.offer(language))
+                .map(|(offer, unreadable)| {
+                    (offer.item.waystone_unread, unreadable.waystone_properties)
+                })
+                .collect::<Vec<_>>()
+        };
+
+        let english = read(Language::English);
+        assert_eq!(english[0], (false, vec![]));
+        // Not a waystone: its properties are those of another item.
+        assert_eq!(english[2], (false, vec![]));
+        assert_eq!(
+            english[3],
+            (
+                true,
+                vec![
+                    Name("Monster Quantity".to_owned()),
+                    Value("Item Rarity: +1.5%".to_owned()),
+                    Value("Pack Size: ".to_owned()),
+                ]
+            ),
+            "a name renamed by a patch, a value that can't be read, no value"
+        );
+        // A base of another language isn't read as a waystone.
+        assert_eq!(english[1], (false, vec![]));
+        let french = read(Language::French);
+        assert_eq!(french[0], (false, vec![]));
+        assert_eq!(french[1], (false, vec![]));
+    }
+
+    #[test]
+    fn what_cant_be_read_of_a_page_is_logged_once_and_an_unknown_name_whatever_its_value() {
+        use UnreadProperty::{Name, Value};
+
+        let renamed = |value: &str| Unreadable {
+            quality: None,
+            waystone_properties: vec![
+                Name("Monster Quantity".to_owned()),
+                Value(format!("Item Rarity: {value}")),
+            ],
+        };
+        let unreadable = [
+            renamed("+1.5%"),
+            renamed("+1.5%"),
+            renamed("+2.5%"),
+            Unreadable {
+                quality: Some("Quality: +1.5%".to_owned()),
+                waystone_properties: Vec::new(),
+            },
+            Unreadable::default(),
+        ];
+
+        assert_eq!(
+            warnings(&unreadable),
+            [
+                "Trade site: a quality that can't be read, Quality: +1.5%",
+                "Trade site: an unknown property of a waystone, Monster Quantity",
+                "Trade site: a property of a waystone that can't be read, Item Rarity: +1.5%",
+                "Trade site: a property of a waystone that can't be read, Item Rarity: +2.5%",
+            ]
+        );
+        assert_eq!(warnings(&[]), Vec::<String>::new());
     }
 
     #[test]
