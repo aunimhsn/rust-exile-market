@@ -592,11 +592,23 @@ fn quality<'a>(line: &'a str, labels: &Labels) -> Option<(Option<QualityKind>, &
 
 /// The quality of a property written as the game writes it in `language`, `Quality (Mana
 /// Modifiers): +40%` or `Quality: +20%`: its kind, none for the quality of the base, and its
-/// value, none when it can't be read; `None` for another property.
+/// value, none when it isn't a whole percentage; `None` for another property.
 #[must_use]
 pub fn read_quality(line: &str, language: Language) -> Option<(Option<QualityKind>, Option<u32>)> {
     let (kind, value) = quality(line, Labels::of(language))?;
-    Some((kind, digits(value)))
+    Some((kind, whole_percent(value)))
+}
+
+/// A whole percentage written `+20%` or `20%`; `None` for another text, a decimal or a
+/// negative one.
+#[must_use]
+pub fn whole_percent(text: &str) -> Option<u32> {
+    let text = text.trim();
+    text.strip_prefix('+')
+        .unwrap_or(text)
+        .strip_suffix('%')?
+        .parse()
+        .ok()
 }
 
 /// The number after a label, e.g. `Item Level: 80` or `Quality: +20%`.

@@ -29,7 +29,7 @@ pub use modifier::{
     Affix, AffixTier, Currency, Lord, Modifier, ModifierKind, ModifierOrigin, PartTier, Range,
     StatLine, TierDoubt,
 };
-pub use parser::{ParseError, ParseWarning, read_quality};
+pub use parser::{ParseError, ParseWarning, read_quality, whole_percent};
 pub use weapon::{DamageKind, Weapon};
 
 use crate::language::Language;

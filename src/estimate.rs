@@ -62,23 +62,23 @@ pub struct Estimate {
     /// The median of the first page of offers, which tells the suspicious ones.
     pub reference: Reference,
     /// The kind of the quality of a catalyst of the offers counted, when it was searched.
-    pub quality: Option<Catalyst>,
+    pub searched_catalyst: Option<Catalyst>,
 }
 
 /// The estimate from the `first_page` of offers of a search of items, the cheapest first, of
 /// the `total` found, with the `rates` of the currencies; the offers with the quality of a
-/// catalyst of another kind than `quality`, when it was searched, are left out. `None`
+/// catalyst of another kind than `searched_catalyst`, when it was searched, are left out. `None`
 /// without an offer priced in one of the three currencies.
 #[must_use]
 pub fn estimate(
     first_page: &[ItemOffer],
     total: u64,
     rates: Rates,
-    quality: Option<Catalyst>,
+    searched_catalyst: Option<Catalyst>,
 ) -> Option<Estimate> {
     let mut prices: Vec<f64> = first_page
         .iter()
-        .filter(|offer| quality.is_none_or(|catalyst| !offer.has_other_quality(catalyst)))
+        .filter(|offer| searched_catalyst.is_none_or(|catalyst| !offer.has_other_quality(catalyst)))
         .filter_map(|offer| offer.price.as_ref())
         .filter_map(|price| in_exalted(price.amount, &price.currency, rates))
         .collect();
@@ -98,7 +98,7 @@ pub fn estimate(
         counted: counted.len(),
         total,
         reference,
-        quality,
+        searched_catalyst,
     })
 }
 
@@ -264,10 +264,10 @@ mod tests {
 
         assert!((mana.exalted - 3.2 * 700.0).abs() < 1e-9);
         assert_eq!(mana.counted, 5);
-        assert_eq!(mana.quality, Some(Catalyst::Mana));
+        assert_eq!(mana.searched_catalyst, Some(Catalyst::Mana));
         assert_eq!(mana.total, 27, "every offer found");
         assert!((any.exalted - 2.4 * 700.0).abs() < 1e-9);
-        assert_eq!(any.quality, None);
+        assert_eq!(any.searched_catalyst, None);
     }
 
     #[test]

@@ -818,22 +818,31 @@ impl Translator {
         self.format_number(ESTIMATE_UNCERTAIN, "count", counted)
     }
 
-    /// How an estimate from all the `counted` offers is made, of the `quality` of a catalyst
-    /// when it was searched: "Median of the 3 similar offers of mana quality."
+    /// How an estimate from all the `counted` offers is made, of the kind of the quality of a
+    /// catalyst searched: "Median of the 3 similar offers of mana quality."
     #[must_use]
-    pub fn estimate_median(&self, counted: usize, quality: Option<Catalyst>) -> String {
-        self.format_estimate(ESTIMATE_MEDIAN, ESTIMATE_MEDIAN_OF, counted, quality)
+    pub fn estimate_median(&self, counted: usize, searched_catalyst: Option<Catalyst>) -> String {
+        self.format_estimate(
+            ESTIMATE_MEDIAN,
+            ESTIMATE_MEDIAN_OF,
+            counted,
+            searched_catalyst,
+        )
     }
 
-    /// How an estimate from the `counted` cheapest offers is made, of the `quality` of a
-    /// catalyst when it was searched.
+    /// How an estimate from the `counted` cheapest offers is made, of the kind of the quality
+    /// of a catalyst searched.
     #[must_use]
-    pub fn estimate_median_cheapest(&self, counted: usize, quality: Option<Catalyst>) -> String {
+    pub fn estimate_median_cheapest(
+        &self,
+        counted: usize,
+        searched_catalyst: Option<Catalyst>,
+    ) -> String {
         self.format_estimate(
             ESTIMATE_MEDIAN_CHEAPEST,
             ESTIMATE_MEDIAN_CHEAPEST_OF,
             counted,
-            quality,
+            searched_catalyst,
         )
     }
 
@@ -1003,15 +1012,15 @@ impl Translator {
         self.format(id, Some(&args))
     }
 
-    /// The note of an estimate, `id`, or `of_kind` with the kind of the `quality` searched.
+    /// The note of an estimate, `id`, or `of_kind` with the kind of the quality searched.
     fn format_estimate(
         &self,
         id: &str,
         of_kind: &str,
         counted: usize,
-        quality: Option<Catalyst>,
+        searched_catalyst: Option<Catalyst>,
     ) -> String {
-        let Some(catalyst) = quality else {
+        let Some(catalyst) = searched_catalyst else {
             return self.format_number(id, "count", counted);
         };
         let mut args = FluentArgs::new();

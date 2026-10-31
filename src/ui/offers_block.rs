@@ -72,7 +72,8 @@ const DOT_RADIUS: f32 = 3.0;
 const DOT_GAP: f32 = 6.0;
 /// The "?" after a suspicious price.
 const SUSPICIOUS_GAP: f32 = 2.0;
-/// The orb of an offer of another kind of quality, faint, and the space before its kind.
+/// The orb of an offer of another kind of quality, faint, and the space before its kind,
+/// beyond the space after the orb.
 const OTHER_QUALITY_ORB: u8 = 115;
 const OTHER_QUALITY_GAP: f32 = 4.0;
 /// The double chevron under the list: its height, the space above it, how high it is
@@ -154,19 +155,20 @@ fn listed_since(listed: Option<SystemTime>, now: SystemTime) -> Option<Duration>
     listed.map(|listed| now.duration_since(listed).unwrap_or_default())
 }
 
-/// The rows of the offers of a search of items, at `now`; with the `quality` of a catalyst
-/// searched, the offers of another kind are marked, and never suspicious: their market isn't
-/// the item's.
+/// The rows of the offers of a search of items, at `now`; with the `searched_catalyst`, the
+/// kind of the quality of a catalyst searched, the offers of another kind are marked, and
+/// never suspicious: their market isn't the item's.
 fn item_rows(
     offers: &[ItemOffer],
     reference: Option<Reference>,
-    quality: Option<Catalyst>,
+    searched_catalyst: Option<Catalyst>,
     now: SystemTime,
 ) -> Vec<Row> {
     offers
         .iter()
         .map(|offer| {
-            let other_quality = quality.and_then(|catalyst| offer.other_quality(catalyst));
+            let other_quality =
+                searched_catalyst.and_then(|catalyst| offer.other_quality(catalyst));
             Row {
                 price: offer
                     .price
@@ -334,7 +336,12 @@ impl<'a> OffersBlock<'a> {
                 searched,
                 ..
             } => {
-                let rows = item_rows(offers, self.reference, self.offers.catalyst(self.item), now);
+                let rows = item_rows(
+                    offers,
+                    self.reference,
+                    self.offers.searched_catalyst(self.item),
+                    now,
+                );
                 let list = List {
                     rows: &rows,
                     items: Some(offers),
@@ -740,7 +747,7 @@ impl<'a> OffersBlock<'a> {
             let tooltip = OfferTooltip {
                 offer,
                 item: self.item,
-                quality: self.offers.catalyst(self.item),
+                searched_catalyst: self.offers.searched_catalyst(self.item),
                 lines: self.lines,
                 name_color: rarity_color(offer.item.rarity.unwrap_or(self.item.rarity())),
                 suspicious: row.suspicious,
@@ -798,7 +805,11 @@ impl<'a> OffersBlock<'a> {
                 let kind =
                     widgets::text_line(ui, self.i18n.offer_quality_kind(catalyst), text::note());
                 let top = center_y - kind.size().y / 2.0;
-                painter.galley(pos2(right + OTHER_QUALITY_GAP, top), kind, color::WEAK);
+                painter.galley(
+                    pos2(right + ORB_GAP + OTHER_QUALITY_GAP, top),
+                    kind,
+                    color::WEAK,
+                );
             }
             if row.suspicious {
                 let mark = widgets::text_line(ui, "?", text::list_amount());

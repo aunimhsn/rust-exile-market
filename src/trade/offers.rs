@@ -9,7 +9,7 @@ use serde::de::{self, Deserializer};
 use serde_json::Value;
 
 use crate::format::Currency;
-use crate::item::{Catalyst, QualityKind, Rarity, read_quality};
+use crate::item::{Catalyst, QualityKind, Rarity, read_quality, whole_percent};
 use crate::language::Language;
 
 /// The highest quality of a catalyst on a ring, an amulet or a jewel, without a modifier
@@ -18,6 +18,9 @@ const CATALYST_QUALITY: u32 = 20;
 /// The stat of `+#% to Maximum Quality` (the Essence of the Breach, the implicit of a Breach
 /// Ring), whatever its kind (`explicit.`, `implicit.`…).
 const MAXIMUM_QUALITY_STAT: &str = "stat_2039822488";
+/// The type of the quality among the properties of `/fetch`, whatever its kind or its language
+/// (seen on 2026-10-31, as in the API of Path of Exile 1).
+const QUALITY_PROPERTY: u32 = 6;
 
 /// The status of a seller.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -115,19 +118,10 @@ impl OfferItem {
                     .as_deref()
                     .is_some_and(|stat| stat.rsplit('.').next() == Some(MAXIMUM_QUALITY_STAT))
             })
-            .filter_map(|modifier| first_number(&modifier.text))
+            // `+20% to Maximum Quality`, `+20% à la Qualité maximale`.
+            .filter_map(|modifier| whole_percent(modifier.text.split_whitespace().next()?))
             .fold(CATALYST_QUALITY, u32::saturating_add)
     }
-}
-
-/// The first whole number of a text: 20 in `+20% to Maximum Quality`.
-fn first_number(text: &str) -> Option<u32> {
-    let start = text.find(|c: char| c.is_ascii_digit())?;
-    let digits: String = text[start..]
-        .chars()
-        .take_while(char::is_ascii_digit)
-        .collect();
-    digits.parse().ok()
 }
 
 /// A modifier line of an offer, without the markup of the trade site.
@@ -256,6 +250,9 @@ struct ApiProperty {
     name: String,
     #[serde(default)]
     values: Vec<Value>,
+    /// 6 for the quality; none for most of the others.
+    #[serde(rename = "type")]
+    kind: Option<u32>,
 }
 
 impl ApiProperty {
@@ -264,9 +261,10 @@ impl ApiProperty {
     fn quality(&self, language: Language) -> Option<OfferQuality> {
         let value = self.values.first()?.get(0)?.as_str()?;
         let line = format!("{}: {value}", plain_text(&self.name));
-        let (kind, value) = read_quality(&line, language)?;
-        let Some(value) = value else {
-            log::warn!("Trade site: a quality that can't be read, {line}");
+        let Some((kind, Some(value))) = read_quality(&line, language) else {
+            if self.kind == Some(QUALITY_PROPERTY) {
+                log::warn!("Trade site: a quality that can't be read, {line}");
+            }
             return None;
         };
         Some(OfferQuality { value, kind })
@@ -741,6 +739,28 @@ mod tests {
         for catalyst in Catalyst::ALL {
             assert_eq!(strange.other_quality(catalyst), None, "{catalyst:?}");
         }
+    }
+
+    #[test]
+    fn every_maximum_quality_of_an_offer_adds_up() {
+        // A Breach Ring with the Essence of the Breach: 20 % and both modifiers.
+        let fetch: ApiFetch = serde_json::from_str(
+            r#"{"result": [{"id": "r1", "listing": {"account": {}}, "item": {
+                "typeLine": "Breach Ring", "rarity": "Rare",
+                "properties": [{"name": "Quality (Attack Modifiers)", "values": [["+60%", 1]], "type": 6}],
+                "implicitMods": [{"description": "+20% to Maximum [Quality]", "hash": "stat.implicit.stat_2039822488"}],
+                "explicitMods": [
+                    {"description": "+20% to Maximum [Quality]", "hash": "stat.explicit.stat_2039822488"},
+                    {"description": "+12.5% to Maximum [Quality]", "hash": "stat.explicit.stat_2039822488"},
+                    {"description": "+5% to [Quality] of all Skills", "hash": "stat.explicit.stat_3655769732"}
+                ]
+            }}]}"#,
+        )
+        .expect("read");
+
+        let offers = fetch.offers(Language::English);
+
+        assert_eq!(offers[0].item.max_catalyst_quality(), 60, "not a decimal");
     }
 
     #[test]

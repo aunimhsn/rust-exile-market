@@ -483,7 +483,7 @@ fn shown_estimate(
     let Err(NoFixedPrice::NotFixedName) = fixed_price else {
         return None;
     };
-    let quality = offers.catalyst(item);
+    let searched_catalyst = offers.searched_catalyst(item);
     let OffersState::Items {
         offers,
         total,
@@ -494,7 +494,7 @@ fn shown_estimate(
         return None;
     };
     // The next offers loaded don't move it.
-    estimate::estimate(&offers[..*first_page], *total, rates?, quality)
+    estimate::estimate(&offers[..*first_page], *total, rates?, searched_catalyst)
 }
 
 /// The state of the trade site in the status bar, at `now`: the long wait before the next

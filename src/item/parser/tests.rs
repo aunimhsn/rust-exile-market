@@ -1299,6 +1299,31 @@ fn tells_a_unique_copied_from_the_in_game_trade() {
 }
 
 #[test]
+fn a_quality_is_read_as_a_whole_percentage_only() {
+    assert_eq!(whole_percent("+20%"), Some(20));
+    assert_eq!(whole_percent(" 20% "), Some(20));
+    assert_eq!(whole_percent("+12.5%"), None);
+    assert_eq!(whole_percent("-10%"), None);
+    assert_eq!(whole_percent("+20"), None);
+    assert_eq!(
+        read_quality("Qualité (Modificateurs de Mana): +50%", Language::French),
+        Some((
+            Some(QualityKind {
+                catalyst: Some(Catalyst::Mana),
+                words: "Modificateurs de Mana".to_owned(),
+            }),
+            Some(50)
+        ))
+    );
+    assert_eq!(
+        read_quality("Quality: +12.5%", Language::English),
+        Some((None, None)),
+        "a quality, unreadable"
+    );
+    assert_eq!(read_quality("Spirit: 100", Language::English), None);
+}
+
+#[test]
 fn reads_the_quality_of_a_catalyst_with_its_kind() {
     for (text, quality, catalyst) in [
         (EN_RARE_AMULET_CATALYST, 40, Catalyst::Mana),

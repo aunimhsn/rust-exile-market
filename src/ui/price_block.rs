@@ -284,9 +284,10 @@ impl<'a> PriceBlock<'a> {
         }
         let note = if counted == COUNTED {
             self.i18n
-                .estimate_median_cheapest(counted, estimate.quality)
+                .estimate_median_cheapest(counted, estimate.searched_catalyst)
         } else {
-            self.i18n.estimate_median(counted, estimate.quality)
+            self.i18n
+                .estimate_median(counted, estimate.searched_catalyst)
         };
         ui.add_space(LINE_GAP);
         line(ui, &note, color::WEAK);
@@ -532,7 +533,7 @@ mod tests {
                 exalted: 1925.0,
                 rates: RATES,
             },
-            quality: None,
+            searched_catalyst: None,
         };
 
         assert_eq!(

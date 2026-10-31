@@ -100,7 +100,7 @@ impl Offers {
     /// The kind of the quality of a catalyst of `item`, the item shown, when its offers shown
     /// were searched with its quality: the offers of another kind aren't counted.
     #[must_use]
-    pub fn catalyst(&self, item: &Item) -> Option<Catalyst> {
+    pub fn searched_catalyst(&self, item: &Item) -> Option<Catalyst> {
         match self.state {
             OffersState::Items {
                 quality_searched: true,
@@ -438,17 +438,45 @@ mod tests {
         Item::parse(&crate::item::CopiedItem::from_text(&text).unwrap()).unwrap()
     }
 
-    /// The search of the item with its quality.
-    fn quality_search() -> Search {
+    /// The search of the item with its quality, from `minimum` to `maximum`.
+    fn quality_between(minimum: Option<f64>, maximum: Option<f64>) -> Search {
         let mut search = item_search();
         if let Query::Items(query) = &mut search.query {
             query.properties.push(crate::trade::query::PropertyFilter {
                 property: Property::Quality,
-                minimum: Some(40.0),
-                maximum: None,
+                minimum,
+                maximum,
             });
         }
         search
+    }
+
+    /// The search of the item with its quality, 40 % at least.
+    fn quality_search() -> Search {
+        quality_between(Some(40.0), None)
+    }
+
+    #[test]
+    fn a_quality_without_limits_isnt_searched() {
+        let mana = amulet("Mana Modifiers");
+        let now = Instant::now();
+        let searched = |search| {
+            let mut offers = Offers::default();
+            let _ = offers.search(search, now);
+            offers.apply(
+                answer(items(&["a"], false), after(now, 0)),
+                SystemTime::UNIX_EPOCH,
+            );
+            offers.searched_catalyst(&mana)
+        };
+
+        // The trade site gets no filter: it finds the offers without quality too.
+        assert_eq!(searched(quality_between(None, None)), None);
+        assert_eq!(
+            searched(quality_between(None, Some(30.0))),
+            Some(Catalyst::Mana)
+        );
+        assert_eq!(searched(quality_search()), Some(Catalyst::Mana));
     }
 
     #[test]
@@ -459,11 +487,11 @@ mod tests {
         let mut offers = Offers::default();
 
         let _ = offers.search(quality_search(), now);
-        assert_eq!(offers.catalyst(&mana), None, "while searching");
+        assert_eq!(offers.searched_catalyst(&mana), None, "while searching");
         offers.apply(answer(items(&["a"], true), after(now, 0)), at);
-        assert_eq!(offers.catalyst(&mana), Some(Catalyst::Mana));
+        assert_eq!(offers.searched_catalyst(&mana), Some(Catalyst::Mana));
         assert_eq!(
-            offers.catalyst(&amulet("Strange Modifiers")),
+            offers.searched_catalyst(&amulet("Strange Modifiers")),
             None,
             "a kind the application doesn't know"
         );
@@ -481,16 +509,24 @@ mod tests {
         ] {
             let _ = offers.more();
             offers.apply(answer(outcome.clone(), after(now, 0)), at);
-            assert_eq!(offers.catalyst(&mana), Some(Catalyst::Mana), "{outcome:?}");
+            assert_eq!(
+                offers.searched_catalyst(&mana),
+                Some(Catalyst::Mana),
+                "{outcome:?}"
+            );
         }
 
         let _ = offers.search(item_search(), now);
         offers.apply(answer(items(&["c"], false), after(now, 0)), at);
-        assert_eq!(offers.catalyst(&mana), None, "a search without the quality");
+        assert_eq!(
+            offers.searched_catalyst(&mana),
+            None,
+            "a search without the quality"
+        );
         let _ = offers.search(quality_search(), now);
         offers.apply(answer(items(&["d"], false), after(now, 0)), at);
         offers.clear();
-        assert_eq!(offers.catalyst(&mana), None, "another item copied");
+        assert_eq!(offers.searched_catalyst(&mana), None, "another item copied");
     }
 
     fn ids(offers: &Offers) -> Vec<String> {

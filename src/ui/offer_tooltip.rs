@@ -169,7 +169,7 @@ pub struct OfferTooltip<'a> {
     pub item: &'a Item,
     /// The kind of the quality of a catalyst searched: an offer of another kind isn't
     /// counted in the estimate.
-    pub quality: Option<Catalyst>,
+    pub searched_catalyst: Option<Catalyst>,
     /// The modifier lines of the copied item, to compare the rolls.
     pub lines: &'a CopiedLines,
     pub name_color: Color32,
@@ -187,8 +187,10 @@ struct Line {
 }
 
 /// The line of the quality of an offer, when the copied `item` has the quality of a
-/// catalyst: gray with its difference; white at the maximum of the offer, or beyond it; red
-/// without difference when of another kind.
+/// catalyst, of a known kind or not. Of another known kind than the item's: red, without
+/// difference. Else, with its difference from the item: white at the maximum of the offer (20
+/// %, more with its modifiers `+#% to Maximum Quality`) or beyond it, gray below it. The
+/// quality of the base, or a kind the application doesn't know, is never of another kind.
 fn quality_line(offer: &ItemOffer, item: &Item, i18n: &Translator) -> Option<Line> {
     let copied = item.quality_kind()?;
     let quality = offer.item.quality.as_ref()?;
@@ -298,7 +300,7 @@ impl OfferTooltip<'_> {
             );
         }
         if self
-            .quality
+            .searched_catalyst
             .is_some_and(|catalyst| self.offer.has_other_quality(catalyst))
         {
             ui.add_space(WARNING_GAP);
@@ -675,6 +677,59 @@ mod tests {
         assert_eq!(attack.text, "Attack quality: 50%");
         assert_eq!(attack.tint, color::FALL);
         assert_eq!(attack.difference, None);
+    }
+
+    #[test]
+    fn a_kind_that_cant_be_told_apart_is_never_red() {
+        use crate::item::{CopiedItem, QualityKind};
+        use crate::trade::offers::OfferQuality;
+
+        let i18n = Translator::new(crate::language::Language::English);
+        let parse = |words: &str| {
+            let text = include_str!("../item/test-items/en-owner-rare-amulet-catalyst.txt")
+                .replace("Mana Modifiers", words);
+            Item::parse(&CopiedItem::from_text(&text).unwrap()).unwrap()
+        };
+        let mana = parse("Mana Modifiers");
+        let line = |offer: &ItemOffer, item: &Item| quality_line(offer, item, &i18n);
+
+        // The copied item of a kind the application doesn't know.
+        let strange = parse("Strange Modifiers");
+        let attack = amulet(50, Catalyst::Attack, "Attack Modifiers", &[]);
+        let of_strange = line(&attack, &strange).unwrap();
+        assert_eq!(of_strange.text, "Attack quality: 50%");
+        assert_eq!(of_strange.tint, color::TEXT, "beyond its maximum");
+        // An offer of a kind the application doesn't know: its words.
+        let mut unknown = amulet(30, Catalyst::Mana, "", &[]);
+        unknown.item.quality = Some(OfferQuality {
+            value: 30,
+            kind: Some(QualityKind {
+                catalyst: None,
+                words: "Strange Modifiers".to_owned(),
+            }),
+        });
+        let of_unknown = line(&unknown, &mana).unwrap();
+        assert_eq!(of_unknown.text, "Quality (Strange Modifiers): 30%");
+        assert_eq!(of_unknown.tint, color::TEXT);
+        // The quality of the base.
+        let mut base = amulet(10, Catalyst::Mana, "", &[]);
+        base.item.quality = Some(OfferQuality {
+            value: 10,
+            kind: None,
+        });
+        let of_base = line(&base, &mana).unwrap();
+        assert_eq!(of_base.text, "Quality: 10%");
+        assert_eq!(of_base.tint, color::WEAK);
+        assert_eq!(
+            of_base.difference,
+            Some(Difference {
+                value: -30.0,
+                verdict: Verdict::Worse
+            })
+        );
+        // No quality.
+        base.item.quality = None;
+        assert_eq!(line(&base, &mana), None);
     }
 
     #[test]
