@@ -39,7 +39,7 @@ Path of Exile 2 leaves early access with its version 1.0 on 2026-12-11. The modi
 - [x] **10. Item stats and filters** (#20, #23, #25, #26)
 - [x] **11. Trade site client** (#28)
 - [x] **12. Offers display** (#29, #30)
-- [ ] **13. Estimated prices**, in fifty-one pull requests, from the [game data](docs/game-data.md):
+- [ ] **13. Estimated prices**, in fifty-two pull requests, from the [game data](docs/game-data.md):
   - [x] **13a, the game data** (#31)
   - [x] **13b, the stat ids** (#32)
   - [x] **13c, the better side of a line** (#34)
@@ -51,16 +51,16 @@ Path of Exile 2 leaves early access with its version 1.0 on 2026-12-11. The modi
   - [x] **13h, the normal items, the sockets, the quality and the required level** (#49)
   - [x] **13i, the estimated price** (#51)
   - [x] **13j, the modifier tables** (#53, #55, #58, #60, #62)
-  - [ ] **13k, the modifiers of the endgame mechanics**, in thirty-six pull requests: every edge case of a modifier tied to a mechanic, studied in Exiled Exchange 2 (commit cca3066), RePoE and Craft of Exile on 2026-10-28, with the items copied by the owner, English and French (`inputs/polish-13-en.txt`, `inputs/polish-13-fr.txt`, and three screenshots: an unrevealed modifier written as glowing green scrambled letters, a fractured line in gold, a revealed desecrated line on a green-yellow row); one pass only, the owner gathered every case first; this step is the polish of step 13, and takes every other edge case found on the way:
+  - [ ] **13k, the modifiers of the endgame mechanics**, in thirty-seven pull requests: every edge case of a modifier tied to a mechanic, studied in Exiled Exchange 2 (commit cca3066), RePoE and Craft of Exile on 2026-10-28, with the items copied by the owner, English and French (`inputs/polish-13-en.txt`, `inputs/polish-13-fr.txt`, and three screenshots: an unrevealed modifier written as glowing green scrambled letters, a fractured line in gold, a revealed desecrated line on a green-yellow row); one pass only, the owner gathered every case first; this step is the polish of step 13, and takes every other edge case found on the way:
     - [x] **13k1, the mock-up** (#66)
     - [x] **13k2, the search and the reading** (#68, #70, #73, #75, #77, #80, #82, #84, #86, #89, #92, #94, #97, #100, #102, #104, #106, #108, #110, #112, #114)
     - [x] **13k3, the modifiers of one tier only** (#116, #118, #120, #122, #124, #126, #128, #130)
     - [x] **13k4, the quality of each kind of item** (#132, #134)
-    - [ ] **13k5, the other kinds of items**, in four pull requests (owner's choice on 2026-10-31):
+    - [ ] **13k5, the other kinds of items**, in five pull requests (owner's choice on 2026-10-31; 13k5c in two):
       - [x] **13k5a, the owner's other items** (#137, #138)
       - [x] **13k5b, the lines of the in-game trade** (#139)
       - [ ] **13k5c, the properties of a waystone**: shown and searched as filters, as Exiled Exchange 2 does (`MAP (WAYSTONE) FILTERS`): `Revives Available`, `Item Rarity`, `Pack Size`, `Monster Rarity`, `Monster Effectiveness`, `Waystone Drop Chance` (French `Résurrections disponibles`, `Rareté des objets`, `Taille des Groupes`…), which make its price while the application reads none today (found in 13k3e, the owner's choice on 2026-10-31); mock-up first. Split into two pull requests (owner's choice on 2026-10-31):
-        - [x] **13k5c1, read, shown and searched**: the properties read in English and French, shown and searched as filters of the `map_filters` group of the trade site (`map_revives`, `map_iir`, `map_packsize`, `map_rare_monsters` named "Monster Rarity" and `map_magic_monsters` named "Monster Effectiveness" on the trade site on 2026-10-31, `map_bonus`); mock-up section "Waystone properties (13k5c)".
+        - [x] **13k5c1, read, shown and searched** (#141)
         - [ ] **13k5c2, the properties of the offers**: in the tooltip of an offer of waystone, its properties with their difference from the copied waystone (Exiled Exchange 2 doesn't); mock-up first.
       - [ ] **13k5d, the properties of a skill gem**: a skill gem is searched by its name only today (`Flame Wall`, the owner's level 2 gem), while its level, its quality and its sockets make its price (Exiled Exchange 2 searches at least its level): shown and searched as filters (found in the code review of 13k5a, the owner's choice on 2026-10-31: a step of its own); check the filters of the trade site first; mock-up first.
 - [ ] **14. Overlay POC**: right after step 13, before the first release (owner's choice on 2026-10-31: the overlay is too strong an argument to release without it; the riskiest step first, its unknowns cleared while there is time), a proof of concept of the price shown over the game, the strongest point of Exiled Exchange 2, to compete with it there too; its hotkey can press the copy itself, like Exiled Exchange 2, so that the player no longer has to. To solve there: the hotkey and the keys sent to the game under Wayland (the game, an X11 client through XWayland, may let an X11 application hear and send keys while it has the focus, as Exiled Exchange 2 does on Linux; otherwise the global shortcuts portal of the desktop).
