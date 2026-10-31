@@ -45,7 +45,7 @@ use crate::roll_difference::CopiedLines;
 use crate::tier_rolls::{LineRolls, TierRolls, TierSpan};
 use crate::trade::link;
 use crate::trade::pseudo::{Pseudo, PseudoTotal};
-use crate::trade::stat_filters::{LineStat, LineStats};
+use crate::trade::stat_filters::{self, LineStat, LineStats};
 
 /// The space between two rows.
 const ROW_GAP: f32 = 6.0;
@@ -154,13 +154,15 @@ enum Group {
     Enchant,
     Runes,
     Implicit,
+    /// Their count and the most the item can have; none for a corrupted waystone, its count
+    /// alone ([`stat_filters::corrupted_waystone`]).
     Prefixes {
         filled: u32,
-        max: u32,
+        max: Option<u32>,
     },
     Suffixes {
         filled: u32,
-        max: u32,
+        max: Option<u32>,
     },
     /// The explicit modifiers of a magic or rare item whose header doesn't tell their affix:
     /// a header the parser doesn't know, or lines before the first header.
@@ -1180,6 +1182,8 @@ fn unique_rows<'a>(item: &'a Item, reading: &Reading<'_>) -> Vec<Row<'a>> {
 fn affix_rows<'a>(item: &'a Item, reading: &Reading<'_>) -> Vec<Row<'a>> {
     // A rune or an implicit can add affixes or take some away (`+1 Suffix Modifier allowed`).
     let limits = reading.stats.affix_limits(item);
+    let counted_only = stat_filters::corrupted_waystone(item);
+    let max = |limit: u32| (!counted_only).then_some(limit);
     let line_varies = |line: &StatLine, _: &Stat<'_>| varies(line);
     let prefixes = affix_stats(item, Some(Affix::Prefix), reading);
     let suffixes = affix_stats(item, Some(Affix::Suffix), reading);
@@ -1215,7 +1219,7 @@ fn affix_rows<'a>(item: &'a Item, reading: &Reading<'_>) -> Vec<Row<'a>> {
         &mut rows,
         Group::Prefixes {
             filled: filled(Affix::Prefix),
-            max: limits.prefixes,
+            max: max(limits.prefixes),
         },
         prefixes,
     );
@@ -1223,7 +1227,7 @@ fn affix_rows<'a>(item: &'a Item, reading: &Reading<'_>) -> Vec<Row<'a>> {
         &mut rows,
         Group::Suffixes {
             filled: filled(Affix::Suffix),
-            max: limits.suffixes,
+            max: max(limits.suffixes),
         },
         suffixes,
     );
@@ -1793,7 +1797,8 @@ fn note(ui: &mut Ui, words: String) {
     ui.label(RichText::new(words).font(text::note()).color(color::FAINT));
 }
 
-/// A small title, with the fill of the prefixes and suffixes: lighter while one is open; and
+/// A small title, with the fill of the prefixes and suffixes: lighter while one is open, the
+/// count alone without most; and
 /// "min – max" on its right, above the range fields of the filters.
 fn group_title(ui: &mut Ui, group: Group, range: bool, i18n: &Translator) {
     let (message, fill) = match group {
@@ -1822,16 +1827,12 @@ fn group_title(ui: &mut Ui, group: Group, range: bool, i18n: &Translator) {
         ui.spacing_mut().item_spacing.x = 6.0;
         small_title(ui, message);
         if let Some((filled, max)) = fill {
-            let tint = if filled < max {
-                color::ACCENT
-            } else {
-                color::WEAK
+            let (words, tint) = match max {
+                Some(max) if filled < max => (i18n.affix_fill(filled, max), color::ACCENT),
+                Some(max) => (i18n.affix_fill(filled, max), color::WEAK),
+                None => (filled.to_string(), color::WEAK),
             };
-            ui.label(
-                RichText::new(i18n.affix_fill(filled, max))
-                    .font(text::label())
-                    .color(tint),
-            );
+            ui.label(RichText::new(words).font(text::label()).color(tint));
         }
         if range {
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {

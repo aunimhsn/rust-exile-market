@@ -348,13 +348,17 @@ impl LineStats {
     }
 
     /// How many prefixes and suffixes `item`, whose lines these are, can have: one of each
-    /// for a magic item, two for a jewel, three otherwise, with those its lines add or take
-    /// away ([`Self::affixes_allowed`]).
+    /// for a magic item, two for a jewel or a rare tablet, six for a corrupted waystone
+    /// ([`corrupted_waystone`]), three otherwise (seen on the trade site on 2026-10-31), with
+    /// those its lines add or take away ([`Self::affixes_allowed`]).
     #[must_use]
     pub fn affix_limits(&self, item: &Item) -> AffixLimits {
+        let tablet = game_data::category(item.language(), item.base_type())
+            == Some(game_data::Category::Tablet);
         let usual = match item.rarity() {
             Rarity::Magic => 1,
-            _ if item.is_jewel() => 2,
+            _ if item.is_jewel() || tablet => 2,
+            _ if corrupted_waystone(item) => 6,
             _ => 3,
         };
         let limit = |affix| u32::saturating_add_signed(usual, self.affixes_allowed(affix));
@@ -426,6 +430,18 @@ impl LineStats {
             })
             .collect()
     }
+}
+
+/// Whether `item` is a corrupted rare waystone, whose prefixes and suffixes have no fixed
+/// limit each: the corruption adds one of each (4 and 4) or makes them all of one affix (6
+/// and none), 8 at most (40 offers of the trade site on 2026-10-31); its fill is its count
+/// alone, nothing open, since nothing can change it any more.
+#[must_use]
+pub fn corrupted_waystone(item: &Item) -> bool {
+    item.rarity() == Rarity::Rare
+        && item.is_corrupted()
+        && game_data::category(item.language(), item.base_type())
+            == Some(game_data::Category::Waystone)
 }
 
 #[cfg(test)]

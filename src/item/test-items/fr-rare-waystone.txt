@@ -1,0 +1,23 @@
+Classe d'objet: Pierres de téléportation
+Rareté: Rare
+ Intention génitrice
+Pierre de téléportation (Palier 12)
+--------
+Résurrections disponibles: 2 (augmented)
+Rareté des objets: +25% (augmented)
+Taille des Groupes: +9% (augmented)
+Rareté des Monstres: +23% (augmented)
+Chances de trouver des Pierres de téléportation: +65% (augmented)
+--------
+Niveau de l'objet: 78
+--------
+{ Préfixe : « Preste » (Palier : 1) }
+Les Monstres ont 13(10-15)% d'Augmentation de la Vitesse dAttaque, d'incantation et de déplacement
+{ Préfixe : « Robuste » (Palier : 1) }
+24(20-25)% Davantage de Vie des Monstres
+{ Suffixe : « de la Surpuissance » (Palier : 1) }
+Les Monstres ont 101(100-119)% d'Augmentation d'Application des Altérations Élémentaires
+{ Suffixe : « du Prisme » (Palier : 1) }
++33(30-34)% à la Résistance élémentaire des Monstres
+--------
+Peut être utilisée dans un Dispositif cartographique, vous permettant d'entrer dans une Carte. Les Pierres de téléportation ne peuvent être utilisées qu'une seule fois.

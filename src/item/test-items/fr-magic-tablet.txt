@@ -1,0 +1,14 @@
+Classe d'objet: Tablette
+Rareté: Magique
+Tablette irradiée Généreuse
+--------
+Niveau de l'objet: 77
+--------
+{ Modificateur Implicite }
+Ajoute Irradiation à une Carte
+10 utilisations restantes
+--------
+{ Préfixe : « Généreuse » (Palier : 1) }
+30(25-35)% d'Augmentation de l'Or trouvé dans la Carte
+--------
+À utiliser dans votre Dispositif cartographique pour ajouter des modificateurs à une Carte.

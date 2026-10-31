@@ -1,6 +1,7 @@
-//! The modifier tables, from the RePoE fork (`mods.json`, `base_items.json` and
-//! `stat_translations/stat_descriptions.json`): the tiers of each prefix and suffix that rolls
-//! on the equipment, the jewels, the flasks and the charms, also those a desecration reveals
+//! The modifier tables, from the RePoE fork (`mods.json`, `base_items.json`,
+//! `stat_translations/stat_descriptions.json` and `stat_translations/tablet_stat_descriptions.json`):
+//! the tiers of each prefix and suffix that rolls on the equipment, the jewels, the flasks, the
+//! charms, the waystones and the tablets, also those a desecration reveals
 //! (the lords of the Abyss), those of the Genesis tree of the Breach and those only an essence
 //! or an alloy of Verisium adds, and the tags of each base that tell where a modifier rolls.
 
@@ -224,9 +225,23 @@ pub const ALLOYS: &[CurrencyModifier] = &[
 ];
 
 /// The domains of the bases kept, and of their modifiers: the equipment, the jewels, the flasks
-/// and the charms; each one a domain the application knows (`Domain` in
-/// `src/game_data/bases.rs`), as is [`DESECRATED`], the domain of modifiers only.
-const DOMAINS: [&str; 3] = [EQUIPMENT, JEWELS, "flask"];
+/// and the charms, the waystones (`area`) and the tablets; each one a domain the application
+/// knows (`Domain` in `src/game_data/bases.rs`), as is [`DESECRATED`], the domain of modifiers
+/// only.
+const DOMAINS: [&str; 5] = [EQUIPMENT, JEWELS, "flask", "area", TABLETS];
+
+/// The domain of the modifiers of the tablets, which the game writes as the translations of
+/// `tablet_stat_descriptions.json` write them (`30% increased Gold found in Map`, not `… in
+/// this Area`), before those of `stat_descriptions.json`.
+const TABLETS: &str = "tablet";
+
+/// The stats of the waystones that roll while their line writes no value: the game writes
+/// `Monsters are Armoured` alone, whatever share of their strength RePoE adds to their armour
+/// (35–55%).
+const UNWRITTEN_ROLLS: [&str; 2] = [
+    "map_monsters_additional_strength_ratio_%_for_armour",
+    "map_monsters_additional_dexterity_ratio_%_for_evasion",
+];
 
 /// Whether `tag` is one of the Time-Lost jewels, whose modifiers the game writes within the
 /// words of [`RADIUS_GRANTS`].
@@ -471,11 +486,13 @@ pub type Templates = BTreeMap<String, String>;
 
 /// The modifier tables of `modifiers`, those only a currency of `currencies` adds among them
 /// ([`CURRENCIES`]), the lines of their stats written as the English templates of Exiled
-/// Exchange 2, and the tags of the bases that the tables read, by English name of the base.
+/// Exchange 2 (by `tablet_translations` first for the tablets), and the tags of the bases that
+/// the tables read, by English name of the base.
 pub fn reduce(
     modifiers: &BTreeMap<String, SourceModifier>,
     bases: &BTreeMap<String, SourceBase>,
     translations: &[Translation],
+    tablet_translations: &[Translation],
     templates: &Templates,
     currencies: &[(Source, &[CurrencyModifier])],
 ) -> Result<(Vec<Modifier>, BaseTags)> {
@@ -484,7 +501,13 @@ pub fn reduce(
         .filter(|base| base.release_state == "released")
         .collect();
     let currencies = currency_spawns(modifiers, currencies, &released)?;
-    let grouped = group_tiers(modifiers, translations, templates, &currencies)?;
+    let grouped = group_tiers(
+        modifiers,
+        &by_stat(&[translations]),
+        &by_stat(&[tablet_translations, translations]),
+        templates,
+        &currencies,
+    )?;
 
     let mut tables = Vec::new();
     let mut unknown_lines = BTreeSet::new();
@@ -508,6 +531,10 @@ pub fn reduce(
         // A modifier that rolls on no released base of its domains, e.g. one of Path of Exile
         // left in the files, or a desecrated one of the waystones.
         if !spawn.iter().any(|&(_, weight)| weight > 0) {
+            continue;
+        }
+        // A modifier without line, its values all 0 (`TrapThrowSpeed`), is never written.
+        if lines.is_empty() {
             continue;
         }
         // A line without template can't be found, nor its modifier.
@@ -545,20 +572,28 @@ pub fn reduce(
     Ok((tables, base_tags))
 }
 
+/// The translation of each stat, the first of `files` that writes it, the first of its file.
+fn by_stat<'a>(files: &[&'a [Translation]]) -> HashMap<&'a str, &'a Translation> {
+    let mut by_stat = HashMap::new();
+    for translation in files.iter().copied().flatten() {
+        for id in &translation.ids {
+            by_stat.entry(id.as_str()).or_insert(translation);
+        }
+    }
+    by_stat
+}
+
 /// The tiers of `modifiers` that roll (with the currency and the spawn weights of `currencies`
-/// for those only a currency adds), grouped by type, affix, domain, lines, bases and source.
+/// for those only a currency adds), grouped by type, affix, domain, lines, bases and source,
+/// their lines written by the translations of `by_stat`, those of the tablets by
+/// `tablet_by_stat`.
 fn group_tiers(
     modifiers: &BTreeMap<String, SourceModifier>,
-    translations: &[Translation],
+    by_stat: &HashMap<&str, &Translation>,
+    tablet_by_stat: &HashMap<&str, &Translation>,
     templates: &Templates,
     currencies: &HashMap<&str, (Source, Vec<SpawnWeight>)>,
 ) -> Result<BTreeMap<Key, Vec<Tier>>> {
-    let mut by_stat: HashMap<&str, usize> = HashMap::new();
-    for (index, translation) in translations.iter().enumerate() {
-        for id in &translation.ids {
-            by_stat.entry(id.as_str()).or_insert(index);
-        }
-    }
     let mut grouped: BTreeMap<Key, Vec<Tier>> = BTreeMap::new();
     for (id, modifier) in modifiers {
         let currency = currencies.get(id.as_str());
@@ -582,8 +617,13 @@ fn group_tiers(
             )
             .into());
         }
-        let (lines, ranges) = lines(modifier, translations, &by_stat, templates)
-            .map_err(|error| format!("{id}: {error}"))?;
+        let by_stat = if modifier.domain == TABLETS {
+            tablet_by_stat
+        } else {
+            by_stat
+        };
+        let (lines, ranges) =
+            lines(modifier, by_stat, templates).map_err(|error| format!("{id}: {error}"))?;
         // Left out, it would be read as no modifier, without a word.
         if let Some((source, _)) = currency
             && let Some(line) = lines.iter().find(|line| !line.known)
@@ -749,16 +789,15 @@ fn base_tags(released: &[&SourceBase], tables: &[Modifier]) -> BaseTags {
 /// (written as the game writes it, without range): [`reduce`] leaves its modifier out.
 fn lines(
     modifier: &SourceModifier,
-    translations: &[Translation],
-    by_stat: &HashMap<&str, usize>,
+    by_stat: &HashMap<&str, &Translation>,
     templates: &Templates,
 ) -> Result<(Vec<Line>, Vec<LineRanges>)> {
     let mut lines = Vec::new();
     let mut ranges = Vec::new();
     // The translations written, once each: one can write several stats.
-    let mut written = Vec::new();
+    let mut written: Vec<&Translation> = Vec::new();
     for stat in &modifier.stats {
-        let Some(&index) = by_stat.get(stat.id.as_str()) else {
+        let Some(&translation) = by_stat.get(stat.id.as_str()) else {
             // A stat the game doesn't write, e.g. `dummy_stat_display_nothing`; one that rolls
             // is written by a translation RePoE doesn't have (`minion_area_of_effect_+%` of a
             // hybrid of the Abyss on the jewels), whose line can't be found.
@@ -772,13 +811,22 @@ fn lines(
             }
             continue;
         };
-        let Some(translation) = translations.get(index) else {
-            continue;
-        };
-        if translation.hidden == Some(true) || written.contains(&index) {
+        // The game writes no line of values all 0: the `0% increased Quantity of Waystones
+        // found in Map` RePoE gives the additional Essence of a tablet.
+        let zero = translation
+            .ids
+            .iter()
+            .filter_map(|id| stat_of(modifier, id))
+            .all(|stat| stat.min == 0 && stat.max == 0);
+        if translation.hidden == Some(true)
+            || zero
+            || written
+                .iter()
+                .any(|&before| std::ptr::eq(before, translation))
+        {
             continue;
         }
-        written.push(index);
+        written.push(translation);
         let (line, line_ranges) = line(modifier, translation, templates)?;
         lines.push(line);
         ranges.push(line_ranges);
@@ -849,7 +897,7 @@ fn line(
     // A stat that rolls is written by a value of its line, or its range would be lost.
     for (index, id) in translation.ids.iter().enumerate() {
         let rolls = stat_of(modifier, id).is_some_and(|stat| stat.min != stat.max);
-        if rolls && !indexes.contains(&index) {
+        if rolls && !indexes.contains(&index) && !UNWRITTEN_ROLLS.contains(&id.as_str()) {
             return Err(format!("{id} rolls but {} doesn't write it", general.string).into());
         }
     }
@@ -896,7 +944,9 @@ fn line(
 }
 
 /// The template of Exiled Exchange 2 of a line of `modifier` written one of `strings` (templates
-/// of the game, [`template`]), the first it knows. On a Time-Lost jewel, the line within the
+/// of the game, [`template`]), the first it knows, else the first it knows without the `+` of
+/// its numbers, which the application reads in their values (`+#% Monster Elemental
+/// Resistances` of the waystones, `#% Monster Elemental Resistances`). On a Time-Lost jewel, the line within the
 /// words of [`RADIUS_GRANTS`] of which it knows one kind only (`Small Passive Skills in Radius
 /// also grant #% increased Elemental Damage`), with its number when a string writes one: known
 /// without its number only (`Small Passive Skills in Radius also grant Attack Hits apply
@@ -911,7 +961,16 @@ fn known_template<'a>(
     strings: &[String],
     templates: &'a Templates,
 ) -> Result<Option<&'a String>> {
-    let alone = || strings.iter().find_map(|string| templates.get(string));
+    let alone = || {
+        strings
+            .iter()
+            .find_map(|string| templates.get(string))
+            .or_else(|| {
+                strings
+                    .iter()
+                    .find_map(|string| templates.get(&string.replace("+#", "#")))
+            })
+    };
     if !on_radius_jewel(modifier) {
         return Ok(alone());
     }
@@ -1060,6 +1119,7 @@ mod tests {
             &serde_json::from_str(modifiers).expect("modifiers"),
             &serde_json::from_str(bases).expect("bases"),
             &serde_json::from_str::<Vec<_>>(translations).expect("translations"),
+            &[],
             &templates,
             &[],
         )
@@ -1236,6 +1296,159 @@ mod tests {
             .collect();
         // One table per domain, the domain of the equipment unwritten.
         assert_eq!(domains, [Some(serde_json::json!("flask")), None]);
+    }
+
+    /// A waystone of the band of tiers 11 to 15 and a tablet, of `base_items.json`.
+    const MAP_BASES: &str = r#"{
+        "Waystone": {"domain": "area", "name": "Waystone (Tier 12)", "release_state": "released", "tags": ["map_key_high", "map", "default"]},
+        "Tablet": {"domain": "tablet", "name": "Irradiated Tablet", "release_state": "released", "tags": ["tower_augment", "default"]}
+    }"#;
+
+    /// The lines of each table of `modifiers` rolling on [`MAP_BASES`], with `translations`
+    /// and `tablet_translations`, the templates of Exiled Exchange 2 being `templates`.
+    fn map_lines(
+        modifiers: &str,
+        translations: &str,
+        tablet_translations: &str,
+        templates: &[&str],
+    ) -> Vec<serde_json::Value> {
+        let (tables, _) = reduce(
+            &serde_json::from_str(modifiers).expect("modifiers"),
+            &serde_json::from_str(MAP_BASES).expect("bases"),
+            &serde_json::from_str::<Vec<_>>(translations).expect("translations"),
+            &serde_json::from_str::<Vec<_>>(tablet_translations).expect("tablet translations"),
+            &templates
+                .iter()
+                .map(|&template| (template.to_owned(), template.to_owned()))
+                .collect(),
+            &[],
+        )
+        .expect("reduced");
+        tables
+            .iter()
+            .map(|table| serde_json::json!([table.domain, table.lines, table.tiers]))
+            .collect()
+    }
+
+    #[test]
+    fn a_tablet_takes_the_lines_of_its_own_translations_first() {
+        let gold = |domain: &str| {
+            modifier(
+                "Gold",
+                1,
+                r#"[{"tag": "default", "weight": 1}]"#,
+                r#"[{"id": "map_extra_gold_piles_chance_%", "min": 25, "max": 35}, {"id": "map_verisium_stack_size_+%", "min": 15, "max": 25}]"#,
+            )
+            .replace(r#""domain": "item""#, &format!(r#""domain": "{domain}""#))
+        };
+        let modifiers = format!(
+            r#"{{"TowerGold": {}, "MapGold": {}}}"#,
+            gold("tablet"),
+            gold("area")
+        );
+        let translations = r#"[
+            {"ids": ["map_extra_gold_piles_chance_%"], "English": [{"string": "{0}% increased Gold found in this Area", "index_handlers": [[]]}], "hidden": null},
+            {"ids": ["map_verisium_stack_size_+%"], "English": [{"string": "{0}% increased Verisium", "index_handlers": [[]]}], "hidden": null}
+        ]"#;
+        let tablet_translations = r#"[{"ids": ["map_extra_gold_piles_chance_%"], "English": [{"string": "{0}% increased Gold found in Map", "index_handlers": [[]]}], "hidden": null}]"#;
+
+        let lines = map_lines(
+            &modifiers,
+            translations,
+            tablet_translations,
+            &[
+                "#% increased Gold found in this Area",
+                "#% increased Gold found in Map",
+                "#% increased Verisium",
+            ],
+        );
+
+        // The tablet with its own line of gold, and the line of the other file it lacks; the
+        // waystone with the lines of the other file only.
+        let tiers = serde_json::json!([{"level": 1, "ranges": [[[25, 35]], [[15, 25]]]}]);
+        assert_eq!(
+            lines,
+            [
+                serde_json::json!(["area", [{"template": "#% increased Gold found in this Area"}, {"template": "#% increased Verisium"}], tiers]),
+                serde_json::json!(["tablet", [{"template": "#% increased Gold found in Map"}, {"template": "#% increased Verisium"}], tiers]),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_waystone_modifier_writes_only_the_lines_the_game_writes() {
+        // `Monsters are Armoured`: a value its line doesn't write, the share of the strength
+        // of the monsters added to their armour; a fixed value without translation, folded
+        // into the properties of the waystone; a value of 0 the game doesn't write.
+        let armoured = modifier(
+            "Armoured",
+            1,
+            r#"[{"tag": "default", "weight": 1}]"#,
+            r#"[
+                {"id": "map_monsters_additional_strength_ratio_%_for_armour", "min": 35, "max": 55},
+                {"id": "map_map_item_drop_chance_+%_final_from_map", "min": 15, "max": 15},
+                {"id": "map_item_drop_rarity_+%", "min": 0, "max": 0}
+            ]"#,
+        )
+        .replace(r#""domain": "item""#, r#""domain": "area""#);
+        // Every value 0: never written, no table.
+        let nothing = modifier(
+            "Nothing",
+            1,
+            r#"[{"tag": "default", "weight": 1}]"#,
+            r#"[{"id": "map_item_drop_rarity_+%", "min": 0, "max": 0}]"#,
+        )
+        .replace(r#""domain": "item""#, r#""domain": "area""#);
+        let modifiers = format!(r#"{{"MapArmoured": {armoured}, "MapNothing": {nothing}}}"#);
+        let translations = r#"[
+            {"ids": ["map_monsters_additional_strength_ratio_%_for_armour"], "English": [{"string": "Monsters are [MonsterExtraArmour1|Armoured]", "index_handlers": [[]]}], "hidden": null},
+            {"ids": ["map_item_drop_rarity_+%"], "English": [{"string": "{0}% increased Rarity of Items found in this Area", "index_handlers": [[]]}], "hidden": null}
+        ]"#;
+
+        let lines = map_lines(
+            &modifiers,
+            translations,
+            "[]",
+            &[
+                "Monsters are Armoured",
+                "#% increased Rarity of Items found in this Area",
+            ],
+        );
+
+        assert_eq!(
+            lines,
+            [
+                serde_json::json!(["area", [{"template": "Monsters are Armoured"}], [{"level": 1, "ranges": [[]]}]])
+            ]
+        );
+    }
+
+    #[test]
+    fn a_line_is_known_without_the_plus_sign_of_its_number() {
+        // The application reads the sign in the value: `+33% Monster Elemental Resistances`
+        // finds `#% Monster Elemental Resistances`.
+        let resistances = modifier(
+            "Resistances",
+            1,
+            r#"[{"tag": "map_key_high", "weight": 1}, {"tag": "default", "weight": 0}]"#,
+            r#"[{"id": "map_monsters_additional_elemental_resistance", "min": 30, "max": 34}]"#,
+        )
+        .replace(r#""domain": "item""#, r#""domain": "area""#);
+        let translations = r#"[{"ids": ["map_monsters_additional_elemental_resistance"], "English": [{"string": "+{0}% Monster Elemental Resistances", "index_handlers": [[]]}], "hidden": null}]"#;
+
+        let lines = map_lines(
+            &format!(r#"{{"MapResistances": {resistances}}}"#),
+            translations,
+            "[]",
+            &["#% Monster Elemental Resistances"],
+        );
+
+        assert_eq!(
+            lines,
+            [
+                serde_json::json!(["area", [{"template": "#% Monster Elemental Resistances"}], [{"level": 1, "ranges": [[[30, 34]]]}]])
+            ]
+        );
     }
 
     #[test]
@@ -1479,6 +1692,7 @@ mod tests {
             &serde_json::from_str(modifiers).expect("modifiers"),
             &serde_json::from_str(BASES).expect("bases"),
             &serde_json::from_str::<Vec<_>>(translations).expect("translations"),
+            &[],
             &[(template.to_owned(), template.to_owned())].into(),
             &[(Source::Essence, essences)],
         )?;
@@ -1604,6 +1818,7 @@ mod tests {
             &serde_json::from_str(&modifiers).expect("modifiers"),
             &serde_json::from_str(BASES).expect("bases"),
             &serde_json::from_str::<Vec<_>>(translations).expect("translations"),
+            &[],
             &[(template.to_owned(), template.to_owned())].into(),
             &[(Source::Essence, &[("Essence", &[("bow", 1)])])],
         )
@@ -2095,6 +2310,7 @@ mod tests {
             &serde_json::from_str(&modifiers).expect("modifiers"),
             &serde_json::from_str(BASES).expect("bases"),
             &serde_json::from_str::<Vec<_>>(translations).expect("translations"),
+            &[],
             &[(
                 "Loads an additional bolt".to_owned(),
                 "Loads an additional bolt".to_owned(),
@@ -2193,6 +2409,7 @@ mod tests {
             &serde_json::from_str(&modifiers).expect("modifiers"),
             &serde_json::from_str(BASES).expect("bases"),
             &serde_json::from_str::<Vec<_>>(translations).expect("translations"),
+            &[],
             &[("Thorns".to_owned(), "# to # Thorns damage".to_owned())].into(),
             &[],
         )
@@ -2259,6 +2476,7 @@ mod tests {
             &serde_json::from_str(bases).expect("bases"),
             &serde_json::from_str::<Vec<_>>(&format!("[{}]", translations.join(", ")))
                 .expect("translations"),
+            &[],
             &templates
                 .iter()
                 .map(|&template| (template.to_owned(), template.to_owned()))
@@ -2424,6 +2642,7 @@ mod tests {
             &serde_json::from_str(&modifiers).expect("modifiers"),
             &serde_json::from_str(bases).expect("bases"),
             &serde_json::from_str::<Vec<_>>(translations).expect("translations"),
+            &[],
             &templates,
             &[],
         )

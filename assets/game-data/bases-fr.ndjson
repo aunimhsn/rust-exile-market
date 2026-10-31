@@ -1175,6 +1175,22 @@
 {"name":"Pic de discorde","category":"One Hand Mace","tags":["mace","one_hand_weapon","weapon","default"]}
 {"name":"Pic de guerre","category":"One Hand Mace","tags":["mace","one_hand_weapon","weapon","default"]}
 {"name":"Pic de guerre runeforgé","category":"One Hand Mace","tags":["mace","one_hand_weapon","weapon","default"]}
+{"name":"Pierre de téléportation (Palier 1)","category":"Map","domain":"area","tags":["map_key_low","default"]}
+{"name":"Pierre de téléportation (Palier 10)","category":"Map","domain":"area","tags":["map_key_medium","default"]}
+{"name":"Pierre de téléportation (Palier 11)","category":"Map","domain":"area","tags":["map_key_high","default"]}
+{"name":"Pierre de téléportation (Palier 12)","category":"Map","domain":"area","tags":["map_key_high","default"]}
+{"name":"Pierre de téléportation (Palier 13)","category":"Map","domain":"area","tags":["map_key_high","default"]}
+{"name":"Pierre de téléportation (Palier 14)","category":"Map","domain":"area","tags":["map_key_high","default"]}
+{"name":"Pierre de téléportation (Palier 15)","category":"Map","domain":"area","tags":["map_key_high","default"]}
+{"name":"Pierre de téléportation (Palier 16)","category":"Map","domain":"area","tags":["map_key_highest","default"]}
+{"name":"Pierre de téléportation (Palier 2)","category":"Map","domain":"area","tags":["map_key_low","default"]}
+{"name":"Pierre de téléportation (Palier 3)","category":"Map","domain":"area","tags":["map_key_low","default"]}
+{"name":"Pierre de téléportation (Palier 4)","category":"Map","domain":"area","tags":["map_key_low","default"]}
+{"name":"Pierre de téléportation (Palier 5)","category":"Map","domain":"area","tags":["map_key_low","default"]}
+{"name":"Pierre de téléportation (Palier 6)","category":"Map","domain":"area","tags":["map_key_medium","default"]}
+{"name":"Pierre de téléportation (Palier 7)","category":"Map","domain":"area","tags":["map_key_medium","default"]}
+{"name":"Pierre de téléportation (Palier 8)","category":"Map","domain":"area","tags":["map_key_medium","default"]}
+{"name":"Pierre de téléportation (Palier 9)","category":"Map","domain":"area","tags":["map_key_medium","default"]}
 {"name":"Plastron complet","category":"Body Armour","tags":["str_armour","body_armour","armour","default"]}
 {"name":"Plastron complet runeforgé","category":"Body Armour","tags":["str_armour","body_armour","armour","default"]}
 {"name":"Plastron complet runomaîtrisé","category":"Body Armour","tags":["str_armour","body_armour","armour","default"]}
@@ -1296,6 +1312,14 @@
 {"name":"Souliers élégants","category":"Boots","tags":["int_armour","boots","armour","default"]}
 {"name":"Souliers élégants runeforgés","category":"Boots","tags":["int_armour","boots","armour","default"]}
 {"name":"Surin en verre","category":"Dagger","tags":["dagger","one_hand_weapon","weapon","default"]}
+{"name":"Tablette d'Abysse","category":"TowerAugment","domain":"tablet","tags":["tower_augment_abyss","default"]}
+{"name":"Tablette d'Expédition","category":"TowerAugment","domain":"tablet","tags":["tower_augment_expedition","default"]}
+{"name":"Tablette de Brèche","category":"TowerAugment","domain":"tablet","tags":["tower_augment_breach","default"]}
+{"name":"Tablette de Délire","category":"TowerAugment","domain":"tablet","tags":["tower_augment_delirium","default"]}
+{"name":"Tablette de Rituel","category":"TowerAugment","domain":"tablet","tags":["tower_augment_ritual","default"]}
+{"name":"Tablette du Superviseur","category":"TowerAugment","domain":"tablet","tags":["tower_augment_map_boss","default"]}
+{"name":"Tablette du Temple","category":"TowerAugment","domain":"tablet","tags":["tower_augment_incursion","default"]}
+{"name":"Tablette irradiée","category":"TowerAugment","domain":"tablet","tags":["default"]}
 {"name":"Talisman alpha","category":"Talisman","tags":["talisman","two_hand_weapon","weapon","default"]}
 {"name":"Talisman braisécorce","category":"Talisman","tags":["talisman","two_hand_weapon","weapon","default"]}
 {"name":"Talisman cendrécorce","category":"Talisman","tags":["talisman","two_hand_weapon","weapon","default"]}

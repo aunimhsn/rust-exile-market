@@ -1,5 +1,6 @@
 //! The bases of the game, from Exiled Exchange 2 (`assets/game-data/bases-<language>.ndjson`):
-//! the category of each base of equipment, jewel, flask or charm, by its name in each language,
+//! the category of each base of equipment, jewel, flask, charm, waystone or tablet, by its name
+//! in each language,
 //! and its tags from RePoE, which tell the modifiers that roll on it.
 
 use std::collections::HashMap;
@@ -41,6 +42,9 @@ pub enum Category {
     Spear,
     Staff,
     Talisman,
+    /// The tablets of the Atlas.
+    #[serde(rename = "TowerAugment")]
+    Tablet,
     #[serde(rename = "Two Hand Axe")]
     TwoHandAxe,
     #[serde(rename = "Two Hand Mace")]
@@ -50,6 +54,8 @@ pub enum Category {
     Wand,
     /// The quarterstaves.
     Warstaff,
+    #[serde(rename = "Map")]
+    Waystone,
 }
 
 impl Category {
@@ -87,13 +93,16 @@ impl Category {
             | Self::Flask
             | Self::Jewel
             | Self::Quiver
-            | Self::Ring => 0,
+            | Self::Ring
+            | Self::Tablet
+            | Self::Waystone => 0,
         }
     }
 
     /// The id of the category on the trade site (`weapon.bow`), as Exiled Exchange 2 maps it
     /// (`CATEGORY_TO_TRADE_ID`); a flask by the `tags` of its base, since the trade site tells
-    /// the life flasks from the mana flasks. Checked on the trade site on 2026-10-28.
+    /// the life flasks from the mana flasks. Checked on the trade site on 2026-10-28, the
+    /// waystones and the tablets on 2026-10-31.
     fn trade_id(self, tags: &[String]) -> &'static str {
         let tagged = |tag: &str| tags.iter().any(|candidate| candidate == tag);
         match self {
@@ -113,6 +122,8 @@ impl Category {
             Self::Flask if tagged("mana_flask") => "flask.mana",
             Self::Flask => "flask",
             Self::Jewel => "jewel",
+            Self::Tablet => "map.tablet",
+            Self::Waystone => "map.waystone",
             Self::Bow => "weapon.bow",
             Self::Crossbow => "weapon.crossbow",
             Self::Dagger => "weapon.dagger",
@@ -172,6 +183,10 @@ pub(super) enum Domain {
     Flask,
     /// The jewels.
     Misc,
+    /// The waystones.
+    Area,
+    /// The tablets.
+    Tablet,
     /// The modifiers a desecration reveals on the equipment and the jewels: those of the lords
     /// of the Abyss, of one tier each; no base is of this domain.
     Desecrated,
@@ -280,6 +295,14 @@ mod tests {
             trade_category(Language::English, "Ultimate Mana Flask"),
             Some("flask.mana")
         );
+        assert_eq!(
+            trade_category(Language::French, "Pierre de téléportation (Palier 12)"),
+            Some("map.waystone")
+        );
+        assert_eq!(
+            trade_category(Language::English, "Irradiated Tablet"),
+            Some("map.tablet")
+        );
         assert_eq!(trade_category(Language::English, "Mystery Ring"), None);
         // Every flask of the data is a life or a mana flask.
         for bases in [&ENGLISH, &FRENCH] {
@@ -303,6 +326,14 @@ mod tests {
             Some(Domain::Flask)
         );
         assert_eq!(domain(Language::English, "Ruby"), Some(Domain::Misc));
+        assert_eq!(
+            domain(Language::English, "Waystone (Tier 12)"),
+            Some(Domain::Area)
+        );
+        assert_eq!(
+            domain(Language::French, "Tablette de Brèche"),
+            Some(Domain::Tablet)
+        );
         assert_eq!(domain(Language::English, "Mystery Ring"), None);
     }
 
