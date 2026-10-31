@@ -1848,3 +1848,48 @@ fn every_advanced_copy_is_read_the_same_from_the_in_game_trade() {
     }
     assert!(read >= 30, "{read} items");
 }
+
+#[test]
+fn reads_the_level_quality_and_sockets_of_a_skill_gem() {
+    for text in [EN_GEM_SKILL, FR_GEM_SKILL] {
+        let item = item(text);
+        assert_eq!(item.gem_level(), Some(2), "{text}");
+        assert_eq!(item.sockets(), Some(2), "{text}");
+        assert_eq!(item.quality(), None, "{text}");
+    }
+    // At the highest level, the game adds `(Max)` after it, as the trade site; a corrupted gem
+    // its quality beyond 20 %.
+    for (text, level) in [
+        (
+            "Item Class: Skill Gems\nRarity: Gem\nComet\n--------\n\
+             Spell, AoE, Cold, Repeatable\nLevel: 20 (Max)\nQuality: +23% (augmented)\n\
+             --------\nSockets: G G G G G \n--------\nCorrupted",
+            20,
+        ),
+        (
+            "Classe d'objet: Gemmes d'aptitude\nRareté: Gemme\nComète\n--------\n\
+             Sort, Zone d'effet, Froid, Répétable \nNiveau: 21 (Maxi) (augmented)\n\
+             Qualité: +23% (augmented)\n--------\nChâsses: G G G G G \n--------\nCorrompu",
+            21,
+        ),
+    ] {
+        let item = item(text);
+        assert_eq!(item.gem_level(), Some(level), "{text}");
+        assert_eq!(item.quality(), Some(23), "{text}");
+        assert_eq!(item.sockets(), Some(5), "{text}");
+        assert!(item.warnings().is_empty(), "{text}");
+    }
+}
+
+#[test]
+fn an_unreadable_gem_level_warns_and_a_level_of_another_item_isnt_one() {
+    let text = "Item Class: Skill Gems\nRarity: Gem\nComet\n--------\nLevel: high";
+    let gem = try_parse(text).expect("the item is read");
+    assert_eq!(gem.gem_level(), None);
+    assert_eq!(
+        gem.warnings(),
+        [ParseWarning::InvalidValue(Field::GemLevel)]
+    );
+    let flask = "Item Class: Life Flasks\nRarity: Normal\nLife Flask\n--------\nLevel: 3";
+    assert_eq!(item(flask).gem_level(), None);
+}

@@ -181,6 +181,8 @@ pub struct Item {
         reason = "the game calls it the item level"
     )]
     item_level: Option<u32>,
+    /// The level of a gem, `Level: 2`; none for a support gem, which has no level.
+    gem_level: Option<u32>,
     quality: Option<u32>,
     /// The kind of the quality of a catalyst; none for the quality of the base.
     quality_kind: Option<QualityKind>,
@@ -329,6 +331,12 @@ impl Item {
     #[must_use]
     pub fn item_level(&self) -> Option<u32> {
         self.item_level
+    }
+
+    /// The level of a gem.
+    #[must_use]
+    pub fn gem_level(&self) -> Option<u32> {
+        self.gem_level
     }
 
     /// The quality, in percent.

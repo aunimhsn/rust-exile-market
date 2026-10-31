@@ -27,6 +27,8 @@ pub(super) struct Labels {
     pub sockets: &'static str,
     pub requires: &'static str,
     pub level: &'static str,
+    /// The name of the level of a gem among its properties, without its separator.
+    pub gem_level: &'static str,
     /// The short and long names of the attributes in the requirements.
     pub strength: &'static [&'static str],
     pub dexterity: &'static [&'static str],
@@ -172,6 +174,7 @@ static ENGLISH: Labels = Labels {
     sockets: "Sockets: ",
     requires: "Requires: ",
     level: "Level ",
+    gem_level: "Level",
     strength: &["Str", "Strength"],
     dexterity: &["Dex", "Dexterity"],
     intelligence: &["Int", "Intelligence"],
@@ -267,6 +270,7 @@ static FRENCH: Labels = Labels {
     sockets: "Châsses: ",
     requires: "Prérequis : ",
     level: "Niveau ",
+    gem_level: "Niveau",
     strength: &["For", "Force"],
     dexterity: &["Dex", "Dextérité"],
     intelligence: &["Int", "Intelligence"],

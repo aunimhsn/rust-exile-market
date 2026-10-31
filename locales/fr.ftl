@@ -113,6 +113,8 @@ tag-sockets = { $value ->
 }
 tag-item-level = niv. { $value }
 tag-stack = Pile { $size }/{ $max }
+# Le niveau d'une gemme, après sa classe d'objet sous son nom : « Gemmes d'aptitude · Niveau 2 ».
+gem-level = Niveau { $value }
 # Les valeurs principales de la base, chacune suivie de son nombre en gras : le DPS d'une arme,
 # les défenses d'une armure ou d'un bouclier.
 dps-physical = DPS physique
@@ -163,6 +165,7 @@ group-unique = Unique
 group-item = Objet
 group-weapon = Arme
 group-waystone = Pierre de téléportation
+group-gem = Gemme
 # Les totaux que le site d'échange additionne sur plusieurs modificateurs.
 group-pseudo = Pseudo
 # À côté de Préfixes et Suffixes : combien l'objet en a, sur le maximum possible.
@@ -190,6 +193,7 @@ filter-base-type = Base : { $base }
 filter-item-class = Classe cherchée : { $class }
 filter-item-level = Niveau de l'objet : { $value }
 filter-sockets = Châsses : { $value }
+filter-gem-level = Niveau : { $value }
 filter-quality = Qualité : { $value }%
 # La qualité d'un catalyseur sur une bague, une amulette ou un joyau, courte avec son type ; un type que l'application ne connaît pas garde les mots du jeu ($words).
 filter-catalyst-quality = { $kind ->
@@ -347,6 +351,7 @@ possible-uniques = Uniques possibles
 no-offers = Aucune offre
 # Les objets rares, magiques et normaux, dont le prix s'estime d'après les offres d'objets similaires.
 no-market-price-rare = Pas de prix de marché pour les objets rares.
+no-market-price-skill-gem = Pas de prix de marché pour les gemmes d'aptitude.
 no-market-price-magic = Pas de prix de marché pour les objets magiques.
 no-market-price-normal = Pas de prix de marché pour les objets normaux.
 search-to-estimate = Recherchez des offres similaires pour l'estimer.

@@ -68,6 +68,7 @@ pub enum ParseWarning {
 pub enum Field {
     ItemLevel,
     Stack,
+    GemLevel,
     Quality,
     Requirements,
     WaystoneProperty,
@@ -78,6 +79,7 @@ impl fmt::Display for Field {
         formatter.write_str(match self {
             Self::ItemLevel => "item level",
             Self::Stack => "stack size",
+            Self::GemLevel => "level of a gem",
             Self::Quality => "quality",
             Self::Requirements => "requirements",
             Self::WaystoneProperty => "property of a waystone",
@@ -209,6 +211,7 @@ fn read_header(lines: &[&str], language: Language, labels: &Labels) -> Result<It
         exceptional,
         stack: None,
         item_level: None,
+        gem_level: None,
         quality: None,
         quality_kind: None,
         sockets: None,
@@ -519,8 +522,8 @@ fn read_headed(item: &mut Item, lines: &[&str], labels: &Labels) {
     item.modifiers.extend(current);
 }
 
-/// The lines `Name: value` of the properties section, and the quality and the damage of a
-/// weapon among them; on a waystone, a warning for a property it can't read.
+/// The lines `Name: value` of the properties section, and the quality, the damage of a weapon
+/// and the level of a gem among them; on a waystone, a warning for a property it can't read.
 fn read_properties(item: &mut Item, lines: &[&str], labels: &Labels) {
     let mut damage = Vec::new();
     let mut attacks_per_second = None;
@@ -552,6 +555,13 @@ fn read_properties(item: &mut Item, lines: &[&str], labels: &Labels) {
                 .any(|range| range.kind == DamageKind::Physical);
             if !physical || name == labels.physical_damage {
                 damage.extend(ranges);
+            }
+        }
+        if item.rarity == Rarity::Gem && name == labels.gem_level {
+            item.gem_level = gem_level(value);
+            if item.gem_level.is_none() {
+                item.warnings
+                    .push(ParseWarning::InvalidValue(Field::GemLevel));
             }
         }
         if item.class == labels.waystones
@@ -684,6 +694,12 @@ fn number_after(line: &str, label: &str) -> Option<u32> {
 
 /// The number made of all the digits of a text: `+20%` gives 20, `1,234` gives 1234; `None`
 /// without digits or when too large.
+/// The level of a gem, its number only: `20 (Max)` gives 20, as the trade site writes it
+/// (French `20 (Maxi)`).
+fn gem_level(value: &str) -> Option<u32> {
+    value.split_whitespace().next()?.parse().ok()
+}
+
 fn digits(text: &str) -> Option<u32> {
     let digits: String = text.chars().filter(char::is_ascii_digit).collect();
     digits.parse().ok()

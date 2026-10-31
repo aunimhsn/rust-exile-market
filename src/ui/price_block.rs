@@ -73,7 +73,7 @@ enum PriceView<'a> {
 /// Why the price block shows no price.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Notice<'a> {
-    /// A rare, magic or normal item, priced from similar offers.
+    /// A rare, magic or normal item, or a skill gem, priced from similar offers.
     NoMarketPrice(Rarity),
     /// The prices of the league are downloading; the league once it is known.
     PricesDownloading(Option<&'a str>),
@@ -361,9 +361,8 @@ impl<'a> PriceBlock<'a> {
             Notice::NoMarketPrice(rarity) => i18n.text(match rarity {
                 Rarity::Magic => Message::NoMarketPriceMagic,
                 Rarity::Normal => Message::NoMarketPriceNormal,
-                Rarity::Rare | Rarity::Unique | Rarity::Currency | Rarity::Gem => {
-                    Message::NoMarketPriceRare
-                }
+                Rarity::Gem => Message::NoMarketPriceSkillGem,
+                Rarity::Rare | Rarity::Unique | Rarity::Currency => Message::NoMarketPriceRare,
             }),
             Notice::PricesDownloading(Some(league)) => i18n.prices_downloading(league),
             Notice::PricesDownloading(None) => i18n.text(Message::PricesDownloadingNoLeague),
@@ -520,6 +519,16 @@ mod tests {
         assert_eq!(
             view(&price, None, Rarity::Magic, KNOWN, Some("Standard")),
             PriceView::Notice(Notice::NoMarketPrice(Rarity::Magic))
+        );
+    }
+
+    #[test]
+    fn a_skill_gem_has_no_market_price_either() {
+        let price = Err(NoFixedPrice::NotFixedName);
+
+        assert_eq!(
+            view(&price, None, Rarity::Gem, KNOWN, Some("Standard")),
+            PriceView::Notice(Notice::NoMarketPrice(Rarity::Gem))
         );
     }
 

@@ -43,7 +43,9 @@ const rareBar = o => `<span class="bar"><i style="width:${(o.share * 100).toFixe
 function item(it, unfolded = false) {
   // Corrupted once or twice, as in the application.
   const tagClass = t => /Corrupt|Corrompu|Double corruption/.test(t) ? "corrupted" : /^\d+ T1$/.test(t) ? "t1" : "";
-  const tags = (it.tags || []).map(t => typeof t === "object" ? stateTag(t) : `<span class="tag ${tagClass(t)}">${t}</span>`).join("");
+  // A tag object: a state tag, or a number in a style of its own (`cls`, 13k5d1: a gem at its top levels).
+  const tags = (it.tags || []).map(t => typeof t !== "object" ? `<span class="tag ${tagClass(t)}">${t}</span>`
+    : t.state ? stateTag(t) : `<span class="tag ${t.cls || ""}">${t.label}</span>`).join("");
   const filters = it.filters ? `<span class="filters">${it.filters}</span>` : "";
   // "Show 6 stats" when folded, "Hide stats" when unfolded; French when the label is French.
   const count = Number((it.statsLabel || "").match(/\d+/)?.[0] || 0);

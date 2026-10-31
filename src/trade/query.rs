@@ -120,6 +120,8 @@ impl PropertyFilter {
             Property::ElementalDps => ("equipment_filters", "edps"),
             // The trade site names `map_rare_monsters` "Monster Rarity" and
             // `map_magic_monsters` "Monster Effectiveness" (`/data/filters`, 2026-10-31).
+            Property::GemLevel => ("misc_filters", "gem_level"),
+            Property::GemSockets => ("misc_filters", "gem_sockets"),
             Property::Waystone(property) => (
                 "map_filters",
                 match property {
@@ -614,6 +616,49 @@ mod tests {
                 "map_rare_monsters": { "min": 22.0 },
                 "map_magic_monsters": { "min": 11.0 },
                 "map_bonus": { "min": 45.0 }
+            } })
+        );
+    }
+
+    #[test]
+    fn the_level_and_the_sockets_of_a_gem_share_the_misc_filters_with_its_states() {
+        let filter = |property, minimum| PropertyFilter {
+            property,
+            minimum: Some(minimum),
+            maximum: None,
+        };
+        let query = ItemQuery {
+            name: None,
+            base_type: Some("Comet".to_owned()),
+            category: None,
+            rarity: Some(RarityFilter::NotUnique),
+            states: StateFilters {
+                corrupted: Some(false),
+                ..StateFilters::default()
+            },
+            properties: vec![
+                filter(Property::GemLevel, 15.0),
+                filter(Property::Quality, 16.0),
+                filter(Property::GemSockets, 3.0),
+            ],
+            stats: Vec::new(),
+        };
+
+        // The ids of `/data/filters` on 2026-11-01.
+        let filters = &query.to_json()["query"]["filters"];
+        assert_eq!(
+            filters["misc_filters"],
+            json!({ "filters": {
+                "gem_level": { "min": 15.0 },
+                "gem_sockets": { "min": 3.0 },
+                "corrupted": { "option": "false" }
+            } })
+        );
+        assert_eq!(
+            filters["type_filters"],
+            json!({ "filters": {
+                "rarity": { "option": "nonunique" },
+                "quality": { "min": 16.0 }
             } })
         );
     }

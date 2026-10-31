@@ -3442,14 +3442,81 @@ fn the_owners_normal_items_unique_charm_and_gems_show_their_rows() {
         ]
     );
 
-    // A skill gem and an uncut gem: no filter (the level, quality and sockets of a skill
-    // gem in step 13k5d).
+    // An uncut gem, an item of the currency exchange: no filter.
     for text in [
-        include_str!("../../item/test-items/en-owner-skill-gem.txt"),
-        include_str!("../../item/test-items/fr-skill-gem.txt"),
         include_str!("../../item/test-items/en-owner-currency-uncut-gem.txt"),
         include_str!("../../item/test-items/fr-currency-uncut-gem.txt"),
     ] {
         assert_eq!(texts(&parse(text)), Vec::<String>::new(), "{text}");
     }
+}
+
+#[test]
+fn a_skill_gem_is_searched_by_its_level_quality_and_sockets() {
+    // The owner's gem of level 2: its level checked, its 2 sockets, which every gem has, not.
+    for text in [
+        include_str!("../../item/test-items/en-owner-skill-gem.txt"),
+        include_str!("../../item/test-items/fr-skill-gem.txt"),
+    ] {
+        assert_eq!(
+            texts(&parse(text)),
+            ["Gem", "■ GemLevel: 2 ≥2", "□ GemSockets: 2 ≥2"],
+            "{text}"
+        );
+    }
+    // The quality checked from 16 %, the sockets from 3, the level always.
+    let gem = |level: u32, quality: u32, sockets: usize| {
+        let sockets = "G ".repeat(sockets);
+        parse(&format!(
+            "Item Class: Skill Gems\nRarity: Gem\nComet\n--------\nSpell, AoE, Cold\n\
+             Level: {level}\nQuality: +{quality}% (augmented)\n--------\nSockets: {sockets}"
+        ))
+    };
+    assert_eq!(
+        texts(&gem(15, 12, 3)),
+        [
+            "Gem",
+            "■ GemLevel: 15 ≥15",
+            "□ Quality: 12 ≥12",
+            "■ GemSockets: 3 ≥3"
+        ]
+    );
+    assert_eq!(
+        texts(&gem(20, 16, 2)),
+        [
+            "Gem",
+            "■ GemLevel: 20 ≥20",
+            "■ Quality: 16 ≥16",
+            "□ GemSockets: 2 ≥2"
+        ]
+    );
+    // The fields within the levels, qualities and sockets of a gem, widened to hold a value
+    // beyond them.
+    let bounds = |item: &Item| -> Vec<(f64, f64)> {
+        rows(item)
+            .into_iter()
+            .filter_map(|row| match row {
+                Row::Stat(stat) => {
+                    let bounds = stat.filter?.limit?.bounds?;
+                    Some((bounds.min, bounds.max))
+                }
+                _ => None,
+            })
+            .collect()
+    };
+    assert_eq!(
+        bounds(&gem(21, 23, 5)),
+        [(1.0, 21.0), (0.0, 23.0), (0.0, 5.0)]
+    );
+    assert_eq!(
+        bounds(&gem(22, 25, 6)),
+        [(1.0, 22.0), (0.0, 25.0), (0.0, 6.0)]
+    );
+}
+
+#[test]
+fn a_support_gem_without_level_has_no_filter() {
+    let support = "Item Class: Support Gems\nRarity: Gem\nFire Penetration I\n--------\n\
+                   Support, Fire\n--------\nRequires: Level 5";
+    assert_eq!(texts(&parse(support)), Vec::<String>::new());
 }

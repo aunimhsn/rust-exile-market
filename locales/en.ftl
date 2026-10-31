@@ -113,6 +113,8 @@ tag-sockets = { $value ->
 }
 tag-item-level = ilvl { $value }
 tag-stack = Stack { $size }/{ $max }
+# The level of a gem, after its item class under its name: "Skill Gems · Level 2".
+gem-level = Level { $value }
 # The main values of the base, each followed by its number in bold: the DPS of a weapon,
 # the defences of an armour piece or a shield.
 dps-physical = Physical DPS
@@ -163,6 +165,8 @@ group-unique = Unique
 group-item = Item
 group-weapon = Weapon
 group-waystone = Waystone
+# The filters of the level, the quality and the sockets of a skill gem.
+group-gem = Gem
 # The totals the trade site adds up from several modifiers.
 group-pseudo = Pseudo
 # Beside Prefixes and Suffixes: how many the item has, of the most it can have.
@@ -187,6 +191,8 @@ filter-base-type = Base: { $base }
 filter-item-class = Class searched: { $class }
 filter-item-level = Item level: { $value }
 filter-sockets = Sockets: { $value }
+# The level of a gem.
+filter-gem-level = Level: { $value }
 filter-quality = Quality: { $value }%
 # The quality of a catalyst on a ring, an amulet or a jewel, short with its kind; a kind the application doesn't know keeps the words of the game ($words).
 filter-catalyst-quality = { $kind ->
@@ -338,6 +344,8 @@ possible-uniques = Possible uniques
 no-offers = No offers
 # Rare, magic and normal items, priced from the offers of similar items.
 no-market-price-rare = No market price for rare items.
+# A skill gem, which no price database lists, priced from the offers of similar gems.
+no-market-price-skill-gem = No market price for skill gems.
 no-market-price-magic = No market price for magic items.
 no-market-price-normal = No market price for normal items.
 search-to-estimate = Search similar offers to estimate it.
