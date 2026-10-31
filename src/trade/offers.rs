@@ -20,7 +20,7 @@ const CATALYST_QUALITY: u32 = 20;
 const MAXIMUM_QUALITY_STAT: &str = "stat_2039822488";
 /// The type of the quality among the properties of `/fetch`, whatever its kind or its language
 /// (seen on 2026-10-31, as in the API of Path of Exile 1).
-const QUALITY_PROPERTY: u32 = 6;
+const QUALITY_PROPERTY: u64 = 6;
 
 /// The status of a seller.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -250,24 +250,38 @@ struct ApiProperty {
     name: String,
     #[serde(default)]
     values: Vec<Value>,
-    /// 6 for the quality; none for most of the others.
-    #[serde(rename = "type")]
-    kind: Option<u32>,
+    /// 6 for the quality; none for most of the others. Read loosely: it only tells a quality
+    /// that can't be read, which mustn't fail the whole answer.
+    #[serde(rename = "type", default)]
+    kind: Value,
 }
 
 impl ApiProperty {
     /// The quality, read as the game writes it in `language`: `Quality (Attack Modifiers):
-    /// +20%`.
-    fn quality(&self, language: Language) -> Option<OfferQuality> {
-        let value = self.values.first()?.get(0)?.as_str()?;
+    /// +20%`; the line of a quality that can't be read, its value or its name, as an error;
+    /// `None` for another property.
+    fn quality(&self, language: Language) -> Option<Result<OfferQuality, String>> {
+        let value = self
+            .values
+            .first()
+            .and_then(|value| value.get(0))
+            .and_then(Value::as_str)
+            .unwrap_or_default();
         let line = format!("{}: {value}", plain_text(&self.name));
-        let Some((kind, Some(value))) = read_quality(&line, language) else {
-            if self.kind == Some(QUALITY_PROPERTY) {
-                log::warn!("Trade site: a quality that can't be read, {line}");
-            }
-            return None;
-        };
-        Some(OfferQuality { value, kind })
+        match read_quality(&line, language) {
+            Some((kind, Some(value))) => Some(Ok(OfferQuality { value, kind })),
+            Some((_, None)) => Some(Err(line)),
+            None => self.is_quality().then_some(Err(line)),
+        }
+    }
+
+    /// Whether its type is that of the quality, `6` or `"6"`.
+    fn is_quality(&self) -> bool {
+        let kind = self
+            .kind
+            .as_u64()
+            .or_else(|| self.kind.as_str()?.parse().ok());
+        kind == Some(QUALITY_PROPERTY)
     }
 }
 
@@ -334,13 +348,16 @@ impl ApiFetch {
     /// The offers, in the order of the ids asked, from the trade site of `language`; an offer
     /// gone since the search is left out.
     pub fn offers(self, language: Language) -> Vec<ItemOffer> {
-        let offers: Vec<ItemOffer> = self
+        let (offers, unreadable): (Vec<ItemOffer>, BTreeSet<Option<String>>) = self
             .result
             .into_iter()
             .flatten()
             .map(|listed| listed.offer(language))
-            .collect();
-        // Once per kind, not per offer.
+            .unzip();
+        // Once per page, not per offer.
+        for line in unreadable.into_iter().flatten() {
+            log::warn!("Trade site: a quality that can't be read, {line}");
+        }
         let unknown: BTreeSet<&str> = offers
             .iter()
             .filter_map(|offer| offer.item.quality.as_ref()?.kind.as_ref())
@@ -355,12 +372,18 @@ impl ApiFetch {
 }
 
 impl ApiListed {
-    fn offer(self, language: Language) -> ItemOffer {
+    /// The offer, and the line of its quality when it can't be read.
+    fn offer(self, language: Language) -> (ItemOffer, Option<String>) {
         let item = self.item;
-        let quality = item
+        let (quality, unreadable) = match item
             .properties
             .iter()
-            .find_map(|property| property.quality(language));
+            .find_map(|property| property.quality(language))
+        {
+            Some(Ok(quality)) => (Some(quality), None),
+            Some(Err(line)) => (None, Some(line)),
+            None => (None, None),
+        };
         let modifiers = [
             (ModifierKind::Enchant, item.enchant_mods),
             (ModifierKind::Rune, item.rune_mods),
@@ -376,7 +399,7 @@ impl ApiListed {
                 .map(move |modifier| modifier.offer_modifier(kind))
         })
         .collect();
-        ItemOffer {
+        let offer = ItemOffer {
             id: self.id,
             price: self.listing.price.map(|price| Price {
                 amount: price.amount,
@@ -394,7 +417,8 @@ impl ApiListed {
                 quality,
                 modifiers,
             },
-        }
+        };
+        (offer, unreadable)
     }
 }
 
@@ -739,6 +763,45 @@ mod tests {
         for catalyst in Catalyst::ALL {
             assert_eq!(strange.other_quality(catalyst), None, "{catalyst:?}");
         }
+    }
+
+    #[test]
+    fn a_quality_that_cant_be_read_fails_neither_the_answer_nor_its_offer() {
+        let property = |json: &str| -> ApiProperty { serde_json::from_str(json).expect("read") };
+        let quality = |json: &str| property(json).quality(Language::English);
+
+        // A type written as a text, and a name the application doesn't know.
+        assert_eq!(
+            quality(
+                r#"{"name": "Kwality (Mana Modifiers)", "values": [["+20%", 1]], "type": "6"}"#
+            ),
+            Some(Err("Kwality (Mana Modifiers): +20%".to_owned()))
+        );
+        // A name read, without type, and a value that isn't a whole percentage.
+        assert_eq!(
+            quality(r#"{"name": "Quality (Mana Modifiers)", "values": [["+12.5%", 1]]}"#),
+            Some(Err("Quality (Mana Modifiers): +12.5%".to_owned()))
+        );
+        // Another property, of another type or without type.
+        assert_eq!(
+            quality(r#"{"name": "[Amulet]", "values": [], "displayMode": 0}"#),
+            None
+        );
+        assert_eq!(
+            quality(r#"{"name": "Spirit", "values": [["100", 1]], "type": 26}"#),
+            None
+        );
+        // The offer is read, without quality.
+        let fetch: ApiFetch = serde_json::from_str(
+            r#"{"result": [{"id": "k1", "listing": {"account": {}}, "item": {
+                "typeLine": "Gold Amulet",
+                "properties": [{"name": "Kwality (Mana Modifiers)", "values": [["+20%", 1]], "type": "6"}]
+            }}]}"#,
+        )
+        .expect("read");
+        let offers = fetch.offers(Language::English);
+        assert_eq!(offers.len(), 1);
+        assert_eq!(offers[0].item.quality, None);
     }
 
     #[test]

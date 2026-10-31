@@ -699,6 +699,20 @@ mod tests {
         let of_strange = line(&attack, &strange).unwrap();
         assert_eq!(of_strange.text, "Attack quality: 50%");
         assert_eq!(of_strange.tint, color::TEXT, "beyond its maximum");
+        assert_eq!(
+            of_strange.difference,
+            Some(Difference {
+                value: 10.0,
+                verdict: Verdict::Better
+            })
+        );
+        // Below its maximum: gray.
+        let below = line(
+            &amulet(15, Catalyst::Attack, "Attack Modifiers", &[]),
+            &strange,
+        )
+        .unwrap();
+        assert_eq!(below.tint, color::WEAK);
         // An offer of a kind the application doesn't know: its words.
         let mut unknown = amulet(30, Catalyst::Mana, "", &[]);
         unknown.item.quality = Some(OfferQuality {
@@ -711,6 +725,13 @@ mod tests {
         let of_unknown = line(&unknown, &mana).unwrap();
         assert_eq!(of_unknown.text, "Quality (Strange Modifiers): 30%");
         assert_eq!(of_unknown.tint, color::TEXT);
+        assert_eq!(
+            of_unknown.difference,
+            Some(Difference {
+                value: -10.0,
+                verdict: Verdict::Worse
+            })
+        );
         // The quality of the base.
         let mut base = amulet(10, Catalyst::Mana, "", &[]);
         base.item.quality = Some(OfferQuality {
