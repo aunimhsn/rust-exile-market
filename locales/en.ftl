@@ -200,6 +200,9 @@ origin-fractured = Fractured
 origin-crafted = Crafted
 # The Vaal modifier of a corrupted unique: the word of the game, the same in every language.
 origin-vaal = Vaal
+# In place of the origin: the currency that added a modifier whose tier the game doesn't write.
+origin-essence = Essence
+origin-alloy = Alloy
 # A desecrated modifier not revealed yet, in its group; and the note under the stats of its item.
 unrevealed-prefix = Unrevealed prefix
 unrevealed-suffix = Unrevealed suffix

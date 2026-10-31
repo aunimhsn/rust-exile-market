@@ -159,7 +159,8 @@ fn tier_row_text(row: &TierRow) -> String {
             format!("(with {} of {line})", ranges_text(ranges))
         }
     });
-    let text = [Some(tier), word, tip]
+    let currency = row.currency.map(|currency| format!("{currency:?}"));
+    let text = [Some(tier), word, tip, currency]
         .into_iter()
         .flatten()
         .filter(|part| !part.is_empty())
@@ -320,20 +321,80 @@ fn a_modifier_of_one_tier_only_shows_its_ranges_without_tier() {
         "{jewel:?}"
     );
 
-    // The essences of a bow, written without tier.
+    // The essences of a bow, written without tier, named after their ranges.
     let bow = texts(&parse(include_str!(
         "../../item/test-items/en-rare-bow-fractured.txt"
     )));
     assert!(
         bow.iter().any(|text| text
             .starts_with("■ 20% chance to gain Onslaught on Killing Hits with this Weapon ≥")
-            && text.ends_with(" [0.00 20–25]")),
+            && text.ends_with(" [0.00 20–25 Essence]")),
         "{bow:?}"
     );
+    // The `+3` of an older patch, which no table holds today (the bows take `+2`): nothing.
     assert!(
         bow.contains(&"■ +3 to Level of all Attack Skills ≥3".to_owned()),
         "{bow:?}"
     );
+}
+
+#[test]
+fn a_modifier_of_an_essence_or_an_alloy_names_its_currency() {
+    // The owner's gloves: the alloy written crafted, its currency in place of "Crafted".
+    let gloves = texts(&parse(include_str!(
+        "../../item/test-items/fr-rare-gloves-alloy.txt"
+    )));
+    let alloy = "11% d'Augmentation de Vitesse d'Attaque tant qu'il vous manque de la \
+                 Sauvegarde runique";
+    assert!(
+        gloves.contains(&format!("■ {alloy} ≥10 [0.20 10–15 Alloy]")),
+        "{gloves:?}"
+    );
+
+    // Copied from the in-game trade, with an essence: both found in the tables.
+    let trade = texts(&read_again(parse(
+        "Item Class: Gloves\nRarity: Rare\nPandemonium Grip\nAdorned Wraps\n--------\n\
+         Item Level: 80\n--------\n\
+         13% increased Quantity of Gold Dropped by Slain Enemies\n\
+         11% increased Attack Speed while missing Runic Ward (crafted)",
+    )));
+    assert!(
+        trade.contains(
+            &"■ 13% increased Quantity of Gold Dropped by Slain Enemies ≥12 [0.60 10–15 Essence]"
+                .to_owned()
+        ),
+        "{trade:?}"
+    );
+    assert!(
+        trade.iter().any(|text| text
+            .starts_with("■ 11% increased Attack Speed while missing Runic Ward ≥")
+            && text.ends_with(" [0.20 10–15 Alloy]")),
+        "{trade:?}"
+    );
+}
+
+#[test]
+fn a_modifier_of_a_currency_fractured_or_desecrated_keeps_its_origin() {
+    let essence = Some(Currency::Essence);
+
+    assert_eq!(
+        Origin::of_affix(None, essence),
+        Some(Origin::Currency(Currency::Essence))
+    );
+    assert_eq!(
+        Origin::of_affix(Some(ModifierOrigin::Crafted), Some(Currency::Alloy)),
+        Some(Origin::Currency(Currency::Alloy))
+    );
+    assert_eq!(
+        Origin::of_affix(Some(ModifierOrigin::Fractured), essence),
+        Some(Origin::Written(ModifierOrigin::Fractured))
+    );
+    // A crafted modifier of no currency (a craft of the Runes of Aldur, `Motivating`).
+    assert_eq!(
+        Origin::of_affix(Some(ModifierOrigin::Crafted), None),
+        Some(Origin::Written(ModifierOrigin::Crafted))
+    );
+    assert_eq!(Origin::of_affix(None, None), None);
 }
 
 #[test]
@@ -2543,6 +2604,7 @@ fn part(affix: Affix) -> PartTier {
         tiers: vec![1],
         hides_number: false,
         ranges: vec![Range { min: 1.0, max: 2.0 }],
+        currency: None,
     }
 }
 
@@ -2656,4 +2718,47 @@ fn a_modifier_counts_the_affixes_it_takes_in_the_room_of_its_item() {
         ..modifier(prefix, None)
     };
     assert_eq!(counts(&unrevealed), (1, 0));
+}
+
+#[test]
+fn the_part_of_an_alloy_in_a_summed_line_names_its_currency() {
+    let bow = include_str!("../../item/test-items/en-owner-trade-rare-bow-mirrored.txt");
+    // Two prefixes open: +800 is a pure prefix T2 or T3 (347–550) and the accuracy of the
+    // hybrid of the Celestial Alloy (327–427), with its attack speed (5–8), both crafted.
+    let bow = read_again(parse(
+        &bow.replace("258% increased Physical Damage\n", "")
+            .replace("+25% to Critical Damage Bonus\n", "")
+            .replace(
+                "+195 to Accuracy Rating\n",
+                "+800 to Accuracy Rating (crafted)\n6% increased Attack Speed (crafted)\n",
+            ),
+    ));
+
+    let texts = texts(&bow);
+    // "Alloy" after the part of the alloy, in place of "Crafted" under the line.
+    assert!(
+        texts.contains(&"■ +800 to Accuracy Rating ≥720 [T2/T3 347–550 / 327–427 Hybrid (with 6% increased Attack Speed) Alloy]".to_owned()),
+        "{texts:?}"
+    );
+    assert!(
+        texts.contains(&"□ 6% increased Attack Speed ≥5 [0.33 5–8 Hybrid (with 327–427 of +800 to Accuracy Rating) Alloy]".to_owned()),
+        "{texts:?}"
+    );
+}
+
+#[test]
+fn a_line_of_the_in_game_trade_also_an_ordinary_tier_names_no_currency() {
+    // `+3 to Level of all Spell Skills` on a wand: the ordinary T2 of 4, or the essence.
+    let wand = texts(&read_again(parse(
+        "Item Class: Wands\nRarity: Rare\nStorm Song\nAcrid Wand\n--------\n\
+         Item Level: 82\n--------\n+3 to Level of all Spell Skills",
+    )));
+    let line = wand
+        .iter()
+        .find(|text| text.contains("+3 to Level of all Spell Skills"))
+        .expect("the line");
+    assert!(
+        line.contains(" T2") && !line.contains("Essence"),
+        "{wand:?}"
+    );
 }

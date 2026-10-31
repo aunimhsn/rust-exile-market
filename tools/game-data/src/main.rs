@@ -338,7 +338,7 @@ fn modifier_tables(
         &serde_json::from_str(&repoe("base_items.json")?)?,
         &serde_json::from_str::<Vec<_>>(&repoe("stat_translations/stat_descriptions.json")?)?,
         templates,
-        modifiers::ESSENCES,
+        modifiers::CURRENCIES,
     )
 }
 

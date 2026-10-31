@@ -9,7 +9,8 @@ use serde::Deserialize;
 use super::bases::{self, BaseSpawn, Domain};
 use super::lines::{LineMatch, StatSource, modifier_stats};
 use crate::item::{
-    Affix, AffixTier, Lord, Modifier, ModifierKind, ModifierOrigin, PartTier, Range, TierDoubt,
+    Affix, AffixTier, Currency, Lord, Modifier, ModifierKind, ModifierOrigin, PartTier, Range,
+    TierDoubt,
 };
 use crate::language::Language;
 
@@ -60,6 +61,9 @@ enum TableSource {
     /// An essence (`of the Essence`, `20(20-25)% chance to gain Onslaught on Killing Hits with
     /// this Weapon`).
     Essence,
+    /// An alloy of Verisium (`of the Stars`, `11(10-15)% increased Attack Speed while missing
+    /// Runic Ward`, crafted).
+    Alloy,
 }
 
 /// A lord of the Abyss, as the generator writes him.
@@ -132,18 +136,36 @@ impl Table {
                 .is_some_and(|&(_, weight)| weight > 0)
     }
 
-    /// Whether the table may hold a modifier the game marks `desecrated` or not: a desecrated
-    /// table only a desecrated one.
-    fn may_hold(&self, desecrated: bool) -> bool {
-        desecrated || self.domain != Domain::Desecrated
+    /// Whether the table may hold a modifier of `origin`, as the game marks it: a desecrated
+    /// table only a desecrated modifier, which is never one of a currency (the `20–30` of an
+    /// essence on an amulet, before the `15–25` of Amanamu in the file); the table of an alloy
+    /// only a marked one, the game marking it crafted (`(crafted)` from the in-game trade,
+    /// checked by the owner on 2026-10-30), or fractured since: an unmarked line read in a
+    /// hybrid of an alloy (`+1 to Level of all Spell Skills` and the mana of a wand) would put
+    /// the ordinary modifiers of every such item in doubt.
+    fn may_hold(&self, origin: Option<ModifierOrigin>) -> bool {
+        match origin {
+            Some(ModifierOrigin::Desecrated) => self.currency().is_none(),
+            Some(_) => self.domain != Domain::Desecrated,
+            None => self.domain != Domain::Desecrated && self.source != Some(TableSource::Alloy),
+        }
     }
 
-    /// Whether the game writes the modifier without tier: one of the Genesis tree or of an
-    /// essence.
+    /// Whether the game writes the modifier without tier: one of the Genesis tree, of an
+    /// essence or of an alloy.
     fn tier_unwritten(&self) -> bool {
         match self.source {
-            Some(TableSource::Genesis | TableSource::Essence) => true,
+            Some(TableSource::Genesis | TableSource::Essence | TableSource::Alloy) => true,
             None => false,
+        }
+    }
+
+    /// The currency that adds the modifier, when only one does.
+    fn currency(&self) -> Option<Currency> {
+        match self.source {
+            Some(TableSource::Essence) => Some(Currency::Essence),
+            Some(TableSource::Alloy) => Some(Currency::Alloy),
+            Some(TableSource::Genesis) | None => None,
         }
     }
 
@@ -157,7 +179,9 @@ impl Table {
     /// modifier as itself only. A minion modifier of the Genesis tree merges with no ordinary
     /// one: `of the Despot` of the tree (`MinionGemLevelBelt2`) would make the `+2 to Level of
     /// all Minion Skills` of an amulet, its T2 of 3, a T3 of 5; nor does a modifier of an
-    /// essence, of one tier.
+    /// essence or of an alloy, of one tier: the tables of an alloy merge only with those of an
+    /// alloy of its type (the cast speed and cold damage of the Transcendent Alloy on a wand,
+    /// the values of the staves and the one-handed ones, two tiers).
     fn same_modifier(&self, other: &Self) -> bool {
         if self.domain == Domain::Desecrated || other.domain == Domain::Desecrated {
             return std::ptr::eq(self, other);
@@ -202,10 +226,13 @@ pub struct ModifierTiers {
     /// follow them (two for `Adds # to # Physical Damage`; for a line without number, one
     /// when its string gives the value, `Loads an additional bolt`, none otherwise).
     pub counts: Vec<usize>,
-    /// Whether the game writes the modifier without tier, one of the Genesis tree or of an
-    /// essence: it is read as the advanced copy writes it, the ranges of its tier without
-    /// number.
+    /// Whether the game writes the modifier without tier, one of the Genesis tree, of an
+    /// essence or of an alloy: it is read as the advanced copy writes it, the ranges of its tier
+    /// without number.
     pub tier_unwritten: bool,
+    /// The currency that adds the modifier, an essence or an alloy: none for another
+    /// modifier, or when tables of another source hold the copied one as well (`find`).
+    pub currency: Option<Currency>,
     /// The lord of the Abyss whose modifier it is: none for another modifier, or when the
     /// modifiers of two lords hold the copied one as well (`find`; a split, `splits`, takes the
     /// lord of its table, never shown).
@@ -227,7 +254,7 @@ impl ModifierTiers {
     }
 
     /// Whether the number of its tier isn't shown: one tier only on the base, or a tier the
-    /// game doesn't write (the Genesis tree, an essence).
+    /// game doesn't write (the Genesis tree, an essence, an alloy).
     #[must_use]
     pub fn hides_number(&self) -> bool {
         self.single() || self.tier_unwritten
@@ -268,9 +295,10 @@ impl ModifierTiers {
 /// them (a line without number has no range), only a tier that holds the values. When several
 /// tiers fit as well, the one of the number the advanced copy wrote is taken, or, for a header
 /// written without tier, one of a modifier whose tier the game doesn't write (the Genesis tree,
-/// an essence: the `+3 to Level of all Spell Skills` of an essence on a wand, not the ordinary
-/// T2); then the best one; when several modifiers do, the first of the file, an ordinary one
-/// before one of the Genesis tree or of an essence, before a desecrated one.
+/// an essence, an alloy: the `+3 to Level of all Spell Skills` of an essence on a wand, not the
+/// ordinary T2); then the best one; when several modifiers do, the first of the file, an
+/// ordinary one before one of the Genesis tree, of an essence or of an alloy, before a
+/// desecrated one.
 #[must_use]
 pub fn modifier_tiers(
     language: Language,
@@ -378,6 +406,7 @@ fn hybrid_tiers(
                 neighbour: better,
                 counts: counts.clone(),
                 tier_unwritten: table.tier_unwritten(),
+                currency: table.currency(),
                 lord: table.lord.map(Lord::from),
             };
             best = Some((fit, tiers));
@@ -780,6 +809,7 @@ fn part_tier(
             .into_iter()
             .flatten()
             .collect(),
+        currency: tiers.currency,
     })
 }
 
@@ -992,7 +1022,7 @@ fn candidates(
                 lines: lines.clone(),
                 ranges: None,
                 tier: CopiedTier::Unknown,
-                desecrated: first.origin == Some(ModifierOrigin::Desecrated),
+                origin: first.origin,
             };
             let affixes: Vec<_> = [
                 (Affix::Prefix, TableAffix::Prefix),
@@ -1069,7 +1099,7 @@ fn splits(
         lines: vec![line.clone()],
         ranges: None,
         tier: CopiedTier::Unknown,
-        desecrated: copied.desecrated,
+        origin: copied.origin,
     };
     // The values of the summed line among those of every line, in their order.
     let offset: usize = copied
@@ -1134,6 +1164,7 @@ fn splits(
                             neighbour: None,
                             counts: counts.clone(),
                             tier_unwritten: whole.tier_unwritten(),
+                            currency: whole.currency(),
                             lord: whole.lord.map(Lord::from),
                         },
                         added: AddedTiers {
@@ -1145,6 +1176,7 @@ fn splits(
                                 neighbour: None,
                                 counts: vec![line.count()],
                                 tier_unwritten: added.tier_unwritten(),
+                                currency: added.currency(),
                                 lord: added.lord.map(Lord::from),
                             },
                         },
@@ -1538,19 +1570,27 @@ fn find(
                     neighbour: None,
                     counts,
                     tier_unwritten: table.tier_unwritten(),
+                    currency: table.currency(),
                     lord: table.lord.map(Lord::from),
                 },
             ));
         } else if let Some(((fit, _), (best_fit, best_tiers))) = found.zip(best.as_mut())
             && fit == *best_fit
-            && best_tiers.lord != table.lord.map(Lord::from)
         {
             // The modifiers of two lords hold it as well: neither is named (the flask charges
             // of Kurgal, `10–15`, and of Ulaman, `10–18`, on the belts). An ordinary table comes
             // before them, so a lord never takes its place; the desecrated tables of the Genesis
             // tree come after them, but share no line and base with a lord's in a range of both
             // (the exposure of the rings, `10–15` of Kurgal, `25–35` of the tree).
-            best_tiers.lord = None;
+            if best_tiers.lord != table.lord.map(Lord::from) {
+                best_tiers.lord = None;
+            }
+            // A modifier of a currency and another one hold it as well: the currency isn't
+            // named. An ordinary table comes first, so a tie with a tier written keeps none (the
+            // `+5 to Level of all Spell Skills` of a staff written T1, the essence's as well).
+            if best_tiers.currency != table.currency() {
+                best_tiers.currency = None;
+            }
         }
     }
     best.map(|(_, tiers)| tiers)
@@ -1572,9 +1612,18 @@ fn tiers_on_base(
         .filter(|other| other.same_modifier(table) && other.rolls_on(base))
         .flat_map(|other| &other.tiers)
         .collect();
-    // A stable sort: two tiers of one level keep the order of the file, the better last
-    // (`Upgrades Radius to Large` of a Time-Lost jewel, T1, after `to Medium`).
-    tiers.sort_by_key(|tier| tier.level);
+    // By level, then by ranges, as the generator sorts the tiers of a table: of two tiers of one
+    // level, the higher ranges last, the better (`Upgrades Radius to Large` of a Time-Lost jewel,
+    // T1, after `to Medium`), also from two tables (the cast speed of the Transcendent Alloy on a
+    // wand, `39–47%` of the staves, T1, after the `26–31%` of the one-handed weapons).
+    // The values of the game are never NaN: two ranges always compare.
+    tiers.sort_by(|tier, other| {
+        tier.level.cmp(&other.level).then_with(|| {
+            range_values(tier)
+                .partial_cmp(range_values(other))
+                .unwrap_or(std::cmp::Ordering::Equal)
+        })
+    });
     tiers
         .iter()
         .rev()
@@ -1587,6 +1636,11 @@ fn tiers_on_base(
             })
         })
         .collect()
+}
+
+/// The bounds of every range of `tier`, in the order of its lines.
+fn range_values(tier: &TableTier) -> impl Iterator<Item = f64> + '_ {
+    tier.ranges.iter().flatten().flatten().copied()
 }
 
 /// The ranges of `tier` in the order of the copied lines.
@@ -1660,11 +1714,11 @@ struct Copied<'a> {
     ranges: Option<Vec<Range>>,
     /// The tier the advanced copy wrote.
     tier: CopiedTier,
-    /// Whether the game marks the modifier desecrated (`Desecrated Prefix Modifier`, `
-    /// (desecrated)`): only such a modifier may be one of the desecrated tables, which the game
-    /// always marks (a desecrated modifier can't be fractured, owner's answer on 2026-10-30),
-    /// while a desecration also reveals ordinary modifiers.
-    desecrated: bool,
+    /// The origin the game marks (`Desecrated Prefix Modifier`, ` (desecrated)`, ` (crafted)`):
+    /// only a desecrated modifier may be one of the desecrated tables, which the game always
+    /// marks (a desecrated modifier can't be fractured, owner's answer on 2026-10-30), while a
+    /// desecration also reveals ordinary modifiers ([`Table::may_hold`]).
+    origin: Option<ModifierOrigin>,
 }
 
 impl<'a> Copied<'a> {
@@ -1714,13 +1768,13 @@ impl<'a> Copied<'a> {
                 }
                 None => CopiedTier::Unknown,
             },
-            desecrated: modifier.origin == Some(ModifierOrigin::Desecrated),
+            origin: modifier.origin,
         })
     }
 
     /// Whether the modifier may be one of `table` ([`Table::may_hold`]).
     fn may_be(&self, table: &Table) -> bool {
-        table.may_hold(self.desecrated)
+        table.may_hold(self.origin)
     }
 
     /// For each copied line, the index of the line of the same template in `lines`, the lines

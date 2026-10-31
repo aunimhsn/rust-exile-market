@@ -2,7 +2,7 @@
 //! `stat_translations/stat_descriptions.json`): the tiers of each prefix and suffix that rolls
 //! on the equipment, the jewels, the flasks and the charms, also those a desecration reveals
 //! (the lords of the Abyss), those of the Genesis tree of the Breach and those only an essence
-//! adds, and the tags of each base that tell where a modifier rolls.
+//! or an alloy of Verisium adds, and the tags of each base that tell where a modifier rolls.
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
@@ -38,9 +38,13 @@ const GENESIS_TAGS: [&str; 2] = ["breach_desecration", "genesis_tree_minion"];
 /// those its tags before rule out (`ring` and `belt` at 0 for one of the amulets).
 const GENESIS_BASES: [&str; 3] = ["ring", "amulet", "belt"];
 
-/// A modifier only an essence adds, by its id in `mods.json`, and the tags of the bases it rolls
-/// on, as `(tag, weight)`.
-pub type Essence = (&'static str, &'static [(&'static str, u32)]);
+/// A modifier only a currency adds (an essence, an alloy of Verisium), by its id in `mods.json`,
+/// and the tags of the bases it rolls on, as `(tag, weight)`.
+pub type CurrencyModifier = (&'static str, &'static [(&'static str, u32)]);
+
+/// The modifiers each currency adds: those of the essences, then those of the alloys.
+pub const CURRENCIES: &[(Source, &[CurrencyModifier])] =
+    &[(Source::Essence, ESSENCES), (Source::Alloy, ALLOYS)];
 
 /// The modifiers only an essence adds, of the domain of the equipment, and the tags of the bases
 /// each one rolls on, as `(tag, weight)`, `default` at 0 after them: RePoE writes these
@@ -51,7 +55,7 @@ pub type Essence = (&'static str, &'static [(&'static str, u32)]);
 /// that of an older patch). The ordinary essences add ordinary modifiers, with their tiers.
 /// Left out: the notable of the Essence of Delirium on a body armour (`EssenceGrantedPassive`,
 /// `Allocates #`), whose value is the hash of the notable, not a roll.
-pub const ESSENCES: &[Essence] = &[
+pub const ESSENCES: &[CurrencyModifier] = &[
     ("EssenceAbyssPrefix", &[("default", 1)]),
     ("EssenceAbyssSuffix", &[("default", 1)]),
     (
@@ -121,6 +125,102 @@ pub const ESSENCES: &[Essence] = &[
     ),
     ("EssenceSpellSkillLevel1H1", &[("wand", 1)]),
     ("EssenceSpellSkillLevel2H1", &[("staff", 1)]),
+];
+
+/// The modifiers an alloy of Verisium adds to a rare item, in place of one of its modifiers, of
+/// the domain of the equipment, and the tags of the bases each one rolls on, as `(tag,
+/// weight)`, `default` at 0 after them: RePoE writes them with `default` at 0 alone. From Craft
+/// of Exile (`essences` of its `poec_data.json`, where the alloys are listed too) and poe2db (the
+/// page of each alloy), 2026-10-31, checked on the trade site the same day (league Runes of
+/// Aldur): the trade site files them `crafted` (`P0`, `S0`, named `Verisium` and `of the
+/// Stars`), and they roll whatever the level of the item (a helmet of level 7 with the
+/// `ManaCostEfficiency` of level 25). The Transcendent Alloy adds the cast speed and cold damage
+/// of the staves (`39–47%`, `11–16%`) to the wands and the foci too, as Craft of Exile has it:
+/// poe2db gives them the one-handed values (`26–31%`, `7–11%`), which the trade site shows on
+/// most of them, the oldest offers from 2026-06-18, while 2,729 wands and 420 foci of the league
+/// have the values of the staves (a patch of the game, the items keeping theirs). The `weapon`
+/// tag is that of the martial weapons, the bows to the warstaves. Left out: three other
+/// modifiers of RePoE no alloy adds (`AlloyLocalWardIncreasePercent2`,
+/// `AlloySpiritPresenceAreaOfEffectHybrid1`, `AlloyManaNearbyAllyAttackSpeedHybrid1`).
+pub const ALLOYS: &[CurrencyModifier] = &[
+    ("AlloyAccuracyAttackSpeedHybrid1", &[("weapon", 1)]),
+    ("AlloyAilmentMagnitude1", &[("weapon", 1)]),
+    ("AlloyArchonDuration1", &[("helmet", 1)]),
+    ("AlloyAttackAreaOfEffect1", &[("gloves", 1)]),
+    ("AlloyAttackSpeedIfMissingWardRecently1", &[("gloves", 1)]),
+    ("AlloyAttackSpeedRing1", &[("ring", 1)]),
+    (
+        "AlloyAttributeIncreasedLocalPhysicalDamageHybrid1",
+        &[("weapon", 1)],
+    ),
+    ("AlloyBallistaLimit1", &[("crossbow", 1)]),
+    ("AlloyBellLimit1", &[("warstaff", 1)]),
+    (
+        "AlloyCastSpeedDamageAsExtraColdHybrid1",
+        &[("staff", 1), ("wand", 1), ("focus", 1)],
+    ),
+    (
+        "AlloyCastSpeedDamageAsExtraColdHybridOneHand1",
+        &[("wand", 1), ("focus", 1)],
+    ),
+    ("AlloyCastSpeedGloves1", &[("gloves", 1)]),
+    ("AlloyChanceToChain1", &[("quiver", 1)]),
+    (
+        "AlloyDamageAsExtraFireTwoHandWhileMissingRunicWard1",
+        &[("staff", 1)],
+    ),
+    (
+        "AlloyDamageAsExtraFireWhileMissingRunicWard1",
+        &[("wand", 1)],
+    ),
+    ("AlloyDamagingAilmentDuration1", &[("gloves", 1)]),
+    (
+        "AlloyEffectOfResistanceMods1",
+        &[("amulet", 1), ("belt", 1), ("ring", 1)],
+    ),
+    (
+        "AlloyEffectOfSocketedAugments1",
+        &[("weapon", 1), ("sceptre", 1), ("staff", 1), ("wand", 1)],
+    ),
+    ("AlloyElementalPenetration1", &[("gloves", 1)]),
+    ("AlloyElementalSkillLimit1", &[("wand", 1)]),
+    (
+        "AlloyExposureEffect1",
+        &[("staff", 1), ("wand", 1), ("focus", 1)],
+    ),
+    ("AlloyFlaskChargesPerSecond1", &[("belt", 1)]),
+    ("AlloyLightningDamageIgnites1", &[("talisman", 1)]),
+    ("AlloyLocalWardIncreasePercent1", &[("armour", 1)]),
+    ("AlloyManaCostEfficiency1", &[("helmet", 1)]),
+    ("AlloyMarkEffect", &[("bow", 1)]),
+    (
+        "AlloyMaximumElementalInfusions1",
+        &[("staff", 1), ("wand", 1), ("sceptre", 1)],
+    ),
+    ("AlloyMaximumRunicWard1", &[("ring", 1)]),
+    ("AlloyMaximumRunicWardPercent1", &[("amulet", 1)]),
+    (
+        "AlloyMaximumRunicWardWeapon1",
+        &[("weapon", 1), ("sceptre", 1), ("staff", 1), ("wand", 1)],
+    ),
+    ("AlloyMeleeStrikeRange1", &[("spear", 1)]),
+    ("AlloyMinionDamagingAilmentMagnitude1", &[("sceptre", 1)]),
+    ("AlloyNaturesArchon1", &[("staff", 1)]),
+    ("AlloyPresenceAreaOfEffect1", &[("body_armour", 1)]),
+    ("AlloyPuppetMasterChance1", &[("sceptre", 1)]),
+    ("AlloyPuppeteerStacks1", &[("sceptre", 1)]),
+    ("AlloyRecoverRunicWardOnCharmUse1", &[("belt", 1)]),
+    ("AlloyReducedSlowPotency1", &[("body_armour", 1)]),
+    ("AlloyRemnantPickupRange1", &[("gloves", 1)]),
+    ("AlloyRetainGlory1", &[("mace", 1)]),
+    ("AlloyRunicWardOnBlock1", &[("shield", 1)]),
+    ("AlloyRunicWardRechargeRate1", &[("belt", 1)]),
+    ("AlloySkillEffectDuration1", &[("boots", 1)]),
+    ("AlloySpellAreaOfEffect1", &[("helmet", 1)]),
+    ("AlloySpellLevelManaHybrid1", &[("staff", 1), ("wand", 1)]),
+    ("AlloySpiritOnBoots1", &[("boots", 1)]),
+    ("AlloyTemporaryMinionSkillLimit1", &[("boots", 1)]),
+    ("AlloyTotemPlacementSpeed1", &[("focus", 1), ("shield", 1)]),
 ];
 
 /// The domains of the bases kept, and of their modifiers: the equipment, the jewels, the flasks
@@ -242,11 +342,24 @@ pub struct Modifier {
 /// Where a modifier that isn't an ordinary one comes from.
 #[derive(Serialize, Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 #[serde(rename_all = "lowercase")]
-enum Source {
+pub enum Source {
     /// The Genesis tree of the Breach, on the rings, the amulets and the belts it grows.
     Genesis,
     /// An essence ([`ESSENCES`]).
     Essence,
+    /// An alloy of Verisium ([`ALLOYS`]).
+    Alloy,
+}
+
+impl Source {
+    /// The currency, with its article, in the errors of its list.
+    fn currency(self) -> &'static str {
+        match self {
+            Self::Genesis => "the Genesis tree",
+            Self::Essence => "an essence",
+            Self::Alloy => "an alloy",
+        }
+    }
 }
 
 /// A line of a modifier.
@@ -356,22 +469,22 @@ pub type BaseTags = BTreeMap<String, BaseSpawn>;
 /// each template itself: `Loads # additional bolts` is `Loads an additional bolt`.
 pub type Templates = BTreeMap<String, String>;
 
-/// The modifier tables of `modifiers`, those of `essences` among them ([`ESSENCES`]), the lines
-/// of their stats written as the English templates of Exiled Exchange 2, and the tags of the
-/// bases that the tables read, by English name of the base.
+/// The modifier tables of `modifiers`, those only a currency of `currencies` adds among them
+/// ([`CURRENCIES`]), the lines of their stats written as the English templates of Exiled
+/// Exchange 2, and the tags of the bases that the tables read, by English name of the base.
 pub fn reduce(
     modifiers: &BTreeMap<String, SourceModifier>,
     bases: &BTreeMap<String, SourceBase>,
     translations: &[Translation],
     templates: &Templates,
-    essences: &[Essence],
+    currencies: &[(Source, &[CurrencyModifier])],
 ) -> Result<(Vec<Modifier>, BaseTags)> {
     let released: Vec<&SourceBase> = bases
         .values()
         .filter(|base| base.release_state == "released")
         .collect();
-    let essences = essence_spawns(modifiers, essences, &released)?;
-    let grouped = group_tiers(modifiers, translations, templates, &essences)?;
+    let currencies = currency_spawns(modifiers, currencies, &released)?;
+    let grouped = group_tiers(modifiers, translations, templates, &currencies)?;
 
     let mut tables = Vec::new();
     let mut unknown_lines = BTreeSet::new();
@@ -421,23 +534,24 @@ pub fn reduce(
     for line in unknown_lines {
         println!("Modifier line without template, its modifier left out: {line}");
     }
-    // The ordinary tables first, then those of the Genesis tree and of the essences, then the
-    // desecrated ones: of two tables that hold a copied modifier as well, the application takes
-    // the first of the file, the ordinary one (`+2 to Level of all Minion Skills` of an amulet, a
-    // T2 of its own or a minion modifier of the Genesis tree), but for a header written without
-    // tier, which takes one whose tier the game doesn't write (`find` in the application).
+    // The ordinary tables first, then those of the Genesis tree, of the essences and of the
+    // alloys, then the desecrated ones: of two tables that hold a copied modifier as well, the
+    // application takes the first of the file, the ordinary one (`+2 to Level of all Minion
+    // Skills` of an amulet, a T2 of its own or a minion modifier of the Genesis tree), but for a
+    // header written without tier, which takes one whose tier the game doesn't write (`find` in
+    // the application).
     tables.sort_by_key(|table| (table.domain == DESECRATED, table.source));
     let base_tags = base_tags(&released, &tables);
     Ok((tables, base_tags))
 }
 
-/// The tiers of `modifiers` that roll (with the spawn weights of `essences` for those only an
-/// essence adds), grouped by type, affix, domain, lines, bases and source.
+/// The tiers of `modifiers` that roll (with the currency and the spawn weights of `currencies`
+/// for those only a currency adds), grouped by type, affix, domain, lines, bases and source.
 fn group_tiers(
     modifiers: &BTreeMap<String, SourceModifier>,
     translations: &[Translation],
     templates: &Templates,
-    essences: &HashMap<&str, Vec<SpawnWeight>>,
+    currencies: &HashMap<&str, (Source, Vec<SpawnWeight>)>,
 ) -> Result<BTreeMap<Key, Vec<Tier>>> {
     let mut by_stat: HashMap<&str, usize> = HashMap::new();
     for (index, translation) in translations.iter().enumerate() {
@@ -447,11 +561,11 @@ fn group_tiers(
     }
     let mut grouped: BTreeMap<Key, Vec<Tier>> = BTreeMap::new();
     for (id, modifier) in modifiers {
-        let essence = essences.get(id.as_str());
-        let spawn_weights = essence.unwrap_or(&modifier.spawn_weights);
+        let currency = currencies.get(id.as_str());
+        let spawn_weights = currency.map_or(&modifier.spawn_weights, |(_, spawn)| spawn);
         let rolls = (is_kept(&modifier.domain) || modifier.domain == DESECRATED)
             && ["prefix", "suffix"].contains(&modifier.generation_type.as_str())
-            && (essence.is_some() || !modifier.is_essence_only)
+            && (currency.is_some() || !modifier.is_essence_only)
             && spawn_weights.iter().any(|spawn| spawn.weight > 0);
         if !rolls {
             continue;
@@ -471,20 +585,20 @@ fn group_tiers(
         let (lines, ranges) = lines(modifier, translations, &by_stat, templates)
             .map_err(|error| format!("{id}: {error}"))?;
         // Left out, it would be read as no modifier, without a word.
-        if essence.is_some()
+        if let Some((source, _)) = currency
             && let Some(line) = lines.iter().find(|line| !line.known)
         {
             return Err(format!(
-                "{id}: a modifier of an essence with a line without template, {}",
+                "{id}: a modifier of {} with a line without template, {}",
+                source.currency(),
                 line.template
             )
             .into());
         }
         let (spawn, genesis) = spawn_on_bases(spawn_weights);
-        let source = if essence.is_some() {
-            Some(Source::Essence)
-        } else {
-            genesis.then_some(Source::Genesis)
+        let source = match currency {
+            Some(&(source, _)) => Some(source),
+            None => genesis.then_some(Source::Genesis),
         };
         grouped
             .entry((
@@ -497,11 +611,12 @@ fn group_tiers(
             ))
             .or_default()
             .push(Tier {
-                // An essence adds its modifier whatever the level of the item, below the
-                // level RePoE writes (72 for the Perfect ones): a Cultist Bow of level 33 with
-                // the `+2 to Level of all Attack Skills` of an essence, on the trade site on
-                // 2026-10-30.
-                level: if essence.is_some() {
+                // An essence or an alloy adds its modifier whatever the level of the item,
+                // below the level RePoE writes (72 for the Perfect essences): a Cultist Bow of
+                // level 33 with the `+2 to Level of all Attack Skills` of an essence, on the
+                // trade site on 2026-10-30, a helmet of level 7 with an alloy of level 25 on
+                // 2026-10-31.
+                level: if currency.is_some() {
                     1
                 } else {
                     modifier.required_level
@@ -512,25 +627,30 @@ fn group_tiers(
     Ok(grouped)
 }
 
-/// The spawn weights of each modifier of `essences` by its id, `default` at 0 after its own
-/// tags. An error when one is written twice, isn't a prefix or a suffix of the equipment among
-/// `modifiers`, rolls without an essence, or has a tag no base of the equipment among `released`
-/// has (mistyped, or gone): the list is to be checked again, after a patch of the game.
-fn essence_spawns(
+/// The currency and the spawn weights of each modifier of `currencies` by its id, `default` at 0
+/// after its own tags. An error when one is written twice, isn't a prefix or a suffix of the
+/// equipment among `modifiers`, rolls without its currency, or has a tag no base of the
+/// equipment among `released` has (mistyped, or gone): the list is to be checked again, after a
+/// patch of the game.
+fn currency_spawns(
     modifiers: &BTreeMap<String, SourceModifier>,
-    essences: &[Essence],
+    currencies: &[(Source, &[CurrencyModifier])],
     released: &[&SourceBase],
-) -> Result<HashMap<&'static str, Vec<SpawnWeight>>> {
+) -> Result<HashMap<&'static str, (Source, Vec<SpawnWeight>)>> {
     let equipment_tags: BTreeSet<&str> = released
         .iter()
         .filter(|base| base.domain == EQUIPMENT)
         .flat_map(|base| base.tags.iter().map(String::as_str))
         .collect();
     let mut spawns = HashMap::new();
-    for &(id, tags) in essences {
+    let listed = currencies
+        .iter()
+        .flat_map(|&(source, list)| list.iter().map(move |&(id, tags)| (source, id, tags)));
+    for (source, id, tags) in listed {
+        let currency = source.currency();
         let modifier = modifiers
             .get(id)
-            .ok_or_else(|| format!("{id}: a modifier of an essence that RePoE doesn't have"))?;
+            .ok_or_else(|| format!("{id}: a modifier of {currency} that RePoE doesn't have"))?;
         let error = if spawns.contains_key(id) {
             Some("written twice in the list".to_owned())
         } else if modifier.domain != EQUIPMENT {
@@ -541,14 +661,14 @@ fn essence_spawns(
                 modifier.generation_type
             ))
         } else if modifier.spawn_weights.iter().any(|spawn| spawn.weight > 0) {
-            Some("rolls without an essence".to_owned())
+            Some(format!("rolls without {currency}"))
         } else {
             tags.iter()
                 .find(|(tag, _)| !equipment_tags.contains(tag))
                 .map(|(tag, _)| format!("a tag no base of the equipment has, {tag}"))
         };
         if let Some(error) = error {
-            return Err(format!("{id}: a modifier of an essence: {error}").into());
+            return Err(format!("{id}: a modifier of {currency}: {error}").into());
         }
         let weight = |(tag, weight): (&str, u32)| SpawnWeight {
             tag: tag.to_owned(),
@@ -560,7 +680,7 @@ fn essence_spawns(
             .all(|&(tag, _)| tag != "default")
             .then_some(("default", 0));
         let spawn = tags.iter().copied().chain(default).map(weight).collect();
-        spawns.insert(id, spawn);
+        spawns.insert(id, (source, spawn));
     }
     Ok(spawns)
 }
@@ -1352,7 +1472,7 @@ mod tests {
 
     /// The tables from `modifiers` of `mods.json` on the bases of [`BASES`], those of `essences`
     /// among them, each with a line `{0} to Level of all Spell Skills`.
-    fn essence_tables(modifiers: &str, essences: &[Essence]) -> Result<serde_json::Value> {
+    fn essence_tables(modifiers: &str, essences: &[CurrencyModifier]) -> Result<serde_json::Value> {
         let translations = r#"[{"ids": ["spell_skill_gem_level_+"], "English": [{"string": "{0:+d} to Level of all Spell Skills", "index_handlers": [[]]}], "hidden": null}]"#;
         let template = "# to Level of all Spell Skills";
         let (tables, _) = reduce(
@@ -1360,7 +1480,7 @@ mod tests {
             &serde_json::from_str(BASES).expect("bases"),
             &serde_json::from_str::<Vec<_>>(translations).expect("translations"),
             &[(template.to_owned(), template.to_owned())].into(),
-            essences,
+            &[(Source::Essence, essences)],
         )?;
         Ok(serde_json::to_value(tables).expect("written"))
     }
@@ -1430,7 +1550,7 @@ mod tests {
     fn a_modifier_of_an_essence_missing_rolling_or_mistyped_stops_the_generator() {
         let nowhere = r#"[{"tag": "default", "weight": 0}]"#;
         let on_bows = r#"[{"tag": "bow", "weight": 1}, {"tag": "default", "weight": 0}]"#;
-        let error = |spawn: &str, essences: &[Essence]| {
+        let error = |spawn: &str, essences: &[CurrencyModifier]| {
             essence_tables(
                 &format!(r#"{{"Essence": {}}}"#, spell_levels("Kind", 72, spawn, 3)),
                 essences,
@@ -1485,7 +1605,7 @@ mod tests {
             &serde_json::from_str(BASES).expect("bases"),
             &serde_json::from_str::<Vec<_>>(translations).expect("translations"),
             &[(template.to_owned(), template.to_owned())].into(),
-            &[("Essence", &[("bow", 1)])],
+            &[(Source::Essence, &[("Essence", &[("bow", 1)])])],
         )
         .err()
         .map(|error| error.to_string());
@@ -1499,8 +1619,41 @@ mod tests {
         );
     }
 
-    #[test]
-    fn the_modifiers_of_the_essences_roll_on_the_item_classes_of_craft_of_exile() {
+    /// The one-handed martial weapons, with the bows, as the essences have them.
+    const ONE_HAND: [&str; 7] = [
+        "Bow",
+        "Dagger",
+        "Flail",
+        "One Hand Axe",
+        "One Hand Mace",
+        "One Hand Sword",
+        "Spear",
+    ];
+
+    /// The two-handed martial weapons, without the bows.
+    const TWO_HAND: [&str; 6] = [
+        "Crossbow",
+        "Talisman",
+        "Two Hand Axe",
+        "Two Hand Mace",
+        "Two Hand Sword",
+        "Warstaff",
+    ];
+
+    /// The armours, the shields and the foci: the bases of the `armour` tag.
+    const ARMOUR: [&str; 7] = [
+        "Body Armour",
+        "Boots",
+        "Buckler",
+        "Focus",
+        "Gloves",
+        "Helmet",
+        "Shield",
+    ];
+
+    /// Checks that each modifier of `list` rolls on every base of the categories `expected`
+    /// gives it, in the same order, and on no other base of the equipment.
+    fn assert_rolls_on_classes(list: &[CurrencyModifier], expected: &[(&str, Vec<&str>)]) {
         // The categories of the equipment and the tags of each base, as the generator wrote
         // them; a name of several bases has none.
         let mut categories: BTreeMap<String, Vec<Vec<String>>> = BTreeMap::new();
@@ -1523,66 +1676,9 @@ mod tests {
                 .find(|(tag, _)| tags.iter().any(|base| base == tag))
                 .is_some_and(|&(_, weight)| weight > 0)
         };
-        let one_hand = [
-            "Bow",
-            "Dagger",
-            "Flail",
-            "One Hand Axe",
-            "One Hand Mace",
-            "One Hand Sword",
-            "Spear",
-        ];
-        let two_hand = [
-            "Crossbow",
-            "Talisman",
-            "Two Hand Axe",
-            "Two Hand Mace",
-            "Two Hand Sword",
-            "Warstaff",
-        ];
-        let martial: Vec<&str> = one_hand.iter().chain(&two_hand).copied().collect();
-        let every: Vec<&str> = categories.keys().map(String::as_str).collect();
-        // The item classes of each modifier in Craft of Exile (2026-10-30), the bows with the
-        // one-handed weapons as the trade site has them.
-        let expected: [(&str, &[&str]); 33] = [
-            ("EssenceAbyssPrefix", &every),
-            ("EssenceAbyssSuffix", &every),
-            ("EssenceAttackSkillLevel1H1", &one_hand),
-            ("EssenceAttackSkillLevel2H1", &two_hand),
-            ("EssenceAuraEffect1", &["Sceptre"]),
-            ("EssenceBreach", &["Amulet", "Ring"]),
-            ("EssenceColdRecoupLife1", &["Helmet"]),
-            ("EssenceCorruptForTwoEnchantments1", &["Belt"]),
-            ("EssenceDamageasExtraCold1", &one_hand),
-            ("EssenceDamageasExtraCold2H", &two_hand),
-            ("EssenceDamageasExtraFire1", &one_hand),
-            ("EssenceDamageasExtraFire2H", &two_hand),
-            ("EssenceDamageasExtraLightning1", &one_hand),
-            ("EssenceDamageasExtraLightning2H", &two_hand),
-            ("EssenceDamageasExtraPhysical1", &one_hand),
-            ("EssenceDamageasExtraPhysical2H", &two_hand),
-            ("EssenceFireRecoupLife1", &["Belt"]),
-            ("EssenceGlobalDefences1", &["Amulet"]),
-            ("EssenceGoldDropped1", &["Gloves"]),
-            ("EssenceIncreasedLifePercent1", &["Body Armour"]),
-            ("EssenceIncreasedManaPercent1", &["Ring"]),
-            ("EssenceLightningRecoupLife1", &["Gloves"]),
-            ("EssenceLocalRuneAndSoulCoreEffect1", &["Boots", "Gloves"]),
-            ("EssenceManaCostReduction", &["Focus", "Wand"]),
-            ("EssenceManaCostReduction2H", &["Staff"]),
-            ("EssenceOnslaughtonKill1", &martial),
-            ("EssencePercentDexterity1", &["Amulet"]),
-            ("EssencePercentIntelligence1", &["Amulet"]),
-            ("EssencePercentStrength1", &["Amulet"]),
-            ("EssencePhysicalDamageTakenAsChaos1", &["Body Armour"]),
-            ("EssenceReducedCriticalDamageAgainstYou1", &["Body Armour"]),
-            ("EssenceSpellSkillLevel1H1", &["Wand"]),
-            ("EssenceSpellSkillLevel2H1", &["Staff"]),
-        ];
-
-        assert_eq!(ESSENCES.len(), expected.len());
-        for (&(id, spawn), &(expected_id, classes)) in ESSENCES.iter().zip(&expected) {
-            assert_eq!(id, expected_id);
+        assert_eq!(list.len(), expected.len());
+        for (&(id, spawn), (expected_id, classes)) in list.iter().zip(expected) {
+            assert_eq!(id, *expected_id);
             for (category, bases) in &categories {
                 // Every base of a class, or none.
                 let on: Vec<bool> = bases.iter().map(|tags| rolls(spawn, tags)).collect();
@@ -1590,6 +1686,179 @@ mod tests {
                 assert!(on.iter().all(|&on| on == all), "{id} on {category}: {on:?}");
             }
         }
+    }
+
+    /// The categories of the bases of the equipment, as the generator wrote them.
+    fn equipment_categories() -> Vec<String> {
+        let mut categories: Vec<String> = include_str!("../../../assets/game-data/bases-en.ndjson")
+            .lines()
+            .map(|line| serde_json::from_str::<serde_json::Value>(line).expect("a base"))
+            .filter(|base| base.get("domain").is_none())
+            .map(|base| base["category"].as_str().expect("its category").to_owned())
+            .collect();
+        categories.sort();
+        categories.dedup();
+        categories
+    }
+
+    #[test]
+    fn the_modifiers_of_the_essences_roll_on_the_item_classes_of_craft_of_exile() {
+        let one_hand = ONE_HAND.to_vec();
+        let two_hand = TWO_HAND.to_vec();
+        let martial: Vec<&str> = ONE_HAND.iter().chain(&TWO_HAND).copied().collect();
+        let categories = equipment_categories();
+        let every: Vec<&str> = categories.iter().map(String::as_str).collect();
+        let classes = |classes: &[&'static str]| classes.to_vec();
+        // The item classes of each modifier in Craft of Exile (2026-10-30), the bows with the
+        // one-handed weapons as the trade site has them.
+        let expected: [(&str, Vec<&str>); 33] = [
+            ("EssenceAbyssPrefix", every.clone()),
+            ("EssenceAbyssSuffix", every.clone()),
+            ("EssenceAttackSkillLevel1H1", one_hand.clone()),
+            ("EssenceAttackSkillLevel2H1", two_hand.clone()),
+            ("EssenceAuraEffect1", classes(&["Sceptre"])),
+            ("EssenceBreach", classes(&["Amulet", "Ring"])),
+            ("EssenceColdRecoupLife1", classes(&["Helmet"])),
+            ("EssenceCorruptForTwoEnchantments1", classes(&["Belt"])),
+            ("EssenceDamageasExtraCold1", one_hand.clone()),
+            ("EssenceDamageasExtraCold2H", two_hand.clone()),
+            ("EssenceDamageasExtraFire1", one_hand.clone()),
+            ("EssenceDamageasExtraFire2H", two_hand.clone()),
+            ("EssenceDamageasExtraLightning1", one_hand.clone()),
+            ("EssenceDamageasExtraLightning2H", two_hand.clone()),
+            ("EssenceDamageasExtraPhysical1", one_hand.clone()),
+            ("EssenceDamageasExtraPhysical2H", two_hand.clone()),
+            ("EssenceFireRecoupLife1", classes(&["Belt"])),
+            ("EssenceGlobalDefences1", classes(&["Amulet"])),
+            ("EssenceGoldDropped1", classes(&["Gloves"])),
+            ("EssenceIncreasedLifePercent1", classes(&["Body Armour"])),
+            ("EssenceIncreasedManaPercent1", classes(&["Ring"])),
+            ("EssenceLightningRecoupLife1", classes(&["Gloves"])),
+            (
+                "EssenceLocalRuneAndSoulCoreEffect1",
+                classes(&["Boots", "Gloves"]),
+            ),
+            ("EssenceManaCostReduction", classes(&["Focus", "Wand"])),
+            ("EssenceManaCostReduction2H", classes(&["Staff"])),
+            ("EssenceOnslaughtonKill1", martial.clone()),
+            ("EssencePercentDexterity1", classes(&["Amulet"])),
+            ("EssencePercentIntelligence1", classes(&["Amulet"])),
+            ("EssencePercentStrength1", classes(&["Amulet"])),
+            (
+                "EssencePhysicalDamageTakenAsChaos1",
+                classes(&["Body Armour"]),
+            ),
+            (
+                "EssenceReducedCriticalDamageAgainstYou1",
+                classes(&["Body Armour"]),
+            ),
+            ("EssenceSpellSkillLevel1H1", classes(&["Wand"])),
+            ("EssenceSpellSkillLevel2H1", classes(&["Staff"])),
+        ];
+
+        assert_rolls_on_classes(ESSENCES, &expected);
+    }
+
+    #[test]
+    fn the_modifiers_of_the_alloys_roll_on_the_item_classes_of_poe2db() {
+        let martial: Vec<&str> = ONE_HAND.iter().chain(&TWO_HAND).copied().collect();
+        let spell = ["Staff", "Wand"];
+        let weapons: Vec<&str> = martial
+            .iter()
+            .chain(&spell)
+            .chain(&["Sceptre"])
+            .copied()
+            .collect();
+        let armour = ARMOUR.to_vec();
+        let classes = |classes: &[&'static str]| classes.to_vec();
+        // The item classes of each modifier on the page of its alloy in poe2db (2026-10-31),
+        // the cast speed and cold damage of the staves on the wands and the foci too, as the
+        // trade site has them.
+        let expected: [(&str, Vec<&str>); 48] = [
+            ("AlloyAccuracyAttackSpeedHybrid1", martial.clone()),
+            ("AlloyAilmentMagnitude1", martial.clone()),
+            ("AlloyArchonDuration1", classes(&["Helmet"])),
+            ("AlloyAttackAreaOfEffect1", classes(&["Gloves"])),
+            (
+                "AlloyAttackSpeedIfMissingWardRecently1",
+                classes(&["Gloves"]),
+            ),
+            ("AlloyAttackSpeedRing1", classes(&["Ring"])),
+            (
+                "AlloyAttributeIncreasedLocalPhysicalDamageHybrid1",
+                martial.clone(),
+            ),
+            ("AlloyBallistaLimit1", classes(&["Crossbow"])),
+            ("AlloyBellLimit1", classes(&["Warstaff"])),
+            (
+                "AlloyCastSpeedDamageAsExtraColdHybrid1",
+                classes(&["Focus", "Staff", "Wand"]),
+            ),
+            (
+                "AlloyCastSpeedDamageAsExtraColdHybridOneHand1",
+                classes(&["Focus", "Wand"]),
+            ),
+            ("AlloyCastSpeedGloves1", classes(&["Gloves"])),
+            ("AlloyChanceToChain1", classes(&["Quiver"])),
+            (
+                "AlloyDamageAsExtraFireTwoHandWhileMissingRunicWard1",
+                classes(&["Staff"]),
+            ),
+            (
+                "AlloyDamageAsExtraFireWhileMissingRunicWard1",
+                classes(&["Wand"]),
+            ),
+            ("AlloyDamagingAilmentDuration1", classes(&["Gloves"])),
+            (
+                "AlloyEffectOfResistanceMods1",
+                classes(&["Amulet", "Belt", "Ring"]),
+            ),
+            ("AlloyEffectOfSocketedAugments1", weapons.clone()),
+            ("AlloyElementalPenetration1", classes(&["Gloves"])),
+            ("AlloyElementalSkillLimit1", classes(&["Wand"])),
+            ("AlloyExposureEffect1", classes(&["Focus", "Staff", "Wand"])),
+            ("AlloyFlaskChargesPerSecond1", classes(&["Belt"])),
+            ("AlloyLightningDamageIgnites1", classes(&["Talisman"])),
+            ("AlloyLocalWardIncreasePercent1", armour.clone()),
+            ("AlloyManaCostEfficiency1", classes(&["Helmet"])),
+            ("AlloyMarkEffect", classes(&["Bow"])),
+            (
+                "AlloyMaximumElementalInfusions1",
+                classes(&["Sceptre", "Staff", "Wand"]),
+            ),
+            ("AlloyMaximumRunicWard1", classes(&["Ring"])),
+            ("AlloyMaximumRunicWardPercent1", classes(&["Amulet"])),
+            ("AlloyMaximumRunicWardWeapon1", weapons.clone()),
+            ("AlloyMeleeStrikeRange1", classes(&["Spear"])),
+            (
+                "AlloyMinionDamagingAilmentMagnitude1",
+                classes(&["Sceptre"]),
+            ),
+            ("AlloyNaturesArchon1", classes(&["Staff"])),
+            ("AlloyPresenceAreaOfEffect1", classes(&["Body Armour"])),
+            ("AlloyPuppetMasterChance1", classes(&["Sceptre"])),
+            ("AlloyPuppeteerStacks1", classes(&["Sceptre"])),
+            ("AlloyRecoverRunicWardOnCharmUse1", classes(&["Belt"])),
+            ("AlloyReducedSlowPotency1", classes(&["Body Armour"])),
+            ("AlloyRemnantPickupRange1", classes(&["Gloves"])),
+            (
+                "AlloyRetainGlory1",
+                classes(&["One Hand Mace", "Two Hand Mace"]),
+            ),
+            ("AlloyRunicWardOnBlock1", classes(&["Buckler", "Shield"])),
+            ("AlloyRunicWardRechargeRate1", classes(&["Belt"])),
+            ("AlloySkillEffectDuration1", classes(&["Boots"])),
+            ("AlloySpellAreaOfEffect1", classes(&["Helmet"])),
+            ("AlloySpellLevelManaHybrid1", classes(&spell)),
+            ("AlloySpiritOnBoots1", classes(&["Boots"])),
+            ("AlloyTemporaryMinionSkillLimit1", classes(&["Boots"])),
+            (
+                "AlloyTotemPlacementSpeed1",
+                classes(&["Buckler", "Focus", "Shield"]),
+            ),
+        ];
+
+        assert_rolls_on_classes(ALLOYS, &expected);
     }
 
     /// The lines and the tiers of the one table of a modifier of `stats`, written by

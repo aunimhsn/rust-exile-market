@@ -38,8 +38,8 @@ use crate::format;
 use crate::game_data::{self, Category};
 use crate::i18n::{Message, Translator};
 use crate::item::{
-    Affix, AffixTier, Item, Lord, Modifier, ModifierKind, ModifierOrigin, PartTier, Range, Rarity,
-    StatLine, TierDoubt,
+    Affix, AffixTier, Currency, Item, Lord, Modifier, ModifierKind, ModifierOrigin, PartTier,
+    Range, Rarity, StatLine, TierDoubt,
 };
 use crate::roll_difference::CopiedLines;
 use crate::tier_rolls::{LineRolls, TierRolls, TierSpan};
@@ -169,6 +169,57 @@ enum Group {
     Unique,
 }
 
+/// The word after the roll of a modifier: its origin, as the game writes it, or the currency
+/// that adds it, which the modifier tables tell. Written as the word alone in a debug output
+/// (`Desecrated`, `Essence`).
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Origin {
+    Written(ModifierOrigin),
+    Currency(Currency),
+}
+
+impl Origin {
+    /// The word after a prefix or suffix of `origin` that `currency` adds: the currency, an
+    /// essence (which the game writes as an ordinary modifier) or an alloy (crafted), so that a
+    /// line without tier says why; its origin otherwise, also for a modifier of a currency
+    /// fractured or desecrated.
+    fn of_affix(origin: Option<ModifierOrigin>, currency: Option<Currency>) -> Option<Self> {
+        match (origin, currency) {
+            (None | Some(ModifierOrigin::Crafted), Some(currency)) => {
+                Some(Self::Currency(currency))
+            }
+            (origin, _) => origin.map(Self::Written),
+        }
+    }
+
+    /// The word after the prefix or suffix `modifier` that `currency` adds ([`Self::of_affix`]);
+    /// for a line that adds up two modifiers, the currency of a part follows the tier of that
+    /// part, in place of "Crafted" under the line.
+    fn of_modifier(modifier: &Modifier, currency: Option<Currency>) -> Option<Self> {
+        match &modifier.doubt {
+            Some(TierDoubt::Split { whole, added, .. })
+                if whole.currency.or(added.currency).is_some() =>
+            {
+                let crafted = Some(ModifierOrigin::Crafted);
+                modifier
+                    .origin
+                    .filter(|&origin| Some(origin) != crafted)
+                    .map(Self::Written)
+            }
+            _ => Self::of_affix(modifier.origin, currency),
+        }
+    }
+}
+
+impl std::fmt::Debug for Origin {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Written(origin) => origin.fmt(formatter),
+            Self::Currency(currency) => currency.fmt(formatter),
+        }
+    }
+}
+
 /// The roll of a stat, the lines its tooltips name borrowed from the item.
 #[derive(Debug, Clone, PartialEq)]
 enum Roll<'a> {
@@ -177,19 +228,20 @@ enum Roll<'a> {
     Bar {
         share: f32,
         ranges: Vec<Range>,
-        origin: Option<ModifierOrigin>,
+        origin: Option<Origin>,
     },
     /// A line of a prefix or a suffix: where its value falls over every tier of its modifier
     /// on the base, from 0 to 1, when the modifier tables know them; under the last line of the
     /// modifier, its tier and the ranges of that tier, of all its lines for a hybrid, so that it
-    /// reads as one modifier, then its origin when it is desecrated, fractured or crafted. Also
+    /// reads as one modifier, then its origin when it is desecrated, fractured or crafted, or the
+    /// currency that adds it (an essence, an alloy). Also
     /// the origin alone under a line of a unique that never varies (a fixed Vaal modifier),
     /// without bar nor tier. Under the other lines of a hybrid whose part a line adds up, the
     /// tier of the hybrid, "Hybrid" after its ranges. Boxed, so that a row stays small.
     Affix {
         share: Option<f32>,
         tier: Option<Box<TierRow<'a>>>,
-        origin: Option<ModifierOrigin>,
+        origin: Option<Origin>,
     },
     /// Under the last line of a modifier copied from the in-game trade that can be a prefix or
     /// a suffix: the tier of each and its ranges, one under the other, a word after the ranges
@@ -198,7 +250,7 @@ enum Roll<'a> {
     /// of each.
     Tiers {
         rows: Vec<TierRow<'a>>,
-        origin: Option<ModifierOrigin>,
+        origin: Option<Origin>,
     },
 }
 
@@ -228,6 +280,9 @@ struct TierRow<'a> {
     quiet: bool,
     /// The tooltip of that word.
     tip: Option<WordTip<'a>>,
+    /// The currency that adds the part of a line that adds up two modifiers, an essence or an
+    /// alloy, named last, as after the ranges of any modifier it adds.
+    currency: Option<Currency>,
 }
 
 /// The tooltip of the word after the ranges of a tier.
@@ -261,6 +316,7 @@ impl<'a> TierRow<'a> {
             lord: None,
             quiet: false,
             tip: None,
+            currency: None,
         }
     }
 
@@ -277,6 +333,7 @@ impl<'a> TierRow<'a> {
             lord: found.lord,
             quiet: found.ranges.is_empty(),
             tip: None,
+            currency: None,
         }
     }
 
@@ -310,6 +367,7 @@ impl<'a> TierRow<'a> {
             lord: None,
             quiet: false,
             tip,
+            currency: part.currency,
         })
     }
 }
@@ -1298,6 +1356,7 @@ fn affix_stats<'a>(item: &'a Item, affix: Option<Affix>, reading: &Reading<'_>) 
                 }];
             }
             let last = modifier.lines.len().saturating_sub(1);
+            let origin = Origin::of_modifier(modifier, reading.tiers.currency(index));
             // The origin under the tiers of a line that adds up two modifiers, the tier of the
             // hybrid under the last of its other lines.
             let (origin_line, tier_line) = match &modifier.doubt {
@@ -1334,7 +1393,7 @@ fn affix_stats<'a>(item: &'a Item, affix: Option<Affix>, reading: &Reading<'_>) 
                                 .then(|| TierRow::plain(ModifierTier { number, ranges }))
                         }
                     };
-                    let origin = modifier.origin.filter(|_| line_index == origin_line);
+                    let origin = origin.filter(|_| line_index == origin_line);
                     let mut stat = affix_stat(key, line, tier, origin, reading);
                     let rows = match &modifier.doubt {
                         Some(TierDoubt::EitherAffix { prefix, suffix }) if line_index == last => {
@@ -1367,7 +1426,7 @@ fn affix_stat<'a>(
     key: StatKey,
     line: &'a StatLine,
     tier: Option<TierRow<'a>>,
-    origin: Option<ModifierOrigin>,
+    origin: Option<Origin>,
     reading: &Reading<'_>,
 ) -> Stat<'a> {
     let counted = reading.counted(key, line);
@@ -1509,6 +1568,7 @@ fn unique_stat<'a>(
 ) -> Stat<'a> {
     let line = &reading.counted(key, whole);
     let ranges = copied_ranges(line);
+    let origin = origin.map(Origin::Written);
     let fixed = Stat {
         key: FilterKey::Stat(key),
         text: StatText::line(&whole.text),
@@ -1638,7 +1698,7 @@ fn average(values: impl Iterator<Item = f64>) -> Option<f64> {
 
 /// The bar of `rolls`, those whose range is wider than one value ([`varying_share`]), their
 /// ranges and the `origin` of their modifier; none when no roll varies.
-fn bar<'a>(rolls: Vec<(f64, Range)>, origin: Option<ModifierOrigin>) -> Option<Roll<'a>> {
+fn bar<'a>(rolls: Vec<(f64, Range)>, origin: Option<Origin>) -> Option<Roll<'a>> {
     let share = varying_share(&rolls)?;
     Some(Roll::Bar {
         share,
@@ -2108,7 +2168,7 @@ fn roll_line(
     i18n: &Translator,
 ) {
     // What ends the roll: its origin, then the tag.
-    let ending = |ui: &mut Ui, origin: Option<ModifierOrigin>| {
+    let ending = |ui: &mut Ui, origin: Option<Origin>| {
         if let Some(origin) = origin {
             origin_word(ui, origin, i18n);
         }
@@ -2161,20 +2221,24 @@ fn tier_row(ui: &mut Ui, row: &TierRow, i18n: &Translator) {
     if !row.quiet_tier() {
         tier_label(ui, &row.tier, row.better);
     }
-    let Some(word) = word else {
-        return;
-    };
-    let response = small_word(ui, word, color::WEAK);
-    if let Some(tip) = &row.tip {
-        let text = match tip {
-            WordTip::Text(message) => i18n.text(*message),
-            WordTip::HybridLines(lines) => i18n.hybrid_with(lines),
-            WordTip::HybridPart { ranges, line } => i18n.hybrid_part(&ranges_text(ranges), line),
-        };
-        response.on_hover_ui(|ui| {
-            ui.set_max_width(WORD_TIP_WIDTH);
-            ui.add(Label::new(text).wrap());
-        });
+    if let Some(word) = word {
+        let response = small_word(ui, word, color::WEAK);
+        if let Some(tip) = &row.tip {
+            let text = match tip {
+                WordTip::Text(message) => i18n.text(*message),
+                WordTip::HybridLines(lines) => i18n.hybrid_with(lines),
+                WordTip::HybridPart { ranges, line } => {
+                    i18n.hybrid_part(&ranges_text(ranges), line)
+                }
+            };
+            response.on_hover_ui(|ui| {
+                ui.set_max_width(WORD_TIP_WIDTH);
+                ui.add(Label::new(text).wrap());
+            });
+        }
+    }
+    if let Some(currency) = row.currency {
+        origin_word(ui, Origin::Currency(currency), i18n);
     }
 }
 
@@ -2207,7 +2271,7 @@ fn tier_label(ui: &mut Ui, tier: &ModifierTier, better: Option<u32>) {
 }
 
 /// The word of an origin, small, in its color: the last item of the line of a roll.
-fn origin_word(ui: &mut Ui, origin: ModifierOrigin, i18n: &Translator) {
+fn origin_word(ui: &mut Ui, origin: Origin, i18n: &Translator) {
     let (message, tint) = origin_label(origin);
     small_word(ui, i18n.text(message), tint);
 }
@@ -2240,13 +2304,18 @@ fn space_before(ui: &mut Ui, gap: f32) {
     }
 }
 
-/// The word of an origin, and its color.
-fn origin_label(origin: ModifierOrigin) -> (Message, Color32) {
+/// The word of an origin, and its color: that of the crafted modifiers for a currency, as the
+/// trade site files them.
+fn origin_label(origin: Origin) -> (Message, Color32) {
     match origin {
-        ModifierOrigin::Desecrated => (Message::OriginDesecrated, color::DESECRATED),
-        ModifierOrigin::Fractured => (Message::OriginFractured, color::FRACTURED),
-        ModifierOrigin::Crafted => (Message::OriginCrafted, color::CRAFTED),
-        ModifierOrigin::Vaal => (Message::OriginVaal, color::VAAL),
+        Origin::Written(ModifierOrigin::Desecrated) => {
+            (Message::OriginDesecrated, color::DESECRATED)
+        }
+        Origin::Written(ModifierOrigin::Fractured) => (Message::OriginFractured, color::FRACTURED),
+        Origin::Written(ModifierOrigin::Crafted) => (Message::OriginCrafted, color::CRAFTED),
+        Origin::Written(ModifierOrigin::Vaal) => (Message::OriginVaal, color::VAAL),
+        Origin::Currency(Currency::Essence) => (Message::OriginEssence, color::CRAFTED),
+        Origin::Currency(Currency::Alloy) => (Message::OriginAlloy, color::CRAFTED),
     }
 }
 

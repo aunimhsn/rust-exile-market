@@ -226,8 +226,7 @@ fn placements<'a>(
                 .first()
                 .and_then(|&line| lines.get(line))
                 .and_then(|line| line.origin);
-            let desecrated = origin == Some(ModifierOrigin::Desecrated);
-            if !table.may_hold(desecrated) {
+            if !table.may_hold(origin) {
                 continue;
             }
             let copied = Copied {
@@ -238,7 +237,7 @@ fn placements<'a>(
                     .collect(),
                 ranges: None,
                 tier: CopiedTier::Unknown,
-                desecrated,
+                origin,
             };
             let Some(order) = copied.order(&table.lines) else {
                 continue;
