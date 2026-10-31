@@ -1,7 +1,9 @@
 //! The item block: the name of the copied item in its rarity color, the Check on trade pill,
-//! its base type and class, then its facts (the main values of its base, the skills it
+//! its base type and class (the base and the tier of a waystone), then its facts (the main values of its base, the skills it
 //! grants, its requirements, its tags), and the pill of its stats. A click on a state tag
 //! (Corrupted, Fractured…) lights it: the offers of that state only.
+
+use std::borrow::Cow;
 
 use egui::text::{LayoutJob, TextFormat};
 use egui::{
@@ -14,7 +16,7 @@ use super::theme::{color, size, text};
 use super::widgets;
 use crate::filters::Filters;
 use crate::i18n::{Message, NumberTag, Requirement, Translator};
-use crate::item::{DamageKind, Item, ItemState, Rarity};
+use crate::item::{self, DamageKind, Item, ItemState, Rarity, WaystoneProperty};
 use crate::roll_difference::CopiedLines;
 use crate::tier_rolls::TierRolls;
 use crate::trade::stat_filters::LineStats;
@@ -142,6 +144,8 @@ enum BaseValue {
     Block(u32),
     /// The defence of a runeforged base, without attribute.
     RunicWard(u32),
+    /// A property of a waystone, in percent but for the revives.
+    Waystone(WaystoneProperty, i32),
 }
 
 impl BaseValue {
@@ -155,6 +159,26 @@ impl BaseValue {
             Self::EnergyShield(_) => Message::DefenceEnergyShield,
             Self::Block(_) => Message::DefenceBlock,
             Self::RunicWard(_) => Message::DefenceRunicWard,
+            Self::Waystone(property, _) => match property {
+                WaystoneProperty::Revives => Message::WaystoneRevives,
+                WaystoneProperty::ItemRarity => Message::WaystoneItemRarity,
+                WaystoneProperty::PackSize => Message::WaystonePackSize,
+                WaystoneProperty::MonsterRarity => Message::WaystoneMonsterRarity,
+                WaystoneProperty::MonsterEffectiveness => Message::WaystoneMonsterEffectiveness,
+                WaystoneProperty::DropChance => Message::WaystoneDropChance,
+            },
+        }
+    }
+
+    /// The name of the game of a label written short, for its tooltip: the revives, and in
+    /// French the drop chance of a waystone.
+    fn full_label(self) -> Option<Message> {
+        match self {
+            Self::Waystone(WaystoneProperty::Revives, _) => Some(Message::WaystoneRevivesFull),
+            Self::Waystone(WaystoneProperty::DropChance, _) => {
+                Some(Message::WaystoneDropChanceFull)
+            }
+            _ => None,
         }
     }
 
@@ -166,13 +190,16 @@ impl BaseValue {
             Self::Evasion(_) => color::DEXTERITY,
             Self::EnergyShield(_) => color::INTELLIGENCE,
             Self::RunicWard(_) => color::RUNIC_WARD,
-            Self::Dps(..) | Self::Block(_) => color::WEAK,
+            Self::Dps(..) | Self::Block(_) | Self::Waystone(..) => color::WEAK,
         }
     }
 
     fn number(self) -> String {
         match self {
             Self::Block(percent) => format!("{percent}%"),
+            // As the game writes it: `+11%`.
+            Self::Waystone(property, value) if property.is_percent() => format!("{value:+}%"),
+            Self::Waystone(_, value) => value.to_string(),
             Self::Dps(_, value)
             | Self::Armour(value)
             | Self::Evasion(value)
@@ -278,7 +305,7 @@ impl<'a> ItemBlock<'a> {
             0.0
         };
         ui.horizontal_top(|ui| {
-            let name = RichText::new(self.item.title())
+            let name = RichText::new(self.title())
                 .font(text::item_name())
                 .color(rarity_color(self.item.rarity()));
             ui.allocate_ui_with_layout(
@@ -299,11 +326,42 @@ impl<'a> ItemBlock<'a> {
         .inner
     }
 
+    /// The name of the item; a waystone without its tier, which the line under it writes:
+    /// `Burning Waystone`.
+    fn title(&self) -> Cow<'_, str> {
+        let title = self.item.title();
+        if self.waystone_base().is_some()
+            && let Some((name, _)) = item::without_tier(self.item.language(), title)
+        {
+            return Cow::Owned(name);
+        }
+        Cow::Borrowed(title)
+    }
+
+    /// The base and the tier of a waystone whose base is known: `Waystone` of tier 12.
+    fn waystone_base(&self) -> Option<(&str, u32)> {
+        let base_type = self.base_type.filter(|_| self.item.is_waystone())?;
+        item::base_and_tier(self.item.language(), base_type)
+    }
+
     /// The base type of a rare or unique item, then its class in gray: "Wanderer Coat · Body
-    /// Armours"; the class alone for the other items, named by their base.
+    /// Armours"; the class alone for the other items, named by their base. A waystone, of any
+    /// rarity, writes its base and its tier, in its color, without its class, which only repeats
+    /// it: "Waystone · T12".
     fn base_and_class(&self) -> LayoutJob {
         let mut job = LayoutJob::default();
         let font = text::item_line();
+        if let Some((name, tier)) = self.waystone_base() {
+            append(&mut job, name, &font, color::TEXT);
+            append(&mut job, SEPARATOR, &font, color::WEAK);
+            append(
+                &mut job,
+                &format!("T{tier}"),
+                &text::base_value(),
+                waystone_tier_color(tier),
+            );
+            return job;
+        }
         if let Some(base_type) = self.base_line() {
             append(&mut job, base_type, &font, color::TEXT);
             append(&mut job, SEPARATOR, &font, color::WEAK);
@@ -421,7 +479,13 @@ impl<'a> ItemBlock<'a> {
                     VALUE_NUMBER_GAP,
                     TextFormat::simple(text::base_value(), color::TEXT),
                 );
-                ui.add(Label::new(job).extend());
+                let response = ui.add(Label::new(job).extend());
+                if let Some(full) = value.full_label() {
+                    let (short, full) = (self.i18n.text(value.label()), self.i18n.text(full));
+                    if full != short {
+                        response.on_hover_text(full);
+                    }
+                }
             }
         });
     }
@@ -504,9 +568,16 @@ impl<'a> ItemBlock<'a> {
         tags
     }
 
-    /// The DPS of a weapon, each kind it deals; or the defences of an armour piece or a
-    /// shield.
+    /// The DPS of a weapon, each kind it deals; the defences of an armour piece or a shield;
+    /// or the properties of a waystone, in the order of the item.
     fn base_values(&self) -> Vec<BaseValue> {
+        let waystone = self.item.waystone_properties();
+        if !waystone.is_empty() {
+            return waystone
+                .into_iter()
+                .map(|found| BaseValue::Waystone(found.property, found.value))
+                .collect();
+        }
         if let Some(weapon) = self.item.weapon() {
             let dps = weapon.dps();
             return [
@@ -616,6 +687,18 @@ pub(super) fn rarity_color(rarity: Rarity) -> Color32 {
     }
 }
 
+/// The color of the tier of a waystone, which tells at a glance how dangerous the map is:
+/// tiers 1 to 5 white, 6 to 10 the yellow of a warning, 11 to 15 the orange of the best tier
+/// of a modifier, 16 (a corrupted waystone raised one tier) the corrupted red.
+pub(super) fn waystone_tier_color(tier: u32) -> Color32 {
+    match tier {
+        ..=5 => color::TEXT,
+        6..=10 => color::WARNING,
+        11..=15 => color::TIER_1,
+        _ => color::VAAL,
+    }
+}
+
 /// A DPS rounded to a whole number; none when it rounds to zero, or past [`MAX_DPS`].
 fn rounded(dps: f64) -> Option<u32> {
     let rounded = dps.round();
@@ -667,6 +750,110 @@ mod tests {
 
     fn english(text: &str) -> Texts {
         texts(text, Language::English)
+    }
+
+    /// The name, the line under it and the base values of the waystone copied as `text`, of the
+    /// base type `base_type`, with the interface in `language`; the tooltips of the base values
+    /// written short after them, between parentheses.
+    fn waystone(text: &str, base_type: &str, language: Language) -> (String, String, Vec<String>) {
+        let item = Item::parse(&CopiedItem::from_text(text).expect("an item")).expect("read");
+        let i18n = Translator::new(language);
+        let mut filters = Filters::default();
+        let lines = CopiedLines::default();
+        let stats = LineStats::default();
+        let tiers = TierRolls::default();
+        let block = ItemBlock::new(&item, &lines, &stats, &tiers, &mut filters, &i18n)
+            .stats(false, Some(base_type));
+        let values = block
+            .base_values()
+            .into_iter()
+            .map(|value| {
+                let label = i18n.text(value.label());
+                let full = value
+                    .full_label()
+                    .map(|full| i18n.text(full))
+                    .filter(|full| *full != label)
+                    .map(|full| format!(" ({full})"))
+                    .unwrap_or_default();
+                format!("{label} {}{full}", value.number())
+            })
+            .collect();
+        (
+            block.title().into_owned(),
+            block.base_and_class().text,
+            values,
+        )
+    }
+
+    #[test]
+    fn a_waystone_shows_its_base_and_tier_and_its_properties() {
+        let (name, base, values) = waystone(
+            include_str!("../item/test-items/en-owner-rare-waystone.txt"),
+            "Waystone (Tier 12)",
+            Language::English,
+        );
+        assert_eq!(name, "Arcane Choice");
+        // Without its class, which only repeats it.
+        assert_eq!(base, "Waystone · T12");
+        assert_eq!(
+            values,
+            [
+                "Revives 3 (Revives Available)",
+                "Item Rarity +11%",
+                "Monster Rarity +25%",
+                "Monster Effectiveness +13%",
+                "Waystone Drop Chance +50%",
+            ]
+        );
+
+        let (name, base, values) = waystone(
+            include_str!("../item/test-items/fr-rare-waystone.txt"),
+            "Pierre de téléportation (Palier 12)",
+            Language::French,
+        );
+        assert_eq!(name, "Intention génitrice");
+        assert_eq!(base, "Pierre de téléportation · T12");
+        assert_eq!(
+            values,
+            [
+                "Résurrections 2 (Résurrections disponibles)",
+                "Rareté des objets +25%",
+                "Taille des Groupes +9%",
+                "Rareté des Monstres +23%",
+                "Pierres trouvées +65% (Chances de trouver des Pierres de téléportation)",
+            ]
+        );
+
+        // A magic waystone, named without its tier, in both languages.
+        let (name, base, _) = waystone(
+            "Item Class: Waystones\nRarity: Magic\nBurning Waystone (Tier 15)\n--------\n\
+             Item Level: 80",
+            "Waystone (Tier 15)",
+            Language::English,
+        );
+        assert_eq!(
+            (name.as_str(), base.as_str()),
+            ("Burning Waystone", "Waystone · T15")
+        );
+        let (name, _, _) = waystone(
+            "Classe d'objet: Pierres de téléportation\nRareté: Magique\n\
+             Pierre de téléportation (Palier 15) incendiaire\n--------\n\
+             Niveau de l'objet: 80",
+            "Pierre de téléportation (Palier 15)",
+            Language::French,
+        );
+        assert_eq!(name, "Pierre de téléportation incendiaire");
+    }
+
+    #[test]
+    fn the_tier_of_a_waystone_has_the_color_of_its_band() {
+        assert_eq!(waystone_tier_color(1), color::TEXT);
+        assert_eq!(waystone_tier_color(5), color::TEXT);
+        assert_eq!(waystone_tier_color(6), color::WARNING);
+        assert_eq!(waystone_tier_color(10), color::WARNING);
+        assert_eq!(waystone_tier_color(11), color::TIER_1);
+        assert_eq!(waystone_tier_color(15), color::TIER_1);
+        assert_eq!(waystone_tier_color(16), color::VAAL);
     }
 
     #[test]

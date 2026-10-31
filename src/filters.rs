@@ -1,6 +1,6 @@
 //! The filters of the offers search, as the player sets them: whether each stat of the item,
-//! or its base type, item level, sockets, quality, required level, DPS or pseudo totals, is
-//! searched, its minimum and its maximum, and the state tags the player lit. They are kept for
+//! or its base type, item level, sockets, quality, required level, DPS, properties of a
+//! waystone or pseudo totals, is searched, its minimum and its maximum, and the state tags the player lit. They are kept for
 //! the item shown, until an item is copied, even the same one after another text; a stat the
 //! player didn't touch keeps the choice made for it by default.
 //!
@@ -10,7 +10,7 @@
 use std::collections::HashMap;
 
 use crate::format;
-use crate::item::{Item, ItemState, Range};
+use crate::item::{Item, ItemState, Range, WaystoneProperty};
 use crate::trade::pseudo::Pseudo;
 
 /// A line of a modifier of the item: the index of its modifier among the modifiers of the
@@ -46,6 +46,7 @@ pub enum Property {
     PhysicalDps,
     /// Fire, cold and lightning together.
     ElementalDps,
+    Waystone(WaystoneProperty),
 }
 
 /// A half of the range field of a filter.

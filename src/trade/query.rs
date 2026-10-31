@@ -5,7 +5,7 @@
 use serde_json::{Map, Value, json};
 
 use crate::filters::Property;
-use crate::item::ItemState;
+use crate::item::{ItemState, WaystoneProperty};
 
 /// What a search looks for.
 #[derive(Debug, Clone, PartialEq)]
@@ -118,6 +118,19 @@ impl PropertyFilter {
             Property::RequiredLevel => ("req_filters", "lvl"),
             Property::PhysicalDps => ("equipment_filters", "pdps"),
             Property::ElementalDps => ("equipment_filters", "edps"),
+            // The trade site names `map_rare_monsters` "Monster Rarity" and
+            // `map_magic_monsters` "Monster Effectiveness" (`/data/filters`, 2026-10-31).
+            Property::Waystone(property) => (
+                "map_filters",
+                match property {
+                    WaystoneProperty::Revives => "map_revives",
+                    WaystoneProperty::ItemRarity => "map_iir",
+                    WaystoneProperty::PackSize => "map_packsize",
+                    WaystoneProperty::MonsterRarity => "map_rare_monsters",
+                    WaystoneProperty::MonsterEffectiveness => "map_magic_monsters",
+                    WaystoneProperty::DropChance => "map_bonus",
+                },
+            ),
         }
     }
 }
@@ -564,6 +577,44 @@ mod tests {
                 },
                 "sort": { "price": "asc" }
             })
+        );
+    }
+
+    #[test]
+    fn the_properties_of_a_waystone_are_searched_among_the_endgame_filters() {
+        let waystone = |property, minimum| PropertyFilter {
+            property: Property::Waystone(property),
+            minimum: Some(minimum),
+            maximum: None,
+        };
+        let query = ItemQuery {
+            name: None,
+            base_type: Some("Waystone (Tier 12)".to_owned()),
+            category: None,
+            rarity: Some(RarityFilter::NotUnique),
+            states: StateFilters::default(),
+            properties: vec![
+                waystone(WaystoneProperty::Revives, 3.0),
+                waystone(WaystoneProperty::ItemRarity, 9.0),
+                waystone(WaystoneProperty::PackSize, 8.0),
+                waystone(WaystoneProperty::MonsterRarity, 22.0),
+                waystone(WaystoneProperty::MonsterEffectiveness, 11.0),
+                waystone(WaystoneProperty::DropChance, 45.0),
+            ],
+            stats: Vec::new(),
+        };
+
+        // The ids of `/data/filters` on 2026-10-31.
+        assert_eq!(
+            query.to_json()["query"]["filters"]["map_filters"],
+            json!({ "filters": {
+                "map_revives": { "min": 3.0 },
+                "map_iir": { "min": 9.0 },
+                "map_packsize": { "min": 8.0 },
+                "map_rare_monsters": { "min": 22.0 },
+                "map_magic_monsters": { "min": 11.0 },
+                "map_bonus": { "min": 45.0 }
+            } })
         );
     }
 

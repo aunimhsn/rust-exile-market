@@ -7,6 +7,10 @@
 //! field stays within them; under the last line of its modifier, its tier and the range of that
 //! tier.
 //!
+//! A waystone has the filters of its properties in a group of their own, the item rarity and
+//! the drop chance checked, its modifiers unchecked: a buyer pays for its bonuses, not for its
+//! monsters; the filter of its base shows a bar of its tier, and the tier, in its color.
+//!
 //! A stat that is a filter of the search starts with its checkbox and keeps the column of its
 //! range field on the right, also when it has no limit; a stat of a unique that never varies
 //! isn't a filter and starts at the left edge; a line the trade site can't search shows the
@@ -30,6 +34,7 @@ use egui::{
     Rect, Response, RichText, Sense, Stroke, TextEdit, Ui, Vec2, pos2, vec2,
 };
 
+use super::item_block::waystone_tier_color;
 use super::number_field::NumberField;
 use super::theme::{self, color, size, text};
 use super::widgets;
@@ -38,8 +43,8 @@ use crate::format;
 use crate::game_data::{self, Category};
 use crate::i18n::{Message, Translator};
 use crate::item::{
-    Affix, AffixTier, Currency, Item, Lord, Modifier, ModifierKind, ModifierOrigin, PartTier,
-    QualityKind, Range, Rarity, StatLine, TierDoubt,
+    self, Affix, AffixTier, Currency, Item, Lord, MAX_WAYSTONE_TIER, Modifier, ModifierKind,
+    ModifierOrigin, PartTier, QualityKind, Range, Rarity, StatLine, TierDoubt, WaystoneProperty,
 };
 use crate::roll_difference::CopiedLines;
 use crate::tier_rolls::{LineRolls, TierRolls, TierSpan};
@@ -147,6 +152,8 @@ enum Group {
     Item,
     /// The DPS of a weapon.
     Weapon,
+    /// The properties of a waystone.
+    Waystone,
     /// The totals the trade site adds up from several lines.
     Pseudo,
     /// The enchantments, and the modifiers added by the corruption.
@@ -253,6 +260,9 @@ enum Roll<'a> {
         rows: Vec<TierRow<'a>>,
         origin: Option<Origin>,
     },
+    /// Under the filter of the base of a waystone: a bar of its tier over every tier, then the
+    /// tier, both in the color of the tier, which tells how dangerous the map is.
+    WaystoneTier(u32),
 }
 
 /// The tier of a prefix or suffix, written by the advanced copy or found from the values, and
@@ -644,6 +654,17 @@ enum StatText<'a> {
     Unrevealed(Affix),
 }
 
+/// The value of `property` in its filter: a percentage of a waystone with its sign, as the
+/// game writes it (`+11`).
+fn property_value(property: Property, value: f64) -> String {
+    match property {
+        Property::Waystone(waystone) if waystone.is_percent() && value >= 0.0 => {
+            format!("+{}", format::number(value))
+        }
+        _ => format::number(value),
+    }
+}
+
 impl<'a> StatText<'a> {
     /// A line of a modifier, without the words of its radius for a line of a Time-Lost jewel.
     fn line(text: &'a str) -> Self {
@@ -688,7 +709,7 @@ impl<'a> StatText<'a> {
             Self::Line(text) | Self::RadiusLine { line: text, .. } => Cow::Borrowed(text),
             Self::BaseType { base_type, .. } => Cow::Owned(i18n.filter_base_type(base_type)),
             Self::Property(property, value) => {
-                Cow::Owned(i18n.filter_property(property, &format::number(value)))
+                Cow::Owned(i18n.filter_property(property, &property_value(property, value)))
             }
             Self::CatalystQuality(kind, value) => {
                 Cow::Owned(i18n.filter_catalyst_quality(kind, &format::number(value)))
@@ -818,6 +839,7 @@ fn rows<'a>(
     let unrevealed = item.unrevealed_modifiers() > 0;
     let dps = if item.rarity().has_item_filters() {
         push_group(&mut rows, Group::Item, item_filters(item, base_type));
+        push_group(&mut rows, Group::Waystone, waystone_filters(item));
         dps_filters(item, !unrevealed)
     } else {
         Vec::new()
@@ -837,7 +859,7 @@ fn rows<'a>(
         tiers,
         dps_filters: !dps.is_empty(),
         pseudo_filters: !pseudo.is_empty(),
-        unrevealed,
+        unchecked: unrevealed || item.is_waystone(),
     };
     push_group(&mut rows, Group::Weapon, dps);
     push_group(&mut rows, Group::Pseudo, pseudo);
@@ -906,26 +928,34 @@ fn searchable(stat: &mut Stat<'_>, line: Option<&LineStat>) {
 }
 
 /// The filters of the properties of a rare, magic or normal item, like Exiled Exchange 2: its
-/// base type, checked (unchecked, its item class is searched in its place); its item level,
+/// base type, checked (unchecked, its item class is searched in its place), the base of a
+/// waystone without its tier, a bar of its tier under it; its item level,
 /// checked on a normal item only (a player who checks it on another usually looks for a level
 /// of crafting), with the level of the item as its minimum; then its sockets, its quality and
 /// its required level when they are filters, and the number of its unrevealed modifiers, checked
 /// with that number as its minimum.
 fn item_filters<'a>(item: &'a Item, base_type: Option<&'a str>) -> Vec<Stat<'a>> {
-    let base_type_filter = base_type.map(|base_type| Stat {
-        key: FilterKey::BaseType,
-        text: StatText::BaseType {
-            base_type,
-            class: link::searched_category(item, base_type)
-                .is_some()
-                .then(|| item.class()),
-        },
-        filter: Some(StatFilter {
-            checked: true,
-            limit: None,
-        }),
-        unsearchable: false,
-        roll: None,
+    let base_type_filter = base_type.map(|base_type| {
+        let waystone = if item.is_waystone() {
+            item::base_and_tier(item.language(), base_type)
+        } else {
+            None
+        };
+        Stat {
+            key: FilterKey::BaseType,
+            text: StatText::BaseType {
+                base_type: waystone.map_or(base_type, |(name, _)| name),
+                class: link::searched_category(item, base_type)
+                    .is_some()
+                    .then(|| item.class()),
+            },
+            filter: Some(StatFilter {
+                checked: true,
+                limit: None,
+            }),
+            unsearchable: false,
+            roll: waystone.map(|(_, tier)| Roll::WaystoneTier(tier)),
+        }
     });
     let item_level = item.item_level().map(|level| {
         let level = f64::from(level);
@@ -941,6 +971,35 @@ fn item_filters<'a>(item: &'a Item, base_type: Option<&'a str>) -> Vec<Stat<'a>>
         .chain(quality_filter(item, category))
         .chain(required_level_filter(item))
         .chain(unrevealed_filter(item))
+        .collect()
+}
+
+/// The filters of the properties of a waystone, in the order of the item: the item rarity and
+/// the drop chance checked, what the players run a map for, the others unchecked; a percentage
+/// with a minimum at 90 % of its value, rounded down, as a modifier, the revives with their
+/// number; none for a property of zero or below, which searches nothing.
+fn waystone_filters(item: &Item) -> Vec<Stat<'static>> {
+    item.waystone_properties()
+        .into_iter()
+        .filter(|found| found.value > 0)
+        .map(|found| {
+            let value = f64::from(found.value);
+            let minimum = if found.property.is_percent() {
+                (value * (1.0 - COMPARABLE_MARGIN)).floor()
+            } else {
+                value
+            };
+            let checked = matches!(
+                found.property,
+                WaystoneProperty::ItemRarity | WaystoneProperty::DropChance
+            );
+            property_filter(
+                Property::Waystone(found.property),
+                value,
+                Limit::minimum(minimum),
+                checked,
+            )
+        })
         .collect()
 }
 
@@ -1116,18 +1175,20 @@ struct Reading<'r> {
     dps_filters: bool,
     /// The item has the filters of its pseudo totals.
     pseudo_filters: bool,
-    /// The item has an unrevealed modifier, which can change it.
-    unrevealed: bool,
+    /// Every line starts unchecked: the item has an unrevealed modifier, which can change it,
+    /// or is a waystone, whose buyer pays for its properties, not for its monsters (like Exiled
+    /// Exchange 2).
+    unchecked: bool,
 }
 
 impl Reading<'_> {
     /// The line `key` starts checked: unchecked when the DPS of the weapon counts it, its
-    /// damage or its attack speed, when a pseudo total adds it up, or on an item with an
-    /// unrevealed modifier.
+    /// damage or its attack speed, when a pseudo total adds it up, or on an item whose lines
+    /// all start unchecked (an unrevealed modifier, a waystone).
     fn checked(&self, key: StatKey) -> bool {
         let weapon_damage = self.dps_filters && self.stats.weapon_damage(key);
         let added_up = self.pseudo_filters && self.stats.added_up(key);
-        !weapon_damage && !added_up && !self.unrevealed
+        !weapon_damage && !added_up && !self.unchecked
     }
 
     /// The half of the range field the stat `key` fills: the maximum for a line better lower.
@@ -1830,6 +1891,7 @@ fn group_title(ui: &mut Ui, group: Group, range: bool, i18n: &Translator) {
     let (message, fill) = match group {
         Group::Item => (Message::GroupItem, None),
         Group::Weapon => (Message::GroupWeapon, None),
+        Group::Waystone => (Message::GroupWaystone, None),
         Group::Pseudo => (Message::GroupPseudo, None),
         Group::Enchant => (Message::GroupEnchant, None),
         Group::Runes => (Message::GroupRunes, None),
@@ -2220,7 +2282,7 @@ fn roll_line(
             ranges,
             origin,
         } => roll_row(ui, |ui| {
-            roll_bar(ui, *share, bar);
+            roll_bar(ui, *share, bar, color::ACCENT);
             range_label(ui, ranges);
             ending(ui, *origin);
         }),
@@ -2230,7 +2292,7 @@ fn roll_line(
             origin,
         } => roll_row(ui, |ui| {
             if let Some(share) = share {
-                roll_bar(ui, *share, bar);
+                roll_bar(ui, *share, bar, color::ACCENT);
             }
             if let Some(tier) = tier {
                 tier_row(ui, tier, i18n);
@@ -2249,7 +2311,24 @@ fn roll_line(
                 }
             });
         }
+        Roll::WaystoneTier(tier) => roll_row(ui, |ui| {
+            let tint = waystone_tier_color(*tier);
+            roll_bar(ui, waystone_tier_share(*tier), bar, tint);
+            ui.label(
+                RichText::new(format!("T{tier}"))
+                    .font(text::tier())
+                    .color(tint),
+            );
+        }),
     }
+}
+
+/// Where the tier of a waystone falls over every tier, from 0 for tier 1 to 1 for the highest.
+fn waystone_tier_share(tier: u32) -> f32 {
+    let share = f64::from(tier.saturating_sub(1)) / f64::from(MAX_WAYSTONE_TIER - 1);
+    #[expect(clippy::cast_possible_truncation, reason = "a share from 0 to 1")]
+    let share = share.clamp(0.0, 1.0) as f32;
+    share
 }
 
 /// A tier and its ranges ([`tier_label`]), then the word after them in gray, with its
@@ -2357,8 +2436,8 @@ fn origin_label(origin: Origin) -> (Message, Color32) {
     }
 }
 
-/// The bar of a roll, filled to `share` in the style `bar`.
-fn roll_bar(ui: &mut Ui, share: f32, bar: RollBar) {
+/// The bar of a roll, filled to `share` in the style `bar`, in `tint`.
+fn roll_bar(ui: &mut Ui, share: f32, bar: RollBar, tint: Color32) {
     let (rect, _) = ui.allocate_exact_size(BAR_SIZE, Sense::hover());
     let radius = BAR_SIZE.y / 2.0;
     let painter = ui.painter();
@@ -2369,7 +2448,7 @@ fn roll_bar(ui: &mut Ui, share: f32, bar: RollBar) {
                 rect.min,
                 vec2(rect.width() * share.clamp(0.0, 1.0), rect.height()),
             );
-            painter.rect_filled(fill, radius, color::ACCENT);
+            painter.rect_filled(fill, radius, tint);
         }
     }
 }

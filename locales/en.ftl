@@ -123,6 +123,16 @@ defence-evasion = Evasion
 defence-energy-shield = Energy Shield
 defence-block = Block
 defence-runic-ward = Runic Ward
+# The properties of a waystone, as the game names them, each followed by its value in bold;
+# the -full names, in the tooltip of a name written short, are those of the game.
+waystone-revives = Revives
+waystone-revives-full = Revives Available
+waystone-item-rarity = Item Rarity
+waystone-pack-size = Pack Size
+waystone-monster-rarity = Monster Rarity
+waystone-monster-effectiveness = Monster Effectiveness
+waystone-drop-chance = Waystone Drop Chance
+waystone-drop-chance-full = Waystone Drop Chance
 # The summary of an item that grants skills, e.g. "Level 18 Sigil of Power", joined by " · ".
 granted-skill = Grants Skill: { $skill }
 # The requirements line, its parts joined by " · ": "Requires Level 65 · 145 Dex".
@@ -152,6 +162,7 @@ group-unique = Unique
 # The filters of the base type, the item level, the sockets, the quality and the required level of a rare, magic or normal item.
 group-item = Item
 group-weapon = Weapon
+group-waystone = Waystone
 # The totals the trade site adds up from several modifiers.
 group-pseudo = Pseudo
 # Beside Prefixes and Suffixes: how many the item has, of the most it can have.
@@ -197,6 +208,13 @@ filter-catalyst-quality = { $kind ->
 filter-required-level = Required level: { $value }
 filter-physical-dps = Physical DPS: { $value }
 filter-elemental-dps = Elemental DPS: { $value }
+# The filters of the properties of a waystone; $value has its sign for a percentage ("+11").
+filter-waystone-revives = Revives available: { $value }
+filter-waystone-item-rarity = Item rarity: { $value }%
+filter-waystone-pack-size = Pack size: { $value }%
+filter-waystone-monster-rarity = Monster rarity: { $value }%
+filter-waystone-monster-effectiveness = Monster effectiveness: { $value }%
+filter-waystone-drop-chance = Waystone drop chance: { $value }%
 # The filters of the pseudo totals, with their value.
 pseudo-elemental-resistance = +{ $value }% total Elemental Resistance
 pseudo-chaos-resistance = +{ $value }% total to Chaos Resistance
