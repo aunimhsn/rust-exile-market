@@ -2879,6 +2879,39 @@ fn a_tablet_shows_its_modifiers_over_their_ranges() {
 }
 
 #[test]
+fn a_french_line_finds_the_table_of_its_english_stat() {
+    // Two French stats whose template isn't that of the English stat: copied from the in-game
+    // trade, each line finds its table as in English.
+    let tablet = texts(&read_again(parse(
+        "Classe d'objet: Tablette\nRareté: Rare\nSceau sinistre\nTablette irradiée\n--------\n\
+         Niveau de l'objet: 80\n--------\n\
+         9% d'Augmentation de la Rareté des Objets trouvés dans la Carte",
+    )));
+    let waystone = texts(&read_again(parse(
+        "Classe d'objet: Pierres de téléportation\nRareté: Rare\nChemin sinistre\n\
+         Pierre de téléportation (Palier 15)\n--------\nNiveau de l'objet: 82\n--------\n\
+         -8% aux Résistances maximales des joueurs",
+    )));
+
+    assert_eq!(
+        explicit_rows(tablet),
+        [
+            "Prefixes 1/2",
+            "■ 9% d'Augmentation de la Rareté des Objets trouvés dans la Carte ≥8 [0.25 8–12]",
+            "Trade copy note",
+        ]
+    );
+    assert_eq!(
+        explicit_rows(waystone),
+        [
+            "Suffixes 1/3",
+            "■ -8% aux Résistances maximales des joueurs ≥-8 [1.00 6–8]",
+            "Trade copy note",
+        ]
+    );
+}
+
+#[test]
 fn a_corrupted_waystone_shows_the_count_of_its_affixes_alone() {
     // Six suffixes and no prefix, as several corrupted waystones on the trade site on
     // 2026-10-31, copied from the in-game trade: the count alone, each line found a suffix

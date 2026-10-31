@@ -8,6 +8,7 @@ use serde::Deserialize;
 
 use super::bases::{self, BaseSpawn, Domain};
 use super::lines::{LineMatch, StatSource, modifier_stats};
+use super::stats::{Stats, TradeGroup};
 use crate::item::{
     Affix, AffixTier, Currency, Lord, Modifier, ModifierKind, ModifierOrigin, PartTier, Range,
     TierDoubt,
@@ -463,6 +464,22 @@ fn part_in(
 pub struct AffixLimits {
     pub prefixes: u32,
     pub suffixes: u32,
+    /// Whether the fill of the item is its count alone, without most nor open place: a
+    /// corrupted rare waystone, whose limits are no fixed number of each affix.
+    pub counted_only: bool,
+}
+
+impl AffixLimits {
+    /// At most `prefixes` prefixes and `suffixes` suffixes, a fill with its most.
+    #[cfg(test)]
+    #[must_use]
+    pub fn new(prefixes: u32, suffixes: u32) -> Self {
+        Self {
+            prefixes,
+            suffixes,
+            counted_only: false,
+        }
+    }
 }
 
 /// The tiers of a modifier copied from the in-game trade, found from its values.
@@ -1732,7 +1749,7 @@ impl<'a> Copied<'a> {
                 return None;
             }
             lines.push(CopiedLine {
-                template: stat.stat.reference.as_str(),
+                template: Stats::english_reference(stat.stat, TradeGroup::of(modifier)),
                 values: stat.values.clone(),
                 written: stat.matcher_value.filter(|_| stat.values.is_empty()),
             });

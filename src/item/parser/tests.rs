@@ -46,8 +46,12 @@ const FR_TRADE_UNIQUE_BELT: &str = test_item!("fr-trade-unique-belt-mutated.txt"
 const EN_TRADE_RARE_HELMET: &str = test_item!("en-owner-trade-rare-helmet-fractured.txt");
 const EN_TRADE_RARE_BOW: &str = test_item!("en-owner-trade-rare-bow-mirrored.txt");
 const EN_TRADE_UNIQUE_BELT: &str = test_item!("en-owner-trade-unique-belt-mutated.txt");
+const EN_RARE_WAYSTONE: &str = test_item!("en-owner-rare-waystone.txt");
+const FR_RARE_WAYSTONE: &str = test_item!("fr-rare-waystone.txt");
+const EN_MAGIC_TABLET: &str = test_item!("en-owner-magic-tablet.txt");
+const FR_MAGIC_TABLET: &str = test_item!("fr-magic-tablet.txt");
 
-const ALL: [&str; 34] = [
+const ALL: [&str; 38] = [
     FR_RARE_STAFF,
     FR_RARE_BODY_ARMOUR,
     FR_UNIQUE_CROSSBOW,
@@ -82,6 +86,10 @@ const ALL: [&str; 34] = [
     EN_TRADE_RARE_HELMET,
     EN_TRADE_RARE_BOW,
     EN_TRADE_UNIQUE_BELT,
+    EN_RARE_WAYSTONE,
+    FR_RARE_WAYSTONE,
+    EN_MAGIC_TABLET,
+    FR_MAGIC_TABLET,
 ];
 
 const PREFIX: ModifierKind = ModifierKind::Explicit(Some(Affix::Prefix));

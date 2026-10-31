@@ -88,8 +88,11 @@ const GOOD_TURNS: &[&str] = &[
     "efficacité",
 ];
 /// What the line acts on when the player isn't its subject, in lowercase: the better side of a
-/// number is unknown (more life for the enemies, less damage on them…).
-const OTHER_SUBJECTS: &[&str] = &["enemies", "monsters", "ennemis", "monstres"];
+/// number is unknown (more life for the enemies, less damage on them…); the singular too, as
+/// the waystones write it (`#% more Monster Life`, `Monster have #% increased …`).
+const OTHER_SUBJECTS: &[&str] = &[
+    "enemies", "monsters", "monster", "ennemis", "monstres", "monstre",
+];
 /// The conversions, in lowercase: their better side depends on the build.
 const BUILD_DEPENDENT: &[&str] = &["taken as", "converted to", "requirements to"];
 
@@ -170,7 +173,9 @@ fn average(numbers: impl ExactSizeIterator<Item = f64>) -> Option<f64> {
 
 /// Which side of the numbers of `template` is better.
 fn direction(template: &str) -> Direction {
-    let template = template.to_lowercase();
+    // An enemy monster is the target of the player, not the subject of the line (`Critical
+    // Hits ignore Enemy Monster Elemental Resistances`).
+    let template = template.to_lowercase().replace("enemy monster", "enemy");
     let has_any = |words: &[&str]| words.iter().any(|word| has_word(&template, word));
     if has_any(OTHER_SUBJECTS) || has_any(BUILD_DEPENDENT) {
         return Direction::Unknown;

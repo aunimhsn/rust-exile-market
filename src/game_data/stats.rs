@@ -260,6 +260,33 @@ impl Stats {
         self.list.len()
     }
 
+    /// The English template of `stat`, a stat of any language, as the English stats and the
+    /// modifier tables write it: its own, but for a stat no English stat has with the same
+    /// template and game id, whose template the English stat of its game id has, else the one
+    /// that shares an id of `group` of the trade site with it. Two French stats on 2026-10-31
+    /// (`the_template_of_every_french_stat_is_an_english_one`): `#% to all Maximum
+    /// Resistances` of the waystones (`#% maximum Player Resistances` in English), and `#%
+    /// increased Rarity of Items found in Map` of the tablets, which the English data reads as
+    /// the rarity of an item (`#% increased Rarity of Items found`).
+    pub fn english_reference(stat: &Stat, group: TradeGroup) -> &str {
+        let english = Self::of(Language::English);
+        let list = &english.list;
+        if list
+            .iter()
+            .any(|other| other.reference == stat.reference && other.id == stat.id)
+        {
+            return &stat.reference;
+        }
+        let shares_trade_id = |other: &&Stat| {
+            let ids = other.trade_ids(group);
+            stat.trade_ids(group).iter().any(|id| ids.contains(id))
+        };
+        list.iter()
+            .find(|other| stat.id.is_some() && other.id == stat.id)
+            .or_else(|| list.iter().find(shares_trade_id))
+            .map_or(&stat.reference, |other| &other.reference)
+    }
+
     /// Every stat.
     #[cfg(test)]
     pub fn all(&self) -> impl Iterator<Item = &Stat> {
@@ -335,6 +362,36 @@ mod tests {
 
     /// A desecrated or a fractured line is searched by its explicit id ([`TradeGroup::of`]):
     /// without one, it couldn't be searched at all.
+    #[test]
+    fn the_template_of_every_french_stat_is_an_english_one() {
+        let english: Vec<&str> = Stats::of(Language::English)
+            .all()
+            .map(|stat| stat.reference.as_str())
+            .collect();
+        for stat in Stats::of(Language::French).all() {
+            let reference = Stats::english_reference(stat, TradeGroup::Explicit);
+            assert!(english.contains(&reference), "{}", stat.reference);
+        }
+
+        let french = |id: &str| Stats::of(Language::French).by_id(id).expect("a stat");
+        assert_eq!(
+            Stats::english_reference(
+                french("map_additional_player_maximum_resistances_%"),
+                TradeGroup::Explicit
+            ),
+            "#% maximum Player Resistances"
+        );
+        assert_eq!(
+            Stats::english_reference(french("map_item_drop_rarity_+%"), TradeGroup::Explicit),
+            "#% increased Rarity of Items found"
+        );
+        // A stat with an English twin keeps its own.
+        assert_eq!(
+            Stats::english_reference(french("base_maximum_life"), TradeGroup::Explicit),
+            "# to maximum Life"
+        );
+    }
+
     #[test]
     fn every_desecrated_or_fractured_stat_has_an_explicit_id() {
         for language in [Language::English, Language::French] {

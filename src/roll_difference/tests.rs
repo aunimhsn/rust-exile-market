@@ -451,6 +451,26 @@ fn some_words_turn_what_the_player_wants_lower_into_better_higher() {
 }
 
 #[test]
+fn a_line_about_the_monsters_has_no_better_side_in_either_language() {
+    // The lines of the waystones, the monster written in the singular too.
+    for line in [
+        "#% more Monster Life",
+        "#% increased Monster Damage",
+        "Monster have #% increased Elemental Ailment Application",
+        "#% Davantage de Vie des Monstres",
+    ] {
+        assert_eq!(direction(line), Direction::Unknown, "{line}");
+    }
+    // An enemy monster is the target of the player.
+    assert_eq!(
+        direction(
+            "Hits have #% chance to treat Enemy Monster Elemental Resistance values as inverted"
+        ),
+        Direction::Higher
+    );
+}
+
+#[test]
 fn a_conversion_has_no_better_side() {
     for line in [
         "#% of Physical Damage taken as Fire Damage",
@@ -544,8 +564,10 @@ fn counts(language: Language) -> (usize, usize, usize) {
 /// counts, and the lines read differently are to look at before updating them.
 #[test]
 fn every_string_of_the_stats_reads_as_classified() {
-    assert_eq!(counts(Language::English), (1983, 599, 300));
-    assert_eq!(counts(Language::French), (2008, 589, 304));
+    // 2026-10-31 (13k3e): the lines about a monster in the singular, of the waystones and
+    // the tablets, read unknown, as those about the monsters.
+    assert_eq!(counts(Language::English), (1960, 589, 333));
+    assert_eq!(counts(Language::French), (1985, 579, 337));
 
     // Two changes that make up for each other would keep the counts: the French strings
     // with an English string are counted too.

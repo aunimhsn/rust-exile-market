@@ -1,7 +1,6 @@
-//! The bases of the game, from Exiled Exchange 2 (`assets/game-data/bases-<language>.ndjson`):
-//! the category of each base of equipment, jewel, flask, charm, waystone or tablet, by its name
-//! in each language,
-//! and its tags from RePoE, which tell the modifiers that roll on it.
+//! The bases of the game, from Exiled Exchange 2 (`assets/game-data/bases-<language>.ndjson`): the
+//! category of each base of equipment, jewel, flask, charm, waystone or tablet, by its name in each
+//! language, and its tags from RePoE, which tell the modifiers that roll on it.
 
 use std::collections::HashMap;
 use std::sync::LazyLock;

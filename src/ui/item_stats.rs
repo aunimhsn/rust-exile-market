@@ -45,7 +45,7 @@ use crate::roll_difference::CopiedLines;
 use crate::tier_rolls::{LineRolls, TierRolls, TierSpan};
 use crate::trade::link;
 use crate::trade::pseudo::{Pseudo, PseudoTotal};
-use crate::trade::stat_filters::{self, LineStat, LineStats};
+use crate::trade::stat_filters::{LineStat, LineStats};
 
 /// The space between two rows.
 const ROW_GAP: f32 = 6.0;
@@ -155,7 +155,7 @@ enum Group {
     Runes,
     Implicit,
     /// Their count and the most the item can have; none for a corrupted waystone, its count
-    /// alone ([`stat_filters::corrupted_waystone`]).
+    /// alone ([`game_data::AffixLimits::counted_only`]).
     Prefixes {
         filled: u32,
         max: Option<u32>,
@@ -1182,8 +1182,7 @@ fn unique_rows<'a>(item: &'a Item, reading: &Reading<'_>) -> Vec<Row<'a>> {
 fn affix_rows<'a>(item: &'a Item, reading: &Reading<'_>) -> Vec<Row<'a>> {
     // A rune or an implicit can add affixes or take some away (`+1 Suffix Modifier allowed`).
     let limits = reading.stats.affix_limits(item);
-    let counted_only = stat_filters::corrupted_waystone(item);
-    let max = |limit: u32| (!counted_only).then_some(limit);
+    let max = |limit: u32| (!limits.counted_only).then_some(limit);
     let line_varies = |line: &StatLine, _: &Stat<'_>| varies(line);
     let prefixes = affix_stats(item, Some(Affix::Prefix), reading);
     let suffixes = affix_stats(item, Some(Affix::Suffix), reading);
@@ -1797,9 +1796,8 @@ fn note(ui: &mut Ui, words: String) {
     ui.label(RichText::new(words).font(text::note()).color(color::FAINT));
 }
 
-/// A small title, with the fill of the prefixes and suffixes: lighter while one is open, the
-/// count alone without most; and
-/// "min – max" on its right, above the range fields of the filters.
+/// A small title, with the fill of the prefixes and suffixes: lighter while one is open, the count
+/// alone without most; and "min – max" on its right, above the range fields of the filters.
 fn group_title(ui: &mut Ui, group: Group, range: bool, i18n: &Translator) {
     let (message, fill) = match group {
         Group::Item => (Message::GroupItem, None),

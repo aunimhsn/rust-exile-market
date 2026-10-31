@@ -1,9 +1,10 @@
 //! The modifier tables, from the RePoE fork (`mods.json`, `base_items.json`,
-//! `stat_translations/stat_descriptions.json` and `stat_translations/tablet_stat_descriptions.json`):
-//! the tiers of each prefix and suffix that rolls on the equipment, the jewels, the flasks, the
-//! charms, the waystones and the tablets, also those a desecration reveals
-//! (the lords of the Abyss), those of the Genesis tree of the Breach and those only an essence
-//! or an alloy of Verisium adds, and the tags of each base that tell where a modifier rolls.
+//! `stat_translations/stat_descriptions.json` and
+//! `stat_translations/tablet_stat_descriptions.json`): the tiers of each prefix and suffix that
+//! rolls on the equipment, the jewels, the flasks, the charms, the waystones and the tablets, also
+//! those a desecration reveals (the lords of the Abyss), those of the Genesis tree of the Breach
+//! and those only an essence or an alloy of Verisium adds, and the tags of each base that tell
+//! where a modifier rolls.
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
@@ -391,6 +392,10 @@ struct Line {
     /// found, nor its modifier.
     #[serde(skip)]
     known: bool,
+    /// The string of the game whose template is known without the `+` of its number
+    /// ([`known_template`]), printed by the generator.
+    #[serde(skip)]
+    unsigned: Option<String>,
 }
 
 #[expect(
@@ -511,6 +516,7 @@ pub fn reduce(
 
     let mut tables = Vec::new();
     let mut unknown_lines = BTreeSet::new();
+    let mut unsigned_lines = BTreeSet::new();
     for ((kind, affix, domain, lines, spawn, source), mut tiers) in grouped {
         let lord = spawn
             .iter()
@@ -543,6 +549,10 @@ pub fn reduce(
             unknown_lines.extend(unknown.iter().map(|line| line.template.clone()));
             continue;
         }
+        unsigned_lines.extend(lines.iter().filter_map(|line| {
+            let string = line.unsigned.clone()?;
+            Some((string, line.template.clone()))
+        }));
         // By level, then by ranges: of two tiers of one level, the higher ranges last, the better
         // tier for the application (`Upgrades Radius to Large` after `to Medium`, both of level
         // 1: its T1, as the game writes it).
@@ -560,6 +570,9 @@ pub fn reduce(
     }
     for line in unknown_lines {
         println!("Modifier line without template, its modifier left out: {line}");
+    }
+    for (string, template) in unsigned_lines {
+        println!("Modifier line known without the + of its number: {string} as {template}");
     }
     // The ordinary tables first, then those of the Genesis tree, of the essences and of the
     // alloys, then the desecrated ones: of two tables that hold a copied modifier as well, the
@@ -625,15 +638,22 @@ fn group_tiers(
         let (lines, ranges) =
             lines(modifier, by_stat, templates).map_err(|error| format!("{id}: {error}"))?;
         // Left out, it would be read as no modifier, without a word.
-        if let Some((source, _)) = currency
-            && let Some(line) = lines.iter().find(|line| !line.known)
-        {
-            return Err(format!(
-                "{id}: a modifier of {} with a line without template, {}",
-                source.currency(),
-                line.template
-            )
-            .into());
+        if let Some((source, _)) = currency {
+            if let Some(line) = lines.iter().find(|line| !line.known) {
+                return Err(format!(
+                    "{id}: a modifier of {} with a line without template, {}",
+                    source.currency(),
+                    line.template
+                )
+                .into());
+            }
+            if lines.is_empty() {
+                return Err(format!(
+                    "{id}: a modifier of {} without line, its values all 0",
+                    source.currency()
+                )
+                .into());
+            }
         }
         let (spawn, genesis) = spawn_on_bases(spawn_weights);
         let source = match currency {
@@ -806,6 +826,7 @@ fn lines(
                     template: stat.id.clone(),
                     divisor: 1,
                     known: false,
+                    unsigned: None,
                 });
                 ranges.push(Vec::new());
             }
@@ -871,6 +892,7 @@ fn line(
             template: format!("{}{jewel}", template(&general.string)),
             divisor: 1,
             known: false,
+            unsigned: None,
         };
         return Ok((line, Vec::new()));
     };
@@ -935,27 +957,33 @@ fn line(
             .into());
         }
     };
+    // Known without the `+` of its number: printed, a string Exiled Exchange 2 doesn't have.
+    let unsigned = (!on_radius_jewel(modifier)
+        && !strings.iter().any(|string| templates.contains_key(string)))
+    .then(|| strings.iter().find(|string| string.contains("+#")).cloned())
+    .flatten();
     let line = Line {
         template,
         divisor,
         known: true,
+        unsigned,
     };
     Ok((line, ranges))
 }
 
-/// The template of Exiled Exchange 2 of a line of `modifier` written one of `strings` (templates
-/// of the game, [`template`]), the first it knows, else the first it knows without the `+` of
-/// its numbers, which the application reads in their values (`+#% Monster Elemental
-/// Resistances` of the waystones, `#% Monster Elemental Resistances`). On a Time-Lost jewel, the line within the
-/// words of [`RADIUS_GRANTS`] of which it knows one kind only (`Small Passive Skills in Radius
-/// also grant #% increased Elemental Damage`), with its number when a string writes one: known
-/// without its number only (`Small Passive Skills in Radius also grant Attack Hits apply
-/// Incision`, while the game writes `… 4% chance for Attack Hits to apply Incision`, seen on the
-/// trade site on 2026-10-30), the line can't be found, and has none. A line about the radius
-/// itself ([`RADIUS_LINES`]) is written alone; another line known within neither has none. Of
-/// a desecrated modifier, which it knows within both (`#% increased maximum Life`), the
-/// notables: the trade site has a desecrated stat for them only, as for every other desecrated
-/// modifier of these jewels (checked on 2026-10-30).
+/// The template of Exiled Exchange 2 of a line of `modifier` written one of `strings` (templates of
+/// the game, [`template`]), the first it knows, else the first it knows without the `+` of its
+/// numbers, which the application reads in their values (`+#% Monster Elemental Resistances` of the
+/// waystones, `#% Monster Elemental Resistances`). On a Time-Lost jewel, the line within the words
+/// of [`RADIUS_GRANTS`] of which it knows one kind only (`Small Passive Skills in Radius also grant
+/// #% increased Elemental Damage`), with its number when a string writes one: known without its
+/// number only (`Small Passive Skills in Radius also grant Attack Hits apply Incision`, while the
+/// game writes `… 4% chance for Attack Hits to apply Incision`, seen on the trade site on
+/// 2026-10-30), the line can't be found, and has none. A line about the radius itself
+/// ([`RADIUS_LINES`]) is written alone; another line known within neither has none. Of a desecrated
+/// modifier, which it knows within both (`#% increased maximum Life`), the notables: the trade site
+/// has a desecrated stat for them only, as for every other desecrated modifier of these jewels
+/// (checked on 2026-10-30).
 fn known_template<'a>(
     modifier: &SourceModifier,
     strings: &[String],
@@ -1424,6 +1452,61 @@ mod tests {
     }
 
     #[test]
+    fn a_line_of_two_values_is_written_when_one_of_them_isnt_0() {
+        let damage = modifier(
+            "Damage",
+            1,
+            r#"[{"tag": "default", "weight": 1}]"#,
+            r#"[{"id": "minimum_damage", "min": 0, "max": 0}, {"id": "maximum_damage", "min": 5, "max": 10}]"#,
+        )
+        .replace(r#""domain": "item""#, r#""domain": "area""#);
+        let translations = r#"[{"ids": ["minimum_damage", "maximum_damage"], "English": [{"string": "Adds {0} to {1} Damage", "index_handlers": [[], []]}], "hidden": null}]"#;
+
+        let lines = map_lines(
+            &format!(r#"{{"MapDamage": {damage}}}"#),
+            translations,
+            "[]",
+            &["Adds # to # Damage"],
+        );
+
+        assert_eq!(
+            lines,
+            [
+                serde_json::json!(["area", [{"template": "Adds # to # Damage"}], [{"level": 1, "ranges": [[[0, 0], [5, 10]]]}]])
+            ]
+        );
+    }
+
+    #[test]
+    fn a_line_known_with_the_plus_sign_of_its_number_keeps_that_template() {
+        let resistances = modifier(
+            "Resistances",
+            1,
+            r#"[{"tag": "map_key_high", "weight": 1}, {"tag": "default", "weight": 0}]"#,
+            r#"[{"id": "map_monsters_additional_elemental_resistance", "min": 30, "max": 34}]"#,
+        )
+        .replace(r#""domain": "item""#, r#""domain": "area""#);
+        let translations = r#"[{"ids": ["map_monsters_additional_elemental_resistance"], "English": [{"string": "+{0}% Monster Elemental Resistances", "index_handlers": [[]]}], "hidden": null}]"#;
+
+        let lines = map_lines(
+            &format!(r#"{{"MapResistances": {resistances}}}"#),
+            translations,
+            "[]",
+            &[
+                "#% Monster Elemental Resistances",
+                "+#% Monster Elemental Resistances",
+            ],
+        );
+
+        assert_eq!(
+            lines,
+            [
+                serde_json::json!(["area", [{"template": "+#% Monster Elemental Resistances"}], [{"level": 1, "ranges": [[[30, 34]]]}]])
+            ]
+        );
+    }
+
+    #[test]
     fn a_line_is_known_without_the_plus_sign_of_its_number() {
         // The application reads the sign in the value: `+33% Monster Elemental Resistances`
         // finds `#% Monster Elemental Resistances`.
@@ -1794,6 +1877,36 @@ mod tests {
             )
             .as_deref(),
             Some("Essence: a modifier of an essence: written twice in the list")
+        );
+    }
+
+    #[test]
+    fn a_modifier_of_an_alloy_without_line_stops_the_generator() {
+        let modifiers = format!(
+            r#"{{"Alloy": {}}}"#,
+            modifier(
+                "Kind",
+                1,
+                r#"[{"tag": "default", "weight": 0}]"#,
+                r#"[{"id": "spell_skill_gem_level_+", "min": 0, "max": 0}]"#
+            )
+        );
+        let translations = r#"[{"ids": ["spell_skill_gem_level_+"], "English": [{"string": "{0:+d} to Level of all Spell Skills", "index_handlers": [[]]}], "hidden": null}]"#;
+        let template = "# to Level of all Spell Skills";
+        let error = reduce(
+            &serde_json::from_str(&modifiers).expect("modifiers"),
+            &serde_json::from_str(BASES).expect("bases"),
+            &serde_json::from_str::<Vec<_>>(translations).expect("translations"),
+            &[],
+            &[(template.to_owned(), template.to_owned())].into(),
+            &[(Source::Alloy, &[("Alloy", &[("bow", 1)])])],
+        )
+        .err()
+        .map(|error| error.to_string());
+
+        assert_eq!(
+            error.as_deref(),
+            Some("Alloy: a modifier of an alloy without line, its values all 0")
         );
     }
 

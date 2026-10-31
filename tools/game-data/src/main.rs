@@ -618,6 +618,7 @@ mod tests {
     fn the_bases_of_the_searched_categories_are_kept_each_name_once() {
         let kept = bases(&[
             r#"{"name": "Mammoth Targe", "namespace": "ITEM", "craftable": {"category": "Shield"}}"#,
+            r#"{"name": "Mammoth Targe", "namespace": "ITEM", "craftable": {"category": "Shield"}}"#,
             // The waystones and the tablets.
             r#"{"name": "Waystone (Tier 12)", "namespace": "ITEM", "craftable": {"category": "Map"}}"#,
             r#"{"name": "Irradiated Tablet", "namespace": "ITEM", "craftable": {"category": "TowerAugment"}}"#,
