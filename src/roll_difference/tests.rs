@@ -451,6 +451,154 @@ fn some_words_turn_what_the_player_wants_lower_into_better_higher() {
 }
 
 #[test]
+fn a_line_about_the_monsters_has_no_better_side_in_either_language() {
+    // The lines of the waystones, the monster written in the singular too: no reward.
+    for line in [
+        "#% more Monster Life",
+        "#% increased Monster Damage",
+        "Monster have #% increased Elemental Ailment Application",
+        "#% Davantage de Vie des Monstres",
+    ] {
+        assert_eq!(direction(line), Direction::Unknown, "{line}");
+    }
+    // An enemy monster is the target of the player, in the singular or the plural.
+    for line in [
+        "Hits have #% chance to treat Enemy Monster Elemental Resistance values as inverted",
+        "#% increased Damage against Enemy Monsters",
+    ] {
+        assert_eq!(direction(line), Direction::Higher, "{line}");
+    }
+    // The rewards of the monsters of a map: more is better (owner, 2026-10-31).
+    for (line, expected) in [
+        ("#% increased number of Monster Packs", Direction::Higher),
+        ("#% reduced number of Monster Packs", Direction::Lower),
+        ("Map has #% increased Monster Rarity", Direction::Higher),
+        (
+            "Map has #% increased number of Rare Monsters",
+            Direction::Higher,
+        ),
+        (
+            "Breaches have #% increased Monster density",
+            Direction::Higher,
+        ),
+        (
+            "Rare Monsters have # additional Modifiers",
+            Direction::Higher,
+        ),
+        (
+            "#% increased Quantity of Breach Splinters dropped by Breach Monsters in Map",
+            Direction::Higher,
+        ),
+        (
+            "#% increased Quantity of Gold Dropped by Slain Enemies",
+            Direction::Higher,
+        ),
+        (
+            "Expeditions have +#% Surpassing chance to Duplicate Runic Monsters in Map",
+            Direction::Higher,
+        ),
+        // French lines without English twin.
+        (
+            "#% d'Augmentation de la Quantité de Journaux de bord d'Expédition cédés par les \
+             Monstres Runiques dans la Carte",
+            Direction::Higher,
+        ),
+        (
+            "Les Failles abyssales ont #% de chances que tous les Monstres générés soient au \
+             moins Magiques",
+            Direction::Higher,
+        ),
+        // "Réduction" also writes a bonus: no side.
+        (
+            "#% de Réduction de la Quantité de Journaux de bord d'Expédition cédés par les \
+             Monstres Runiques",
+            Direction::Unknown,
+        ),
+        // Not rewards: the rare or magic monsters stronger.
+        ("Rare Monsters have #% increased Life", Direction::Unknown),
+        (
+            "Magic Monsters deal #% increased Damage",
+            Direction::Unknown,
+        ),
+    ] {
+        assert_eq!(direction(line), expected, "{line}");
+    }
+}
+
+/// The words of [`REWARDS`] and [`PLAYER_TARGETS`] that give a side to the strings of the
+/// stats about monsters, with how many each gives one, in both languages: a new string is to
+/// look at, so that a line where more is worse isn't read better higher (`Rare Monsters have
+/// #% increased Life`).
+#[test]
+fn the_lines_about_monsters_given_a_side_are_known() {
+    let mut turned: std::collections::BTreeMap<&str, usize> = std::collections::BTreeMap::new();
+    for language in [Language::English, Language::French] {
+        for (string, english) in game_data::equipment_strings(language) {
+            let read = english.unwrap_or(string);
+            let lower = read.to_lowercase();
+            let has = |word: &str| has_word(&lower, word);
+            if !OTHER_SUBJECTS.iter().any(|word| has(word)) || direction(read) == Direction::Unknown
+            {
+                continue;
+            }
+            let word = PLAYER_TARGETS
+                .iter()
+                .chain(REWARDS)
+                .find(|word| has(word))
+                .expect("a word");
+            *turned.entry(word).or_default() += 1;
+        }
+    }
+
+    // Checked one by one on 2026-10-31 (13k3e): the rewards of the maps, the gold and the
+    // rarity dropped by the enemies, and the enemy monsters the player hits.
+    assert_eq!(
+        turned,
+        std::collections::BTreeMap::from([
+            ("abyssal modifier", 2),
+            ("abyssal modifiers", 10),
+            ("additional modifier", 10),
+            ("additional modifiers", 4),
+            ("additional monsters", 6),
+            ("additional packs", 12),
+            ("additional rare monsters", 14),
+            ("additional waves", 4),
+            ("at least magic", 4),
+            ("au moins magiques", 2),
+            ("cédés par", 1),
+            ("drop", 2),
+            ("dropped by", 41),
+            ("duplicate runic monsters", 2),
+            ("enemy monster", 2),
+            ("experience", 8),
+            ("increased magic monsters", 10),
+            ("increased monsters", 4),
+            ("increased rare monsters", 2),
+            ("monster density", 4),
+            ("monster markers", 16),
+            ("monster packs", 8),
+            ("monster rarity", 4),
+            ("number of rare monsters", 2),
+            ("pack of monsters", 2),
+            ("pack size", 14),
+            ("packs of monsters", 4),
+            ("rare expedition monsters", 12),
+            ("rare modifier", 4),
+            ("rare modifiers", 4),
+            ("reduced magic monsters", 6),
+            ("reduced monsters", 4),
+            ("reward progress", 6),
+            ("slaying rare monsters", 6),
+            ("to be magic", 12),
+            ("to be rare", 12),
+            ("tribute", 12),
+            ("unique monster to the map", 2),
+            ("will be rare monsters", 2),
+        ])
+    );
+}
+
+#[test]
 fn a_conversion_has_no_better_side() {
     for line in [
         "#% of Physical Damage taken as Fire Damage",
@@ -544,8 +692,11 @@ fn counts(language: Language) -> (usize, usize, usize) {
 /// counts, and the lines read differently are to look at before updating them.
 #[test]
 fn every_string_of_the_stats_reads_as_classified() {
-    assert_eq!(counts(Language::English), (1983, 599, 300));
-    assert_eq!(counts(Language::French), (2008, 589, 304));
+    // 2026-10-31 (13k3e): the lines about a monster in the singular, of the waystones and
+    // the tablets, read unknown, as those about the monsters, but for their rewards (owner),
+    // read as the other lines, and those about an enemy monster.
+    assert_eq!(counts(Language::English), (2054, 631, 197));
+    assert_eq!(counts(Language::French), (2082, 620, 199));
 
     // Two changes that make up for each other would keep the counts: the French strings
     // with an English string are counted too.

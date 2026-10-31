@@ -13,6 +13,12 @@ fn parse(text: &str) -> Item {
 
 /// The rows of `item`, its lines read in English.
 fn rows(item: &Item) -> Vec<Row<'_>> {
+    rows_of(item, base_type(item))
+}
+
+/// The rows of `item` of the base type `base_type`, its lines read in English: the base type
+/// of a magic item is found among the names of the trade site.
+fn rows_of<'a>(item: &'a Item, base_type: Option<&'a str>) -> Vec<Row<'a>> {
     let lines = CopiedLines::new(
         item.language(),
         item.modifiers(),
@@ -23,10 +29,10 @@ fn rows(item: &Item) -> Vec<Row<'_>> {
     let tiers = TierRolls::new(
         item.language(),
         item.modifiers(),
-        base_type(item),
+        base_type,
         item.item_level(),
     );
-    super::rows(item, &lines, &stats, &tiers, base_type(item))
+    super::rows(item, &lines, &stats, &tiers, base_type)
 }
 
 /// The base type the search of `item` looks for, among its filters: none for a unique.
@@ -50,10 +56,19 @@ fn texts(item: &Item) -> Vec<String> {
 /// after the ranges followed by its tooltip, and two neighbouring tiers `T1/T2 155–179`); last,
 /// the tag of the radius of a line of a Time-Lost jewel, `<Small>`.
 fn row_texts<'a>(rows: impl IntoIterator<Item = Row<'a>>) -> Vec<String> {
+    // `2/3`, or the count alone: `6`.
+    let fill = |filled: u32, max: Option<u32>| match max {
+        Some(max) => format!("{filled}/{max}"),
+        None => filled.to_string(),
+    };
     rows.into_iter()
         .map(|row| match row {
-            Row::Group(Group::Prefixes { filled, max }) => format!("Prefixes {filled}/{max}"),
-            Row::Group(Group::Suffixes { filled, max }) => format!("Suffixes {filled}/{max}"),
+            Row::Group(Group::Prefixes { filled, max }) => {
+                format!("Prefixes {}", fill(filled, max))
+            }
+            Row::Group(Group::Suffixes { filled, max }) => {
+                format!("Suffixes {}", fill(filled, max))
+            }
             Row::Group(group) => format!("{group:?}"),
             Row::UnrevealedNote => "Unrevealed note".to_owned(),
             Row::TradeCopyNote => "Trade copy note".to_owned(),
@@ -2761,4 +2776,206 @@ fn a_line_of_the_in_game_trade_also_an_ordinary_tier_names_no_currency() {
         line.contains(" T2") && !line.contains("Essence"),
         "{wand:?}"
     );
+}
+
+#[test]
+fn a_waystone_shows_its_modifiers_over_their_ranges_in_both_copies() {
+    // The owner's waystones of tier 12, in the band of tiers 11 to 15: every modifier of one
+    // tier there, its bar and its field over the range of that tier, without tier; from the
+    // in-game trade, the same, each line found a prefix or a suffix from its value.
+    let english = include_str!("../../item/test-items/en-owner-rare-waystone.txt");
+    let french = include_str!("../../item/test-items/fr-rare-waystone.txt");
+    let in_game_trade = |text: &str| {
+        let lines: Vec<&str> = text.lines().filter(|line| !line.starts_with('{')).collect();
+        texts(&read_again(parse(&lines.join("\n"))))
+    };
+    let explicit = |texts: Vec<String>| -> Vec<String> {
+        texts
+            .into_iter()
+            .skip_while(|text| !text.starts_with("Prefixes"))
+            .collect()
+    };
+    let english_modifiers = [
+        "Prefixes 2/3",
+        "■ Monsters have 91% increased Stun Buildup ≥90 [0.10 90–100]",
+        "■ 18% increased Monster Damage ≥16 [0.75 15–19]",
+        "Suffixes 1/3",
+        "■ Monster have 106% increased Elemental Ailment Application ≥100 [0.32 100–119]",
+    ];
+    let french_modifiers = [
+        "Prefixes 2/3",
+        "■ Les Monstres ont 13% d'Augmentation de la Vitesse dAttaque, d'incantation et de \
+         déplacement ≥12 [0.60 10–15]",
+        "■ 24% Davantage de Vie des Monstres ≥22 [0.80 20–25]",
+        "Suffixes 2/3",
+        "■ Les Monstres ont 101% d'Augmentation d'Application des Altérations Élémentaires ≥100 \
+         [0.05 100–119]",
+        // Written with a `+` the template of Exiled Exchange 2 doesn't have.
+        "■ +33% à la Résistance élémentaire des Monstres ≥30 [0.75 30–34]",
+    ];
+    let with_note = |modifiers: &[&str]| {
+        let mut texts: Vec<String> = modifiers.iter().map(|&text| text.to_owned()).collect();
+        texts.push("Trade copy note".to_owned());
+        texts
+    };
+
+    assert_eq!(explicit(texts(&parse(english))), english_modifiers);
+    assert_eq!(
+        explicit(in_game_trade(english)),
+        with_note(&english_modifiers)
+    );
+    assert_eq!(explicit(texts(&parse(french))), french_modifiers);
+    assert_eq!(
+        explicit(in_game_trade(french)),
+        with_note(&french_modifiers)
+    );
+}
+
+#[test]
+fn a_tablet_shows_its_modifiers_over_their_ranges() {
+    // The owner's magic tablet, its base from the names of the trade site, in both languages.
+    let english = parse(include_str!(
+        "../../item/test-items/en-owner-magic-tablet.txt"
+    ));
+    let french = parse(include_str!("../../item/test-items/fr-magic-tablet.txt"));
+    let last_two = |rows: Vec<String>| rows[rows.len() - 2..].to_vec();
+
+    assert_eq!(
+        last_two(row_texts(rows_of(&english, Some("Irradiated Tablet")))),
+        [
+            "Prefixes 1/1",
+            "■ 30% increased Gold found in Map ≥27 [0.50 25–35]"
+        ]
+    );
+    assert_eq!(
+        last_two(row_texts(rows_of(&french, Some("Tablette irradiée")))),
+        [
+            "Prefixes 1/1",
+            "■ 30% d'Augmentation de l'Or trouvé dans la Carte ≥27 [0.50 25–35]"
+        ]
+    );
+
+    // A rare tablet, seen on the trade site on 2026-10-31, copied from the in-game trade: two
+    // prefixes and two suffixes at most, each line found from its value.
+    let rare = texts(&read_again(parse(
+        "Item Class: Tablet\nRarity: Rare\nDread Sigil\nIrradiated Tablet\n--------\n\
+         Item Level: 80\n--------\n\
+         9% increased Rarity of Items found in Map\n15% increased Experience gain in Map\n\
+         34% increased Quantity of Waystones found in Map\n\
+         Map has 85% increased chance to contain Shrines",
+    )));
+    assert_eq!(
+        explicit_rows(rare),
+        [
+            "Prefixes 2/2",
+            "■ 9% increased Rarity of Items found in Map ≥8 [0.25 8–12]",
+            "■ 15% increased Experience gain in Map ≥14 [0.50 12–18]",
+            "Suffixes 2/2",
+            "■ 34% increased Quantity of Waystones found in Map ≥31 [0.40 30–40]",
+            "■ Map has 85% increased chance to contain Shrines ≥77 [0.50 70–100]",
+            "Trade copy note",
+        ]
+    );
+}
+
+#[test]
+fn a_french_line_finds_the_table_of_its_english_stat() {
+    // French stats whose template isn't that of the English stat: copied from the in-game
+    // trade, each line finds its table as in English.
+    let tablet = texts(&read_again(parse(
+        "Classe d'objet: Tablette\nRareté: Rare\nSceau sinistre\nTablette irradiée\n--------\n\
+         Niveau de l'objet: 80\n--------\n\
+         9% d'Augmentation de la Rareté des Objets trouvés dans la Carte",
+    )));
+    let waystone = texts(&read_again(parse(
+        "Classe d'objet: Pierres de téléportation\nRareté: Rare\nChemin sinistre\n\
+         Pierre de téléportation (Palier 15)\n--------\nNiveau de l'objet: 82\n--------\n\
+         -8% aux Résistances maximales des joueurs",
+    )));
+
+    assert_eq!(
+        explicit_rows(tablet),
+        [
+            "Prefixes 1/2",
+            "■ 9% d'Augmentation de la Rareté des Objets trouvés dans la Carte ≥8 [0.25 8–12]",
+            "Trade copy note",
+        ]
+    );
+    // One French line of two English stats: the mana recovery of the flasks of a belt, a
+    // prefix of six tiers, and of the jewels, a suffix of one tier.
+    let belt = texts(&read_again(parse(
+        "Classe d'objet: Ceintures\nRareté: Rare\nLien sinistre\nCeinture ample\n--------\n\
+         Niveau de l'objet: 80\n--------\n\
+         25% d'Augmentation de la Récupération de Mana des Flacons",
+    )));
+    assert_eq!(
+        explicit_rows(belt),
+        [
+            "Prefixes 1/3",
+            "■ 25% d'Augmentation de la Récupération de Mana des Flacons ≥23 [0.57 T3 23–28]",
+            "Trade copy note",
+        ]
+    );
+    let jewel = texts(&read_again(parse(
+        "Classe d'objet: Joyaux\nRareté: Rare\nÉclat sinistre\nÉmeraude\n--------\n\
+         Niveau de l'objet: 80\n--------\n\
+         10% d'Augmentation de la Récupération de Mana des Flacons",
+    )));
+    assert_eq!(
+        explicit_rows(jewel),
+        [
+            "Suffixes 1/2",
+            "■ 10% d'Augmentation de la Récupération de Mana des Flacons ≥9 [0.50 5–15]",
+            "Trade copy note",
+        ]
+    );
+    assert_eq!(
+        explicit_rows(waystone),
+        [
+            "Suffixes 1/3",
+            "■ -8% aux Résistances maximales des joueurs ≥-8 [1.00 6–8]",
+            "Trade copy note",
+        ]
+    );
+}
+
+#[test]
+fn a_corrupted_waystone_shows_the_count_of_its_affixes_alone() {
+    // Six suffixes and no prefix, as several corrupted waystones on the trade site on
+    // 2026-10-31, copied from the in-game trade: the count alone, each line found a suffix
+    // from its value, the lines without number after the others, without range.
+    let corrupted = texts(&read_again(parse(
+        "Item Class: Waystones\nRarity: Rare\nGrim Path\nWaystone (Tier 15)\n--------\n\
+             Item Level: 82\n--------\n\
+             Area has patches of Shocked Ground\nMonsters are Evasive\nMonsters are Armoured\n\
+             47% less effect of Curses on Monsters\n\
+             Players have 25% less Cooldown Recovery Rate\n\
+         Players have 40% less Recovery Rate of Life and Energy Shield\n--------\nCorrupted",
+    )));
+
+    assert_eq!(
+        explicit_rows(corrupted),
+        [
+            "Suffixes 6",
+            "■ 47% less effect of Curses on Monsters ≥42 [0.70 40–50]",
+            "■ Players have 25% less Cooldown Recovery Rate ≤28 [0.00 25–30]",
+            "■ Players have 40% less Recovery Rate of Life and Energy Shield ≤40 [1.00 36–40]",
+            "■ Area has patches of Shocked Ground",
+            "■ Monsters are Evasive",
+            "■ Monsters are Armoured",
+            "Trade copy note",
+        ]
+    );
+}
+
+/// The rows of `texts` from the first group of prefixes, suffixes or explicit modifiers.
+fn explicit_rows(texts: Vec<String>) -> Vec<String> {
+    texts
+        .into_iter()
+        .skip_while(|text| {
+            !["Prefixes", "Suffixes", "Explicit"]
+                .iter()
+                .any(|group| text.starts_with(group))
+        })
+        .collect()
 }

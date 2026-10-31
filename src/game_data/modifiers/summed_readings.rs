@@ -346,7 +346,7 @@ fn mappings(table: &Table, lines: &[Line<'_>]) -> Vec<Vec<usize>> {
                     .iter()
                     .enumerate()
                     .filter(|(index, line)| {
-                        line.copied.template == table_line.template
+                        line.copied.is(&table_line.template)
                             && !way.contains(index)
                             && way
                                 .first()

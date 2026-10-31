@@ -546,6 +546,41 @@ fn counts_the_affixes_a_rune_or_an_implicit_allows() {
 }
 
 #[test]
+fn a_tablet_and_a_corrupted_waystone_have_their_own_affix_limits() {
+    let limits = |text: &str| {
+        let item = parse(text);
+        let limits = LineStats::new(item.language(), item.modifiers(), None).affix_limits(&item);
+        (limits.prefixes, limits.suffixes, limits.counted_only)
+    };
+    let waystone = "Item Class: Waystones\nRarity: Rare\nGrim Path\nWaystone (Tier 15)\n\
+                    --------\nItem Level: 82";
+    let tablet = "Item Class: Tablet\nRarity: Rare\nDread Sigil\nIrradiated Tablet\n\
+                  --------\nItem Level: 80";
+
+    // Seen on the trade site on 2026-10-31: three of each on a waystone, up to six of one
+    // affix once corrupted, its fill its count alone; two of each on a rare tablet.
+    assert_eq!(limits(waystone), (3, 3, false));
+    assert_eq!(
+        limits(&format!("{waystone}\n--------\nCorrupted")),
+        (6, 6, true)
+    );
+    assert_eq!(limits(tablet), (2, 2, false));
+    assert_eq!(
+        limits(include_str!(
+            "../../item/test-items/en-owner-magic-tablet.txt"
+        )),
+        (1, 1, false)
+    );
+    // Only a rare waystone is counted so once corrupted.
+    let magic = "Item Class: Waystones\nRarity: Magic\nBurning Waystone (Tier 15)\n\
+                 --------\nItem Level: 82\n--------\nCorrupted";
+    assert_eq!(limits(magic), (1, 1, false));
+    let ring = "Item Class: Rings\nRarity: Rare\nWoe Loop\nGold Ring\n--------\n\
+                Item Level: 80\n--------\nCorrupted";
+    assert_eq!(limits(ring), (3, 3, false));
+}
+
+#[test]
 fn counts_the_affixes_allowed_by_a_line_the_trade_site_finds() {
     // Exiled Exchange 2 has no rune id for the prefixes allowed: the template of the
     // trade site finds the line once it is known, its stat without game id.

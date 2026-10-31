@@ -321,6 +321,59 @@ pub mod tests {
     }
 
     #[test]
+    fn the_base_type_of_a_magic_tablet_or_waystone_is_found() {
+        let names = |base_types: &[&str]| Names {
+            exchange: HashMap::new(),
+            base_types: base_types.iter().map(|&base| base.to_owned()).collect(),
+            stats: Vec::new(),
+        };
+        let names = ItemNames::new(
+            SystemTime::UNIX_EPOCH,
+            names(&[
+                "Irradiated Tablet",
+                "Waystone (Tier 1)",
+                "Waystone (Tier 15)",
+            ]),
+            names(&["Tablette irradiée", "Pierre de téléportation (Palier 15)"]),
+            Vec::new(),
+        );
+        let base_type = |text: &str| {
+            let item = Item::parse(&CopiedItem::from_text(text).expect("an item")).expect("read");
+            names
+                .magic_base_type(item.language(), item.base_type())
+                .map(str::to_owned)
+        };
+
+        // The owner's tablets, and a waystone whose tier holds another one (`Tier 1`).
+        assert_eq!(
+            base_type(include_str!("item/test-items/en-owner-magic-tablet.txt")).as_deref(),
+            Some("Irradiated Tablet")
+        );
+        assert_eq!(
+            base_type(include_str!("item/test-items/fr-magic-tablet.txt")).as_deref(),
+            Some("Tablette irradiée")
+        );
+        assert_eq!(
+            base_type(
+                "Item Class: Waystones\nRarity: Magic\nBurning Waystone (Tier 15)\n--------\n\
+                 Item Level: 80"
+            )
+            .as_deref(),
+            Some("Waystone (Tier 15)")
+        );
+        // Written by hand: the French affix after the base.
+        assert_eq!(
+            base_type(
+                "Classe d'objet: Pierres de téléportation\nRareté: Magique\n\
+                 Pierre de téléportation (Palier 15) incendiaire\n--------\n\
+                 Niveau de l'objet: 80"
+            )
+            .as_deref(),
+            Some("Pierre de téléportation (Palier 15)")
+        );
+    }
+
+    #[test]
     fn the_base_type_of_a_copied_magic_item_is_found() {
         let text = include_str!("item/test-items/en-magic-mace.txt");
         let copied = CopiedItem::from_text(text).expect("an item");

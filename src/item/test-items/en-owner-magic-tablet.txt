@@ -1,0 +1,14 @@
+Item Class: Tablet
+Rarity: Magic
+Bountiful Irradiated Tablet
+--------
+Item Level: 77
+--------
+{ Implicit Modifier }
+Adds Irradiated to a Map
+10 uses remaining
+--------
+{ Prefix Modifier "Bountiful" (Tier: 1) }
+30(25-35)% increased Gold found in Map
+--------
+Can be used in a personal Map Device to add modifiers to a Map.

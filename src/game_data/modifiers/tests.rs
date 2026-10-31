@@ -311,7 +311,7 @@ fn the_value_of_a_line_without_number_is_divided_as_its_table_shows_it() {
     ));
     let copied = |values: Vec<f64>, written| Copied {
         lines: vec![CopiedLine {
-            template: "Inherent Rage loss starts 1 second later",
+            templates: vec!["Inherent Rage loss starts 1 second later"],
             values,
             written,
         }],
@@ -540,7 +540,7 @@ fn of_two_tiers_as_good_the_one_the_advanced_copy_wrote_is_taken() {
     ));
     let copied = |tier: Option<u32>| Copied {
         lines: vec![CopiedLine {
-            template: "# to maximum Life",
+            templates: vec!["# to maximum Life"],
             values: vec![15.0],
             written: None,
         }],
@@ -585,12 +585,12 @@ fn two_tables_with_the_same_lines_in_another_order_are_two_modifiers() {
     let copied = Copied {
         lines: vec![
             CopiedLine {
-                template: "B #",
+                templates: vec!["B #"],
                 values: vec![15.0],
                 written: None,
             },
             CopiedLine {
-                template: "A #",
+                templates: vec!["A #"],
                 values: vec![3.0],
                 written: None,
             },
@@ -666,7 +666,7 @@ fn found_tiers(
     modifiers: &[Modifier],
     (prefixes, suffixes): (u32, u32),
 ) -> Vec<FoundTiers> {
-    let limits = AffixLimits { prefixes, suffixes };
+    let limits = AffixLimits::new(prefixes, suffixes);
     trade_tiers(
         item.language(),
         item.base_type(),
@@ -1250,10 +1250,7 @@ fn the_lines_read_again_from_their_values_are_the_modifiers_of_the_advanced_copy
 fn the_lines_of_a_tiara_read_again_join_its_hybrid_and_keep_an_unknown_affix() {
     let item = parse(TIARA_EN);
     let read = |modifiers: &[Modifier]| {
-        let limits = AffixLimits {
-            prefixes: 3,
-            suffixes: 3,
-        };
+        let limits = AffixLimits::new(3, 3);
         with_trade_tiers(
             item.language(),
             item.base_type(),
@@ -1326,10 +1323,7 @@ fn the_lines_of_a_tiara_read_again_join_its_hybrid_and_keep_an_unknown_affix() {
 #[test]
 fn the_lines_of_a_tiara_read_again_keep_the_tiers_of_the_affix_in_doubt() {
     let item = parse(TIARA_EN);
-    let limits = AffixLimits {
-        prefixes: 3,
-        suffixes: 3,
-    };
+    let limits = AffixLimits::new(3, 3);
     let read = |modifiers: &[Modifier]| {
         with_trade_tiers(
             item.language(),
@@ -1406,7 +1400,7 @@ fn read_again(
     modifiers: &[Modifier],
     (prefixes, suffixes): (u32, u32),
 ) -> Vec<Modifier> {
-    let limits = AffixLimits { prefixes, suffixes };
+    let limits = AffixLimits::new(prefixes, suffixes);
     with_trade_tiers(
         Language::English,
         base_type,
@@ -1438,10 +1432,7 @@ fn split_of(read: &[Modifier]) -> &Modifier {
 #[test]
 fn a_split_line_is_read_with_the_other_lines_of_its_hybrid_and_the_tiers_of_each_part() {
     let item = parse(BOW_EN);
-    let limits = AffixLimits {
-        prefixes: 3,
-        suffixes: 4,
-    };
+    let limits = AffixLimits::new(3, 4);
 
     let read = with_trade_tiers(
         item.language(),
@@ -2046,7 +2037,7 @@ fn a_value_in_several_tiers_takes_the_worst_without_the_ranges_of_the_copy() {
     ));
     let copied = Copied {
         lines: vec![CopiedLine {
-            template: "# to maximum Life",
+            templates: vec!["# to maximum Life"],
             values: vec![7.0],
             written: None,
         }],
@@ -2079,12 +2070,12 @@ fn the_tiers_of_the_hybrid_of_a_split_are_those_of_its_part() {
     let copied = |armour: f64| Copied {
         lines: vec![
             CopiedLine {
-                template: "#% increased Armour",
+                templates: vec!["#% increased Armour"],
                 values: vec![armour],
                 written: None,
             },
             CopiedLine {
-                template: "# to Stun Threshold",
+                templates: vec!["# to Stun Threshold"],
                 values: vec![100.0],
                 written: None,
             },
@@ -2134,12 +2125,12 @@ fn the_hybrid_of_a_split_is_the_first_table_whose_tiers_of_its_part_the_item_lev
     let copied = || Copied {
         lines: vec![
             CopiedLine {
-                template: "#% increased Armour",
+                templates: vec!["#% increased Armour"],
                 values: vec![25.0],
                 written: None,
             },
             CopiedLine {
-                template: "# to Stun Threshold",
+                templates: vec!["# to Stun Threshold"],
                 values: vec![100.0],
                 written: None,
             },
@@ -2194,12 +2185,12 @@ fn two_hybrids_of_the_same_lines_that_split_a_line_are_two_ways() {
     let copied = Copied {
         lines: vec![
             CopiedLine {
-                template: "#% increased Armour",
+                templates: vec!["#% increased Armour"],
                 values: vec![25.0],
                 written: None,
             },
             CopiedLine {
-                template: "# to Stun Threshold",
+                templates: vec!["# to Stun Threshold"],
                 values: vec![100.0],
                 written: None,
             },
@@ -2220,10 +2211,7 @@ fn two_hybrids_of_the_same_lines_that_split_a_line_are_two_ways() {
 #[test]
 fn a_base_the_data_doesnt_know_has_no_tiers_found() {
     let item = parse(TIARA_EN);
-    let limits = AffixLimits {
-        prefixes: 3,
-        suffixes: 3,
-    };
+    let limits = AffixLimits::new(3, 3);
 
     let found = trade_tiers(
         Language::English,
@@ -2318,10 +2306,7 @@ fn two_fractured_lines_are_one_hybrid_even_when_the_item_has_room() {
 #[test]
 fn a_tier_above_the_item_level_isnt_found() {
     let modifiers = energy_shield_and_life();
-    let limits = AffixLimits {
-        prefixes: 1,
-        suffixes: 3,
-    };
+    let limits = AffixLimits::new(1, 3);
     let read = |item_level| {
         let found = trade_tiers(
             Language::English,
@@ -2455,10 +2440,7 @@ fn greaves(armour: u32) -> Vec<Modifier> {
 /// The lines of `modifiers` read from their values on greaves of `item_level` with 3
 /// prefixes and 3 suffixes, and the lines split.
 fn greaves_read(modifiers: &[Modifier], item_level: u32) -> (LinesRead, Added) {
-    let limits = AffixLimits {
-        prefixes: 3,
-        suffixes: 3,
-    };
+    let limits = AffixLimits::new(3, 3);
     let found = trade_tiers(
         Language::English,
         "Bronze Greaves",
@@ -2545,10 +2527,7 @@ fn a_part_of_a_split_line_in_two_neighbouring_tiers_keeps_both() {
 #[test]
 fn the_summed_part_of_a_split_line_in_two_neighbouring_tiers_keeps_both() {
     let rarity = [modifier(None, &["18% increased Rarity of Items found"])];
-    let limits = AffixLimits {
-        prefixes: 3,
-        suffixes: 3,
-    };
+    let limits = AffixLimits::new(3, 3);
     let read = |item_level| {
         let found = trade_tiers(
             Language::English,
@@ -2598,10 +2577,7 @@ fn a_line_held_alone_is_split_when_the_other_line_of_the_hybrid_has_no_tier_alon
         modifier(None, &["9% increased Armour"]),
         modifier(None, &["+100 to maximum Life"]),
     ];
-    let limits = AffixLimits {
-        prefixes: 3,
-        suffixes: 3,
-    };
+    let limits = AffixLimits::new(3, 3);
 
     let found = trade_tiers(
         Language::English,
@@ -2689,10 +2665,7 @@ fn the_tiers_of_a_split_are_those_the_item_level_allows() {
         modifier(None, &["+195 to Accuracy Rating"]),
     ];
     let read = |item_level, prefixes| {
-        let limits = AffixLimits {
-            prefixes,
-            suffixes: 3,
-        };
+        let limits = AffixLimits::new(prefixes, 3);
         let found = trade_tiers(
             Language::English,
             "Warmonger Bow",
@@ -2723,10 +2696,7 @@ fn the_tiers_of_a_split_are_those_the_item_level_allows() {
 #[test]
 fn no_line_of_a_sanctified_item_is_split() {
     let item = parse(BOW_EN);
-    let limits = AffixLimits {
-        prefixes: 3,
-        suffixes: 4,
-    };
+    let limits = AffixLimits::new(3, 4);
 
     let found = trade_tiers(
         item.language(),
@@ -2794,10 +2764,7 @@ fn an_affix_the_room_ruled_out_is_kept_when_a_reading_in_doubt_frees_it() {
     .iter()
     .map(|line| modifier(None, &[*line]))
     .collect();
-    let limits = AffixLimits {
-        prefixes: 3,
-        suffixes: 3,
-    };
+    let limits = AffixLimits::new(3, 3);
 
     let found = trade_tiers(
         Language::English,
@@ -2863,10 +2830,7 @@ fn the_lines_of_the_owners_body_armour_adding_up_two_hybrids_have_no_tier() {
 fn a_line_split_with_a_neighbour_its_hybrid_may_not_have_is_in_doubt() {
     let read = |lines: &[&str]| {
         let modifiers: Vec<_> = lines.iter().map(|line| modifier(None, &[*line])).collect();
-        let limits = AffixLimits {
-            prefixes: 3,
-            suffixes: 3,
-        };
+        let limits = AffixLimits::new(3, 3);
         trade_tiers(
             Language::English,
             "Soldier Cuirass",
@@ -3296,4 +3260,36 @@ fn the_tiers_of_two_tables_of_one_level_are_numbered_by_their_ranges() {
             (2, Some(range(26.0, 31.0)))
         ])
     );
+}
+
+#[test]
+fn every_template_of_the_tables_is_reached_by_a_french_stat() {
+    // A table no French line reaches would leave that line of a French copy without tier. A
+    // line is read with the ids of its group ([`TradeGroup::of`]): crafted for an alloy,
+    // explicit for the others, also desecrated or fractured.
+    let reached = |group| -> std::collections::BTreeSet<&str> {
+        Stats::of(Language::French)
+            .all()
+            .flat_map(|stat| Stats::english_references(stat, group))
+            .collect()
+    };
+    let explicit = reached(TradeGroup::Explicit);
+    let crafted = reached(TradeGroup::Crafted);
+    let missed: std::collections::BTreeSet<&str> = TABLES
+        .iter()
+        .flat_map(|table| {
+            let reached = if table.source == Some(TableSource::Alloy) {
+                &crafted
+            } else {
+                &explicit
+            };
+            table
+                .lines
+                .iter()
+                .map(|line| line.template.as_str())
+                .filter(|template| !reached.contains(template))
+        })
+        .collect();
+
+    assert!(missed.is_empty(), "{missed:?}");
 }

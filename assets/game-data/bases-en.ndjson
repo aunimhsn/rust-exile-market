@@ -1,5 +1,6 @@
 {"name":"Aberrant Sledge","category":"Two Hand Mace","tags":["mace","two_hand_weapon","weapon","default"]}
 {"name":"Absent Amulet","category":"Amulet","tags":["amulet","default"]}
+{"name":"Abyss Tablet","category":"TowerAugment","domain":"tablet","tags":["tower_augment_abyss","default"]}
 {"name":"Abyssal Flail","category":"Flail","tags":["flail","one_hand_weapon","weapon","default"]}
 {"name":"Abyssal Signet","category":"Ring","tags":["ring","default"]}
 {"name":"Acrid Wand","category":"Wand","tags":["wand","default"]}
@@ -104,6 +105,7 @@
 {"name":"Braided Cuffs","category":"Gloves","tags":["str_int_armour","gloves","armour","default"]}
 {"name":"Branched Spear","category":"Spear","tags":["spear","one_hand_weapon","weapon","default"]}
 {"name":"Breach Ring","category":"Ring","tags":["ring","default"]}
+{"name":"Breach Tablet","category":"TowerAugment","domain":"tablet","tags":["tower_augment_breach","default"]}
 {"name":"Brigand Mace","category":"One Hand Mace","tags":["mace","one_hand_weapon","weapon","default"]}
 {"name":"Brigand Mask","category":"Helmet","tags":["dex_int_armour","helmet","armour","default"]}
 {"name":"Brimmed Helm","category":"Helmet","tags":["str_dex_armour","helmet","armour","default"]}
@@ -202,6 +204,7 @@
 {"name":"Decorated Helm","category":"Helmet","tags":["str_dex_armour","helmet","armour","default"]}
 {"name":"Deerstalker Hood","category":"Helmet","tags":["dex_armour","helmet","armour","default"]}
 {"name":"Dekharan Crest Shield","category":"Shield","tags":["str_int_armour","str_int_shield","shield","armour","default"]}
+{"name":"Delirium Tablet","category":"TowerAugment","domain":"tablet","tags":["tower_augment_delirium","default"]}
 {"name":"Descry Crest Shield","category":"Shield","tags":["str_int_armour","str_int_shield","shield","armour","default"]}
 {"name":"Desert Buckler","category":"Buckler","tags":["dex_armour","dex_shield","shield","armour","default"]}
 {"name":"Desert Cap","category":"Helmet","tags":["dex_armour","helmet","armour","default"]}
@@ -259,6 +262,7 @@
 {"name":"Evangelist Garb","category":"Body Armour","tags":["dex_int_armour","body_armour","armour","default"]}
 {"name":"Execratus Hammer","category":"One Hand Mace","tags":["mace","one_hand_weapon","weapon","default"]}
 {"name":"Executioner Greataxe","category":"Two Hand Axe","tags":["axe","two_hand_weapon","weapon","default"]}
+{"name":"Expedition Tablet","category":"TowerAugment","domain":"tablet","tags":["tower_augment_expedition","default"]}
 {"name":"Explorer Armour","category":"Body Armour","tags":["str_dex_armour","body_armour","armour","default"]}
 {"name":"Exquisite Vest","category":"Body Armour","tags":["dex_armour","body_armour","armour","default"]}
 {"name":"Extended Cleaver","category":"One Hand Axe","tags":["axe","one_hand_weapon","weapon","default"]}
@@ -414,6 +418,7 @@
 {"name":"Ironwood Greathammer","category":"Two Hand Mace","tags":["mace","two_hand_weapon","weapon","default"]}
 {"name":"Ironwood Shortbow","category":"Bow","tags":["bow","ranged","two_hand_weapon","weapon","default"]}
 {"name":"Ironwood Targe","category":"Shield","tags":["str_dex_armour","str_dex_shield","shield","armour","default"]}
+{"name":"Irradiated Tablet","category":"TowerAugment","domain":"tablet","tags":["default"]}
 {"name":"Itinerant Jacket","category":"Body Armour","tags":["dex_int_armour","body_armour","armour","default"]}
 {"name":"Jade Amulet","category":"Amulet","tags":["amulet","default"]}
 {"name":"Jade Club","category":"One Hand Mace","tags":["mace","one_hand_weapon","weapon","default"]}
@@ -527,6 +532,7 @@
 {"name":"Ornate Mitts","category":"Gloves","tags":["str_armour","gloves","armour","default"]}
 {"name":"Ornate Plate","category":"Body Armour","tags":["str_armour","body_armour","armour","default"]}
 {"name":"Ornate Ringmail","category":"Body Armour","tags":["str_int_armour","body_armour","armour","default"]}
+{"name":"Overseer Tablet","category":"TowerAugment","domain":"tablet","tags":["tower_augment_map_boss","default"]}
 {"name":"Padded Leggings","category":"Boots","tags":["str_int_armour","boots","armour","default"]}
 {"name":"Painted Buckler","category":"Buckler","tags":["dex_armour","dex_shield","shield","armour","default"]}
 {"name":"Painted Crest Shield","category":"Shield","tags":["str_int_armour","str_int_shield","shield","armour","default"]}
@@ -606,6 +612,7 @@
 {"name":"Ringed Buckler","category":"Buckler","tags":["dex_armour","dex_shield","shield","armour","default"]}
 {"name":"Ringmail Gauntlets","category":"Gloves","tags":["str_dex_armour","gloves","armour","default"]}
 {"name":"Rippled Greatsword","category":"Two Hand Sword","tags":["sword","two_hand_weapon","weapon","default"]}
+{"name":"Ritual Tablet","category":"TowerAugment","domain":"tablet","tags":["tower_augment_ritual","default"]}
 {"name":"River Raiment","category":"Body Armour","tags":["int_armour","body_armour","armour","default"]}
 {"name":"Riveted Mitts","category":"Gloves","tags":["str_armour","gloves","armour","default"]}
 {"name":"Roaring Staff","category":"Staff","tags":["staff","default"]}
@@ -1419,6 +1426,7 @@
 {"name":"Tempered Mitts","category":"Gloves","tags":["str_armour","gloves","armour","default"]}
 {"name":"Templar Vestments","category":"Body Armour","tags":["str_int_armour","body_armour","armour","default"]}
 {"name":"Temple Maul","category":"Two Hand Mace","tags":["mace","two_hand_weapon","weapon","default"]}
+{"name":"Temple Tablet","category":"TowerAugment","domain":"tablet","tags":["tower_augment_incursion","default"]}
 {"name":"Tenebrous Amulet","category":"Amulet","tags":["amulet","default"]}
 {"name":"Tenebrous Crown","category":"Helmet","tags":["str_int_armour","helmet","armour","default"]}
 {"name":"Tenebrous Ring","category":"Ring","tags":["ring","default"]}
@@ -1515,6 +1523,22 @@
 {"name":"Waxing Quarterstaff","category":"Warstaff","tags":["warstaff","two_hand_weapon","weapon","default"]}
 {"name":"Wayfarer Jacket","category":"Body Armour","tags":["dex_int_armour","body_armour","armour","default"]}
 {"name":"Wayfarer Shoes","category":"Boots","tags":["dex_int_armour","boots","armour","default"]}
+{"name":"Waystone (Tier 1)","category":"Map","domain":"area","tags":["map_key_low","default"]}
+{"name":"Waystone (Tier 10)","category":"Map","domain":"area","tags":["map_key_medium","default"]}
+{"name":"Waystone (Tier 11)","category":"Map","domain":"area","tags":["map_key_high","default"]}
+{"name":"Waystone (Tier 12)","category":"Map","domain":"area","tags":["map_key_high","default"]}
+{"name":"Waystone (Tier 13)","category":"Map","domain":"area","tags":["map_key_high","default"]}
+{"name":"Waystone (Tier 14)","category":"Map","domain":"area","tags":["map_key_high","default"]}
+{"name":"Waystone (Tier 15)","category":"Map","domain":"area","tags":["map_key_high","default"]}
+{"name":"Waystone (Tier 16)","category":"Map","domain":"area","tags":["map_key_highest","default"]}
+{"name":"Waystone (Tier 2)","category":"Map","domain":"area","tags":["map_key_low","default"]}
+{"name":"Waystone (Tier 3)","category":"Map","domain":"area","tags":["map_key_low","default"]}
+{"name":"Waystone (Tier 4)","category":"Map","domain":"area","tags":["map_key_low","default"]}
+{"name":"Waystone (Tier 5)","category":"Map","domain":"area","tags":["map_key_low","default"]}
+{"name":"Waystone (Tier 6)","category":"Map","domain":"area","tags":["map_key_medium","default"]}
+{"name":"Waystone (Tier 7)","category":"Map","domain":"area","tags":["map_key_medium","default"]}
+{"name":"Waystone (Tier 8)","category":"Map","domain":"area","tags":["map_key_medium","default"]}
+{"name":"Waystone (Tier 9)","category":"Map","domain":"area","tags":["map_key_medium","default"]}
 {"name":"Wayward Crest Shield","category":"Shield","tags":["str_int_armour","str_int_shield","shield","armour","default"]}
 {"name":"Weaver Leggings","category":"Boots","tags":["str_int_armour","boots","armour","default"]}
 {"name":"Whorl Focus","category":"Focus","tags":["int_armour","focus","armour","default"]}
