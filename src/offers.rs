@@ -386,7 +386,7 @@ mod tests {
                 item_level: None,
                 corrupted: false,
                 quality: None,
-                waystone: Vec::new(),
+                waystone_properties: Vec::new(),
                 modifiers: Vec::new(),
             },
         }

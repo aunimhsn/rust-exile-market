@@ -41,7 +41,7 @@ fn amulet(value: u32, catalyst: Catalyst, words: &str, modifiers: &[&str]) -> It
                     words: words.to_owned(),
                 }),
             }),
-            waystone: Vec::new(),
+            waystone_properties: Vec::new(),
             modifiers: modifiers
                 .iter()
                 .map(|text| OfferModifier {
@@ -202,17 +202,48 @@ fn owners_waystone() -> Item {
     .unwrap()
 }
 
-/// A waystone of `base_type` offered with its `properties`.
+/// A waystone of `base_type` and of item level 81 offered with its `properties`.
 fn waystone(base_type: &str, properties: &[(WaystoneProperty, i32)]) -> ItemOffer {
-    let mut offer = amulet(0, Catalyst::Mana, "", &[]);
-    offer.item.base_type = base_type.to_owned();
-    offer.item.quality = None;
-    offer.item.item_level = Some(81);
-    offer.item.waystone = properties
-        .iter()
-        .map(|&(property, value)| WaystoneValue { property, value })
-        .collect();
-    offer
+    use crate::trade::offers::OfferItem;
+
+    ItemOffer {
+        id: "w".to_owned(),
+        price: None,
+        seller: SellerStatus::Online,
+        listed: None,
+        whisper: String::new(),
+        item: OfferItem {
+            rarity: None,
+            name: None,
+            base_type: base_type.to_owned(),
+            item_level: Some(81),
+            corrupted: false,
+            quality: None,
+            waystone_properties: properties
+                .iter()
+                .map(|&(property, value)| WaystoneValue { property, value })
+                .collect(),
+            modifiers: Vec::new(),
+        },
+    }
+}
+
+/// The lines of `offer` as `(text, tint, difference)`.
+fn waystone_texts(
+    offer: &ItemOffer,
+    item: &Item,
+    i18n: &Translator,
+) -> Vec<(String, Color32, Option<f64>)> {
+    waystone_lines(offer, item, i18n)
+        .into_iter()
+        .map(|line| {
+            (
+                line.text,
+                line.tint,
+                line.difference.map(|difference| difference.value),
+            )
+        })
+        .collect()
 }
 
 #[test]
@@ -293,6 +324,65 @@ fn the_same_property_has_no_difference_and_another_item_no_waystone_line() {
     )
     .unwrap();
     assert_eq!(waystone_lines(&offer, &bow, &i18n), []);
+}
+
+#[test]
+fn the_properties_of_an_offer_of_waystone_are_written_in_french() {
+    use crate::item::CopiedItem;
+    use WaystoneProperty::{DropChance, Revives};
+
+    let i18n = Translator::new(crate::language::Language::French);
+    // The owner's French waystone: revives 2, item rarity +25 %, pack size +9 %, monster
+    // rarity +23 %, drop chance +65 %.
+    let copied = Item::parse(
+        &CopiedItem::from_text(include_str!("../../item/test-items/fr-rare-waystone.txt")).unwrap(),
+    )
+    .unwrap();
+    let offer = waystone(
+        "Pierre de téléportation (Palier 15)",
+        &[(Revives, 0), (DropChance, 85)],
+    );
+
+    // The French colon after a no-break space.
+    let texts: Vec<String> = waystone_texts(&offer, &copied, &i18n)
+        .into_iter()
+        .map(|(text, ..)| text)
+        .collect();
+    assert_eq!(
+        texts,
+        [
+            "Résurrections disponibles\u{a0}: 0",
+            "Rareté des objets\u{a0}: 0%",
+            "Taille des groupes\u{a0}: 0%",
+            "Rareté des monstres\u{a0}: 0%",
+            "Chances de trouver des pierres de téléportation\u{a0}: +85%",
+        ]
+    );
+    assert_eq!(
+        meta(&offer, &copied, &i18n, 300.0).text,
+        "Pierre de téléportation · T15 · niv.\u{a0}81"
+    );
+}
+
+#[test]
+fn a_negative_property_that_the_offer_lacks_is_a_gain() {
+    use crate::item::CopiedItem;
+
+    let i18n = Translator::new(crate::language::Language::English);
+    let copied = Item::parse(
+        &CopiedItem::from_text(
+            "Item Class: Waystones\nRarity: Normal\nWaystone (Tier 3)\n--------\n\
+             Item Rarity: -5% (augmented)\n--------\nItem Level: 66",
+        )
+        .unwrap(),
+    )
+    .unwrap();
+
+    // Faint, since the offer doesn't have it, but 0 is better than -5 %.
+    assert_eq!(
+        waystone_texts(&waystone("Waystone (Tier 3)", &[]), &copied, &i18n),
+        [("Item rarity: 0%".to_owned(), color::FAINT, Some(5.0))]
+    );
 }
 
 #[test]

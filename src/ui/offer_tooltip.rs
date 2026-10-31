@@ -13,7 +13,7 @@ use egui::{
     Stroke, Ui, Vec2, pos2, vec2,
 };
 
-use super::item_block::waystone_tier_color;
+use super::item_block::{SEPARATOR, waystone_tier_color};
 use super::item_stats::property_value;
 use super::offers_block::{RowPrice, offer_price};
 use super::price_block::orb;
@@ -42,7 +42,6 @@ const LINE_GAP: f32 = 3.0;
 /// The space between a modifier and its difference.
 const DIFFERENCE_GAP: f32 = 10.0;
 const META_GAP: f32 = 2.0;
-const SEPARATOR: &str = " · ";
 const WARNING_GAP: f32 = 8.0;
 const FOOT_GAP: f32 = 10.0;
 const ORB: f32 = 18.0;
@@ -255,26 +254,25 @@ fn waystone_lines(offer: &ItemOffer, item: &Item, i18n: &Translator) -> Vec<Line
     WaystoneProperty::ALL
         .into_iter()
         .filter_map(|property| {
-            let offered = value_of(&offer.item.waystone, property);
+            let offered = value_of(&offer.item.waystone_properties, property);
             let copied = value_of(&copied, property);
             if offered.is_none() && copied.is_none() {
                 return None;
             }
-            let value = f64::from(offered.unwrap_or(0));
+            let value = offered.unwrap_or(0);
             let text = i18n.filter_property(
                 Property::Waystone(property),
-                &property_value(Property::Waystone(property), value),
+                &property_value(Property::Waystone(property), f64::from(value)),
             );
-            let difference = Some(value - f64::from(copied.unwrap_or(0)))
-                .filter(|difference| *difference != 0.0)
-                .map(|value| Difference {
-                    value,
-                    verdict: if value > 0.0 {
-                        Verdict::Better
-                    } else {
-                        Verdict::Worse
-                    },
-                });
+            let difference = value - copied.unwrap_or(0);
+            let difference = (difference != 0).then(|| Difference {
+                value: f64::from(difference),
+                verdict: if difference > 0 {
+                    Verdict::Better
+                } else {
+                    Verdict::Worse
+                },
+            });
             Some(Line {
                 text,
                 tint: if offered.is_some() {
@@ -299,8 +297,11 @@ fn meta(offer: &ItemOffer, item: &Item, i18n: &Translator, width: f32) -> Layout
     let mut append = |text: &str, font: &egui::FontId, tint| {
         job.append(text, 0.0, TextFormat::simple(font.clone(), tint));
     };
-    let waystone =
-        item::base_and_tier(item.language(), &offered.base_type).filter(|_| item.is_waystone());
+    let waystone = if item.is_waystone() {
+        item::base_and_tier(item.language(), &offered.base_type)
+    } else {
+        None
+    };
     if let Some((name, tier)) = waystone {
         append(name, &font, color::WEAK);
         append(SEPARATOR, &font, color::WEAK);

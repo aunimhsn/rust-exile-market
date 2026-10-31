@@ -51,8 +51,9 @@ const VALUE_NUMBER_GAP: f32 = 5.0;
 const TAG_SPACING: Vec2 = vec2(6.0, 5.0);
 /// The space around the text of a tag.
 const TAG_PADDING: Vec2 = vec2(7.0, 1.0);
-/// The separator of the base type and the class, of the skills and of the requirements.
-const SEPARATOR: &str = " · ";
+/// The separator of the base type and the class, of the skills and of the requirements; of
+/// the base, the item level and the states in the tooltip of an offer.
+pub(super) const SEPARATOR: &str = " · ";
 /// The largest DPS shown: far over any weapon, under the largest `u32`.
 const MAX_DPS: f64 = 1e6;
 
