@@ -151,7 +151,7 @@ pub(super) struct Stats {
     /// The index of the stat and of its matcher, by string written as [`normalize`] does.
     by_string: HashMap<String, Vec<(usize, usize)>>,
     /// The indexes of the stats by their English template, built at the first
-    /// [`Stats::twin`]: only the English stats are asked for twins.
+    /// [`Stats::twin`] or [`Stats::english_references`]: only the English stats are asked.
     by_reference: OnceLock<HashMap<String, Vec<usize>>>,
     /// The most lines a string has.
     pub max_lines: usize,
@@ -232,17 +232,8 @@ impl Stats {
     /// this template and id, or when the matcher there doesn't negate like the other or
     /// doesn't give the same value: the strings don't line up.
     pub fn twin(&self, stat: &Stat, matcher_index: usize) -> Option<&Matcher> {
-        let by_reference = self.by_reference.get_or_init(|| {
-            let mut by_reference: HashMap<String, Vec<usize>> = HashMap::new();
-            for (index, stat) in self.list.iter().enumerate() {
-                by_reference
-                    .entry(stat.reference.clone())
-                    .or_default()
-                    .push(index);
-            }
-            by_reference
-        });
-        let mut same = by_reference
+        let mut same = self
+            .by_reference()
             .get(&stat.reference)?
             .iter()
             .filter_map(|&index| self.list.get(index))
@@ -260,31 +251,73 @@ impl Stats {
         self.list.len()
     }
 
-    /// The English template of `stat`, a stat of any language, as the English stats and the
-    /// modifier tables write it: its own, but for a stat no English stat has with the same
-    /// template and game id, whose template the English stat of its game id has, else the one
-    /// that shares an id of `group` of the trade site with it. Two French stats on 2026-10-31
-    /// (`the_template_of_every_french_stat_is_an_english_one`): `#% to all Maximum
-    /// Resistances` of the waystones (`#% maximum Player Resistances` in English), and `#%
-    /// increased Rarity of Items found in Map` of the tablets, which the English data reads as
-    /// the rarity of an item (`#% increased Rarity of Items found`).
-    pub fn english_reference(stat: &Stat, group: TradeGroup) -> &str {
+    /// The English templates of `stat`, a stat of any language, as the English stats and the
+    /// modifier tables write them, the first the most likely: an English stat its own; a stat
+    /// of another language its own when an English stat has it with the same game id, else
+    /// that of the English stat of its game id; then those of the English stats that share an
+    /// id of `group` of the trade site with it, which searches them as one, a line its
+    /// language writes the same. Four French stats on 2026-10-31
+    /// (`the_french_stats_with_other_english_templates`): `#% to all Maximum Resistances` of
+    /// the waystones (`#% maximum Player Resistances` in English); `#% increased Rarity of
+    /// Items found in Map` of the tablets, which the English data reads as the rarity of an
+    /// item (`#% increased Rarity of Items found`); the mana recovery of the flasks, also `#%
+    /// increased Mana Recovery from Flasks` of the jewels; the bleeding, also `#% chance to
+    /// cause Bleeding on Hit`.
+    pub fn english_references(stat: &Stat, group: TradeGroup) -> Vec<&str> {
         let english = Self::of(Language::English);
-        let list = &english.list;
-        if list
-            .iter()
-            .any(|other| other.reference == stat.reference && other.id == stat.id)
+        if english
+            .list
+            .as_ptr_range()
+            .contains(&std::ptr::from_ref(stat))
         {
-            return &stat.reference;
+            return vec![stat.reference.as_str()];
         }
-        let shares_trade_id = |other: &&Stat| {
-            let ids = other.trade_ids(group);
-            stat.trade_ids(group).iter().any(|id| ids.contains(id))
+        let twin = english
+            .by_reference()
+            .get(&stat.reference)
+            .into_iter()
+            .flatten()
+            .filter_map(|&index| english.list.get(index))
+            .any(|other| other.id == stat.id);
+        let own = if twin {
+            Some(stat.reference.as_str())
+        } else {
+            english
+                .list
+                .iter()
+                .find(|other| stat.id.is_some() && other.id == stat.id)
+                .map(|other| other.reference.as_str())
         };
-        list.iter()
-            .find(|other| stat.id.is_some() && other.id == stat.id)
-            .or_else(|| list.iter().find(shares_trade_id))
-            .map_or(&stat.reference, |other| &other.reference)
+        let ids = stat.trade_ids(group);
+        let shared = english
+            .list
+            .iter()
+            .filter(|other| other.trade_ids(group).iter().any(|id| ids.contains(id)))
+            .map(|other| other.reference.as_str());
+        let mut references: Vec<&str> = Vec::new();
+        for reference in own.into_iter().chain(shared) {
+            if !references.contains(&reference) {
+                references.push(reference);
+            }
+        }
+        if references.is_empty() {
+            references.push(&stat.reference);
+        }
+        references
+    }
+
+    /// The indexes of the stats by their English template, built at the first call.
+    fn by_reference(&self) -> &HashMap<String, Vec<usize>> {
+        self.by_reference.get_or_init(|| {
+            let mut by_reference: HashMap<String, Vec<usize>> = HashMap::new();
+            for (index, stat) in self.list.iter().enumerate() {
+                by_reference
+                    .entry(stat.reference.clone())
+                    .or_default()
+                    .push(index);
+            }
+            by_reference
+        })
     }
 
     /// Every stat.
@@ -360,38 +393,67 @@ mod tests {
         }
     }
 
-    /// A desecrated or a fractured line is searched by its explicit id ([`TradeGroup::of`]):
-    /// without one, it couldn't be searched at all.
     #[test]
-    fn the_template_of_every_french_stat_is_an_english_one() {
+    fn the_french_stats_with_other_english_templates() {
         let english: Vec<&str> = Stats::of(Language::English)
             .all()
             .map(|stat| stat.reference.as_str())
             .collect();
+        let mut others = Vec::new();
         for stat in Stats::of(Language::French).all() {
-            let reference = Stats::english_reference(stat, TradeGroup::Explicit);
-            assert!(english.contains(&reference), "{}", stat.reference);
+            let references = Stats::english_references(stat, TradeGroup::Explicit);
+            assert!(
+                references
+                    .iter()
+                    .all(|reference| english.contains(reference)),
+                "{}",
+                stat.reference
+            );
+            if references != [stat.reference.as_str()] {
+                others.push((stat.reference.as_str(), references));
+            }
         }
 
-        let french = |id: &str| Stats::of(Language::French).by_id(id).expect("a stat");
+        // Checked on 2026-10-31: a new one is to look at before adding it here.
         assert_eq!(
-            Stats::english_reference(
-                french("map_additional_player_maximum_resistances_%"),
-                TradeGroup::Explicit
-            ),
-            "#% maximum Player Resistances"
+            others,
+            [
+                (
+                    "#% chance to inflict Bleeding on Hit",
+                    vec![
+                        "#% chance to inflict Bleeding on Hit",
+                        "#% chance to cause Bleeding on Hit"
+                    ]
+                ),
+                (
+                    "#% increased Flask Mana Recovery rate",
+                    vec![
+                        "#% increased Flask Mana Recovery rate",
+                        "#% increased Mana Recovery from Flasks"
+                    ]
+                ),
+                (
+                    "#% increased Rarity of Items found in Map",
+                    vec!["#% increased Rarity of Items found"]
+                ),
+                (
+                    "#% to all Maximum Resistances",
+                    vec!["#% maximum Player Resistances"]
+                ),
+            ]
         );
+        // An English stat keeps its own.
+        let life = Stats::of(Language::English)
+            .by_id("base_maximum_life")
+            .expect("a stat");
         assert_eq!(
-            Stats::english_reference(french("map_item_drop_rarity_+%"), TradeGroup::Explicit),
-            "#% increased Rarity of Items found"
-        );
-        // A stat with an English twin keeps its own.
-        assert_eq!(
-            Stats::english_reference(french("base_maximum_life"), TradeGroup::Explicit),
-            "# to maximum Life"
+            Stats::english_references(life, TradeGroup::Explicit),
+            ["# to maximum Life"]
         );
     }
 
+    /// A desecrated or a fractured line is searched by its explicit id ([`TradeGroup::of`]):
+    /// without one, it couldn't be searched at all.
     #[test]
     fn every_desecrated_or_fractured_stat_has_an_explicit_id() {
         for language in [Language::English, Language::French] {

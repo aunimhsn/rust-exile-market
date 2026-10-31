@@ -311,7 +311,7 @@ fn the_value_of_a_line_without_number_is_divided_as_its_table_shows_it() {
     ));
     let copied = |values: Vec<f64>, written| Copied {
         lines: vec![CopiedLine {
-            template: "Inherent Rage loss starts 1 second later",
+            templates: vec!["Inherent Rage loss starts 1 second later"],
             values,
             written,
         }],
@@ -540,7 +540,7 @@ fn of_two_tiers_as_good_the_one_the_advanced_copy_wrote_is_taken() {
     ));
     let copied = |tier: Option<u32>| Copied {
         lines: vec![CopiedLine {
-            template: "# to maximum Life",
+            templates: vec!["# to maximum Life"],
             values: vec![15.0],
             written: None,
         }],
@@ -585,12 +585,12 @@ fn two_tables_with_the_same_lines_in_another_order_are_two_modifiers() {
     let copied = Copied {
         lines: vec![
             CopiedLine {
-                template: "B #",
+                templates: vec!["B #"],
                 values: vec![15.0],
                 written: None,
             },
             CopiedLine {
-                template: "A #",
+                templates: vec!["A #"],
                 values: vec![3.0],
                 written: None,
             },
@@ -2037,7 +2037,7 @@ fn a_value_in_several_tiers_takes_the_worst_without_the_ranges_of_the_copy() {
     ));
     let copied = Copied {
         lines: vec![CopiedLine {
-            template: "# to maximum Life",
+            templates: vec!["# to maximum Life"],
             values: vec![7.0],
             written: None,
         }],
@@ -2070,12 +2070,12 @@ fn the_tiers_of_the_hybrid_of_a_split_are_those_of_its_part() {
     let copied = |armour: f64| Copied {
         lines: vec![
             CopiedLine {
-                template: "#% increased Armour",
+                templates: vec!["#% increased Armour"],
                 values: vec![armour],
                 written: None,
             },
             CopiedLine {
-                template: "# to Stun Threshold",
+                templates: vec!["# to Stun Threshold"],
                 values: vec![100.0],
                 written: None,
             },
@@ -2125,12 +2125,12 @@ fn the_hybrid_of_a_split_is_the_first_table_whose_tiers_of_its_part_the_item_lev
     let copied = || Copied {
         lines: vec![
             CopiedLine {
-                template: "#% increased Armour",
+                templates: vec!["#% increased Armour"],
                 values: vec![25.0],
                 written: None,
             },
             CopiedLine {
-                template: "# to Stun Threshold",
+                templates: vec!["# to Stun Threshold"],
                 values: vec![100.0],
                 written: None,
             },
@@ -2185,12 +2185,12 @@ fn two_hybrids_of_the_same_lines_that_split_a_line_are_two_ways() {
     let copied = Copied {
         lines: vec![
             CopiedLine {
-                template: "#% increased Armour",
+                templates: vec!["#% increased Armour"],
                 values: vec![25.0],
                 written: None,
             },
             CopiedLine {
-                template: "# to Stun Threshold",
+                templates: vec!["# to Stun Threshold"],
                 values: vec![100.0],
                 written: None,
             },
@@ -3260,4 +3260,25 @@ fn the_tiers_of_two_tables_of_one_level_are_numbered_by_their_ranges() {
             (2, Some(range(26.0, 31.0)))
         ])
     );
+}
+
+#[test]
+fn every_template_of_the_tables_is_reached_by_a_french_stat() {
+    // A table no French line reaches would leave that line of a French copy without tier.
+    let french: Vec<&str> = Stats::of(Language::French)
+        .all()
+        .flat_map(|stat| {
+            [TradeGroup::Explicit, TradeGroup::Desecrated]
+                .into_iter()
+                .flat_map(|group| Stats::english_references(stat, group))
+        })
+        .collect();
+    let missed: std::collections::BTreeSet<&str> = TABLES
+        .iter()
+        .flat_map(|table| &table.lines)
+        .map(|line| line.template.as_str())
+        .filter(|template| !french.contains(template))
+        .collect();
+
+    assert!(missed.is_empty(), "{missed:?}");
 }

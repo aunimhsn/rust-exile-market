@@ -393,7 +393,8 @@ struct Line {
     #[serde(skip)]
     known: bool,
     /// The string of the game whose template is known without the `+` of its number
-    /// ([`known_template`]), printed by the generator.
+    /// ([`known_template`]), printed by the generator; the same for every tier of a
+    /// translation, so it doesn't split the tiers of a table.
     #[serde(skip)]
     unsigned: Option<String>,
 }
@@ -879,7 +880,7 @@ fn line(
         .iter()
         .map(|variant| template(&variant.string))
         .collect();
-    let Some(template) = known_template(modifier, &strings, templates)?.cloned() else {
+    let Some(Known { template, unsigned }) = known_template(modifier, &strings, templates)? else {
         // Without template, the line can't be found: written as the game writes it, its string
         // with the most numbers; one of the Time-Lost jewels, which the game writes within the
         // words of the passive skills that grant it, saying so.
@@ -944,7 +945,7 @@ fn line(
         .map(|variant| self::template(&variant.string))
         .collect();
     let written = known_template(modifier, &without_number, templates)?
-        .is_some_and(|known| *known == template);
+        .is_some_and(|known| known.template == template);
     let divisor = match (written, indexes.as_slice()) {
         (false, _) | (true, []) => 1,
         (true, &[index]) => divisor_of(handlers(index))?,
@@ -957,13 +958,8 @@ fn line(
             .into());
         }
     };
-    // Known without the `+` of its number: printed, a string Exiled Exchange 2 doesn't have.
-    let unsigned = (!on_radius_jewel(modifier)
-        && !strings.iter().any(|string| templates.contains_key(string)))
-    .then(|| strings.iter().find(|string| string.contains("+#")).cloned())
-    .flatten();
     let line = Line {
-        template,
+        template: template.clone(),
         divisor,
         known: true,
         unsigned,
@@ -988,16 +984,28 @@ fn known_template<'a>(
     modifier: &SourceModifier,
     strings: &[String],
     templates: &'a Templates,
-) -> Result<Option<&'a String>> {
+) -> Result<Option<Known<'a>>> {
     let alone = || {
         strings
             .iter()
             .find_map(|string| templates.get(string))
-            .or_else(|| {
-                strings
-                    .iter()
-                    .find_map(|string| templates.get(&string.replace("+#", "#")))
+            .map(|template| Known {
+                template,
+                unsigned: None,
             })
+            .or_else(|| {
+                strings.iter().find_map(|string| {
+                    let template = templates.get(&string.replace("+#", "#"))?;
+                    Some(Known {
+                        template,
+                        unsigned: Some(string.clone()),
+                    })
+                })
+            })
+    };
+    let within_words = |template| Known {
+        template,
+        unsigned: None,
     };
     if !on_radius_jewel(modifier) {
         return Ok(alone());
@@ -1009,7 +1017,7 @@ fn known_template<'a>(
         .collect();
     let words = match granted.as_slice() {
         [] => {
-            return Ok(alone().filter(|template| RADIUS_LINES.contains(&template.as_str())));
+            return Ok(alone().filter(|known| RADIUS_LINES.contains(&known.template.as_str())));
         }
         &[words] => words,
         [_, _] if modifier.domain == DESECRATED => NOTABLE_GRANTS,
@@ -1030,7 +1038,15 @@ fn known_template<'a>(
     Ok(strings
         .iter()
         .filter(|string| !numbered || string.contains('#'))
-        .find_map(|string| within(words, string)))
+        .find_map(|string| within(words, string))
+        .map(within_words))
+}
+
+/// The template of Exiled Exchange 2 [`known_template`] finds, and the string of the game it
+/// knows without the `+` of its number, when it is so.
+struct Known<'a> {
+    template: &'a String,
+    unsigned: Option<String>,
 }
 
 /// Whether `modifier` rolls on a Time-Lost jewel.

@@ -1691,8 +1691,9 @@ enum Fit {
 /// A copied line of a modifier, the lines of a stat written on several lines counting as one.
 #[derive(Clone)]
 struct CopiedLine<'a> {
-    /// The English template of its stat.
-    template: &'a str,
+    /// The English templates of its stat ([`Stats::english_references`]): one, but for a line
+    /// of another language that is the line of two English stats.
+    templates: Vec<&'a str>,
     /// The values of its `#`, with the sign of the stat.
     values: Vec<f64>,
     /// The value its string gives, for a line without `#` (`Loads an additional bolt` is 1),
@@ -1701,6 +1702,11 @@ struct CopiedLine<'a> {
 }
 
 impl CopiedLine<'_> {
+    /// Whether the line is one of the template `template` of a table.
+    fn is(&self, template: &str) -> bool {
+        self.templates.contains(&template)
+    }
+
     /// How many values the line has.
     fn count(&self) -> usize {
         if self.values.is_empty() {
@@ -1749,7 +1755,7 @@ impl<'a> Copied<'a> {
                 return None;
             }
             lines.push(CopiedLine {
-                template: Stats::english_reference(stat.stat, TradeGroup::of(modifier)),
+                templates: Stats::english_references(stat.stat, TradeGroup::of(modifier)),
                 values: stat.values.clone(),
                 written: stat.matcher_value.filter(|_| stat.values.is_empty()),
             });
@@ -1808,7 +1814,7 @@ impl<'a> Copied<'a> {
                 let index = lines
                     .iter()
                     .zip(&used)
-                    .position(|(line, &used)| !used && line.template == copied.template)?;
+                    .position(|(line, &used)| !used && copied.is(&line.template))?;
                 *used.get_mut(index)? = true;
                 Some(index)
             })

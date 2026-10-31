@@ -452,7 +452,7 @@ fn some_words_turn_what_the_player_wants_lower_into_better_higher() {
 
 #[test]
 fn a_line_about_the_monsters_has_no_better_side_in_either_language() {
-    // The lines of the waystones, the monster written in the singular too.
+    // The lines of the waystones, the monster written in the singular too: no reward.
     for line in [
         "#% more Monster Life",
         "#% increased Monster Damage",
@@ -461,13 +461,41 @@ fn a_line_about_the_monsters_has_no_better_side_in_either_language() {
     ] {
         assert_eq!(direction(line), Direction::Unknown, "{line}");
     }
-    // An enemy monster is the target of the player.
-    assert_eq!(
-        direction(
-            "Hits have #% chance to treat Enemy Monster Elemental Resistance values as inverted"
+    // An enemy monster is the target of the player, in the singular or the plural.
+    for line in [
+        "Hits have #% chance to treat Enemy Monster Elemental Resistance values as inverted",
+        "#% increased Damage against Enemy Monsters",
+    ] {
+        assert_eq!(direction(line), Direction::Higher, "{line}");
+    }
+    // The rewards of the monsters of a map: more is better (owner, 2026-10-31).
+    for (line, expected) in [
+        ("#% increased number of Monster Packs", Direction::Higher),
+        ("#% reduced number of Monster Packs", Direction::Lower),
+        ("Map has #% increased Monster Rarity", Direction::Higher),
+        (
+            "Map has #% increased number of Rare Monsters",
+            Direction::Higher,
         ),
-        Direction::Higher
-    );
+        (
+            "Breaches have #% increased Monster density",
+            Direction::Higher,
+        ),
+        (
+            "Rare Monsters have # additional Modifiers",
+            Direction::Higher,
+        ),
+        (
+            "#% increased Quantity of Breach Splinters dropped by Breach Monsters in Map",
+            Direction::Higher,
+        ),
+        (
+            "#% increased Quantity of Gold Dropped by Slain Enemies",
+            Direction::Higher,
+        ),
+    ] {
+        assert_eq!(direction(line), expected, "{line}");
+    }
 }
 
 #[test]
@@ -565,9 +593,10 @@ fn counts(language: Language) -> (usize, usize, usize) {
 #[test]
 fn every_string_of_the_stats_reads_as_classified() {
     // 2026-10-31 (13k3e): the lines about a monster in the singular, of the waystones and
-    // the tablets, read unknown, as those about the monsters.
-    assert_eq!(counts(Language::English), (1960, 589, 333));
-    assert_eq!(counts(Language::French), (1985, 579, 337));
+    // the tablets, read unknown, as those about the monsters, but for their rewards (owner),
+    // read as the other lines, and those about an enemy monster.
+    assert_eq!(counts(Language::English), (2042, 628, 212));
+    assert_eq!(counts(Language::French), (2067, 617, 217));
 
     // Two changes that make up for each other would keep the counts: the French strings
     // with an English string are counted too.

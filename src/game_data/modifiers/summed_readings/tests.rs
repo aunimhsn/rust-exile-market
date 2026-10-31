@@ -130,7 +130,7 @@ fn line(
         modifier,
         origin,
         copied: CopiedLine {
-            template,
+            templates: vec![template],
             values: Vec::new(),
             written: None,
         },

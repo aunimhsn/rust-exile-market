@@ -361,6 +361,16 @@ pub mod tests {
             .as_deref(),
             Some("Waystone (Tier 15)")
         );
+        // Written by hand: the French affix after the base.
+        assert_eq!(
+            base_type(
+                "Classe d'objet: Pierres de téléportation\nRareté: Magique\n\
+                 Pierre de téléportation (Palier 15) incendiaire\n--------\n\
+                 Niveau de l'objet: 80"
+            )
+            .as_deref(),
+            Some("Pierre de téléportation (Palier 15)")
+        );
     }
 
     #[test]

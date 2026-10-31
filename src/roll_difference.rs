@@ -93,6 +93,43 @@ const GOOD_TURNS: &[&str] = &[
 const OTHER_SUBJECTS: &[&str] = &[
     "enemies", "monsters", "monster", "ennemis", "monstres", "monstre",
 ];
+/// The monsters the player hits, in lowercase: they aren't the subject of the line (`Critical
+/// Hits ignore Enemy Monster Elemental Resistances`).
+const PLAYER_TARGETS: &[&str] = &["enemy monster", "enemy monsters"];
+/// The rewards of the monsters of a map, in lowercase: more is better, though the line is
+/// about monsters (`#% increased number of Monster Packs`, `Map has #% increased Monster
+/// Rarity` of the tablets; owner's choice on 2026-10-31: more monsters make a map harder at
+/// first, but they are a bonus in the end).
+const REWARDS: &[&str] = &[
+    "monster packs",
+    "pack of monsters",
+    "packs of monsters",
+    "pack size",
+    "monster rarity",
+    "monster density",
+    "monster markers",
+    "magic monsters",
+    "rare monster",
+    "rare monsters",
+    "unique monster to the map",
+    "additional monsters",
+    "increased monsters",
+    "reduced monsters",
+    "at least magic",
+    "to be magic",
+    "to be rare",
+    "additional modifier",
+    "additional modifiers",
+    "rare modifier",
+    "rare modifiers",
+    "abyssal modifier",
+    "abyssal modifiers",
+    "dropped by",
+    "drop",
+    "experience",
+    "tribute",
+    "reward progress",
+];
 /// The conversions, in lowercase: their better side depends on the build.
 const BUILD_DEPENDENT: &[&str] = &["taken as", "converted to", "requirements to"];
 
@@ -173,11 +210,10 @@ fn average(numbers: impl ExactSizeIterator<Item = f64>) -> Option<f64> {
 
 /// Which side of the numbers of `template` is better.
 fn direction(template: &str) -> Direction {
-    // An enemy monster is the target of the player, not the subject of the line (`Critical
-    // Hits ignore Enemy Monster Elemental Resistances`).
-    let template = template.to_lowercase().replace("enemy monster", "enemy");
+    let template = template.to_lowercase();
     let has_any = |words: &[&str]| words.iter().any(|word| has_word(&template, word));
-    if has_any(OTHER_SUBJECTS) || has_any(BUILD_DEPENDENT) {
+    let other_subject = has_any(OTHER_SUBJECTS) && !has_any(PLAYER_TARGETS) && !has_any(REWARDS);
+    if other_subject || has_any(BUILD_DEPENDENT) {
         return Direction::Unknown;
     }
     let less = has_any(LESS_WORDS);

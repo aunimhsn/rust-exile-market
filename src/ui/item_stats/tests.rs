@@ -2880,7 +2880,7 @@ fn a_tablet_shows_its_modifiers_over_their_ranges() {
 
 #[test]
 fn a_french_line_finds_the_table_of_its_english_stat() {
-    // Two French stats whose template isn't that of the English stat: copied from the in-game
+    // French stats whose template isn't that of the English stat: copied from the in-game
     // trade, each line finds its table as in English.
     let tablet = texts(&read_again(parse(
         "Classe d'objet: Tablette\nRareté: Rare\nSceau sinistre\nTablette irradiée\n--------\n\
@@ -2898,6 +2898,21 @@ fn a_french_line_finds_the_table_of_its_english_stat() {
         [
             "Prefixes 1/2",
             "■ 9% d'Augmentation de la Rareté des Objets trouvés dans la Carte ≥8 [0.25 8–12]",
+            "Trade copy note",
+        ]
+    );
+    // One French line of two English stats: the mana recovery of the flasks of a belt, and of
+    // the jewels.
+    let jewel = texts(&read_again(parse(
+        "Classe d'objet: Joyaux\nRareté: Rare\nÉclat sinistre\nÉmeraude\n--------\n\
+         Niveau de l'objet: 80\n--------\n\
+         10% d'Augmentation de la Récupération de Mana des Flacons",
+    )));
+    assert_eq!(
+        explicit_rows(jewel),
+        [
+            "Suffixes 1/2",
+            "■ 10% d'Augmentation de la Récupération de Mana des Flacons ≥9 [0.50 5–15]",
             "Trade copy note",
         ]
     );
