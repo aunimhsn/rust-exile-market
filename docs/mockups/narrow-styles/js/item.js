@@ -178,16 +178,19 @@ function item(it, unfolded = false) {
   } else if (it.statsLabel) {
     stats = `<div class="stats-toggle"><span class="pill">${pill(false)}</span>${filters}</div>`;
   }
+  // A property of the item block may be written short (`[name, value, full name]`, 13k5c): its tooltip gives
+  // the name of the game.
+  // `noClass`: a waystone, whose item class only repeats its base (13k5c, the owner's choice).
   return `
     <div class="band b item-band">
       <div class="name-row">
         <div class="name rarity-${it.rarity}">${it.name}</div>
         <a class="trade" title="${it.tradeTitle || "Open the search on the trade site"}">${it.tradeLabel || "Check on trade"}</a>
       </div>
-      <div class="base">${it.base ? `${it.base} <span class="cls">· ${it.cls}</span>` : `<span class="cls">${it.cls}</span>`}</div>
+      <div class="base">${it.base ? `${it.base}${it.noClass ? "" : ` <span class="cls">· ${it.cls}</span>`}` : `<span class="cls">${it.cls}</span>`}</div>
       <div class="facts">
         ${it.summary ? `<div class="summary">${it.summary}</div>` : ""}
-        ${it.props ? `<div class="summary props">${it.props.map(([k, v]) => `<div><span class="${propClass(k)}">${k}</span><b>${v}</b></div>`).join("")}</div>` : ""}
+        ${it.props ? `<div class="summary props">${it.props.map(([k, v, full]) => `<div${full ? ` title="${full}"` : ""}><span class="${propClass(k)}">${k}</span><b>${v}</b></div>`).join("")}</div>` : ""}
         ${it.req ? `<div class="reqline">${colorAttributes(it.req)}</div>` : ""}
         ${tags ? `<div class="meta">${tags}</div>` : ""}
       </div>
