@@ -73,11 +73,12 @@ pub enum ItemState {
 /// The kind of the quality of a catalyst, on a ring, an amulet or a jewel, which raises the
 /// modifiers of that kind instead of the base: `Quality (Mana Modifiers): +40%`.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum QualityKind {
-    Catalyst(Catalyst),
-    /// A kind the application doesn't know, with the words of the game between the
-    /// parentheses (`Speed Modifiers`, `Modificateurs de Vitesse`).
-    Other(String),
+pub struct QualityKind {
+    /// None for a kind the application doesn't know.
+    pub catalyst: Option<Catalyst>,
+    /// The words of the game between the parentheses (`Mana Modifiers`, `Modificateurs de
+    /// Mana`).
+    pub words: String,
 }
 
 /// The modifiers the quality of a catalyst raises, named after the tags of the modifiers.
@@ -96,6 +97,26 @@ pub enum Catalyst {
     Speed,
     Attribute,
     Minion,
+}
+
+impl Catalyst {
+    /// Every kind, for the tests.
+    #[cfg(test)]
+    pub const ALL: [Self; 13] = [
+        Self::Life,
+        Self::Mana,
+        Self::Defence,
+        Self::Physical,
+        Self::Fire,
+        Self::Cold,
+        Self::Lightning,
+        Self::Chaos,
+        Self::Attack,
+        Self::Caster,
+        Self::Speed,
+        Self::Attribute,
+        Self::Minion,
+    ];
 }
 
 /// The size of a stack, and the largest stack of this item.

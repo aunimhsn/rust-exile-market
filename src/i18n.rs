@@ -729,13 +729,10 @@ impl Translator {
     /// with the words of the game, "Quality (Speed Modifiers): 20%".
     #[must_use]
     pub fn filter_catalyst_quality(&self, kind: &QualityKind, value: &str) -> String {
-        let (id, words) = match kind {
-            QualityKind::Catalyst(catalyst) => (catalyst_id(*catalyst), ""),
-            QualityKind::Other(words) => ("other", words.as_str()),
-        };
         let mut args = FluentArgs::new();
-        args.set("kind", id);
-        args.set("words", words);
+        args.set("kind", kind.catalyst.map_or("other", catalyst_id));
+        // Also for a known kind: a selector missing from a file falls back to the words.
+        args.set("words", kind.words.as_str());
         args.set("value", value);
         self.format(FILTER_CATALYST_QUALITY, Some(&args))
     }
@@ -1367,9 +1364,16 @@ mod tests {
     fn the_quality_of_a_catalyst_is_short_with_its_kind() {
         let english = Translator::new(Language::English);
         let french = Translator::new(Language::French);
-        let mana = QualityKind::Catalyst(Catalyst::Mana);
-        let attack = QualityKind::Catalyst(Catalyst::Attack);
-        let unknown = QualityKind::Other("Speedy Modifiers".to_owned());
+        let known = |catalyst| QualityKind {
+            catalyst: Some(catalyst),
+            words: String::new(),
+        };
+        let mana = known(Catalyst::Mana);
+        let attack = known(Catalyst::Attack);
+        let unknown = QualityKind {
+            catalyst: None,
+            words: "Speedy Modifiers".to_owned(),
+        };
 
         assert_eq!(
             english.filter_catalyst_quality(&mana, "40"),
@@ -1388,5 +1392,24 @@ mod tests {
             english.filter_catalyst_quality(&unknown, "20"),
             "Quality (Speedy Modifiers): 20%"
         );
+    }
+
+    #[test]
+    fn every_kind_of_catalyst_has_its_text_in_every_language() {
+        for language in [Language::English, Language::French] {
+            let translator = Translator::new(language);
+            for catalyst in Catalyst::ALL {
+                let kind = QualityKind {
+                    catalyst: Some(catalyst),
+                    words: "the words of the game".to_owned(),
+                };
+                let text = translator.filter_catalyst_quality(&kind, "40");
+                // Not the fallback with the words of the game.
+                assert!(
+                    !text.contains("the words") && text.contains("40%"),
+                    "{catalyst:?} in {language:?}: {text}"
+                );
+            }
+        }
     }
 }

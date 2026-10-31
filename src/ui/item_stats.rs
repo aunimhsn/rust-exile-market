@@ -27,7 +27,7 @@ use std::borrow::Cow;
 use egui::text::{LayoutJob, TextFormat};
 use egui::{
     Align, Align2, Area, Color32, CornerRadius, Frame, Id, Label, Layout, Margin, Order, Pos2,
-    Rect, Response, RichText, Sense, Stroke, TextEdit, Ui, UiBuilder, Vec2, pos2, vec2,
+    Rect, Response, RichText, Sense, Stroke, TextEdit, Ui, Vec2, pos2, vec2,
 };
 
 use super::number_field::NumberField;
@@ -66,10 +66,15 @@ const WIDE_HALF_WIDTH: f32 = 31.0;
 const WIDE_CHARACTERS: usize = 4;
 /// The space around the halves of a range field.
 const RANGE_PADDING: Margin = Margin::symmetric(2, 1);
-/// How far the range field is raised on the line of its checkbox: taller than the checkbox, it
-/// looked too low (tuned by eye by the owner on the mock-up, 2.5 px since step 13k4). The row
-/// keeps its height.
-const RANGE_RAISE: f32 = 2.5;
+/// The range field raised by 3 px on the line of its checkbox: taller than the checkbox, it
+/// looked too low (tuned by eye by the owner on the mock-up: 1 px in step 13h, 3 px in step
+/// 13k4a, a whole pixel so that every row is the same). The row keeps its height.
+const RANGE_RAISE: Margin = Margin {
+    left: 0,
+    right: 0,
+    top: -3,
+    bottom: 3,
+};
 /// The space between a range field and its tooltip, under it.
 const TOOLTIP_GAP: f32 = 8.0;
 /// The space around the text of the tooltip of a range field, and between its lines.
@@ -1870,6 +1875,11 @@ fn stat_row(ui: &mut Ui, stat: &Stat<'_>, filters: &mut Filters, i18n: &Translat
         unrevealed_row(ui, &stat.text.text(i18n));
         return;
     }
+    // The row starts on a whole pixel, so that its checkbox and its range field round alike
+    // on every row.
+    let top = ui.cursor().top();
+    let pixels = ui.pixels_per_point();
+    ui.add_space((top * pixels).ceil() / pixels - top);
     ui.horizontal_top(|ui| {
         let width = ui.available_width();
         let line_height = ui.fonts_mut(|fonts| fonts.row_height(&text::body()));
@@ -2004,18 +2014,13 @@ fn range_field(ui: &mut Ui, key: FilterKey, choice: &mut Filter, limit: Limit, i
     let stroke = Stroke::new(1.0, line);
     let dash_width =
         column - 2.0 * (f32::from(RANGE_PADDING.left) + stroke.width) - 2.0 * half_width;
-    // The row keeps the room of the field; the field is drawn raised in it.
-    let field_height = ui.fonts_mut(|fonts| fonts.row_height(&text::range_field()))
-        + 2.0 * (f32::from(RANGE_PADDING.top) + stroke.width);
-    let (_, slot) = ui.allocate_space(vec2(column, field_height));
-    let mut raised =
-        ui.new_child(UiBuilder::new().max_rect(slot.translate(vec2(0.0, -RANGE_RAISE))));
     let field = Frame::NONE
         .fill(color::CONTROL)
         .stroke(stroke)
         .corner_radius(CornerRadius::same(size::RADIUS))
         .inner_margin(RANGE_PADDING)
-        .show(&mut raised, |ui| {
+        .outer_margin(RANGE_RAISE)
+        .show(ui, |ui| {
             // The halves and the dash one line of numbers high, the dash in the middle.
             ui.spacing_mut().item_spacing.x = 0.0;
             ui.spacing_mut().interact_size.y = 0.0;
@@ -2047,7 +2052,8 @@ fn range_field(ui: &mut Ui, key: FilterKey, choice: &mut Filter, limit: Limit, i
                 }
             }
         });
-    let rect = field.response.rect;
+    // The field as it is drawn, without the margin that raises it.
+    let rect = field.response.rect - RANGE_RAISE;
     if ui.rect_contains_pointer(rect) {
         field_tooltip(ui, key, rect, limit, i18n);
     }

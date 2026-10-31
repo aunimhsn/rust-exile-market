@@ -1309,8 +1309,8 @@ fn reads_the_quality_of_a_catalyst_with_its_kind() {
         let item = item(text);
         assert_eq!(item.quality(), Some(quality), "{text}");
         assert_eq!(
-            item.quality_kind(),
-            Some(&QualityKind::Catalyst(catalyst)),
+            item.quality_kind().and_then(|kind| kind.catalyst),
+            Some(catalyst),
             "{text}"
         );
     }
@@ -1320,16 +1320,59 @@ fn reads_the_quality_of_a_catalyst_with_its_kind() {
 
 #[test]
 fn a_kind_of_catalyst_the_application_doesnt_know_keeps_the_words_of_the_game() {
-    let item = item(
-        "Item Class: Rings\nRarity: Rare\nWoe Loop\nGold Ring\n--------\n\
-         Quality (Speedy Modifiers): +20% (augmented)\n--------\nItem Level: 80",
-    );
+    for (text, words) in [
+        (
+            "Item Class: Rings\nRarity: Rare\nWoe Loop\nGold Ring\n--------\n\
+             Quality (Speedy Modifiers): +20% (augmented)\n--------\nItem Level: 80",
+            "Speedy Modifiers",
+        ),
+        (
+            "Classe d'objet: Bagues\nRareté: Rare\nBoucle du malheur\nBague en or\n--------\n\
+             Qualité (Modificateurs de Défense): +20% (augmented)\n--------\n\
+             Niveau de l'objet: 80",
+            "Modificateurs de Défense",
+        ),
+    ] {
+        let item = try_parse(text).expect("the item is read");
 
-    assert_eq!(item.quality(), Some(20));
-    assert_eq!(
-        item.quality_kind(),
-        Some(&QualityKind::Other("Speedy Modifiers".to_owned()))
-    );
+        assert_eq!(item.quality(), Some(20), "{text}");
+        assert_eq!(
+            item.quality_kind(),
+            Some(&QualityKind {
+                catalyst: None,
+                words: words.to_owned(),
+            }),
+            "{text}"
+        );
+        // Logged, so that the words of the game can be added.
+        assert_eq!(
+            item.warnings(),
+            [ParseWarning::UnknownQualityKind],
+            "{text}"
+        );
+    }
+}
+
+#[test]
+fn a_quality_of_a_catalyst_that_cant_be_read_is_left_out_with_a_warning() {
+    for line in [
+        "Quality (Mana Modifiers) +40% (augmented)",
+        "Quality (Mana Modifiers): +abc% (augmented)",
+    ] {
+        let item = try_parse(&format!(
+            "Item Class: Rings\nRarity: Rare\nWoe Loop\nGold Ring\n--------\n{line}\n\
+             --------\nItem Level: 80"
+        ))
+        .expect("the item is read");
+
+        assert_eq!(item.quality(), None, "{line}");
+        assert_eq!(item.quality_kind(), None, "{line}");
+        assert_eq!(
+            item.warnings(),
+            [ParseWarning::InvalidValue(Field::Quality)],
+            "{line}"
+        );
+    }
 }
 
 #[test]

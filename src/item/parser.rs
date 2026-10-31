@@ -51,6 +51,9 @@ pub enum ParseWarning {
     /// Modifier lines before the first header of their section: they are kept as a
     /// modifier without kind, name nor tier.
     ModifierWithoutHeader,
+    /// The quality of a catalyst of a kind not in the labels: it is kept with the words of
+    /// the game.
+    UnknownQualityKind,
 }
 
 /// A line of the item with a value to read.
@@ -79,6 +82,7 @@ impl fmt::Display for ParseWarning {
             Self::InvalidValue(field) => write!(formatter, "invalid {field}"),
             Self::UnknownModifierHeader => formatter.write_str("unknown modifier header"),
             Self::ModifierWithoutHeader => formatter.write_str("modifier lines without header"),
+            Self::UnknownQualityKind => formatter.write_str("unknown kind of quality"),
         }
     }
 }
@@ -464,19 +468,17 @@ fn read_properties(item: &mut Item, lines: &[&str], labels: &Labels) {
             Some(line) => (line, true),
             None => (*line, false),
         };
-        if line.starts_with(labels.quality) {
-            item.quality = number_after(line, labels.quality);
-            if item.quality.is_none() {
-                item.warnings
-                    .push(ParseWarning::InvalidValue(Field::Quality));
-            }
-        } else if let Some((kind, value)) = catalyst_quality(line, labels) {
+        if let Some((kind, value)) = quality(line, labels) {
             item.quality = digits(value);
             if item.quality.is_none() {
                 item.warnings
                     .push(ParseWarning::InvalidValue(Field::Quality));
+            } else if let Some(kind) = kind {
+                if kind.catalyst.is_none() {
+                    item.warnings.push(ParseWarning::UnknownQualityKind);
+                }
+                item.quality_kind = Some(kind);
             }
-            item.quality_kind = Some(kind);
         }
         let (name, value) = line.split_once(':').unwrap_or((line, ""));
         let (name, value) = (name.trim(), value.trim());
@@ -565,20 +567,27 @@ fn read_stack(line: &str, labels: &Labels) -> Option<Stack> {
     })
 }
 
-/// The quality of a catalyst, `Quality (Mana Modifiers): +40%`: its kind, and the text of its
-/// value.
-fn catalyst_quality<'a>(line: &'a str, labels: &Labels) -> Option<(QualityKind, &'a str)> {
+/// The quality line, `Quality: +20%` or the quality of a catalyst, `Quality (Mana Modifiers):
+/// +40%`: the kind of a catalyst, and the text of the value, empty for a quality of a catalyst
+/// whose words don't close.
+fn quality<'a>(line: &'a str, labels: &Labels) -> Option<(Option<QualityKind>, &'a str)> {
+    if let Some(value) = line.strip_prefix(labels.quality) {
+        return Some((None, value));
+    }
     let (open, close) = labels.catalyst_quality;
-    let (words, value) = line.strip_prefix(open)?.split_once(close)?;
-    let kind = labels
+    let Some((words, value)) = line.strip_prefix(open)?.split_once(close) else {
+        return Some((None, ""));
+    };
+    let catalyst = labels
         .catalysts
         .iter()
         .find(|&&(known, _)| known == words)
-        .map_or_else(
-            || QualityKind::Other(words.to_owned()),
-            |&(_, catalyst)| QualityKind::Catalyst(catalyst),
-        );
-    Some((kind, value))
+        .map(|&(_, catalyst)| catalyst);
+    let kind = QualityKind {
+        catalyst,
+        words: words.to_owned(),
+    };
+    Some((Some(kind), value))
 }
 
 /// The number after a label, e.g. `Item Level: 80` or `Quality: +20%`.

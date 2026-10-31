@@ -143,7 +143,10 @@ fn row_texts<'a>(rows: impl IntoIterator<Item = Row<'a>>) -> Vec<String> {
                         format!("{property:?}: {}", format::number(value))
                     }
                     StatText::CatalystQuality(kind, value) => {
-                        format!("{kind:?} quality: {}", format::number(value))
+                        let kind = kind
+                            .catalyst
+                            .map_or_else(|| kind.words.clone(), |catalyst| format!("{catalyst:?}"));
+                        format!("{kind} quality: {}", format::number(value))
                     }
                     StatText::Pseudo(pseudo, value) => {
                         format!("{pseudo:?}: {}", format::number(value))
@@ -1887,7 +1890,7 @@ fn the_quality_of_a_catalyst_is_a_filter_with_its_kind_unchecked() {
         [
             "■ Base: Gloam Amulet",
             "□ ItemLevel: 79 ≥79",
-            "□ Catalyst(Mana) quality: 40 ≥40",
+            "□ Mana quality: 40 ≥40",
         ]
     );
     // 20 %, a quality a base of a ring has only from a catalyst, is a filter too.
@@ -1896,7 +1899,7 @@ fn the_quality_of_a_catalyst_is_a_filter_with_its_kind_unchecked() {
         [
             "■ Base: Bague prismatique",
             "□ ItemLevel: 82 ≥82",
-            "□ Catalyst(Cold) quality: 20 ≥20",
+            "□ Cold quality: 20 ≥20",
         ]
     );
     // Its text says that the trade site searches any kind.
@@ -1925,6 +1928,18 @@ fn the_field_of_the_quality_stays_within_the_highest_quality_of_the_base() {
     assert_eq!(highest(&normal("Bows", "Gemini Bow")), "30");
     assert_eq!(highest(&normal("One Hand Maces", "Flanged Mace")), "40");
     assert_eq!(highest(&normal("Life Flasks", "Ultimate Life Flask")), "23");
+    assert_eq!(highest(&normal("Charms", "Ruby Charm")), "23");
+    let jewel = parse(
+        "Item Class: Jewels\nRarity: Rare\nWoe Spark\nSapphire\n--------\n\
+         Quality (Caster Modifiers): +20% (augmented)\n--------\nItem Level: 80",
+    );
+    assert_eq!(highest(&jewel), "20");
+    // A quality above the highest of its base widens its field.
+    let bow = parse(
+        "Item Class: Bows\nRarity: Normal\nGemini Bow\n--------\n\
+         Quality: +45% (augmented)\n--------\nItem Level: 80",
+    );
+    assert_eq!(highest(&bow), "45");
     assert_eq!(
         highest(&parse(include_str!(
             "../../item/test-items/en-owner-rare-amulet-catalyst.txt"

@@ -14,7 +14,8 @@
 // Essence of the Breach, +20%; the implicit of a Breach Ring, +20%, of a Refined one, +25%); a quality pushed
 // beyond by a Vaal Infuser (up to 10% more) is at its maximum too. A quality of another kind stays red.
 // In B and C, only while the filter of the quality is checked: unchecked, the player doesn't search the
-// quality, every offer counts (the kind stays in the tooltip, as in A).
+// quality, every offer counts (the kind stays in the tooltip, as in A). The filter is unchecked at first;
+// the windows of the offers show it checked by the player.
 // Ten offers of the search, from the cheapest: the median of the five cheapest is 2.4 Divine Orbs with every
 // kind, 3.2 with the mana quality only.
 
@@ -27,7 +28,7 @@ const amuletManaStats = tip => [
   { group: "Item", min: true },
   { mod: "Base: Solar Amulet", check: true },
   { mod: "Item level: 81", check: false, min: 81 },
-  { mod: "Mana quality: 40%", check: true, min: 40, tip },
+  { mod: "Mana quality: 40%", check: false, min: 40, tip },
   { group: "Implicit" },
   { mod: "+12 to Spirit", check: false, min: 11, range: "10–15", share: .4 },
   { group: "Prefixes", fill: "2 of 3 · 1 open" },
@@ -79,12 +80,12 @@ const ANY_KIND_TIP = "The trade site searches any kind of quality.";
 const LEFT_OUT_TIP = "The trade site searches any kind of quality: the offers of another kind aren't counted in the estimate.";
 
 SECTIONS.unshift(["Catalyst quality (13k4): the kind of quality of the offers, B chosen, the quality at its maximum in white", [
-  ["Chosen · B, an offer at its maximum: its quality in white", win(topBar(), item(AMULET_MANA), price(MANA_ONLY),
+  ["Chosen · B, the filter checked, an offer at its maximum: its quality in white", win(topBar(), item(AMULET_MANA), price(MANA_ONLY),
     manaOffers({ rows: manaRows({ marked: true }), hover: 6, tooltip: tooltipOf(MANA_OFFERS[6], SAME_KIND_MAX, { mods: essenceMods }) }), foot())],
   ["Chosen · B, below its maximum: gray, its difference", win(topBar(), item(AMULET_MANA), price(MANA_ONLY),
     manaOffers({ rows: manaRows({ marked: true }), hover: 3, tooltip: tooltipOf(MANA_OFFERS[3], SAME_KIND, { mods: essenceMods }) }), foot())],
-  ["Chosen · B, the filter: its tooltip says the estimate leaves them out", win(topBar(), item({ ...AMULET_MANA, stats: amuletManaStats(LEFT_OUT_TIP) }, true), foot())],
-  ["Chosen · B, another kind: faint, its kind after the price, left out of the estimate", win(topBar(), item(AMULET_MANA), price(MANA_ONLY),
+  ["Chosen · B, the filter, unchecked at first: its tooltip says the estimate leaves them out", win(topBar(), item({ ...AMULET_MANA, stats: amuletManaStats(LEFT_OUT_TIP) }, true), foot())],
+  ["Chosen · B, the filter checked, another kind: faint, its kind after the price, left out of the estimate", win(topBar(), item(AMULET_MANA), price(MANA_ONLY),
     manaOffers({ rows: manaRows({ marked: true }) }), foot())],
   ["Chosen · B, an offer of another kind hovered", win(topBar(), item(AMULET_MANA), price(MANA_ONLY),
     manaOffers({ rows: manaRows({ marked: true }), hover: 4, tooltip: tooltipOf(MANA_OFFERS[4], OTHER_KIND, { note: "Another kind of quality: not counted in the estimate." }) }), foot())],
@@ -93,7 +94,7 @@ SECTIONS.unshift(["Catalyst quality (13k4): the kind of quality of the offers, B
     offers({ count: "10 sur 27 en ligne", columns: ["Prix", "Publiée"], age: "recherche il y a 2min", rows: manaRows({ marked: true }).map(r => ({
       ...r, when: r.when.replace(/^(\S+) ago$/, "il y a $1").replace("1d", "1j").replace("2d", "2j"),
       other: r.other && { Caster: "Lanceur de sorts", Attack: "Attaque", Minion: "Créature" }[r.other] })) }, "fr"), foot("poe2scout il y a 12min · GGG trade il y a 2min"))],
-  ["A · the filter: its tooltip says the trade site searches any kind", win(topBar(), item({ ...AMULET_MANA, stats: amuletManaStats(ANY_KIND_TIP) }, true), foot())],
+  ["A · the filter, unchecked at first: its tooltip says the trade site searches any kind", win(topBar(), item({ ...AMULET_MANA, stats: amuletManaStats(ANY_KIND_TIP) }, true), foot())],
   ["A · every offer counted", win(topBar(), item(AMULET_MANA), price(EVERY_KIND), manaOffers(), foot())],
   ["A · an offer of another kind: its quality in red", win(topBar(), item(AMULET_MANA), price(EVERY_KIND),
     manaOffers({ hover: 4, tooltip: tooltipOf(MANA_OFFERS[4], OTHER_KIND) }), foot())],
