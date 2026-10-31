@@ -59,6 +59,7 @@ fn a_part_of_a_split_in_two_neighbouring_tiers_is_read_the_same_in_either() {
         neighbour,
         counts: vec![1],
         tier_unwritten: false,
+        currency: None,
         lord: None,
     };
     // A line split into two pure prefixes, the first a T2 or a T1, the other a T1: no base

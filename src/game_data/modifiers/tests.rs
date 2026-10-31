@@ -55,7 +55,7 @@ fn a_table_rolls_on_the_bases_of_its_domain_only() {
 }
 
 #[test]
-fn the_tables_are_ordinary_then_of_the_genesis_tree_and_the_essences_then_desecrated() {
+fn the_tables_are_ordinary_then_of_the_genesis_tree_the_essences_and_the_alloys_then_desecrated() {
     // Of two tables that hold a copied modifier as well, the first is taken: the ordinary one,
     // then the minion one of the Genesis tree; but for a header written without tier, which
     // takes one whose tier the game doesn't write (an essence's).
@@ -67,9 +67,11 @@ fn the_tables_are_ordinary_then_of_the_genesis_tree_and_the_essences_then_desecr
     assert!(order.is_sorted());
     let genesis = Some(TableSource::Genesis);
     let essence = Some(TableSource::Essence);
+    let alloy = Some(TableSource::Alloy);
     for kind in [
         (false, genesis),
         (false, essence),
+        (false, alloy),
         (true, None),
         (true, genesis),
     ] {
@@ -1510,6 +1512,7 @@ fn a_part_whose_two_tiers_give_its_line_other_ranges_isnt_read() {
         neighbour: Some(0),
         counts: vec![1],
         tier_unwritten: false,
+        currency: None,
         lord: None,
     };
     let read =
@@ -1534,6 +1537,7 @@ fn a_part_whose_two_tiers_give_its_line_other_ranges_isnt_read() {
         neighbour: Some(0),
         counts: vec![2],
         tier_unwritten: false,
+        currency: None,
         lord: None,
     };
     let read_damage =
@@ -1822,26 +1826,135 @@ fn a_modifier_of_an_essence_written_without_tier_is_not_the_ordinary_tier_of_its
         };
         tiers(base_type, &suffix).map(|tiers| {
             let number = tiers.tier().map(|tier| tier.number);
-            (tiers.tiers.len(), number, tiers.tier_unwritten)
+            (
+                tiers.tiers.len(),
+                number,
+                tiers.tier_unwritten,
+                tiers.currency,
+            )
         })
     };
+    let essence = Some(Currency::Essence);
 
     // `of the Essence` on a wand, its one value, the T2 of 4 of the ordinary modifier as well.
     let wand = "+3 to Level of all Spell Skills";
-    assert_eq!(numbers("Acrid Wand", wand, None), Some((1, Some(1), true)));
+    assert_eq!(
+        numbers("Acrid Wand", wand, None),
+        Some((1, Some(1), true, essence))
+    );
     assert_eq!(
         numbers("Acrid Wand", wand, Some(2)),
-        Some((4, Some(2), false))
+        Some((4, Some(2), false, None))
     );
-    // On a staff, in the T1 of the ordinary one, `5–6`.
+    // On a staff, in the T1 of the ordinary one, `5–6`: the tier written, the ordinary one,
+    // also when the essence's ties with it.
     let staff = "+5 to Level of all Spell Skills";
     assert_eq!(
         numbers("Ashen Staff", staff, None),
-        Some((1, Some(1), true))
+        Some((1, Some(1), true, essence))
     );
     assert_eq!(
         numbers("Ashen Staff", staff, Some(1)),
-        Some((4, Some(1), false))
+        Some((4, Some(1), false, None))
+    );
+}
+
+#[test]
+fn a_modifier_of_an_alloy_is_one_of_its_own_whose_tier_the_game_doesnt_write() {
+    let found = |base_type: &str, affix, lines: &[&str]| {
+        tiers(base_type, &modifier(Some(affix), lines)).map(|tiers| {
+            let ranges = tiers.tier().map(|tier| tier.ranges.clone());
+            (
+                tiers.tiers.len(),
+                ranges,
+                tiers.hides_number(),
+                tiers.currency,
+            )
+        })
+    };
+    let alloy = Some(Currency::Alloy);
+
+    // The owner's gloves (`fr-rare-gloves-alloy.txt`), `of the Stars`.
+    assert_eq!(
+        found(
+            "Adorned Wraps",
+            Affix::Suffix,
+            &["11% increased Attack Speed while missing Runic Ward"]
+        ),
+        Some((1, Some(vec![range(10.0, 15.0)]), true, alloy))
+    );
+    // Of the type of an ordinary modifier of other bases (`ManaCostEfficiency` of the
+    // essences on the wands), apart from it.
+    assert_eq!(
+        found(
+            "Face Mask",
+            Affix::Prefix,
+            &["26% increased Mana Cost Efficiency"]
+        ),
+        Some((1, Some(vec![range(18.0, 29.0)]), true, alloy))
+    );
+    // The cast speed and cold damage of the Transcendent Alloy: on a wand and a focus, the
+    // values of the staves of an older patch as well as the one-handed ones, two tiers of one
+    // modifier; on a staff, its values only.
+    let cold = |speed: u32, cold: u32| {
+        [
+            format!("{speed}% increased Cast Speed"),
+            format!("Gain {cold}% of Elemental Damage as Extra Cold Damage"),
+        ]
+    };
+    let hybrid = |base_type: &str, (speed, gain): (u32, u32)| {
+        let lines = cold(speed, gain);
+        let lines: Vec<&str> = lines.iter().map(String::as_str).collect();
+        found(base_type, Affix::Suffix, &lines)
+    };
+    let staves = Some(vec![range(39.0, 47.0), range(11.0, 16.0)]);
+    let one_hand = Some(vec![range(26.0, 31.0), range(7.0, 11.0)]);
+    for base_type in ["Acrid Wand", "Sacred Focus"] {
+        assert_eq!(
+            hybrid(base_type, (41, 15)),
+            Some((2, staves.clone(), true, alloy)),
+            "{base_type}"
+        );
+        assert_eq!(
+            hybrid(base_type, (28, 9)),
+            Some((2, one_hand.clone(), true, alloy)),
+            "{base_type}"
+        );
+    }
+    assert_eq!(
+        hybrid("Ashen Staff", (41, 15)),
+        Some((1, staves, true, alloy))
+    );
+}
+
+#[test]
+fn a_line_of_an_alloy_copied_from_the_in_game_trade_gets_its_affix_and_range() {
+    let read = |base_type: &str, level: u32, line: &str| {
+        explicit_tiers(&read_again(base_type, level, &trade_lines(&[line]), (3, 3)))
+    };
+
+    // Without tier, as the advanced copy writes it.
+    assert_eq!(
+        read(
+            "Adorned Wraps",
+            80,
+            "11% increased Attack Speed while missing Runic Ward"
+        ),
+        [(
+            ModifierKind::Explicit(Some(Affix::Suffix)),
+            None,
+            vec![Some(range(10.0, 15.0))]
+        )]
+    );
+    // Whatever the level of the item, below the 25 of the modifier in RePoE: a helmet of level
+    // 7 on the trade site (2026-10-31).
+    assert_eq!(
+        read("Face Mask", 7, "26% increased Mana Cost Efficiency"),
+        [(
+            ModifierKind::Explicit(Some(Affix::Prefix)),
+            None,
+            vec![Some(range(18.0, 29.0))]
+        )]
     );
 }
 
@@ -2859,6 +2972,7 @@ fn candidate(modifiers: std::ops::Range<usize>, affixes: &[Affix], fractured: bo
         neighbour: None,
         counts: Vec::new(),
         tier_unwritten: false,
+        currency: None,
         lord: None,
     };
     Candidate {
@@ -2881,6 +2995,7 @@ fn way(tables: (usize, usize), (found, added_found): (usize, usize)) -> Split {
         neighbour: None,
         counts: Vec::new(),
         tier_unwritten: false,
+        currency: None,
         lord: None,
     };
     Split {

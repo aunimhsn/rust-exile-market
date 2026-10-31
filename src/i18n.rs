@@ -106,6 +106,10 @@ pub enum Message {
     OriginFractured,
     OriginCrafted,
     OriginVaal,
+    /// The currency that adds a modifier whose tier the game doesn't write, in place of its
+    /// origin.
+    OriginEssence,
+    OriginAlloy,
     /// The line of a modifier not revealed yet, and the note under the stats of its item.
     UnrevealedPrefix,
     UnrevealedSuffix,
@@ -154,7 +158,7 @@ pub enum Message {
 impl Message {
     /// Every message, for the tests.
     #[cfg(test)]
-    const ALL: [Self; 114] = [
+    const ALL: [Self; 116] = [
         Self::LeagueModeSoftcore,
         Self::LeagueModeHardcore,
         Self::LeagueLoading,
@@ -235,6 +239,8 @@ impl Message {
         Self::OriginFractured,
         Self::OriginCrafted,
         Self::OriginVaal,
+        Self::OriginEssence,
+        Self::OriginAlloy,
         Self::UnrevealedPrefix,
         Self::UnrevealedSuffix,
         Self::UnrevealedNote,
@@ -355,6 +361,8 @@ impl Message {
             Self::OriginFractured => "origin-fractured",
             Self::OriginCrafted => "origin-crafted",
             Self::OriginVaal => "origin-vaal",
+            Self::OriginEssence => "origin-essence",
+            Self::OriginAlloy => "origin-alloy",
             Self::UnrevealedPrefix => "unrevealed-prefix",
             Self::UnrevealedSuffix => "unrevealed-suffix",
             Self::UnrevealedNote => "unrevealed-note",

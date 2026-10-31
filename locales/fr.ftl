@@ -203,6 +203,9 @@ origin-fractured = Fissuré
 origin-crafted = Artisanat
 # Le modificateur vaal d'un unique corrompu : le mot du jeu, le même dans toutes les langues.
 origin-vaal = Vaal
+# À la place de l'origine : la devise qui a ajouté un modificateur dont le jeu n'écrit pas le palier.
+origin-essence = Essence
+origin-alloy = Alliage
 # Un modificateur profané pas encore révélé, dans son groupe ; et la note sous les stats de son objet.
 unrevealed-prefix = Préfixe non révélé
 unrevealed-suffix = Suffixe non révélé

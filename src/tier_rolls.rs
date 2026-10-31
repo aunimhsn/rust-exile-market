@@ -7,14 +7,15 @@
 //! has a modifier whose tier the game doesn't write, of the Genesis tree: its lines roll over the
 //! ranges of the advanced copy (`Reinforcing`, `Minions have 21(19-22)% increased maximum
 //! Life`), or over the tier the tables find for a fixed value, which the copy writes without
-//! range (`of the Despot` of a belt, `+2 to Level of all Minion Skills`).
+//! range (`of the Despot` of a belt, `+2 to Level of all Minion Skills`). The tables also tell
+//! the currency that adds such a modifier, an essence or an alloy, named after its ranges.
 //!
 //! The ranges of a tier follow the values of each line match of the modifier, and the values
 //! of a match the numbers its stat counts on its lines, in their order: the numbers are read
 //! from the same matches as the tiers, so that each range lands on its number.
 
 use crate::filters::StatKey;
-use crate::game_data::{self, Tier};
+use crate::game_data::{self, Currency, Tier};
 use crate::item::{Modifier, ModifierKind, Range, TierDoubt};
 use crate::language::Language;
 use crate::trade::stat_filters::counted_numbers;
@@ -47,6 +48,8 @@ pub struct TierRolls {
     /// item, whose T1 would read as "the best" while it is "the only one", or whose tier the game
     /// doesn't write (the Genesis tree).
     single: Vec<usize>,
+    /// The index of each modifier a currency adds, written without tier, and that currency.
+    currencies: Vec<(usize, Currency)>,
 }
 
 impl TierRolls {
@@ -63,11 +66,18 @@ impl TierRolls {
     ) -> Self {
         let mut lines = Vec::new();
         let mut single = Vec::new();
+        let mut currencies = Vec::new();
         for (index, modifier) in modifiers.iter().enumerate() {
-            // Its copied ranges, whatever its base.
+            // Its copied ranges, whatever its base; the currency that adds it, from the tables.
             if written_without_tier(modifier) {
                 single.push(index);
                 lines.extend(copied_rolls(index, modifier));
+                let matches = game_data::modifier_stats(language, modifier, None);
+                let currency = base_type.and_then(|base_type| {
+                    game_data::modifier_tiers(language, base_type, item_level, modifier, &matches)?
+                        .currency
+                });
+                currencies.extend(currency.map(|currency| (index, currency)));
                 continue;
             }
             let Some(base_type) = base_type else {
@@ -104,6 +114,7 @@ impl TierRolls {
             let one_tier = tiers.single() || fixed;
             if fixed {
                 single.push(index);
+                currencies.extend(tiers.currency.map(|currency| (index, currency)));
             } else if one_tier && summed.is_none() {
                 match modifier.tier {
                     Some(1) => single.push(index),
@@ -140,7 +151,11 @@ impl TierRolls {
                 start += count;
             }
         }
-        Self { lines, single }
+        Self {
+            lines,
+            single,
+            currencies,
+        }
     }
 
     /// The rolls of the line `key` over every tier; none for a line without them.
@@ -157,6 +172,16 @@ impl TierRolls {
     #[must_use]
     pub fn single(&self, index: usize) -> bool {
         self.single.contains(&index)
+    }
+
+    /// The currency that adds the modifier `index`, an essence or an alloy, written without
+    /// tier: none for another modifier.
+    #[must_use]
+    pub fn currency(&self, index: usize) -> Option<Currency> {
+        self.currencies
+            .iter()
+            .find(|&&(modifier, _)| modifier == index)
+            .map(|&(_, currency)| currency)
     }
 }
 

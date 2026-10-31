@@ -60,6 +60,17 @@ enum TableSource {
     /// An essence (`of the Essence`, `20(20-25)% chance to gain Onslaught on Killing Hits with
     /// this Weapon`).
     Essence,
+    /// An alloy of Verisium (`of the Stars`, `11(10-15)% increased Attack Speed while missing
+    /// Runic Ward`, crafted).
+    Alloy,
+}
+
+/// The currency that adds a modifier of its own, whose tier the game doesn't write: named after
+/// the ranges of its line, so that a line without tier says why.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Currency {
+    Essence,
+    Alloy,
 }
 
 /// A lord of the Abyss, as the generator writes him.
@@ -138,12 +149,21 @@ impl Table {
         desecrated || self.domain != Domain::Desecrated
     }
 
-    /// Whether the game writes the modifier without tier: one of the Genesis tree or of an
-    /// essence.
+    /// Whether the game writes the modifier without tier: one of the Genesis tree, of an
+    /// essence or of an alloy.
     fn tier_unwritten(&self) -> bool {
         match self.source {
-            Some(TableSource::Genesis | TableSource::Essence) => true,
+            Some(TableSource::Genesis | TableSource::Essence | TableSource::Alloy) => true,
             None => false,
+        }
+    }
+
+    /// The currency that adds the modifier, when only one does.
+    fn currency(&self) -> Option<Currency> {
+        match self.source {
+            Some(TableSource::Essence) => Some(Currency::Essence),
+            Some(TableSource::Alloy) => Some(Currency::Alloy),
+            Some(TableSource::Genesis) | None => None,
         }
     }
 
@@ -202,10 +222,13 @@ pub struct ModifierTiers {
     /// follow them (two for `Adds # to # Physical Damage`; for a line without number, one
     /// when its string gives the value, `Loads an additional bolt`, none otherwise).
     pub counts: Vec<usize>,
-    /// Whether the game writes the modifier without tier, one of the Genesis tree or of an
-    /// essence: it is read as the advanced copy writes it, the ranges of its tier without
-    /// number.
+    /// Whether the game writes the modifier without tier, one of the Genesis tree, of an
+    /// essence or of an alloy: it is read as the advanced copy writes it, the ranges of its tier
+    /// without number.
     pub tier_unwritten: bool,
+    /// The currency that adds the modifier, an essence or an alloy: none for another
+    /// modifier, or when tables of another source hold the copied one as well (`find`).
+    pub currency: Option<Currency>,
     /// The lord of the Abyss whose modifier it is: none for another modifier, or when the
     /// modifiers of two lords hold the copied one as well (`find`; a split, `splits`, takes the
     /// lord of its table, never shown).
@@ -227,7 +250,7 @@ impl ModifierTiers {
     }
 
     /// Whether the number of its tier isn't shown: one tier only on the base, or a tier the
-    /// game doesn't write (the Genesis tree, an essence).
+    /// game doesn't write (the Genesis tree, an essence, an alloy).
     #[must_use]
     pub fn hides_number(&self) -> bool {
         self.single() || self.tier_unwritten
@@ -378,6 +401,7 @@ fn hybrid_tiers(
                 neighbour: better,
                 counts: counts.clone(),
                 tier_unwritten: table.tier_unwritten(),
+                currency: table.currency(),
                 lord: table.lord.map(Lord::from),
             };
             best = Some((fit, tiers));
@@ -1134,6 +1158,7 @@ fn splits(
                             neighbour: None,
                             counts: counts.clone(),
                             tier_unwritten: whole.tier_unwritten(),
+                            currency: whole.currency(),
                             lord: whole.lord.map(Lord::from),
                         },
                         added: AddedTiers {
@@ -1145,6 +1170,7 @@ fn splits(
                                 neighbour: None,
                                 counts: vec![line.count()],
                                 tier_unwritten: added.tier_unwritten(),
+                                currency: added.currency(),
                                 lord: added.lord.map(Lord::from),
                             },
                         },
@@ -1538,19 +1564,27 @@ fn find(
                     neighbour: None,
                     counts,
                     tier_unwritten: table.tier_unwritten(),
+                    currency: table.currency(),
                     lord: table.lord.map(Lord::from),
                 },
             ));
         } else if let Some(((fit, _), (best_fit, best_tiers))) = found.zip(best.as_mut())
             && fit == *best_fit
-            && best_tiers.lord != table.lord.map(Lord::from)
         {
             // The modifiers of two lords hold it as well: neither is named (the flask charges
             // of Kurgal, `10–15`, and of Ulaman, `10–18`, on the belts). An ordinary table comes
             // before them, so a lord never takes its place; the desecrated tables of the Genesis
             // tree come after them, but share no line and base with a lord's in a range of both
             // (the exposure of the rings, `10–15` of Kurgal, `25–35` of the tree).
-            best_tiers.lord = None;
+            if best_tiers.lord != table.lord.map(Lord::from) {
+                best_tiers.lord = None;
+            }
+            // A modifier of a currency and another one hold it as well: the currency isn't
+            // named. An ordinary table comes first, so a tie with a tier written keeps none (the
+            // `+5 to Level of all Spell Skills` of a staff written T1, the essence's as well).
+            if best_tiers.currency != table.currency() {
+                best_tiers.currency = None;
+            }
         }
     }
     best.map(|(_, tiers)| tiers)

@@ -1,0 +1,23 @@
+Classe d'objet: Gants
+Rareté: Rare
+ Prise pandémoniaque
+Mitaines adornées
+--------
+Score d'Évasion: 147 (augmented)
+Bouclier d'énergie: 46 (augmented)
+--------
+Prérequis : Niveau 59, 41 Dex, 41 Int
+--------
+Châsses: S 
+--------
+Niveau de l'objet: 80
+--------
+{ Préfixe : « du Chérubin » (Palier : 1) — Évasion, Bouclier d'énergie }
++73(65-78) au Score d'Évasion
++23(22-25) de Bouclier d'énergie maximal
+{ Préfixe : « Athlétique » (Palier : 1) — Vie }
++137(120-149) de Vie maximale
+{ Préfixe : « Crépitante » (Palier : 5) — Dégâts, Élémentaire, Foudre, Attaque }
+Ajoute 1 à 29(28-32) Dégâts de Foudre aux Attaques
+{ Artisanat Suffixe : « des Étoiles » }
+11(10-15)% d'Augmentation de Vitesse d'Attaque tant qu'il vous manque de la Sauvegarde runique
