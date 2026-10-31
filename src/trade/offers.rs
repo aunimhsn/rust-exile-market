@@ -1,7 +1,7 @@
 //! The offers of the trade site, read from its answers: the listed items of a search, and the
 //! offers of the currency exchange.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::time::{Duration, SystemTime};
 
 use serde::Deserialize;
@@ -82,15 +82,22 @@ pub struct OfferQuality {
 }
 
 impl ItemOffer {
-    /// Whether the item has the quality of a catalyst of another kind than `catalyst`: its
-    /// filter searches any kind. A kind the application doesn't know can't be told apart.
+    /// The kind of the quality of a catalyst of the item, when it is another kind than
+    /// `catalyst`: its filter searches any kind. A kind the application doesn't know can't be
+    /// told apart.
     #[must_use]
-    pub fn has_other_quality(&self, catalyst: Catalyst) -> bool {
+    pub fn other_quality(&self, catalyst: Catalyst) -> Option<Catalyst> {
         self.item
             .quality
             .as_ref()
             .and_then(|quality| quality.kind.as_ref()?.catalyst)
-            .is_some_and(|kind| kind != catalyst)
+            .filter(|&kind| kind != catalyst)
+    }
+
+    /// Whether the item has the quality of a catalyst of another kind than `catalyst`.
+    #[must_use]
+    pub fn has_other_quality(&self, catalyst: Catalyst) -> bool {
+        self.other_quality(catalyst).is_some()
     }
 }
 
@@ -106,7 +113,7 @@ impl OfferItem {
                 modifier
                     .stat
                     .as_deref()
-                    .is_some_and(|stat| stat.ends_with(MAXIMUM_QUALITY_STAT))
+                    .is_some_and(|stat| stat.rsplit('.').next() == Some(MAXIMUM_QUALITY_STAT))
             })
             .filter_map(|modifier| first_number(&modifier.text))
             .fold(CATALYST_QUALITY, u32::saturating_add)
@@ -258,9 +265,10 @@ impl ApiProperty {
         let value = self.values.first()?.get(0)?.as_str()?;
         let line = format!("{}: {value}", plain_text(&self.name));
         let (kind, value) = read_quality(&line, language)?;
-        if kind.as_ref().is_some_and(|kind| kind.catalyst.is_none()) {
-            log::warn!("Trade site: an unknown kind of quality, {line}");
-        }
+        let Some(value) = value else {
+            log::warn!("Trade site: a quality that can't be read, {line}");
+            return None;
+        };
         Some(OfferQuality { value, kind })
     }
 }
@@ -328,11 +336,23 @@ impl ApiFetch {
     /// The offers, in the order of the ids asked, from the trade site of `language`; an offer
     /// gone since the search is left out.
     pub fn offers(self, language: Language) -> Vec<ItemOffer> {
-        self.result
+        let offers: Vec<ItemOffer> = self
+            .result
             .into_iter()
             .flatten()
             .map(|listed| listed.offer(language))
-            .collect()
+            .collect();
+        // Once per kind, not per offer.
+        let unknown: BTreeSet<&str> = offers
+            .iter()
+            .filter_map(|offer| offer.item.quality.as_ref()?.kind.as_ref())
+            .filter(|kind| kind.catalyst.is_none())
+            .map(|kind| kind.words.as_str())
+            .collect();
+        for words in unknown {
+            log::warn!("Trade site: an unknown kind of quality, {words}");
+        }
+        offers
     }
 }
 
@@ -633,8 +653,8 @@ mod tests {
     }
 
     /// Two amulets of `/fetch` on 2026-10-31, shortened: a quality of a catalyst raised by
-    /// the Essence of the Breach, and one left at 50 % without it; and a bow with the quality
-    /// of its base.
+    /// the Essence of the Breach, and one left at 50 % without it; a bow with the quality of
+    /// its base; and an amulet of a kind the application doesn't know.
     const QUALITIES: &str = r#"{"result": [
         {"id": "a1", "listing": {"account": {}}, "item": {
             "typeLine": "Absent Amulet", "rarity": "Rare",
@@ -649,6 +669,22 @@ mod tests {
         {"id": "b1", "listing": {"account": {}}, "item": {
             "typeLine": "Gemini Bow", "rarity": "Rare",
             "properties": [{"name": "[Bow]", "values": [], "displayMode": 0}, {"name": "[Quality]", "values": [["+20%", 1]], "displayMode": 0, "type": 6}]
+        }},
+        {"id": "a3", "listing": {"account": {}}, "item": {
+            "typeLine": "Gold Amulet", "rarity": "Rare",
+            "properties": [{"name": "Quality (Strange Modifiers)", "values": [["+20%", 1]], "displayMode": 0, "type": 6}]
+        }}
+    ]}"#;
+
+    /// An amulet of `/fetch` on the French trade site on 2026-10-31, shortened.
+    const FRENCH_QUALITY: &str = r#"{"result": [
+        {"id": "f1", "listing": {"account": {}}, "item": {
+            "typeLine": "Amulette de l'absence", "rarity": "Rare",
+            "properties": [
+                {"name": "Amulette", "values": [], "displayMode": 0},
+                {"name": "Qualité (Modificateurs de Lanceur de sorts)", "values": [["+50%", 1]], "displayMode": 0, "type": 6}
+            ],
+            "explicitMods": [{"description": "+20% à la [Quality|Qualité] maximale", "hash": "stat.explicit.stat_2039822488"}]
         }}
     ]}"#;
 
@@ -691,6 +727,37 @@ mod tests {
             !bow.has_other_quality(Catalyst::Mana),
             "the quality of the base"
         );
+        // A kind the application doesn't know can't be told apart from any kind.
+        let strange = &offers[3];
+        let kind = strange
+            .item
+            .quality
+            .as_ref()
+            .and_then(|quality| quality.kind.as_ref());
+        assert_eq!(
+            kind.map(|kind| (kind.catalyst, kind.words.as_str())),
+            Some((None, "Strange Modifiers"))
+        );
+        for catalyst in Catalyst::ALL {
+            assert_eq!(strange.other_quality(catalyst), None, "{catalyst:?}");
+        }
+    }
+
+    #[test]
+    fn the_quality_of_an_offer_of_the_french_trade_site_is_read_with_its_kind() {
+        let fetch: ApiFetch = serde_json::from_str(FRENCH_QUALITY).expect("read");
+
+        let offers = fetch.offers(Language::French);
+
+        let caster = &offers[0];
+        let quality = caster.item.quality.as_ref().expect("a quality");
+        assert_eq!(quality.value, 50);
+        assert_eq!(
+            quality.kind.as_ref().and_then(|kind| kind.catalyst),
+            Some(Catalyst::Caster)
+        );
+        assert_eq!(caster.item.max_catalyst_quality(), 40);
+        assert_eq!(caster.other_quality(Catalyst::Mana), Some(Catalyst::Caster));
     }
 
     #[test]

@@ -385,10 +385,10 @@ offer-quality-kind = { $kind ->
         [lightning] Foudre
         [chaos] Chaos
         [attack] Attaque
-        [caster] Lanceur de sorts
+        [caster] Sorts
         [speed] Vitesse
-        [attribute] Attribut
-        [minion] Créature
+        [attribute] Attributs
+        [minion] Créatures
        *[other] Autre
     }
 seller-online = En ligne

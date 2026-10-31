@@ -61,7 +61,11 @@ pub enum OffersState {
 /// The kinds of orders.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum PendingOrder {
-    Search(SearchKind),
+    Search {
+        kind: SearchKind,
+        /// The search filters the quality.
+        quality_searched: bool,
+    },
     More,
 }
 
@@ -71,8 +75,6 @@ struct Pending {
     order: PendingOrder,
     /// Asked for the item shown: no item was copied since.
     shown: bool,
-    /// A search that filters the quality.
-    quality_searched: bool,
 }
 
 /// The offers of the item shown, and the searches.
@@ -147,9 +149,11 @@ impl Offers {
             return None;
         }
         self.pending = Some(Pending {
-            order: PendingOrder::Search(kind),
+            order: PendingOrder::Search {
+                kind,
+                quality_searched: search.query.searches(Property::Quality),
+            },
             shown: true,
-            quality_searched: search.query.searches(Property::Quality),
         });
         self.state = OffersState::Searching;
         Some(Order::Search(search))
@@ -176,7 +180,6 @@ impl Offers {
                 self.pending = Some(Pending {
                     order: PendingOrder::More,
                     shown: true,
-                    quality_searched: false,
                 });
                 Some(Order::More)
             }
@@ -202,8 +205,14 @@ impl Offers {
             // kind of the search refused, for both when the order is unknown. The limits of the
             // fetch of more offers are already in those of the searches of items.
             let (items, exchange) = match pending.map(|pending| pending.order) {
-                Some(PendingOrder::Search(SearchKind::Items)) => (true, false),
-                Some(PendingOrder::Search(SearchKind::Exchange)) => (false, true),
+                Some(PendingOrder::Search {
+                    kind: SearchKind::Items,
+                    ..
+                }) => (true, false),
+                Some(PendingOrder::Search {
+                    kind: SearchKind::Exchange,
+                    ..
+                }) => (false, true),
                 Some(PendingOrder::More) => (false, false),
                 None => (true, true),
             };
@@ -258,7 +267,13 @@ impl Offers {
                 more,
                 loading_more: false,
                 more_failed: false,
-                quality_searched: pending.quality_searched,
+                quality_searched: matches!(
+                    pending.order,
+                    PendingOrder::Search {
+                        quality_searched: true,
+                        ..
+                    }
+                ),
                 searched: now,
             },
             (Outcome::Exchange { offers, total }, _) => OffersState::Exchange {
@@ -414,6 +429,68 @@ mod tests {
             total: 13,
             more,
         }
+    }
+
+    /// The owner's amulet, its quality of a catalyst of the kind `words`.
+    fn amulet(words: &str) -> Item {
+        let text = include_str!("item/test-items/en-owner-rare-amulet-catalyst.txt")
+            .replace("Mana Modifiers", words);
+        Item::parse(&crate::item::CopiedItem::from_text(&text).unwrap()).unwrap()
+    }
+
+    /// The search of the item with its quality.
+    fn quality_search() -> Search {
+        let mut search = item_search();
+        if let Query::Items(query) = &mut search.query {
+            query.properties.push(crate::trade::query::PropertyFilter {
+                property: Property::Quality,
+                minimum: Some(40.0),
+                maximum: None,
+            });
+        }
+        search
+    }
+
+    #[test]
+    fn the_quality_searched_lasts_with_its_offers_until_the_next_search() {
+        let mana = amulet("Mana Modifiers");
+        let now = Instant::now();
+        let at = SystemTime::UNIX_EPOCH;
+        let mut offers = Offers::default();
+
+        let _ = offers.search(quality_search(), now);
+        assert_eq!(offers.catalyst(&mana), None, "while searching");
+        offers.apply(answer(items(&["a"], true), after(now, 0)), at);
+        assert_eq!(offers.catalyst(&mana), Some(Catalyst::Mana));
+        assert_eq!(
+            offers.catalyst(&amulet("Strange Modifiers")),
+            None,
+            "a kind the application doesn't know"
+        );
+        // The next offers, those that couldn't come, and those refused by the limits.
+        for outcome in [
+            Outcome::More {
+                offers: vec![offer("b")],
+                more: true,
+            },
+            Outcome::Unreachable,
+            Outcome::Limited {
+                until: now,
+                refused: true,
+            },
+        ] {
+            let _ = offers.more();
+            offers.apply(answer(outcome.clone(), after(now, 0)), at);
+            assert_eq!(offers.catalyst(&mana), Some(Catalyst::Mana), "{outcome:?}");
+        }
+
+        let _ = offers.search(item_search(), now);
+        offers.apply(answer(items(&["c"], false), after(now, 0)), at);
+        assert_eq!(offers.catalyst(&mana), None, "a search without the quality");
+        let _ = offers.search(quality_search(), now);
+        offers.apply(answer(items(&["d"], false), after(now, 0)), at);
+        offers.clear();
+        assert_eq!(offers.catalyst(&mana), None, "another item copied");
     }
 
     fn ids(offers: &Offers) -> Vec<String> {

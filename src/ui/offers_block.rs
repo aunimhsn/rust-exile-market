@@ -166,9 +166,7 @@ fn item_rows(
     offers
         .iter()
         .map(|offer| {
-            let other_quality = quality
-                .filter(|&catalyst| offer.has_other_quality(catalyst))
-                .and_then(|_| offer.item.quality.as_ref()?.kind.as_ref()?.catalyst);
+            let other_quality = quality.and_then(|catalyst| offer.other_quality(catalyst));
             Row {
                 price: offer
                     .price

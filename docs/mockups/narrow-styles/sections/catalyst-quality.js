@@ -93,7 +93,7 @@ SECTIONS.unshift(["Catalyst quality (13k4): the kind of quality of the offers, B
     price({ ...MANA_ONLY, offers: "27 similaires", note: "Médiane des 5 offres similaires les moins chères de qualité de mana." }, "fr"),
     offers({ count: "10 sur 27 en ligne", columns: ["Prix", "Publiée"], age: "recherche il y a 2min", rows: manaRows({ marked: true }).map(r => ({
       ...r, when: r.when.replace(/^(\S+) ago$/, "il y a $1").replace("1d", "1j").replace("2d", "2j"),
-      other: r.other && { Caster: "Lanceur de sorts", Attack: "Attaque", Minion: "Créature" }[r.other] })) }, "fr"), foot("poe2scout il y a 12min · GGG trade il y a 2min"))],
+      other: r.other && { Caster: "Sorts", Attack: "Attaque", Minion: "Créatures" }[r.other] })) }, "fr"), foot("poe2scout il y a 12min · GGG trade il y a 2min"))],
   ["A · the filter, unchecked at first: its tooltip says the trade site searches any kind", win(topBar(), item({ ...AMULET_MANA, stats: amuletManaStats(ANY_KIND_TIP) }, true), foot())],
   ["A · every offer counted", win(topBar(), item(AMULET_MANA), price(EVERY_KIND), manaOffers(), foot())],
   ["A · an offer of another kind: its quality in red", win(topBar(), item(AMULET_MANA), price(EVERY_KIND),

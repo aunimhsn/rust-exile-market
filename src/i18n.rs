@@ -1470,10 +1470,7 @@ mod tests {
             french.estimate_median(3, Some(Catalyst::Attack)),
             "Médiane des 3 offres similaires de qualité d'attaque."
         );
-        assert_eq!(
-            french.offer_quality_kind(Catalyst::Caster),
-            "Lanceur de sorts"
-        );
+        assert_eq!(french.offer_quality_kind(Catalyst::Caster), "Sorts");
     }
 
     #[test]
