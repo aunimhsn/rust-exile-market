@@ -353,7 +353,7 @@ possible-uniques = Uniques possibles
 no-offers = Aucune offre
 # Les objets rares, magiques et normaux, dont le prix s'estime d'après les offres d'objets similaires.
 no-market-price-rare = Pas de prix de marché pour les objets rares.
-# Une gemme d'aptitude, qu'aucune base de prix ne liste, estimée par les offres de gemmes similaires.
+# Une gemme d'aptitude, qu'aucune base de prix ne liste, dont le prix s'estime d'après les offres de gemmes similaires.
 no-market-price-skill-gem = Pas de prix de marché pour les gemmes d'aptitude.
 no-market-price-magic = Pas de prix de marché pour les objets magiques.
 no-market-price-normal = Pas de prix de marché pour les objets normaux.

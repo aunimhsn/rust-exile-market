@@ -1853,7 +1853,7 @@ fn every_advanced_copy_is_read_the_same_from_the_in_game_trade() {
 fn reads_the_level_quality_and_sockets_of_a_skill_gem() {
     for text in [EN_GEM_SKILL, FR_GEM_SKILL] {
         let item = item(text);
-        assert_eq!(item.gem_level(), Some(2), "{text}");
+        assert_eq!(item.skill_gem_level(), Some(2), "{text}");
         assert_eq!(item.sockets(), Some(2), "{text}");
         assert_eq!(item.quality(), None, "{text}");
     }
@@ -1874,7 +1874,7 @@ fn reads_the_level_quality_and_sockets_of_a_skill_gem() {
         ),
     ] {
         let item = item(text);
-        assert_eq!(item.gem_level(), Some(level), "{text}");
+        assert_eq!(item.skill_gem_level(), Some(level), "{text}");
         assert_eq!(item.quality(), Some(23), "{text}");
         assert_eq!(item.sockets(), Some(5), "{text}");
         assert!(item.warnings().is_empty(), "{text}");
@@ -1885,11 +1885,11 @@ fn reads_the_level_quality_and_sockets_of_a_skill_gem() {
 fn an_unreadable_gem_level_warns_and_a_level_of_another_item_isnt_one() {
     let text = "Item Class: Skill Gems\nRarity: Gem\nComet\n--------\nLevel: high";
     let gem = try_parse(text).expect("the item is read");
-    assert_eq!(gem.gem_level(), None);
+    assert_eq!(gem.skill_gem_level(), None);
     assert_eq!(
         gem.warnings(),
         [ParseWarning::InvalidValue(Field::GemLevel)]
     );
     let flask = "Item Class: Life Flasks\nRarity: Normal\nLife Flask\n--------\nLevel: 3";
-    assert_eq!(item(flask).gem_level(), None);
+    assert_eq!(item(flask).skill_gem_level(), None);
 }

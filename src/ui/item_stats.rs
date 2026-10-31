@@ -1016,7 +1016,7 @@ fn waystone_filters(item: &Item) -> Vec<Stat<'static>> {
 /// checked from 16 %, like Exiled Exchange 2; its sockets, checked from 3, every gem having 2.
 /// None for a support gem, which has no level.
 fn gem_filters(item: &Item) -> Vec<Stat<'static>> {
-    let Some(level) = item.gem_level().filter(|_| item.is_skill_gem()) else {
+    let Some(level) = item.skill_gem_level() else {
         return Vec::new();
     };
     // Within the values a gem can take, from `min` to `max`.

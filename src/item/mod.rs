@@ -335,17 +335,17 @@ impl Item {
         self.item_level
     }
 
-    /// The level of a gem.
+    /// The level of a skill gem; none for another item, a support gem among them.
     #[must_use]
-    pub fn gem_level(&self) -> Option<u32> {
-        self.gem_level
+    pub fn skill_gem_level(&self) -> Option<u32> {
+        self.gem_level.filter(|_| self.rarity == Rarity::Gem)
     }
 
     /// A skill gem, which has a level: priced from its similar offers, never an item of the
     /// currency exchange, unlike a lineage support gem or an uncut gem.
     #[must_use]
     pub fn is_skill_gem(&self) -> bool {
-        self.rarity == Rarity::Gem && self.gem_level.is_some()
+        self.skill_gem_level().is_some()
     }
 
     /// The quality, in percent.

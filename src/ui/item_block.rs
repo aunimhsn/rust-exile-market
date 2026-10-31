@@ -375,7 +375,7 @@ impl<'a> ItemBlock<'a> {
             append(&mut job, SEPARATOR, &font, color::WEAK);
         }
         append(&mut job, self.item.class(), &font, color::WEAK);
-        if let Some(level) = self.item.gem_level() {
+        if let Some(level) = self.item.skill_gem_level() {
             append(&mut job, SEPARATOR, &font, color::WEAK);
             append(
                 &mut job,
