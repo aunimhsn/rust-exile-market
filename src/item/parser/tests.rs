@@ -1641,6 +1641,9 @@ fn reads_the_lines_of_fixed_value_of_a_unique_charm_without_their_marker_in_both
 
 #[test]
 fn every_advanced_copy_is_read_the_same_from_the_in_game_trade() {
+    // It checks the reading without headers: the sections of marked lines, the markers and the
+    // stats written on several lines joined. The helper reads the headers, the ranges and the
+    // text of the markers as the parser does: their own tests check them.
     // Each line with its kind, without affix, its origin and its text, in any order: the
     // in-game trade writes the fractured modifiers first and the desecrated ones last.
     let lines = |item: &Item| {

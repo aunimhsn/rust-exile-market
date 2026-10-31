@@ -12,8 +12,8 @@ use super::{CopiedItem, Modifier, ModifierKind, ModifierOrigin};
 
 /// `text`, an advanced copy, as the in-game trade copies it; the marker of a fixed value
 /// (` — Unscalable Value`) kept, whether the in-game trade writes it being unknown. None when
-/// the item holds a modifier whose in-game trade copy isn't known: a corruption enhancement,
-/// or a modifier not revealed yet.
+/// `text` is no item, or when the item holds a modifier whose in-game trade copy isn't known:
+/// a corruption enhancement, or a modifier not revealed yet.
 pub fn as_in_game_trade(text: &str) -> Option<String> {
     let labels = Labels::of(CopiedItem::from_text(text)?.language());
     let mut sections = Vec::new();
@@ -30,8 +30,8 @@ pub fn as_in_game_trade(text: &str) -> Option<String> {
             .filter(|line| !line.is_empty())
         {
             // The headers of the French texts put no-break spaces around the punctuation, read
-            // as plain spaces as the parser does; the other lines keep them, as the game
-            // writes them.
+            // as plain spaces as the parser does; the other lines keep theirs, for a copy whose
+            // lines would have some (none of the test items has one in a modifier line).
             if let Some(header) = Header::parse(&line.replace(['\u{a0}', '\u{202f}'], " "), labels)
             {
                 let modifier = match header {
