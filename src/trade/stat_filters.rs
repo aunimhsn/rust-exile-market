@@ -40,7 +40,7 @@ const AFFIXES_ALLOWED: [(&str, Affix); 2] = [
 pub enum LineStat {
     Searched(TradeStat),
     /// Another line of a stat written on several lines: the first line with a number of the
-    /// stat searches it, or else the first line.
+    /// stat searches it, or else the first line ([`LineStats::searched_line`]).
     Continued,
     /// A line without trade id in its group: a modifier added by a patch the game data
     /// doesn't know yet, or a line the parser read wrong.
@@ -202,6 +202,10 @@ fn written(value: f64) -> f64 {
 #[derive(Debug)]
 struct Line {
     key: StatKey,
+    /// The line of its modifier that searches its stat, which every line of the stat shares,
+    /// also for a stat the trade site can't search; a line whose stat is unknown is its own:
+    /// `game_data::modifier_stats` gives an unknown stat one line only.
+    searched: usize,
     stat: LineStat,
     /// The indexes of its numbers its stat counts; none when its stat isn't known.
     numbers: Option<Vec<usize>>,
@@ -272,6 +276,7 @@ impl LineStats {
                     };
                     lines.push(Line {
                         key,
+                        searched,
                         stat: line_stat,
                         numbers: known.then_some(numbers),
                         game_id: game_id.clone(),
@@ -370,6 +375,17 @@ impl LineStats {
             suffixes: limit(Affix::Suffix),
             counted_only: corrupted_waystone,
         }
+    }
+
+    /// The line that searches the stat of the line `key`, the same for every line of a stat
+    /// written on several lines, even when the trade site can't search it: the first line
+    /// with a number of the stat, or else its first line; `key` itself when it is unknown.
+    #[must_use]
+    pub fn searched_line(&self, key: StatKey) -> StatKey {
+        self.line(key).map_or(key, |line| StatKey {
+            line: line.searched,
+            ..key
+        })
     }
 
     fn line(&self, key: StatKey) -> Option<&Line> {

@@ -266,6 +266,7 @@ fn a_stat_written_on_two_lines_is_searched_by_its_first_line() {
     let stats = line_stats(&item);
 
     assert_eq!(stats.get(key(0, 1)), Some(&LineStat::Continued));
+    assert_eq!(stats.searched_line(key(0, 1)), key(0, 0));
     assert_eq!(stats.numbers(key(0, 0)), Some(&[0][..]));
     // The field holds the 20 only, not the 3 its string writes.
     let searched = stats.stat_filters(refs(&[
@@ -287,6 +288,7 @@ fn a_stat_whose_numbers_are_on_its_second_line_is_searched_by_it() {
     let stats = line_stats(&item);
 
     assert_eq!(stats.get(key(0, 0)), Some(&LineStat::Continued));
+    assert_eq!(stats.searched_line(key(0, 0)), key(0, 1));
     assert_eq!(
         stats.stat_filters(refs(&[(key(0, 1), filter("", "5"))])),
         [stat("explicit.stat_1777740627", None, Some(5.0))]
@@ -308,6 +310,39 @@ fn a_stat_is_searched_by_its_first_line_with_one_of_its_numbers() {
     assert_eq!(stats.numbers(key(0, 0)), Some(&[][..]));
     assert_eq!(stats.numbers(key(0, 1)), Some(&[0][..]));
     assert_eq!(stats.get(key(0, 2)), Some(&LineStat::Continued));
+    assert_eq!(stats.searched_line(key(0, 2)), key(0, 1));
+}
+
+#[test]
+fn every_line_of_a_stat_the_trade_site_cant_search_shares_its_searched_line() {
+    // The stat of a unique as an implicit: no implicit id.
+    let item = unique(
+        "{ Implicit Modifier }\n\
+         20(15-25)% chance to gain Onslaught for 3 seconds when you kill an\n\
+         enemy affected by Abyssal Wasting",
+    );
+    let stats = line_stats(&item);
+
+    assert_eq!(stats.get(key(0, 0)), Some(&LineStat::Unsearchable));
+    assert_eq!(stats.get(key(0, 1)), Some(&LineStat::Unsearchable));
+    assert_eq!(stats.searched_line(key(0, 0)), key(0, 0));
+    assert_eq!(stats.searched_line(key(0, 1)), key(0, 0));
+}
+
+#[test]
+fn an_unknown_line_is_its_own_searched_line() {
+    // Two unknown lines of one modifier are never one stat.
+    let item = unique(
+        "Gain 3 Unknown Charges when you Dance\n\
+         Gain 4 Other Charges when you Sing",
+    );
+    let stats = line_stats(&item);
+
+    assert_eq!(stats.get(key(0, 0)), Some(&LineStat::Unsearchable));
+    assert_eq!(stats.searched_line(key(0, 0)), key(0, 0));
+    assert_eq!(stats.searched_line(key(0, 1)), key(0, 1));
+    // A line it doesn't hold.
+    assert_eq!(stats.searched_line(key(5, 2)), key(5, 2));
 }
 
 #[test]
