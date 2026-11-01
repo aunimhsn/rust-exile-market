@@ -1,6 +1,6 @@
 # Assets notice
 
-The images in `currencies/` are Path of Exile 2 icons, © Grinding Gear Games. They are **not** covered by the license of this project (MIT OR Apache-2.0), and are used here only to show prices in a free, non-commercial tool.
+The images in `currencies/` and `exchange/` are Path of Exile 2 icons, © Grinding Gear Games, and so are the names of the items in `exchange/currencies.ndjson`. They are **not** covered by the license of this project (MIT OR Apache-2.0), and are used here only to show prices in a free, non-commercial tool.
 
 | File | Item | Source |
 |---|---|---|
@@ -8,7 +8,9 @@ The images in `currencies/` are Path of Exile 2 icons, © Grinding Gear Games. T
 | `currencies/divine-orb.png` | Divine Orb | `web.poecdn.com`, through the poe2scout API |
 | `currencies/chaos-orb.png` | Chaos Orb | `web.poecdn.com`, through the poe2scout API |
 
-Only the icons that are always visible belong here, so that the application can show them offline. The icons of the copied items are loaded at runtime from the Grinding Gear Games CDN and cached locally: they are never added to this repository.
+The images in `exchange/` are the icons of the items of the currency exchange, the currencies an offer may be priced in, taken from the trade site (`/api/trade2/data/static`) and the CDN `web.poecdn.com` by `tools/exchange-icons`, shrunk to 36 px; each is named by the id of its item on the trade site (`vaal.png`).
+
+Only the icons of the prices belong here, so that the application can show them offline. The application shows no icon of the copied items.
 
 The fonts in `fonts/` are under the SIL Open Font License 1.1, not under the license of this project. They are static instances (one weight per file), made with fontTools from the variable fonts of Google Fonts; neither font declares a Reserved Font Name.
 

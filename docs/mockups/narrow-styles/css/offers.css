@@ -7,7 +7,9 @@
 .offers .row-o:nth-child(even) { background: var(--row-alt); }
 .offers .row-o .p { display: flex; align-items: center; gap: 6px; font-family: var(--font-number); font-weight: 600; }
 .offers .row-o img { width: 18px; height: 18px; }
-.offers .row-o.sus .p { color: var(--faint); text-decoration: line-through; }
+.offers .row-o.sus .p { color: var(--faint); }
+/* Only the amount struck through, not the name of its currency. */
+.offers .row-o.sus .app-amount { text-decoration: line-through; }
 /* An offer of another kind of quality (13k4): its price faint, the kind after it in weak text. */
 .offers .row-o.is-other .p { color: var(--faint); }
 .offers .row-o.is-other img { opacity: .45; }
@@ -33,6 +35,9 @@
 .tt-name { font-weight: 700; font-size: 14px; }
 .tt-price { font-family: var(--font-number); font-weight: 600; }
 .tt-meta { color: var(--weak); font-size: 12px; margin-top: 2px; }
+/* The tier of a waystone in the tooltip: in its color, but in the font of its line, not bold (owner,
+   2026-11-01); the item block keeps it bold. */
+.tt-meta .app-waystone-tier { font-weight: inherit; font-size: inherit; }
 /* The requirements of an offer of gem (13k5d2), as the line of the item block. */
 .tt-req { color: var(--weak); font-size: 12px; margin-top: 2px; }
 .tt-mods { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--control-line); display: grid; gap: 3px; }
@@ -107,3 +112,18 @@
 .button.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent, var(--bg-a)); font-weight: 700; }
 .button.wait { color: var(--faint); }
 .spinner { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--control-line); border-top-color: var(--accent); }
+/* The currency of a price (fix of the prices in other currencies): its icon, its name after it in weak
+   text, its name alone in the amount's color for an item without icon; the name in a tooltip over the
+   icon, under the pointer. */
+.app-currency-icon { position: relative; display: inline-flex; }
+.app-currency-icon .app-tip { left: -6px; right: auto; }
+.app-currency-icon:hover .app-tip, .app-currency-icon.is-hovered .app-tip { display: block; }
+.app-currency-name { color: var(--weak); font: 500 12px var(--font-body); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.app-currency-name.is-alone { color: var(--text); font: 600 13px var(--font-body); }
+.offers .row-o .p, .tt-price { min-width: 0; }
+/* A suspicious offer, or one of another kind of quality: the name of its currency faint too. */
+.offers .row-o.sus .app-currency-name, .offers .row-o.is-other .app-currency-name { color: var(--faint); }
+/* The kind of another quality written as its filter after a faint dot, in weak text (owner, 2026-11-01:
+   gray, not red). */
+.app-kind-dot { color: var(--faint); font: 500 12px var(--font-body); margin-left: 2px; }
+.app-kind-tag { color: var(--weak); font: 500 12px var(--font-body); }

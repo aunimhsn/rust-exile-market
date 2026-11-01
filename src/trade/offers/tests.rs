@@ -229,6 +229,32 @@ fn a_quality_that_cant_be_read_fails_neither_the_answer_nor_its_offer() {
 }
 
 #[test]
+fn the_offers_priced_in_waystones_or_an_unknown_currency_are_left_out() {
+    let listed = |id: &str, price: &str| {
+        format!(
+            r#"{{"id": "{id}", "listing": {{{price}"account": {{}}}}, "item": {{"typeLine": "Waystone (Tier 12)"}}}}"#
+        )
+    };
+    let price = |amount: u32, currency: &str| {
+        format!(r#""price": {{"type": "~price", "amount": {amount}, "currency": "{currency}"}}, "#)
+    };
+    let fetch: ApiFetch = serde_json::from_str(&format!(
+        r#"{{"result": [{}, {}, {}, {}, {}]}}"#,
+        listed("a", &price(1, "exalted")),
+        listed("b", &price(3, "waystone-12")),
+        listed("c", &price(1, "vaal")),
+        listed("d", &price(4, "not-a-currency")),
+        listed("e", ""),
+    ))
+    .expect("read");
+
+    let offers = fetch.offers(Language::English);
+
+    let ids: Vec<&str> = offers.iter().map(|offer| offer.id.as_str()).collect();
+    assert_eq!(ids, ["a", "c", "e"], "an offer without price stays");
+}
+
+#[test]
 fn every_maximum_quality_of_an_offer_adds_up() {
     // A Breach Ring with the Essence of the Breach: 20 % and both modifiers.
     let fetch: ApiFetch = serde_json::from_str(

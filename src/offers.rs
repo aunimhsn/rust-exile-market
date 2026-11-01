@@ -33,7 +33,8 @@ pub enum OffersState {
         offers: Vec<ItemOffer>,
         total: u64,
         /// How many offers of `offers`, the first ones, came in the answer to the search:
-        /// fewer than a page when some were gone since the search.
+        /// fewer than a page when some were gone since the search, or left out for their
+        /// currency.
         first_page: usize,
         /// The offers left to fetch, of this search.
         rest: Rest,

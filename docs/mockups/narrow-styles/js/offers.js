@@ -1,4 +1,13 @@
 // The offers and their tooltip.
+// The currency of a price (fix of the prices in other currencies): its icon (`k`), its name after it
+// (`name`) in weak text, or its name alone for an item without icon (`k` absent); the name in a tooltip
+// over the icon (`tip`), shown when `tipShown`.
+function currencyMark(r) {
+  const tip = r.tip ? `<span class="app-tip">${r.tip}</span>` : "";
+  const icon = r.k ? `<span class="app-currency-icon ${r.tipShown ? "is-hovered" : ""}">${orb(r.k)}${tip}</span>` : "";
+  const name = r.name ? `<span class="app-currency-name ${r.k ? "" : "is-alone"}">${r.name}</span>` : "";
+  return icon + name;
+}
 function offerTooltip(t) {
   const compare = (list, kind = "") => list.map(m => {
     const diff = m.yours === undefined ? "" : m.value - m.yours;
@@ -10,7 +19,7 @@ function offerTooltip(t) {
     return `<div class="tt-mod ${kind} ${m.other ? "is-other" : m.max ? "is-max" : m.lacking ? "is-lacking" : ""}"><span>${tier}${m.text}</span>${m.other ? "" : delta}</div>`;
   }).join("");
   return `<div class="offer-tooltip ${t.pinned ? "pinned" : ""} ${t.below ? "below" : ""}">
-    <div class="tt-head"><span class="rarity-${t.rarity || "unique"} tt-name">${t.name}</span><span class="tt-price">${t.price} ${orb(t.currency)}</span></div>
+    <div class="tt-head"><span class="rarity-${t.rarity || "unique"} tt-name">${t.name}</span><span class="tt-price">${t.price} ${currencyMark({ k: t.currency, name: t.currencyName })}</span></div>
     <div class="tt-meta">${t.meta}</div>
     ${t.req ? `<div class="tt-req">${colorAttributes(t.req)}</div>` : ""}
     ${t.suspicious ? `<div class="tt-warn">Be careful: far below the market price.</div>` : ""}
@@ -55,8 +64,8 @@ function offers(o, lang = "en") {
     ? `<div class="again ready" title="Search again">${ICON.refresh(18)}</div>`
     : `<div class="again waiting" title="Next search in 8s">8s</div>`;
   // An offer of another kind of quality (13k4, `r.other`: the kind): its price faint, the kind after it.
-  const rows = o.rows.map((r, i) => `<div class="row-o ${r.sus ? "sus" : ""} ${r.other ? "is-other" : ""} ${o.hover === i ? "hovered" : ""}">
-      <span class="p">${r.v} ${orb(r.k)}${r.other ? `<span class="app-other-kind">${r.other}</span>` : ""}</span>${three ? `<span>${r.stock}</span>` : ""}<span><i class="online ${r.away ? "away" : ""}"></i>${r.when}</span>${o.hover === i ? offerTooltip(o.tooltip) : ""}</div>`).join("");
+  const rows = o.rows.map((r, i) => `<div class="row-o ${r.sus ? "sus" : ""} ${r.other || r.kindTag ? "is-other" : ""} ${o.hover === i ? "hovered" : ""}">
+      <span class="p"><span class="app-amount">${r.v}</span> ${currencyMark(r)}${r.other ? `<span class="app-other-kind">${r.other}</span>` : ""}${r.kindTag ? `<span class="app-kind-dot">·</span><span class="app-kind-tag">${r.kindTag}</span>` : ""}</span>${three ? `<span>${r.stock}</span>` : ""}<span><i class="online ${r.away ? "away" : ""}"></i>${r.when}</span>${o.hover === i ? offerTooltip(o.tooltip) : ""}</div>`).join("");
   return `<div class="band b">
     <div class="head flat-head"><span class="title-stack"><span class="label">${label}</span><span class="age">${o.age || "searched 2min ago"}</span></span><span class="right">${o.count}</span>${again}</div>
     <div class="offers ${three ? "three" : ""}"><div class="cols">${o.columns.map(c => `<span>${c}</span>`).join("")}</div>${rows}</div>
