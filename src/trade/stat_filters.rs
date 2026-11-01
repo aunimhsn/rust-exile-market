@@ -40,8 +40,10 @@ const AFFIXES_ALLOWED: [(&str, Affix); 2] = [
 pub enum LineStat {
     Searched(TradeStat),
     /// Another line of a stat written on several lines: the first line with a number of the
-    /// stat searches it, or else the first line.
-    Continued,
+    /// stat searches it, or else the first line, `searched`, among the lines of its modifier.
+    Continued {
+        searched: usize,
+    },
     /// A line without trade id in its group: a modifier added by a patch the game data
     /// doesn't know yet, or a line the parser read wrong.
     Unsearchable,
@@ -267,7 +269,7 @@ impl LineStats {
                     };
                     let line_stat = match &stat {
                         Some(stat) if line == searched => LineStat::Searched(stat.clone()),
-                        Some(_) => LineStat::Continued,
+                        Some(_) => LineStat::Continued { searched },
                         None => LineStat::Unsearchable,
                     };
                     lines.push(Line {
@@ -430,7 +432,7 @@ impl LineStats {
             .into_iter()
             .filter_map(|(key, filter)| match self.get(key)? {
                 LineStat::Searched(stat) => Some(stat.filter(filter)),
-                LineStat::Continued | LineStat::Unsearchable => None,
+                LineStat::Continued { .. } | LineStat::Unsearchable => None,
             })
             .collect()
     }

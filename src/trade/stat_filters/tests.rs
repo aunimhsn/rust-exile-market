@@ -265,7 +265,10 @@ fn a_stat_written_on_two_lines_is_searched_by_its_first_line() {
     );
     let stats = line_stats(&item);
 
-    assert_eq!(stats.get(key(0, 1)), Some(&LineStat::Continued));
+    assert_eq!(
+        stats.get(key(0, 1)),
+        Some(&LineStat::Continued { searched: 0 })
+    );
     assert_eq!(stats.numbers(key(0, 0)), Some(&[0][..]));
     // The field holds the 20 only, not the 3 its string writes.
     let searched = stats.stat_filters(refs(&[
@@ -286,7 +289,10 @@ fn a_stat_whose_numbers_are_on_its_second_line_is_searched_by_it() {
     );
     let stats = line_stats(&item);
 
-    assert_eq!(stats.get(key(0, 0)), Some(&LineStat::Continued));
+    assert_eq!(
+        stats.get(key(0, 0)),
+        Some(&LineStat::Continued { searched: 1 })
+    );
     assert_eq!(
         stats.stat_filters(refs(&[(key(0, 1), filter("", "5"))])),
         [stat("explicit.stat_1777740627", None, Some(5.0))]
@@ -304,10 +310,16 @@ fn a_stat_is_searched_by_its_first_line_with_one_of_its_numbers() {
     let stats = line_stats(&item);
 
     // The 5 is written by the string of the stat.
-    assert_eq!(stats.get(key(0, 0)), Some(&LineStat::Continued));
+    assert_eq!(
+        stats.get(key(0, 0)),
+        Some(&LineStat::Continued { searched: 1 })
+    );
     assert_eq!(stats.numbers(key(0, 0)), Some(&[][..]));
     assert_eq!(stats.numbers(key(0, 1)), Some(&[0][..]));
-    assert_eq!(stats.get(key(0, 2)), Some(&LineStat::Continued));
+    assert_eq!(
+        stats.get(key(0, 2)),
+        Some(&LineStat::Continued { searched: 1 })
+    );
 }
 
 #[test]

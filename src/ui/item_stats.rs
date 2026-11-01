@@ -96,7 +96,7 @@ const TIER_ROW_GAP: f32 = 1.0;
 /// "Hybrid" names a line of the item, which can be long.
 const WORD_TIP_WIDTH: f32 = 230.0;
 /// The lines of the text of a stat, at most; the whole text is in its tooltip.
-const MAX_LINES: usize = 2;
+const MAX_LINES: usize = 4;
 /// The bar of a roll.
 const BAR_SIZE: Vec2 = vec2(96.0, 4.0);
 /// The space above the roll of a stat.
@@ -639,6 +639,9 @@ const RADIUS_WORDS: [(&str, RadiusSkills); 4] = [
 enum StatText<'a> {
     /// A line of a modifier.
     Line(&'a str),
+    /// A stat the game writes on several lines, its lines joined by a space, so that nothing
+    /// comes between them.
+    Lines(&'a [StatLine]),
     /// A line of a Time-Lost jewel, without the words of its radius (`line`), and the whole
     /// line, which names it to a screen reader.
     RadiusLine {
@@ -714,6 +717,13 @@ impl<'a> StatText<'a> {
     fn text(self, i18n: &Translator) -> Cow<'a, str> {
         match self {
             Self::Line(text) | Self::RadiusLine { line: text, .. } => Cow::Borrowed(text),
+            Self::Lines(lines) => Cow::Owned(
+                lines
+                    .iter()
+                    .map(|line| line.text.as_str())
+                    .collect::<Vec<_>>()
+                    .join(" "),
+            ),
             Self::BaseType { base_type, .. } => Cow::Owned(i18n.filter_base_type(base_type)),
             Self::Property(property, value) => {
                 Cow::Owned(i18n.filter_property(property, &property_value(property, value)))
@@ -883,6 +893,7 @@ fn rows<'a>(
             searchable(stat, stats.get(key));
         }
     }
+    let mut rows = join_stat_lines(item, stats, rows);
     if unrevealed {
         rows.push(Row::UnrevealedNote);
     }
@@ -930,8 +941,160 @@ fn rows<'a>(
 fn searchable(stat: &mut Stat<'_>, line: Option<&LineStat>) {
     match line {
         Some(LineStat::Searched(_)) => {}
-        Some(LineStat::Continued) => stat.filter = None,
+        Some(LineStat::Continued { .. }) => stat.filter = None,
         Some(LineStat::Unsearchable) | None => stat.unsearchable = stat.filter.take().is_some(),
+    }
+}
+
+/// The rows of a stat the game writes on several lines joined into one, after
+/// [`searchable`]: its text the lines joined, with the filter of its searched line, and under
+/// it the roll of its lines, so that its bar never comes between them (`Lorsque vous collectez
+/// une Infusion élémentaire, vous avez 23% de chances de gagner une` then `Infusion
+/// élémentaire supplémentaire du même type` of Kurgal). Rows that can't be joined stay apart:
+/// a stat with a bar on two of its lines (`Alternating every 5 seconds:`), or a line of a
+/// Time-Lost jewel.
+fn join_stat_lines<'a>(item: &'a Item, stats: &LineStats, rows: Vec<Row<'a>>) -> Vec<Row<'a>> {
+    // The line of the modifier that searches the stat of `key`, which its rows share.
+    let anchor = |key: StatKey| match stats.get(key) {
+        Some(&LineStat::Continued { searched }) => StatKey {
+            line: searched,
+            ..key
+        },
+        _ => key,
+    };
+    let mut joined = Vec::with_capacity(rows.len());
+    let mut group: Vec<(StatKey, Stat<'a>)> = Vec::new();
+    for row in rows {
+        if let Row::Stat(stat) = &row
+            && let FilterKey::Stat(key) = stat.key
+        {
+            let follows = group.last().is_some_and(|(last, _)| {
+                last.modifier == key.modifier
+                    && last.line + 1 == key.line
+                    && anchor(*last) == anchor(key)
+            });
+            if !follows {
+                flush_stat_lines(item, &mut group, &mut joined, anchor);
+            }
+            if let Row::Stat(stat) = row {
+                group.push((key, stat));
+            }
+            continue;
+        }
+        flush_stat_lines(item, &mut group, &mut joined, anchor);
+        joined.push(row);
+    }
+    flush_stat_lines(item, &mut group, &mut joined, anchor);
+    joined
+}
+
+/// Pushes the rows of `group`, lines of one stat that follow each other, to `rows`: one row
+/// when they can be joined, otherwise each as it is.
+fn flush_stat_lines<'a>(
+    item: &'a Item,
+    group: &mut Vec<(StatKey, Stat<'a>)>,
+    rows: &mut Vec<Row<'a>>,
+    anchor: impl Fn(StatKey) -> StatKey,
+) {
+    let stats = std::mem::take(group);
+    match joined_stat(item, &stats, anchor) {
+        Some(stat) => rows.push(Row::Stat(stat)),
+        None => rows.extend(stats.into_iter().map(|(_, stat)| Row::Stat(stat))),
+    }
+}
+
+/// The row of the lines of one stat, `stats`, in their order; none for a single line, or for
+/// lines that can't be joined.
+fn joined_stat<'a>(
+    item: &'a Item,
+    stats: &[(StatKey, Stat<'a>)],
+    anchor: impl Fn(StatKey) -> StatKey,
+) -> Option<Stat<'a>> {
+    let ([(first, _), _, ..], Some((last, _))) = (stats, stats.last()) else {
+        return None;
+    };
+    if !stats
+        .iter()
+        .all(|(_, stat)| matches!(stat.text, StatText::Line(_)))
+    {
+        return None;
+    }
+    let lines = item
+        .modifiers()
+        .get(first.modifier)?
+        .lines
+        .get(first.line..=last.line)?;
+    let searched = anchor(*first);
+    let (_, searched_stat) = stats.iter().find(|(key, _)| *key == searched)?;
+    let mut rolls = stats.iter().filter_map(|(_, stat)| stat.roll.clone());
+    let roll = match rolls.next() {
+        Some(first) => Some(rolls.try_fold(first, joined_roll)?),
+        None => None,
+    };
+    Some(Stat {
+        key: FilterKey::Stat(searched),
+        text: StatText::Lines(lines),
+        filter: searched_stat.filter,
+        unsearchable: searched_stat.unsearchable,
+        roll,
+    })
+}
+
+/// The roll under the joined lines of a stat, from the roll of a line, `roll`, and of the
+/// next one: the bar of the line with a number, and the tier and the origin written under its
+/// last line; none when both can't be told under one text (two bars, two tiers).
+fn joined_roll<'a>(roll: Roll<'a>, next: Roll<'a>) -> Option<Roll<'a>> {
+    match (roll, next) {
+        (
+            Roll::Affix {
+                share,
+                tier,
+                origin,
+            },
+            Roll::Affix {
+                share: next_share,
+                tier: next_tier,
+                origin: next_origin,
+            },
+        ) if (share.is_none() || next_share.is_none())
+            && (tier.is_none() || next_tier.is_none()) =>
+        {
+            Some(Roll::Affix {
+                share: share.or(next_share),
+                tier: tier.or(next_tier),
+                origin: next_origin.or(origin),
+            })
+        }
+        // The bar of a unique and the origin under its last line.
+        (
+            Roll::Bar {
+                share,
+                ranges,
+                origin: bar_origin,
+            },
+            Roll::Affix {
+                share: None,
+                tier: None,
+                origin,
+            },
+        )
+        | (
+            Roll::Affix {
+                share: None,
+                tier: None,
+                origin,
+            },
+            Roll::Bar {
+                share,
+                ranges,
+                origin: bar_origin,
+            },
+        ) => Some(Roll::Bar {
+            share,
+            ranges,
+            origin: origin.or(bar_origin),
+        }),
+        _ => None,
     }
 }
 
@@ -1982,7 +2145,7 @@ fn group_title(ui: &mut Ui, group: Group, range: bool, i18n: &Translator) {
     });
 }
 
-/// A stat in the color of the modifiers, on two lines at most, and its roll under it; a
+/// A stat in the color of the modifiers, on four lines at most, and its roll under it; a
 /// filter between its checkbox and the column of its range field.
 fn stat_row(ui: &mut Ui, stat: &Stat<'_>, filters: &mut Filters, i18n: &Translator, bar: RollBar) {
     if let StatText::Unrevealed(_) = stat.text {
