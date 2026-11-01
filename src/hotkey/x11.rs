@@ -3,6 +3,7 @@
 
 use std::error::Error;
 
+use global_hotkey::HotKeyState;
 use x11rb::connection::{Connection, RequestConnection as _};
 use x11rb::protocol::xproto::{
     self, Atom, AtomEnum, ConnectionExt as _, KeyButMask, Keycode, Window,
@@ -19,6 +20,10 @@ const XK_CONTROL_L: u32 = 0xffe3;
 /// game that reads the keys at each frame sees each of them (the delay of the `enigo` crate).
 const KEY_DELAY_MS: u32 = 12;
 
+/// At the release of D: while it is held, the X server gives every key to the application that
+/// listens to the hotkey, so that a copy sent then wouldn't reach the game.
+pub const SENT_AT: HotKeyState = HotKeyState::Released;
+
 /// The connection to the X server, opened at the start, and again at the next copy after a
 /// failure.
 pub struct CopySender {
@@ -33,8 +38,9 @@ impl CopySender {
     ///
     /// When the X server can't be reached or has no XTest extension.
     pub fn connect() -> Result<Self> {
+        let keyboard = Keyboard::connect().map_err(|error| format!("no X11 keyboard ({error})"))?;
         Ok(Self {
-            keyboard: Some(Keyboard::connect()?),
+            keyboard: Some(keyboard),
         })
     }
 
