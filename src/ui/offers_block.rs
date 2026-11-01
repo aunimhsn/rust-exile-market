@@ -843,8 +843,8 @@ impl<'a> OffersBlock<'a> {
         }
         let mut right = start.x + size.x;
         // The kind of another quality, or the "?", after the name, which leaves them room. The
-        // kind is written as the tier of a waystone, after a dot, short and bold in the red of
-        // another quality in the tooltip, so that it isn't read as a name.
+        // kind is written as its filter after a dot, "· Caster quality", so that it isn't read
+        // as a name.
         let after = if let Some(catalyst) = row.other_quality {
             let mut job = LayoutJob::default();
             job.append(
@@ -855,9 +855,9 @@ impl<'a> OffersBlock<'a> {
             job.append(
                 &self.i18n.offer_quality_kind(catalyst),
                 0.0,
-                TextFormat::simple(text::other_quality_kind(), color::FALL),
+                TextFormat::simple(text::note(), color::WEAK),
             );
-            Some((painter.layout_job(job), 0.0, color::FALL))
+            Some((painter.layout_job(job), 0.0, color::WEAK))
         } else if row.suspicious {
             let mark = widgets::text_line(ui, "?", text::list_amount());
             Some((mark, ORB_GAP + SUSPICIOUS_GAP, color::WARNING))

@@ -115,8 +115,8 @@ SECTIONS.unshift(["Prices in other currencies (fix a): D chosen; the offers in W
   // "Minion" after "Divine Orb" read as the name of a buyer). Asked by the owner: written as the tier of a
   // waystone (13k5c2), after a faint dot, short and bold in a color of its own: the red of a quality of
   // another kind in the tooltip of an offer (13k4), written as its filter, "Caster quality". Chosen by the
-  // owner on 2026-11-01.
-  ["Chosen · the kind after a dot, in the red of another quality, as the tier of a waystone", win(topBar(), item(AMULET_MANA), price(MANA_ONLY),
+  // owner on 2026-11-01, then in gray as the name rather than red and bold.
+  ["Chosen · the kind after a dot, written as its filter, in gray", win(topBar(), item(AMULET_MANA), price(MANA_ONLY),
     offers({ count: "10 of 27 online", columns: ["Price", "Listed"], rows: manaRows({ marked: true }).map((r, i) => ({
       ...r, name: CURRENCY_NAMES[r.k][0], sus: (i === 2 && !r.other) || r.sus, other: undefined,
       kindTag: r.other && `${r.other} quality` })) }), foot())],

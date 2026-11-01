@@ -242,12 +242,6 @@ pub mod text {
         fonts::text(12.0, Weight::ExtraBold)
     }
 
-    /// The kind of another quality after the price of an offer, as the tier of a waystone.
-    #[must_use]
-    pub fn other_quality_kind() -> FontId {
-        fonts::text(12.0, Weight::ExtraBold)
-    }
-
     /// A modifier line in the tooltip of an offer.
     #[must_use]
     pub fn tooltip_line() -> FontId {

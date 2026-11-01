@@ -123,7 +123,7 @@
 .offers .row-o .p, .tt-price { min-width: 0; }
 /* A suspicious offer, or one of another kind of quality: the name of its currency faint too. */
 .offers .row-o.sus .app-currency-name, .offers .row-o.is-other .app-currency-name { color: var(--faint); }
-/* The kind of another quality written as the tier of a waystone: a faint dot, then the kind short and bold,
-   in the red of a quality of another kind in the tooltip. */
+/* The kind of another quality written as its filter after a faint dot, in weak text (owner, 2026-11-01:
+   gray, not red). */
 .app-kind-dot { color: var(--faint); font: 500 12px var(--font-body); margin-left: 2px; }
-.app-kind-tag { color: var(--fall); font: 700 12px var(--font-body); }
+.app-kind-tag { color: var(--weak); font: 500 12px var(--font-body); }
