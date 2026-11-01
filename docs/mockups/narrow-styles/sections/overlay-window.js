@@ -7,11 +7,11 @@
 // a click on an item stands for Ctrl+D, and the real Ctrl key of the keyboard is read. The height, chosen by the
 // owner on 2026-11-01: the height of the content, level with the item (its top at the top of the item, moved up as
 // much as the screen needs), growing when the stats are shown, at most the height of the screen, then its content
-// scrolls. Two open decisions, one group of tabs each: its title bar, and what closes it.
+// scrolls. No title bar (owner, 2026-11-01: the most bare; the league can't be changed over the game, the player
+// knows it, and the window closes by itself): the league in the status bar. One open decision: what closes it.
 
-VARIANTS.overlayBar = { label: "Title bar", options: { full: "Whole", short: "League and Close only" }, fallback: "full" };
 VARIANTS.overlayClose = { label: "Closes", options: { away: "Mouse 40 px away (EE2, Ctrl held to reach it)", delay: "1 s outside the item and the window", click: "A click in the game" }, fallback: "away" };
-for (const key of ["overlayBar", "overlayClose"]) {
+for (const key of ["overlayClose"]) {
   const v = VARIANTS[key];
   chosen[key] = params.get(key) in v.options ? params.get(key) : v.fallback;
 }
@@ -23,12 +23,15 @@ const OV_BOW_OFFERS = { count: "10 of 18 online", columns: ["Price", "Listed"], 
 // The items of the screen: the panel, the cell (column, row) and size in cells, and the window each opens.
 const OV_ITEMS = {
   headhunter: { panel: "stash", at: [3, 5], size: [2, 1], label: "Headhunter", rarity: "unique",
-    window: (unfolded = false) => win(topBar(), item({ ...HH, stats: HH_STATS }, unfolded), price(HH_PRICE), offers(HH_OFFERS), foot()) },
+    window: (unfolded = false) => ovWin(item({ ...HH, stats: HH_STATS }, unfolded), price(HH_PRICE), offers(HH_OFFERS)) },
   bow: { panel: "inventory", at: [5, 1], size: [2, 4], label: "Storm Bite", rarity: "rare",
-    window: (unfolded = false) => win(topBar(), item({ ...BOW_RARE, stats: BOW_FILTERS }, unfolded), price(OV_BOW_PRICE), offers(OV_BOW_OFFERS), foot()) },
+    window: (unfolded = false) => ovWin(item({ ...BOW_RARE, stats: BOW_FILTERS }, unfolded), price(OV_BOW_PRICE), offers(OV_BOW_OFFERS)) },
   ring: { panel: "inventory", at: [9, 3], size: [1, 1], label: "Ring", rarity: "rare",
-    window: (unfolded = false) => win(topBar(), item({ ...RING, stats: RING_FILTERS }, unfolded), price(RARE_ESTIMATE_BEFORE), offers({ state: "idle" }), foot()) },
+    window: (unfolded = false) => ovWin(item({ ...RING, stats: RING_FILTERS }, unfolded), price(RARE_ESTIMATE_BEFORE), offers({ state: "idle" })) },
 };
+// The window over the game: the blocks of the narrow window, without title bar, the league at the start of the
+// status bar.
+const ovWin = (...blocks) => win(...blocks, foot("Forbidden Rites · poe2scout 12min ago · GGG trade 2min ago"));
 const OV = { cell: 70, panel: 888, width: 420, stash: [24, 200], inventory: [2560 - 888 + 24, 880] };
 
 const ovItemsHtml = panel => Object.entries(OV_ITEMS).filter(([, it]) => it.panel === panel).map(([key, it]) => {
@@ -133,8 +136,6 @@ document.addEventListener("click", event => {
     ovState.unfolded = !ovState.unfolded;
     windowElement.innerHTML = OV_ITEMS[ovState.last.key].window(ovState.unfolded);
     ovPlace(windowElement);
-  } else if (event.target.closest(".app-icon-button[title='Close']") && event.target.closest(".ov-window")) {
-    ovClose("its Close button");
   } else if (ovState.open && !event.target.closest(".ov-window")) {
     ovClose("a click in the game");
   }

@@ -29,9 +29,6 @@
 .ov-window .win { border-radius: 0; box-shadow: 0 0 40px rgba(0, 0, 0, .7); max-height: 1440px; overflow-y: auto; }
 .ov-window.is-fading { opacity: .45; transition: opacity 1s linear; }
 /* Height: the content, level with the item (placed by the script), at most the height of the screen. */
-/* Title bar: the whole one, or the league and Close only. */
-:root[data-overlay-bar="short"] .ov-window .app-icon-button:not([title="Close"]),
-:root[data-overlay-bar="short"] .ov-real .app-icon-button:not([title="Close"]) { display: none; }
 /* The distance past which the window closes (Exiled Exchange 2: 40 px), around the point of Ctrl+D. */
 .ov-reach { position: absolute; width: 80px; height: 80px; margin: -40px 0 0 -40px; border: 2px dashed rgba(255, 255, 255, .55); border-radius: 50%; display: none; pointer-events: none; z-index: 3; }
 :root[data-overlay-close="away"] .ov-reach.is-on { display: block; }
