@@ -51,15 +51,11 @@ const ovScreen = `<div class="ov-screen"><div class="ov-stage">
 const ovEmpty = empty.replace(`<span class="key">C</span>`, `<span class="key">D</span>`);
 const ovEmptyNote = ovEmpty.replace(`<span>The price shows up here.</span>`, `<span>The price shows up here.</span>
   <span class="ov-note-line">Play in windowed fullscreen: in fullscreen, the game lets no application copy the item or show its price over it.</span>`);
-const ovBubble = newLeague("x").replace(/<span class="app-notice-text">.*?<\/span>/, `<span class="app-notice-text">Play in <b>windowed fullscreen</b>: in fullscreen, Ctrl+D can't copy the item and the price can't show over the game.</span>`).replace(">Switch<", ">Got it<");
-const ovHelp = settings.replace(`<div class="disclaimer">`, `<div class="field ov-help"><span class="label">Help</span>
-      <p><b>Ctrl+D does nothing?</b> Play in windowed fullscreen or in a window: in fullscreen, the game lets no application copy the item or show its price over it. Another application may also hold Ctrl+D, such as Exiled Exchange 2: close it, or copy with Ctrl+C.</p></div>
-    <div class="disclaimer">`);
-
-SECTIONS.unshift(["Windowed fullscreen note (14b1): where the player learns it", [
-  ["A · A line under the invitation, before the first item", win(topBar(), ovEmptyNote, foot())],
-  ["B · A bubble at the first launch, closed for good", win(topBar(), ovBubble, ovEmpty, foot())],
-  ["C · Help in the settings", win(topBar(true), ovHelp, foot(`<span class="app-author">Exile Market 0.1.0 · Made by Sylent · <a href="https://sylent.art" target="_blank" rel="noopener">sylent.art</a></span>`))],
+// Chosen by the owner on 2026-11-01: the line under the invitation only, the most discreet; no bubble, and no
+// Help in the settings for now (no dead elements there; its place to see later). The interface never names
+// another application.
+SECTIONS.unshift(["Windowed fullscreen note (14b1): A chosen, a line under the invitation", [
+  ["Chosen · A line under the invitation, before the first item", win(topBar(), ovEmptyNote, foot())],
 ]]);
 SECTIONS.unshift(["Window over the game (14b1): click an item of the screen, it stands for Ctrl+D", [
   ["Your screen, 2560 × 1440 at half scale: stash on the left, inventory on the right", ovScreen],

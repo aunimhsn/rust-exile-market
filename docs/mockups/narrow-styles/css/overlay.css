@@ -48,6 +48,3 @@
 .ov-key.is-held { background: #f2f5f9; color: #0f1216; }
 /* The note on the windowed fullscreen. */
 .ov-note-line { display: block; margin: 18px auto 0; max-width: 330px; color: var(--weak); font-size: 12px; line-height: 1.45; text-align: center; }
-.ov-help { display: grid; gap: 6px; }
-.ov-help p { margin: 0; color: var(--weak); font-size: 12.5px; line-height: 1.45; }
-.ov-help b { color: var(--text); font-weight: 600; }
