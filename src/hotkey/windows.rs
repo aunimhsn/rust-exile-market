@@ -42,7 +42,7 @@ impl CopySender {
         match self.keyboard.key(Key::C, Direction::Click) {
             // Windows doesn't tell a key it drops: a game run as administrator never gets it.
             Ok(()) => {
-                log::info!("Copy requested by the price-check hotkey (C, Ctrl held by the player)")
+                log::info!("Copy requested by the price-check hotkey (C, Ctrl held by the player)");
             }
             Err(error) => log::warn!("The copy can't be sent: {error}"),
         }
