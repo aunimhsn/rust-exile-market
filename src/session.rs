@@ -4,6 +4,7 @@
 use std::time::{Duration, SystemTime};
 
 use crate::clipboard::ClipboardEvent;
+use crate::estimate::Worth;
 use crate::game_data::{self, StatSource, TradeGroup, TradeStats};
 use crate::item::{CopiedItem, Item, ItemState, Modifier, ParseError, Rarity};
 use crate::item_names::ItemNames;
@@ -441,10 +442,10 @@ impl Session {
         Ok((price, rates))
     }
 
-    /// The rates of the currencies of the prices of the league shown, once known.
+    /// What the currencies are worth with the prices of the league shown, once known.
     #[must_use]
-    pub fn rates(&self) -> Option<Rates> {
-        self.league_prices().map(|prices| prices.list.rates)
+    pub fn worth(&self) -> Option<Worth<'_>> {
+        self.league_prices().map(|prices| Worth::of(&prices.list))
     }
 
     /// What the search for `item` on the trade site looks for; none for a magic item whose

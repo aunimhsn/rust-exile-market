@@ -60,7 +60,7 @@ enum PriceView<'a> {
         unique: bool,
     },
     /// The price of a rare, magic or normal item, from its similar offers.
-    Estimated(Estimate),
+    Estimated(Estimate<'a>),
     /// The uniques an unidentified item can be.
     Candidates {
         candidates: &'a [Candidate<'a>],
@@ -87,7 +87,7 @@ enum Notice<'a> {
 /// `estimate`, given the state of the `prices` of the `league` shown.
 fn view<'a>(
     price: &'a Result<(FixedPrice<'a>, Rates), NoFixedPrice>,
-    estimate: Option<Estimate>,
+    estimate: Option<Estimate<'a>>,
     rarity: Rarity,
     prices: PricesState,
     league: Option<&'a str>,
@@ -131,7 +131,7 @@ fn view<'a>(
 pub struct PriceBlock<'a> {
     item: &'a Item,
     price: Result<(FixedPrice<'a>, Rates), NoFixedPrice>,
-    estimate: Option<Estimate>,
+    estimate: Option<Estimate<'a>>,
     prices: PricesState,
     league: Option<&'a str>,
     i18n: &'a Translator,
@@ -160,7 +160,7 @@ impl<'a> PriceBlock<'a> {
 
     /// The estimated price of an item without a fixed price, from its similar offers.
     #[must_use]
-    pub fn estimate(mut self, estimate: Option<Estimate>) -> Self {
+    pub fn estimate(mut self, estimate: Option<Estimate<'a>>) -> Self {
         self.estimate = estimate;
         self
     }
@@ -276,7 +276,7 @@ impl<'a> PriceBlock<'a> {
     /// The estimated price in the three currencies, the warning of an estimate from few
     /// offers, then how it is made.
     fn estimated(&self, ui: &mut Ui, estimate: Estimate) {
-        amounts(ui, estimate.exalted, estimate.reference.rates);
+        amounts(ui, estimate.exalted, estimate.reference.worth.rates);
         let counted = estimate.counted;
         if counted < COUNTED {
             ui.add_space(LINE_GAP);
@@ -491,12 +491,16 @@ fn message(ui: &mut Ui, text: &str, tint: egui::Color32) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::estimate::Reference;
+    use crate::estimate::{Reference, Worth};
     use std::time::Duration;
 
     const RATES: Rates = Rates {
         chaos: 75.0,
         divine: 750.0,
+    };
+    const WORTH: Worth = Worth {
+        rates: RATES,
+        currencies: &[],
     };
     const KNOWN: PricesState = PricesState::Known {
         age: Duration::ZERO,
@@ -540,7 +544,7 @@ mod tests {
             total: 18,
             reference: Reference {
                 exalted: 1925.0,
-                rates: RATES,
+                worth: WORTH,
             },
             searched_catalyst: None,
         };

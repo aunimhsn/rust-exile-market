@@ -239,7 +239,7 @@ fn block(ready: Block, wait: Duration, busy: bool) -> Block {
 pub struct OffersBlock<'a> {
     offers: &'a Offers,
     kind: SearchKind,
-    reference: Option<Reference>,
+    reference: Option<Reference<'a>>,
     /// The copied item, and its lines, which the tooltips compare.
     item: &'a Item,
     lines: &'a CopiedLines,
@@ -253,7 +253,7 @@ impl<'a> OffersBlock<'a> {
     pub fn new(
         offers: &'a Offers,
         kind: SearchKind,
-        reference: Option<Reference>,
+        reference: Option<Reference<'a>>,
         item: &'a Item,
         lines: &'a CopiedLines,
         i18n: &'a Translator,
@@ -1104,6 +1104,7 @@ fn spinner(painter: &Painter, center: Pos2, time: f64) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::estimate::Worth;
     use crate::prices::Rates;
     use crate::trade::offers::OfferItem;
 
@@ -1111,10 +1112,14 @@ mod tests {
         chaos: 75.0,
         divine: 750.0,
     };
+    const WORTH: Worth = Worth {
+        rates: RATES,
+        currencies: &[],
+    };
     /// 12.4 Divine Orbs.
     const REFERENCE: Reference = Reference {
         exalted: 9300.0,
-        rates: RATES,
+        worth: WORTH,
     };
 
     fn offer(amount: f64, currency: &str, seller: SellerStatus) -> ItemOffer {
@@ -1215,7 +1220,7 @@ mod tests {
     }
 
     #[test]
-    fn another_currency_has_its_icon_and_its_name_and_is_never_suspicious() {
+    fn another_currency_has_its_icon_and_its_name_and_isnt_suspicious_without_price() {
         let rows = item_rows(
             &[offer(1.0, "annul", SellerStatus::Online)],
             Some(REFERENCE),
@@ -1231,6 +1236,36 @@ mod tests {
         assert_eq!(price.label(Language::English), "1 Orb of Annulment");
         assert_eq!(price.label(Language::French), "1 Orbe d'annulation");
         assert!(!rows[0].suspicious);
+    }
+
+    #[test]
+    fn an_offer_in_a_currency_of_the_price_database_may_be_suspicious() {
+        // 12.4 div of reference: 10 Orbs of Annulment at 150 ex are 1,500 ex, under a quarter.
+        let currencies = [crate::prices::CurrencyPrice {
+            name: "Orb of Annulment".to_owned(),
+            exchange_id: "annul".to_owned(),
+            price: crate::prices::Price {
+                exalted: 150.0,
+                quantity: 100,
+                history: Vec::new(),
+            },
+        }];
+        let reference = Reference {
+            exalted: 9300.0,
+            worth: Worth {
+                rates: RATES,
+                currencies: &currencies,
+            },
+        };
+        let offers = [
+            offer(10.0, "annul", SellerStatus::Online),
+            offer(60.0, "annul", SellerStatus::Online),
+        ];
+
+        let rows = item_rows(&offers, Some(reference), None, SystemTime::UNIX_EPOCH);
+
+        let suspicious: Vec<bool> = rows.iter().map(|row| row.suspicious).collect();
+        assert_eq!(suspicious, [true, false]);
     }
 
     #[test]
@@ -1284,7 +1319,7 @@ mod tests {
         };
         let reference = Reference {
             exalted: 182.0,
-            rates: RATES,
+            worth: WORTH,
         };
 
         let rows = exchange_rows(&[offer], Some(reference), SystemTime::UNIX_EPOCH);

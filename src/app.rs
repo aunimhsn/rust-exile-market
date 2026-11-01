@@ -11,7 +11,7 @@ use egui::{
 };
 
 use crate::clipboard::{ClipboardEvent, ClipboardWatch};
-use crate::estimate::{self, Estimate, Reference};
+use crate::estimate::{self, Estimate, Reference, Worth};
 use crate::filters::{Filters, Window};
 use crate::hotkey::PriceCheckHotkey;
 use crate::i18n::{DOWNLOAD_QUOTE_COUNT, Message, Translator};
@@ -307,9 +307,11 @@ impl ExileMarketApp {
         let tradable = self.session.tradable(item);
         let must_identify = self.session.must_identify(item);
         let fixed_price = self.session.fixed_price(item);
-        let estimate = shown_estimate(&self.offers, item, &fixed_price, self.session.rates());
+        let worth = self.session.worth();
+        let estimate = shown_estimate(&self.offers, item, &fixed_price, worth);
         // Without a fixed price, the estimate tells the suspicious offers.
-        let reference = reference(&fixed_price).or(estimate.map(|estimate| estimate.reference));
+        let reference =
+            reference(&fixed_price, worth).or(estimate.map(|estimate| estimate.reference));
         let mut offers_action = None;
         let (action, height) = ui::content(ui, to_top, |ui| {
             let action = ItemBlock::new(
@@ -739,24 +741,31 @@ fn to_points(pixels: i32, scale: f32) -> f32 {
     pixels as f32 / scale
 }
 
-/// The price of one item that tells a suspicious offer: the price of a fixed-name item.
-fn reference(fixed_price: &Result<(FixedPrice, Rates), NoFixedPrice>) -> Option<Reference> {
-    let (exalted, rates) = match fixed_price {
-        Ok((FixedPrice::Currency(currency), rates)) => (currency.price.exalted, *rates),
-        Ok((FixedPrice::Unique(unique), rates)) => (unique.price.exalted, *rates),
+/// The price of one item that tells a suspicious offer: the price of a fixed-name item, with
+/// the `worth` of the currencies of its prices.
+fn reference<'a>(
+    fixed_price: &Result<(FixedPrice, Rates), NoFixedPrice>,
+    worth: Option<Worth<'a>>,
+) -> Option<Reference<'a>> {
+    let exalted = match fixed_price {
+        Ok((FixedPrice::Currency(currency), _)) => currency.price.exalted,
+        Ok((FixedPrice::Unique(unique), _)) => unique.price.exalted,
         Ok((FixedPrice::Uniques(_), _)) | Err(_) => return None,
     };
-    Some(Reference { exalted, rates })
+    Some(Reference {
+        exalted,
+        worth: worth?,
+    })
 }
 
 /// The estimated price of `item`, the item shown, without a fixed price, from the `offers` of
-/// its search and the `rates` of the prices of the league.
-fn shown_estimate(
+/// its search and the `worth` of the currencies with the prices of the league.
+fn shown_estimate<'a>(
     offers: &Offers,
     item: &Item,
     fixed_price: &Result<(FixedPrice, Rates), NoFixedPrice>,
-    rates: Option<Rates>,
-) -> Option<Estimate> {
+    worth: Option<Worth<'a>>,
+) -> Option<Estimate<'a>> {
     let Err(NoFixedPrice::NotFixedName) = fixed_price else {
         return None;
     };
@@ -771,7 +780,7 @@ fn shown_estimate(
         return None;
     };
     // The next offers loaded don't move it.
-    estimate::estimate(&offers[..*first_page], *total, rates?, searched_catalyst)
+    estimate::estimate(&offers[..*first_page], *total, worth?, searched_catalyst)
 }
 
 /// The state of the trade site in the status bar, at `now`: the long wait before the next
@@ -928,6 +937,10 @@ mod tests {
         chaos: 70.0,
         divine: 700.0,
     };
+    const WORTH: Worth = Worth {
+        rates: RATES,
+        currencies: &[],
+    };
 
     /// Offers of a bow for `amounts` Divine Orbs.
     fn divines(amounts: &[f64]) -> Vec<crate::trade::offers::ItemOffer> {
@@ -1043,7 +1056,7 @@ mod tests {
             ),
             SystemTime::now(),
         );
-        let first = shown_estimate(&offers, &amulet, &rare, Some(RATES)).unwrap();
+        let first = shown_estimate(&offers, &amulet, &rare, Some(WORTH)).unwrap();
         let _ = offers.more();
         // Counted, the first of them would lower the estimate to 1.1 div.
         offers.apply(
@@ -1061,7 +1074,7 @@ mod tests {
         );
 
         assert_eq!(
-            shown_estimate(&offers, &amulet, &rare, Some(RATES)),
+            shown_estimate(&offers, &amulet, &rare, Some(WORTH)),
             Some(first)
         );
         assert!((first.exalted - 1.2 * 700.0).abs() < 1e-9);
@@ -1072,13 +1085,13 @@ mod tests {
             "no rates yet"
         );
         assert_eq!(
-            shown_estimate(&offers, &amulet, &Err(NoFixedPrice::NotPriced), Some(RATES)),
+            shown_estimate(&offers, &amulet, &Err(NoFixedPrice::NotPriced), Some(WORTH)),
             None,
             "a fixed-name item isn't estimated"
         );
         let _ = offers.search(searched(Vec::new()), now);
         assert_eq!(
-            shown_estimate(&offers, &amulet, &rare, Some(RATES)),
+            shown_estimate(&offers, &amulet, &rare, Some(WORTH)),
             None,
             "while searching"
         );
@@ -1116,7 +1129,7 @@ mod tests {
                 &offers,
                 &amulet,
                 &Err(NoFixedPrice::NotFixedName),
-                Some(RATES),
+                Some(WORTH),
             )
             .unwrap();
             assert_eq!(estimate.counted, counted);
