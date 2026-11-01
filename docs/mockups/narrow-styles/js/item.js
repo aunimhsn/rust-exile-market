@@ -114,7 +114,7 @@ function item(it, unfolded = false) {
           + (affixOrigin ? `<span class="range app-origin-alone">${affixOrigin}</span>` : "");
         return `<div class="mod2 min-top${cls}">${check}<span class="text">${row.mod}</span>${field}<div class="roll2 app-affixes">${lines}</div></div>`;
       }
-      // A filter: its checkbox, its text on two lines at most (whole under the pointer), its minimum
+      // A filter: its checkbox, its text on four lines at most (whole under the pointer; two until 2026-11-01), its minimum
       // on the line of the checkbox in a column kept for it, and its bar and range under the text.
       // A stat without a filter has no checkbox and starts at the left edge.
       // A line the trade site can't search: a circle struck through in place of its checkbox, in the
