@@ -395,22 +395,22 @@ offers-more-tooltip = Show more offers
 offers-suspicious = Be careful: far below the market price.
 # Under the name of an offer whose quality of a catalyst is of another kind than the item's, while its quality is searched.
 offers-other-quality = Another kind of quality: not counted in the estimate.
-# After the price of such an offer, in the list: its kind of quality.
+# After the price of such an offer, in the list: its kind of quality, written as the filter, so that it reads as a quality and not as a name.
 offer-quality-kind = { $kind ->
-        [life] Life
-        [mana] Mana
-        [defence] Defence
-        [physical] Physical
-        [fire] Fire
-        [cold] Cold
-        [lightning] Lightning
-        [chaos] Chaos
-        [attack] Attack
-        [caster] Caster
-        [speed] Speed
-        [attribute] Attribute
-        [minion] Minion
-       *[other] Other
+        [life] Life quality
+        [mana] Mana quality
+        [defence] Defence quality
+        [physical] Physical quality
+        [fire] Fire quality
+        [cold] Cold quality
+        [lightning] Lightning quality
+        [chaos] Chaos quality
+        [attack] Attack quality
+        [caster] Caster quality
+        [speed] Speed quality
+        [attribute] Attribute quality
+        [minion] Minion quality
+       *[other] Other quality
     }
 seller-online = Online
 seller-away = Away

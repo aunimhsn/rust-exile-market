@@ -243,7 +243,7 @@ fn the_offers_priced_in_waystones_or_an_unknown_currency_are_left_out() {
         listed("a", &price(1, "exalted")),
         listed("b", &price(3, "waystone-12")),
         listed("c", &price(1, "vaal")),
-        listed("d", &price(4, "gilded-effigy")),
+        listed("d", &price(4, "not-a-currency")),
         listed("e", ""),
     ))
     .expect("read");

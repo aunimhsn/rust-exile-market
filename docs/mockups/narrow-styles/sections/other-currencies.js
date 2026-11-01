@@ -64,10 +64,11 @@ const otherCurrencyBlock = (option, lang = "en", extra = {}) => offers({
   rows: otherCurrencyOffers(option, lang, extra.hoveredIcon),
   ...extra,
 }, lang);
-const otherWindow = (option, lang, extra) => win(topBar(), item(lang === "fr" ? WAYSTONE_FR : WAYSTONE),
+const otherWindow = (option, lang, extra) => win(topBar(), item(lang === "fr" ? WAYSTONE_PROPS_FR : WAYSTONE_PROPS),
   price(lang === "fr" ? OTHER_WAYSTONE_PRICE_FR : OTHER_WAYSTONE_PRICE, lang), otherCurrencyBlock(option, lang, extra), foot());
 
-// D chosen by the owner on 2026-11-01. Then, asked by the owner: the offers priced in Waystones left out, a
+// The waystone of the windows: the item block of 13k5c ("Waystone · T12", its properties), as the application
+// shows it. D chosen by the owner on 2026-11-01. Then, asked by the owner: the offers priced in Waystones left out, a
 // waystone not being stackable, so that such a price is odd, and those priced in a currency without icon
 // (unknown to the application, the Gilded Effigy here); the trade site can't leave them out (its price
 // filter takes one option: every currency in Exalted Orbs, the Exalted or Divine Orbs, or one of the 10
@@ -80,7 +81,7 @@ const otherWindow = (option, lang, extra) => win(topBar(), item(lang === "fr" ? 
 // Chosen by the owner on 2026-11-01: E1, to keep the market clean: the application doesn't encourage the
 // sellers who price in odd currencies.
 const withoutWaystones = rows => rows.filter(r => r.k && !r.k.startsWith("waystone-"));
-const dWindow = (lang, extra = {}) => win(topBar(), item(lang === "fr" ? WAYSTONE_FR : WAYSTONE),
+const dWindow = (lang, extra = {}) => win(topBar(), item(lang === "fr" ? WAYSTONE_PROPS_FR : WAYSTONE_PROPS),
   price(lang === "fr" ? OTHER_WAYSTONE_PRICE_FR : OTHER_WAYSTONE_PRICE, lang),
   offers({
     ...(lang === "fr"
@@ -96,7 +97,9 @@ SECTIONS.unshift(["Prices in other currencies (fix a): D chosen; the offers in W
   // The tooltip of an offer: its price with the icon alone, without the name (owner, 2026-11-01).
   ["D · an offer in Vaal Orbs hovered: the icon alone in its tooltip", dWindow("en", { hover: 2, tooltip: {
     rarity: "rare", name: "Gloom Path", price: "1", currency: "vaal",
-    meta: "Waystone (Tier 12) · ilvl 81", status: "away",
+    // The tier short, in its color, as chosen in 13k5c2; in the tooltip, in the font of its line, not bold
+    // (owner, 2026-11-01).
+    meta: `${waystoneBase("Waystone", 12)} · ilvl 81`, status: "away",
     mods: [
       { text: "Monsters have 95% increased Stun Buildup", value: 95, yours: 91 },
       { text: "17% increased Monster Damage", value: 17, yours: 18 },
@@ -105,9 +108,18 @@ SECTIONS.unshift(["Prices in other currencies (fix a): D chosen; the offers in W
   } })],
   // With the name, the "?" of a suspicious offer (struck through, the price only) and the kind of quality of
   // an offer of another kind (13k4) come after the name, the name faint with its price.
-  ["D · a suspicious offer and offers of another kind of quality", win(topBar(), item(AMULET_MANA), price(MANA_ONLY),
+  ["Before · a suspicious offer and offers of another kind of quality, the kind alone", win(topBar(), item(AMULET_MANA), price(MANA_ONLY),
     offers({ count: "10 of 27 online", columns: ["Price", "Listed"], rows: manaRows({ marked: true }).map((r, i) => ({
       ...r, name: CURRENCY_NAMES[r.k][0], sus: (i === 2 && !r.other) || r.sus })) }), foot())],
+  // The kind of another quality after the name of the currency could read as a name (owner, 2026-11-01:
+  // "Minion" after "Divine Orb" read as the name of a buyer). Asked by the owner: written as the tier of a
+  // waystone (13k5c2), after a faint dot, short and bold in a color of its own: the red of a quality of
+  // another kind in the tooltip of an offer (13k4), written as its filter, "Caster quality". Chosen by the
+  // owner on 2026-11-01.
+  ["Chosen · the kind after a dot, in the red of another quality, as the tier of a waystone", win(topBar(), item(AMULET_MANA), price(MANA_ONLY),
+    offers({ count: "10 of 27 online", columns: ["Price", "Listed"], rows: manaRows({ marked: true }).map((r, i) => ({
+      ...r, name: CURRENCY_NAMES[r.k][0], sus: (i === 2 && !r.other) || r.sus, other: undefined,
+      kindTag: r.other && `${r.other} quality` })) }), foot())],
   // The narrowest column: the price of the currency exchange, beside the stock and the listing time; its
   // offers are always paid in Exalted Orbs (in Divine Orbs for the Exalted Orb itself), whose name fits.
   ["D · the currency exchange in French, its narrow column", win(topBar(),
@@ -124,7 +136,7 @@ SECTIONS.unshift(["Prices in other currencies (fix a): D chosen; the offers in W
 
 // Put after the section above.
 SECTIONS.splice(1, 0, ["Prices in other currencies (fix a), the first decision: D chosen, the name after every icon", [
-  ["Today: the raw id of the trade site, without icon", win(topBar(), item(WAYSTONE), price(OTHER_WAYSTONE_PRICE),
+  ["Today: the raw id of the trade site, without icon", win(topBar(), item(WAYSTONE_PROPS), price(OTHER_WAYSTONE_PRICE),
     offers({ count: "10 of 84 online", columns: ["Price", "Listed"], rows: otherCurrencyRows.map(r => ({
       ...r, k: THREE_ORBS.includes(r.k) ? r.k : undefined,
       name: THREE_ORBS.includes(r.k) ? undefined : r.k || "gilded-effigy",

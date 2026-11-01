@@ -404,22 +404,22 @@ offers-more-tooltip = Afficher plus d'offres
 offers-suspicious = Attention : très en dessous du prix du marché.
 # Sous le nom d'une offre dont la qualité d'un catalyseur est d'un autre type que celle de l'objet, quand sa qualité est cherchée.
 offers-other-quality = Qualité d'un autre type : cette offre ne compte pas dans l'estimation.
-# Après le prix d'une telle offre, dans la liste : son type de qualité.
+# Après le prix d'une telle offre, dans la liste : son type de qualité, écrit comme le filtre, pour qu'il se lise comme une qualité et non comme un nom.
 offer-quality-kind = { $kind ->
-        [life] Vie
-        [mana] Mana
-        [defence] Défense
-        [physical] Physique
-        [fire] Feu
-        [cold] Froid
-        [lightning] Foudre
-        [chaos] Chaos
-        [attack] Attaque
-        [caster] Sorts
-        [speed] Vitesse
-        [attribute] Attributs
-        [minion] Créatures
-       *[other] Autre
+        [life] Qualité de vie
+        [mana] Qualité de mana
+        [defence] Qualité de défense
+        [physical] Qualité physique
+        [fire] Qualité de feu
+        [cold] Qualité de froid
+        [lightning] Qualité de foudre
+        [chaos] Qualité de chaos
+        [attack] Qualité d'attaque
+        [caster] Qualité de sorts
+        [speed] Qualité de vitesse
+        [attribute] Qualité d'attributs
+        [minion] Qualité de créatures
+       *[other] Autre qualité
     }
 seller-online = En ligne
 seller-away = Absent

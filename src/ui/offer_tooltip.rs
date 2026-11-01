@@ -351,7 +351,7 @@ fn requirements(
 
 /// The base type of the offer, its item level and its corruption, wrapped at `width`. An
 /// offer of waystone, when the copied `item` is one, writes its tier short, in its color, as
-/// the item block does: "Waystone · T12". An offer of skill gem, when the copied `item` is one,
+/// the item block does, but not bold: "Waystone · T12". An offer of skill gem, when the copied `item` is one,
 /// writes the item class of the item in place of its base type, the name of the gem again,
 /// and its level in its color: "Skill Gems · Level 16".
 fn meta(offer: &ItemOffer, item: &Item, i18n: &Translator, width: f32) -> LayoutJob {
@@ -371,11 +371,8 @@ fn meta(offer: &ItemOffer, item: &Item, i18n: &Translator, width: f32) -> Layout
     if let Some((name, tier)) = waystone {
         append(name, &font, color::WEAK);
         append(SEPARATOR, &font, color::WEAK);
-        append(
-            &format!("T{tier}"),
-            &text::tooltip_tier(),
-            waystone_tier_color(tier),
-        );
+        // In the font of its line, not bold as in the item block (owner, 2026-11-01).
+        append(&format!("T{tier}"), &font, waystone_tier_color(tier));
     } else if let Some(level) = gem_level {
         append(item.class(), &font, color::WEAK);
         append(SEPARATOR, &font, color::WEAK);

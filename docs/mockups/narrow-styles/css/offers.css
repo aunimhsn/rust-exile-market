@@ -35,6 +35,9 @@
 .tt-name { font-weight: 700; font-size: 14px; }
 .tt-price { font-family: var(--font-number); font-weight: 600; }
 .tt-meta { color: var(--weak); font-size: 12px; margin-top: 2px; }
+/* The tier of a waystone in the tooltip: in its color, but in the font of its line, not bold (owner,
+   2026-11-01); the item block keeps it bold. */
+.tt-meta .app-waystone-tier { font-weight: inherit; font-size: inherit; }
 /* The requirements of an offer of gem (13k5d2), as the line of the item block. */
 .tt-req { color: var(--weak); font-size: 12px; margin-top: 2px; }
 .tt-mods { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--control-line); display: grid; gap: 3px; }
@@ -120,3 +123,7 @@
 .offers .row-o .p, .tt-price { min-width: 0; }
 /* A suspicious offer, or one of another kind of quality: the name of its currency faint too. */
 .offers .row-o.sus .app-currency-name, .offers .row-o.is-other .app-currency-name { color: var(--faint); }
+/* The kind of another quality written as the tier of a waystone: a faint dot, then the kind short and bold,
+   in the red of a quality of another kind in the tooltip. */
+.app-kind-dot { color: var(--faint); font: 500 12px var(--font-body); margin-left: 2px; }
+.app-kind-tag { color: var(--fall); font: 700 12px var(--font-body); }

@@ -127,6 +127,14 @@ mod tests {
     }
 
     #[test]
+    fn an_id_with_an_accent_finds_its_icon() {
+        // Written by build.rs from the name of its file, the path most likely to break.
+        let currency = shown("legacy-of-mjölner").unwrap();
+        assert!(currency.icon.starts_with(b"\x89PNG"));
+        assert_eq!(currency.name(Language::English), "Legacy of Mjölner");
+    }
+
+    #[test]
     fn the_names_have_no_space_around_them() {
         for currency in CURRENCIES.values() {
             for language in Language::ALL {
@@ -139,9 +147,9 @@ mod tests {
     #[test]
     fn a_waystone_or_an_unknown_currency_isnt_shown() {
         assert!(known("waystone-12"));
-        assert!(!known("gilded-effigy"));
+        assert!(!known("not-a-currency"));
         assert_eq!(shown("waystone-12"), None);
-        assert_eq!(shown("gilded-effigy"), None);
+        assert_eq!(shown("not-a-currency"), None);
     }
 
     #[test]

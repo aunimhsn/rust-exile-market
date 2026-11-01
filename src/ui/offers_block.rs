@@ -10,12 +10,13 @@ use std::f32::consts::{PI, TAU};
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime};
 
+use egui::text::{LayoutJob, TextFormat};
 use egui::{
     Color32, CursorIcon, Galley, Id, Key, Painter, Pos2, Rect, Response, Role, Sense, Stroke, Ui,
     Vec2, WidgetInfo, pos2, vec2,
 };
 
-use super::item_block::rarity_color;
+use super::item_block::{SEPARATOR, rarity_color};
 use super::offer_tooltip::{OfferTooltip, Pointer, TooltipState, reach};
 use super::theme::{color, size, text};
 use super::{images, widgets};
@@ -73,10 +74,8 @@ const DOT_RADIUS: f32 = 3.0;
 const DOT_GAP: f32 = 6.0;
 /// The "?" after a suspicious price.
 const SUSPICIOUS_GAP: f32 = 2.0;
-/// The orb of an offer of another kind of quality, faint, and the space before its kind,
-/// beyond the space after the orb.
+/// The icon of an offer of another kind of quality, faint.
 const OTHER_QUALITY_ORB: u8 = 115;
-const OTHER_QUALITY_GAP: f32 = 4.0;
 /// The double chevron under the list: its height, the space above it, how high it is
 /// raised to look centered, and how far it slides down under the pointer.
 const MORE_HEIGHT: f32 = 32.0;
@@ -98,8 +97,9 @@ pub enum OffersAction {
 pub(super) struct RowPrice {
     pub(super) amount: String,
     /// Its currency, drawn by its icon, its name after it in a row; `None` for a currency
-    /// the application doesn't know, whose offers of items are left out (the offers of the
-    /// currency exchange are paid in Exalted or Divine Orbs).
+    /// whose offers aren't shown (a waystone, or one the application doesn't know): the
+    /// offers of items in it are left out, those of the currency exchange are paid in
+    /// Exalted or Divine Orbs.
     pub(super) currency: Option<&'static ExchangeCurrency>,
 }
 
@@ -439,7 +439,7 @@ impl<'a> OffersBlock<'a> {
             if wait > LONG_WAIT {
                 lines.push((i18n.offers_limit(wait), color::WARNING));
             }
-            if list.rows.is_empty() {
+            if no_offer(list.rows, list.more) {
                 lines.push((i18n.text(Message::OffersNone), color::WEAK));
                 lines.push((i18n.text(Message::OffersNoneHint), color::WEAK));
             }
@@ -842,13 +842,25 @@ impl<'a> OffersBlock<'a> {
             );
         }
         let mut right = start.x + size.x;
-        // The kind of another quality, or the "?", after the name, which leaves them room.
+        // The kind of another quality, or the "?", after the name, which leaves them room. The
+        // kind is written as the tier of a waystone, after a dot, short and bold in the red of
+        // another quality in the tooltip, so that it isn't read as a name.
         let after = if let Some(catalyst) = row.other_quality {
-            let kind = widgets::text_line(ui, self.i18n.offer_quality_kind(catalyst), text::note());
-            Some((kind, ORB_GAP + OTHER_QUALITY_GAP, color::WEAK))
+            let mut job = LayoutJob::default();
+            job.append(
+                SEPARATOR,
+                0.0,
+                TextFormat::simple(text::note(), color::FAINT),
+            );
+            job.append(
+                &self.i18n.offer_quality_kind(catalyst),
+                0.0,
+                TextFormat::simple(text::other_quality_kind(), color::FALL),
+            );
+            Some((painter.layout_job(job), 0.0, color::FALL))
         } else if row.suspicious {
             let mark = widgets::text_line(ui, "?", text::list_amount());
-            Some((mark, SUSPICIOUS_GAP, color::WARNING))
+            Some((mark, ORB_GAP + SUSPICIOUS_GAP, color::WARNING))
         } else {
             None
         };
@@ -897,6 +909,13 @@ struct List<'a> {
     more: More,
     /// The next offers couldn't come.
     more_failed: bool,
+}
+
+/// Whether the block says that no offer was found: none shown, and none left to fetch. A page
+/// whose offers were all left out for their currency (the waystones) shows nothing above the
+/// double chevron, which fetches the next ones.
+fn no_offer(rows: &[Row], more: More) -> bool {
+    rows.is_empty() && more == More::None
 }
 
 /// What is under the list.
@@ -1223,8 +1242,25 @@ mod tests {
     }
 
     #[test]
+    fn no_offer_is_said_only_when_none_is_left_to_fetch() {
+        assert!(no_offer(&[], More::None));
+        assert!(
+            !no_offer(&[], More::Chevron),
+            "a page left out for its currency: the next ones may be shown"
+        );
+        assert!(!no_offer(&[], More::Loading));
+        let rows = item_rows(
+            &[offer(1.0, "divine", SellerStatus::Online)],
+            None,
+            None,
+            SystemTime::UNIX_EPOCH,
+        );
+        assert!(!no_offer(&rows, More::None));
+    }
+
+    #[test]
     fn a_currency_the_application_doesnt_know_has_no_icon_nor_name() {
-        let price = row_price(4.0, "gilded-effigy");
+        let price = row_price(4.0, "not-a-currency");
 
         assert_eq!(price.currency, None);
         assert_eq!(price.label(Language::English), "4");

@@ -905,7 +905,7 @@ impl Translator {
         )
     }
 
-    /// The kind of the quality of an offer, after its price in the list: "Attack".
+    /// The kind of the quality of an offer, after its price in the list: "Attack quality".
     #[must_use]
     pub fn offer_quality_kind(&self, catalyst: Catalyst) -> String {
         self.format_kind(OFFER_QUALITY_KIND, catalyst)
@@ -1552,7 +1552,10 @@ mod tests {
             french.estimate_median(3, Some(Catalyst::Attack)),
             "Médiane des 3 offres similaires de qualité d'attaque."
         );
-        assert_eq!(french.offer_quality_kind(Catalyst::Caster), "Sorts");
+        assert_eq!(
+            french.offer_quality_kind(Catalyst::Caster),
+            "Qualité de sorts"
+        );
     }
 
     #[test]
@@ -1574,7 +1577,7 @@ mod tests {
                 let note = translator.estimate_median(3, Some(catalyst));
                 let word = translator.offer_quality_kind(catalyst);
                 assert!(
-                    !["Other", "Autre"].contains(&word.as_str())
+                    !["Other quality", "Autre qualité"].contains(&word.as_str())
                         && !note.ends_with(" of quality.")
                         && !note.ends_with(" de qualité."),
                     "{catalyst:?} in {language:?}: {word}, {note}"

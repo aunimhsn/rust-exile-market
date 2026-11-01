@@ -93,6 +93,35 @@ fn main() -> Result<()> {
         .map(|entry| (entry.id.as_str(), entry.text.trim()))
         .collect();
 
+    // Every icon is taken before any file is replaced, so that a failure halfway leaves the
+    // icons of the last run as they were.
+    let mut index = String::new();
+    let mut icons = Vec::new();
+    for group in &english.result {
+        for entry in &group.entries {
+            let Some(image) = &entry.image else { continue };
+            if !is_file_name(&entry.id) {
+                return Err(format!("{:?}: not a file name", entry.id).into());
+            }
+            let french = french_names
+                .get(entry.id.as_str())
+                .ok_or_else(|| format!("{}: no French name", entry.id))?;
+            if !icons.is_empty() {
+                thread::sleep(CDN_PAUSE);
+            }
+            let png = shrunk(&get(&agent, &format!("{CDN}{image}"))?)
+                .map_err(|error| format!("{}: {error}", entry.id))?;
+            icons.push((format!("{}.png", entry.id), png));
+            index.push_str(&serde_json::to_string(&Currency {
+                id: &entry.id,
+                group: &group.id,
+                english: entry.text.trim(),
+                french,
+            })?);
+            index.push('\n');
+        }
+    }
+
     let output = Path::new(OUTPUT);
     fs::create_dir_all(output)?;
     for file in fs::read_dir(output)? {
@@ -101,34 +130,21 @@ fn main() -> Result<()> {
             fs::remove_file(path)?;
         }
     }
-
-    let mut index = String::new();
-    let mut count = 0;
-    for group in &english.result {
-        for entry in &group.entries {
-            let Some(image) = &entry.image else { continue };
-            let french = french_names
-                .get(entry.id.as_str())
-                .ok_or_else(|| format!("{}: no French name", entry.id))?;
-            if count > 0 {
-                thread::sleep(CDN_PAUSE);
-            }
-            let png = shrunk(&get(&agent, &format!("{CDN}{image}"))?)
-                .map_err(|error| format!("{}: {error}", entry.id))?;
-            fs::write(output.join(format!("{}.png", entry.id)), png)?;
-            index.push_str(&serde_json::to_string(&Currency {
-                id: &entry.id,
-                group: &group.id,
-                english: entry.text.trim(),
-                french,
-            })?);
-            index.push('\n');
-            count += 1;
-        }
+    for (name, png) in &icons {
+        fs::write(output.join(name), png)?;
     }
     fs::write(output.join(INDEX), index)?;
-    println!("{count} icons written to {OUTPUT}/");
+    println!("{} icons written to {OUTPUT}/", icons.len());
     Ok(())
+}
+
+/// Whether the id of an item can name its file on every system: no separator of a path, no
+/// character Windows refuses.
+fn is_file_name(id: &str) -> bool {
+    !id.is_empty()
+        && !id.starts_with('.')
+        && !id.contains(['/', '\\', ':', '*', '?', '"', '<', '>', '|'])
+        && !id.chars().any(char::is_control)
 }
 
 /// The image `png`, fit into [`SIZE`] pixels, centered on a transparent square of that size
@@ -167,4 +183,46 @@ fn read(agent: &ureq::Agent, url: &str) -> Result<Vec<u8>> {
         .take(16 * 1024 * 1024)
         .read_to_end(&mut bytes)?;
     Ok(bytes)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use image::Rgba;
+
+    /// `image` encoded as a PNG.
+    fn png(image: &RgbaImage) -> Vec<u8> {
+        let mut bytes = Vec::new();
+        image
+            .write_with_encoder(PngEncoder::new(&mut bytes))
+            .expect("encoded");
+        bytes
+    }
+
+    #[test]
+    fn an_image_wider_than_high_is_centered_on_a_transparent_square() {
+        let wide = RgbaImage::from_pixel(64, 32, Rgba([200, 100, 50, 255]));
+
+        let square = image::load_from_memory(&shrunk(&png(&wide)).expect("shrunk"))
+            .expect("read")
+            .into_rgba8();
+
+        assert_eq!(square.dimensions(), (SIZE, SIZE));
+        assert_eq!(square.get_pixel(0, 0)[3], 0, "transparent above");
+        assert_eq!(square.get_pixel(0, SIZE - 1)[3], 0, "transparent below");
+        assert_eq!(
+            *square.get_pixel(SIZE / 2, SIZE / 2),
+            Rgba([200, 100, 50, 255])
+        );
+    }
+
+    #[test]
+    fn an_id_names_a_file_only_without_a_path_or_a_forbidden_character() {
+        assert!(is_file_name("vaal"));
+        assert!(is_file_name("legacy-of-mjölner"));
+        for id in ["", "a/b", "a\\b", "c:", "..", "what?"] {
+            assert!(!is_file_name(id), "{id:?}");
+        }
+    }
 }
