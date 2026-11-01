@@ -7,8 +7,8 @@
 //!
 //! An offer is compared in Exalted Orbs: the Chaos and Divine Orbs at the rates of the price
 //! database, another item of the currency exchange at its price there (a Vaal Orb, a
-//! Mirror); an offer in a currency without price (a Soul Core, a Thaumaturgic Flux), or whose
-//! price stands on too few trades, is left out.
+//! Mirror); an offer in a currency without price (a Wombgift), or whose price stands on too
+//! few trades ([`prices::MIN_TRADES`]), is left out.
 //!
 //! The estimate is itself the reference of its offers: the median of the first page of
 //! offers, the answer to the search, tells the suspicious ones, which it leaves out. That
@@ -18,18 +18,12 @@
 use crate::format::Currency;
 use crate::item::Catalyst;
 use crate::prices::{self, CurrencyPrice, PriceList, Rates};
-use crate::trade::offers::{ItemOffer, currency};
+use crate::trade::offers::{self, ItemOffer};
 
 /// An offer under this share of the reference price is suspicious.
 const SUSPICIOUS_SHARE: f64 = 0.25;
 /// The cheapest offers counted in an estimate; fewer make it uncertain.
 pub const COUNTED: usize = 5;
-/// The quantity behind the price of a currency, under which its price is too thin to count
-/// an offer in it: 118 of the 638 currencies priced by poe2scout stand on one trade (league
-/// Forbidden Rites, 2026-11-01), some of them absurd (a Transmutation Shard at 11 ex, a
-/// Lesser Charging Rune at 40,156 ex), while the Mirror, the least traded of the currencies
-/// of the price filter of the trade site, has 14.
-const MIN_QUANTITY: u32 = 10;
 
 /// What the currencies an offer may be priced in are worth, from the prices of a league.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -52,16 +46,13 @@ impl<'a> Worth<'a> {
     }
 
     /// `amount` of the currency `id` of the trade site, in Exalted Orbs; `None` for a
-    /// currency without price, or whose price stands on fewer than [`MIN_QUANTITY`].
+    /// currency without price, or whose price stands on too few trades.
     fn in_exalted(self, amount: f64, id: &str) -> Option<f64> {
-        let worth = match currency(id) {
+        let worth = match offers::currency(id) {
             Some(Currency::Exalted) => 1.0,
             Some(Currency::Divine) => self.rates.divine,
             Some(Currency::Chaos) => self.rates.chaos,
-            None => {
-                let price = &prices::currency(self.currencies, id)?.price;
-                (price.quantity >= MIN_QUANTITY).then_some(price.exalted)?
-            }
+            None => prices::currency(self.currencies, id)?.trusted_exalted()?,
         };
         // A price of nothing, or none, would count an offer as free.
         (worth.is_finite() && worth > 0.0).then_some(amount * worth)
@@ -409,9 +400,9 @@ mod tests {
     fn a_price_on_too_few_trades_isnt_counted() {
         // A Lesser Charging Rune at 40,156 ex on one trade, as poe2scout priced it.
         let mut rune = priced("lesser-charging-rune", 40_156.0);
-        rune.price.quantity = MIN_QUANTITY - 1;
+        rune.price.quantity = prices::MIN_TRADES - 1;
         let mut mirror = priced("mirror", 70_000.0);
-        mirror.price.quantity = MIN_QUANTITY;
+        mirror.price.quantity = prices::MIN_TRADES;
         let currencies = [rune, mirror];
         let worth = Worth {
             rates: RATES,

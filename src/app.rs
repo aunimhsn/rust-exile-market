@@ -742,15 +742,16 @@ fn to_points(pixels: i32, scale: f32) -> f32 {
 }
 
 /// The price of one item that tells a suspicious offer: the price of a fixed-name item, with
-/// the `worth` of the currencies of its prices. Both come from the prices of the league
-/// shown: the rates beside the fixed price are those of `worth`, which also prices the other
-/// currencies.
+/// the `worth` of the currencies of its prices; none for an item of the currency exchange
+/// whose price stands on too few trades, which would tell honest offers. Both come from the
+/// prices of the league shown: the rates beside the fixed price are those of `worth`, which
+/// also prices the other currencies.
 fn reference<'a>(
     fixed_price: &Result<(FixedPrice, Rates), NoFixedPrice>,
     worth: Option<Worth<'a>>,
 ) -> Option<Reference<'a>> {
     let exalted = match fixed_price {
-        Ok((FixedPrice::Currency(currency), _)) => currency.price.exalted,
+        Ok((FixedPrice::Currency(currency), _)) => currency.trusted_exalted()?,
         Ok((FixedPrice::Unique(unique), _)) => unique.price.exalted,
         Ok((FixedPrice::Uniques(_), _)) | Err(_) => return None,
     };
@@ -1136,6 +1137,31 @@ mod tests {
             None,
             "the estimate tells them"
         );
+    }
+
+    #[test]
+    fn a_price_of_the_currency_exchange_on_few_trades_tells_no_suspicious_offer() {
+        use crate::prices::{CurrencyPrice, MIN_TRADES, Price};
+
+        // A Lesser Charging Rune at 40,156 ex on one trade: its honest offers aren't bait.
+        let rune = |quantity| CurrencyPrice {
+            name: "Lesser Charging Rune".to_owned(),
+            exchange_id: "lesser-charging-rune".to_owned(),
+            price: Price {
+                exalted: 40_156.0,
+                quantity,
+                history: Vec::new(),
+            },
+        };
+        let thin = rune(MIN_TRADES - 1);
+        let traded = rune(MIN_TRADES);
+
+        assert_eq!(
+            reference(&Ok((FixedPrice::Currency(&thin), RATES)), Some(WORTH)),
+            None
+        );
+        let traded = reference(&Ok((FixedPrice::Currency(&traded), RATES)), Some(WORTH)).unwrap();
+        assert!((traded.exalted - 40_156.0).abs() < 1e-9);
     }
 
     #[test]

@@ -20,7 +20,8 @@ pub struct Rates {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Price {
     pub exalted: f64,
-    /// How many were listed behind the price: the number of offers of a unique.
+    /// What stands behind the price: the number of offers of a unique, the trades of an item
+    /// of the currency exchange; 0 when the price database doesn't give it.
     pub quantity: u32,
     /// The daily prices of the last days, the most recent first; `None` for a day without
     /// price.
@@ -107,6 +108,20 @@ pub struct CurrencyPrice {
     /// Its id on the currency exchange of the trade site, e.g. `divine`.
     pub exchange_id: String,
     pub price: Price,
+}
+
+/// The trades behind the price of an item of the currency exchange, under which its price
+/// is too thin to compare an offer with: 118 of the 638 items priced by poe2scout stand on one
+/// trade (league Forbidden Rites, 2026-11-01), some of them absurd (a Transmutation Shard at
+/// 11 ex, a Lesser Charging Rune at 40,156 ex).
+pub const MIN_TRADES: u32 = 10;
+
+impl CurrencyPrice {
+    /// Its price in Exalted Orbs, when it stands on [`MIN_TRADES`] at least.
+    #[must_use]
+    pub fn trusted_exalted(&self) -> Option<f64> {
+        (self.price.quantity >= MIN_TRADES).then_some(self.price.exalted)
+    }
 }
 
 /// The prices of a league, as the price database gave them at one time.
