@@ -4,17 +4,15 @@
 // right of the stash when it is on the left half, like Exiled Exchange 2 (PriceCheckWindow.vue, commit cca3066).
 // Checked in the owner's game on 2026-11-01 (Bazzite KDE, windowed fullscreen): such a window shows over the game,
 // doesn't take its focus, and a click on it stays in it. The screen is the owner's, 2560 × 1440, at half scale;
-// a click on an item stands for Ctrl+D, and the real Ctrl key of the keyboard is read. The height, chosen by the
+// a click on an item stands for Ctrl+D. The height, chosen by the
 // owner on 2026-11-01: the height of the content, level with the item (its top at the top of the item, moved up as
 // much as the screen needs), growing when the stats are shown, at most the height of the screen, then its content
 // scrolls. No title bar (owner, 2026-11-01: the most bare; the league can't be changed over the game, the player
-// knows it, and the window closes by itself): the league on the right of the status bar. One open decision: what closes it.
-
-VARIANTS.overlayClose = { label: "Closes", options: { combined: "Combined: Ctrl held, or the mouse on the item or in it, else 1 s", away: "Mouse 40 px away (EE2, Ctrl held to reach it)", delay: "1 s outside the item and the window", click: "A click in the game" }, fallback: "combined" };
-for (const key of ["overlayClose"]) {
-  const v = VARIANTS[key];
-  chosen[key] = params.get(key) in v.options ? params.get(key) : v.fallback;
-}
+// knows it, and the window closes by itself): the league on the right of the status bar. It stays open until a click
+// in the game (owner, 2026-11-01: the rule said in one sentence, the one that gives the player the most control,
+// an action of theirs closes it; no Close button needed); Ctrl+D on another item replaces its content. Rejected: the
+// mouse 40 px away with Ctrl held to reach the window (Exiled Exchange 2), 1 s outside the item and the window, and a
+// mix of the three, hard to understand.
 
 const OV_BOW_PRICE = { estimate: true, values: ["2.4", "24", "1.7K"], offers: "18 similar", note: "Median of the 5 cheapest similar offers." };
 const OV_BOW_OFFERS = { count: "10 of 18 online", columns: ["Price", "Listed"], rows: [
@@ -47,10 +45,9 @@ const ovScreen = `<div class="ov-screen"><div class="ov-stage">
     <div class="ov-scene"><i></i></div>
     <div class="ov-panel ov-stash"><h4>Stash</h4></div>${ovGrid("stash", 12)}${ovItemsHtml("stash")}
     <div class="ov-panel ov-inventory"><h4>Inventory</h4><div class="ov-equipment"></div></div>${ovGrid("inventory", 5)}${ovItemsHtml("inventory")}
-    <div class="ov-reach"></div>
     <div class="ov-window"></div>
   </div></div>
-  <div class="ov-pointer-note">Click an item: it stands for <span class="ov-key">Ctrl</span>+<span class="ov-key">D</span>. Your real <span class="ov-key ov-ctrl">Ctrl</span> key is read: hold it to keep the window open. <b class="ov-status">Closed.</b></div>`;
+  <div class="ov-pointer-note">Click an item: it stands for <span class="ov-key">Ctrl</span>+<span class="ov-key">D</span>. The window stays open until a click in the game; clicks in it stay in it. <b class="ov-status">Closed.</b></div>`;
 
 // The windowed fullscreen: where the player learns that the exclusive fullscreen isn't supported.
 const ovEmpty = empty.replace(`<span class="key">C</span>`, `<span class="key">D</span>`);
@@ -67,20 +64,18 @@ SECTIONS.unshift(["Window over the game (14b1): click an item of the screen, it 
   ["The window over the game, at real size", `<div class="ov-real">${OV_ITEMS.bow.window()}</div>`],
 ]]);
 
-// The behaviour: open at a click on an item, placed by the half of the screen, closed by the chosen rule.
-const ovState = { unfolded: false, open: false, press: null, item: null, entered: false, timer: null, ctrl: false, last: null };
+// The behaviour: open at a click on an item, placed by the half of the screen, closed by a click in the game.
+const ovState = { open: false, item: null, last: null, unfolded: false };
 const ovStage = () => document.querySelector(".ov-stage");
 function ovStatus(text) {
   const status = document.querySelector(".ov-status");
   if (status) status.textContent = text;
 }
 function ovClose(why) {
-  clearTimeout(ovState.timer);
-  Object.assign(ovState, { open: false, press: null, item: null, entered: false, timer: null });
+  Object.assign(ovState, { open: false, item: null });
   const stage = ovStage();
   if (!stage) return;
   stage.querySelector(".ov-window").className = "ov-window";
-  stage.querySelector(".ov-reach").classList.remove("is-on");
   ovStatus(`Closed: ${why}.`);
 }
 // Level with the item: the top of the window at the top of the item, moved up as much as the screen needs, at
@@ -88,106 +83,41 @@ function ovClose(why) {
 function ovPlace(windowElement) {
   windowElement.style.top = `${Math.max(0, Math.min(ovState.item.y, 1440 - windowElement.offsetHeight))}px`;
 }
-function ovOpen(key, element, press, unfolded = false) {
-  const stage = ovStage();
+function ovOpen(key, element, unfolded = false) {
   const it = OV_ITEMS[key];
   const box = { x: element.offsetLeft, y: element.offsetTop, w: element.offsetWidth, h: element.offsetHeight };
   const right = box.x + box.w / 2 > 1280;
-  const left = right ? 2560 - OV.panel - OV.width : OV.panel;
-  const windowElement = stage.querySelector(".ov-window");
+  const windowElement = ovStage().querySelector(".ov-window");
   windowElement.innerHTML = it.window(unfolded);
   windowElement.className = "ov-window is-open";
-  windowElement.style.left = `${left}px`;
-  const reach = stage.querySelector(".ov-reach");
-  reach.style.left = `${press.x}px`;
-  reach.style.top = `${press.y}px`;
-  reach.classList.add("is-on");
-  clearTimeout(ovState.timer);
-  Object.assign(ovState, { open: true, press, item: box, entered: false, timer: null, last: { key, press }, unfolded });
+  windowElement.style.left = `${right ? 2560 - OV.panel - OV.width : OV.panel}px`;
+  Object.assign(ovState, { open: true, item: box, last: key, unfolded });
   ovPlace(windowElement);
   ovStatus(`Open ${right ? "left of the inventory" : "right of the stash"}: ${it.label}.`);
 }
-const ovPoint = event => {
-  const rect = document.querySelector(".ov-screen").getBoundingClientRect();
-  return { x: (event.clientX - rect.left) * 2, y: (event.clientY - rect.top) * 2 };
-};
-const ovInside = (p, b) => p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h;
-const ovWindowBox = () => {
-  const w = ovStage().querySelector(".ov-window");
-  return { x: w.offsetLeft, y: w.offsetTop, w: w.offsetWidth, h: w.offsetHeight };
-};
 document.addEventListener("click", event => {
-  // A tab draws the sheet again (its own listener runs first): the window of the last item opens again, so
-  // that the variants compare on the same item.
+  // A tab draws the sheet again (its own listener runs first): the window of the last item opens again.
   if (event.target.closest("#styles") && event.target.dataset.variant) {
-    clearTimeout(ovState.timer);
-    if (ovState.open && ovState.last) {
-      const element = document.querySelector(`[data-ov-item="${ovState.last.key}"]`);
-      if (element) ovOpen(ovState.last.key, element, ovState.last.press, ovState.unfolded);
-    }
+    const element = ovState.open && document.querySelector(`[data-ov-item="${ovState.last}"]`);
+    if (element) ovOpen(ovState.last, element, ovState.unfolded);
     return;
   }
   if (!event.target.closest(".ov-screen")) return;
   const itemElement = event.target.closest(".ov-item");
   if (itemElement) {
-    ovOpen(itemElement.dataset.ovItem, itemElement, ovPoint(event));
+    ovOpen(itemElement.dataset.ovItem, itemElement);
   } else if (event.target.closest(".ov-window .stats-toggle .pill")) {
     // Show or hide the stats: the window grows or shrinks, and moves up if the screen needs it.
     const windowElement = ovStage().querySelector(".ov-window");
     ovState.unfolded = !ovState.unfolded;
-    windowElement.innerHTML = OV_ITEMS[ovState.last.key].window(ovState.unfolded);
+    windowElement.innerHTML = OV_ITEMS[ovState.last].window(ovState.unfolded);
     ovPlace(windowElement);
   } else if (ovState.open && !event.target.closest(".ov-window")) {
     ovClose("a click in the game");
   }
 });
-document.addEventListener("mousemove", event => {
-  if (!ovState.open || !event.target.closest(".ov-screen")) return;
-  // A tab drew the sheet again: the window drawn before is gone.
-  if (!ovStage().querySelector(".ov-window.is-open")) {
-    ovState.open = false;
-    return;
-  }
-  const p = ovPoint(event);
-  const inWindow = ovInside(p, ovWindowBox());
-  const windowElement = ovStage().querySelector(".ov-window");
-  if (inWindow) ovState.entered = true;
-  switch (chosen.overlayClose) {
-    case "away":
-      if (inWindow || ovState.ctrl) return;
-      if (ovState.entered) ovClose("the mouse left the window");
-      else if (Math.hypot(p.x - ovState.press.x, p.y - ovState.press.y) > 40) ovClose("the mouse moved 40 px away without Ctrl held");
-      break;
-    case "combined":
-    case "delay":
-      // Combined: Ctrl held keeps it open too, the gesture of Exiled Exchange 2.
-      if (inWindow || ovInside(p, ovState.item) || (chosen.overlayClose === "combined" && ovState.ctrl)) {
-        clearTimeout(ovState.timer);
-        ovState.timer = null;
-        windowElement.classList.remove("is-fading");
-        ovStatus(ovState.ctrl && !inWindow && !ovInside(p, ovState.item) ? "Open: Ctrl is held." : "Open: the mouse is on the item or in the window.");
-      } else if (!ovState.timer) {
-        windowElement.classList.add("is-fading");
-        ovStatus("Closing in 1 s, unless the mouse comes back to the item or the window…");
-        ovState.timer = setTimeout(() => ovClose("1 s outside the item and the window"), 1000);
-      }
-      break;
-    default:
-      break;
-  }
-});
-const ovCtrl = held => {
-  ovState.ctrl = held;
-  document.querySelectorAll(".ov-ctrl").forEach(key => key.classList.toggle("is-held", held));
-};
-document.addEventListener("keydown", event => { if (event.key === "Control") ovCtrl(true); });
-document.addEventListener("keyup", event => { if (event.key === "Control") ovCtrl(false); });
-window.addEventListener("blur", () => ovCtrl(false));
-// `?ovopen=bow` opens the window of that item at load, as if Ctrl+D was pressed on its middle, `&ovstats` with its
-// stats shown (screenshots).
+// `?ovopen=bow` opens the window of that item at load, as if Ctrl+D was pressed on it, `&ovstats` with its stats
+// shown (screenshots).
 if (params.get("ovopen") in OV_ITEMS) {
-  setTimeout(() => {
-    const element = document.querySelector(`[data-ov-item="${params.get("ovopen")}"]`);
-    ovOpen(params.get("ovopen"), element, { x: element.offsetLeft + element.offsetWidth / 2, y: element.offsetTop + element.offsetHeight / 2 }, params.has("ovstats"));
-  });
+  setTimeout(() => ovOpen(params.get("ovopen"), document.querySelector(`[data-ov-item="${params.get("ovopen")}"]`), params.has("ovstats")));
 }

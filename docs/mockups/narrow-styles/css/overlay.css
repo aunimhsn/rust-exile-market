@@ -27,19 +27,14 @@
 .ov-window { position: absolute; top: 0; width: 420px; display: none; z-index: 2; transform-origin: 0 0; }
 .ov-window.is-open { display: block; }
 .ov-window .win { border-radius: 0; box-shadow: 0 0 40px rgba(0, 0, 0, .7); max-height: 1440px; overflow-y: auto; }
-.ov-window.is-fading { opacity: .45; transition: opacity 1s linear; }
 /* Height: the content, level with the item (placed by the script), at most the height of the screen. */
 /* The status bar of the window over the game: the sources on the left, the league on the right, on the color of
    its trade and the whole height of the bar, not clickable. */
 .ov-foot { display: flex; align-items: stretch; justify-content: space-between; padding: 0 0 0 14px; }
 .ov-foot > span:first-child { padding: 6px 0; }
 .ov-league { display: flex; align-items: center; padding: 0 10px; background: var(--league-bg); color: var(--text); }
-/* The distance past which the window closes (Exiled Exchange 2: 40 px), around the point of Ctrl+D. */
-.ov-reach { position: absolute; width: 80px; height: 80px; margin: -40px 0 0 -40px; border: 2px dashed rgba(255, 255, 255, .55); border-radius: 50%; display: none; pointer-events: none; z-index: 3; }
-:root[data-overlay-close="away"] .ov-reach.is-on { display: block; }
 .ov-pointer-note { margin-top: 8px; color: var(--page-text); font-size: 13px; }
 .ov-pointer-note b { color: #e8e8e8; font-weight: 600; }
 .ov-key { display: inline-block; padding: 1px 6px; border: 1px solid #444a50; border-radius: 4px; color: #e8e8e8; font-size: 12px; }
-.ov-key.is-held { background: #f2f5f9; color: #0f1216; }
 /* The note on the windowed fullscreen. */
 .ov-note-line { display: block; margin: 18px auto 0; max-width: 330px; color: var(--weak); font-size: 12px; line-height: 1.45; text-align: center; }
