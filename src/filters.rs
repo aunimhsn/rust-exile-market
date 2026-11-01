@@ -126,7 +126,8 @@ impl Filter {
 
     /// The player leaves `half`: its number is brought back within the range of the stat, the
     /// half emptied when it holds no number; a minimum above the maximum brings the other
-    /// half to the same number.
+    /// half to the same number. Settling it again changes nothing, so that a half may be
+    /// settled twice (its field left, then settled once no field is edited).
     pub fn settle(&mut self, half: Half) {
         *self.text_mut(half) = self.searched(half).map(limit_text).unwrap_or_default();
         let (Some(value), Some(other)) = (self.searched(half), self.searched(half.other())) else {
@@ -155,10 +156,25 @@ pub struct Filters {
     changed: HashMap<FilterKey, Filter>,
     /// The state tags lit: the offers of these states only.
     lit: Vec<ItemState>,
-    /// The half of a range field the player is in, in the main window and in the window over
-    /// the game: settled when its field disappears before they leave it (the window over the
-    /// game closed, another item copied).
-    edited: [Option<(FilterKey, Half)>; 2],
+    /// The half of a range field the player is in, in each window: settled when its field
+    /// disappears before they leave it (the window over the game closed, another item copied).
+    edited: Edited,
+}
+
+/// The half of a range field the player is in, in each window.
+#[derive(Debug, Default)]
+struct Edited {
+    main: Option<(FilterKey, Half)>,
+    over_the_game: Option<(FilterKey, Half)>,
+}
+
+impl Edited {
+    fn of(&mut self, window: Window) -> &mut Option<(FilterKey, Half)> {
+        match window {
+            Window::Main => &mut self.main,
+            Window::OverTheGame => &mut self.over_the_game,
+        }
+    }
 }
 
 impl Filters {
@@ -204,19 +220,19 @@ impl Filters {
 
     /// The player is in `half` of the range field of `key`, in `window`.
     pub fn edit(&mut self, window: Window, key: FilterKey, half: Half) {
-        self.edited[window as usize] = Some((key, half));
+        *self.edited.of(window) = Some((key, half));
     }
 
     /// No half of a field of `window` is edited any more.
     pub fn forget_edited(&mut self, window: Window) {
-        self.edited[window as usize] = None;
+        *self.edited.of(window) = None;
     }
 
     /// Settles the half the player was in, in `window`, as leaving it does, when its field
     /// disappears before they leave it (the window over the game closed, another item copied):
     /// a widget no longer drawn never sees its focus lost.
     pub fn settle_edited(&mut self, window: Window) {
-        if let Some((key, half)) = self.edited[window as usize].take()
+        if let Some((key, half)) = self.edited.of(window).take()
             && let Some(filter) = self.changed.get_mut(&key)
         {
             filter.settle(half);
@@ -372,6 +388,42 @@ mod tests {
         assert_eq!(limits("70", "5"), (Some(60.0), Some(60.0)));
         assert_eq!(limits("", "45"), (None, Some(45.0)));
         assert_eq!(limits("-", ""), (None, None));
+    }
+
+    #[test]
+    fn a_half_settled_again_stays_as_it_is() {
+        for (minimum, maximum) in [
+            ("99", ""),
+            ("12.", "7"),
+            ("45.678", "50"),
+            ("-", "abc"),
+            ("70", "50"),
+            ("", "30"),
+        ] {
+            for half in [Half::Minimum, Half::Maximum] {
+                let mut once = filter(minimum, maximum, RANGE);
+                once.settle(half);
+                let mut again = once.clone();
+                again.settle(half);
+                assert_eq!(again, once, "{minimum}–{maximum}, {half:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn the_field_edited_in_one_window_stays_while_the_other_forgets_its_own() {
+        let key = FilterKey::Property(Property::ItemLevel);
+        let mut filters = Filters::default();
+        filters.set(key, filter("99", "", RANGE));
+        filters.edit(Window::Main, key, Half::Minimum);
+
+        // The window over the game, without a field edited, forgets its own at each frame.
+        filters.forget_edited(Window::OverTheGame);
+        filters.settle_edited(Window::OverTheGame);
+        assert_eq!(filters.get(key, || filter("", "", None)).minimum, "99");
+
+        filters.settle_edited(Window::Main);
+        assert_eq!(filters.get(key, || filter("", "", None)).minimum, "60");
     }
 
     #[test]
