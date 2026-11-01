@@ -560,3 +560,55 @@ fn a_lost_thread_asks_no_more_offers() {
 
     assert_eq!(offers.more(), None);
 }
+
+#[test]
+fn the_offers_of_an_item_left_keep_its_list_but_not_a_failure_nor_a_search_under_way() {
+    let now = Instant::now();
+    // A list whose next offers couldn't come, then asked again.
+    let mut offers = Offers::default();
+    let _ = offers.search(item_search(), now);
+    offers.apply(
+        answer(items(&["a"], true), after(now, 0)),
+        SystemTime::UNIX_EPOCH,
+    );
+    let _ = offers.more();
+    offers.apply(
+        answer(Outcome::Unreachable, after(now, 0)),
+        SystemTime::now(),
+    );
+    let _ = offers.more();
+
+    let left = offers.swap(OffersState::Idle);
+
+    assert!(matches!(
+        &left,
+        OffersState::Items {
+            loading_more: false,
+            more_failed: false,
+            rest,
+            ..
+        } if !rest.is_empty()
+    ));
+    assert_eq!(offers.state(), &OffersState::Idle);
+    // The next offers of the item left come to nothing.
+    offers.apply(
+        answer(items(&["b"], false), after(now, 0)),
+        SystemTime::now(),
+    );
+    assert_eq!(offers.state(), &OffersState::Idle);
+    // Shown again, its list loads the rest of its search.
+    assert_eq!(offers.swap(left), OffersState::Idle);
+    assert_eq!(ids(&offers), ["a"]);
+    assert_eq!(offers.more(), Some(Order::More(rest(true))));
+
+    // A failure, or a search under way, comes back as before the first search.
+    for state in [
+        OffersState::Searching,
+        OffersState::Unreachable,
+        OffersState::Limited,
+    ] {
+        let mut offers = Offers::default();
+        let _ = offers.swap(state);
+        assert_eq!(offers.swap(OffersState::Idle), OffersState::Idle);
+    }
+}

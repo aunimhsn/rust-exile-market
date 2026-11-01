@@ -132,7 +132,7 @@ impl OfferSearch {
         wake: impl Fn() + Send + 'static,
     ) -> Self {
         let worker = Worker::spawn("trade-search", OnDrop::Detach, wake, move |outbox, wake| {
-            let mut searches = Searches(open());
+            let mut searches = Searches { client: open() };
             loop {
                 let order = match outbox.wait_for_order(Duration::MAX) {
                     Waited::Order(order) => order,
@@ -182,7 +182,9 @@ fn latest(first: Order, outbox: &Outbox<Answer, Order>) -> Option<Order> {
 }
 
 /// The client of the searches.
-struct Searches<T>(TradeClient<T>);
+struct Searches<T> {
+    client: TradeClient<T>,
+}
 
 impl<T: Transport> Searches<T> {
     fn answer(&mut self, order: Order) -> Answer {
@@ -202,8 +204,8 @@ impl<T: Transport> Searches<T> {
         });
         let now = Instant::now();
         let next_search = NextSearch {
-            items: self.0.next_search(SearchKind::Items, now),
-            exchange: self.0.next_search(SearchKind::Exchange, now),
+            items: self.client.next_search(SearchKind::Items, now),
+            exchange: self.client.next_search(SearchKind::Exchange, now),
         };
         Answer {
             outcome,
@@ -218,7 +220,7 @@ impl<T: Transport> Searches<T> {
                 league,
                 query: Query::Items(query),
             }) => {
-                let search = self.0.search_items(language, &league, &query)?;
+                let search = self.client.search_items(language, &league, &query)?;
                 log::info!("Trade site: {} offers found", search.total);
                 // The player never sees a search whose first offers can't be fetched.
                 let (offers, rest) = self.fetch_next(Rest {
@@ -237,7 +239,7 @@ impl<T: Transport> Searches<T> {
                 league,
                 query: Query::Exchange(want),
             }) => {
-                let search = self.0.search_exchange(language, &league, &want)?;
+                let search = self.client.search_exchange(language, &league, &want)?;
                 log::info!("Trade site: {} exchange offers of {want}", search.total);
                 Ok(Outcome::Exchange {
                     offers: search.offers,
@@ -257,7 +259,7 @@ impl<T: Transport> Searches<T> {
             return Ok((Vec::new(), rest));
         }
         let wait = self
-            .0
+            .client
             .next_fetch(Instant::now())
             .saturating_duration_since(Instant::now());
         if wait > LONGEST_FETCH_WAIT {
@@ -266,7 +268,7 @@ impl<T: Transport> Searches<T> {
         thread::sleep(wait);
         let count = rest.offers.len().min(FETCH_SIZE);
         let ids = rest.offers.get(..count).unwrap_or_default();
-        let offers = self.0.fetch(rest.language, &rest.search, ids)?;
+        let offers = self.client.fetch(rest.language, &rest.search, ids)?;
         rest.offers.drain(..count);
         Ok((offers, rest))
     }

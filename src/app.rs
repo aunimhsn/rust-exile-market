@@ -12,7 +12,7 @@ use egui::{
 
 use crate::clipboard::{ClipboardEvent, ClipboardWatch};
 use crate::estimate::{self, Estimate, Reference};
-use crate::filters::Filters;
+use crate::filters::{Filters, Window};
 use crate::hotkey::PriceCheckHotkey;
 use crate::i18n::{DOWNLOAD_QUOTE_COUNT, Message, Translator};
 use crate::item::{CopiedItem, Item};
@@ -187,11 +187,17 @@ impl ExileMarketApp {
         }
         // The offers shown were searched in the previous league.
         if self.session.league() != Some(&league) {
-            self.offers.clear();
-            self.recent.forget_offers();
+            self.forget_offers();
         }
         self.session.choose_league(league);
         self.market.price(self.session.league());
+    }
+
+    /// Forgets the offers of the item shown and of the items remembered: they were searched in
+    /// the previous league.
+    fn forget_offers(&mut self) {
+        self.offers.clear();
+        self.recent.forget_offers();
     }
 
     /// Closes the bubble of the new league for good.
@@ -439,7 +445,7 @@ impl ExileMarketApp {
                             .any(|event| matches!(event, egui::Event::WindowFocused(false)))
                     });
                 if (place.is_none() || left || lost) && ui.ctx().text_edit_focused() {
-                    self.filters.settle_edited();
+                    self.filters.settle_edited(Window::OverTheGame);
                     ui.ctx().memory_mut(egui::Memory::stop_text_input);
                 }
                 place?;
@@ -459,7 +465,7 @@ impl ExileMarketApp {
         let editing = height.is_some_and(|(_, editing)| editing);
         let height = height.map(|(height, _)| height);
         if !editing {
-            self.filters.forget_edited();
+            self.filters.forget_edited(Window::OverTheGame);
         }
         // The status bar, drawn before the fields, says it at the next frame.
         let held = self.keyboard.held();
@@ -504,9 +510,8 @@ impl ExileMarketApp {
         self.session.apply(event);
         // Read again with the names of the trade site arrived since it was left, its lines may
         // have moved, the filters set on them no longer falling on the same lines.
-        if let Some(shape) = back
-            && self.session.item().map(ShownItem::shape) != Some(shape)
-        {
+        let shown = self.session.item().map(ShownItem::shape);
+        if lines_moved(back.as_deref(), shown.as_deref()) {
             self.filters.forget_stats();
         }
     }
@@ -590,8 +595,7 @@ impl App for ExileMarketApp {
         });
         if let Some(league) = shown {
             // The offers shown were searched in the previous league.
-            self.offers.clear();
-            self.recent.forget_offers();
+            self.forget_offers();
             if self.settings.set_league(&league) {
                 self.settings_file.save(&self.settings);
             }
@@ -665,6 +669,11 @@ impl App for ExileMarketApp {
         // Taken once for both windows.
         let to_top = std::mem::take(&mut self.scroll_to_top);
         self.show_overlay(&ctx, prices, search_kind, trade, to_top);
+        // Another item copied leaves the field the player was in, its number already settled,
+        // so that the caret doesn't go on in the same field of that item.
+        if to_top && ctx.text_edit_focused() {
+            ctx.memory_mut(egui::Memory::stop_text_input);
+        }
         match self.view {
             View::Item => {
                 self.item(ui, prices, search_kind, to_top);
@@ -674,6 +683,11 @@ impl App for ExileMarketApp {
                     self.change_setting(ui.ctx(), change);
                 }
             }
+        }
+        // No field of the main window edited, or its field no longer drawn (the settings
+        // opened): its number settled, again when leaving it settled it already.
+        if !ctx.text_edit_focused() {
+            self.filters.settle_edited(Window::Main);
         }
     }
 
@@ -689,6 +703,12 @@ impl App for ExileMarketApp {
 /// command also asks for the next frame, which would redraw both windows at every frame.
 fn paint_while_hidden(overlay_shown: bool, main_visible: Option<bool>) -> bool {
     overlay_shown && main_visible == Some(false)
+}
+
+/// The item shown came back with the shape `back` of its modifiers when it was left, and has the
+/// shape `shown` now: read again with the names of the trade site arrived since, its lines moved.
+fn lines_moved(back: Option<&[usize]>, shown: Option<&[usize]>) -> bool {
+    back.is_some_and(|back| shown != Some(back))
 }
 
 /// `item` copied by the hotkey again: the item already shown, which stays as it is. Copied
@@ -831,6 +851,15 @@ mod tests {
         assert!(!copied_again(true, None, &ring));
         // Copied with Ctrl+C after another text: read again.
         assert!(!copied_again(false, Some(&ring), &ring));
+    }
+
+    #[test]
+    fn an_item_that_comes_back_forgets_its_stat_filters_only_when_its_lines_moved() {
+        // The hybrid of a magic mace joined by the names arrived since it was left.
+        assert!(lines_moved(Some(&[1, 1, 1]), Some(&[2, 1])));
+        assert!(!lines_moved(Some(&[2, 1]), Some(&[2, 1])));
+        // An item not remembered, or the item shown copied again.
+        assert!(!lines_moved(None, Some(&[2, 1])));
     }
 
     #[test]

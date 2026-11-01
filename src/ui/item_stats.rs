@@ -38,7 +38,7 @@ use super::item_block::waystone_tier_color;
 use super::number_field::NumberField;
 use super::theme::{self, color, size, text};
 use super::widgets;
-use crate::filters::{self, Filter, FilterKey, Filters, Half, Property, StatKey};
+use crate::filters::{self, Filter, FilterKey, Filters, Half, Property, StatKey, Window};
 use crate::format;
 use crate::game_data::{self, Category};
 use crate::i18n::{Message, Translator};
@@ -2212,11 +2212,14 @@ fn stat_row(ui: &mut Ui, stat: &Stat<'_>, filters: &mut Filters, i18n: &Translat
         if choice != before {
             filters.set(stat.key, choice);
         }
-        // In the window over the game only, which may close before the player leaves the field.
-        if let Some(half) = edited
-            && ui.ctx().viewport_id() != ViewportId::ROOT
-        {
-            filters.edit(stat.key, half);
+        // Settled if its field disappears before the player leaves it.
+        if let Some(half) = edited {
+            let window = if ui.ctx().viewport_id() == ViewportId::ROOT {
+                Window::Main
+            } else {
+                Window::OverTheGame
+            };
+            filters.edit(window, stat.key, half);
         }
     });
 }

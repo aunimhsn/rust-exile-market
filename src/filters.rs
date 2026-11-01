@@ -142,15 +142,23 @@ impl Filter {
     }
 }
 
+/// A window the filters are drawn in, each with its own field edited.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Window {
+    Main,
+    OverTheGame,
+}
+
 /// The filters the player changed, for one item.
 #[derive(Debug, Default)]
 pub struct Filters {
     changed: HashMap<FilterKey, Filter>,
     /// The state tags lit: the offers of these states only.
     lit: Vec<ItemState>,
-    /// The half of a range field of the window over the game the player is in: settled when the
-    /// window closes before they leave it.
-    edited: Option<(FilterKey, Half)>,
+    /// The half of a range field the player is in, in the main window and in the window over
+    /// the game: settled when its field disappears before they leave it (the window over the
+    /// game closed, another item copied).
+    edited: [Option<(FilterKey, Half)>; 2],
 }
 
 impl Filters {
@@ -194,21 +202,21 @@ impl Filters {
             .retain(|key, _| !matches!(key, FilterKey::Stat(_)));
     }
 
-    /// The player is in `half` of the range field of `key`.
-    pub fn edit(&mut self, key: FilterKey, half: Half) {
-        self.edited = Some((key, half));
+    /// The player is in `half` of the range field of `key`, in `window`.
+    pub fn edit(&mut self, window: Window, key: FilterKey, half: Half) {
+        self.edited[window as usize] = Some((key, half));
     }
 
-    /// No half of a field of the window over the game is edited any more.
-    pub fn forget_edited(&mut self) {
-        self.edited = None;
+    /// No half of a field of `window` is edited any more.
+    pub fn forget_edited(&mut self, window: Window) {
+        self.edited[window as usize] = None;
     }
 
-    /// Settles the half the player was in, as leaving it does, when its field disappears before
-    /// they leave it (the window over the game closed): a widget no longer drawn never sees its
-    /// focus lost.
-    pub fn settle_edited(&mut self) {
-        if let Some((key, half)) = self.edited.take()
+    /// Settles the half the player was in, in `window`, as leaving it does, when its field
+    /// disappears before they leave it (the window over the game closed, another item copied):
+    /// a widget no longer drawn never sees its focus lost.
+    pub fn settle_edited(&mut self, window: Window) {
+        if let Some((key, half)) = self.edited[window as usize].take()
             && let Some(filter) = self.changed.get_mut(&key)
         {
             filter.settle(half);
@@ -404,8 +412,18 @@ mod tests {
             FilterKey::Property(Property::ItemLevel),
             filter("99", "", RANGE),
         );
-        filters.edit(FilterKey::Property(Property::ItemLevel), Half::Minimum);
-        filters.settle_edited();
+        filters.edit(
+            Window::OverTheGame,
+            FilterKey::Property(Property::ItemLevel),
+            Half::Minimum,
+        );
+        // The main window edits no field.
+        filters.settle_edited(Window::Main);
+        let unsettled = filters.get(FilterKey::Property(Property::ItemLevel), || {
+            filter("", "", None)
+        });
+        assert_eq!(unsettled.minimum, "99");
+        filters.settle_edited(Window::OverTheGame);
         let settled = filters.get(FilterKey::Property(Property::ItemLevel), || {
             filter("", "", None)
         });
@@ -415,7 +433,7 @@ mod tests {
             FilterKey::Property(Property::ItemLevel),
             filter("99", "", RANGE),
         );
-        filters.settle_edited();
+        filters.settle_edited(Window::OverTheGame);
         let unsettled = filters.get(FilterKey::Property(Property::ItemLevel), || {
             filter("", "", None)
         });

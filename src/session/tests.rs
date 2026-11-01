@@ -585,10 +585,7 @@ fn a_magic_hybrid_joined_once_the_names_arrive_reshapes_the_modifiers() {
         Crackling Temple Maul of the Brute\n--------\nItem Level: 32\n--------\n\
         30% increased Physical Damage\n+60 to Accuracy Rating\n+8 to Strength";
     let mut session = session();
-    let shape = |session: &Session| {
-        let item = session.item()?.parsed().ok()?;
-        Some(super::shape(item.modifiers()))
-    };
+    let shape = |session: &Session| session.item().map(ShownItem::shape);
     copy(&mut session, MACE);
     assert_eq!(
         shape(&session),

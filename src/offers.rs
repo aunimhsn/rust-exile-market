@@ -118,21 +118,22 @@ impl Offers {
         self.last_search
     }
 
-    /// Another item is shown: no offer yet, and the answer of an order of the previous item
-    /// will change nothing.
+    /// The offers shown were searched in another league: none until the next search, and the
+    /// answer of an order asked before will change nothing.
     pub fn clear(&mut self) {
-        let _ = self.leave();
+        let _ = self.swap(OffersState::Idle);
     }
 
-    /// Another item is shown: the offers of the item left, to show again when it comes back
-    /// ([`Self::show`]); the answer of an order of that item will change nothing, so that a
-    /// search or more offers asked for it come back as never asked.
+    /// Another item is shown, with `back`, the offers it had when it was left, or none: the
+    /// offers of the item left, to show again when it comes back. The answer of an order of the
+    /// item left will change nothing, so that a search or more offers asked for it come back as
+    /// never asked.
     #[must_use]
-    pub fn leave(&mut self) -> OffersState {
+    pub fn swap(&mut self, back: OffersState) -> OffersState {
         if let Some(pending) = &mut self.pending {
             pending.shown = false;
         }
-        match std::mem::take(&mut self.state) {
+        match std::mem::replace(&mut self.state, back) {
             OffersState::Items {
                 offers,
                 total,
@@ -158,11 +159,6 @@ impl Offers {
             | OffersState::Unreachable
             | OffersState::Limited => OffersState::Idle,
         }
-    }
-
-    /// Shows the offers of an item that comes back, as [`Self::leave`] gave them.
-    pub fn show(&mut self, state: OffersState) {
-        self.state = state;
     }
 
     /// No order may be sent: the answer of the last one hasn't come, or the thread of the

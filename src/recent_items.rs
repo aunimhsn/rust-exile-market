@@ -4,7 +4,7 @@
 
 use std::collections::VecDeque;
 
-use crate::filters::Filters;
+use crate::filters::{Filters, Window};
 use crate::item::CopiedItem;
 use crate::offers::{Offers, OffersState};
 
@@ -43,7 +43,11 @@ impl RecentItems {
     /// Shows `item`, copied, in place of the item shown, whose modifiers have `shape`: the
     /// item shown is remembered with the `filters` and the `offers` the player left, which
     /// become those of `item` as they left them, or none. The item shown copied again keeps
-    /// them. The shape of the modifiers of `item` when it was left, when it comes back.
+    /// them.
+    ///
+    /// Returns the shape of the modifiers of `item` when it was left, when it comes back: read
+    /// again with another shape, the filters of its lines no longer fall on the same lines.
+    /// `None` for an item not remembered, and for the item shown copied again.
     pub fn show(
         &mut self,
         item: &CopiedItem,
@@ -55,26 +59,26 @@ impl RecentItems {
             return None;
         }
         // A number being typed is settled, as leaving its field does.
-        filters.settle_edited();
+        filters.settle_edited(Window::Main);
+        filters.settle_edited(Window::OverTheGame);
         let back = self
             .left
             .iter()
             .position(|(left, _)| left == item)
             .and_then(|index| self.left.remove(index))
             .map(|(_, back)| back);
-        let back_shape = back.as_ref().map(|back| back.shape.clone());
+        let remembered = back.is_some();
         let back = back.unwrap_or_default();
         let left = Left {
             filters: std::mem::replace(filters, back.filters),
-            offers: offers.leave(),
+            offers: offers.swap(back.offers),
             shape,
         };
-        offers.show(back.offers);
         if let Some(shown) = self.shown.replace(item.clone()) {
             self.left.push_front((shown, left));
             self.left.truncate(REMEMBERED - 1);
         }
-        back_shape
+        remembered.then_some(back.shape)
     }
 
     /// Forgets the offers of every item left: they were searched in another league.
@@ -255,7 +259,7 @@ mod tests {
                 ..filter(true, "120")
             },
         );
-        shown.filters.edit(key, Half::Minimum);
+        shown.filters.edit(Window::Main, key, Half::Minimum);
 
         shown.copy(&ring("Doom Loop"));
         shown.copy(&ring("Woe Loop"));
