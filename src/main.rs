@@ -30,6 +30,8 @@ mod tier_rolls;
 mod trade;
 mod ui;
 mod worker;
+#[cfg(target_os = "linux")]
+mod x11;
 
 /// The name of the application, in every language.
 const APP_NAME: &str = "Exile Market";

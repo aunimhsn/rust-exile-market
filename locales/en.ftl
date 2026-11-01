@@ -36,6 +36,8 @@ status-trade = GGG trade { $age }
 status-trade-wait = GGG trade: next search in { $wait }
 # While the settings are open: the version and the author; the site, last, is a link.
 status-author = { $app } { $version } · Made by { $author } · { $site }
+# In the window over the game, while a min or max field is edited: the keys no longer reach the game.
+status-keyboard = Keys go to this window · Enter or Esc: back to the game
 
 ## Window before the first item
 

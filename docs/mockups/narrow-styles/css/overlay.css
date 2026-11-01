@@ -38,3 +38,7 @@
 .ov-key { display: inline-block; padding: 1px 6px; border: 1px solid #444a50; border-radius: 4px; color: #e8e8e8; font-size: 12px; }
 /* The note on the windowed fullscreen. */
 .ov-note-line { display: block; margin: 18px auto 0; max-width: 330px; color: var(--weak); font-size: 12px; line-height: 1.45; text-align: center; }
+/* The keyboard in the window over the game (14b2): the field edited, its edge white as when it has the focus, and
+   the line of the status bar in the text color (option B, chosen by the owner on 2026-11-01). */
+.app-range.kb-typing { border-color: var(--accent); }
+.kb-note { color: var(--text); }

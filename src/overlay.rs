@@ -3,11 +3,16 @@
 //!
 //! This module decides where the window goes, and when it opens and closes, without the system:
 //! the pointer and the game window come with the hotkey ([`crate::hotkey`]), the clicks from a
-//! thread of each system ([`ClickWatch`]), and the application draws the window.
+//! thread of each system ([`ClickWatch`]), and the application draws the window. The keyboard
+//! goes to the window while one of its fields is edited ([`KeyboardFocus`]).
 
+#[cfg(target_os = "linux")]
+mod keyboard;
 #[cfg(target_os = "linux")]
 mod x11;
 
+#[cfg(target_os = "linux")]
+pub use self::keyboard::KeyboardFocus;
 #[cfg(target_os = "linux")]
 pub use self::x11::ClickWatch;
 
@@ -110,6 +115,9 @@ pub struct Overlay {
     pending: Option<Pending>,
     /// Turned off for good: it would no longer close.
     off: bool,
+    /// The hotkey was pressed since the last frame of the window: it gave the keyboard back to
+    /// the game, so that the field edited in the window is left.
+    leave_field: bool,
 }
 
 impl Overlay {
@@ -119,6 +127,7 @@ impl Overlay {
     /// the main window; it replaces the hotkey before it all the same, whose item would
     /// otherwise open the window at the wrong place.
     pub fn hotkey(&mut self, target: Option<Target>, copy: Option<Instant>, now: Instant) {
+        self.leave_field = true;
         self.pending = copy.map(|copy| Pending {
             target,
             copy,
@@ -149,6 +158,12 @@ impl Overlay {
                 false
             }
         }
+    }
+
+    /// Whether the field edited in the window is left, once per press of the hotkey, which gave
+    /// the keyboard back to the game.
+    pub fn take_leave_field(&mut self) -> bool {
+        std::mem::take(&mut self.leave_field)
     }
 
     /// Closes the window and never opens it again, when the clicks that close it can no longer
@@ -205,6 +220,34 @@ impl ClickWatch {
     /// No click, and nothing that stopped.
     pub fn receive(&mut self, _handle: impl FnMut(Point)) -> bool {
         true
+    }
+}
+
+/// No window over the game on this system yet: the game keeps the keyboard.
+#[cfg(not(target_os = "linux"))]
+#[derive(Default)]
+pub struct KeyboardFocus;
+
+#[cfg(not(target_os = "linux"))]
+#[expect(
+    clippy::unused_self,
+    reason = "the interface of the keyboard of Linux, without its state"
+)]
+impl KeyboardFocus {
+    #[must_use]
+    pub fn new() -> Self {
+        Self
+    }
+
+    /// Never held.
+    pub fn follow(&mut self, _editing: bool) -> bool {
+        false
+    }
+
+    /// Never held.
+    #[must_use]
+    pub fn held(&self) -> bool {
+        false
     }
 }
 
@@ -498,6 +541,15 @@ mod tests {
 
         assert!(overlay.copied(Some(now)));
         assert_eq!(overlay.shown(), None);
+    }
+
+    #[test]
+    fn each_hotkey_leaves_the_field_edited_once() {
+        let mut overlay = Overlay::default();
+        assert!(!overlay.take_leave_field());
+        overlay.hotkey(None, None, Instant::now());
+        assert!(overlay.take_leave_field());
+        assert!(!overlay.take_leave_field());
     }
 
     #[test]

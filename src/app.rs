@@ -19,7 +19,7 @@ use crate::item::{CopiedItem, Item};
 use crate::league::League;
 use crate::market::MarketWatch;
 use crate::offers::{LONG_WAIT, Offers, OffersState};
-use crate::overlay::{self, ClickWatch, Overlay, ScreenRect};
+use crate::overlay::{self, ClickWatch, KeyboardFocus, Overlay, ScreenRect};
 use crate::prices::Rates;
 use crate::pricing::{FixedPrice, NoFixedPrice};
 use crate::session::{LeagueChange, PricesState, Session, ShownItem};
@@ -80,6 +80,8 @@ pub struct ExileMarketApp {
     overlay_window: Option<ScreenRect>,
     /// The height of its content at the last frame, in points; none until it is laid out once.
     overlay_height: Option<f32>,
+    /// The keyboard, given to the window over the game while one of its fields is edited.
+    keyboard: KeyboardFocus,
     /// The last item copied: the hotkey on the same item opens the window over the game without
     /// clearing its filters and offers.
     last_copied: Option<CopiedItem>,
@@ -139,6 +141,7 @@ impl ExileMarketApp {
             clicks: ClickWatch::start(move || clicks_ctx.request_repaint()),
             overlay_window: None,
             overlay_height: None,
+            keyboard: KeyboardFocus::new(),
             last_copied: None,
             market,
             item_names: ItemNamesWatch::start(move || names_ctx.request_repaint()),
@@ -364,8 +367,8 @@ impl ExileMarketApp {
     /// of its event loop): it is called at every frame of `ui`, so that the window, created
     /// hidden with the first frame, is never destroyed; and the fields of its builder that
     /// eframe can only set by creating the window again (its type, override-redirect, active,
-    /// taskbar, decorations) never change. Step 14b2 gives it the keyboard through X11
-    /// (`SetInputFocus`), not through `with_active`.
+    /// taskbar, decorations) never change. While one of its fields is edited, it has the
+    /// keyboard through X11 (`SetInputFocus`, [`KeyboardFocus`]), not through `with_active`.
     fn show_overlay(
         &mut self,
         ctx: &Context,
@@ -420,19 +423,47 @@ impl ExileMarketApp {
             ViewportId::from_hash_of("window-over-the-game"),
             builder,
             |ui, _| {
+                // Closed, the hotkey gave the keyboard back to the game, or the window lost it
+                // (Alt+Tab, which egui doesn't take for leaving the field): no field is edited,
+                // so that the status bar doesn't say the keys go to the window, and a window that
+                // opens again doesn't take the keyboard. The number typed is settled, as leaving
+                // its field does.
+                let left = self.overlay.take_leave_field();
+                let lost = self.keyboard.held()
+                    && ui.input(|input| {
+                        input
+                            .events
+                            .iter()
+                            .any(|event| matches!(event, egui::Event::WindowFocused(false)))
+                    });
+                if (place.is_none() || left || lost) && ui.ctx().text_edit_focused() {
+                    self.filters.settle_edited();
+                    ui.ctx().memory_mut(egui::Memory::stop_text_input);
+                }
                 place?;
                 // Its own ids: the scroll and the panels of the main window are its own.
                 let height = ui
                     .push_id("window-over-the-game", |ui| {
                         StatusBar::sources(&self.i18n, prices, trade)
                             .league(league.as_ref())
+                            .keyboard(self.keyboard.held())
                             .show(ui);
                         self.item(ui, prices, kind, to_top)
                     })
                     .inner;
-                Some(height)
+                Some((height, ui.ctx().text_edit_focused()))
             },
         );
+        let editing = height.is_some_and(|(_, editing)| editing);
+        let height = height.map(|(height, _)| height);
+        if !editing {
+            self.filters.forget_edited();
+        }
+        // The status bar, drawn before the fields, says it at the next frame.
+        let held = self.keyboard.held();
+        if self.keyboard.follow(editing) != held {
+            ctx.request_repaint();
+        }
         if height.is_some() && self.overlay_height != height {
             self.overlay_height = height;
             ctx.request_repaint();

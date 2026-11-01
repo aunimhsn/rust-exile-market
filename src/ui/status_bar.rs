@@ -1,6 +1,6 @@
 //! The status bar: the age of each data source, or, while the settings are open, the version
 //! and the author, with a link to the author's site. In the window over the game, the league on
-//! its right.
+//! its right, and while a field of it has the keyboard, a line that says so in place of the ages.
 
 use egui::{
     Align, CursorIcon, Frame, Label, Layout, OpenUrl, Panel, Rect, RichText, Role, Sense, Stroke,
@@ -31,6 +31,8 @@ pub enum TradeStatus {
 enum Line {
     Sources(PricesState, TradeStatus),
     Author,
+    /// The keys go to the window over the game, not to the game.
+    Keyboard,
 }
 
 /// The space on each side of the league name.
@@ -58,6 +60,16 @@ impl<'a> StatusBar<'a> {
     #[must_use]
     pub fn league(mut self, league: Option<&'a League>) -> Self {
         self.league = league;
+        self
+    }
+
+    /// In place of the ages of the sources while `held`: the window over the game has the
+    /// keyboard, so that the game gets no keys, and Enter or Esc gives it back.
+    #[must_use]
+    pub fn keyboard(mut self, held: bool) -> Self {
+        if held {
+            self.line = Line::Keyboard;
+        }
         self
     }
 
@@ -92,6 +104,11 @@ impl<'a> StatusBar<'a> {
                     match self.line {
                         Line::Sources(prices, trade) => self.sources_line(ui, prices, trade),
                         Line::Author => self.author_line(ui),
+                        // In the text color: the game no longer gets the keys the player types.
+                        Line::Keyboard => {
+                            let line = self.i18n.text(Message::StatusKeyboard);
+                            ui.add(Label::new(small(line).color(color::TEXT)).truncate());
+                        }
                     }
                 });
             });
@@ -169,8 +186,14 @@ impl<'a> StatusBar<'a> {
     }
 }
 
+/// A line of the bar in its small face.
+fn small(line: impl Into<String>) -> RichText {
+    RichText::new(line).font(text::small())
+}
+
+/// A line of the bar in its small face, faint.
 fn faint(line: impl Into<String>) -> RichText {
-    RichText::new(line).font(text::small()).color(color::FAINT)
+    small(line).color(color::FAINT)
 }
 
 #[cfg(test)]
@@ -196,6 +219,21 @@ mod tests {
         // epaint panics when the texture changes of a frame are dropped unapplied.
         output.textures_delta.clear();
         widths
+    }
+
+    #[test]
+    fn the_keyboard_held_takes_the_place_of_the_sources() {
+        let i18n = Translator::new(crate::language::Language::English);
+        let bar = |held| {
+            StatusBar::sources(&i18n, PricesState::Unavailable, TradeStatus::Idle)
+                .keyboard(held)
+                .line
+        };
+        assert_eq!(bar(true), Line::Keyboard);
+        assert_eq!(
+            bar(false),
+            Line::Sources(PricesState::Unavailable, TradeStatus::Idle)
+        );
     }
 
     #[test]

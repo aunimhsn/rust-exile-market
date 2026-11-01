@@ -31,7 +31,7 @@ use std::borrow::Cow;
 use egui::text::{LayoutJob, TextFormat};
 use egui::{
     Align, Align2, Area, Color32, CornerRadius, Frame, Id, Label, Layout, Margin, Order, Pos2,
-    Rect, Response, RichText, Sense, Stroke, TextEdit, Ui, Vec2, pos2, vec2,
+    Rect, Response, RichText, Sense, Stroke, TextEdit, Ui, Vec2, ViewportId, pos2, vec2,
 };
 
 use super::item_block::waystone_tier_color;
@@ -2206,11 +2206,17 @@ fn stat_row(ui: &mut Ui, stat: &Stat<'_>, filters: &mut Filters, i18n: &Translat
             i18n,
         );
         ui.add_space(GAP);
-        if let Some(limit) = filter.limit {
-            range_field(ui, stat.key, &mut choice, limit, i18n);
-        }
+        let edited = filter
+            .limit
+            .and_then(|limit| range_field(ui, stat.key, &mut choice, limit, i18n));
         if choice != before {
             filters.set(stat.key, choice);
+        }
+        // In the window over the game only, which may close before the player leaves the field.
+        if let Some(half) = edited
+            && ui.ctx().viewport_id() != ViewportId::ROOT
+        {
+            filters.edit(stat.key, half);
         }
     });
 }
@@ -2271,8 +2277,14 @@ fn stat_text(
 
 /// The range field of a filter, in its column: its minimum, a dash, its maximum, each half a
 /// number only, brought back within the range of the stat when the player leaves it; its
-/// tooltip under the pointer.
-fn range_field(ui: &mut Ui, key: FilterKey, choice: &mut Filter, limit: Limit, i18n: &Translator) {
+/// tooltip under the pointer; the half the player is in, if any.
+fn range_field(
+    ui: &mut Ui,
+    key: FilterKey,
+    choice: &mut Filter,
+    limit: Limit,
+    i18n: &Translator,
+) -> Option<Half> {
     let halves = [Half::Minimum, Half::Maximum];
     let ids = halves.map(|half| ui.make_persistent_id(("stat-range", key, half)));
     let focused = ui.memory(|memory| ids.iter().any(|&id| memory.has_focus(id)));
@@ -2287,6 +2299,7 @@ fn range_field(ui: &mut Ui, key: FilterKey, choice: &mut Filter, limit: Limit, i
         (RANGE_COLUMN, HALF_WIDTH)
     };
     let stroke = Stroke::new(1.0, line);
+    let mut edited = None;
     let dash_width =
         column - 2.0 * (f32::from(RANGE_PADDING.left) + stroke.width) - 2.0 * half_width;
     let field = Frame::NONE
@@ -2325,6 +2338,11 @@ fn range_field(ui: &mut Ui, key: FilterKey, choice: &mut Filter, limit: Limit, i
                 if response.lost_focus() {
                     choice.settle(half);
                 }
+                // Read in egui, as `Context::text_edit_focused`: the window may not have the
+                // keyboard of the system yet.
+                if ui.memory(|memory| memory.has_focus(id)) {
+                    edited = Some(half);
+                }
             }
         });
     // The field as it is drawn, without the margin that raises it.
@@ -2332,6 +2350,7 @@ fn range_field(ui: &mut Ui, key: FilterKey, choice: &mut Filter, limit: Limit, i
     if ui.rect_contains_pointer(rect) {
         field_tooltip(ui, key, rect, limit, i18n);
     }
+    edited
 }
 
 /// A line of a tooltip: its text, its color, and whether it is small, like the ranges under
