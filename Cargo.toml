@@ -55,9 +55,10 @@ fluent-syntax = "0.12.0"
 [lints]
 workspace = true
 
-# The generator of the game data embedded in the application (see docs/game-data.md).
+# The tools that make the data embedded in the application: the generator of the game data
+# (see docs/game-data.md) and the icons of the currency exchange (see docs/images.md).
 [workspace]
-members = ["tools/game-data"]
+members = ["tools/exchange-icons", "tools/game-data"]
 
 [workspace.package]
 edition = "2024"

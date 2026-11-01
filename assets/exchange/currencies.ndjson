@@ -1,0 +1,771 @@
+{"id":"wisdom","group":"Currency","english":"Scroll of Wisdom","french":"Parchemin de sagesse"}
+{"id":"transmute","group":"Currency","english":"Orb of Transmutation","french":"Orbe de transmutation"}
+{"id":"greater-orb-of-transmutation","group":"Currency","english":"Greater Orb of Transmutation","french":"Orbe de transmutation majeur"}
+{"id":"perfect-orb-of-transmutation","group":"Currency","english":"Perfect Orb of Transmutation","french":"Orbe de transmutation parfait"}
+{"id":"aug","group":"Currency","english":"Orb of Augmentation","french":"Orbe d'augmentation"}
+{"id":"greater-orb-of-augmentation","group":"Currency","english":"Greater Orb of Augmentation","french":"Orbe d'augmentation majeur"}
+{"id":"perfect-orb-of-augmentation","group":"Currency","english":"Perfect Orb of Augmentation","french":"Orbe d'augmentation parfait"}
+{"id":"chance","group":"Currency","english":"Orb of Chance","french":"Orbe de chance"}
+{"id":"alch","group":"Currency","english":"Orb of Alchemy","french":"Orbe d'alchimie"}
+{"id":"chaos","group":"Currency","english":"Chaos Orb","french":"Orbe du chaos"}
+{"id":"greater-chaos-orb","group":"Currency","english":"Greater Chaos Orb","french":"Orbe du chaos majeur"}
+{"id":"perfect-chaos-orb","group":"Currency","english":"Perfect Chaos Orb","french":"Orbe du chaos parfait"}
+{"id":"vaal","group":"Currency","english":"Vaal Orb","french":"Orbe vaal"}
+{"id":"regal","group":"Currency","english":"Regal Orb","french":"Orbe royal"}
+{"id":"greater-regal-orb","group":"Currency","english":"Greater Regal Orb","french":"Orbe royal majeur"}
+{"id":"perfect-regal-orb","group":"Currency","english":"Perfect Regal Orb","french":"Orbe royal parfait"}
+{"id":"exalted","group":"Currency","english":"Exalted Orb","french":"Orbe exalté"}
+{"id":"greater-exalted-orb","group":"Currency","english":"Greater Exalted Orb","french":"Orbe exalté majeur"}
+{"id":"perfect-exalted-orb","group":"Currency","english":"Perfect Exalted Orb","french":"Orbe exalté parfait"}
+{"id":"divine","group":"Currency","english":"Divine Orb","french":"Orbe divin"}
+{"id":"annul","group":"Currency","english":"Orb of Annulment","french":"Orbe d'annulation"}
+{"id":"artificers","group":"Currency","english":"Artificer's Orb","french":"Orbe d'artificier"}
+{"id":"fracturing-orb","group":"Currency","english":"Fracturing Orb","french":"Orbe fissurant"}
+{"id":"mirror","group":"Currency","english":"Mirror of Kalandra","french":"Miroir de Kalandra"}
+{"id":"hinekoras-lock","group":"Currency","english":"Hinekora's Lock","french":"Mèche de cheveux d'Hinekora"}
+{"id":"cryptic-key","group":"Currency","english":"Cryptic Key","french":"Clé cryptique"}
+{"id":"lesser-jewellers-orb","group":"Currency","english":"Lesser Jeweller's Orb","french":"Orbe de joaillier mineur"}
+{"id":"greater-jewellers-orb","group":"Currency","english":"Greater Jeweller's Orb","french":"Orbe de joaillier majeur"}
+{"id":"perfect-jewellers-orb","group":"Currency","english":"Perfect Jeweller's Orb","french":"Orbe de joaillier parfait"}
+{"id":"scrap","group":"Currency","english":"Armourer's Scrap","french":"Ferraille d'armurier"}
+{"id":"whetstone","group":"Currency","english":"Blacksmith's Whetstone","french":"Pierre à aiguiser de forgeron"}
+{"id":"etcher","group":"Currency","english":"Arcanist's Etcher","french":"Gravelet de l'arcaniste"}
+{"id":"bauble","group":"Currency","english":"Glassblower's Bauble","french":"Bulle de souffleur de verre"}
+{"id":"gcp","group":"Currency","english":"Gemcutter's Prism","french":"Prisme de lapidaire"}
+{"id":"transmutation-shard","group":"Currency","english":"Transmutation Shard","french":"Éclat de transmutation"}
+{"id":"chance-shard","group":"Currency","english":"Chance Shard","french":"Éclat de chance"}
+{"id":"regal-shard","group":"Currency","english":"Regal Shard","french":"Éclat royal"}
+{"id":"artificers-shard","group":"Currency","english":"Artificer's Shard","french":"Éclat d'artificier"}
+{"id":"idol-of-estazunti","group":"Fragments","english":"Idol of Estazunti","french":"Idole d'Estazunti"}
+{"id":"runic-splinter","group":"Fragments","english":"Runic Splinter","french":"Esquille runique"}
+{"id":"kulemaks-invitation","group":"Fragments","english":"Kulemak's Invitation","french":"Invitation de Kulemak"}
+{"id":"breachlord-sac","group":"Fragments","english":"Breachlord Sac","french":"Sac de Seigneur de Brèche"}
+{"id":"cowardly-fate","group":"Fragments","english":"Cowardly Fate","french":"Destin lâche"}
+{"id":"deadly-fate","group":"Fragments","english":"Deadly Fate","french":"Destin mortel"}
+{"id":"victorious-fate","group":"Fragments","english":"Victorious Fate","french":"Destin victorieux"}
+{"id":"ancient-crisis-fragment","group":"Fragments","english":"Ancient Crisis Fragment","french":"Fragment de Crise antique"}
+{"id":"faded-crisis-fragment","group":"Fragments","english":"Faded Crisis Fragment","french":"Fragment de Crise terni"}
+{"id":"weathered-crisis-fragment","group":"Fragments","english":"Weathered Crisis Fragment","french":"Fragment de Crise érodé"}
+{"id":"primary-calamity-fragment","group":"Fragments","english":"Primary Calamity Fragment","french":"Fragment de Calamité primaire"}
+{"id":"secondary-calamity-fragment","group":"Fragments","english":"Secondary Calamity Fragment","french":"Fragment de Calamité secondaire"}
+{"id":"tertiary-calamity-fragment","group":"Fragments","english":"Tertiary Calamity Fragment","french":"Fragment de Calamité tertiaire"}
+{"id":"origin-spark","group":"Fragments","english":"Origin Spark","french":"Étincelle des origines"}
+{"id":"origin-cradle","group":"Fragments","english":"Origin Cradle","french":"Berceau des origines"}
+{"id":"origin-core","group":"Fragments","english":"Origin Core","french":"Noyau des origines"}
+{"id":"twilight-reliquary-key","group":"Fragments","english":"Twilight Reliquary Key","french":"Clé du Reliquaire du Crépuscule"}
+{"id":"xeshts-reliquary-key","group":"Fragments","english":"Xesht's Reliquary Key","french":"Clé du Reliquaire de Xesht"}
+{"id":"the-trialmasters-reliquary-key","group":"Fragments","english":"The Trialmaster's Reliquary Key","french":"Clé du Reliquaire du Maître des Épreuves"}
+{"id":"ritualistic-reliquary-key","group":"Fragments","english":"Ritualistic Reliquary Key","french":"Clé du Reliquaire ritualiste"}
+{"id":"tangmazus-reliquary-key","group":"Fragments","english":"Tangmazu's Reliquary Key","french":"Clé du Reliquaire de Tangmazu"}
+{"id":"olroths-reliquary-key","group":"Fragments","english":"Olroth's Reliquary Key","french":"Clé du Reliquaire d'Olroth"}
+{"id":"the-arbiters-reliquary-key","group":"Fragments","english":"The Arbiter's Reliquary Key","french":"Clé du Reliquaire de l'Arbitre"}
+{"id":"against-the-darkness","group":"Fragments","english":"Zarokh's Reliquary Key: Against the Darkness","french":"Clé du Reliquaire de Zarokh : Contre les Ténèbres"}
+{"id":"sandstorm-visage","group":"Fragments","english":"Zarokh's Reliquary Key: Sandstorm Visage","french":"Clé du Reliquaire de Zarokh : Visage de la Tempête de sable"}
+{"id":"blessed-bonds","group":"Fragments","english":"Zarokh's Reliquary Key: Blessed Bonds","french":"Clé du Reliquaire de Zarokh : Liens bénis"}
+{"id":"sekhemas-resolve","group":"Fragments","english":"Zarokh's Reliquary Key: Sekhema's Resolve","french":"Clé du Reliquaire de Zarokh : Détermination des Sekhemas"}
+{"id":"temporalis","group":"Fragments","english":"Zarokh's Reliquary Key: Temporalis","french":"Clé du Reliquaire de Zarokh : Temporalis"}
+{"id":"azmeri-reliquary-key","group":"Fragments","english":"Azmeri Reliquary Key","french":"Clé du Reliquaire azmérien"}
+{"id":"verisium","group":"Verisium","english":"Verisium","french":"Vérisium"}
+{"id":"exceptional-verisium","group":"Verisium","english":"Exceptional Verisium","french":"Vérisium exceptionnel"}
+{"id":"mutated-verisium","group":"Verisium","english":"Mutated Verisium","french":"Vérisium altéré"}
+{"id":"corrupted-verisium","group":"Verisium","english":"Corrupted Verisium","french":"Vérisium corrompu"}
+{"id":"founders-verisium","group":"Verisium","english":"Founders Verisium","french":"Vérisium des fondateurs"}
+{"id":"medveds-crest-of-the-circle","group":"Verisium","english":"Medved's Crest of the Circle","french":"Insigne du Cercle de Medved"}
+{"id":"voranas-crest-of-the-scythe","group":"Verisium","english":"Vorana's Crest of the Scythe","french":"Insigne de la Faux de Vorana"}
+{"id":"uhtreds-crest-of-the-chalice","group":"Verisium","english":"Uhtred's Crest of the Chalice","french":"Insigne du Calice d'Uthred"}
+{"id":"olroths-crest-of-the-sun","group":"Verisium","english":"Olroth's Crest of the Sun","french":"Insigne du Soleil d'Olroth"}
+{"id":"runic-alloy","group":"Verisium","english":"Runic Alloy","french":"Alliage runique"}
+{"id":"adaptive-alloy","group":"Verisium","english":"Adaptive Alloy","french":"Alliage adaptatif"}
+{"id":"protective-alloy","group":"Verisium","english":"Protective Alloy","french":"Alliage protecteur"}
+{"id":"expansive-alloy","group":"Verisium","english":"Expansive Alloy","french":"Alliage expansif"}
+{"id":"swift-alloy","group":"Verisium","english":"Swift Alloy","french":"Alliage véloce"}
+{"id":"cyclonic-alloy","group":"Verisium","english":"Cyclonic Alloy","french":"Alliage cyclonique"}
+{"id":"prismatic-alloy","group":"Verisium","english":"Prismatic Alloy","french":"Alliage prismatique"}
+{"id":"mystic-alloy","group":"Verisium","english":"Mystic Alloy","french":"Alliage mystique"}
+{"id":"sovereign-alloy","group":"Verisium","english":"Sovereign Alloy","french":"Alliage souverain"}
+{"id":"celestial-alloy","group":"Verisium","english":"Celestial Alloy","french":"Alliage céleste"}
+{"id":"transcendent-alloy","group":"Verisium","english":"Transcendent Alloy","french":"Alliage transcendant"}
+{"id":"the-runebinders-alloy","group":"Verisium","english":"The Runebinder's Alloy","french":"Alliage du Lieur de runes"}
+{"id":"the-runefathers-alloy","group":"Verisium","english":"The Runefather's Alloy","french":"Alliage du Père des runes"}
+{"id":"venerable-starlit-ore","group":"Verisium","english":"Venerable Starlit Ore","french":"Minerai étoilé vénérable"}
+{"id":"revered-starlit-ore","group":"Verisium","english":"Revered Starlit Ore","french":"Minerai étoilé révéré"}
+{"id":"veridical-starlit-ore","group":"Verisium","english":"Veridical Starlit Ore","french":"Minerai étoilé véridique"}
+{"id":"warding-starlit-ore","group":"Verisium","english":"Warding Starlit Ore","french":"Minerai étoilé de sauvegarde"}
+{"id":"starlit-ore","group":"Verisium","english":"Starlit Ore","french":"Minerai étoilé"}
+{"id":"liquid-verisium","group":"Verisium","english":"Liquid Verisium","french":"Vérisium liquide"}
+{"id":"lesser-desert-rune","group":"Runes","english":"Lesser Desert Rune","french":"Rune du Désert mineure"}
+{"id":"lesser-glacial-rune","group":"Runes","english":"Lesser Glacial Rune","french":"Rune de la Glace mineure"}
+{"id":"lesser-storm-rune","group":"Runes","english":"Lesser Storm Rune","french":"Rune de l'Orage mineure"}
+{"id":"lesser-iron-rune","group":"Runes","english":"Lesser Iron Rune","french":"Rune du Fer mineure"}
+{"id":"lesser-body-rune","group":"Runes","english":"Lesser Body Rune","french":"Rune du Corps mineure"}
+{"id":"lesser-mind-rune","group":"Runes","english":"Lesser Mind Rune","french":"Rune de l'Esprit mineure"}
+{"id":"lesser-rebirth-rune","group":"Runes","english":"Lesser Rebirth Rune","french":"Rune de la Renaissance mineure"}
+{"id":"lesser-inspiration-rune","group":"Runes","english":"Lesser Inspiration Rune","french":"Rune de l'Inspiration mineure"}
+{"id":"lesser-stone-rune","group":"Runes","english":"Lesser Stone Rune","french":"Rune de la Pierre mineure"}
+{"id":"lesser-vision-rune","group":"Runes","english":"Lesser Vision Rune","french":"Rune de la Vision mineure"}
+{"id":"lesser-robust-rune","group":"Runes","english":"Lesser Robust Rune","french":"Rune de la Robustesse mineure"}
+{"id":"lesser-adept-rune","group":"Runes","english":"Lesser Adept Rune","french":"Rune de l'Adepte mineure"}
+{"id":"lesser-resolve-rune","group":"Runes","english":"Lesser Resolve Rune","french":"Rune de la Résolution mineure"}
+{"id":"lesser-ward-rune","group":"Runes","english":"Lesser Ward Rune","french":"Rune de Sauvegarde mineure"}
+{"id":"lesser-charging-rune","group":"Runes","english":"Lesser Charging Rune","french":"Rune de Charge mineure"}
+{"id":"desert-rune","group":"Runes","english":"Desert Rune","french":"Rune du Désert"}
+{"id":"glacial-rune","group":"Runes","english":"Glacial Rune","french":"Rune de la Glace"}
+{"id":"storm-rune","group":"Runes","english":"Storm Rune","french":"Rune de l'Orage"}
+{"id":"iron-rune","group":"Runes","english":"Iron Rune","french":"Rune du Fer"}
+{"id":"body-rune","group":"Runes","english":"Body Rune","french":"Rune du Corps"}
+{"id":"mind-rune","group":"Runes","english":"Mind Rune","french":"Rune de l'Esprit"}
+{"id":"rebirth-rune","group":"Runes","english":"Rebirth Rune","french":"Rune de la Renaissance"}
+{"id":"inspiration-rune","group":"Runes","english":"Inspiration Rune","french":"Rune de l'Inspiration"}
+{"id":"stone-rune","group":"Runes","english":"Stone Rune","french":"Rune de la Pierre"}
+{"id":"vision-rune","group":"Runes","english":"Vision Rune","french":"Rune de la Vision"}
+{"id":"robust-rune","group":"Runes","english":"Robust Rune","french":"Rune de la Robustesse"}
+{"id":"adept-rune","group":"Runes","english":"Adept Rune","french":"Rune de l'Adepte"}
+{"id":"resolve-rune","group":"Runes","english":"Resolve Rune","french":"Rune de la Résolution"}
+{"id":"ward-rune","group":"Runes","english":"Ward Rune","french":"Rune de Sauvegarde"}
+{"id":"charging-rune","group":"Runes","english":"Charging Rune","french":"Rune de Charge"}
+{"id":"greater-desert-rune","group":"Runes","english":"Greater Desert Rune","french":"Rune du Désert majeure"}
+{"id":"greater-glacial-rune","group":"Runes","english":"Greater Glacial Rune","french":"Rune de la Glace majeure"}
+{"id":"greater-storm-rune","group":"Runes","english":"Greater Storm Rune","french":"Rune de l'Orage majeure"}
+{"id":"greater-iron-rune","group":"Runes","english":"Greater Iron Rune","french":"Rune du Fer majeure"}
+{"id":"greater-body-rune","group":"Runes","english":"Greater Body Rune","french":"Rune du Corps majeure"}
+{"id":"greater-mind-rune","group":"Runes","english":"Greater Mind Rune","french":"Rune de l'Esprit majeure"}
+{"id":"greater-rebirth-rune","group":"Runes","english":"Greater Rebirth Rune","french":"Rune de la Renaissance majeure"}
+{"id":"greater-inspiration-rune","group":"Runes","english":"Greater Inspiration Rune","french":"Rune de l'Inspiration majeure"}
+{"id":"greater-stone-rune","group":"Runes","english":"Greater Stone Rune","french":"Rune de la Pierre majeure"}
+{"id":"greater-vision-rune","group":"Runes","english":"Greater Vision Rune","french":"Rune de la Vision majeure"}
+{"id":"greater-robust-rune","group":"Runes","english":"Greater Robust Rune","french":"Rune de la Robustesse majeure"}
+{"id":"greater-adept-rune","group":"Runes","english":"Greater Adept Rune","french":"Rune de l'Adepte majeure"}
+{"id":"greater-resolve-rune","group":"Runes","english":"Greater Resolve Rune","french":"Rune de la Résolution majeure"}
+{"id":"greater-ward-rune","group":"Runes","english":"Greater Ward Rune","french":"Rune de Sauvegarde majeure"}
+{"id":"greater-charging-rune","group":"Runes","english":"Greater Charging Rune","french":"Rune de Charge majeure"}
+{"id":"perfect-desert-rune","group":"Runes","english":"Perfect Desert Rune","french":"Rune du Désert parfaite"}
+{"id":"perfect-glacial-rune","group":"Runes","english":"Perfect Glacial Rune","french":"Rune de la Glace parfaite"}
+{"id":"perfect-storm-rune","group":"Runes","english":"Perfect Storm Rune","french":"Rune de l'Orage parfaite"}
+{"id":"perfect-iron-rune","group":"Runes","english":"Perfect Iron Rune","french":"Rune du Fer parfaite"}
+{"id":"perfect-body-rune","group":"Runes","english":"Perfect Body Rune","french":"Rune du Corps parfaite"}
+{"id":"perfect-mind-rune","group":"Runes","english":"Perfect Mind Rune","french":"Rune de l'Esprit parfaite"}
+{"id":"perfect-rebirth-rune","group":"Runes","english":"Perfect Rebirth Rune","french":"Rune de la Renaissance parfaite"}
+{"id":"perfect-inspiration-rune","group":"Runes","english":"Perfect Inspiration Rune","french":"Rune de l'Inspiration parfaite"}
+{"id":"perfect-stone-rune","group":"Runes","english":"Perfect Stone Rune","french":"Rune de la Pierre parfaite"}
+{"id":"perfect-vision-rune","group":"Runes","english":"Perfect Vision Rune","french":"Rune de la Vision parfaite"}
+{"id":"perfect-robust-rune","group":"Runes","english":"Perfect Robust Rune","french":"Rune de la Robustesse parfaite"}
+{"id":"perfect-adept-rune","group":"Runes","english":"Perfect Adept Rune","french":"Rune de l'Adepte parfaite"}
+{"id":"perfect-resolve-rune","group":"Runes","english":"Perfect Resolve Rune","french":"Rune de la Résolution parfaite"}
+{"id":"perfect-ward-rune","group":"Runes","english":"Perfect Ward Rune","french":"Rune de Sauvegarde parfaite"}
+{"id":"perfect-charging-rune","group":"Runes","english":"Perfect Charging Rune","french":"Rune de Charge parfaite"}
+{"id":"greater-rune-of-leadership","group":"Runes","english":"Greater Rune of Leadership","french":"Rune majeure de Direction"}
+{"id":"greater-rune-of-tithing","group":"Runes","english":"Greater Rune of Tithing","french":"Rune majeure de Dîme"}
+{"id":"greater-rune-of-alacrity","group":"Runes","english":"Greater Rune of Alacrity","french":"Rune majeure d'Alacrité"}
+{"id":"greater-rune-of-nobility","group":"Runes","english":"Greater Rune of Nobility","french":"Rune majeure de Noblesse"}
+{"id":"hedgewitch-assandras-rune-of-wisdom","group":"Runes","english":"Hedgewitch Assandra's Rune of Wisdom","french":"Rune de Sagesse d'Assandra la Sorcière des Haies"}
+{"id":"saqawals-rune-of-the-sky","group":"Runes","english":"Saqawal's Rune of the Sky","french":"Rune du Ciel de Saqawal"}
+{"id":"fenumus-rune-of-agony","group":"Runes","english":"Fenumus' Rune of Agony","french":"Rune d'Agonie de Fénumus"}
+{"id":"farruls-rune-of-grace","group":"Runes","english":"Farrul's Rune of Grace","french":"Rune de Grâce de Farrul"}
+{"id":"farruls-rune-of-the-chase","group":"Runes","english":"Farrul's Rune of the Chase","french":"Rune de la Poursuite de Farrul"}
+{"id":"craiceanns-rune-of-warding","group":"Runes","english":"Craiceann's Rune of Warding","french":"Rune de Protection de Saqawal"}
+{"id":"saqawals-rune-of-memory","group":"Runes","english":"Saqawal's Rune of Memory","french":"Rune de Souvenir de Saqawal"}
+{"id":"saqawals-rune-of-erosion","group":"Runes","english":"Saqawal's Rune of Erosion","french":"Rune d'Érosion de Saqawal"}
+{"id":"farruls-rune-of-the-hunt","group":"Runes","english":"Farrul's Rune of the Hunt","french":"Rune de la Chasse de Farrul"}
+{"id":"craiceanns-rune-of-recovery","group":"Runes","english":"Craiceann's Rune of Recovery","french":"Rune de Récupération de Craïcéann"}
+{"id":"courtesan-mannans-rune-of-cruelty","group":"Runes","english":"Courtesan Mannan's Rune of Cruelty","french":"Rune de Cruauté de Mannan la Courtisane"}
+{"id":"thane-grannells-rune-of-mastery","group":"Runes","english":"Thane Grannell's Rune of Mastery","french":"Rune de la Maîtrise de Thane Grannell"}
+{"id":"fenumus-rune-of-spinning","group":"Runes","english":"Fenumus' Rune of Spinning","french":"Rune du Tournoiement de Fénumus"}
+{"id":"countess-seskes-rune-of-archery","group":"Runes","english":"Countess Seske's Rune of Archery","french":"Rune de l'Archerie de la Comtesse Seske"}
+{"id":"thane-girts-rune-of-wildness","group":"Runes","english":"Thane Girt's Rune of Wildness","french":"Rune de la Sauvagerie de Thane Girt"}
+{"id":"fenumus-rune-of-draining","group":"Runes","english":"Fenumus' Rune of Draining","french":"Rune du Drainage de Fénumus"}
+{"id":"thane-myrks-rune-of-summer","group":"Runes","english":"Thane Myrk's Rune of Summer","french":"Rune de l'Été de Thane Myrk"}
+{"id":"lady-hestras-rune-of-winter","group":"Runes","english":"Lady Hestra's Rune of Winter","french":"Rune de l'Hiver de Lady Héstra"}
+{"id":"thane-lelds-rune-of-spring","group":"Runes","english":"Thane Leld's Rune of Spring","french":"Rune du Printemps de Thane Leld"}
+{"id":"the-greatwolfs-rune-of-claws","group":"Runes","english":"The Greatwolf's Rune of Claws","french":"Rune des Griffes du Grand loup"}
+{"id":"the-greatwolfs-rune-of-willpower","group":"Runes","english":"The Greatwolf's Rune of Willpower","french":"Rune de la Volonté du Grand loup"}
+{"id":"rune-of-vitality","group":"Runes","english":"Rune of Vitality","french":"Rune de Vitalité"}
+{"id":"rune-of-the-hunt","group":"Runes","english":"Rune of the Hunt","french":"Rune de la Chasse"}
+{"id":"rune-of-acrobatics","group":"Runes","english":"Rune of Acrobatics","french":"Rune des Acrobaties"}
+{"id":"rune-of-culmination","group":"Runes","english":"Rune of Culmination","french":"Rune de Culmination"}
+{"id":"rune-of-renown","group":"Runes","english":"Rune of Renown","french":"Rune de Renom"}
+{"id":"rune-of-accumulation","group":"Runes","english":"Rune of Accumulation","french":"Rune d'Accumulation"}
+{"id":"rune-of-foundations","group":"Runes","english":"Rune of Foundations","french":"Rune des Fondations"}
+{"id":"rune-of-the-prism","group":"Runes","english":"Rune of the Prism","french":"Rune du Prisme"}
+{"id":"rune-of-the-blossom","group":"Runes","english":"Rune of the Blossom","french":"Rune de l'Épanouissement"}
+{"id":"rune-of-consistency","group":"Runes","english":"Rune of Consistency","french":"Rune de Constance"}
+{"id":"rune-of-reach","group":"Runes","english":"Rune of Reach","french":"Rune d'Allonge"}
+{"id":"rune-of-vital-flame","group":"Runes","english":"Rune of Vital Flame","french":"Rune de la Flamme vitale"}
+{"id":"rune-of-confrontation","group":"Runes","english":"Rune of Confrontation","french":"Rune de Portée"}
+{"id":"masterwork-rune","group":"Runes","english":"Masterwork Rune","french":"Rune magistrale"}
+{"id":"passion-of-aldur","group":"Runes","english":"Passion of Aldur","french":"Passion d'Aldur"}
+{"id":"breath-of-aldur","group":"Runes","english":"Breath of Aldur","french":"Souffle d'Aldur"}
+{"id":"ire-of-aldur","group":"Runes","english":"Ire of Aldur","french":"Ire d'Aldur"}
+{"id":"betrayal-of-aldur","group":"Runes","english":"Betrayal of Aldur","french":"Trahison d'Aldur"}
+{"id":"serles-triumph","group":"Runes","english":"Serle's Triumph","french":"Triomphe de Serle"}
+{"id":"cadigans-epiphany","group":"Runes","english":"Cadigan's Epiphany","french":"Épiphanie de Cadigan"}
+{"id":"astrids-creativity","group":"Runes","english":"Astrid's Creativity","french":"Créativité d'Astrid"}
+{"id":"uhtreds-sidereus","group":"Runes","english":"Uhtred's Sidereus","french":"Sidereus d'Uthred"}
+{"id":"kolrs-hunt","group":"Runes","english":"Kolr's Hunt","french":"Traque de Kolr"}
+{"id":"voranas-carnage","group":"Runes","english":"Vorana's Carnage","french":"Carnage de Vorana"}
+{"id":"thruds-might","group":"Runes","english":"Thrud's Might","french":"Puissance de Thurd"}
+{"id":"medveds-tending","group":"Runes","english":"Medved's Tending","french":"Sollicitude de Medved"}
+{"id":"katlas-gloom","group":"Runes","english":"Katla's Gloom","french":"Morosité de Katla"}
+{"id":"aldurs-legacy","group":"Runes","english":"Aldur's Legacy","french":"Héritage d'Aldur"}
+{"id":"warding-rune-of-reinforcement","group":"Runes","english":"Warding Rune of Reinforcement","french":"Rune de Sauvegarde du Renforcement"}
+{"id":"warding-rune-of-protection","group":"Runes","english":"Warding Rune of Protection","french":"Rune de Sauvegarde de la Protection"}
+{"id":"warding-rune-of-disintegration","group":"Runes","english":"Warding Rune of Disintegration","french":"Rune de Sauvegarde de la Désintégration"}
+{"id":"warding-rune-of-desperation","group":"Runes","english":"Warding Rune of Desperation","french":"Rune de Sauvegarde de la Désespérance"}
+{"id":"warding-rune-of-symbiosis","group":"Runes","english":"Warding Rune of Symbiosis","french":"Rune de Sauvegarde de la Symbiose"}
+{"id":"warding-rune-of-courage","group":"Runes","english":"Warding Rune of Courage","french":"Rune de Sauvegarde du Courage"}
+{"id":"warding-rune-of-stability","group":"Runes","english":"Warding Rune of Stability","french":"Rune de Sauvegarde de la Stabilité"}
+{"id":"warding-rune-of-glancing","group":"Runes","english":"Warding Rune of Glancing","french":"Rune de Sauvegarde de la Déviation"}
+{"id":"warding-rune-of-heart","group":"Runes","english":"Warding Rune of Heart","french":"Rune de Sauvegarde du Cœur"}
+{"id":"warding-rune-of-nourishment","group":"Runes","english":"Warding Rune of Nourishment","french":"Rune de Sauvegarde de la Subsistance"}
+{"id":"warding-rune-of-annihilation","group":"Runes","english":"Warding Rune of Annihilation","french":"Rune de Sauvegarde de l'Annihilation"}
+{"id":"warding-rune-of-armature","group":"Runes","english":"Warding Rune of Armature","french":"Rune de Sauvegarde de l'Armature"}
+{"id":"warding-rune-of-obsession","group":"Runes","english":"Warding Rune of Obsession","french":"Rune de Sauvegarde de l'Obsession"}
+{"id":"warding-rune-of-equinox","group":"Runes","english":"Warding Rune of Equinox","french":"Rune de Sauvegarde de l'Équinoxe"}
+{"id":"warding-rune-of-salvaging","group":"Runes","english":"Warding Rune of Salvaging","french":"Rune de Sauvegarde du Salut"}
+{"id":"warding-rune-of-bodyguards","group":"Runes","english":"Warding Rune of Bodyguards","french":"Rune de Sauvegarde des Gardes du corps"}
+{"id":"warding-rune-of-hollowing","group":"Runes","english":"Warding Rune of Hollowing","french":"Rune de Sauvegarde de la Vacuité"}
+{"id":"ancient-rune-of-splinters","group":"Runes","english":"Ancient Rune of Splinters","french":"Rune antique des Éclats"}
+{"id":"ancient-rune-of-dueling","group":"Runes","english":"Ancient Rune of Dueling","french":"Rune antique du Duel"}
+{"id":"ancient-rune-of-the-titan","group":"Runes","english":"Ancient Rune of the Titan","french":"Rune antique du Titan"}
+{"id":"ancient-rune-of-shattering","group":"Runes","english":"Ancient Rune of Shattering","french":"Rune antique du Fracassement"}
+{"id":"ancient-rune-of-prowess","group":"Runes","english":"Ancient Rune of Prowess","french":"Rune antique de la Prouesse"}
+{"id":"ancient-rune-of-control","group":"Runes","english":"Ancient Rune of Control","french":"Rune antique du Contrôle"}
+{"id":"ancient-rune-of-discovery","group":"Runes","english":"Ancient Rune of Discovery","french":"Rune antique de la Découverte"}
+{"id":"ancient-rune-of-decay","group":"Runes","english":"Ancient Rune of Decay","french":"Rune antique de la Décomposition"}
+{"id":"ancient-rune-of-witchcraft","group":"Runes","english":"Ancient Rune of Witchcraft","french":"Rune antique de la Sorcellerie"}
+{"id":"ancient-rune-of-the-horde","group":"Runes","english":"Ancient Rune of the Horde","french":"Rune antique de la Horde"}
+{"id":"ancient-rune-of-animosity","group":"Runes","english":"Ancient Rune of Animosity","french":"Rune antique de l'Animosité"}
+{"id":"ancient-rune-of-detonation","group":"Runes","english":"Ancient Rune of Detonation","french":"Rune antique de la Détonation"}
+{"id":"ancient-rune-of-retaliation","group":"Runes","english":"Ancient Rune of Retaliation","french":"Rune antique de la Riposte"}
+{"id":"legacy-of-bramblejack","group":"Runes","english":"Legacy of Bramblejack","french":"Héritage de « Veste de ronces »"}
+{"id":"legacy-of-blackbraid","group":"Runes","english":"Legacy of Blackbraid","french":"Héritage de « Tressenoire »"}
+{"id":"legacy-of-edyrns-tusks","group":"Runes","english":"Legacy of Edyrn's Tusks","french":"Héritage de « Défenses d'Édyrn »"}
+{"id":"legacy-of-kingsguard","group":"Runes","english":"Legacy of Kingsguard","french":"Héritage de « La Bise glaçante »"}
+{"id":"legacy-of-bristleboar","group":"Runes","english":"Legacy of Bristleboar","french":"Héritage de « Soie de sanglier »"}
+{"id":"legacy-of-foxshade","group":"Runes","english":"Legacy of Foxshade","french":"Héritage de « Ombrenard »"}
+{"id":"legacy-of-ashrend","group":"Runes","english":"Legacy of Ashrend","french":"Héritage de « Cendrelambeaux »"}
+{"id":"legacy-of-briskwrap","group":"Runes","english":"Legacy of Briskwrap","french":"Héritage de « Vifharnais »"}
+{"id":"legacy-of-the-unleashed","group":"Runes","english":"Legacy of The Unleashed","french":"Héritage de « Le Déchaîné »"}
+{"id":"legacy-of-horns-of-bynden","group":"Runes","english":"Legacy of Horns of Bynden","french":"Héritage de « Cornes de Bynden »"}
+{"id":"legacy-of-wings-of-caelyn","group":"Runes","english":"Legacy of Wings of Caelyn","french":"Héritage de « Ailes de Caelyn »"}
+{"id":"legacy-of-ezomyte-peak","group":"Runes","english":"Legacy of Ezomyte Peak","french":"Héritage de « Pointe ézomyte »"}
+{"id":"legacy-of-deidbell","group":"Runes","english":"Legacy of Deidbell","french":"Héritage de « Glas du Trépas »"}
+{"id":"legacy-of-elevore","group":"Runes","english":"Legacy of Elevore","french":"Héritage de « Élévore »"}
+{"id":"legacy-of-starkonjas-head","group":"Runes","english":"Legacy of Starkonja's Head","french":"Héritage de « Tête de Starkonja »"}
+{"id":"legacy-of-crown-of-thorns","group":"Runes","english":"Legacy of Crown of Thorns","french":"Héritage de « Couronne d'épines »"}
+{"id":"legacy-of-greymake","group":"Runes","english":"Legacy of Greymake","french":"Héritage de « Grisaille »"}
+{"id":"legacy-of-erians-cobble","group":"Runes","english":"Legacy of Erian's Cobble","french":"Héritage de « Rafistolage d'Érian »"}
+{"id":"legacy-of-the-smiling-knight","group":"Runes","english":"Legacy of The Smiling Knight","french":"Héritage de « Le Chevalier au sourire »"}
+{"id":"legacy-of-the-vile-knight","group":"Runes","english":"Legacy of The Vile Knight","french":"Héritage de « Le vil Chevalier »"}
+{"id":"legacy-of-northpaw","group":"Runes","english":"Legacy of Northpaw","french":"Héritage de « Griffe du Nord »"}
+{"id":"legacy-of-candlemaker","group":"Runes","english":"Legacy of Candlemaker","french":"Héritage de « Attise-cierge »"}
+{"id":"legacy-of-deathblow","group":"Runes","english":"Legacy of Deathblow","french":"Héritage de « Coup fatal »"}
+{"id":"legacy-of-legionstride","group":"Runes","english":"Legacy of Legionstride","french":"Héritage de « Marche de la Légion »"}
+{"id":"legacy-of-trampletoe","group":"Runes","english":"Legacy of Trampletoe","french":"Héritage de « Piétineur »"}
+{"id":"legacy-of-briarpatch","group":"Runes","english":"Legacy of Briarpatch","french":"Héritage de « Rapiéceronces »"}
+{"id":"legacy-of-bushwhack","group":"Runes","english":"Legacy of Bushwhack","french":"Héritage de « Bushwhack »"}
+{"id":"legacy-of-wanderlust","group":"Runes","english":"Legacy of Wanderlust","french":"Héritage de « Pérambulations »"}
+{"id":"legacy-of-the-knight-errant","group":"Runes","english":"Legacy of The Knight-errant","french":"Héritage de « Le Chevalier errant »"}
+{"id":"legacy-of-oberns-bastion","group":"Runes","english":"Legacy of Obern's Bastion","french":"Héritage de « Bastion d'Obern »"}
+{"id":"legacy-of-dionadair","group":"Runes","english":"Legacy of Dionadair","french":"Héritage de « Dionadair »"}
+{"id":"legacy-of-wulfsbane","group":"Runes","english":"Legacy of Wulfsbane","french":"Héritage de « Fléau des loups »"}
+{"id":"legacy-of-chernobogs-pillar","group":"Runes","english":"Legacy of Chernobog's Pillar","french":"Héritage de « Chernobog's Pillar »"}
+{"id":"legacy-of-alkem-eira","group":"Runes","english":"Legacy of Alkem Eira","french":"Héritage de « Alkem Eira »"}
+{"id":"legacy-of-oaksworn","group":"Runes","english":"Legacy of Oaksworn","french":"Héritage de « Serment du Chêne »"}
+{"id":"legacy-of-dunkelhalt","group":"Runes","english":"Legacy of Dunkelhalt","french":"Héritage de « Dunkelhalt »"}
+{"id":"legacy-of-rondel-de-ezo","group":"Runes","english":"Legacy of Rondel de Ezo","french":"Héritage de « Rondeau d'Ezo »"}
+{"id":"legacy-of-brynhands-mark","group":"Runes","english":"Legacy of Brynhand's Mark","french":"Héritage de « Marque de Brynhand »"}
+{"id":"legacy-of-trenchtimbre","group":"Runes","english":"Legacy of Trenchtimbre","french":"Héritage de « À l'unisson »"}
+{"id":"legacy-of-mjölner","group":"Runes","english":"Legacy of Mjölner","french":"Héritage de « Mjöllnir »"}
+{"id":"legacy-of-twisted-empyrean","group":"Runes","english":"Legacy of Twisted Empyrean","french":"Héritage de « Empyrée déformé »"}
+{"id":"legacy-of-hoghunt","group":"Runes","english":"Legacy of Hoghunt","french":"Héritage de « Porchasse »"}
+{"id":"legacy-of-hrimnors-hymn","group":"Runes","english":"Legacy of Hrimnor's Hymn","french":"Héritage de « Hymne de Hrimnor »"}
+{"id":"legacy-of-brain-rattler","group":"Runes","english":"Legacy of Brain Rattler","french":"Héritage de « Secoueur de Cervelle »"}
+{"id":"legacy-of-lifesprig","group":"Runes","english":"Legacy of Lifesprig","french":"Héritage de « Bourgeon de vie »"}
+{"id":"legacy-of-duality","group":"Runes","english":"Legacy of Duality","french":"Héritage de « Dualité »"}
+{"id":"legacy-of-tyrannys-grip","group":"Runes","english":"Legacy of Tyranny's Grip","french":"Héritage de « Poigne de la tyrannie »"}
+{"id":"legacy-of-the-sentry","group":"Runes","english":"Legacy of The Sentry","french":"Héritage de « La Sentinelle »"}
+{"id":"legacy-of-adonias-ego","group":"Runes","english":"Legacy of Adonia's Ego","french":"Héritage de « Ego d'Adonia »"}
+{"id":"legacy-of-cursecarver","group":"Runes","english":"Legacy of Cursecarver","french":"Héritage de « Graveuse de malédictions »"}
+{"id":"legacy-of-dusk-vigil","group":"Runes","english":"Legacy of Dusk Vigil","french":"Héritage de « Vigile crépusculaire »"}
+{"id":"legacy-of-the-blood-thorn","group":"Runes","english":"Legacy of The Blood Thorn","french":"Héritage de « L'Épine de sang »"}
+{"id":"legacy-of-quill-rain","group":"Runes","english":"Legacy of Quill Rain","french":"Héritage de « Pluie d'aiguillons »"}
+{"id":"legacy-of-ironbound","group":"Runes","english":"Legacy of Ironbound","french":"Héritage de « Ricochefer »"}
+{"id":"legacy-of-amor-mandragora","group":"Runes","english":"Legacy of Amor Mandragora","french":"Héritage de « Amor Mandragora »"}
+{"id":"legacy-of-spiteful-floret","group":"Runes","english":"Legacy of Spiteful Floret","french":"Héritage de « Fleuron malveillant »"}
+{"id":"legacy-of-svalinn","group":"Runes","english":"Legacy of Svalinn","french":"Héritage de « Svalinn »"}
+{"id":"legacy-of-keeper-of-the-arc","group":"Runes","english":"Legacy of Keeper of the Arc","french":"Héritage de « Gardien de la destinée »"}
+{"id":"legacy-of-olrovasara","group":"Runes","english":"Legacy of Olrovasara","french":"Héritage de « Olrovasara »"}
+{"id":"legacy-of-a-worthy-foe","group":"Runes","english":"Legacy of A Worthy Foe","french":"Héritage de « Yeux du Père des runes »"}
+{"id":"legacy-of-serles-grit","group":"Runes","english":"Legacy of Serle's Grit","french":"Héritage de « Détermination de Serle »"}
+{"id":"legacy-of-runeseekers-call","group":"Runes","english":"Legacy of Runeseeker's Call","french":"Héritage de « Appel du Chercheur de runes »"}
+{"id":"legacy-of-facebreaker","group":"Runes","english":"Legacy of Facebreaker","french":"Héritage de « Brise-face »"}
+{"id":"expedition-logbook","group":"Expedition","english":"Expedition Logbook","french":"Journal de bord d'Expédition"}
+{"id":"aldurs-saga","group":"Expedition","english":"Aldur's Saga","french":"Saga d'Aldur"}
+{"id":"medveds-saga","group":"Expedition","english":"Medved's Saga","french":"Saga de Medved"}
+{"id":"voranas-saga","group":"Expedition","english":"Vorana's Saga","french":"Saga de Vorana"}
+{"id":"uhtreds-saga","group":"Expedition","english":"Uhtred's Saga","french":"Saga d'Uthred"}
+{"id":"olroths-saga","group":"Expedition","english":"Olroth's Saga","french":"Saga d'Olroth"}
+{"id":"blazing-flux","group":"Expedition","english":"Blazing Flux","french":"Flux flamboyant"}
+{"id":"chilling-flux","group":"Expedition","english":"Chilling Flux","french":"Flux glaçant"}
+{"id":"crackling-flux","group":"Expedition","english":"Crackling Flux","french":"Flux crépitant"}
+{"id":"void-flux","group":"Expedition","english":"Void Flux","french":"Flux du néant"}
+{"id":"thaumaturgic-flux-2","group":"Expedition","english":"Thaumaturgic Flux (Level 2)","french":"Flux thaumaturgique (Niveau 2)"}
+{"id":"thaumaturgic-flux-3","group":"Expedition","english":"Thaumaturgic Flux (Level 3)","french":"Flux thaumaturgique (Niveau 3)"}
+{"id":"thaumaturgic-flux-4","group":"Expedition","english":"Thaumaturgic Flux (Level 4)","french":"Flux thaumaturgique (Niveau 4)"}
+{"id":"thaumaturgic-flux-5","group":"Expedition","english":"Thaumaturgic Flux (Level 5)","french":"Flux thaumaturgique (Niveau 5)"}
+{"id":"thaumaturgic-flux-6","group":"Expedition","english":"Thaumaturgic Flux (Level 6)","french":"Flux thaumaturgique (Niveau 6)"}
+{"id":"thaumaturgic-flux-7","group":"Expedition","english":"Thaumaturgic Flux (Level 7)","french":"Flux thaumaturgique (Niveau 7)"}
+{"id":"thaumaturgic-flux-8","group":"Expedition","english":"Thaumaturgic Flux (Level 8)","french":"Flux thaumaturgique (Niveau 8)"}
+{"id":"thaumaturgic-flux-9","group":"Expedition","english":"Thaumaturgic Flux (Level 9)","french":"Flux thaumaturgique (Niveau 9)"}
+{"id":"thaumaturgic-flux-10","group":"Expedition","english":"Thaumaturgic Flux (Level 10)","french":"Flux thaumaturgique (Niveau 10)"}
+{"id":"thaumaturgic-flux-11","group":"Expedition","english":"Thaumaturgic Flux (Level 11)","french":"Flux thaumaturgique (Niveau 11)"}
+{"id":"thaumaturgic-flux-12","group":"Expedition","english":"Thaumaturgic Flux (Level 12)","french":"Flux thaumaturgique (Niveau 12)"}
+{"id":"thaumaturgic-flux-13","group":"Expedition","english":"Thaumaturgic Flux (Level 13)","french":"Flux thaumaturgique (Niveau 13)"}
+{"id":"thaumaturgic-flux-14","group":"Expedition","english":"Thaumaturgic Flux (Level 14)","french":"Flux thaumaturgique (Niveau 14)"}
+{"id":"thaumaturgic-flux-15","group":"Expedition","english":"Thaumaturgic Flux (Level 15)","french":"Flux thaumaturgique (Niveau 15)"}
+{"id":"thaumaturgic-flux-16","group":"Expedition","english":"Thaumaturgic Flux (Level 16)","french":"Flux thaumaturgique (Niveau 16)"}
+{"id":"thaumaturgic-flux-17","group":"Expedition","english":"Thaumaturgic Flux (Level 17)","french":"Flux thaumaturgique (Niveau 17)"}
+{"id":"thaumaturgic-flux-18","group":"Expedition","english":"Thaumaturgic Flux (Level 18)","french":"Flux thaumaturgique (Niveau 18)"}
+{"id":"thaumaturgic-flux-19","group":"Expedition","english":"Thaumaturgic Flux (Level 19)","french":"Flux thaumaturgique (Niveau 19)"}
+{"id":"thaumaturgic-flux-20","group":"Expedition","english":"Thaumaturgic Flux (Level 20)","french":"Flux thaumaturgique (Niveau 20)"}
+{"id":"perfect-flux","group":"Expedition","english":"Perfect Flux","french":"Flux parfait"}
+{"id":"emergent-vigour","group":"Expedition","english":"Emergent Vigour","french":"Vigueur émergente"}
+{"id":"emergent-possibility","group":"Expedition","english":"Emergent Possibility","french":"Possibilité émergente"}
+{"id":"emergent-protection","group":"Expedition","english":"Emergent Protection","french":"Protection émergente"}
+{"id":"emergent-instinct","group":"Expedition","english":"Emergent Instinct","french":"Insctinct émergent"}
+{"id":"carved-cunning","group":"Expedition","english":"Carved Cunning","french":"Ruse sculptée"}
+{"id":"carved-majesty","group":"Expedition","english":"Carved Majesty","french":"Majesté sculptée"}
+{"id":"carved-mischief","group":"Expedition","english":"Carved Mischief","french":"Malice sculptée"}
+{"id":"carved-tenacity","group":"Expedition","english":"Carved Tenacity","french":"Ténacité sculptée"}
+{"id":"architects-orb","group":"Vaal","english":"Architect's Orb","french":"Orbe d'architecte"}
+{"id":"crystallised-corruption","group":"Vaal","english":"Crystallised Corruption","french":"Corruption cristallisée"}
+{"id":"core-destabiliser","group":"Vaal","english":"Core Destabiliser","french":"Déstabilisateur de Noyau"}
+{"id":"ancient-infuser","group":"Vaal","english":"Ancient Infuser","french":"Infuseur antique"}
+{"id":"vaal-cultivation-orb","group":"Vaal","english":"Vaal Cultivation Orb","french":"Orbe de culture vaal"}
+{"id":"yaomacs-orb-of-sacrifice","group":"Vaal","english":"Yaomac's Orb of Sacrifice","french":"Orbe de sacrifice de Yaomac"}
+{"id":"kopecs-orb-of-sacrifice","group":"Vaal","english":"Kopec's Orb of Sacrifice","french":"Orbe de scrifice de Kopec"}
+{"id":"kamasas-orb-of-sacrifice","group":"Vaal","english":"Kamasa's Orb of Sacrifice","french":"Orbe de sacrifice de Kamasa"}
+{"id":"yuguls-orb-of-sacrifice","group":"Vaal","english":"Yugul's Orb of Sacrifice","french":"Orbe de sacrifice de Yugul"}
+{"id":"vaal-armourers-infuser","group":"Vaal","english":"Vaal Armourer's Infuser","french":"Infuseur vaal d'armurier"}
+{"id":"vaal-blacksmiths-infuser","group":"Vaal","english":"Vaal Blacksmith's Infuser","french":"Infuseur vaal de forgeron"}
+{"id":"vaal-arcanists-infuser","group":"Vaal","english":"Vaal Arcanist's Infuser","french":"Infuseur vaal d'arcaniste"}
+{"id":"vaal-catalysing-infuser","group":"Vaal","english":"Vaal Catalysing Infuser","french":"Infuseur vaal de catalyse"}
+{"id":"orb-of-extraction","group":"Vaal","english":"Orb of Extraction","french":"Orbe d'extraction"}
+{"id":"vaal-siphoner","group":"Vaal","english":"Vaal Siphoner","french":"Siphonneur vaal"}
+{"id":"guatelitzis-thesis","group":"Vaal","english":"Guatelitzi's Thesis","french":"Thèse de Guatelitzi"}
+{"id":"citaqualotls-thesis","group":"Vaal","english":"Citaqualotl's Thesis","french":"Thèse de Citaqualotl"}
+{"id":"jiquanis-thesis","group":"Vaal","english":"Jiquani's Thesis","french":"Thèse de Jiquani"}
+{"id":"quipolatls-thesis","group":"Vaal","english":"Quipolatl's Thesis","french":"Thèse de Quipolatl"}
+{"id":"soul-core-of-tacati","group":"Vaal","english":"Soul Core of Tacati","french":"Noyau d'âme de Tacati"}
+{"id":"soul-core-of-opiloti","group":"Vaal","english":"Soul Core of Opiloti","french":"Noyau d'âme d'Opiloti"}
+{"id":"soul-core-of-jiquani","group":"Vaal","english":"Soul Core of Jiquani","french":"Noyau d'âme de Jiquani"}
+{"id":"soul-core-of-zalatl","group":"Vaal","english":"Soul Core of Zalatl","french":"Noyau d'âme de Zalatl"}
+{"id":"soul-core-of-citaqualotl","group":"Vaal","english":"Soul Core of Citaqualotl","french":"Noyau d'âme de Citaqualotl"}
+{"id":"soul-core-of-puhuarte","group":"Vaal","english":"Soul Core of Puhuarte","french":"Noyau d'âme de Puhuarte"}
+{"id":"soul-core-of-tzamoto","group":"Vaal","english":"Soul Core of Tzamoto","french":"Noyau d'âme de Tzamoto"}
+{"id":"soul-core-of-xopec","group":"Vaal","english":"Soul Core of Xopec","french":"Noyau d'âme de Xopec"}
+{"id":"soul-core-of-azcapa","group":"Vaal","english":"Soul Core of Azcapa","french":"Noyau d'âme d'Azcapa"}
+{"id":"soul-core-of-topotante","group":"Vaal","english":"Soul Core of Topotante","french":"Noyau d'âme de Topotante"}
+{"id":"soul-core-of-quipolatl","group":"Vaal","english":"Soul Core of Quipolatl","french":"Noyau d'âme de Quipolatl"}
+{"id":"soul-core-of-ticaba","group":"Vaal","english":"Soul Core of Ticaba","french":"Noyau d'âme de Ticaba"}
+{"id":"soul-core-of-atmohua","group":"Vaal","english":"Soul Core of Atmohua","french":"Noyau d'âme d'Atmohua"}
+{"id":"soul-core-of-cholotl","group":"Vaal","english":"Soul Core of Cholotl","french":"Noyau d'âme de Cholotl"}
+{"id":"soul-core-of-zantipi","group":"Vaal","english":"Soul Core of Zantipi","french":"Noyau d'âme de Zantipi"}
+{"id":"hayoxis-soul-core-of-heatproofing","group":"Vaal","english":"Hayoxi's Soul Core of Heatproofing","french":"Noyau d'âme d'Hayoxi de l'Ignifugation"}
+{"id":"zalatls-soul-core-of-insulation","group":"Vaal","english":"Zalatl's Soul Core of Insulation","french":"Noyau d'âme de Zalatl de l'Isolation"}
+{"id":"topotantes-soul-core-of-dampening","group":"Vaal","english":"Topotante's Soul Core of Dampening","french":"Noyau d'âme de Topotante de l'Humidification"}
+{"id":"atmohuas-soul-core-of-retreat","group":"Vaal","english":"Atmohua's Soul Core of Retreat","french":"Noyau d'âme d'Atmohua de la Retraite"}
+{"id":"quipolatls-soul-core-of-flow","group":"Vaal","english":"Quipolatl's Soul Core of Flow","french":"Noyau d'âme de Quipolatl du Flux"}
+{"id":"tzamotos-soul-core-of-ferocity","group":"Vaal","english":"Tzamoto's Soul Core of Ferocity","french":"Noyau d'âme de Tzamoto de la Férocité"}
+{"id":"uromotis-soul-core-of-attenuation","group":"Vaal","english":"Uromoti's Soul Core of Attenuation","french":"Noyau d'âme d'Uromoti de l'Atténuation"}
+{"id":"opilotis-soul-core-of-assault","group":"Vaal","english":"Opiloti's Soul Core of Assault","french":"Noyau d'âme d'Opiloti de l'Assaut"}
+{"id":"guatelitzis-soul-core-of-endurance","group":"Vaal","english":"Guatelitzi's Soul Core of Endurance","french":"Noyau d'âme de Guatelitzi de l'Endurance"}
+{"id":"xopecs-soul-core-of-power","group":"Vaal","english":"Xopec's Soul Core of Power","french":"Noyau d'âme de Xopec du Pouvoir"}
+{"id":"estazuntis-soul-core-of-convalescence","group":"Vaal","english":"Estazunti's Soul Core of Convalescence","french":"Noyau d'âme d'Estazunti de la Convalescence"}
+{"id":"tacatis-soul-core-of-affliction","group":"Vaal","english":"Tacati's Soul Core of Affliction","french":"Noyau d'âme de Tacati de l'Affliction"}
+{"id":"cholotls-soul-core-of-war","group":"Vaal","english":"Cholotl's Soul Core of War","french":"Noyau d'âme de Cholotl de la Guerre"}
+{"id":"citaqualotls-soul-core-of-foulness","group":"Vaal","english":"Citaqualotl's Soul Core of Foulness","french":"Noyau d'âme de Citaqualotl de l'Infamie"}
+{"id":"xipocados-soul-core-of-dominion","group":"Vaal","english":"Xipocado's Soul Core of Dominion","french":"Noyau d'âme de Xipocado de la Domination"}
+{"id":"jiquanis-soul-core-of-automation","group":"Vaal","english":"Jiquani's Soul Core of Automation","french":"Noyau d'âme de Jiquani de l'Automatisation"}
+{"id":"jiquanis-soul-core-of-malediction","group":"Vaal","english":"Jiquani's Soul Core of Malediction","french":"Noyau d'âme de Jiquani de la Malédiction"}
+{"id":"jiquanis-soul-core-of-targeting","group":"Vaal","english":"Jiquani's Soul Core of Targeting","french":"Noyau d'âme de Jiquani du Ciblage"}
+{"id":"jiquanis-soul-core-of-rallying","group":"Vaal","english":"Jiquani's Soul Core of Rallying","french":"Noyau d'âme de Jiquani du Ralliement"}
+{"id":"jiquanis-soul-core-of-radiance","group":"Vaal","english":"Jiquani's Soul Core of Radiance","french":"Noyau d'âme de Jiquani de la Radiance"}
+{"id":"jiquanis-soul-core-of-severing","group":"Vaal","english":"Jiquani's Soul Core of Severing","french":"Noyau d'âme de Jiquani du Sectionnement"}
+{"id":"jiquanis-soul-core-of-rippling","group":"Vaal","english":"Jiquani's Soul Core of Rippling","french":"Noyau d'âme de Jiquani des Répercussions"}
+{"id":"jiquanis-soul-core-of-quaking","group":"Vaal","english":"Jiquani's Soul Core of Quaking","french":"Noyau d'âme de Jiquani du Tremblement"}
+{"id":"jiquanis-soul-core-of-munitions","group":"Vaal","english":"Jiquani's Soul Core of Munitions","french":"Noyau d'âme de Jiquani des Munitions"}
+{"id":"jiquanis-soul-core-of-snares","group":"Vaal","english":"Jiquani's Soul Core of Snares","french":"Noyau d'âme de Jiquani des Entraves"}
+{"id":"jiquanis-soul-core-of-abundance","group":"Vaal","english":"Jiquani's Soul Core of Abundance","french":"Noyau d'âme de Jiquani de l'Abondance"}
+{"id":"jiquanis-soul-core-of-squalls","group":"Vaal","english":"Jiquani's Soul Core of Squalls","french":"Noyau d'âme de Jiquani des Rafales"}
+{"id":"jiquanis-soul-core-of-thundering","group":"Vaal","english":"Jiquani's Soul Core of Thundering","french":"Noyau d'âme de Jiquani du Tonnerre"}
+{"id":"atziris-soul-core-of-devotion","group":"Vaal","english":"Atziri's Soul Core of Devotion","french":"Noyau d'âme d'Atziri de la Dévotion"}
+{"id":"atziris-soul-core-of-vitality","group":"Vaal","english":"Atziri's Soul Core of Vitality","french":"Noyau d'âme d'Atziri de la Vitalité"}
+{"id":"atziris-soul-core-of-alacrity","group":"Vaal","english":"Atziri's Soul Core of Alacrity","french":"Noyau d'âme d'Atziri de l'Alacrité"}
+{"id":"atziris-soul-core-of-inoculation","group":"Vaal","english":"Atziri's Soul Core of Inoculation","french":"Noyau d'âme d'Atziri de l'Inoculation"}
+{"id":"simulacrum-splinter","group":"Delirium","english":"Simulacrum Splinter","french":"Esquille de Simulacre"}
+{"id":"simulacrum","group":"Delirium","english":"Simulacrum","french":"Simulacre"}
+{"id":"diluted-liquid-ire","group":"Delirium","english":"Diluted Liquid Ire","french":"Ire liquide diluée"}
+{"id":"diluted-liquid-guilt","group":"Delirium","english":"Diluted Liquid Guilt","french":"Culpabilité liquide diluée"}
+{"id":"diluted-liquid-greed","group":"Delirium","english":"Diluted Liquid Greed","french":"Cupidité liquide diluée"}
+{"id":"liquid-paranoia","group":"Delirium","english":"Liquid Paranoia","french":"Paranoïa liquide"}
+{"id":"liquid-envy","group":"Delirium","english":"Liquid Envy","french":"Jalousie liquide"}
+{"id":"liquid-disgust","group":"Delirium","english":"Liquid Disgust","french":"Dégoût liquide"}
+{"id":"liquid-despair","group":"Delirium","english":"Liquid Despair","french":"Désespoir liquide"}
+{"id":"concentrated-liquid-fear","group":"Delirium","english":"Concentrated Liquid Fear","french":"Peur liquide concentrée"}
+{"id":"concentrated-liquid-suffering","group":"Delirium","english":"Concentrated Liquid Suffering","french":"Souffrance liquide concentrée"}
+{"id":"concentrated-liquid-isolation","group":"Delirium","english":"Concentrated Liquid Isolation","french":"Isolement liquide concentré"}
+{"id":"potent-liquid-melancholy","group":"Delirium","english":"Potent Liquid Melancholy","french":"Mélancolie liquide puissante"}
+{"id":"potent-liquid-ferocity","group":"Delirium","english":"Potent Liquid Ferocity","french":"Férocité liquide puissante"}
+{"id":"potent-liquid-contempt","group":"Delirium","english":"Potent Liquid Contempt","french":"Dédain liquide puissant"}
+{"id":"ancient-potent-liquid-melancholy","group":"Delirium","english":"Ancient Potent Liquid Melancholy","french":"Mélancolie liquide antique puissante"}
+{"id":"ancient-potent-liquid-ferocity","group":"Delirium","english":"Ancient Potent Liquid Ferocity","french":"Férocité liquide antique puissante"}
+{"id":"ancient-potent-liquid-contempt","group":"Delirium","english":"Ancient Potent Liquid Contempt","french":"Dédain liquide antique puissant"}
+{"id":"ancient-diluted-liquid-ire","group":"Delirium","english":"Ancient Diluted Liquid Ire","french":"Ire liquide antique diluée"}
+{"id":"ancient-diluted-liquid-guilt","group":"Delirium","english":"Ancient Diluted Liquid Guilt","french":"Culpabilité liquide antique diluée"}
+{"id":"ancient-diluted-liquid-greed","group":"Delirium","english":"Ancient Diluted Liquid Greed","french":"Cupidité liquide antique diluée"}
+{"id":"ancient-liquid-paranoia","group":"Delirium","english":"Ancient Liquid Paranoia","french":"Paranoïa liquide antique"}
+{"id":"ancient-liquid-envy","group":"Delirium","english":"Ancient Liquid Envy","french":"Jalousie liquide antique"}
+{"id":"ancient-liquid-disgust","group":"Delirium","english":"Ancient Liquid Disgust","french":"Dégoût liquide puissant"}
+{"id":"ancient-liquid-despair","group":"Delirium","english":"Ancient Liquid Despair","french":"Désespoir liquide puissant"}
+{"id":"ancient-concentrated-liquid-fear","group":"Delirium","english":"Ancient Concentrated Liquid Fear","french":"Peur liquide antique concentrée"}
+{"id":"ancient-concentrated-liquid-suffering","group":"Delirium","english":"Ancient Concentrated Liquid Suffering","french":"Souffrance liquide antique concentrée"}
+{"id":"ancient-concentrated-liquid-isolation","group":"Delirium","english":"Ancient Concentrated Liquid Isolation","french":"Isolement liquide antique concentré"}
+{"id":"breach-splinter","group":"Breach","english":"Breach Splinter","french":"Esquille de Brèche"}
+{"id":"breachstone","group":"Breach","english":"Breachstone","french":"Pierre de Brèche"}
+{"id":"lavish-wombgift","group":"Breach","english":"Lavish Wombgift","french":"Don de la matrice somptueux"}
+{"id":"ornate-wombgift","group":"Breach","english":"Ornate Wombgift","french":"Don de la matrice orné"}
+{"id":"banded-wombgift","group":"Breach","english":"Banded Wombgift","french":"Don de la matrice sanglé"}
+{"id":"signet-wombgift","group":"Breach","english":"Signet Wombgift","french":"Don de la matrice sigillaire"}
+{"id":"revelatory-wombgift","group":"Breach","english":"Revelatory Wombgift","french":"Don de la matrice révélateur"}
+{"id":"flesh-catalyst","group":"Breach","english":"Flesh Catalyst","french":"Catalyseur de chair"}
+{"id":"neural-catalyst","group":"Breach","english":"Neural Catalyst","french":"Catalyseur neural"}
+{"id":"carapace-catalyst","group":"Breach","english":"Carapace Catalyst","french":"Catalyseur carapace"}
+{"id":"uul-netols-catalyst","group":"Breach","english":"Uul-Netol's Catalyst","french":"Catalyseur d'Uul-Netol"}
+{"id":"xophs-catalyst","group":"Breach","english":"Xoph's Catalyst","french":"Catalyseur de Xoph"}
+{"id":"tuls-catalyst","group":"Breach","english":"Tul's Catalyst","french":"Catalyseur de Tul"}
+{"id":"eshs-catalyst","group":"Breach","english":"Esh's Catalyst","french":"Catalyseur d'Esh"}
+{"id":"chayulas-catalyst","group":"Breach","english":"Chayula's Catalyst","french":"Catalyseur de Chayula"}
+{"id":"reaver-catalyst","group":"Breach","english":"Reaver Catalyst","french":"Catalyseur de ravageur"}
+{"id":"sibilant-catalyst","group":"Breach","english":"Sibilant Catalyst","french":"Catalyseur sibilant"}
+{"id":"skittering-catalyst","group":"Breach","english":"Skittering Catalyst","french":"Catalyseur grouillant"}
+{"id":"adaptive-catalyst","group":"Breach","english":"Adaptive Catalyst","french":"Catalyseur adaptatif"}
+{"id":"necrotic-catalyst","group":"Breach","english":"Necrotic Catalyst","french":"Catalyseur nécrotique"}
+{"id":"refined-flesh-catalyst","group":"Breach","english":"Refined Flesh Catalyst","french":"Catalyseur de chair raffiné"}
+{"id":"refined-neural-catalyst","group":"Breach","english":"Refined Neural Catalyst","french":"Catalyseur neural raffiné"}
+{"id":"refined-carapace-catalyst","group":"Breach","english":"Refined Carapace Catalyst","french":"Catalyseur carapace raffiné"}
+{"id":"refined-uul-netols-catalyst","group":"Breach","english":"Refined Uul-Netol's Catalyst","french":"Catalyseur d'Uul-Netol raffiné"}
+{"id":"refined-xophs-catalyst","group":"Breach","english":"Refined Xoph's Catalyst","french":"Catalyseur de Xoph raffiné"}
+{"id":"refined-tuls-catalyst","group":"Breach","english":"Refined Tul's Catalyst","french":"Catalyseur de Tul raffiné"}
+{"id":"refined-eshs-catalyst","group":"Breach","english":"Refined Esh's Catalyst","french":"Catalyseur d'Esh raffiné"}
+{"id":"refined-chayulas-catalyst","group":"Breach","english":"Refined Chayula's Catalyst","french":"Catalyseur de Chayula raffiné"}
+{"id":"refined-reaver-catalyst","group":"Breach","english":"Refined Reaver Catalyst","french":"Catalyseur de ravageur raffiné"}
+{"id":"refined-sibilant-catalyst","group":"Breach","english":"Refined Sibilant Catalyst","french":"Catalyseur sibilant raffiné"}
+{"id":"refined-skittering-catalyst","group":"Breach","english":"Refined Skittering Catalyst","french":"Catalyseur grouillant raffiné"}
+{"id":"refined-adaptive-catalyst","group":"Breach","english":"Refined Adaptive Catalyst","french":"Catalyseur adaptatif raffiné"}
+{"id":"refined-necrotic-catalyst","group":"Breach","english":"Refined Necrotic Catalyst","french":"Catalyseur nécrotique raffiné"}
+{"id":"petition-splinter","group":"Ritual","english":"Petition Splinter","french":"Esquille de Pétition"}
+{"id":"an-audience-with-the-king","group":"Ritual","english":"An Audience with the King","french":"Une Audience avec le Roi"}
+{"id":"call-of-the-shadows","group":"Ritual","english":"Call of the Shadows","french":"Appel des Ombres"}
+{"id":"head-of-the-king","group":"Ritual","english":"Head of the King","french":"Tête du Roi"}
+{"id":"sacred-bloom","group":"Ritual","english":"Sacred Bloom","french":"Fleur sacrée"}
+{"id":"omen-of-refreshment","group":"Ritual","english":"Omen of Refreshment","french":"Présage de Rafraîchissement"}
+{"id":"omen-of-resurgence","group":"Ritual","english":"Omen of Resurgence","french":"Présage de Résurgence"}
+{"id":"omen-of-amelioration","group":"Ritual","english":"Omen of Amelioration","french":"Présage d'Amélioration"}
+{"id":"omen-of-whittling","group":"Ritual","english":"Omen of Whittling","french":"Présage d'Amenuisement"}
+{"id":"omen-of-sinistral-erasure","group":"Ritual","english":"Omen of Sinistral Erasure","french":"Présage d'Effacement sénestre"}
+{"id":"omen-of-dextral-erasure","group":"Ritual","english":"Omen of Dextral Erasure","french":"Présage d'Effacement dextre"}
+{"id":"omen-of-corruption","group":"Ritual","english":"Omen of Corruption","french":"Présage de Corruption"}
+{"id":"omen-of-greater-exaltation","group":"Ritual","english":"Omen of Greater Exaltation","french":"Présage d'Exaltation majeure"}
+{"id":"omen-of-sinistral-exaltation","group":"Ritual","english":"Omen of Sinistral Exaltation","french":"Présage d'Exaltation sénestre"}
+{"id":"omen-of-dextral-exaltation","group":"Ritual","english":"Omen of Dextral Exaltation","french":"Présage d'Exaltation dextre"}
+{"id":"omen-of-sinistral-annulment","group":"Ritual","english":"Omen of Sinistral Annulment","french":"Présage d'Annulation sénestre"}
+{"id":"omen-of-dextral-annulment","group":"Ritual","english":"Omen of Dextral Annulment","french":"Présage d'Annulation dextre"}
+{"id":"omen-of-answered-prayers","group":"Ritual","english":"Omen of Answered Prayers","french":"Présage des Prières exaucées"}
+{"id":"omen-of-the-hunt","group":"Ritual","english":"Omen of the Hunt","french":"Présage de la Chasse"}
+{"id":"omen-of-reinforcements","group":"Ritual","english":"Omen of Reinforcements","french":"Présage de Renforts"}
+{"id":"omen-of-secret-compartments","group":"Ritual","english":"Omen of Secret Compartments","french":"Présage des Compartiments secrets"}
+{"id":"omen-of-homogenising-exaltation","group":"Ritual","english":"Omen of Homogenising Exaltation","french":"Présage d'Exaltation uniformisante"}
+{"id":"omen-of-homogenising-coronation","group":"Ritual","english":"Omen of Homogenising Coronation","french":"Présage de Couronnement homogénéisant"}
+{"id":"omen-of-gambling","group":"Ritual","english":"Omen of Gambling","french":"Présage de Pari"}
+{"id":"omen-of-bartering","group":"Ritual","english":"Omen of Bartering","french":"Présage de Marchandage"}
+{"id":"omen-of-the-blessed","group":"Ritual","english":"Omen of the Blessed","french":"Présage du Béni"}
+{"id":"omen-of-chaotic-rarity","group":"Ritual","english":"Omen of Chaotic Rarity","french":"Présage de Rareté chaotique"}
+{"id":"omen-of-chaotic-quantity","group":"Ritual","english":"Omen of Chaotic Quantity","french":"Présage de Quantité chaotique"}
+{"id":"omen-of-chaotic-monsters","group":"Ritual","english":"Omen of Chaotic Monsters","french":"Présage de Monstres chaotiques"}
+{"id":"omen-of-chaotic-effectiveness","group":"Ritual","english":"Omen of Chaotic Effectiveness","french":"Présage d'Efficacité chaotique"}
+{"id":"omen-of-chance","group":"Ritual","english":"Omen of Chance","french":"Présage de Chance"}
+{"id":"omen-of-the-ancients","group":"Ritual","english":"Omen of the Ancients","french":"Présage des Anciens"}
+{"id":"omen-of-sanctification","group":"Ritual","english":"Omen of Sanctification","french":"Présage de Sanctification"}
+{"id":"omen-of-dextral-crystallisation","group":"Ritual","english":"Omen of Dextral Crystallisation","french":"Présage de Cristallisation dextre"}
+{"id":"omen-of-sinistral-crystallisation","group":"Ritual","english":"Omen of Sinistral Crystallisation","french":"Présage de Cristallisation sénestre"}
+{"id":"omen-of-catalysing-exaltation","group":"Ritual","english":"Omen of Catalysing Exaltation","french":"Présage d'Exaltation catalysante"}
+{"id":"omen-of-abyssal-echoes","group":"Ritual","english":"Omen of Abyssal Echoes","french":"Présage des Échos abyssaux"}
+{"id":"omen-of-the-sovereign","group":"Ritual","english":"Omen of the Sovereign","french":"Présage du Souverain"}
+{"id":"omen-of-the-liege","group":"Ritual","english":"Omen of the Liege","french":"Présage du Suzerain"}
+{"id":"omen-of-the-blackblooded","group":"Ritual","english":"Omen of the Blackblooded","french":"Présage du Sang-noir"}
+{"id":"omen-of-putrefaction","group":"Ritual","english":"Omen of Putrefaction","french":"Présage de Putréfaction"}
+{"id":"omen-of-light","group":"Ritual","english":"Omen of Light","french":"Présage de Lumière"}
+{"id":"omen-of-sinistral-necromancy","group":"Ritual","english":"Omen of Sinistral Necromancy","french":"Présage de Nécromancie sénestre"}
+{"id":"omen-of-dextral-necromancy","group":"Ritual","english":"Omen of Dextral Necromancy","french":"Présage de Nécromancie dextre"}
+{"id":"raven-touched-shard","group":"Ritual","english":"Raven-Touched Shard","french":"Éclat touché par le Corbeau"}
+{"id":"bear-idol","group":"Ritual","english":"Bear Idol","french":"Idole de l'Ours"}
+{"id":"primate-idol","group":"Ritual","english":"Primate Idol","french":"Idole du Singe"}
+{"id":"stag-idol","group":"Ritual","english":"Stag Idol","french":"Idole du Cerf"}
+{"id":"boar-idol","group":"Ritual","english":"Boar Idol","french":"Idole du Sanglier"}
+{"id":"snake-idol","group":"Ritual","english":"Snake Idol","french":"Idole du Serpent"}
+{"id":"wolf-idol","group":"Ritual","english":"Wolf Idol","french":"Idole du Loup"}
+{"id":"cat-idol","group":"Ritual","english":"Cat Idol","french":"Idole du Chat"}
+{"id":"owl-idol","group":"Ritual","english":"Owl Idol","french":"Idole du Hibou"}
+{"id":"ox-idol","group":"Ritual","english":"Ox Idol","french":"Idole du Bœuf"}
+{"id":"fox-idol","group":"Ritual","english":"Fox Idol","french":"Idole du Renard"}
+{"id":"rabbit-idol","group":"Ritual","english":"Rabbit Idol","french":"Idole du Lapin"}
+{"id":"idol-of-sirrius","group":"Ritual","english":"Idol of Sirrius","french":"Idole de Sirrius"}
+{"id":"idol-of-thruldana","group":"Ritual","english":"Idol of Thruldana","french":"Idole de Thruldana"}
+{"id":"idol-of-grold","group":"Ritual","english":"Idol of Grold","french":"Idole de Grold"}
+{"id":"idol-of-eeshta","group":"Ritual","english":"Idol of Eeshta","french":"Idole d'Eeshta"}
+{"id":"idol-of-egrin","group":"Ritual","english":"Idol of Egrin","french":"Idole d'Egrin"}
+{"id":"idol-of-maxarius","group":"Ritual","english":"Idol of Maxarius","french":"Idole de Maxarius"}
+{"id":"idol-of-ralakesh","group":"Ritual","english":"Idol of Ralakesh","french":"Idole de Ralakesh"}
+{"id":"idol-of-the-sycophant","group":"Ritual","english":"Idol of the Sycophant","french":"Idole du Sycophante"}
+{"id":"idol-of-the-martyr","group":"Ritual","english":"Idol of the Martyr","french":"Idole du Martyr"}
+{"id":"idol-of-the-pharisee","group":"Ritual","english":"Idol of the Pharisee","french":"Idole du Pharisien"}
+{"id":"idol-of-greust","group":"Ritual","english":"Idol of Greust","french":"Idole de Greust"}
+{"id":"idol-of-yeena","group":"Ritual","english":"Idol of Yeena","french":"Idole de Yeena"}
+{"id":"idol-of-eramir","group":"Ritual","english":"Idol of Eramir","french":"Idole d'Éramir"}
+{"id":"idol-of-oak","group":"Ritual","english":"Idol of Oak","french":"Idole d'Orme"}
+{"id":"idol-of-alira","group":"Ritual","english":"Idol of Alira","french":"Idole d'Alira"}
+{"id":"idol-of-kraityn","group":"Ritual","english":"Idol of Kraityn","french":"Idole de Kraityn"}
+{"id":"idol-of-silk","group":"Ritual","english":"Idol of Silk","french":"Idole de Fil-de-soie"}
+{"id":"gnawed-jawbone","group":"Abyss","english":"Gnawed Jawbone","french":"Mâchoire rongée"}
+{"id":"preserved-jawbone","group":"Abyss","english":"Preserved Jawbone","french":"Mâchoire préservée"}
+{"id":"ancient-jawbone","group":"Abyss","english":"Ancient Jawbone","french":"Mâchoire antique"}
+{"id":"gnawed-rib","group":"Abyss","english":"Gnawed Rib","french":"Côte rongée"}
+{"id":"preserved-rib","group":"Abyss","english":"Preserved Rib","french":"Côte préservée"}
+{"id":"ancient-rib","group":"Abyss","english":"Ancient Rib","french":"Côte antique"}
+{"id":"gnawed-collarbone","group":"Abyss","english":"Gnawed Collarbone","french":"Clavicule rongée"}
+{"id":"preserved-collarbone","group":"Abyss","english":"Preserved Collarbone","french":"Clavicule préservée"}
+{"id":"ancient-collarbone","group":"Abyss","english":"Ancient Collarbone","french":"Clavicule antique"}
+{"id":"altered-collarbone","group":"Abyss","english":"Altered Collarbone","french":"Clavicule altérée"}
+{"id":"preserved-cranium","group":"Abyss","english":"Preserved Cranium","french":"Boîte crânienne préservée"}
+{"id":"preserved-vertebrae","group":"Abyss","english":"Preserved Vertebrae","french":"Vertèbre préservée"}
+{"id":"amanamus-gaze","group":"Abyss","english":"Amanamu's Gaze","french":"Regard d'Amanamu"}
+{"id":"tecrods-gaze","group":"Abyss","english":"Tecrod's Gaze","french":"Regard de Tecrod"}
+{"id":"kurgals-gaze","group":"Abyss","english":"Kurgal's Gaze","french":"Regard de Kurgal"}
+{"id":"ulamans-gaze","group":"Abyss","english":"Ulaman's Gaze","french":"Regard d'Ulaman"}
+{"id":"lesser-essence-of-the-body","group":"Essences","english":"Lesser Essence of the Body","french":"Essence du Corps mineure"}
+{"id":"lesser-essence-of-the-mind","group":"Essences","english":"Lesser Essence of the Mind","french":"Essence de l'Esprit mineure"}
+{"id":"lesser-essence-of-enhancement","group":"Essences","english":"Lesser Essence of Enhancement","french":"Essence de la Valorisation mineure"}
+{"id":"lesser-essence-of-abrasion","group":"Essences","english":"Lesser Essence of Abrasion","french":"Essence d'Abrasion mineure"}
+{"id":"lesser-essence-of-flames","group":"Essences","english":"Lesser Essence of Flames","french":"Essence des Flammes mineure"}
+{"id":"lesser-essence-of-insulation","group":"Essences","english":"Lesser Essence of Insulation","french":"Essence de l'Isolation mineure"}
+{"id":"lesser-essence-of-ice","group":"Essences","english":"Lesser Essence of Ice","french":"Essence de la Glace mineure"}
+{"id":"lesser-essence-of-thawing","group":"Essences","english":"Lesser Essence of Thawing","french":"Essence du Dégel mineure"}
+{"id":"lesser-essence-of-electricity","group":"Essences","english":"Lesser Essence of Electricity","french":"Essence de l'Électricité mineure"}
+{"id":"lesser-essence-of-grounding","group":"Essences","english":"Lesser Essence of Grounding","french":"Essence de la Terre mineure"}
+{"id":"lesser-essence-of-ruin","group":"Essences","english":"Lesser Essence of Ruin","french":"Essence de la Ruine mineure"}
+{"id":"lesser-essence-of-command","group":"Essences","english":"Lesser Essence of Command","french":"Essence du Commandement mineure"}
+{"id":"lesser-essence-of-battle","group":"Essences","english":"Lesser Essence of Battle","french":"Essence de la Bataille mineure"}
+{"id":"lesser-essence-of-sorcery","group":"Essences","english":"Lesser Essence of Sorcery","french":"Essence de la Sorcellerie mineure"}
+{"id":"lesser-essence-of-haste","group":"Essences","english":"Lesser Essence of Haste","french":"Essence de la Hâte mineure"}
+{"id":"lesser-essence-of-alacrity","group":"Essences","english":"Lesser Essence of Alacrity","french":"Essence de l'Alacrité mineure"}
+{"id":"lesser-essence-of-the-infinite","group":"Essences","english":"Lesser Essence of the Infinite","french":"Essence de l'Infini mineure"}
+{"id":"lesser-essence-of-seeking","group":"Essences","english":"Lesser Essence of Seeking","french":"Essence de la Recherche mineure"}
+{"id":"lesser-essence-of-opulence","group":"Essences","english":"Lesser Essence of Opulence","french":"Essence de l'Opulence mineure"}
+{"id":"essence-of-the-body","group":"Essences","english":"Essence of the Body","french":"Essence du Corps"}
+{"id":"essence-of-the-mind","group":"Essences","english":"Essence of the Mind","french":"Essence de l'Esprit"}
+{"id":"essence-of-enhancement","group":"Essences","english":"Essence of Enhancement","french":"Essence de la Valorisation"}
+{"id":"essence-of-abrasion","group":"Essences","english":"Essence of Abrasion","french":"Essence d'Abrasion"}
+{"id":"essence-of-flames","group":"Essences","english":"Essence of Flames","french":"Essence des Flammes"}
+{"id":"essence-of-insulation","group":"Essences","english":"Essence of Insulation","french":"Essence de l'Isolation"}
+{"id":"essence-of-ice","group":"Essences","english":"Essence of Ice","french":"Essence de la Glace"}
+{"id":"essence-of-thawing","group":"Essences","english":"Essence of Thawing","french":"Essence du Dégel"}
+{"id":"essence-of-electricity","group":"Essences","english":"Essence of Electricity","french":"Essence de l'Électricité"}
+{"id":"essence-of-grounding","group":"Essences","english":"Essence of Grounding","french":"Essence de la Terre"}
+{"id":"essence-of-ruin","group":"Essences","english":"Essence of Ruin","french":"Essence de la Ruine"}
+{"id":"essence-of-command","group":"Essences","english":"Essence of Command","french":"Essence du Commandement"}
+{"id":"essence-of-battle","group":"Essences","english":"Essence of Battle","french":"Essence de la Bataille"}
+{"id":"essence-of-sorcery","group":"Essences","english":"Essence of Sorcery","french":"Essence de la Sorcellerie"}
+{"id":"essence-of-haste","group":"Essences","english":"Essence of Haste","french":"Essence de la Hâte"}
+{"id":"essence-of-alacrity","group":"Essences","english":"Essence of Alacrity","french":"Essence de l'Alacrité"}
+{"id":"essence-of-the-infinite","group":"Essences","english":"Essence of the Infinite","french":"Essence de l'Infini"}
+{"id":"essence-of-seeking","group":"Essences","english":"Essence of Seeking","french":"Essence de la Recherche"}
+{"id":"essence-of-opulence","group":"Essences","english":"Essence of Opulence","french":"Essence de l'Opulence"}
+{"id":"greater-essence-of-the-body","group":"Essences","english":"Greater Essence of the Body","french":"Essence du Corps majeure"}
+{"id":"greater-essence-of-the-mind","group":"Essences","english":"Greater Essence of the Mind","french":"Essence de l'Esprit majeure"}
+{"id":"greater-essence-of-enhancement","group":"Essences","english":"Greater Essence of Enhancement","french":"Essence de la Valorisation majeure"}
+{"id":"greater-essence-of-abrasion","group":"Essences","english":"Greater Essence of Abrasion","french":"Essence d'Abrasion majeure"}
+{"id":"greater-essence-of-flames","group":"Essences","english":"Greater Essence of Flames","french":"Essence des Flammes majeure"}
+{"id":"greater-essence-of-insulation","group":"Essences","english":"Greater Essence of Insulation","french":"Essence de l'Isolation majeure"}
+{"id":"greater-essence-of-ice","group":"Essences","english":"Greater Essence of Ice","french":"Essence de la Glace majeure"}
+{"id":"greater-essence-of-thawing","group":"Essences","english":"Greater Essence of Thawing","french":"Essence du Dégel majeure"}
+{"id":"greater-essence-of-electricity","group":"Essences","english":"Greater Essence of Electricity","french":"Essence de l'Électricité majeure"}
+{"id":"greater-essence-of-grounding","group":"Essences","english":"Greater Essence of Grounding","french":"Essence de la Terre majeure"}
+{"id":"greater-essence-of-ruin","group":"Essences","english":"Greater Essence of Ruin","french":"Essence de la Ruine majeure"}
+{"id":"greater-essence-of-command","group":"Essences","english":"Greater Essence of Command","french":"Essence du Commandement majeure"}
+{"id":"greater-essence-of-battle","group":"Essences","english":"Greater Essence of Battle","french":"Essence de la Bataille majeure"}
+{"id":"greater-essence-of-sorcery","group":"Essences","english":"Greater Essence of Sorcery","french":"Essence de la Sorcellerie majeure"}
+{"id":"greater-essence-of-haste","group":"Essences","english":"Greater Essence of Haste","french":"Essence de la Hâte majeure"}
+{"id":"greater-essence-of-alacrity","group":"Essences","english":"Greater Essence of Alacrity","french":"Essence de l'Alacrité majeure"}
+{"id":"greater-essence-of-the-infinite","group":"Essences","english":"Greater Essence of the Infinite","french":"Essence de l'Infini majeure"}
+{"id":"greater-essence-of-seeking","group":"Essences","english":"Greater Essence of Seeking","french":"Essence de la Recherche majeure"}
+{"id":"greater-essence-of-opulence","group":"Essences","english":"Greater Essence of Opulence","french":"Essence de l'Opulence majeure"}
+{"id":"perfect-essence-of-the-body","group":"Essences","english":"Perfect Essence of the Body","french":"Essence du Corps parfaite"}
+{"id":"perfect-essence-of-the-mind","group":"Essences","english":"Perfect Essence of the Mind","french":"Essence de l'Esprit parfaite"}
+{"id":"perfect-essence-of-enhancement","group":"Essences","english":"Perfect Essence of Enhancement","french":"Essence de la Valorisation parfaite"}
+{"id":"perfect-essence-of-abrasion","group":"Essences","english":"Perfect Essence of Abrasion","french":"Essence d'Abrasion parfaite"}
+{"id":"perfect-essence-of-flames","group":"Essences","english":"Perfect Essence of Flames","french":"Essence des Flammes parfaite"}
+{"id":"perfect-essence-of-insulation","group":"Essences","english":"Perfect Essence of Insulation","french":"Essence de l'Isolation parfaite"}
+{"id":"perfect-essence-of-ice","group":"Essences","english":"Perfect Essence of Ice","french":"Essence de la Glace parfaite"}
+{"id":"perfect-essence-of-thawing","group":"Essences","english":"Perfect Essence of Thawing","french":"Essence du Dégel parfaite"}
+{"id":"perfect-essence-of-electricity","group":"Essences","english":"Perfect Essence of Electricity","french":"Essence de l'Électricité parfaite"}
+{"id":"perfect-essence-of-grounding","group":"Essences","english":"Perfect Essence of Grounding","french":"Essence de la Terre parfaite"}
+{"id":"perfect-essence-of-ruin","group":"Essences","english":"Perfect Essence of Ruin","french":"Essence de la Ruine parfaite"}
+{"id":"perfect-essence-of-command","group":"Essences","english":"Perfect Essence of Command","french":"Essence du Commandement parfaite"}
+{"id":"perfect-essence-of-battle","group":"Essences","english":"Perfect Essence of Battle","french":"Essence de la Bataille parfaite"}
+{"id":"perfect-essence-of-sorcery","group":"Essences","english":"Perfect Essence of Sorcery","french":"Essence de la Sorcellerie parfaite"}
+{"id":"perfect-essence-of-haste","group":"Essences","english":"Perfect Essence of Haste","french":"Essence de la Hâte parfaite"}
+{"id":"perfect-essence-of-alacrity","group":"Essences","english":"Perfect Essence of Alacrity","french":"Essence de l'Alacrité parfaite"}
+{"id":"perfect-essence-of-the-infinite","group":"Essences","english":"Perfect Essence of the Infinite","french":"Essence de l'Infini parfaite"}
+{"id":"perfect-essence-of-seeking","group":"Essences","english":"Perfect Essence of Seeking","french":"Essence de la Recherche parfaite"}
+{"id":"perfect-essence-of-opulence","group":"Essences","english":"Perfect Essence of Opulence","french":"Essence de l'Opulence parfaite"}
+{"id":"essence-of-hysteria","group":"Essences","english":"Essence of Hysteria","french":"Essence de l'Hystérie"}
+{"id":"essence-of-delirium","group":"Essences","english":"Essence of Delirium","french":"Essence du Délire"}
+{"id":"essence-of-horror","group":"Essences","english":"Essence of Horror","french":"Essence de l'Horreur"}
+{"id":"essence-of-insanity","group":"Essences","english":"Essence of Insanity","french":"Essence de la Démence"}
+{"id":"essence-of-the-abyss","group":"Essences","english":"Essence of the Abyss","french":"Essence de l'Abysse"}
+{"id":"essence-of-the-breach","group":"Essences","english":"Essence of the Breach","french":"Essence de la Brèche"}
+{"id":"uncut-support-gem-1","group":"UncutGems","english":"Uncut Support Gem (Level 1)","french":"Gemme de soutien brute (Niveau 1)"}
+{"id":"uncut-support-gem-2","group":"UncutGems","english":"Uncut Support Gem (Level 2)","french":"Gemme de soutien brute (Niveau 2)"}
+{"id":"uncut-support-gem-3","group":"UncutGems","english":"Uncut Support Gem (Level 3)","french":"Gemme de soutien brute (Niveau 3)"}
+{"id":"uncut-support-gem-4","group":"UncutGems","english":"Uncut Support Gem (Level 4)","french":"Gemme de soutien brute (Niveau 4)"}
+{"id":"uncut-support-gem-5","group":"UncutGems","english":"Uncut Support Gem (Level 5)","french":"Gemme de soutien brute (Niveau 5)"}
+{"id":"uncut-spirit-gem-4","group":"UncutGems","english":"Uncut Spirit Gem (Level 4)","french":"Gemme d'esprit brute (Niveau 4)"}
+{"id":"uncut-spirit-gem-5","group":"UncutGems","english":"Uncut Spirit Gem (Level 5)","french":"Gemme d'esprit brute (Niveau 5)"}
+{"id":"uncut-spirit-gem-6","group":"UncutGems","english":"Uncut Spirit Gem (Level 6)","french":"Gemme d'esprit brute (Niveau 6)"}
+{"id":"uncut-spirit-gem-7","group":"UncutGems","english":"Uncut Spirit Gem (Level 7)","french":"Gemme d'esprit brute (Niveau 7)"}
+{"id":"uncut-spirit-gem-8","group":"UncutGems","english":"Uncut Spirit Gem (Level 8)","french":"Gemme d'esprit brute (Niveau 8)"}
+{"id":"uncut-spirit-gem-9","group":"UncutGems","english":"Uncut Spirit Gem (Level 9)","french":"Gemme d'esprit brute (Niveau 9)"}
+{"id":"uncut-spirit-gem-10","group":"UncutGems","english":"Uncut Spirit Gem (Level 10)","french":"Gemme d'esprit brute (Niveau 10)"}
+{"id":"uncut-spirit-gem-11","group":"UncutGems","english":"Uncut Spirit Gem (Level 11)","french":"Gemme d'esprit brute (Niveau 11)"}
+{"id":"uncut-spirit-gem-12","group":"UncutGems","english":"Uncut Spirit Gem (Level 12)","french":"Gemme d'esprit brute (Niveau 12)"}
+{"id":"uncut-spirit-gem-13","group":"UncutGems","english":"Uncut Spirit Gem (Level 13)","french":"Gemme d'esprit brute (Niveau 13)"}
+{"id":"uncut-spirit-gem-14","group":"UncutGems","english":"Uncut Spirit Gem (Level 14)","french":"Gemme d'esprit brute (Niveau 14)"}
+{"id":"uncut-spirit-gem-15","group":"UncutGems","english":"Uncut Spirit Gem (Level 15)","french":"Gemme d'esprit brute (Niveau 15)"}
+{"id":"uncut-spirit-gem-16","group":"UncutGems","english":"Uncut Spirit Gem (Level 16)","french":"Gemme d'Esprit brute (Niveau 16)"}
+{"id":"uncut-spirit-gem-17","group":"UncutGems","english":"Uncut Spirit Gem (Level 17)","french":"Gemme d'esprit brute (Niveau 17)"}
+{"id":"uncut-spirit-gem-18","group":"UncutGems","english":"Uncut Spirit Gem (Level 18)","french":"Gemme d'esprit brute (Niveau 18)"}
+{"id":"uncut-spirit-gem-19","group":"UncutGems","english":"Uncut Spirit Gem (Level 19)","french":"Gemme d'esprit brute (Niveau 19)"}
+{"id":"uncut-spirit-gem-20","group":"UncutGems","english":"Uncut Spirit Gem (Level 20)","french":"Gemme d'esprit brute (Niveau 20)"}
+{"id":"uncut-skill-gem-1","group":"UncutGems","english":"Uncut Skill Gem (Level 1)","french":"Gemme d'aptitude brute (Niveau 1)"}
+{"id":"uncut-skill-gem-2","group":"UncutGems","english":"Uncut Skill Gem (Level 2)","french":"Gemme d'aptitude brute (Niveau 2)"}
+{"id":"uncut-skill-gem-3","group":"UncutGems","english":"Uncut Skill Gem (Level 3)","french":"Gemme d'aptitude brute (Niveau 3)"}
+{"id":"uncut-skill-gem-4","group":"UncutGems","english":"Uncut Skill Gem (Level 4)","french":"Gemme d'aptitude brute (Niveau 4)"}
+{"id":"uncut-skill-gem-5","group":"UncutGems","english":"Uncut Skill Gem (Level 5)","french":"Gemme d'aptitude brute (Niveau 5)"}
+{"id":"uncut-skill-gem-6","group":"UncutGems","english":"Uncut Skill Gem (Level 6)","french":"Gemme d'aptitude brute (Niveau 6)"}
+{"id":"uncut-skill-gem-7","group":"UncutGems","english":"Uncut Skill Gem (Level 7)","french":"Gemme d'aptitude brute (Niveau 7)"}
+{"id":"uncut-skill-gem-8","group":"UncutGems","english":"Uncut Skill Gem (Level 8)","french":"Gemme d'aptitude brute (Niveau 8)"}
+{"id":"uncut-skill-gem-9","group":"UncutGems","english":"Uncut Skill Gem (Level 9)","french":"Gemme d'aptitude brute (Niveau 9)"}
+{"id":"uncut-skill-gem-10","group":"UncutGems","english":"Uncut Skill Gem (Level 10)","french":"Gemme d'aptitude brute (Niveau 10)"}
+{"id":"uncut-skill-gem-11","group":"UncutGems","english":"Uncut Skill Gem (Level 11)","french":"Gemme d'aptitude brute (Niveau 11)"}
+{"id":"uncut-skill-gem-12","group":"UncutGems","english":"Uncut Skill Gem (Level 12)","french":"Gemme d'aptitude brute (Niveau 12)"}
+{"id":"uncut-skill-gem-13","group":"UncutGems","english":"Uncut Skill Gem (Level 13)","french":"Gemme d'aptitude brute (Niveau 13)"}
+{"id":"uncut-skill-gem-14","group":"UncutGems","english":"Uncut Skill Gem (Level 14)","french":"Gemme d'aptitude brute (Niveau 14)"}
+{"id":"uncut-skill-gem-15","group":"UncutGems","english":"Uncut Skill Gem (Level 15)","french":"Gemme d'aptitude brute (Niveau 15)"}
+{"id":"uncut-skill-gem-16","group":"UncutGems","english":"Uncut Skill Gem (Level 16)","french":"Gemme d'aptitude brute (Niveau 16)"}
+{"id":"uncut-skill-gem-17","group":"UncutGems","english":"Uncut Skill Gem (Level 17)","french":"Gemme d'aptitude brute (Niveau 17)"}
+{"id":"uncut-skill-gem-18","group":"UncutGems","english":"Uncut Skill Gem (Level 18)","french":"Gemme d'aptitude brute (Niveau 18)"}
+{"id":"uncut-skill-gem-19","group":"UncutGems","english":"Uncut Skill Gem (Level 19)","french":"Gemme d'aptitude brute (Niveau 19)"}
+{"id":"uncut-skill-gem-20","group":"UncutGems","english":"Uncut Skill Gem (Level 20)","french":"Gemme d'aptitude brute (Niveau 20)"}
+{"id":"ataluis-bloodletting","group":"LineageSupportGems","english":"Atalui's Bloodletting","french":"Saignée d'Atalui"}
+{"id":"einhars-beastrite","group":"LineageSupportGems","english":"Einhar's Beastrite","french":"Rituel bestial d'Einhar"}
+{"id":"brutus-brain","group":"LineageSupportGems","english":"Brutus' Brain","french":"Cerveau de Brutus"}
+{"id":"uruks-smelting","group":"LineageSupportGems","english":"Uruk's Smelting","french":"Fonderie d'Uruk"}
+{"id":"paquates-pact","group":"LineageSupportGems","english":"Paquate's Pact","french":"Pacte de Paquate"}
+{"id":"vilentas-propulsion","group":"LineageSupportGems","english":"Vilenta's Propulsion","french":"Propulsion de Vilenta"}
+{"id":"ailiths-chimes","group":"LineageSupportGems","english":"Ailith's Chimes","french":"Carillons d'Ailith"}
+{"id":"tecrods-revenge","group":"LineageSupportGems","english":"Tecrod's Revenge","french":"Vengeance de Tecrod"}
+{"id":"doedres-undoing","group":"LineageSupportGems","english":"Doedre's Undoing","french":"Annulation de Doedre"}
+{"id":"rathas-assault","group":"LineageSupportGems","english":"Ratha's Assault","french":"Assaut de Ratha"}
+{"id":"arjuns-medal","group":"LineageSupportGems","english":"Arjun's Medal","french":"Médaille d’Arjun"}
+{"id":"kaoms-madness","group":"LineageSupportGems","english":"Kaom's Madness","french":"Folie de Kaom"}
+{"id":"siones-temper","group":"LineageSupportGems","english":"Sione's Temper","french":"Tempérament de Sione"}
+{"id":"ixchels-torment","group":"LineageSupportGems","english":"Ixchel's Torment","french":"Tourment d'Ixchel"}
+{"id":"romiras-requital","group":"LineageSupportGems","english":"Romira's Requital","french":"Récompense de Romira"}
+{"id":"tawhoas-tending","group":"LineageSupportGems","english":"Tawhoa's Tending","french":"Garde de Tawhoa"}
+{"id":"dominus-grasp","group":"LineageSupportGems","english":"Dominus' Grasp","french":"Poigne de Dominus"}
+{"id":"diallas-desire","group":"LineageSupportGems","english":"Dialla's Desire","french":"Désir de Dialla"}
+{"id":"kalisas-crescendo","group":"LineageSupportGems","english":"Kalisa's Crescendo","french":"Crescendo de Kalisa"}
+{"id":"kulemaks-dominion","group":"LineageSupportGems","english":"Kulemak's Dominion","french":"Domination de Kulemak"}
+{"id":"amanamus-tithe","group":"LineageSupportGems","english":"Amanamu's Tithe","french":"Dîme d'Amanamu"}
+{"id":"xophs-pyre","group":"LineageSupportGems","english":"Xoph's Pyre","french":"Bûcher de Xoph"}
+{"id":"eshs-radiance","group":"LineageSupportGems","english":"Esh's Radiance","french":"Radiance d'Esh"}
+{"id":"tuls-stillness","group":"LineageSupportGems","english":"Tul's Stillness","french":"Immobilité de Tul"}
+{"id":"uul-netols-embrace","group":"LineageSupportGems","english":"Uul-Netol's Embrace","french":"Étreinte d'Uul-Netol"}
+{"id":"rakiatas-flow","group":"LineageSupportGems","english":"Rakiata's Flow","french":"Flux de Rakiata"}
+{"id":"garukhans-resolve","group":"LineageSupportGems","english":"Garukhan's Resolve","french":"Détermination de Garukhan"}
+{"id":"tasalios-rhythm","group":"LineageSupportGems","english":"Tasalio's Rhythm","french":"Rythme de Tasalio"}
+{"id":"tacatis-ire","group":"LineageSupportGems","english":"Tacati's Ire","french":"Ire de Tacati"}
+{"id":"rigwalds-ferocity","group":"LineageSupportGems","english":"Rigwald's Ferocity","french":"Férocité de Rigwald"}
+{"id":"khatals-rejuvenation","group":"LineageSupportGems","english":"Khatal's Rejuvenation","french":"Dynamisation de Khatal"}
+{"id":"bhatairs-vengeance","group":"LineageSupportGems","english":"Bhatair's Vengeance","french":"Vengeance de Bhatair"}
+{"id":"uhtreds-exodus","group":"LineageSupportGems","english":"Uhtred's Exodus","french":"Exode d'Uthred"}
+{"id":"uhtreds-omen","group":"LineageSupportGems","english":"Uhtred's Omen","french":"Présage d'Uthred"}
+{"id":"uhtreds-augury","group":"LineageSupportGems","english":"Uhtred's Augury","french":"Augure d'Uthred"}
+{"id":"daressos-passion","group":"LineageSupportGems","english":"Daresso's Passion","french":"Passion de Daresso"}
+{"id":"ahns-citadel","group":"LineageSupportGems","english":"Ahn's Citadel","french":"Citadelle d'Ahn"}
+{"id":"atziris-allure","group":"LineageSupportGems","english":"Atziri's Allure","french":"Envoûtement d'Atziri"}
+{"id":"hayoxis-fulmination","group":"LineageSupportGems","english":"Hayoxi's Fulmination","french":"Fulmination d'Hayoxi"}
+{"id":"zarokhs-refrain","group":"LineageSupportGems","english":"Zarokh's Refrain","french":"Refrain de Zarokh"}
+{"id":"kurgals-leash","group":"LineageSupportGems","english":"Kurgal's Leash","french":"Laisse de Kurgal"}
+{"id":"varashtas-blessing","group":"LineageSupportGems","english":"Varashta's Blessing","french":"Bénédiction de Varashta"}
+{"id":"arbiters-ignition","group":"LineageSupportGems","english":"Arbiter's Ignition","french":"Ignition de l'Arbitre"}
+{"id":"arakaalis-lust","group":"LineageSupportGems","english":"Arakaali's Lust","french":"Convoitise d'Arakaali"}
+{"id":"xibaquas-rending","group":"LineageSupportGems","english":"Xibaqua's Rending","french":"Déchirure de Xibaqua"}
+{"id":"guatelitzis-ablation","group":"LineageSupportGems","english":"Guatelitzi's Ablation","french":"Ablation de Guatelitzi"}
+{"id":"atziris-communion","group":"LineageSupportGems","english":"Atziri's Communion","french":"Communion d'Atziri"}
+{"id":"atziris-impatience","group":"LineageSupportGems","english":"Atziri's Impatience","french":"Impatience d'Atziri"}
+{"id":"zerphis-infamy","group":"LineageSupportGems","english":"Zerphi's Infamy","french":"Infamie de Zerphi"}
+{"id":"zarokhs-revolt","group":"LineageSupportGems","english":"Zarokh's Revolt","french":"Révolte de Zarokh"}
+{"id":"oisins-oath","group":"LineageSupportGems","english":"Oisín's Oath","french":"Serment d'Oisín"}
+{"id":"cirels-cultivation","group":"LineageSupportGems","english":"Cirel's Cultivation","french":"Culture de Cirel"}
+{"id":"morganas-tempest","group":"LineageSupportGems","english":"Morgana's Tempest","french":"Tempête de Morgana"}
+{"id":"her-declaration","group":"LineageSupportGems","english":"Her Declaration","french":"Sa déclaration"}
+{"id":"prototype-seventeen","group":"LineageSupportGems","english":"Prototype Seventeen","french":"Prototype dix-sept"}
+{"id":"seraphs-heart","group":"LineageSupportGems","english":"Seraph's Heart","french":"Cœur de Séraphin"}
+{"id":"uhtreds-rite","group":"LineageSupportGems","english":"Uhtred's Rite","french":"Rite d'Uhtred"}
+{"id":"tricksters-shard","group":"LineageSupportGems","english":"Trickster's Shard","french":"Éclat du Malicieux"}
+{"id":"arbiters-reach","group":"LineageSupportGems","english":"Arbiter's Reach","french":"Allonge de l'Arbitre"}
+{"id":"tangmazus-thurible","group":"LineageSupportGems","english":"Tangmazu's Thurible","french":"Encensoir de Tangmazu"}
+{"id":"eshs-prowess","group":"LineageSupportGems","english":"Esh's Prowess","french":"Prouesse d'Esh"}
+{"id":"breachlords-rift","group":"LineageSupportGems","english":"Breachlord's Rift","french":"Rupture du Seigneur de Brèche"}
+{"id":"breachlords-amalgam","group":"LineageSupportGems","english":"Breachlord's Amalgam","french":"Amalgame du Seigneur de Brèche"}
+{"id":"vruuns-aftermath","group":"LineageSupportGems","english":"Vruun's Aftermath","french":"Répercussions de Vruun"}
+{"id":"vruuns-inevitability","group":"LineageSupportGems","english":"Vruun's Inevitability","french":"Inévitabilité de Vruun"}
+{"id":"uhtreds-constellation","group":"LineageSupportGems","english":"Uhtred's Constellation","french":"Constellation d'Uthred"}
+{"id":"medveds-felling","group":"LineageSupportGems","english":"Medved's Felling","french":"Chute de Medved"}
+{"id":"voranas-siege","group":"LineageSupportGems","english":"Vorana's Siege","french":"Siège de Vorana"}
+{"id":"styrns-mountain","group":"LineageSupportGems","english":"Styrn's Mountain","french":"Montagne de Styrn"}
+{"id":"styrns-ferocity","group":"LineageSupportGems","english":"Styrn's Ferocity","french":"Férocité de Styrn"}
+{"id":"styrns-anthem","group":"LineageSupportGems","english":"Styrn's Anthem","french":"Hymne de Styrn"}
+{"id":"cathas-brilliance","group":"LineageSupportGems","english":"Catha's Brilliance","french":"Brillance de Catha"}
+{"id":"mórrigans-insight","group":"LineageSupportGems","english":"Mórrigan's Insight","french":"Clairvoyance de la Mórrigan"}
+{"id":"tuls-avalanche","group":"LineageSupportGems","english":"Tul's Avalanche","french":"Avalanche de Tul"}
+{"id":"olroths-hubris","group":"LineageSupportGems","english":"Olroth's Hubris","french":"Orgueil d'Olroth"}
+{"id":"olroths-conviction","group":"LineageSupportGems","english":"Olroth's Conviction","french":"Conviction d'Olroth"}
+{"id":"waystone-1","group":"Waystones","english":"Waystone (Tier 1)","french":"Pierre de téléportation (Palier 1)"}
+{"id":"waystone-2","group":"Waystones","english":"Waystone (Tier 2)","french":"Pierre de téléportation (Palier 2)"}
+{"id":"waystone-3","group":"Waystones","english":"Waystone (Tier 3)","french":"Pierre de téléportation (Palier 3)"}
+{"id":"waystone-4","group":"Waystones","english":"Waystone (Tier 4)","french":"Pierre de téléportation (Palier 4)"}
+{"id":"waystone-5","group":"Waystones","english":"Waystone (Tier 5)","french":"Pierre de téléportation (Palier 5)"}
+{"id":"waystone-6","group":"Waystones","english":"Waystone (Tier 6)","french":"Pierre de téléportation (Palier 6)"}
+{"id":"waystone-7","group":"Waystones","english":"Waystone (Tier 7)","french":"Pierre de téléportation (Palier 7)"}
+{"id":"waystone-8","group":"Waystones","english":"Waystone (Tier 8)","french":"Pierre de téléportation (Palier 8)"}
+{"id":"waystone-9","group":"Waystones","english":"Waystone (Tier 9)","french":"Pierre de téléportation (Palier 9)"}
+{"id":"waystone-10","group":"Waystones","english":"Waystone (Tier 10)","french":"Pierre de téléportation (Palier 10)"}
+{"id":"waystone-11","group":"Waystones","english":"Waystone (Tier 11)","french":"Pierre de téléportation (Palier 11)"}
+{"id":"waystone-12","group":"Waystones","english":"Waystone (Tier 12)","french":"Pierre de téléportation (Palier 12)"}
+{"id":"waystone-13","group":"Waystones","english":"Waystone (Tier 13)","french":"Pierre de téléportation (Palier 13)"}
+{"id":"waystone-14","group":"Waystones","english":"Waystone (Tier 14)","french":"Pierre de téléportation (Palier 14)"}
+{"id":"waystone-15","group":"Waystones","english":"Waystone (Tier 15)","french":"Pierre de téléportation (Palier 15)"}
+{"id":"waystone-16","group":"Waystones","english":"Waystone (Tier 16)","french":"Pierre de téléportation (Palier 16)"}

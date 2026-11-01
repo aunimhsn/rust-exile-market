@@ -1103,6 +1103,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "exchange-icons"
+version = "0.1.0"
+dependencies = [
+ "image",
+ "serde",
+ "serde_json",
+ "ureq",
+]
+
+[[package]]
 name = "fastrand"
 version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

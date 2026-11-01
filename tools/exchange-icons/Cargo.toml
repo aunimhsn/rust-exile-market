@@ -1,0 +1,17 @@
+[package]
+name = "exchange-icons"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+description = "Takes the icons and names of the currency exchange embedded in rust-exile-market."
+license.workspace = true
+publish = false
+
+[dependencies]
+image = { version = "0.25.10", default-features = false, features = ["png"] }
+serde.workspace = true
+serde_json.workspace = true
+ureq.workspace = true
+
+[lints]
+workspace = true
