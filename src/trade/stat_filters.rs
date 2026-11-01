@@ -40,10 +40,8 @@ const AFFIXES_ALLOWED: [(&str, Affix); 2] = [
 pub enum LineStat {
     Searched(TradeStat),
     /// Another line of a stat written on several lines: the first line with a number of the
-    /// stat searches it, or else the first line, `searched`, among the lines of its modifier.
-    Continued {
-        searched: usize,
-    },
+    /// stat searches it, or else the first line ([`LineStats::searched_line`]).
+    Continued,
     /// A line without trade id in its group: a modifier added by a patch the game data
     /// doesn't know yet, or a line the parser read wrong.
     Unsearchable,
@@ -204,6 +202,9 @@ fn written(value: f64) -> f64 {
 #[derive(Debug)]
 struct Line {
     key: StatKey,
+    /// The line of its modifier that searches its stat, which every line of the stat shares,
+    /// also for a stat the trade site can't search.
+    searched: usize,
     stat: LineStat,
     /// The indexes of its numbers its stat counts; none when its stat isn't known.
     numbers: Option<Vec<usize>>,
@@ -269,11 +270,12 @@ impl LineStats {
                     };
                     let line_stat = match &stat {
                         Some(stat) if line == searched => LineStat::Searched(stat.clone()),
-                        Some(_) => LineStat::Continued { searched },
+                        Some(_) => LineStat::Continued,
                         None => LineStat::Unsearchable,
                     };
                     lines.push(Line {
                         key,
+                        searched,
                         stat: line_stat,
                         numbers: known.then_some(numbers),
                         game_id: game_id.clone(),
@@ -374,6 +376,17 @@ impl LineStats {
         }
     }
 
+    /// The line that searches the stat of the line `key`, the same for every line of a stat
+    /// written on several lines, even when the trade site can't search it: the first line
+    /// with a number of the stat, or else its first line; `key` itself when it is unknown.
+    #[must_use]
+    pub fn searched_line(&self, key: StatKey) -> StatKey {
+        self.line(key).map_or(key, |line| StatKey {
+            line: line.searched,
+            ..key
+        })
+    }
+
     fn line(&self, key: StatKey) -> Option<&Line> {
         self.lines.iter().find(|line| line.key == key)
     }
@@ -432,7 +445,7 @@ impl LineStats {
             .into_iter()
             .filter_map(|(key, filter)| match self.get(key)? {
                 LineStat::Searched(stat) => Some(stat.filter(filter)),
-                LineStat::Continued { .. } | LineStat::Unsearchable => None,
+                LineStat::Continued | LineStat::Unsearchable => None,
             })
             .collect()
     }

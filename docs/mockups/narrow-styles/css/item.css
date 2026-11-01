@@ -107,7 +107,7 @@
 .mod2.min-top .check { margin-top: 2px; }
 .mod2.min-top > .input { grid-column: 3; grid-row: 1; }
 .mod2.min-top .roll2 { grid-column: 2; }
-/* Two lines at most, the rest under the pointer. */
+/* Four lines at most (two until 2026-11-01), the rest under the pointer. */
 .mod2 .text { display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
 /* The range field of a filter: the minimum, a dash, the maximum, each half centered; three
    characters on each side, four on the field of a stat whose range reaches them, on its row only.

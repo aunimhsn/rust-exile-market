@@ -941,7 +941,7 @@ fn rows<'a>(
 fn searchable(stat: &mut Stat<'_>, line: Option<&LineStat>) {
     match line {
         Some(LineStat::Searched(_)) => {}
-        Some(LineStat::Continued { .. }) => stat.filter = None,
+        Some(LineStat::Continued) => stat.filter = None,
         Some(LineStat::Unsearchable) | None => stat.unsearchable = stat.filter.take().is_some(),
     }
 }
@@ -955,34 +955,32 @@ fn searchable(stat: &mut Stat<'_>, line: Option<&LineStat>) {
 /// Time-Lost jewel.
 fn join_stat_lines<'a>(item: &'a Item, stats: &LineStats, rows: Vec<Row<'a>>) -> Vec<Row<'a>> {
     // The line of the modifier that searches the stat of `key`, which its rows share.
-    let anchor = |key: StatKey| match stats.get(key) {
-        Some(&LineStat::Continued { searched }) => StatKey {
-            line: searched,
-            ..key
-        },
-        _ => key,
-    };
+    let anchor = |key: StatKey| stats.searched_line(key);
     let mut joined = Vec::with_capacity(rows.len());
     let mut group: Vec<(StatKey, Stat<'a>)> = Vec::new();
     for row in rows {
-        if let Row::Stat(stat) = &row
-            && let FilterKey::Stat(key) = stat.key
-        {
-            let follows = group.last().is_some_and(|(last, _)| {
-                last.modifier == key.modifier
-                    && last.line + 1 == key.line
-                    && anchor(*last) == anchor(key)
-            });
-            if !follows {
-                flush_stat_lines(item, &mut group, &mut joined, anchor);
-            }
-            if let Row::Stat(stat) = row {
+        match row {
+            Row::Stat(
+                stat @ Stat {
+                    key: FilterKey::Stat(key),
+                    ..
+                },
+            ) => {
+                let follows = group.last().is_some_and(|(last, _)| {
+                    last.modifier == key.modifier
+                        && last.line + 1 == key.line
+                        && anchor(*last) == anchor(key)
+                });
+                if !follows {
+                    flush_stat_lines(item, &mut group, &mut joined, anchor);
+                }
                 group.push((key, stat));
             }
-            continue;
+            row => {
+                flush_stat_lines(item, &mut group, &mut joined, anchor);
+                joined.push(row);
+            }
         }
-        flush_stat_lines(item, &mut group, &mut joined, anchor);
-        joined.push(row);
     }
     flush_stat_lines(item, &mut group, &mut joined, anchor);
     joined
@@ -1010,7 +1008,7 @@ fn joined_stat<'a>(
     stats: &[(StatKey, Stat<'a>)],
     anchor: impl Fn(StatKey) -> StatKey,
 ) -> Option<Stat<'a>> {
-    let ([(first, _), _, ..], Some((last, _))) = (stats, stats.last()) else {
+    let [(first, _), .., (last, _)] = stats else {
         return None;
     };
     if !stats

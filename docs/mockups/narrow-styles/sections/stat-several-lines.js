@@ -5,8 +5,8 @@
 // showed each line as a row: the first with the filter and its bar, the next one under the bar, from the left
 // edge, as a line of its own, so that the bar cut the sentence. Fixed: the lines of one stat make one text,
 // joined by a space, its bar, tier and origin under it, as this sheet always drew it ("A lord of the Abyss:
-// one tier only", section Endgame modifiers). A stat with a number on two of its lines (three stats of one
-// unique, `Alternating every 5 seconds:`) keeps a row per line, each with its own bar.
+// one tier only", section Endgame modifiers). A stat with a bar or a tier under two of its lines (a number on two
+// lines: three stats of one unique, `Alternating every 5 seconds:`) keeps a row per line, each with its own.
 // The text of a stat now wraps on four lines at most, instead of two, cut with "…" past them and whole in
 // its tooltip (owner, 2026-11-01: more lines are fine, the elements must never mix; four chosen against
 // three, which cut this French sentence at the default width of 420 px).

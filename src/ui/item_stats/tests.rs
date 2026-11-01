@@ -2363,6 +2363,92 @@ fn a_line_the_trade_site_cant_search_isnt_a_filter() {
 }
 
 #[test]
+fn the_stats_of_one_modifier_are_joined_each_on_its_own_lines() {
+    // Three stats in one modifier, the second searched by its first line, the third by its
+    // second: one row each, never one across two stats.
+    let unique = parse(
+        "Item Class: Boots\nRarity: Unique\nTest\nLattice Sandals\n--------\n\
+         Item Level: 72\n--------\n\
+         { Unique Modifier }\n+52(40-60) to maximum Life\n\
+         20(15-25)% chance to gain Onslaught for 3 seconds when you kill an\n\
+         enemy affected by Abyssal Wasting\n\
+         Life that would be lost by taking Damage is instead Reserved\n\
+         until you take no Damage to Life for 5(4-6) seconds",
+    );
+    let lines = CopiedLines::new(
+        unique.language(),
+        unique.modifiers(),
+        &LineStats::default(),
+        None,
+    );
+    let line_stats = LineStats::new(unique.language(), unique.modifiers(), None);
+    let stats = Stats::new(&unique, &lines, &line_stats, &TierRolls::default(), None);
+
+    assert_eq!(
+        texts(&unique),
+        [
+            "Unique",
+            "■ +52 to maximum Life ≥52 [40–60 0.60]",
+            "■ 20% chance to gain Onslaught for 3 seconds when you kill an / enemy affected by \
+             Abyssal Wasting ≥20 [15–25 0.50]",
+            "■ Life that would be lost by taking Damage is instead Reserved / until you take no \
+             Damage to Life for 5 seconds ≤5 [4–6 0.50]",
+        ]
+    );
+    let filters = Filters::default();
+    let checked: Vec<FilterKey> = stats
+        .checked(&filters)
+        .into_iter()
+        .map(|(key, _)| key)
+        .collect();
+    let key = |modifier, line| FilterKey::Stat(StatKey { modifier, line });
+    assert_eq!(checked, [key(0, 0), key(0, 1), key(0, 4)]);
+}
+
+#[test]
+fn a_stat_on_two_lines_the_trade_site_cant_search_is_one_row() {
+    // The stat of a unique as an implicit: no implicit id, each line unsearchable, joined
+    // with its sign once.
+    let unique = parse(
+        "Item Class: Boots\nRarity: Unique\nTest\nLattice Sandals\n--------\n\
+         Item Level: 72\n--------\n\
+         { Implicit Modifier }\n\
+         20(15-25)% chance to gain Onslaught for 3 seconds when you kill an\n\
+         enemy affected by Abyssal Wasting",
+    );
+
+    assert_eq!(
+        texts(&unique),
+        [
+            "Implicit",
+            "⊘ 20% chance to gain Onslaught for 3 seconds when you kill an / enemy affected by \
+             Abyssal Wasting [15–25 0.50]",
+        ]
+    );
+}
+
+#[test]
+fn the_lines_of_a_stat_read_as_one_sentence() {
+    // Joined by a space, also for a screen reader.
+    let item = parse(include_str!(
+        "../../item/test-items/en-owner-rare-focus-kurgal.txt"
+    ));
+    let rows = rows(&item);
+    let text = rows
+        .iter()
+        .find_map(|row| match row {
+            Row::Stat(stat) if matches!(stat.text, StatText::Lines(_)) => Some(stat.text),
+            _ => None,
+        })
+        .expect("the stat of Kurgal");
+    let i18n = Translator::new(Language::English);
+    let sentence = "23% chance when collecting an Elemental Infusion to gain an additional \
+                    Elemental Infusion of the same type";
+    assert_eq!(text.text(&i18n), sentence);
+    assert_eq!(text.label(&i18n), sentence);
+}
+
+#[test]
 fn the_active_filters_count_the_choices_of_the_player() {
     let crossbow = parse(include_str!(
         "../../item/test-items/en-rare-crossbow-all-modifiers.txt"
