@@ -262,7 +262,7 @@ impl CopyMarker {
     pub fn before_copy(&mut self) -> Option<Instant> {
         let started = Instant::now();
         let marked = self.mark();
-        let copy = prepared(marked, started, Instant::now());
+        let copy = copy_prepared(marked, started, Instant::now());
         // Replaces the copy a previous hotkey expected, even with none: its item would
         // otherwise be taken for the copy of this one.
         *self
@@ -292,7 +292,11 @@ impl CopyMarker {
     not(target_os = "linux"),
     allow(dead_code, reason = "the clipboard is only prepared on Linux")
 )]
-fn prepared(marked: Result<(), arboard::Error>, started: Instant, now: Instant) -> Option<Instant> {
+fn copy_prepared(
+    marked: Result<(), arboard::Error>,
+    started: Instant,
+    now: Instant,
+) -> Option<Instant> {
     let took = now.saturating_duration_since(started);
     if let Err(error) = marked {
         log::warn!("The clipboard can't be prepared for the copy: {error}");
@@ -586,6 +590,27 @@ mod tests {
     }
 
     #[test]
+    fn a_copy_expected_at_most_copy_wait_ago_is_taken() {
+        let watcher = watcher([]);
+        let prepared = Instant::now();
+        expect_copy(&watcher, prepared);
+
+        assert_eq!(
+            watcher.copy_expected(prepared, prepared + COPY_WAIT, true),
+            Some(prepared)
+        );
+        expect_copy(&watcher, prepared);
+        assert_eq!(
+            watcher.copy_expected(
+                prepared,
+                prepared + COPY_WAIT + Duration::from_millis(1),
+                true
+            ),
+            None
+        );
+    }
+
+    #[test]
     fn a_copy_expected_too_long_ago_is_forgotten() {
         let long_ago = Instant::now()
             .checked_sub(COPY_WAIT + Duration::from_secs(1))
@@ -711,10 +736,15 @@ mod tests {
         let soon = started + Duration::from_millis(5);
         let late = started + COPY_WAIT + Duration::from_millis(1);
 
-        assert_eq!(prepared(Ok(()), started, soon), Some(soon));
-        assert_eq!(prepared(Ok(()), started, late), None);
+        assert_eq!(copy_prepared(Ok(()), started, soon), Some(soon));
+        assert_eq!(copy_prepared(Ok(()), started, late), None);
+        let at_the_limit = started + COPY_WAIT;
         assert_eq!(
-            prepared(Err(arboard::Error::ClipboardOccupied), started, soon),
+            copy_prepared(Ok(()), started, at_the_limit),
+            Some(at_the_limit)
+        );
+        assert_eq!(
+            copy_prepared(Err(arboard::Error::ClipboardOccupied), started, soon),
             None
         );
     }

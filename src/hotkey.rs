@@ -96,21 +96,15 @@ impl PriceCheckHotkey {
             if event.id == id && event.state == keys::SENT_AT {
                 let mut sender = sender.lock().unwrap_or_else(PoisonError::into_inner);
                 let (keys, marker) = &mut *sender;
-                keys.send_copy(|target| {
-                    // Marked just before the keys, once they are sure to leave: a copy that
-                    // doesn't leave would leave the marker in place of the item of the player.
-                    #[cfg(target_os = "linux")]
-                    let copy = marker.before_copy();
-                    #[cfg(not(target_os = "linux"))]
-                    let copy = {
-                        let _ = &marker;
-                        None
-                    };
-                    // The application stopped listening: nothing left to tell.
-                    if targets.send(Press { target, copy }).is_ok() {
-                        wake();
-                    }
-                });
+                keys.send_copy(
+                    || prepare_copy(marker),
+                    |target, copy| {
+                        // The application stopped listening: nothing left to tell.
+                        if targets.send(Press { target, copy }).is_ok() {
+                            wake();
+                        }
+                    },
+                );
             }
         }));
         match manager.register(hotkey) {
@@ -130,6 +124,21 @@ impl PriceCheckHotkey {
         log::info!("No price-check hotkey on this system");
         Self { targets: None }
     }
+}
+
+/// Prepares the clipboard for the copy, just before the keys, once they are sure to leave: a
+/// copy that doesn't leave would leave the marker in place of the item of the player; when,
+/// which the item copied carries back.
+#[cfg(target_os = "linux")]
+fn prepare_copy(marker: &mut CopyMarker) -> Option<Instant> {
+    marker.before_copy()
+}
+
+/// Only on Linux until step 14b3 (on Windows, reading the clipboard first would delay the copy
+/// past a short press of Ctrl).
+#[cfg(target_os = "windows")]
+fn prepare_copy(_marker: &mut CopyMarker) -> Option<Instant> {
+    None
 }
 
 impl PriceCheckHotkey {

@@ -442,7 +442,7 @@ impl ExileMarketApp {
     /// Takes in an event of the clipboard watching: an item copied opens the window over the
     /// game when the hotkey copied it, and keeps its filters and offers when it is the item
     /// shown, copied again by the hotkey.
-    fn copied(&mut self, event: ClipboardEvent) {
+    fn take_clipboard_event(&mut self, event: ClipboardEvent) {
         if let ClipboardEvent::Copied { item, hotkey } = &event {
             let was_open = self.overlay.shown().is_some();
             // A window that opens is laid out once before it shows; an open one keeps its
@@ -500,19 +500,14 @@ impl App for ExileMarketApp {
     /// clicks of the components it draws.
     fn logic(&mut self, ctx: &Context, _frame: &mut Frame) {
         let now = Instant::now();
-        // Counted from when the copy was prepared, like the clipboard watching.
-        // In this order, so that each comes after what happened before it: the items read so
-        // far, then the presses of the hotkey (each told before its keys, so before its item),
-        // then the clicks (one that came with an item closes the window it had opened), and
-        // only then the items.
+        // In this order, so that each comes after what happened before it: the events of the
+        // clipboard read so far, then the presses of the hotkey (each told before its keys, so
+        // before its item), then the clicks (pressed before the items taken in below, they
+        // close the window as it was, not the one these items open), and only then the items.
         let mut events = Vec::new();
         self.clipboard.receive(|event| events.push(event));
-        self.hotkey.receive(|press| {
-            // On Windows, until step 14b3, no window over the game.
-            if press.target.is_some() || press.copy.is_some() {
-                self.overlay.hotkey(press.target, press.copy, now);
-            }
-        });
+        self.hotkey
+            .receive(|press| self.overlay.hotkey(press.target, press.copy, now));
         let window = self.overlay_window;
         let clicks_read = self
             .clicks
@@ -524,7 +519,7 @@ impl App for ExileMarketApp {
             );
         }
         for event in events {
-            self.copied(event);
+            self.take_clipboard_event(event);
         }
         if let Some(left) = self.overlay.expire(now) {
             ctx.request_repaint_after(left);
