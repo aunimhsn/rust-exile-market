@@ -3,7 +3,7 @@
 //!
 //! The application sends Ctrl+C to the game itself, and the item arrives through the clipboard
 //! like any copy ([`crate::clipboard`]). On Linux through X11 (XWayland under Wayland), like the
-//! game run by Proton, and on Windows; macOS comes in step 14a2b.
+//! game run by Proton, and on Windows. None on macOS, where Path of Exile 2 has no client.
 
 #[cfg(target_os = "windows")]
 mod windows;
@@ -69,7 +69,7 @@ impl PriceCheckHotkey {
         }
     }
 
-    /// Nothing to listen to yet on this system (step 14a2b).
+    /// Nothing to listen to on this system.
     #[cfg(not(any(target_os = "linux", target_os = "windows")))]
     #[must_use]
     pub fn start() -> Self {
