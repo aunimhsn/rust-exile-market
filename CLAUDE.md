@@ -101,6 +101,10 @@ Follow [Conventional Commits 1.0.0](https://www.conventionalcommits.org/en/v1.0.
 - It writes its recommendations, in French, to `outputs/<YYYY-MM-DD>-<branch>-code-review.md`. These notes are ignored by Git.
 - Summarize the recommendations to the user and apply only the ones they approve, then open the pull request.
 
+## Lessons
+
+- When the owner corrects how Claude Code works, or a practice proves useful, add one line to `docs/lessons.md` at once (its date, the lesson, where it may go), in the pull request of the step under way: the retrospective (step 22 of `roadmap.md`) sorts them into the project template, this `CLAUDE.md`, the skills or the agents.
+
 ## Development
 
 - Before committing, run and make sure all of these pass:

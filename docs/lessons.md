@@ -1,0 +1,15 @@
+# Lessons
+
+What working on the project taught: a correction of the owner, or a practice that proved useful. One line per lesson, written when it happens: its date, the lesson, and where it may go (this project, the template of a Rust desktop application, a skill, an agent). Read only by the retrospective (step 22 of the [roadmap](../roadmap.md)), which sorts each one into the template, this project's `CLAUDE.md`, its skills or its agents, or drops it.
+
+- 2026-10-31: run the checks with their exit codes written out (`cargo clippy …; echo CLIPPY=$?`), never piped into `| tail` within an `&&` chain: the pipe hid a Clippy failure once. Template (`CLAUDE.md`, Development).
+- 2026-11-01: before a probe that takes the focus or sends keys or clicks on the owner's desktop (`xdotool`, the application sending keys), tell them how long it takes and to let go of the keyboard and the mouse, wait for their go, then a 3-2-1 countdown and an end notice as desktop notifications (`notify-send`), since the output of a command isn't shown live. Template (`CLAUDE.md`, a desktop application).
+- 2026-11-01: the archive of a merged step goes as the first commit of the next step's pull request, never in a pull request of its own: one merge per step. Already in this project's `CLAUDE.md` and in the templates.
+- 2026-11-01: on critical code (the guardrails of an external service, the matching of game data), run the code review again after applying its fixes, with a test per fix, until no high or medium finding is left. Template (`CLAUDE.md`, Code review).
+- 2026-11-01: the CI of the pull requests built Linux only, so that code written for Windows or macOS alone was never compiled before a release; Clippy on Windows and macOS added in step 14a2a. Template (CI).
+- 2026-11-01: screenshots of the application itself, reliable under Wayland, with a temporary patch that asks egui for one (`ViewportCommand::Screenshot`), removed once looked at. Template (a skill, or `CLAUDE.md`, Interface design).
+- 2026-11-01: keep `outputs/` small: delete what is no longer needed (old code review notes, previews) as soon as it is used. Template (`CLAUDE.md`, Working folders).
+- 2026-11-01: tell the owner when a step turns out to need a finer split than planned (14a into 14a1 and 14a2, then 14a2a and 14a2b), rather than growing its pull request. Template (`CLAUDE.md`, Specifications and roadmap).
+- 2026-11-01: check the behaviour of a third-party tool in its source before stating it (the Ctrl+D of Exiled Exchange 2 read in `PriceCheckWindow.vue` and `Shortcuts.ts`). Template (`CLAUDE.md`).
+- 2026-11-01: a mock-up at the default width of the window can show what the owner's wider window hides (a sentence on 3 lines for them, 4 at 420 px): look at both widths. Template (`html-mockups` skill).
+- 2026-11-01: check the platforms the product targets against the real service before coding for one (Path of Exile 2 has no macOS client, `"mac": false` on Steam), so that its cost is weighed with the owner first. Template (`CLAUDE.md`).
