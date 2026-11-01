@@ -10,7 +10,7 @@
 // scrolls. No title bar (owner, 2026-11-01: the most bare; the league can't be changed over the game, the player
 // knows it, and the window closes by itself): the league on the right of the status bar. One open decision: what closes it.
 
-VARIANTS.overlayClose = { label: "Closes", options: { away: "Mouse 40 px away (EE2, Ctrl held to reach it)", delay: "1 s outside the item and the window", click: "A click in the game" }, fallback: "away" };
+VARIANTS.overlayClose = { label: "Closes", options: { combined: "Combined: Ctrl held, or the mouse on the item or in it, else 1 s", away: "Mouse 40 px away (EE2, Ctrl held to reach it)", delay: "1 s outside the item and the window", click: "A click in the game" }, fallback: "combined" };
 for (const key of ["overlayClose"]) {
   const v = VARIANTS[key];
   chosen[key] = params.get(key) in v.options ? params.get(key) : v.fallback;
@@ -158,12 +158,14 @@ document.addEventListener("mousemove", event => {
       if (ovState.entered) ovClose("the mouse left the window");
       else if (Math.hypot(p.x - ovState.press.x, p.y - ovState.press.y) > 40) ovClose("the mouse moved 40 px away without Ctrl held");
       break;
+    case "combined":
     case "delay":
-      if (inWindow || ovInside(p, ovState.item)) {
+      // Combined: Ctrl held keeps it open too, the gesture of Exiled Exchange 2.
+      if (inWindow || ovInside(p, ovState.item) || (chosen.overlayClose === "combined" && ovState.ctrl)) {
         clearTimeout(ovState.timer);
         ovState.timer = null;
         windowElement.classList.remove("is-fading");
-        ovStatus("Open: the mouse is on the item or in the window.");
+        ovStatus(ovState.ctrl && !inWindow && !ovInside(p, ovState.item) ? "Open: Ctrl is held." : "Open: the mouse is on the item or in the window.");
       } else if (!ovState.timer) {
         windowElement.classList.add("is-fading");
         ovStatus("Closing in 1 s, unless the mouse comes back to the item or the window…");
