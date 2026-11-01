@@ -30,15 +30,16 @@ pub struct PriceCheckHotkey {
     /// Listens until it is dropped.
     #[cfg(any(target_os = "linux", target_os = "windows"))]
     _manager: Option<global_hotkey::GlobalHotKeyManager>,
-    /// Where each hotkey was pressed, when the system could tell it.
-    targets: Option<Receiver<Target>>,
+    /// Each hotkey, with where it was pressed when the system could tell it.
+    targets: Option<Receiver<Option<Target>>>,
 }
 
 impl PriceCheckHotkey {
     /// Starts listening to Ctrl+D. A failure (the key taken by another application, such as
     /// Exiled Exchange 2) only writes to the log: the player can still copy with Ctrl+C.
-    /// `marker` prepares the clipboard before each copy; `wake` is called after each hotkey that
-    /// tells where it was pressed.
+    /// `marker` prepares the clipboard before each copy (on Linux: on Windows, reading the
+    /// clipboard first would delay the copy past a short press of Ctrl); `wake` is called after
+    /// each hotkey.
     ///
     /// Called once: the handler of the hotkey events can only be set once. Called on the thread
     /// of the window: on Windows, the hotkey is heard by a hidden window of that thread, through
@@ -77,12 +78,14 @@ impl PriceCheckHotkey {
             if event.id == id && event.state == keys::SENT_AT {
                 let mut sender = sender.lock().unwrap_or_else(PoisonError::into_inner);
                 let (keys, marker) = &mut *sender;
+                #[cfg(target_os = "linux")]
                 marker.before_copy();
-                if let Some(target) = keys.send_copy() {
-                    // The application stopped listening: nothing left to tell.
-                    if targets.send(target).is_ok() {
-                        wake();
-                    }
+                #[cfg(not(target_os = "linux"))]
+                let _ = marker;
+                let target = keys.send_copy();
+                // The application stopped listening: nothing left to tell.
+                if targets.send(target).is_ok() {
+                    wake();
                 }
             }
         }));
@@ -106,8 +109,9 @@ impl PriceCheckHotkey {
 }
 
 impl PriceCheckHotkey {
-    /// Gives where each hotkey was pressed since the last call to `handle`, without waiting.
-    pub fn receive(&mut self, mut handle: impl FnMut(Target)) {
+    /// Gives each hotkey since the last call to `handle`, with where it was pressed when the
+    /// system could tell it, without waiting.
+    pub fn receive(&mut self, mut handle: impl FnMut(Option<Target>)) {
         if let Some(targets) = &self.targets {
             while let Ok(target) = targets.try_recv() {
                 handle(target);

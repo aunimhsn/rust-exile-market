@@ -98,12 +98,11 @@ impl<'a> StatusBar<'a> {
     }
 
     /// The league name in the text color on the color of its trade, at the right of the bar and
-    /// its whole height; its width.
+    /// its whole height, cut past half of it; its width.
     fn league_block(ui: &Ui, league: &League) -> f32 {
         let bar = ui.max_rect();
-        let galley =
-            ui.painter()
-                .layout_no_wrap(league.name().to_owned(), text::small(), color::TEXT);
+        // At most half of the bar, cut with "…": the ages of the sources keep the rest.
+        let galley = widgets::truncated_line(ui, league.name(), text::small(), bar.width() / 2.0);
         let width = galley.size().x + 2.0 * LEAGUE_PADDING;
         let block = Rect::from_min_max(pos2(bar.right() - width, bar.top()), bar.right_bottom());
         let painter = ui.painter();

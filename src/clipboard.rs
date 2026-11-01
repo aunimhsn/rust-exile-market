@@ -21,7 +21,10 @@ const FAILURES_BEFORE_UNREADABLE: u32 = 4;
 /// Written in place of an item just before the hotkey copies one, so that the copy of the same
 /// item changes the clipboard, and a copy of nothing (an empty cell) leaves no item in it. Not
 /// empty: KDE may put the previous text back in an emptied clipboard.
-#[cfg_attr(target_os = "macos", allow(dead_code, reason = "no hotkey on macOS"))]
+#[cfg_attr(
+    not(target_os = "linux"),
+    allow(dead_code, reason = "the clipboard is only prepared on Linux")
+)]
 const COPY_MARKER: &str = "Exile Market: copying an item from the game";
 
 /// What the watcher tells the application.
@@ -206,14 +209,20 @@ impl ClipboardWatch {
 /// (`readItemText` in `main/src/shortcuts/HostClipboard.ts`): every copy of the hotkey then
 /// reaches the application, even of the item already shown, and the hotkey on an empty cell
 /// shows nothing.
-#[cfg_attr(target_os = "macos", allow(dead_code, reason = "no hotkey on macOS"))]
+#[cfg_attr(
+    not(target_os = "linux"),
+    allow(dead_code, reason = "the clipboard is only prepared on Linux")
+)]
 pub struct CopyMarker {
     /// Opened at the first copy, and again until it opens.
     clipboard: Option<arboard::Clipboard>,
     copy_expected: Arc<AtomicBool>,
 }
 
-#[cfg_attr(target_os = "macos", allow(dead_code, reason = "no hotkey on macOS"))]
+#[cfg_attr(
+    not(target_os = "linux"),
+    allow(dead_code, reason = "the clipboard is only prepared on Linux")
+)]
 impl CopyMarker {
     /// Replaces an item in the clipboard with [`COPY_MARKER`] (any other text, that the player
     /// may need, is kept), then tells the watcher that a copy comes.
@@ -229,15 +238,37 @@ impl CopyMarker {
             Some(clipboard) => clipboard,
             None => self.clipboard.insert(arboard::Clipboard::new()?),
         };
-        match clipboard.get_text() {
-            Ok(text) if CopiedItem::from_text(&text).is_some() => clipboard.set_text(COPY_MARKER),
-            Ok(_)
-            | Err(arboard::Error::ContentNotAvailable | arboard::Error::ConversionFailure) => {
-                Ok(())
-            }
-            Err(error) => Err(error),
+        if needs_marker(clipboard.get_text())? {
+            set_marker(clipboard)?;
         }
+        Ok(())
     }
+}
+
+/// Whether the clipboard, which holds `text`, needs the marker: when it holds an item.
+#[cfg_attr(
+    not(target_os = "linux"),
+    allow(dead_code, reason = "the clipboard is only prepared on Linux")
+)]
+fn needs_marker(text: Result<String, arboard::Error>) -> Result<bool, arboard::Error> {
+    match text {
+        Ok(text) => Ok(CopiedItem::from_text(&text).is_some()),
+        Err(arboard::Error::ContentNotAvailable | arboard::Error::ConversionFailure) => Ok(false),
+        Err(error) => Err(error),
+    }
+}
+
+/// Writes the marker, out of the history of the clipboard manager (Klipper).
+#[cfg(target_os = "linux")]
+fn set_marker(clipboard: &mut arboard::Clipboard) -> Result<(), arboard::Error> {
+    use arboard::SetExtLinux as _;
+    clipboard.set().exclude_from_history().text(COPY_MARKER)
+}
+
+#[cfg(not(target_os = "linux"))]
+#[allow(dead_code, reason = "the clipboard is only prepared on Linux")]
+fn set_marker(clipboard: &mut arboard::Clipboard) -> Result<(), arboard::Error> {
+    clipboard.set_text(COPY_MARKER)
 }
 
 /// Reads the clipboard until the application stops the thread or stops listening.
@@ -420,6 +451,15 @@ mod tests {
     #[test]
     fn the_marker_is_not_an_item() {
         assert!(CopiedItem::from_text(COPY_MARKER).is_none());
+    }
+
+    #[test]
+    fn only_an_item_in_the_clipboard_gets_the_marker() {
+        assert!(needs_marker(Ok(RING.to_owned())).unwrap());
+        assert!(!needs_marker(Ok("a whisper to keep".to_owned())).unwrap());
+        assert!(!needs_marker(Ok(COPY_MARKER.to_owned())).unwrap());
+        assert!(!needs_marker(Err(arboard::Error::ContentNotAvailable)).unwrap());
+        assert!(needs_marker(Err(arboard::Error::ClipboardOccupied)).is_err());
     }
 
     #[test]

@@ -5,6 +5,7 @@
 //! X server is read instead (`QueryPointer`), which needs no grab and leaves every click to the
 //! game, only while the window is open.
 
+use std::error::Error;
 use std::time::Duration;
 
 use x11rb::connection::Connection as _;
@@ -25,27 +26,43 @@ const BUTTONS: [KeyButMask; 3] = [
     KeyButMask::BUTTON3,
 ];
 
+/// Where the thread reads the pointer: the X server, or a fake one in the tests.
+trait PointerSource {
+    /// Where the pointer is, and whether a button is held.
+    fn read(&mut self) -> Result<(Point, bool), Box<dyn Error>>;
+}
+
 /// The thread that tells the clicks, each where it was pressed, for as long as this value lives.
 pub struct ClickWatch {
     worker: Worker<Point, bool>,
     watching: bool,
+    /// The thread stopped: the clicks can no longer be read.
+    stopped: bool,
 }
 
 impl ClickWatch {
-    /// Starts the thread, idle until [`ClickWatch::watch`]; `wake` is called after each click.
+    /// Starts the thread, idle until [`ClickWatch::watch`]; `wake` is called after each click,
+    /// and when the thread stops.
     #[must_use]
     pub fn start(wake: impl Fn() + Send + 'static) -> Self {
+        Self::spawn(XPointer::connect, wake)
+    }
+
+    /// Reads the pointer that `open` gives, on the thread, where it is opened.
+    fn spawn<P: PointerSource>(
+        open: impl FnOnce() -> Result<P, Box<dyn Error>> + Send + 'static,
+        wake: impl Fn() + Send + 'static,
+    ) -> Self {
         let worker = Worker::spawn("clicks", OnDrop::Detach, wake, |outbox, wake| {
-            match Pointer::connect() {
-                Ok(pointer) => watch(&pointer, outbox, wake),
-                Err(error) => log::warn!(
-                    "The clicks in the game can't be read: the window over the game will close with the next item ({error})"
-                ),
+            match open() {
+                Ok(mut pointer) => watch(&mut pointer, outbox, wake),
+                Err(error) => log::warn!("The clicks in the game can't be read: {error}"),
             }
         });
         Self {
             worker,
             watching: false,
+            stopped: false,
         }
     }
 
@@ -57,28 +74,31 @@ impl ClickWatch {
         }
     }
 
-    /// Gives each click since the last call to `handle`, without waiting.
-    pub fn receive(&mut self, handle: impl FnMut(Point)) {
+    /// Gives each click since the last call to `handle`, without waiting; `false` once the
+    /// thread stopped (the X server out of reach), which the thread wrote to the log.
+    pub fn receive(&mut self, handle: impl FnMut(Point)) -> bool {
         if self.worker.receive(handle) {
-            log::warn!("The thread of the clicks in the game stopped");
+            self.stopped = true;
         }
+        !self.stopped
     }
 }
 
-struct Pointer {
+struct XPointer {
     connection: RustConnection,
     root: Window,
 }
 
-impl Pointer {
-    fn connect() -> Result<Self, Box<dyn std::error::Error>> {
+impl XPointer {
+    fn connect() -> Result<Self, Box<dyn Error>> {
         let (connection, screen) = x11rb::connect(None)?;
         let root = connection.setup().roots[screen].root;
         Ok(Self { connection, root })
     }
+}
 
-    /// Where the pointer is, and whether a button is held.
-    fn read(&self) -> Result<(Point, bool), Box<dyn std::error::Error>> {
+impl PointerSource for XPointer {
+    fn read(&mut self) -> Result<(Point, bool), Box<dyn Error>> {
         let reply = self.connection.query_pointer(self.root)?.reply()?;
         let point = Point {
             x: i32::from(reply.root_x),
@@ -91,8 +111,9 @@ impl Pointer {
     }
 }
 
-/// Sends each press of a button while the application watches, until it stops the thread.
-fn watch(pointer: &Pointer, outbox: &Outbox<Point, bool>, wake: &dyn Fn()) {
+/// Sends each press of a button while the application watches, until it stops the thread or
+/// the pointer can't be read.
+fn watch(pointer: &mut impl PointerSource, outbox: &Outbox<Point, bool>, wake: &dyn Fn()) {
     let mut watching = false;
     // A button already held when the watch starts is no new click.
     let mut held = true;
@@ -133,6 +154,40 @@ fn is_click(held: bool, down: bool) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::VecDeque;
+    use std::sync::mpsc;
+
+    /// A pointer that gives prepared readings, then fails.
+    struct FakePointer(VecDeque<(Point, bool)>);
+
+    impl PointerSource for FakePointer {
+        fn read(&mut self) -> Result<(Point, bool), Box<dyn Error>> {
+            self.0.pop_front().ok_or_else(|| "no more readings".into())
+        }
+    }
+
+    const AT: Point = Point { x: 4000, y: 500 };
+
+    /// The clicks the thread sends for `readings` while watched, until it stops.
+    fn clicks(readings: &[bool]) -> Vec<Point> {
+        let readings = readings.iter().map(|&down| (AT, down)).collect();
+        let (woken, wakes) = mpsc::channel();
+        let mut watch = ClickWatch::spawn(
+            move || Ok(FakePointer(readings)),
+            move || {
+                let _ = woken.send(());
+            },
+        );
+        watch.watch(true);
+        let mut clicks = Vec::new();
+        // Woken after each click, and once more when the readings run out.
+        while wakes.recv_timeout(Duration::from_secs(5)).is_ok() {
+            if !watch.receive(|point| clicks.push(point)) {
+                break;
+            }
+        }
+        clicks
+    }
 
     #[test]
     fn a_click_is_a_button_pressed_where_none_was() {
@@ -140,5 +195,34 @@ mod tests {
         assert!(!is_click(true, true));
         assert!(!is_click(false, false));
         assert!(!is_click(true, false));
+    }
+
+    #[test]
+    fn sends_each_press_once_where_it_was() {
+        assert_eq!(clicks(&[false, true, true, false, true, false]), [AT, AT]);
+    }
+
+    #[test]
+    fn a_button_held_when_the_watch_starts_is_no_click() {
+        assert_eq!(clicks(&[true, true, false, true]), [AT]);
+    }
+
+    #[test]
+    fn tells_once_the_pointer_can_no_longer_be_read() {
+        let (woken, wakes) = mpsc::channel();
+        let mut watch = ClickWatch::spawn(
+            || Ok(FakePointer(VecDeque::new())),
+            move || {
+                let _ = woken.send(());
+            },
+        );
+        assert!(watch.receive(|_| {}));
+        watch.watch(true);
+        wakes
+            .recv_timeout(Duration::from_secs(5))
+            .expect("woken up when the thread stops");
+
+        assert!(!watch.receive(|_| {}));
+        assert!(!watch.receive(|_| {}));
     }
 }

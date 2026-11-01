@@ -701,7 +701,8 @@ impl<'a> OffersBlock<'a> {
         responses: &[Response],
     ) -> Option<usize> {
         let ctx = ui.ctx();
-        let state_id = Id::NULL.with("offer-tooltip-state");
+        // One per window: the main one and the one over the game each have their own.
+        let state_id = Id::NULL.with(("offer-tooltip-state", ctx.viewport_id()));
         let mut state: TooltipState = ctx.data(|data| data.get_temp(state_id).unwrap_or_default());
         let ids: Vec<&str> = offers.iter().map(|offer| offer.id.as_str()).collect();
         let id_at = |index: Option<usize>| index.and_then(|index| ids.get(index).copied());

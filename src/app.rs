@@ -365,23 +365,32 @@ impl ExileMarketApp {
         trade: TradeStatus,
         to_top: bool,
     ) {
-        let Some(target) = self.overlay.shown() else {
-            self.overlay_window = None;
-            return;
-        };
-        // The pointer and the game come in the physical pixels of the screen.
+        let target = self.overlay.shown();
+        // The pointer and the game come in the physical pixels of the screen; the points of the
+        // window are scaled like those of the main window: by the screen and the zoom of the
+        // player (Ctrl + plus).
         let scale = ctx
             .input(|input| input.viewport().native_pixels_per_point)
-            .unwrap_or(1.0);
-        let to_pixels = |points: f32| to_pixels(points, scale);
+            .unwrap_or(1.0)
+            * ctx.zoom_factor();
+        let width = to_pixels(overlay::WIDTH, scale);
         let content = self
             .overlay_height
             .map(|height| height + ui::STATUS_BAR_HEIGHT);
-        let place = target.place(
-            to_pixels(overlay::WIDTH),
-            content.map_or(target.game.height, to_pixels),
-        );
-        self.overlay_window = Some(place);
+        let place = target.map(|target| {
+            target.place(
+                width,
+                content.map_or(target.game.height, |height| to_pixels(height, scale)),
+            )
+        });
+        self.overlay_window = place;
+        // Where it was last, while it is hidden.
+        let at = place.unwrap_or(ScreenRect {
+            x: 0,
+            y: 0,
+            width,
+            height: 1,
+        });
         let builder = ViewportBuilder::default()
             .with_title(crate::APP_NAME)
             // Out of the hands of the window manager: above the game, which keeps the focus.
@@ -392,26 +401,33 @@ impl ExileMarketApp {
             .with_taskbar(false)
             .with_resizable(false)
             // Shown once its content is laid out, at its height.
-            .with_visible(content.is_some())
-            .with_position(pos2(to_points(place.x, scale), to_points(place.y, scale)))
-            .with_inner_size(vec2(overlay::WIDTH, to_points(place.height, scale)));
+            .with_visible(place.is_some() && content.is_some())
+            .with_position(pos2(to_points(at.x, scale), to_points(at.y, scale)))
+            .with_inner_size(vec2(overlay::WIDTH, to_points(at.height, scale)));
         let league = self.session.league().cloned();
+        // Drawn at every frame, hidden while it is closed: created with the first frame, while
+        // the main window shows. eframe 0.37 can't create a window while the main one is
+        // minimized (it then paints outside of its event loop), and egui panics when the
+        // window of an immediate viewport isn't drawn.
         let height = ctx.show_viewport_immediate(
             ViewportId::from_hash_of("window-over-the-game"),
             builder,
             |ui, _| {
+                place?;
                 // Its own ids: the scroll and the panels of the main window are its own.
-                ui.push_id("window-over-the-game", |ui| {
-                    StatusBar::sources(&self.i18n, prices, trade)
-                        .league(league.as_ref())
-                        .show(ui);
-                    self.item(ui, prices, kind, to_top)
-                })
-                .inner
+                let height = ui
+                    .push_id("window-over-the-game", |ui| {
+                        StatusBar::sources(&self.i18n, prices, trade)
+                            .league(league.as_ref())
+                            .show(ui);
+                        self.item(ui, prices, kind, to_top)
+                    })
+                    .inner;
+                Some(height)
             },
         );
-        if self.overlay_height != Some(height) {
-            self.overlay_height = Some(height);
+        if height.is_some() && self.overlay_height != height {
+            self.overlay_height = height;
             ctx.request_repaint();
         }
     }
@@ -463,11 +479,11 @@ impl App for ExileMarketApp {
                     if !was_open {
                         self.overlay_height = None;
                     }
-                    // The same item again: its filters and offers stay.
-                    if self.last_copied.as_ref() == Some(item) {
-                        self.view = View::Item;
-                        return;
-                    }
+                }
+                if copied_again(by_hotkey, self.last_copied.as_ref(), item) {
+                    // Its filters and offers stay.
+                    self.view = View::Item;
+                    return;
                 }
                 self.last_copied = Some(item.clone());
                 self.scroll_to_top = true;
@@ -480,9 +496,22 @@ impl App for ExileMarketApp {
         if let Some(left) = self.overlay.expire(now) {
             ctx.request_repaint_after(left);
         }
-        self.clicks
-            .receive(|point| self.overlay.clicked(point, self.overlay_window));
+        let window = self.overlay_window;
+        let clicks_read = self
+            .clicks
+            .receive(|point| self.overlay.clicked(point, window));
+        // Without its clicks, the window over the game couldn't close: it no longer opens.
+        if !clicks_read && self.overlay.turn_off() {
+            log::warn!(
+                "The window over the game is turned off: the clicks that close it can't be read"
+            );
+        }
         self.clicks.watch(self.overlay.shown().is_some());
+        if self.overlay.shown().is_some() {
+            // Drawn even while the main window is minimized: eframe only runs the interface of
+            // the windows that show, and this one first shows after a frame.
+            ctx.send_viewport_cmd(ViewportCommand::RequestPaintWhileHidden);
+        }
         if self
             .search
             .receive(|answer| self.offers.apply(answer, SystemTime::now()))
@@ -589,6 +618,12 @@ impl App for ExileMarketApp {
     fn persist_egui_memory(&self) -> bool {
         false
     }
+}
+
+/// `item` copied by the hotkey again: the item already shown, which keeps its filters and
+/// offers. Copied with Ctrl+C after another text, it starts again.
+fn copied_again(by_hotkey: bool, last: Option<&CopiedItem>, item: &CopiedItem) -> bool {
+    by_hotkey && last == Some(item)
 }
 
 /// The height of the window over the game for an item that can't be read, in points.
@@ -700,6 +735,21 @@ mod tests {
         assert_eq!(corrupted(&filters), None);
         filters.toggle_state(ItemState::Corrupted);
         assert_eq!(corrupted(&filters), Some(true));
+    }
+
+    #[test]
+    fn the_hotkey_on_the_item_shown_keeps_it_as_it_is() {
+        let ring = CopiedItem::from_text("Item Class: Rings\nRarity: Rare\nWoe Loop\nRuby Ring")
+            .expect("an item");
+        let amulet =
+            CopiedItem::from_text("Item Class: Amulets\nRarity: Rare\nDoom Idol\nGold Amulet")
+                .expect("an item");
+
+        assert!(copied_again(true, Some(&ring), &ring));
+        assert!(!copied_again(true, Some(&ring), &amulet));
+        assert!(!copied_again(true, None, &ring));
+        // Copied with Ctrl+C after another text: a new copy, filters cleared.
+        assert!(!copied_again(false, Some(&ring), &ring));
     }
 
     #[test]

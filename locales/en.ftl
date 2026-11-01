@@ -249,8 +249,8 @@ origin-vaal = Vaal
 origin-essence = Essence
 origin-alloy = Alloy
 # A desecrated modifier not revealed yet, in its group; and the note under the stats of its item.
-unrevealed-prefix = Unrevealed prefix
-unrevealed-suffix = Unrevealed suffix
+unrevealed-prefix = Unrevealed desecrated prefix
+unrevealed-suffix = Unrevealed desecrated suffix
 unrevealed-note = An unrevealed modifier can change the item: its other stats start unchecked.
 # Under the stats of a rare or magic item copied from the trade of the game, without the affixes and tiers of the advanced copy.
 trade-copy-note = The tiers are found from the values.
