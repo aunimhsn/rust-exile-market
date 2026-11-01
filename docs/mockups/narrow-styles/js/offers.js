@@ -12,6 +12,7 @@ function offerTooltip(t) {
   return `<div class="offer-tooltip ${t.pinned ? "pinned" : ""} ${t.below ? "below" : ""}">
     <div class="tt-head"><span class="rarity-${t.rarity || "unique"} tt-name">${t.name}</span><span class="tt-price">${t.price} ${orb(t.currency)}</span></div>
     <div class="tt-meta">${t.meta}</div>
+    ${t.req ? `<div class="tt-req">${colorAttributes(t.req)}</div>` : ""}
     ${t.suspicious ? `<div class="tt-warn">Be careful: far below the market price.</div>` : ""}
     ${t.note ? `<div class="tt-note">${t.note}</div>` : ""}
     ${[[t.props, "prop"], [t.implicit, ""], [t.mods, ""]].filter(([list]) => list && list.length).map(([list, kind]) => `<div class="tt-mods">${compare(list, kind)}</div>`).join("")}

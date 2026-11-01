@@ -13,7 +13,9 @@ use egui::{
     Stroke, Ui, Vec2, pos2, vec2,
 };
 
-use super::item_block::{SEPARATOR, waystone_tier_color};
+use super::item_block::{
+    SEPARATOR, gem_level_color, requirement_parts, requirements_job, waystone_tier_color,
+};
 use super::item_stats::property_value;
 use super::offers_block::{RowPrice, offer_price};
 use super::price_block::orb;
@@ -21,8 +23,11 @@ use super::theme::{self, color, size, text};
 use super::widgets;
 use crate::filters::Property;
 use crate::format;
+use crate::game_data::{self, Category};
 use crate::i18n::{Message, NumberTag, Translator};
-use crate::item::{self, Catalyst, Item, WaystoneProperty, WaystoneValue};
+use crate::item::{
+    self, Catalyst, Item, MAX_GEM_SOCKETS, TOP_GEM_QUALITY, WaystoneProperty, WaystoneValue,
+};
 use crate::roll_difference::{CopiedLines, Difference, Verdict};
 use crate::trade::offers::{ItemOffer, ModifierKind, SellerStatus};
 
@@ -265,15 +270,6 @@ fn waystone_lines(offer: &ItemOffer, item: &Item, i18n: &Translator) -> Vec<Line
                 Property::Waystone(property),
                 &property_value(Property::Waystone(property), f64::from(value)),
             );
-            let difference = value - copied.unwrap_or(0);
-            let difference = (difference != 0).then(|| Difference {
-                value: f64::from(difference),
-                verdict: if difference > 0 {
-                    Verdict::Better
-                } else {
-                    Verdict::Worse
-                },
-            });
             Some(Line {
                 text,
                 tint: if offered.is_some() {
@@ -281,15 +277,88 @@ fn waystone_lines(offer: &ItemOffer, item: &Item, i18n: &Translator) -> Vec<Line
                 } else {
                     color::FAINT
                 },
-                difference,
+                difference: higher_better(f64::from(value), f64::from(copied.unwrap_or(0))),
             })
         })
         .collect()
 }
 
+/// The difference of `value` from the `copied` one, of a property better higher: none when
+/// they are equal.
+fn higher_better(value: f64, copied: f64) -> Option<Difference> {
+    let difference = value - copied;
+    (difference != 0.0).then_some(Difference {
+        value: difference,
+        verdict: if difference > 0.0 {
+            Verdict::Better
+        } else {
+            Verdict::Worse
+        },
+    })
+}
+
+/// The lines of the quality and the sockets of an offer of skill gem, when the copied `item`
+/// is a skill gem, written like their filters, each with its difference from the item, better
+/// higher: gray, white at their top (a quality of 20 % or more, 5 sockets). A quality of the
+/// item that the offer lacks is written faint, at 0, with its loss; sockets the trade site
+/// doesn't give aren't written. The level is under the name ([`meta`]).
+fn gem_lines(offer: &ItemOffer, item: &Item, i18n: &Translator) -> Vec<Line> {
+    if !item.is_skill_gem() {
+        return Vec::new();
+    }
+    let offered = &offer.item;
+    let quality = offered.quality.as_ref().map(|quality| quality.value);
+    let quality = (quality.is_some() || item.quality().is_some()).then(|| {
+        let value = quality.unwrap_or(0);
+        Line {
+            text: i18n.filter_property(Property::Quality, &format::number(f64::from(value))),
+            tint: match quality {
+                None => color::FAINT,
+                Some(value) if value >= TOP_GEM_QUALITY => color::TEXT,
+                Some(_) => color::WEAK,
+            },
+            difference: higher_better(f64::from(value), f64::from(item.quality().unwrap_or(0))),
+        }
+    });
+    let sockets = offered.gem_sockets.map(|sockets| Line {
+        text: i18n.filter_property(Property::GemSockets, &format::number(f64::from(sockets))),
+        tint: if sockets >= MAX_GEM_SOCKETS {
+            color::TEXT
+        } else {
+            color::WEAK
+        },
+        difference: higher_better(f64::from(sockets), f64::from(item.sockets().unwrap_or(0))),
+    });
+    quality.into_iter().chain(sockets).collect()
+}
+
+/// The requirements of an offer of skill gem, weapon or armour, when the copied `item` is one,
+/// wrapped at `width`: "Requires Level 70 · 67 Dex · 67 Int", each attribute in its color,
+/// without difference: the level of the character is unknown. None for another item, whose
+/// requirements matter less, or an offer without any.
+fn requirements(
+    offer: &ItemOffer,
+    item: &Item,
+    i18n: &Translator,
+    width: f32,
+) -> Option<LayoutJob> {
+    let equipped = item.is_skill_gem()
+        || game_data::category(item.language(), item.base_type())
+            .is_some_and(Category::is_weapon_or_armour);
+    if !equipped {
+        return None;
+    }
+    let parts = requirement_parts(offer.item.requirements, i18n)?;
+    let mut job = requirements_job(&parts, i18n, &text::note());
+    job.wrap.max_width = width;
+    Some(job)
+}
+
 /// The base type of the offer, its item level and its corruption, wrapped at `width`. An
 /// offer of waystone, when the copied `item` is one, writes its tier short, in its color, as
-/// the item block does: "Waystone · T12".
+/// the item block does: "Waystone · T12". An offer of skill gem, when the copied `item` is one,
+/// writes the item class of the item in place of its base type, the name of the gem again,
+/// and its level in its color: "Skill Gems · Level 16".
 fn meta(offer: &ItemOffer, item: &Item, i18n: &Translator, width: f32) -> LayoutJob {
     let offered = &offer.item;
     let font = text::note();
@@ -303,6 +372,7 @@ fn meta(offer: &ItemOffer, item: &Item, i18n: &Translator, width: f32) -> Layout
     } else {
         None
     };
+    let gem_level = offered.gem_level.filter(|_| item.is_skill_gem());
     if let Some((name, tier)) = waystone {
         append(name, &font, color::WEAK);
         append(SEPARATOR, &font, color::WEAK);
@@ -310,6 +380,14 @@ fn meta(offer: &ItemOffer, item: &Item, i18n: &Translator, width: f32) -> Layout
             &format!("T{tier}"),
             &text::tooltip_tier(),
             waystone_tier_color(tier),
+        );
+    } else if let Some(level) = gem_level {
+        append(item.class(), &font, color::WEAK);
+        append(SEPARATOR, &font, color::WEAK);
+        append(
+            &i18n.gem_level(level),
+            &text::tooltip_tier(),
+            gem_level_color(level),
         );
     } else {
         append(&offered.base_type, &font, color::WEAK);
@@ -382,6 +460,13 @@ impl OfferTooltip<'_> {
         let (rect, _) =
             ui.allocate_exact_size(vec2(ui.available_width(), galley.size().y), Sense::hover());
         ui.painter().galley(rect.min, galley, color::WEAK);
+        if let Some(job) = requirements(self.offer, self.item, i18n, ui.available_width()) {
+            ui.add_space(META_GAP);
+            let galley = ui.painter().layout_job(job);
+            let (rect, _) =
+                ui.allocate_exact_size(vec2(ui.available_width(), galley.size().y), Sense::hover());
+            ui.painter().galley(rect.min, galley, color::WEAK);
+        }
         if self.suspicious {
             ui.add_space(WARNING_GAP);
             text_block(
@@ -406,9 +491,13 @@ impl OfferTooltip<'_> {
         if let Some(line) = quality_line(self.offer, self.item, i18n) {
             group(ui, &[line]);
         }
-        let waystone = waystone_lines(self.offer, self.item, i18n);
-        if !waystone.is_empty() {
-            group(ui, &waystone);
+        for properties in [
+            waystone_lines(self.offer, self.item, i18n),
+            gem_lines(self.offer, self.item, i18n),
+        ] {
+            if !properties.is_empty() {
+                group(ui, &properties);
+            }
         }
         for kind in [
             ModifierKind::Enchant,

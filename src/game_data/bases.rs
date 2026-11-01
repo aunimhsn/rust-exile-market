@@ -98,6 +98,24 @@ impl Category {
         }
     }
 
+    /// A weapon or an armour, a shield, a buckler, a focus and a quiver among them: what a
+    /// character equips, whose requirements the tooltip of an offer writes; not a jewel nor
+    /// an accessory.
+    #[must_use]
+    pub fn is_weapon_or_armour(self) -> bool {
+        !matches!(
+            self,
+            Self::Amulet
+                | Self::Belt
+                | Self::Charm
+                | Self::Flask
+                | Self::Jewel
+                | Self::Ring
+                | Self::Tablet
+                | Self::Waystone
+        )
+    }
+
     /// The highest quality of an item of the category, in percent: 20 % for every item, beyond
     /// only by an exceptional base (30 %), a Vaal Infuser (10 % beyond the maximum), Serle's
     /// Grit and its rune (`Maximum Quality is 40%`) and the modifiers `+#% to Maximum Quality`

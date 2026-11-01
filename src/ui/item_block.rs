@@ -18,8 +18,8 @@ use super::widgets;
 use crate::filters::Filters;
 use crate::i18n::{Message, NumberTag, Requirement, Translator};
 use crate::item::{
-    self, DamageKind, Item, ItemState, MAX_GEM_SOCKETS, Rarity, TOP_GEM_LEVEL, TOP_GEM_QUALITY,
-    WaystoneProperty,
+    self, DamageKind, Item, ItemState, MAX_GEM_SOCKETS, Rarity, Requirements, TOP_GEM_LEVEL,
+    TOP_GEM_QUALITY, WaystoneProperty,
 };
 use crate::roll_difference::CopiedLines;
 use crate::tier_rolls::TierRolls;
@@ -634,47 +634,63 @@ impl<'a> ItemBlock<'a> {
 
     /// The level and the attributes the item requires, each in its color.
     fn requirements(&self) -> Option<Vec<(String, Color32)>> {
-        let requirements = self.item.requirements();
-        let parts: Vec<(String, Color32)> = [
-            (Requirement::Level, requirements.level, color::WEAK),
-            (
-                Requirement::Strength,
-                requirements.strength,
-                color::STRENGTH,
-            ),
-            (
-                Requirement::Dexterity,
-                requirements.dexterity,
-                color::DEXTERITY,
-            ),
-            (
-                Requirement::Intelligence,
-                requirements.intelligence,
-                color::INTELLIGENCE,
-            ),
-        ]
-        .into_iter()
-        .filter_map(|(part, value, tint)| Some((self.i18n.requirement(part, value?), tint)))
-        .collect();
-        (!parts.is_empty()).then_some(parts)
+        requirement_parts(self.item.requirements(), self.i18n)
     }
 
     /// The requirements line, in gray with each attribute in its color: "Requires Level 65 ·
     /// 145 Dex".
     fn requirements_line(&self, parts: &[(String, Color32)]) -> LayoutJob {
-        let font = text::item_line();
-        let (before, after) = self.i18n.requires_around();
-        let mut job = LayoutJob::default();
-        append(&mut job, &before, &font, color::WEAK);
-        for (index, (part, tint)) in parts.iter().enumerate() {
-            if index > 0 {
-                append(&mut job, SEPARATOR, &font, color::WEAK);
-            }
-            append(&mut job, part, &font, *tint);
-        }
-        append(&mut job, &after, &font, color::WEAK);
-        job
+        requirements_job(parts, self.i18n, &text::item_line())
     }
+}
+
+/// The level and the attributes of `requirements`, each in its color; none without any.
+pub(super) fn requirement_parts(
+    requirements: Requirements,
+    i18n: &Translator,
+) -> Option<Vec<(String, Color32)>> {
+    let parts: Vec<(String, Color32)> = [
+        (Requirement::Level, requirements.level, color::WEAK),
+        (
+            Requirement::Strength,
+            requirements.strength,
+            color::STRENGTH,
+        ),
+        (
+            Requirement::Dexterity,
+            requirements.dexterity,
+            color::DEXTERITY,
+        ),
+        (
+            Requirement::Intelligence,
+            requirements.intelligence,
+            color::INTELLIGENCE,
+        ),
+    ]
+    .into_iter()
+    .filter_map(|(part, value, tint)| Some((i18n.requirement(part, value?), tint)))
+    .collect();
+    (!parts.is_empty()).then_some(parts)
+}
+
+/// The requirements line of `parts` in `font`, in gray with each attribute in its color:
+/// "Requires Level 65 · 145 Dex".
+pub(super) fn requirements_job(
+    parts: &[(String, Color32)],
+    i18n: &Translator,
+    font: &FontId,
+) -> LayoutJob {
+    let (before, after) = i18n.requires_around();
+    let mut job = LayoutJob::default();
+    append(&mut job, &before, font, color::WEAK);
+    for (index, (part, tint)) in parts.iter().enumerate() {
+        if index > 0 {
+            append(&mut job, SEPARATOR, font, color::WEAK);
+        }
+        append(&mut job, part, font, *tint);
+    }
+    append(&mut job, &after, font, color::WEAK);
+    job
 }
 
 /// Adds `text` to `job`, in `font` and `tint`.
@@ -725,7 +741,7 @@ pub(super) fn waystone_tier_color(tier: u32) -> Color32 {
 
 /// The color of the level of a gem, as the tier of a waystone: up to 19 white, 20 (the highest
 /// from the gem) the orange of tier 1, 21 (raised by the corruption) the corrupted red.
-fn gem_level_color(level: u32) -> Color32 {
+pub(super) fn gem_level_color(level: u32) -> Color32 {
     match level {
         ..TOP_GEM_LEVEL => color::TEXT,
         TOP_GEM_LEVEL => color::TIER_1,

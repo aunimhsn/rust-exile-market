@@ -41,6 +41,9 @@ fn amulet(value: u32, catalyst: Catalyst, words: &str, modifiers: &[&str]) -> It
                     words: words.to_owned(),
                 }),
             }),
+            gem_level: None,
+            gem_sockets: None,
+            requirements: crate::item::Requirements::default(),
             waystone_properties: Vec::new(),
             waystone_unread: false,
             modifiers: modifiers
@@ -220,6 +223,9 @@ fn waystone(base_type: &str, properties: &[(WaystoneProperty, i32)]) -> ItemOffe
             item_level: Some(81),
             corrupted: false,
             quality: None,
+            gem_level: None,
+            gem_sockets: None,
+            requirements: crate::item::Requirements::default(),
             waystone_properties: properties
                 .iter()
                 .map(|&(property, value)| WaystoneValue { property, value })
@@ -645,4 +651,184 @@ fn a_difference_is_written_with_its_sign() {
     assert_eq!(signed(6.0), "+6");
     assert_eq!(signed(-7.0), "−7");
     assert_eq!(signed(3.5), "+3.5");
+}
+
+/// A Comet of level 15, 12 % of quality and 3 sockets, copied.
+fn copied_comet() -> Item {
+    let text = "Item Class: Skill Gems\nRarity: Gem\nComet\n--------\nLevel: 15\n\
+                Quality: +12% (augmented)\n--------\nSockets: G G G";
+    Item::parse(&crate::item::CopiedItem::from_text(text).unwrap()).unwrap()
+}
+
+/// A Comet offered at `level`, with its `quality` and its `sockets`.
+fn comet(level: u32, quality: Option<u32>, sockets: Option<u32>) -> ItemOffer {
+    use crate::trade::offers::{OfferItem, OfferQuality};
+
+    ItemOffer {
+        id: "g".to_owned(),
+        price: None,
+        seller: SellerStatus::Online,
+        listed: None,
+        whisper: String::new(),
+        item: OfferItem {
+            rarity: None,
+            name: None,
+            base_type: "Comet".to_owned(),
+            item_level: None,
+            corrupted: false,
+            quality: quality.map(|value| OfferQuality { value, kind: None }),
+            gem_level: Some(level),
+            gem_sockets: sockets,
+            requirements: crate::item::Requirements {
+                level: Some(66),
+                intelligence: Some(116),
+                ..crate::item::Requirements::default()
+            },
+            waystone_properties: Vec::new(),
+            waystone_unread: false,
+            modifiers: Vec::new(),
+        },
+    }
+}
+
+/// The gem lines of `offer` as `(text, tint, difference)`.
+fn gem_texts(
+    offer: &ItemOffer,
+    item: &Item,
+    i18n: &Translator,
+) -> Vec<(String, Color32, Option<f64>)> {
+    gem_lines(offer, item, i18n)
+        .into_iter()
+        .map(|line| {
+            (
+                line.text,
+                line.tint,
+                line.difference.map(|difference| difference.value),
+            )
+        })
+        .collect()
+}
+
+#[test]
+fn the_quality_and_sockets_of_an_offer_of_gem_show_their_difference_white_at_their_top() {
+    let i18n = Translator::new(crate::language::Language::English);
+    let copied = copied_comet();
+    // The offer of the mock-up: without quality, faint at 0 with its loss.
+    assert_eq!(
+        gem_texts(&comet(16, None, Some(4)), &copied, &i18n),
+        [
+            ("Quality: 0%".to_owned(), color::FAINT, Some(-12.0)),
+            ("Sockets: 4".to_owned(), color::WEAK, Some(1.0)),
+        ]
+    );
+    assert_eq!(
+        gem_texts(&comet(21, Some(23), Some(5)), &copied, &i18n),
+        [
+            ("Quality: 23%".to_owned(), color::TEXT, Some(11.0)),
+            ("Sockets: 5".to_owned(), color::TEXT, Some(2.0)),
+        ]
+    );
+    assert_eq!(
+        gem_texts(&comet(20, Some(20), Some(3)), &copied, &i18n),
+        [
+            ("Quality: 20%".to_owned(), color::TEXT, Some(8.0)),
+            ("Sockets: 3".to_owned(), color::WEAK, None),
+        ]
+    );
+    assert!(
+        gem_lines(&comet(20, Some(20), Some(3)), &copied, &i18n)
+            .iter()
+            .all(|line| line.difference.is_none_or(|d| d.verdict == Verdict::Better))
+    );
+}
+
+#[test]
+fn a_gem_without_quality_has_no_quality_line_and_another_item_no_gem_line() {
+    let i18n = Translator::new(crate::language::Language::English);
+    let owners = Item::parse(
+        &crate::item::CopiedItem::from_text(include_str!(
+            "../../item/test-items/en-owner-skill-gem.txt"
+        ))
+        .unwrap(),
+    )
+    .unwrap();
+    // Neither the owner's gem nor the offer has a quality; sockets the site doesn't give
+    // aren't written.
+    assert_eq!(
+        gem_texts(&comet(16, None, Some(2)), &owners, &i18n),
+        [("Sockets: 2".to_owned(), color::WEAK, None)]
+    );
+    assert_eq!(gem_texts(&comet(16, None, None), &owners, &i18n), []);
+    assert_eq!(
+        gem_texts(&comet(16, Some(20), Some(4)), &owners_waystone(), &i18n),
+        []
+    );
+}
+
+#[test]
+fn an_offer_of_gem_writes_the_class_and_its_level_in_its_color() {
+    let i18n = Translator::new(crate::language::Language::English);
+    let copied = copied_comet();
+    let level_color = |offer: &ItemOffer| {
+        let job = meta(offer, &copied, &i18n, 300.0);
+        job.sections
+            .iter()
+            .find(|section| {
+                job.text[section.byte_range.start.0..section.byte_range.end.0].starts_with("Level")
+            })
+            .map(|section| section.format.color)
+    };
+    let mut offer = comet(21, Some(23), Some(5));
+    offer.item.corrupted = true;
+    assert_eq!(
+        meta(&offer, &copied, &i18n, 300.0).text,
+        "Skill Gems · Level\u{a0}21 · Corrupted"
+    );
+    assert_eq!(level_color(&offer), Some(color::VAAL));
+    assert_eq!(level_color(&comet(20, None, None)), Some(color::TIER_1));
+    assert_eq!(level_color(&comet(16, None, None)), Some(color::TEXT));
+    // An offer of gem for another copied item: its base as it is.
+    assert_eq!(
+        meta(&offer, &owners_waystone(), &i18n, 300.0).text,
+        "Comet · Corrupted"
+    );
+}
+
+#[test]
+fn the_requirements_are_written_for_a_gem_a_weapon_or_an_armour_only() {
+    let i18n = Translator::new(crate::language::Language::English);
+    let parse =
+        |text: &str| Item::parse(&crate::item::CopiedItem::from_text(text).unwrap()).unwrap();
+    let written = |offer: &ItemOffer, item: &Item| {
+        requirements(offer, item, &i18n, 300.0).map(|job| job.text)
+    };
+    let offer = comet(16, None, Some(4));
+    assert_eq!(
+        written(&offer, &copied_comet()).as_deref(),
+        Some("Requires Level 66 · 116 Int")
+    );
+    let bow = parse(include_str!(
+        "../../item/test-items/en-rare-bow-fractured.txt"
+    ));
+    assert_eq!(
+        written(&offer, &bow).as_deref(),
+        Some("Requires Level 66 · 116 Int")
+    );
+    let armour = parse(include_str!(
+        "../../item/test-items/fr-rare-body-armour.txt"
+    ));
+    assert!(
+        written(&offer, &armour).is_some(),
+        "a body armour, in French"
+    );
+    // Neither an amulet nor a waystone.
+    let amulet = parse(include_str!(
+        "../../item/test-items/en-owner-rare-amulet-catalyst.txt"
+    ));
+    assert_eq!(written(&offer, &amulet), None);
+    assert_eq!(written(&offer, &owners_waystone()), None);
+    // An offer without requirements.
+    let mut free = offer.clone();
+    free.item.requirements = crate::item::Requirements::default();
+    assert_eq!(written(&free, &bow), None);
 }
