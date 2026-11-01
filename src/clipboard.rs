@@ -144,7 +144,7 @@ impl<S: ClipboardSource> ClipboardWatcher<S> {
         }
     }
 
-    /// When the hotkey prepared a copy before the reading `started`, less than [`COPY_WAIT`]
+    /// When the hotkey prepared a copy before the reading `started`, at most [`COPY_WAIT`]
     /// before `now`; forgotten once an item is `read`, or once too old. A copy prepared during
     /// the reading is kept for the next one.
     fn copy_expected(&self, started: Instant, now: Instant, read: bool) -> Option<Instant> {
@@ -262,23 +262,14 @@ impl CopyMarker {
     pub fn before_copy(&mut self) -> Option<Instant> {
         let started = Instant::now();
         let marked = self.mark();
-        let now = Instant::now();
-        if let Err(error) = marked {
-            log::warn!("The clipboard can't be prepared for the copy: {error}");
-            return None;
-        }
-        if now.duration_since(started) > COPY_WAIT {
-            log::warn!(
-                "The clipboard took {:?} to be prepared for the copy: its item only shows in the main window",
-                now.duration_since(started)
-            );
-            return None;
-        }
+        let copy = prepared(marked, started, Instant::now());
+        // Replaces the copy a previous hotkey expected, even with none: its item would
+        // otherwise be taken for the copy of this one.
         *self
             .copy_expected
             .lock()
-            .unwrap_or_else(PoisonError::into_inner) = Some(now);
-        Some(now)
+            .unwrap_or_else(PoisonError::into_inner) = copy;
+        copy
     }
 
     fn mark(&mut self) -> Result<(), arboard::Error> {
@@ -290,6 +281,29 @@ impl CopyMarker {
             set_marker(clipboard)?;
         }
         Ok(())
+    }
+}
+
+/// When the clipboard counts as prepared for the copy of the hotkey: `now`, once `marked` from
+/// `started` on within [`COPY_WAIT`]; none, written to the log, when it failed or took longer
+/// (arboard waits for an owner that doesn't answer), since an item left in it would then be
+/// taken for the copy of an empty cell.
+#[cfg_attr(
+    not(target_os = "linux"),
+    allow(dead_code, reason = "the clipboard is only prepared on Linux")
+)]
+fn prepared(marked: Result<(), arboard::Error>, started: Instant, now: Instant) -> Option<Instant> {
+    let took = now.saturating_duration_since(started);
+    if let Err(error) = marked {
+        log::warn!("The clipboard can't be prepared for the copy: {error}");
+        None
+    } else if took > COPY_WAIT {
+        log::warn!(
+            "The clipboard took {took:?} to be prepared for the copy: its item only shows in the main window"
+        );
+        None
+    } else {
+        Some(now)
     }
 }
 
@@ -688,6 +702,45 @@ mod tests {
                 1
             )),
             [(copied(RING), false), (copied(RING), true)]
+        );
+    }
+
+    #[test]
+    fn the_clipboard_counts_as_prepared_once_marked_in_time() {
+        let started = Instant::now();
+        let soon = started + Duration::from_millis(5);
+        let late = started + COPY_WAIT + Duration::from_millis(1);
+
+        assert_eq!(prepared(Ok(()), started, soon), Some(soon));
+        assert_eq!(prepared(Ok(()), started, late), None);
+        assert_eq!(
+            prepared(Err(arboard::Error::ClipboardOccupied), started, soon),
+            None
+        );
+    }
+
+    #[test]
+    fn a_text_that_isnt_an_item_keeps_the_copy_expected() {
+        let prepared = Instant::now();
+        assert_eq!(
+            by_hotkey(events_with_copy(
+                [text(RING), text("a whisper"), text(AMULET)],
+                1,
+                prepared
+            )),
+            [(copied(RING), false), (copied(AMULET), true)]
+        );
+    }
+
+    #[test]
+    fn another_item_after_a_copy_expected_too_long_ago_is_a_copy_of_the_player() {
+        let long_ago = Instant::now()
+            .checked_sub(COPY_WAIT + Duration::from_secs(1))
+            .expect("an earlier instant");
+
+        assert_eq!(
+            by_hotkey(events_with_copy([text(RING), text(AMULET)], 1, long_ago)),
+            [(copied(RING), false), (copied(AMULET), false)]
         );
     }
 

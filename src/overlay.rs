@@ -92,32 +92,53 @@ impl Target {
     }
 }
 
+/// A hotkey whose item hasn't arrived yet.
+#[derive(Debug, Clone, Copy)]
+struct Pending {
+    target: Option<Target>,
+    copy: Option<Instant>,
+    told: Instant,
+}
+
 /// When the window shows: from the item the hotkey copied until a click in the game.
 #[derive(Debug, Default)]
 pub struct Overlay {
     /// Where the window shows, while it is open.
     shown: Option<Target>,
-    /// A hotkey whose item hasn't arrived yet: where it was pressed, when the system could
-    /// tell it, and when it prepared the clipboard for its copy, which its item carries.
-    pending: Option<(Option<Target>, Instant)>,
+    /// The last hotkey, until its item arrives: where it was pressed, when the system could
+    /// tell it; when it prepared the clipboard for its copy, which its item carries, if it
+    /// could; and when it was told.
+    pending: Option<Pending>,
     /// Turned off for good: it would no longer close.
     off: bool,
 }
 
 impl Overlay {
-    /// The hotkey prepared the clipboard for its copy at `copy`: the window opens at `target`
-    /// when its item arrives; without target (the pointer or the game couldn't be read), the
-    /// item only shows in the main window.
-    pub fn hotkey(&mut self, target: Option<Target>, copy: Instant) {
-        self.pending = Some((target.filter(|_| !self.off), copy));
+    /// The hotkey, told at `now`, prepared the clipboard for its copy at `copy`: the window
+    /// opens at `target` when its item arrives. Without target (the pointer or the game couldn't
+    /// be read) or without copy (the clipboard couldn't be prepared), its item only shows in
+    /// the main window; it replaces the hotkey before it all the same, whose item would
+    /// otherwise open the window at the wrong place.
+    pub fn hotkey(&mut self, target: Option<Target>, copy: Option<Instant>, now: Instant) {
+        self.pending = Some(Pending {
+            target: target.filter(|_| !self.off),
+            copy,
+            told: now,
+        });
     }
 
     /// An item arrived, which the hotkey that prepared the clipboard at `hotkey` copied, if
-    /// any (the clipboard watching tells it). The item of the pending hotkey opens the window
-    /// where it was pressed, or moves it there (`true`); any other only shows in the main window.
+    /// any (the clipboard watching tells it). The item of the last hotkey opens the window
+    /// where it was pressed, or moves it there (`true`); any other item (copied with Ctrl+C)
+    /// only shows in the main window, and closes the window over the game, which would show it
+    /// beside an item it isn't.
     pub fn copied(&mut self, hotkey: Option<Instant>) -> bool {
         match self.pending {
-            Some((target, copy)) if hotkey == Some(copy) => {
+            Some(Pending {
+                target,
+                copy: Some(copy),
+                ..
+            }) if hotkey == Some(copy) => {
                 self.pending = None;
                 // A hotkey pressed just before the window was turned off opens nothing either.
                 if target.is_some() && !self.off {
@@ -125,7 +146,10 @@ impl Overlay {
                 }
                 true
             }
-            _ => false,
+            _ => {
+                self.shown = None;
+                false
+            }
         }
     }
 
@@ -139,13 +163,11 @@ impl Overlay {
     /// Forgets a hotkey that copied nothing; while one is pending, the time left before it is
     /// forgotten.
     pub fn expire(&mut self, now: Instant) -> Option<Duration> {
-        let (_, copy) = self.pending?;
-        let left = FORGOTTEN_AFTER.checked_sub(now.saturating_duration_since(copy));
+        let pending = self.pending?;
+        let left = FORGOTTEN_AFTER.checked_sub(now.saturating_duration_since(pending.told));
         if left.is_none() {
             self.pending = None;
-            log::info!(
-                "No new item after the price-check hotkey (an empty cell, or on Windows the item already shown)"
-            );
+            log::info!("No item came from the price-check hotkey (an empty cell?)");
         }
         left
     }
@@ -293,7 +315,7 @@ mod tests {
         let mut overlay = Overlay::default();
         let now = Instant::now();
 
-        overlay.hotkey(Some(target(4557, 966)), now);
+        overlay.hotkey(Some(target(4557, 966)), Some(now), now);
         assert_eq!(overlay.shown(), None);
         assert!(overlay.copied(Some(now)));
         assert_eq!(overlay.shown(), Some(target(4557, 966)));
@@ -308,10 +330,34 @@ mod tests {
     }
 
     #[test]
+    fn an_item_copied_with_ctrl_c_closes_the_open_window() {
+        let mut overlay = Overlay::default();
+        let now = Instant::now();
+        overlay.hotkey(Some(target(4557, 966)), Some(now), now);
+        overlay.copied(Some(now));
+
+        assert!(!overlay.copied(None));
+        assert_eq!(overlay.shown(), None);
+    }
+
+    #[test]
+    fn a_hotkey_without_copy_replaces_the_one_before() {
+        let mut overlay = Overlay::default();
+        let empty_cell = Instant::now();
+        let now = empty_cell + Duration::from_millis(500);
+        overlay.hotkey(Some(target(4400, 900)), Some(empty_cell), empty_cell);
+        overlay.hotkey(Some(target(4557, 966)), None, now);
+
+        // An item the clipboard watching still took for the copy of the empty cell.
+        assert!(!overlay.copied(Some(empty_cell)));
+        assert_eq!(overlay.shown(), None);
+    }
+
+    #[test]
     fn an_item_copied_with_ctrl_c_while_a_hotkey_waits_opens_nothing() {
         let mut overlay = Overlay::default();
         let now = Instant::now();
-        overlay.hotkey(Some(target(4557, 966)), now);
+        overlay.hotkey(Some(target(4557, 966)), Some(now), now);
 
         assert!(!overlay.copied(None));
         assert_eq!(overlay.shown(), None);
@@ -325,7 +371,7 @@ mod tests {
         let mut overlay = Overlay::default();
         let older = Instant::now();
         let now = older + Duration::from_secs(2);
-        overlay.hotkey(Some(target(4557, 966)), now);
+        overlay.hotkey(Some(target(4557, 966)), Some(now), now);
 
         assert!(!overlay.copied(Some(older)));
         assert_eq!(overlay.shown(), None);
@@ -335,7 +381,7 @@ mod tests {
     fn a_hotkey_that_copied_nothing_is_forgotten() {
         let mut overlay = Overlay::default();
         let now = Instant::now();
-        overlay.hotkey(Some(target(4557, 966)), now);
+        overlay.hotkey(Some(target(4557, 966)), Some(now), now);
 
         assert_eq!(
             overlay.expire(now + Duration::from_millis(400)),
@@ -351,10 +397,10 @@ mod tests {
         let mut overlay = Overlay::default();
         let now = Instant::now();
         let later = now + Duration::from_secs(5);
-        overlay.hotkey(Some(target(4557, 966)), now);
+        overlay.hotkey(Some(target(4557, 966)), Some(now), now);
         overlay.copied(Some(now));
 
-        overlay.hotkey(Some(target(2860, 500)), later);
+        overlay.hotkey(Some(target(2860, 500)), Some(later), later);
         assert_eq!(overlay.shown(), Some(target(4557, 966)));
         overlay.copied(Some(later));
         assert_eq!(overlay.shown(), Some(target(2860, 500)));
@@ -364,10 +410,14 @@ mod tests {
     fn the_hotkey_on_an_empty_cell_keeps_the_open_window() {
         let mut overlay = Overlay::default();
         let now = Instant::now();
-        overlay.hotkey(Some(target(4557, 966)), now);
+        overlay.hotkey(Some(target(4557, 966)), Some(now), now);
         overlay.copied(Some(now));
 
-        overlay.hotkey(Some(target(4400, 900)), now + Duration::from_secs(5));
+        overlay.hotkey(
+            Some(target(4400, 900)),
+            Some(now + Duration::from_secs(5)),
+            now + Duration::from_secs(5),
+        );
         overlay.expire(now + Duration::from_secs(8));
         assert_eq!(overlay.shown(), Some(target(4557, 966)));
     }
@@ -376,7 +426,7 @@ mod tests {
     fn a_hotkey_without_target_copies_without_opening() {
         let mut overlay = Overlay::default();
         let now = Instant::now();
-        overlay.hotkey(None, now);
+        overlay.hotkey(None, Some(now), now);
 
         assert!(overlay.copied(Some(now)));
         assert_eq!(overlay.shown(), None);
@@ -387,10 +437,10 @@ mod tests {
         let mut overlay = Overlay::default();
         let now = Instant::now();
         let later = now + Duration::from_secs(5);
-        overlay.hotkey(Some(target(4557, 966)), now);
+        overlay.hotkey(Some(target(4557, 966)), Some(now), now);
         overlay.copied(Some(now));
 
-        overlay.hotkey(None, later);
+        overlay.hotkey(None, Some(later), later);
         assert!(overlay.copied(Some(later)));
         assert_eq!(overlay.shown(), Some(target(4557, 966)));
     }
@@ -399,13 +449,13 @@ mod tests {
     fn turned_off_it_closes_and_never_opens_again() {
         let mut overlay = Overlay::default();
         let now = Instant::now();
-        overlay.hotkey(Some(target(4557, 966)), now);
+        overlay.hotkey(Some(target(4557, 966)), Some(now), now);
         overlay.copied(Some(now));
 
         assert!(overlay.turn_off());
         assert_eq!(overlay.shown(), None);
         assert!(!overlay.turn_off());
-        overlay.hotkey(Some(target(4557, 966)), now);
+        overlay.hotkey(Some(target(4557, 966)), Some(now), now);
         // The item still counts as copied by the hotkey.
         assert!(overlay.copied(Some(now)));
         assert_eq!(overlay.shown(), None);
@@ -415,7 +465,7 @@ mod tests {
     fn a_hotkey_pressed_just_before_it_was_turned_off_opens_nothing() {
         let mut overlay = Overlay::default();
         let now = Instant::now();
-        overlay.hotkey(Some(target(4557, 966)), now);
+        overlay.hotkey(Some(target(4557, 966)), Some(now), now);
         overlay.turn_off();
 
         assert!(overlay.copied(Some(now)));
@@ -426,7 +476,7 @@ mod tests {
     fn a_click_in_the_game_closes_it_and_a_click_in_it_doesnt() {
         let mut overlay = Overlay::default();
         let now = Instant::now();
-        overlay.hotkey(Some(target(4557, 966)), now);
+        overlay.hotkey(Some(target(4557, 966)), Some(now), now);
         overlay.copied(Some(now));
         let window = target(4557, 966).place(420, 300);
 
@@ -446,7 +496,7 @@ mod tests {
     fn a_click_before_the_window_was_drawn_closes_it() {
         let mut overlay = Overlay::default();
         let now = Instant::now();
-        overlay.hotkey(Some(target(4557, 966)), now);
+        overlay.hotkey(Some(target(4557, 966)), Some(now), now);
         overlay.copied(Some(now));
 
         overlay.clicked(Point { x: 4000, y: 500 }, None);

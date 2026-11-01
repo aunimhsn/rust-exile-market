@@ -439,6 +439,32 @@ impl ExileMarketApp {
         }
     }
 
+    /// Takes in an event of the clipboard watching: an item copied opens the window over the
+    /// game when the hotkey copied it, and keeps its filters and offers when it is the item
+    /// shown, copied again by the hotkey.
+    fn copied(&mut self, event: ClipboardEvent) {
+        if let ClipboardEvent::Copied { item, hotkey } = &event {
+            let was_open = self.overlay.shown().is_some();
+            // A window that opens is laid out once before it shows; an open one keeps its
+            // height until the next frame, without blinking.
+            if self.overlay.copied(*hotkey) && !was_open {
+                self.overlay_height = None;
+            }
+            // The clipboard watching alone tells the copy of the hotkey.
+            if copied_again(hotkey.is_some(), self.last_copied.as_ref(), item) {
+                // Its filters and offers stay.
+                self.view = View::Item;
+                return;
+            }
+            self.last_copied = Some(item.clone());
+            self.scroll_to_top = true;
+            self.filters.clear();
+            self.offers.clear();
+        }
+        self.view = self.view.after(&event);
+        self.session.apply(event);
+    }
+
     /// The search of the offers of the item shown, when it can be searched.
     fn shown_search(&self) -> Option<Search> {
         let shown = self.session.item()?;
@@ -475,37 +501,18 @@ impl App for ExileMarketApp {
     fn logic(&mut self, ctx: &Context, _frame: &mut Frame) {
         let now = Instant::now();
         // Counted from when the copy was prepared, like the clipboard watching.
+        // In this order, so that each comes after what happened before it: the items read so
+        // far, then the presses of the hotkey (each told before its keys, so before its item),
+        // then the clicks (one that came with an item closes the window it had opened), and
+        // only then the items.
+        let mut events = Vec::new();
+        self.clipboard.receive(|event| events.push(event));
         self.hotkey.receive(|press| {
-            // Without a prepared clipboard, its item only shows in the main window.
-            if let Some(copy) = press.copy {
-                self.overlay.hotkey(press.target, copy);
+            // On Windows, until step 14b3, no window over the game.
+            if press.target.is_some() || press.copy.is_some() {
+                self.overlay.hotkey(press.target, press.copy, now);
             }
         });
-        self.clipboard.receive(|event| {
-            if let ClipboardEvent::Copied { item, hotkey } = &event {
-                let was_open = self.overlay.shown().is_some();
-                // A window that opens is laid out once before it shows; an open one keeps its
-                // height until the next frame, without blinking.
-                if self.overlay.copied(*hotkey) && !was_open {
-                    self.overlay_height = None;
-                }
-                // The clipboard watching alone tells the copy of the hotkey.
-                if copied_again(hotkey.is_some(), self.last_copied.as_ref(), item) {
-                    // Its filters and offers stay.
-                    self.view = View::Item;
-                    return;
-                }
-                self.last_copied = Some(item.clone());
-                self.scroll_to_top = true;
-                self.filters.clear();
-                self.offers.clear();
-            }
-            self.view = self.view.after(&event);
-            self.session.apply(event);
-        });
-        if let Some(left) = self.overlay.expire(now) {
-            ctx.request_repaint_after(left);
-        }
         let window = self.overlay_window;
         let clicks_read = self
             .clicks
@@ -515,6 +522,12 @@ impl App for ExileMarketApp {
             log::warn!(
                 "The window over the game is turned off: the clicks that close it can't be read"
             );
+        }
+        for event in events {
+            self.copied(event);
+        }
+        if let Some(left) = self.overlay.expire(now) {
+            ctx.request_repaint_after(left);
         }
         self.clicks.watch(self.overlay.shown().is_some());
         let main_visible = ctx.input(|input| input.viewport().visible());

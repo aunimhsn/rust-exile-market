@@ -26,7 +26,8 @@ pub struct Press {
     pub target: Option<Target>,
     /// When the clipboard was prepared for its copy, which the clipboard watching gives back
     /// with the item it copied ([`crate::clipboard::ClipboardEvent::Copied`]); none when it
-    /// couldn't be prepared (then its item only shows in the main window).
+    /// couldn't be prepared (then its item only shows in the main window), and always on
+    /// Windows until step 14b3.
     pub copy: Option<Instant>,
 }
 
@@ -95,20 +96,16 @@ impl PriceCheckHotkey {
             if event.id == id && event.state == keys::SENT_AT {
                 let mut sender = sender.lock().unwrap_or_else(PoisonError::into_inner);
                 let (keys, marker) = &mut *sender;
-                // Marked only when the keys can be sent: a copy that doesn't leave would leave
-                // the marker in place of the item of the player.
-                #[cfg(target_os = "linux")]
-                let copy = if keys.ready() {
-                    marker.before_copy()
-                } else {
-                    return;
-                };
-                #[cfg(not(target_os = "linux"))]
-                let copy = {
-                    let _ = marker;
-                    None
-                };
                 keys.send_copy(|target| {
+                    // Marked just before the keys, once they are sure to leave: a copy that
+                    // doesn't leave would leave the marker in place of the item of the player.
+                    #[cfg(target_os = "linux")]
+                    let copy = marker.before_copy();
+                    #[cfg(not(target_os = "linux"))]
+                    let copy = {
+                        let _ = &marker;
+                        None
+                    };
                     // The application stopped listening: nothing left to tell.
                     if targets.send(Press { target, copy }).is_ok() {
                         wake();

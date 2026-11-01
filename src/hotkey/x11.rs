@@ -46,21 +46,11 @@ impl CopySender {
         })
     }
 
-    /// Whether the keys can be sent: the connection to the X server is open, or opens again.
-    pub fn ready(&mut self) -> bool {
-        if self.keyboard.is_none() {
-            match Keyboard::connect() {
-                Ok(keyboard) => self.keyboard = Some(keyboard),
-                Err(error) => log::warn!("The copy can't be sent: no X11 keyboard ({error})"),
-            }
-        }
-        self.keyboard.is_some()
-    }
-
     /// Sends Ctrl+C to the window that has the focus, and writes to the log where it went.
-    /// Just before the keys, `tell` gets where the window over the game opens, when the pointer
-    /// and that window could be read: told before the game copies, the application never gets
-    /// the item before the press.
+    /// Just before the keys, once everything they need is read, `tell` gets where the window over
+    /// the game opens, when the pointer and that window could be read: it prepares the clipboard
+    /// then, and, told before the game copies, the application never gets the item before the
+    /// press.
     pub fn send_copy(&mut self, tell: impl FnOnce(Option<Target>)) {
         let keyboard = match self.keyboard.take() {
             Some(keyboard) => keyboard,
@@ -165,7 +155,6 @@ impl Keyboard {
             return Err("the keyboard has no Control or C key".into());
         };
         let pointer = self.connection.query_pointer(self.root)?.reply()?;
-        let control_held = pointer.mask.contains(KeyButMask::CONTROL);
         let target = game.map(|game| Target {
             pointer: Point {
                 x: i32::from(pointer.root_x),
@@ -173,7 +162,15 @@ impl Keyboard {
             },
             game,
         });
+        // Told once the keys are sure to leave; it prepares the clipboard, which may take a
+        // moment: Ctrl is read after it, as the player holds it when the keys leave.
         tell(target);
+        let control_held = self
+            .connection
+            .query_pointer(self.root)?
+            .reply()?
+            .mask
+            .contains(KeyButMask::CONTROL);
         for (index, key) in copy_keys(control, c, control_held).into_iter().enumerate() {
             let (event, keycode) = match key {
                 Key::Down(keycode) => (xproto::KEY_PRESS_EVENT, keycode),
