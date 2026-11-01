@@ -8,7 +8,7 @@
 // owner on 2026-11-01: the height of the content, level with the item (its top at the top of the item, moved up as
 // much as the screen needs), growing when the stats are shown, at most the height of the screen, then its content
 // scrolls. No title bar (owner, 2026-11-01: the most bare; the league can't be changed over the game, the player
-// knows it, and the window closes by itself): the league in the status bar. One open decision: what closes it.
+// knows it, and the window closes by itself): the league on the right of the status bar. One open decision: what closes it.
 
 VARIANTS.overlayClose = { label: "Closes", options: { away: "Mouse 40 px away (EE2, Ctrl held to reach it)", delay: "1 s outside the item and the window", click: "A click in the game" }, fallback: "away" };
 for (const key of ["overlayClose"]) {
@@ -29,9 +29,10 @@ const OV_ITEMS = {
   ring: { panel: "inventory", at: [9, 3], size: [1, 1], label: "Ring", rarity: "rare",
     window: (unfolded = false) => ovWin(item({ ...RING, stats: RING_FILTERS }, unfolded), price(RARE_ESTIMATE_BEFORE), offers({ state: "idle" })) },
 };
-// The window over the game: the blocks of the narrow window, without title bar, the league at the start of the
-// status bar.
-const ovWin = (...blocks) => win(...blocks, foot("Forbidden Rites · poe2scout 12min ago · GGG trade 2min ago"));
+// The window over the game: the blocks of the narrow window, without title bar; in the status bar, the sources on
+// the left and the league on the right, on the color of its trade as in the title bar, the whole height of the bar,
+// not clickable (owner, 2026-11-01).
+const ovWin = (...blocks) => win(...blocks, `<div class="foot a ov-foot"><span>poe2scout 12min ago · GGG trade 2min ago</span><span class="ov-league">Forbidden Rites</span></div>`);
 const OV = { cell: 70, panel: 888, width: 420, stash: [24, 200], inventory: [2560 - 888 + 24, 880] };
 
 const ovItemsHtml = panel => Object.entries(OV_ITEMS).filter(([, it]) => it.panel === panel).map(([key, it]) => {
