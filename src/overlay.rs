@@ -16,8 +16,9 @@ use std::time::{Duration, Instant};
 /// The width of the window, in points: the one of the narrow layout.
 pub const WIDTH: f32 = 420.0;
 /// How long the game may take to copy the item after the hotkey: past it, the hotkey copied
-/// nothing (an empty cell of the inventory), and opens nothing.
-const COPY_WAIT: Duration = Duration::from_secs(1);
+/// nothing (an empty cell of the inventory), and opens nothing; the clipboard watching also
+/// forgets the copy it expected.
+pub const COPY_WAIT: Duration = Duration::from_secs(1);
 /// The width of a panel of the game (inventory, stash) for its height: 370 for 600, the ratio
 /// Exiled Exchange 2 uses (`uiSidebarWidth` in `main/src/windowing/GameWindow.ts`).
 const PANEL_WIDTH_PER_HEIGHT: (i32, i32) = (370, 600);
@@ -113,7 +114,8 @@ impl Overlay {
     pub fn copied(&mut self, now: Instant) -> bool {
         match self.pending.take() {
             Some((target, pressed)) if now.duration_since(pressed) <= COPY_WAIT => {
-                if target.is_some() {
+                // A hotkey pressed just before the window was turned off opens nothing either.
+                if target.is_some() && !self.off {
                     self.shown = target;
                 }
                 true
@@ -136,7 +138,9 @@ impl Overlay {
         let left = COPY_WAIT.checked_sub(now.duration_since(pressed));
         if left.is_none() {
             self.pending = None;
-            log::info!("The price-check hotkey copied no item");
+            log::info!(
+                "No new item after the price-check hotkey (an empty cell, or on Windows the item already shown)"
+            );
         }
         left
     }
@@ -382,6 +386,17 @@ mod tests {
         assert!(!overlay.turn_off());
         overlay.hotkey(Some(target(4557, 966)), now);
         // The item still counts as copied by the hotkey.
+        assert!(overlay.copied(now));
+        assert_eq!(overlay.shown(), None);
+    }
+
+    #[test]
+    fn a_hotkey_pressed_just_before_it_was_turned_off_opens_nothing() {
+        let mut overlay = Overlay::default();
+        let now = Instant::now();
+        overlay.hotkey(Some(target(4557, 966)), now);
+        overlay.turn_off();
+
         assert!(overlay.copied(now));
         assert_eq!(overlay.shown(), None);
     }

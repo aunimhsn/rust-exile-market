@@ -357,6 +357,14 @@ impl ExileMarketApp {
 
     /// The window over the game, while it is open: the blocks of the item without the title bar,
     /// beside the panel of the game the item is in, as high as its content.
+    ///
+    /// Two rules keep it from a panic of egui ("the user callback was never called"), since
+    /// eframe 0.37 can't create a window while the main one is minimized (it then paints outside
+    /// of its event loop): it is called at every frame of `ui`, so that the window, created
+    /// hidden with the first frame, is never destroyed; and the fields of its builder that
+    /// eframe can only set by creating the window again (its type, override-redirect, active,
+    /// taskbar, decorations) never change. Step 14b2 gives it the keyboard through X11
+    /// (`SetInputFocus`), not through `with_active`.
     fn show_overlay(
         &mut self,
         ctx: &Context,
@@ -365,6 +373,10 @@ impl ExileMarketApp {
         trade: TradeStatus,
         to_top: bool,
     ) {
+        // No window over the game on the other systems yet (step 14b3, Windows).
+        if !cfg!(target_os = "linux") {
+            return;
+        }
         let target = self.overlay.shown();
         // The pointer and the game come in the physical pixels of the screen; the points of the
         // window are scaled like those of the main window: by the screen and the zoom of the
@@ -384,14 +396,7 @@ impl ExileMarketApp {
             )
         });
         self.overlay_window = place;
-        // Where it was last, while it is hidden.
-        let at = place.unwrap_or(ScreenRect {
-            x: 0,
-            y: 0,
-            width,
-            height: 1,
-        });
-        let builder = ViewportBuilder::default()
+        let mut builder = ViewportBuilder::default()
             .with_title(crate::APP_NAME)
             // Out of the hands of the window manager: above the game, which keeps the focus.
             .with_override_redirect(true)
@@ -401,14 +406,15 @@ impl ExileMarketApp {
             .with_taskbar(false)
             .with_resizable(false)
             // Shown once its content is laid out, at its height.
-            .with_visible(place.is_some() && content.is_some())
-            .with_position(pos2(to_points(at.x, scale), to_points(at.y, scale)))
-            .with_inner_size(vec2(overlay::WIDTH, to_points(at.height, scale)));
+            .with_visible(place.is_some() && content.is_some());
+        // Hidden where it was: it doesn't move before it hides.
+        if let Some(place) = place {
+            builder = builder
+                .with_position(pos2(to_points(place.x, scale), to_points(place.y, scale)))
+                .with_inner_size(vec2(overlay::WIDTH, to_points(place.height, scale)));
+        }
         let league = self.session.league().cloned();
-        // Drawn at every frame, hidden while it is closed: created with the first frame, while
-        // the main window shows. eframe 0.37 can't create a window while the main one is
-        // minimized (it then paints outside of its event loop), and egui panics when the
-        // window of an immediate viewport isn't drawn.
+        // Drawn at every frame, hidden while it is closed (see above).
         let height = ctx.show_viewport_immediate(
             ViewportId::from_hash_of("window-over-the-game"),
             builder,
@@ -507,9 +513,8 @@ impl App for ExileMarketApp {
             );
         }
         self.clicks.watch(self.overlay.shown().is_some());
-        if self.overlay.shown().is_some() {
-            // Drawn even while the main window is minimized: eframe only runs the interface of
-            // the windows that show, and this one first shows after a frame.
+        let main_visible = ctx.input(|input| input.viewport().visible());
+        if paint_while_hidden(self.overlay.shown().is_some(), main_visible) {
             ctx.send_viewport_cmd(ViewportCommand::RequestPaintWhileHidden);
         }
         if self
@@ -618,6 +623,13 @@ impl App for ExileMarketApp {
     fn persist_egui_memory(&self) -> bool {
         false
     }
+}
+
+/// Whether the interface must run while the main window is hidden: while the window over the
+/// game shows, which eframe only draws with the main one. Not while the main window shows: the
+/// command also asks for the next frame, which would redraw both windows at every frame.
+fn paint_while_hidden(overlay_shown: bool, main_visible: Option<bool>) -> bool {
+    overlay_shown && main_visible == Some(false)
 }
 
 /// `item` copied by the hotkey again: the item already shown, which keeps its filters and
@@ -735,6 +747,14 @@ mod tests {
         assert_eq!(corrupted(&filters), None);
         filters.toggle_state(ItemState::Corrupted);
         assert_eq!(corrupted(&filters), Some(true));
+    }
+
+    #[test]
+    fn paints_while_hidden_only_for_the_window_over_the_game_and_a_hidden_main_window() {
+        assert!(paint_while_hidden(true, Some(false)));
+        assert!(!paint_while_hidden(true, Some(true)));
+        assert!(!paint_while_hidden(true, None));
+        assert!(!paint_while_hidden(false, Some(false)));
     }
 
     #[test]

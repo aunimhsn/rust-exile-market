@@ -6,11 +6,11 @@
 //! when something happened.
 
 use std::hash::{BuildHasher, RandomState};
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::Duration;
+use std::sync::{Arc, Mutex, PoisonError};
+use std::time::{Duration, Instant};
 
 use crate::item::CopiedItem;
+use crate::overlay::COPY_WAIT;
 use crate::worker::{OnDrop, Outbox, Worker};
 
 /// Fast enough to react before the player looks at the window.
@@ -89,14 +89,18 @@ struct ClipboardWatcher<S> {
     last_text_hash: Option<u64>,
     failures_in_a_row: u32,
     readable: bool,
-    /// Set by the hotkey before its copy: the next item read is a new copy, even the same.
-    copy_expected: Arc<AtomicBool>,
+    /// When the hotkey prepared its copy: the item read within [`COPY_WAIT`] is a new copy, even
+    /// the same.
+    copy_expected: CopyExpected,
 }
+
+/// When the hotkey last prepared a copy, shared by the hotkey and the watcher.
+type CopyExpected = Arc<Mutex<Option<Instant>>>;
 
 impl<S: ClipboardSource> ClipboardWatcher<S> {
     /// The text in the clipboard when the watcher starts counts as new: an item copied
     /// before the application started is shown.
-    fn new(source: S, copy_expected: Arc<AtomicBool>) -> Self {
+    fn new(source: S, copy_expected: CopyExpected) -> Self {
         Self {
             source,
             hasher: RandomState::new(),
@@ -109,19 +113,22 @@ impl<S: ClipboardSource> ClipboardWatcher<S> {
 
     /// Reads the clipboard once, and gives each event to `emit`.
     fn poll(&mut self, mut emit: impl FnMut(ClipboardEvent)) {
-        // Taken before the reading: a copy expected after it is seen at the next one.
-        if self.copy_expected.swap(false, Ordering::AcqRel) {
-            self.last_text_hash = None;
-        }
         match self.source.read() {
             Reading::Text(text) => {
                 self.succeeded(&mut emit);
+                // The marker of the hotkey is no copy of the player: the item before it and
+                // after it is the same copy, unless the hotkey copied it.
+                if text == COPY_MARKER {
+                    return;
+                }
                 let text_hash = self.hasher.hash_one(&text);
+                let item = CopiedItem::from_text(&text);
+                let expected = self.copy_expected(Instant::now(), item.is_some());
                 // Only a different text is a new copy: the same item read again after an
-                // empty or late reading is not.
-                if self.last_text_hash != Some(text_hash) {
+                // empty or late reading is not, unless the hotkey copied it again.
+                if self.last_text_hash != Some(text_hash) || (expected && item.is_some()) {
                     self.last_text_hash = Some(text_hash);
-                    if let Some(item) = CopiedItem::from_text(&text) {
+                    if let Some(item) = item {
                         log::info!("Item copied: {}", item.first_line());
                         emit(ClipboardEvent::Copied(item));
                     }
@@ -131,6 +138,21 @@ impl<S: ClipboardSource> ClipboardWatcher<S> {
             Reading::Busy => self.failed("held by another application", &mut emit),
             Reading::Failed(reason) => self.failed(&reason, &mut emit),
         }
+    }
+
+    /// Whether the hotkey prepared a copy less than [`COPY_WAIT`] before `now`; forgotten once
+    /// an item is `read`, or once too old.
+    fn copy_expected(&self, now: Instant, read: bool) -> bool {
+        let mut prepared = self
+            .copy_expected
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        let expected =
+            prepared.is_some_and(|prepared| now.saturating_duration_since(prepared) <= COPY_WAIT);
+        if read || !expected {
+            *prepared = None;
+        }
+        expected
     }
 
     fn succeeded(&mut self, emit: &mut impl FnMut(ClipboardEvent)) {
@@ -155,7 +177,7 @@ impl<S: ClipboardSource> ClipboardWatcher<S> {
 /// The clipboard watched on its own thread, for as long as this value lives.
 pub struct ClipboardWatch {
     worker: Worker<ClipboardEvent>,
-    copy_expected: Arc<AtomicBool>,
+    copy_expected: CopyExpected,
 }
 
 impl ClipboardWatch {
@@ -175,7 +197,7 @@ impl ClipboardWatch {
         open: impl FnOnce() -> S + Send + 'static,
         wake: impl Fn() + Send + 'static,
     ) -> Self {
-        let copy_expected = Arc::new(AtomicBool::new(false));
+        let copy_expected = CopyExpected::default();
         let expected = Arc::clone(&copy_expected);
         let worker = Worker::spawn("clipboard", OnDrop::Join, wake, move |outbox, wake| {
             watch(ClipboardWatcher::new(open(), expected), outbox, wake);
@@ -216,7 +238,7 @@ impl ClipboardWatch {
 pub struct CopyMarker {
     /// Opened at the first copy, and again until it opens.
     clipboard: Option<arboard::Clipboard>,
-    copy_expected: Arc<AtomicBool>,
+    copy_expected: CopyExpected,
 }
 
 #[cfg_attr(
@@ -230,7 +252,10 @@ impl CopyMarker {
         if let Err(error) = self.mark() {
             log::warn!("The clipboard can't be prepared for the copy: {error}");
         }
-        self.copy_expected.store(true, Ordering::Release);
+        *self
+            .copy_expected
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner) = Some(Instant::now());
     }
 
     fn mark(&mut self) -> Result<(), arboard::Error> {
@@ -329,7 +354,7 @@ mod tests {
     fn watcher(readings: impl IntoIterator<Item = Reading>) -> ClipboardWatcher<FakeClipboard> {
         ClipboardWatcher::new(
             FakeClipboard(readings.into_iter().collect()),
-            Arc::new(AtomicBool::new(false)),
+            CopyExpected::default(),
         )
     }
 
@@ -428,12 +453,12 @@ mod tests {
         let mut events = Vec::new();
         watcher.poll(|event| events.push(event));
         watcher.poll(|event| events.push(event));
-        watcher.copy_expected.store(true, Ordering::Release);
+        expect_copy(&watcher, Instant::now());
         watcher.poll(|event| events.push(event));
         watcher.poll(|event| events.push(event));
 
         assert_eq!(events, [copied(RING), copied(RING)]);
-        assert!(!watcher.copy_expected.load(Ordering::Acquire));
+        assert_eq!(*watcher.copy_expected.lock().unwrap(), None);
     }
 
     #[test]
@@ -441,11 +466,88 @@ mod tests {
         let mut watcher = watcher([text(RING), text(COPY_MARKER), text(RING)]);
         let mut events = Vec::new();
         watcher.poll(|event| events.push(event));
-        watcher.copy_expected.store(true, Ordering::Release);
+        expect_copy(&watcher, Instant::now());
         watcher.poll(|event| events.push(event));
         watcher.poll(|event| events.push(event));
 
         assert_eq!(events, [copied(RING), copied(RING)]);
+    }
+
+    /// The hotkey prepared a copy at `at`.
+    fn expect_copy(watcher: &ClipboardWatcher<FakeClipboard>, at: Instant) {
+        *watcher.copy_expected.lock().unwrap() = Some(at);
+    }
+
+    /// The events of one poll per reading, the hotkey preparing a copy at `at` before the
+    /// reading of index `before`.
+    fn events_with_copy(
+        readings: impl IntoIterator<Item = Reading>,
+        before: usize,
+        at: Instant,
+    ) -> Vec<ClipboardEvent> {
+        let readings: Vec<_> = readings.into_iter().collect();
+        let polls = readings.len();
+        let mut watcher = watcher(readings);
+        let mut events = Vec::new();
+        for poll in 0..polls {
+            if poll == before {
+                expect_copy(&watcher, at);
+            }
+            watcher.poll(|event| events.push(event));
+        }
+        events
+    }
+
+    #[test]
+    fn the_same_item_around_the_marker_is_no_new_copy() {
+        // The hotkey on an empty cell, then Ctrl+C on the item shown: its filters stay.
+        assert_eq!(
+            events([text(RING), text(COPY_MARKER), text(RING)]),
+            [copied(RING)]
+        );
+    }
+
+    #[test]
+    fn a_copy_expected_too_long_ago_is_forgotten() {
+        let long_ago = Instant::now()
+            .checked_sub(COPY_WAIT + Duration::from_secs(1))
+            .expect("an earlier instant");
+
+        assert_eq!(
+            events_with_copy([text(RING), text(COPY_MARKER), text(RING)], 1, long_ago),
+            [copied(RING)]
+        );
+    }
+
+    #[test]
+    fn the_hotkey_on_an_empty_cell_leaves_the_next_ctrl_c_alone() {
+        let long_ago = Instant::now()
+            .checked_sub(COPY_WAIT + Duration::from_secs(1))
+            .expect("an earlier instant");
+        let mut watcher = watcher([text(RING), text(COPY_MARKER), text(COPY_MARKER), text(RING)]);
+        let mut events = Vec::new();
+        watcher.poll(|event| events.push(event));
+        expect_copy(&watcher, Instant::now());
+        watcher.poll(|event| events.push(event));
+        // Nothing copied in time: the expectation gets old.
+        expect_copy(&watcher, long_ago);
+        watcher.poll(|event| events.push(event));
+        watcher.poll(|event| events.push(event));
+
+        assert_eq!(events, [copied(RING)]);
+        assert_eq!(*watcher.copy_expected.lock().unwrap(), None);
+    }
+
+    #[test]
+    fn another_text_between_two_copies_makes_a_new_copy_still() {
+        assert_eq!(
+            events_with_copy(
+                [text(RING), text("a whisper"), text(RING)],
+                5,
+                Instant::now()
+            ),
+            [copied(RING), copied(RING)]
+        );
     }
 
     #[test]

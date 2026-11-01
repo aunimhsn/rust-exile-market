@@ -39,7 +39,7 @@ impl CopySender {
     /// holds it, as Exiled Exchange 2 does on Windows: a Ctrl released while the player holds it
     /// would make their next D reach the game alone.
     ///
-    /// No window over the game on Windows yet (step 14b2): no place to give.
+    /// No window over the game on Windows yet (step 14b3): no place to give.
     pub fn send_copy(&mut self) -> Option<Target> {
         // The virtual key of C, which Windows maps to the key that writes C in the layout of the
         // window that has the focus.

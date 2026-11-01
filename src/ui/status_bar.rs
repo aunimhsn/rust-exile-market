@@ -172,3 +172,48 @@ impl<'a> StatusBar<'a> {
 fn faint(line: impl Into<String>) -> RichText {
     RichText::new(line).font(text::small()).color(color::FAINT)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use egui::{Context, RawInput, pos2, vec2};
+
+    /// The width of the league block in a status bar of the narrow window.
+    fn league_width(name: &str) -> (f32, f32) {
+        let ctx = Context::default();
+        crate::ui::install(&ctx);
+        let input = RawInput {
+            screen_rect: Some(Rect::from_min_size(pos2(0.0, 0.0), vec2(420.0, 28.0))),
+            ..Default::default()
+        };
+        let mut widths = (0.0, 0.0);
+        let mut output = ctx.run_ui(input, |ui| {
+            widths = (
+                StatusBar::league_block(ui, &League::new(name)),
+                ui.max_rect().width(),
+            );
+        });
+        // epaint panics when the texture changes of a frame are dropped unapplied.
+        output.textures_delta.clear();
+        widths
+    }
+
+    #[test]
+    fn a_short_league_name_takes_its_width_and_the_padding() {
+        let (block, bar) = league_width("Standard");
+
+        assert!(block > 2.0 * LEAGUE_PADDING);
+        assert!(block < bar / 2.0);
+    }
+
+    #[test]
+    fn a_long_league_name_is_cut_at_half_of_the_bar() {
+        let (block, bar) =
+            league_width("Forbidden Rites of the Very Long Name of a Private League With Friends");
+
+        assert!(
+            block <= bar / 2.0 + 2.0 * LEAGUE_PADDING + 1.0,
+            "{block} of {bar}"
+        );
+    }
+}

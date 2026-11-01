@@ -32,9 +32,19 @@ trait PointerSource {
     fn read(&mut self) -> Result<(Point, bool), Box<dyn Error>>;
 }
 
+/// What the thread tells the application.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Read {
+    /// A button pressed, where.
+    Click(Point),
+    /// The pointer can no longer be read (the X server out of reach), which the thread wrote to
+    /// the log; the thread then waits to be stopped.
+    Unreadable,
+}
+
 /// The thread that tells the clicks, each where it was pressed, for as long as this value lives.
 pub struct ClickWatch {
-    worker: Worker<Point, bool>,
+    worker: Worker<Read, bool>,
     watching: bool,
     /// The thread stopped: the clicks can no longer be read.
     stopped: bool,
@@ -54,9 +64,18 @@ impl ClickWatch {
         wake: impl Fn() + Send + 'static,
     ) -> Self {
         let worker = Worker::spawn("clicks", OnDrop::Detach, wake, |outbox, wake| {
-            match open() {
-                Ok(mut pointer) => watch(&mut pointer, outbox, wake),
-                Err(error) => log::warn!("The clicks in the game can't be read: {error}"),
+            let error = match open() {
+                Ok(mut pointer) => match watch(&mut pointer, outbox, wake) {
+                    Some(error) => error,
+                    None => return,
+                },
+                Err(error) => error,
+            };
+            log::warn!("The clicks in the game can't be read: {error}");
+            if outbox.send(Read::Unreadable) {
+                wake();
+                // Ends when the application stops it, so that the end isn't taken for a crash.
+                while outbox.wait_for_order(IDLE_WAIT) != Waited::Stop {}
             }
         });
         Self {
@@ -75,9 +94,15 @@ impl ClickWatch {
     }
 
     /// Gives each click since the last call to `handle`, without waiting; `false` once the
-    /// thread stopped (the X server out of reach), which the thread wrote to the log.
-    pub fn receive(&mut self, handle: impl FnMut(Point)) -> bool {
-        if self.worker.receive(handle) {
+    /// clicks can no longer be read (the X server out of reach, or the thread gone), which the
+    /// thread or the worker wrote to the log.
+    pub fn receive(&mut self, mut handle: impl FnMut(Point)) -> bool {
+        let mut unreadable = false;
+        let lost = self.worker.receive(|read| match read {
+            Read::Click(point) => handle(point),
+            Read::Unreadable => unreadable = true,
+        });
+        if lost || unreadable {
             self.stopped = true;
         }
         !self.stopped
@@ -111,15 +136,19 @@ impl PointerSource for XPointer {
     }
 }
 
-/// Sends each press of a button while the application watches, until it stops the thread or
-/// the pointer can't be read.
-fn watch(pointer: &mut impl PointerSource, outbox: &Outbox<Point, bool>, wake: &dyn Fn()) {
+/// Sends each press of a button while the application watches, until it stops the thread (or
+/// stops listening), or the pointer can't be read: why, then.
+fn watch(
+    pointer: &mut impl PointerSource,
+    outbox: &Outbox<Read, bool>,
+    wake: &dyn Fn(),
+) -> Option<Box<dyn Error>> {
     let mut watching = false;
     // A button already held when the watch starts is no new click.
     let mut held = true;
     loop {
         match outbox.wait_for_order(if watching { POLL_INTERVAL } else { IDLE_WAIT }) {
-            Waited::Stop => return,
+            Waited::Stop => return None,
             Waited::Order(order) => {
                 watching = order;
                 held = true;
@@ -131,14 +160,11 @@ fn watch(pointer: &mut impl PointerSource, outbox: &Outbox<Point, bool>, wake: &
         }
         let (point, down) = match pointer.read() {
             Ok(read) => read,
-            Err(error) => {
-                log::warn!("The clicks in the game can't be read: {error}");
-                return;
-            }
+            Err(error) => return Some(error),
         };
         if is_click(held, down) {
-            if !outbox.send(point) {
-                return;
+            if !outbox.send(Read::Click(point)) {
+                return None;
             }
             wake();
         }
@@ -205,6 +231,52 @@ mod tests {
     #[test]
     fn a_button_held_when_the_watch_starts_is_no_click() {
         assert_eq!(clicks(&[true, true, false, true]), [AT]);
+    }
+
+    /// A pointer read from the test, one reading at a time.
+    struct ChannelPointer(mpsc::Receiver<bool>);
+
+    impl PointerSource for ChannelPointer {
+        fn read(&mut self) -> Result<(Point, bool), Box<dyn Error>> {
+            let down = self.0.recv_timeout(Duration::from_secs(5))?;
+            Ok((AT, down))
+        }
+    }
+
+    #[test]
+    fn a_button_held_when_the_watch_starts_again_is_no_click() {
+        let (woken, wakes) = mpsc::channel();
+        let (readings, pointer) = mpsc::channel::<bool>();
+        let mut watch = ClickWatch::spawn(
+            move || Ok(ChannelPointer(pointer)),
+            move || {
+                let _ = woken.send(());
+            },
+        );
+        watch.watch(true);
+        readings.send(false).unwrap();
+        readings.send(true).unwrap();
+        wakes
+            .recv_timeout(Duration::from_secs(5))
+            .expect("woken up by the click");
+        let mut clicks = Vec::new();
+        assert!(watch.receive(|point| clicks.push(point)));
+        assert_eq!(clicks, [AT]);
+
+        // The window closed by that click, then opened again while the button is still held.
+        // The first reading goes to the reading the thread waits for since the click.
+        watch.watch(false);
+        watch.watch(true);
+        for down in [true, true, false, true] {
+            readings.send(down).unwrap();
+        }
+        wakes
+            .recv_timeout(Duration::from_secs(5))
+            .expect("woken up by the next click");
+        // Time for a wrong click from the button held, if the watch took it for a new one.
+        std::thread::sleep(Duration::from_millis(300));
+        assert!(watch.receive(|point| clicks.push(point)));
+        assert_eq!(clicks, [AT, AT]);
     }
 
     #[test]
