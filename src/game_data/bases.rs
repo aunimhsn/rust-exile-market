@@ -103,17 +103,40 @@ impl Category {
     /// an accessory.
     #[must_use]
     pub fn is_weapon_or_armour(self) -> bool {
-        !matches!(
-            self,
+        match self {
+            Self::BodyArmour
+            | Self::Boots
+            | Self::Bow
+            | Self::Buckler
+            | Self::Crossbow
+            | Self::Dagger
+            | Self::Flail
+            | Self::Focus
+            | Self::Gloves
+            | Self::Helmet
+            | Self::OneHandAxe
+            | Self::OneHandMace
+            | Self::OneHandSword
+            | Self::Quiver
+            | Self::Sceptre
+            | Self::Shield
+            | Self::Spear
+            | Self::Staff
+            | Self::Talisman
+            | Self::TwoHandAxe
+            | Self::TwoHandMace
+            | Self::TwoHandSword
+            | Self::Wand
+            | Self::Warstaff => true,
             Self::Amulet
-                | Self::Belt
-                | Self::Charm
-                | Self::Flask
-                | Self::Jewel
-                | Self::Ring
-                | Self::Tablet
-                | Self::Waystone
-        )
+            | Self::Belt
+            | Self::Charm
+            | Self::Flask
+            | Self::Jewel
+            | Self::Ring
+            | Self::Tablet
+            | Self::Waystone => false,
+        }
     }
 
     /// The highest quality of an item of the category, in percent: 20 % for every item, beyond

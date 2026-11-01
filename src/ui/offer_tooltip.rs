@@ -224,16 +224,7 @@ fn quality_line(offer: &ItemOffer, item: &Item, i18n: &Translator) -> Option<Lin
     };
     let difference = item
         .quality()
-        .map(|copied| f64::from(quality.value) - f64::from(copied))
-        .filter(|difference| *difference != 0.0)
-        .map(|value| Difference {
-            value,
-            verdict: if value > 0.0 {
-                Verdict::Better
-            } else {
-                Verdict::Worse
-            },
-        });
+        .and_then(|copied| higher_better(f64::from(quality.value), f64::from(copied)));
     Some(Line {
         text,
         tint,
@@ -342,9 +333,11 @@ fn requirements(
     i18n: &Translator,
     width: f32,
 ) -> Option<LayoutJob> {
-    let equipped = item.is_skill_gem()
-        || game_data::category(item.language(), item.base_type())
-            .is_some_and(Category::is_weapon_or_armour);
+    // A magic item is known by its whole name, its affixes with it: the base of the offer,
+    // the same category, tells it then.
+    let category = game_data::category(item.language(), item.base_type())
+        .or_else(|| game_data::category(item.language(), &offer.item.base_type));
+    let equipped = item.is_skill_gem() || category.is_some_and(Category::is_weapon_or_armour);
     if !equipped {
         return None;
     }

@@ -27,12 +27,15 @@ const QUALITY_PROPERTY: u64 = 6;
 /// The type of the level of a gem among the properties of `/fetch`, `Level` (French `Niveau`),
 /// seen on 2026-11-01.
 const GEM_LEVEL_PROPERTY: u64 = 5;
-/// The types of the requirements of `/fetch`, in English and in French: the level and the
-/// dexterity and intelligence seen on 2026-11-01, the strength between them as in the API of
-/// Path of Exile 1, also told by its name (`[Strength|Str]`).
+// The types of the requirements of `/fetch`, the same in English and in French.
+/// The required level, seen on 2026-11-01.
 const REQUIRED_LEVEL: u64 = 62;
+/// The required strength, not seen yet: between the level and the dexterity, as in the API of
+/// Path of Exile 1, also told by its name (`[Strength|Str]`).
 const REQUIRED_STRENGTH: u64 = 63;
+/// The required dexterity, seen on 2026-11-01.
 const REQUIRED_DEXTERITY: u64 = 64;
+/// The required intelligence, seen on 2026-11-01.
 const REQUIRED_INTELLIGENCE: u64 = 65;
 
 /// The status of a seller.
@@ -251,7 +254,7 @@ struct ApiItem {
     #[serde(default)]
     requirements: Vec<ApiProperty>,
     /// The sockets of a gem for its support gems, `["W", "W"]`; none for another item.
-    gem_sockets: Option<Vec<Value>>,
+    gem_sockets: Option<Vec<de::IgnoredAny>>,
     /// `Unique`, `Rare`…
     rarity: Option<String>,
     /// 0 normal, 1 magic, 2 rare, 3 unique, as in the API of Path of Exile 1.

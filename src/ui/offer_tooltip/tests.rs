@@ -787,6 +787,20 @@ fn an_offer_of_gem_writes_the_class_and_its_level_in_its_color() {
     assert_eq!(level_color(&offer), Some(color::VAAL));
     assert_eq!(level_color(&comet(20, None, None)), Some(color::TIER_1));
     assert_eq!(level_color(&comet(16, None, None)), Some(color::TEXT));
+    // French.
+    let french = Translator::new(crate::language::Language::French);
+    let comete = Item::parse(
+        &crate::item::CopiedItem::from_text(
+            "Classe d'objet: Gemmes d'aptitude\nRareté: Gemme\nComète\n--------\nNiveau: 15\n\
+             --------\nChâsses: G G",
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        meta(&comet(16, None, None), &comete, &french, 300.0).text,
+        "Gemmes d'aptitude · Niveau\u{a0}16"
+    );
     // An offer of gem for another copied item: its base as it is.
     assert_eq!(
         meta(&offer, &owners_waystone(), &i18n, 300.0).text,
@@ -827,6 +841,14 @@ fn the_requirements_are_written_for_a_gem_a_weapon_or_an_armour_only() {
     ));
     assert_eq!(written(&offer, &amulet), None);
     assert_eq!(written(&offer, &owners_waystone()), None);
+    // A magic weapon, known by its whole name: from the base of the offer.
+    let mace = parse(include_str!("../../item/test-items/en-magic-mace.txt"));
+    let mut maul = offer.clone();
+    maul.item.base_type = "Temple Maul".to_owned();
+    assert_eq!(
+        written(&maul, &mace).as_deref(),
+        Some("Requires Level 66 · 116 Int")
+    );
     // An offer without requirements.
     let mut free = offer.clone();
     free.item.requirements = crate::item::Requirements::default();
