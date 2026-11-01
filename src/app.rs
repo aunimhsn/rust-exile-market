@@ -141,7 +141,7 @@ impl ExileMarketApp {
             clicks: ClickWatch::start(move || clicks_ctx.request_repaint()),
             overlay_window: None,
             overlay_height: None,
-            keyboard: KeyboardFocus::default(),
+            keyboard: KeyboardFocus::new(),
             last_copied: None,
             market,
             item_names: ItemNamesWatch::start(move || names_ctx.request_repaint()),

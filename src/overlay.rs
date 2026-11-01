@@ -234,6 +234,11 @@ pub struct KeyboardFocus;
     reason = "the interface of the keyboard of Linux, without its state"
 )]
 impl KeyboardFocus {
+    #[must_use]
+    pub fn new() -> Self {
+        Self
+    }
+
     /// Never held.
     pub fn follow(&mut self, _editing: bool) -> bool {
         false
