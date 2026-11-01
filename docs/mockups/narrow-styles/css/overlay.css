@@ -26,16 +26,9 @@
 /* The window of the application, at the place the rules give it. */
 .ov-window { position: absolute; top: 0; width: 420px; display: none; z-index: 2; transform-origin: 0 0; }
 .ov-window.is-open { display: block; }
-.ov-window .win { border-radius: 0; box-shadow: 0 0 40px rgba(0, 0, 0, .7); }
+.ov-window .win { border-radius: 0; box-shadow: 0 0 40px rgba(0, 0, 0, .7); max-height: 1440px; overflow-y: auto; }
 .ov-window.is-fading { opacity: .45; transition: opacity 1s linear; }
-/* Height: the whole height of the game, or the height of the content (at the top, or level with the item). */
-:root[data-overlay-height="full"] .ov-window { top: 0 !important; }
-:root[data-overlay-height="full"] .ov-window .win,
-:root[data-overlay-height="full"] .ov-real .win { height: 1440px; display: flex; flex-direction: column; }
-/* The status bar at the bottom of the whole height, the space left under the offers. */
-:root[data-overlay-height="full"] .ov-window .foot,
-:root[data-overlay-height="full"] .ov-real .foot { margin-top: auto; }
-:root[data-overlay-height="fit"] .ov-window { top: 0 !important; }
+/* Height: the content, level with the item (placed by the script), at most the height of the screen. */
 /* Title bar: the whole one, or the league and Close only. */
 :root[data-overlay-bar="short"] .ov-window .app-icon-button:not([title="Close"]),
 :root[data-overlay-bar="short"] .ov-real .app-icon-button:not([title="Close"]) { display: none; }
