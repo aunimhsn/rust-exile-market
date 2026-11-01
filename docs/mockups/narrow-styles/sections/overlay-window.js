@@ -63,7 +63,7 @@ SECTIONS.unshift(["Window over the game (14b1): click an item of the screen, it 
 ]]);
 
 // The behaviour: open at a click on an item, placed by the half of the screen, closed by the chosen rule.
-const ovState = { open: false, press: null, item: null, entered: false, timer: null, ctrl: false };
+const ovState = { open: false, press: null, item: null, entered: false, timer: null, ctrl: false, last: null };
 const ovStage = () => document.querySelector(".ov-stage");
 function ovStatus(text) {
   const status = document.querySelector(".ov-status");
@@ -96,7 +96,7 @@ function ovOpen(key, element, press) {
   reach.style.top = `${press.y}px`;
   reach.classList.add("is-on");
   clearTimeout(ovState.timer);
-  Object.assign(ovState, { open: true, press, item: box, entered: false, timer: null });
+  Object.assign(ovState, { open: true, press, item: box, entered: false, timer: null, last: { key, press } });
   ovStatus(`Open ${right ? "left of the inventory" : "right of the stash"}: ${it.label}.`);
 }
 const ovPoint = event => {
@@ -109,6 +109,16 @@ const ovWindowBox = () => {
   return { x: w.offsetLeft, y: w.offsetTop, w: w.offsetWidth, h: w.offsetHeight };
 };
 document.addEventListener("click", event => {
+  // A tab draws the sheet again (its own listener runs first): the window of the last item opens again, so
+  // that the variants compare on the same item.
+  if (event.target.closest("#styles") && event.target.dataset.variant) {
+    clearTimeout(ovState.timer);
+    if (ovState.open && ovState.last) {
+      const element = document.querySelector(`[data-ov-item="${ovState.last.key}"]`);
+      if (element) ovOpen(ovState.last.key, element, ovState.last.press);
+    }
+    return;
+  }
   if (!event.target.closest(".ov-screen")) return;
   const itemElement = event.target.closest(".ov-item");
   if (itemElement) {
