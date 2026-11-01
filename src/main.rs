@@ -23,6 +23,7 @@ mod offers;
 mod overlay;
 mod prices;
 mod pricing;
+mod recent_items;
 mod roll_difference;
 mod session;
 mod settings;

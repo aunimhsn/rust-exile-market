@@ -2562,7 +2562,8 @@ fn the_active_filters_count_the_choices_of_the_player() {
     // The implicit unchecked.
     filters.set(keys[8], choice(false));
     assert_eq!(stats.active_filters(&filters), 7);
-    filters.clear();
+    // Another item copied: its own filters.
+    filters = Filters::default();
     assert_eq!(stats.active_filters(&filters), 7);
 }
 

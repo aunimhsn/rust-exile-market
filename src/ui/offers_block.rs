@@ -330,7 +330,7 @@ impl<'a> OffersBlock<'a> {
             OffersState::Items {
                 offers,
                 total,
-                more,
+                rest,
                 loading_more,
                 more_failed,
                 searched,
@@ -347,10 +347,10 @@ impl<'a> OffersBlock<'a> {
                     items: Some(offers),
                     total: *total,
                     exchange: false,
-                    more: match (*more, *loading_more) {
+                    more: match (rest.is_empty(), *loading_more) {
                         (_, true) => More::Loading,
-                        (true, false) => More::Chevron,
-                        (false, false) => More::None,
+                        (false, false) => More::Chevron,
+                        (true, false) => More::None,
                     },
                     more_failed: *more_failed,
                 };

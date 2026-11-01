@@ -125,6 +125,16 @@ impl ShownItem {
         reshaped
     }
 
+    /// The number of lines of each of its modifiers, none for an item that can't be read: the
+    /// filters of its lines are kept by their places.
+    #[must_use]
+    pub fn shape(&self) -> Vec<usize> {
+        self.parsed
+            .as_ref()
+            .map(|item| shape(item.modifiers()))
+            .unwrap_or_default()
+    }
+
     pub fn parsed(&self) -> Result<&Item, ParseError> {
         self.parsed.as_ref().map_err(|&error| error)
     }
