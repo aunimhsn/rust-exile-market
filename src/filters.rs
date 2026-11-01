@@ -1,9 +1,9 @@
 //! The filters of the offers search, as the player sets them: whether each stat of the item,
 //! or its base type, item level, sockets, quality, required level, DPS, the properties of a
 //! waystone or of a gem, or pseudo totals, is searched, its minimum and its maximum, and the
-//! state tags the player lit. They are kept for the item shown, until an item is copied, even
-//! the same one after another text; a stat the player didn't touch keeps the choice made for it
-//! by default.
+//! state tags the player lit. They belong to the item copied, and are remembered with it when
+//! another item is copied ([`crate::recent_items`]); a stat the player didn't touch keeps the
+//! choice made for it by default.
 //!
 //! The minimum and the maximum searched stay within the range of the stat, whatever the
 //! player is typing ([`Filter::searched`]).
@@ -142,7 +142,7 @@ impl Filter {
     }
 }
 
-/// The filters the player changed, for the item shown.
+/// The filters the player changed, for one item.
 #[derive(Debug, Default)]
 pub struct Filters {
     changed: HashMap<FilterKey, Filter>,
@@ -213,13 +213,6 @@ impl Filters {
         {
             filter.settle(half);
         }
-    }
-
-    /// Forgets the choices of the player: an item is copied.
-    pub fn clear(&mut self) {
-        self.changed.clear();
-        self.lit.clear();
-        self.edited = None;
     }
 }
 
@@ -296,9 +289,6 @@ mod tests {
         filters.toggle_state(ItemState::Corrupted);
         assert!(!filters.is_lit(ItemState::Corrupted));
         assert!(filters.is_lit(ItemState::Fractured));
-        // A copied item starts gray.
-        filters.clear();
-        assert!(!filters.is_lit(ItemState::Fractured));
     }
 
     #[test]
@@ -421,22 +411,6 @@ mod tests {
         });
         assert_eq!(settled.minimum, "60");
         // Once only: the half is no longer remembered.
-        filters.set(
-            FilterKey::Property(Property::ItemLevel),
-            filter("99", "", RANGE),
-        );
-        filters.settle_edited();
-        let unsettled = filters.get(FilterKey::Property(Property::ItemLevel), || {
-            filter("", "", None)
-        });
-        assert_eq!(unsettled.minimum, "99");
-    }
-
-    #[test]
-    fn a_new_item_forgets_the_half_edited() {
-        let mut filters = Filters::default();
-        filters.edit(FilterKey::Property(Property::ItemLevel), Half::Minimum);
-        filters.clear();
         filters.set(
             FilterKey::Property(Property::ItemLevel),
             filter("99", "", RANGE),

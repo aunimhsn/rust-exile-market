@@ -4,7 +4,7 @@ use crate::league::League;
 use crate::trade::offers::{OfferItem, Price, SellerStatus};
 use crate::trade::query::{ItemQuery, Query, StateFilters};
 
-fn item_search() -> Search {
+pub(crate) fn item_search() -> Search {
     Search {
         language: Language::English,
         league: League::new("Standard"),
@@ -23,7 +23,7 @@ fn item_search() -> Search {
     }
 }
 
-fn exchange_search() -> Search {
+pub(crate) fn exchange_search() -> Search {
     Search {
         language: Language::English,
         league: League::new("Standard"),
@@ -75,7 +75,7 @@ fn exchange_offer() -> ExchangeOffer {
     }
 }
 
-fn after(now: Instant, seconds: u64) -> NextSearch {
+pub(crate) fn after(now: Instant, seconds: u64) -> NextSearch {
     let next = now + Duration::from_secs(seconds);
     NextSearch {
         items: next,
@@ -83,7 +83,7 @@ fn after(now: Instant, seconds: u64) -> NextSearch {
     }
 }
 
-fn answer(outcome: Outcome, next_search: NextSearch) -> Answer {
+pub(crate) fn answer(outcome: Outcome, next_search: NextSearch) -> Answer {
     Answer {
         outcome,
         next_search,
@@ -94,8 +94,14 @@ fn items(ids: &[&str], more: bool) -> Outcome {
     Outcome::Items {
         offers: ids.iter().map(|id| offer(id)).collect(),
         total: 13,
-        more,
+        rest: rest(more),
     }
+}
+
+/// The offers left of the search: one, or none.
+fn rest(more: bool) -> Rest {
+    let left: &[&str] = if more { &["k"] } else { &[] };
+    Rest::new(Language::English, "Q1", left)
 }
 
 /// The owner's amulet, its quality of a catalyst of the kind `words`.
@@ -166,7 +172,7 @@ fn the_quality_searched_lasts_with_its_offers_until_the_next_search() {
     for outcome in [
         Outcome::More {
             offers: vec![offer("b")],
-            more: true,
+            rest: rest(true),
         },
         Outcome::Unreachable,
         Outcome::Limited {
@@ -276,7 +282,7 @@ fn more_offers_of_items_are_fetched_and_added_to_the_list() {
         SystemTime::UNIX_EPOCH,
     );
 
-    assert_eq!(offers.more(), Some(Order::More));
+    assert_eq!(offers.more(), Some(Order::More(rest(true))));
     assert_eq!(offers.more(), None, "once at a time");
     assert!(matches!(
         offers.state(),
@@ -287,15 +293,15 @@ fn more_offers_of_items_are_fetched_and_added_to_the_list() {
     ));
     let outcome = Outcome::More {
         offers: vec![offer("c")],
-        more: false,
+        rest: rest(false),
     };
     offers.apply(answer(outcome, after(now, 10)), SystemTime::now());
 
     assert_eq!(ids(&offers), ["a", "b", "c"]);
     assert!(matches!(
         offers.state(),
-        OffersState::Items { more: false, loading_more: false, searched, .. }
-            if *searched == SystemTime::UNIX_EPOCH
+        OffersState::Items { rest, loading_more: false, searched, .. }
+            if rest.is_empty() && *searched == SystemTime::UNIX_EPOCH
     ));
     assert!(
         matches!(offers.state(), OffersState::Items { first_page: 2, .. }),
@@ -328,7 +334,7 @@ fn more_offers_that_cant_come_keep_the_list_to_ask_them_again() {
             ..
         }
     ));
-    assert_eq!(offers.more(), Some(Order::More));
+    assert_eq!(offers.more(), Some(Order::More(rest(true))));
     assert!(
         matches!(
             offers.state(),
@@ -416,12 +422,12 @@ fn more_offers_for_a_previous_item_change_only_the_waiting_time() {
         answer(items(&["a"], true), after(now, 10)),
         SystemTime::UNIX_EPOCH,
     );
-    assert_eq!(offers.more(), Some(Order::More));
+    assert_eq!(offers.more(), Some(Order::More(rest(true))));
 
     offers.clear();
     let outcome = Outcome::More {
         offers: vec![offer("b")],
-        more: false,
+        rest: rest(false),
     };
     offers.apply(answer(outcome, after(now, 20)), SystemTime::now());
 

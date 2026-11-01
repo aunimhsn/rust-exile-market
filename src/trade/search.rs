@@ -1,7 +1,8 @@
 //! The searches of offers on the trade site, made on their own thread when the player asks:
 //! a search of items and the fetch of its first 10 offers, or a search of the currency
-//! exchange; then 10 more offers of the last search of items, when asked. Nothing runs in
-//! the background, and nothing is tried again by itself.
+//! exchange; then 10 more offers of a search of items, when asked: the offers left to fetch go
+//! with its answer, so that each list of offers fetches the rest of its own search. Nothing
+//! runs in the background, and nothing is tried again by itself.
 
 use std::thread;
 use std::time::{Duration, Instant};
@@ -29,8 +30,36 @@ pub struct Search {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Order {
     Search(Search),
-    /// 10 more offers of the last search of items.
-    More,
+    /// 10 more offers among the offers left of a search of items.
+    More(Rest),
+}
+
+/// The offers of a search of items left to fetch, given with its answer.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Rest {
+    language: Language,
+    search: String,
+    offers: Vec<String>,
+}
+
+impl Rest {
+    /// No offer is left to fetch.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.offers.is_empty()
+    }
+}
+
+#[cfg(test)]
+impl Rest {
+    /// The offers `offers` left of the search `search`, on the trade site of `language`.
+    pub fn new(language: Language, search: &str, offers: &[&str]) -> Self {
+        Self {
+            language,
+            search: search.to_owned(),
+            offers: offers.iter().map(|&id| id.to_owned()).collect(),
+        }
+    }
 }
 
 /// The answer to an order.
@@ -40,16 +69,16 @@ pub enum Outcome {
     Items {
         offers: Vec<ItemOffer>,
         total: u64,
-        /// Some offers are left to fetch.
-        more: bool,
+        /// The offers left to fetch.
+        rest: Rest,
     },
     /// The offers of the currency exchange, the cheapest first, all of them.
     Exchange {
         offers: Vec<ExchangeOffer>,
         total: u64,
     },
-    /// The next offers of the last search of items.
-    More { offers: Vec<ItemOffer>, more: bool },
+    /// The next offers of a search of items, and those left after them.
+    More { offers: Vec<ItemOffer>, rest: Rest },
     /// The trade site can't be reached, or answered something unexpected.
     Unreachable,
     /// The trade site refused the request (`refused`), or its limits didn't allow it: nothing
@@ -103,7 +132,7 @@ impl OfferSearch {
         wake: impl Fn() + Send + 'static,
     ) -> Self {
         let worker = Worker::spawn("trade-search", OnDrop::Detach, wake, move |outbox, wake| {
-            let mut searches = Searches::new(open());
+            let mut searches = Searches(open());
             loop {
                 let order = match outbox.wait_for_order(Duration::MAX) {
                     Waited::Order(order) => order,
@@ -145,34 +174,17 @@ fn latest(first: Order, outbox: &Outbox<Answer, Order>) -> Option<Order> {
         match waited {
             Waited::Order(order @ Order::Search(_)) => latest = order,
             // More offers of a search answered before, or asked twice.
-            Waited::Order(Order::More) | Waited::Elapsed => {}
+            Waited::Order(Order::More(_)) | Waited::Elapsed => {}
             Waited::Stop => return None,
         }
     }
     Some(latest)
 }
 
-/// The offers of the last search of items left to fetch.
-struct Remaining {
-    language: Language,
-    search: String,
-    offers: Vec<String>,
-}
-
-/// The client and the last search of items.
-struct Searches<T> {
-    client: TradeClient<T>,
-    remaining: Option<Remaining>,
-}
+/// The client of the searches.
+struct Searches<T>(TradeClient<T>);
 
 impl<T: Transport> Searches<T> {
-    fn new(client: TradeClient<T>) -> Self {
-        Self {
-            client,
-            remaining: None,
-        }
-    }
-
     fn answer(&mut self, order: Order) -> Answer {
         let outcome = self.outcome(order).unwrap_or_else(|error| {
             log::warn!("Trade site: {error}");
@@ -190,8 +202,8 @@ impl<T: Transport> Searches<T> {
         });
         let now = Instant::now();
         let next_search = NextSearch {
-            items: self.client.next_search(SearchKind::Items, now),
-            exchange: self.client.next_search(SearchKind::Exchange, now),
+            items: self.0.next_search(SearchKind::Items, now),
+            exchange: self.0.next_search(SearchKind::Exchange, now),
         };
         Answer {
             outcome,
@@ -206,22 +218,18 @@ impl<T: Transport> Searches<T> {
                 league,
                 query: Query::Items(query),
             }) => {
-                let result = self.client.search_items(language, &league, &query);
-                let search = self.forget_unless_unsent(result)?;
+                let search = self.0.search_items(language, &league, &query)?;
                 log::info!("Trade site: {} offers found", search.total);
-                let total = search.total;
-                self.remaining = Some(Remaining {
+                // The player never sees a search whose first offers can't be fetched.
+                let (offers, rest) = self.fetch_next(Rest {
                     language,
                     search: search.id,
                     offers: search.offers,
-                });
-                // The player never sees a search whose first offers can't be fetched: its next
-                // offers aren't more of the offers shown.
-                let (offers, more) = self.fetch_next().inspect_err(|_| self.remaining = None)?;
+                })?;
                 Ok(Outcome::Items {
                     offers,
-                    total,
-                    more,
+                    total: search.total,
+                    rest,
                 })
             }
             Order::Search(Search {
@@ -229,51 +237,38 @@ impl<T: Transport> Searches<T> {
                 league,
                 query: Query::Exchange(want),
             }) => {
-                let result = self.client.search_exchange(language, &league, &want);
-                let search = self.forget_unless_unsent(result)?;
+                let search = self.0.search_exchange(language, &league, &want)?;
                 log::info!("Trade site: {} exchange offers of {want}", search.total);
                 Ok(Outcome::Exchange {
                     offers: search.offers,
                     total: search.total,
                 })
             }
-            Order::More => {
-                let (offers, more) = self.fetch_next()?;
-                Ok(Outcome::More { offers, more })
+            Order::More(rest) => {
+                let (offers, rest) = self.fetch_next(rest)?;
+                Ok(Outcome::More { offers, rest })
             }
         }
     }
 
-    /// Forgets the last search of items once a new search was sent, whatever its answer: the
-    /// player no longer sees its offers. A search that wasn't sent keeps it.
-    fn forget_unless_unsent<S>(&mut self, result: Result<S, TradeError>) -> Result<S, TradeError> {
-        if !matches!(result, Err(TradeError::Wait(_))) {
-            self.remaining = None;
+    /// The next 10 offers of `rest`, and those left after them.
+    fn fetch_next(&mut self, mut rest: Rest) -> Result<(Vec<ItemOffer>, Rest), TradeError> {
+        if rest.is_empty() {
+            return Ok((Vec::new(), rest));
         }
-        result
-    }
-
-    /// The next 10 offers of the last search of items, and whether some are left; they
-    /// stay to fetch when the fetch fails.
-    fn fetch_next(&mut self) -> Result<(Vec<ItemOffer>, bool), TradeError> {
-        let Some(remaining) = &mut self.remaining else {
-            return Ok((Vec::new(), false));
-        };
         let wait = self
-            .client
+            .0
             .next_fetch(Instant::now())
             .saturating_duration_since(Instant::now());
         if wait > LONGEST_FETCH_WAIT {
             return Err(TradeError::Wait(Instant::now() + wait));
         }
         thread::sleep(wait);
-        let count = remaining.offers.len().min(FETCH_SIZE);
-        let ids = remaining.offers.get(..count).unwrap_or_default();
-        let offers = self
-            .client
-            .fetch(remaining.language, &remaining.search, ids)?;
-        remaining.offers.drain(..count);
-        Ok((offers, !remaining.offers.is_empty()))
+        let count = rest.offers.len().min(FETCH_SIZE);
+        let ids = rest.offers.get(..count).unwrap_or_default();
+        let offers = self.0.fetch(rest.language, &rest.search, ids)?;
+        rest.offers.drain(..count);
+        Ok((offers, rest))
     }
 }
 
@@ -345,37 +340,27 @@ mod tests {
 
         search.order(search_ring());
         let first = answer(&mut search, &wakes);
-        search.order(Order::More);
-        let second = answer(&mut search, &wakes);
-
         let Outcome::Items {
             offers,
             total,
-            more,
+            rest,
         } = first.outcome
         else {
             panic!("offers: {:?}", first.outcome);
         };
+        search.order(Order::More(rest.clone()));
+        let second = answer(&mut search, &wakes);
+
         assert_eq!(ids(&offers).len(), 10);
         assert_eq!(total, 13);
-        assert!(more);
+        assert_eq!(rest.offers, ["k", "l", "m"]);
         assert!(first.next_search.items > Instant::now());
-        assert_eq!(
-            second.outcome,
-            Outcome::More {
-                offers: second_offers(&second),
-                more: false
-            }
-        );
-        assert_eq!(ids(&second_offers(&second)), ["k", "l", "m"]);
+        let Outcome::More { offers, rest } = second.outcome else {
+            panic!("more offers: {:?}", second.outcome);
+        };
+        assert_eq!(ids(&offers), ["k", "l", "m"]);
+        assert!(rest.is_empty());
         assert!(site.requests()[2].url.contains("/fetch/k,l,m?query=Q1"));
-    }
-
-    fn second_offers(answer: &Answer) -> Vec<ItemOffer> {
-        match &answer.outcome {
-            Outcome::More { offers, .. } => offers.clone(),
-            other => panic!("more offers: {other:?}"),
-        }
     }
 
     #[test]
@@ -413,17 +398,18 @@ mod tests {
     }
 
     #[test]
-    fn more_offers_without_a_search_of_items_are_none() {
+    fn more_offers_when_none_is_left_are_none() {
         let site = FakeSite::default();
         let (mut search, wakes) = start(&site);
+        let none = Rest::new(Language::English, "Q1", &[]);
 
-        search.order(Order::More);
+        search.order(Order::More(none.clone()));
 
         assert_eq!(
             answer(&mut search, &wakes).outcome,
             Outcome::More {
                 offers: Vec::new(),
-                more: false
+                rest: none
             }
         );
         assert_eq!(site.requests(), Vec::new());
@@ -443,13 +429,13 @@ mod tests {
             assert!(start.elapsed() < Duration::from_secs(5), "sent");
             thread::sleep(Duration::from_millis(5));
         }
-        search.order(Order::More);
+        search.order(Order::More(Rest::new(Language::English, "Q1", &["k"])));
         search.order(Order::Search(Search {
             language: Language::English,
             league: League::new("Standard"),
             query: Query::Exchange("divine".to_owned()),
         }));
-        search.order(Order::More);
+        search.order(Order::More(Rest::new(Language::English, "Q1", &["k"])));
         drop(blocked);
 
         let mut answers = Vec::new();
@@ -472,41 +458,39 @@ mod tests {
     }
 
     #[test]
-    fn a_search_that_wasnt_sent_keeps_the_offers_left_of_the_last_one() {
+    fn more_offers_of_a_search_come_after_another_search() {
         let site = FakeSite::default();
         site.answer(200, LimitHeaders::default(), SEARCH);
         site.answer(200, LimitHeaders::default(), &fetch(&["a"]));
-        site.answer(200, LimitHeaders::default(), &fetch(&["k"]));
+        site.answer(200, LimitHeaders::default(), &fetch(&["x", "y"]));
         let (mut search, wakes) = start(&site);
         search.order(search_ring());
         answer(&mut search, &wakes);
 
-        // Within the 10 s: not sent.
-        search.order(search_ring());
-        answer(&mut search, &wakes);
-        search.order(Order::More);
+        // The offers left of an item copied before, searched on the French site.
+        search.order(Order::More(Rest::new(Language::French, "F7", &["x", "y"])));
+        let more = answer(&mut search, &wakes);
 
-        assert_eq!(ids(&second_offers(&answer(&mut search, &wakes))), ["k"]);
+        let Outcome::More { offers, rest } = more.outcome else {
+            panic!("more offers: {:?}", more.outcome);
+        };
+        assert_eq!(ids(&offers), ["x", "y"]);
+        assert!(rest.is_empty());
+        let fetched = &site.requests()[2].url;
+        assert!(fetched.contains("/fetch/x,y?query=F7"), "{fetched}");
+        assert!(fetched.starts_with("https://fr."), "{fetched}");
     }
 
     #[test]
-    fn a_search_whose_first_offers_cant_be_fetched_is_forgotten() {
+    fn a_search_whose_first_offers_cant_be_fetched_cant_be_reached() {
         let site = FakeSite::default();
         site.answer(200, LimitHeaders::default(), SEARCH);
         site.answer(503, LimitHeaders::default(), "");
         let (mut search, wakes) = start(&site);
+
         search.order(search_ring());
+
         assert_eq!(answer(&mut search, &wakes).outcome, Outcome::Unreachable);
-
-        search.order(Order::More);
-
-        assert_eq!(
-            answer(&mut search, &wakes).outcome,
-            Outcome::More {
-                offers: Vec::new(),
-                more: false
-            }
-        );
         assert_eq!(site.requests().len(), 2, "a search and its fetch");
     }
 }

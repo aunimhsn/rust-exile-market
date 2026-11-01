@@ -22,6 +22,7 @@ use crate::offers::{LONG_WAIT, Offers, OffersState};
 use crate::overlay::{self, ClickWatch, KeyboardFocus, Overlay, ScreenRect};
 use crate::prices::Rates;
 use crate::pricing::{FixedPrice, NoFixedPrice};
+use crate::recent_items::RecentItems;
 use crate::session::{LeagueChange, PricesState, Session, ShownItem};
 use crate::settings::{SettingChange, Settings, SettingsFile};
 use crate::trade::ItemNamesWatch;
@@ -82,9 +83,9 @@ pub struct ExileMarketApp {
     overlay_height: Option<f32>,
     /// The keyboard, given to the window over the game while one of its fields is edited.
     keyboard: KeyboardFocus,
-    /// The last item copied: the hotkey on the same item opens the window over the game without
-    /// clearing its filters and offers.
-    last_copied: Option<CopiedItem>,
+    /// The item shown, the last one copied, and the items copied before it, with their filters
+    /// and offers as the player left them.
+    recent: RecentItems,
     market: MarketWatch,
     item_names: ItemNamesWatch,
     /// The searches of the trade site, asked by the player.
@@ -93,8 +94,8 @@ pub struct ExileMarketApp {
     offers: Offers,
     /// The stats of the item are unfolded, for every item copied until the player folds them.
     stats_open: bool,
-    /// The filters of the search as the player set them, for the item shown: cleared at each
-    /// copy, even of the same item after another text.
+    /// The filters of the search as the player set them, for the item shown: those of another
+    /// item copied are its own, by default or as the player left them.
     filters: Filters,
     /// An item was copied: the content scrolls back to the top, to its name and its price.
     scroll_to_top: bool,
@@ -142,7 +143,7 @@ impl ExileMarketApp {
             overlay_window: None,
             overlay_height: None,
             keyboard: KeyboardFocus::new(),
-            last_copied: None,
+            recent: RecentItems::default(),
             market,
             item_names: ItemNamesWatch::start(move || names_ctx.request_repaint()),
             search: OfferSearch::start(move || search_ctx.request_repaint()),
@@ -187,6 +188,7 @@ impl ExileMarketApp {
         // The offers shown were searched in the previous league.
         if self.session.league() != Some(&league) {
             self.offers.clear();
+            self.recent.forget_offers();
         }
         self.session.choose_league(league);
         self.market.price(self.session.league());
@@ -471,9 +473,10 @@ impl ExileMarketApp {
     }
 
     /// Takes in an event of the clipboard watching: an item copied opens the window over the
-    /// game when the hotkey copied it, and keeps its filters and offers when it is the item
-    /// shown, copied again by the hotkey.
+    /// game when the hotkey copied it. The item shown, copied again, keeps its filters and
+    /// offers; another item copied leaves them to the items remembered, and shows its own.
     fn take_clipboard_event(&mut self, event: ClipboardEvent) {
+        let mut back = None;
         if let ClipboardEvent::Copied { item, hotkey } = &event {
             let was_open = self.overlay.shown().is_some();
             // A window that opens is laid out once before it shows; an open one keeps its
@@ -482,18 +485,30 @@ impl ExileMarketApp {
                 self.overlay_height = None;
             }
             // The clipboard watching alone tells the copy of the hotkey.
-            if copied_again(hotkey.is_some(), self.last_copied.as_ref(), item) {
+            if copied_again(hotkey.is_some(), self.recent.shown(), item) {
                 // Its filters and offers stay.
                 self.view = View::Item;
                 return;
             }
-            self.last_copied = Some(item.clone());
             self.scroll_to_top = true;
-            self.filters.clear();
-            self.offers.clear();
+            let shape = self
+                .session
+                .item()
+                .map(ShownItem::shape)
+                .unwrap_or_default();
+            back = self
+                .recent
+                .show(item, shape, &mut self.filters, &mut self.offers);
         }
         self.view = self.view.after(&event);
         self.session.apply(event);
+        // Read again with the names of the trade site arrived since it was left, its lines may
+        // have moved, the filters set on them no longer falling on the same lines.
+        if let Some(shape) = back
+            && self.session.item().map(ShownItem::shape) != Some(shape)
+        {
+            self.filters.forget_stats();
+        }
     }
 
     /// The search of the offers of the item shown, when it can be searched.
@@ -576,6 +591,7 @@ impl App for ExileMarketApp {
         if let Some(league) = shown {
             // The offers shown were searched in the previous league.
             self.offers.clear();
+            self.recent.forget_offers();
             if self.settings.set_league(&league) {
                 self.settings_file.save(&self.settings);
             }
@@ -675,8 +691,9 @@ fn paint_while_hidden(overlay_shown: bool, main_visible: Option<bool>) -> bool {
     overlay_shown && main_visible == Some(false)
 }
 
-/// `item` copied by the hotkey again: the item already shown, which keeps its filters and
-/// offers. Copied with Ctrl+C after another text, it starts again.
+/// `item` copied by the hotkey again: the item already shown, which stays as it is. Copied
+/// with Ctrl+C after another text, it is read again with the latest known price, its filters
+/// and offers kept.
 fn copied_again(by_hotkey: bool, last: Option<&CopiedItem>, item: &CopiedItem) -> bool {
     by_hotkey && last == Some(item)
 }
@@ -812,7 +829,7 @@ mod tests {
         assert!(copied_again(true, Some(&ring), &ring));
         assert!(!copied_again(true, Some(&ring), &amulet));
         assert!(!copied_again(true, None, &ring));
-        // Copied with Ctrl+C after another text: a new copy, filters cleared.
+        // Copied with Ctrl+C after another text: read again.
         assert!(!copied_again(false, Some(&ring), &ring));
     }
 
@@ -949,6 +966,12 @@ mod tests {
         }
     }
 
+    /// Offers left to fetch, or none.
+    fn rest(more: bool) -> crate::trade::search::Rest {
+        let left: &[&str] = if more { &["k"] } else { &[] };
+        crate::trade::search::Rest::new(crate::language::Language::English, "Q1", left)
+    }
+
     /// The answer to a search: `offers` of the `total` found, 10 at most; the next search
     /// allowed from `now`.
     fn answer(
@@ -963,7 +986,7 @@ mod tests {
             outcome: Outcome::Items {
                 offers,
                 total,
-                more,
+                rest: rest(more),
             },
             next_search: NextSearch {
                 items: now,
@@ -998,7 +1021,7 @@ mod tests {
             Answer {
                 outcome: Outcome::More {
                     offers: divines(&[0.5; 10]),
-                    more: true,
+                    rest: rest(true),
                 },
                 next_search: NextSearch {
                     items: now,

@@ -1,5 +1,7 @@
 //! The offers of the trade site for the item shown: the searches the player asks, their
-//! answers, and the waiting time before the next search, which applies to every item.
+//! answers, and the waiting time before the next search, which applies to every item. The
+//! offers of an item left are given to be remembered with it, and shown again when it comes
+//! back.
 //!
 //! One order at a time: no order is sent while the answer of the previous one hasn't come,
 //! so that each answer is known to answer the last order, and to belong to the item shown or
@@ -11,7 +13,7 @@ use crate::filters::Property;
 use crate::item::{Catalyst, Item};
 use crate::trade::offers::{ExchangeOffer, ItemOffer};
 use crate::trade::query::SearchKind;
-use crate::trade::search::{Answer, NextSearch, Order, Outcome, Search};
+use crate::trade::search::{Answer, NextSearch, Order, Outcome, Rest, Search};
 
 /// The offers shown at once, and added by each click on the double chevron.
 pub const PAGE: usize = 10;
@@ -33,8 +35,8 @@ pub enum OffersState {
         /// How many offers of `offers`, the first ones, came in the answer to the search:
         /// fewer than a page when some were gone since the search.
         first_page: usize,
-        /// Some offers are left to fetch.
-        more: bool,
+        /// The offers left to fetch, of this search.
+        rest: Rest,
         /// The next offers are asked.
         loading_more: bool,
         /// The next offers couldn't come: the trade site can't be reached. Refused by its
@@ -119,10 +121,48 @@ impl Offers {
     /// Another item is shown: no offer yet, and the answer of an order of the previous item
     /// will change nothing.
     pub fn clear(&mut self) {
-        self.state = OffersState::Idle;
+        let _ = self.leave();
+    }
+
+    /// Another item is shown: the offers of the item left, to show again when it comes back
+    /// ([`Self::show`]); the answer of an order of that item will change nothing, so that a
+    /// search or more offers asked for it come back as never asked.
+    #[must_use]
+    pub fn leave(&mut self) -> OffersState {
         if let Some(pending) = &mut self.pending {
             pending.shown = false;
         }
+        match std::mem::take(&mut self.state) {
+            OffersState::Items {
+                offers,
+                total,
+                first_page,
+                rest,
+                quality_searched,
+                searched,
+                ..
+            } => OffersState::Items {
+                offers,
+                total,
+                first_page,
+                rest,
+                loading_more: false,
+                more_failed: false,
+                quality_searched,
+                searched,
+            },
+            exchange @ OffersState::Exchange { .. } => exchange,
+            // A failure belongs to the moment it was told.
+            OffersState::Idle
+            | OffersState::Searching
+            | OffersState::Unreachable
+            | OffersState::Limited => OffersState::Idle,
+        }
+    }
+
+    /// Shows the offers of an item that comes back, as [`Self::leave`] gave them.
+    pub fn show(&mut self, state: OffersState) {
+        self.state = state;
     }
 
     /// No order may be sent: the answer of the last one hasn't come, or the thread of the
@@ -170,18 +210,18 @@ impl Offers {
                 None
             }
             OffersState::Items {
-                more: true,
+                rest,
                 loading_more,
                 more_failed,
                 ..
-            } if !busy => {
+            } if !busy && !rest.is_empty() => {
                 *loading_more = true;
                 *more_failed = false;
                 self.pending = Some(Pending {
                     order: PendingOrder::More,
                     shown: true,
                 });
-                Some(Order::More)
+                Some(Order::More(rest.clone()))
             }
             _ => None,
         }
@@ -257,14 +297,14 @@ impl Offers {
                 Outcome::Items {
                     offers,
                     total,
-                    more,
+                    rest,
                 },
                 _,
             ) => OffersState::Items {
                 first_page: offers.len(),
                 offers,
                 total,
-                more,
+                rest,
                 loading_more: false,
                 more_failed: false,
                 quality_searched: matches!(
@@ -283,7 +323,7 @@ impl Offers {
                 searched: now,
             },
             (
-                Outcome::More { offers: next, more },
+                Outcome::More { offers: next, rest },
                 OffersState::Items {
                     mut offers,
                     total,
@@ -298,7 +338,7 @@ impl Offers {
                     offers,
                     total,
                     first_page,
-                    more,
+                    rest,
                     loading_more: false,
                     more_failed: false,
                     quality_searched,
@@ -312,7 +352,7 @@ impl Offers {
                     offers,
                     total,
                     first_page,
-                    more,
+                    rest,
                     quality_searched,
                     searched,
                     ..
@@ -321,7 +361,7 @@ impl Offers {
                 offers,
                 total,
                 first_page,
-                more,
+                rest,
                 loading_more: false,
                 more_failed: matches!(failure, Outcome::Unreachable),
                 quality_searched,
@@ -335,4 +375,4 @@ impl Offers {
 }
 
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;
