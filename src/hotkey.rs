@@ -2,16 +2,25 @@
 //! that the player no longer presses Ctrl+C.
 //!
 //! The application sends Ctrl+C to the game itself, and the item arrives through the clipboard
-//! like any copy ([`crate::clipboard`]). On Linux only for now, through X11 (XWayland under
-//! Wayland), like the game run by Proton; Windows and macOS come in step 14a2.
+//! like any copy ([`crate::clipboard`]). On Linux through X11 (XWayland under Wayland), like the
+//! game run by Proton, and on Windows. None on macOS, where Path of Exile 2 has no client.
 
+#[cfg(target_os = "windows")]
+mod windows;
 #[cfg(target_os = "linux")]
 mod x11;
 
+// The keys of each system: `CopySender` (`connect` once at the start, `send_copy` at each
+// hotkey) and `SENT_AT`, the press or the release of D at which the copy is sent.
+#[cfg(target_os = "windows")]
+use self::windows as keys;
+#[cfg(target_os = "linux")]
+use self::x11 as keys;
+
 /// The hotkey listened to for as long as this value lives.
 pub struct PriceCheckHotkey {
-    /// Listens on a thread of its own, which ends when it is dropped.
-    #[cfg(target_os = "linux")]
+    /// Listens until it is dropped.
+    #[cfg(any(target_os = "linux", target_os = "windows"))]
     _manager: Option<global_hotkey::GlobalHotKeyManager>,
 }
 
@@ -19,18 +28,20 @@ impl PriceCheckHotkey {
     /// Starts listening to Ctrl+D. A failure (the key taken by another application, such as
     /// Exiled Exchange 2) only writes to the log: the player can still copy with Ctrl+C.
     ///
-    /// Called once: the handler of the hotkey events can only be set once.
-    #[cfg(target_os = "linux")]
+    /// Called once: the handler of the hotkey events can only be set once. Called on the thread
+    /// of the window: on Windows, the hotkey is heard by a hidden window of that thread, through
+    /// its event loop.
+    #[cfg(any(target_os = "linux", target_os = "windows"))]
     #[must_use]
     pub fn start() -> Self {
         use global_hotkey::hotkey::{Code, HotKey, Modifiers};
-        use global_hotkey::{GlobalHotKeyEvent, GlobalHotKeyManager, HotKeyState};
+        use global_hotkey::{GlobalHotKeyEvent, GlobalHotKeyManager};
         use std::sync::{Mutex, PoisonError};
 
-        let sender = match x11::CopySender::connect() {
+        let sender = match keys::CopySender::connect() {
             Ok(sender) => Mutex::new(sender),
             Err(error) => {
-                log::warn!("The price-check hotkey can't listen: no X11 keyboard ({error})");
+                log::warn!("The price-check hotkey can't listen: {error}");
                 return Self { _manager: None };
             }
         };
@@ -44,10 +55,9 @@ impl PriceCheckHotkey {
         let hotkey = HotKey::new(Some(Modifiers::CONTROL), Code::KeyD);
         let id = hotkey.id();
         GlobalHotKeyEvent::set_event_handler(Some(move |event: GlobalHotKeyEvent| {
-            // At the release of D only: while it is held, the X server gives every key to the
-            // application that listens to the hotkey, so that a copy sent then wouldn't reach
-            // the game.
-            if event.id == id && event.state == HotKeyState::Released {
+            // At the press or at the release of D, as each system lets the keys sent reach the
+            // game.
+            if event.id == id && event.state == keys::SENT_AT {
                 sender
                     .lock()
                     .unwrap_or_else(PoisonError::into_inner)
@@ -63,11 +73,11 @@ impl PriceCheckHotkey {
         }
     }
 
-    /// Nothing to listen to yet on this system (step 14a2).
-    #[cfg(not(target_os = "linux"))]
+    /// Nothing to listen to on this system.
+    #[cfg(not(any(target_os = "linux", target_os = "windows")))]
     #[must_use]
     pub fn start() -> Self {
-        log::info!("No price-check hotkey on this system yet");
+        log::info!("No price-check hotkey on this system");
         Self {}
     }
 }

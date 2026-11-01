@@ -74,7 +74,7 @@ fn native_options(
     settings: &settings::Settings,
     settings_file: &settings::SettingsFile,
 ) -> eframe::NativeOptions {
-    let mut options = eframe::NativeOptions {
+    on_x11(eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_title(APP_NAME)
             .with_app_id("rust-exile-market")
@@ -88,16 +88,25 @@ fn native_options(
         persist_window: true,
         persistence_path: settings_file.window_file(),
         ..Default::default()
-    };
-    // On Linux, the window always goes through X11 (XWayland under Wayland), like the game run
-    // by Proton, so that the clipboard can be read without the focus: see roadmap.md (Linux
-    // display). Without it, winit would pick Wayland, which the OpenGL renderer isn't built for.
-    #[cfg(target_os = "linux")]
-    {
-        use winit::platform::x11::EventLoopBuilderExtX11;
-        options.event_loop_builder = Some(Box::new(|builder| {
+    })
+}
+
+/// On Linux, the window always goes through X11 (XWayland under Wayland), like the game run by
+/// Proton, so that the clipboard can be read without the focus: see roadmap.md (Linux display).
+/// Without it, winit would pick Wayland, which the OpenGL renderer isn't built for.
+#[cfg(target_os = "linux")]
+fn on_x11(options: eframe::NativeOptions) -> eframe::NativeOptions {
+    use winit::platform::x11::EventLoopBuilderExtX11;
+    eframe::NativeOptions {
+        event_loop_builder: Some(Box::new(|builder| {
             builder.with_x11();
-        }));
+        })),
+        ..options
     }
+}
+
+/// The other systems have one display server only.
+#[cfg(not(target_os = "linux"))]
+fn on_x11(options: eframe::NativeOptions) -> eframe::NativeOptions {
     options
 }

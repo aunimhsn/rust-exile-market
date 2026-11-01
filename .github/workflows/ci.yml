@@ -46,6 +46,34 @@ jobs:
       - if: steps.changes.outputs.code == 'true'
         run: cargo test --locked --workspace --all-features
 
+  # The code written for Windows or macOS alone (the keys of the price-check hotkey) is
+  # compiled and linted on its own system, which the job above never builds. Clippy only: the
+  # tests run on Linux.
+  lint-other-systems:
+    name: Lint on ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - id: changes
+        run: sh .github/scripts/code-changed.sh "$BASE" "$HEAD"
+      - if: steps.changes.outputs.code == 'true'
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - if: steps.changes.outputs.code == 'true'
+        uses: Swatinem/rust-cache@v2
+      - if: steps.changes.outputs.code == 'true'
+        run: cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
+
   msrv:
     name: Minimum Rust version
     runs-on: ubuntu-latest
