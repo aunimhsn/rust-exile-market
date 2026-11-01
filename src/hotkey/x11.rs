@@ -11,6 +11,8 @@ use x11rb::protocol::xproto::{
 use x11rb::protocol::xtest::{self, ConnectionExt as _};
 use x11rb::rust_connection::RustConnection;
 
+use crate::overlay::{Point, ScreenRect, Target};
+
 type Result<T> = std::result::Result<T, Box<dyn Error>>;
 
 /// The keysyms of the keys pressed, from `X11/keysymdef.h`.
@@ -45,7 +47,15 @@ impl CopySender {
     }
 
     /// Sends Ctrl+C to the window that has the focus, and writes to the log where it went.
-    pub fn send_copy(&mut self) {
+    /// Once the window and the keyboard are read, `prepare` runs (it may take a moment), then
+    /// the pointer is read, as the game sees it when the keys leave, and `tell` gets where the
+    /// window over the game opens, when the pointer and the window could be read, with what
+    /// `prepare` gave, just before the keys.
+    pub fn send_copy<P>(
+        &mut self,
+        prepare: impl FnOnce() -> P,
+        tell: impl FnOnce(Option<Target>, P),
+    ) {
         let keyboard = match self.keyboard.take() {
             Some(keyboard) => keyboard,
             None => match Keyboard::connect() {
@@ -56,7 +66,7 @@ impl CopySender {
                 }
             },
         };
-        match keyboard.send_copy() {
+        match keyboard.send_copy(prepare, tell) {
             Ok(sent) => {
                 log::info!(
                     "Copy sent by the price-check hotkey to the window of class {} (Ctrl {})",
@@ -110,12 +120,28 @@ impl Keyboard {
         })
     }
 
-    fn send_copy(&self) -> Result<Sent> {
-        // The window the keys go to, read before them; only for the log, so that a failure
-        // doesn't stop the copy.
-        let window_class = self
-            .active_window_class()
-            .unwrap_or_else(|error| format!("unknown ({error})"));
+    fn send_copy<P>(
+        &self,
+        prepare: impl FnOnce() -> P,
+        tell: impl FnOnce(Option<Target>, P),
+    ) -> Result<Sent> {
+        // The window the keys go to, read before them; for the log and the window over the
+        // game, so that a failure doesn't stop the copy.
+        let window = self.active_window();
+        let window_class = match &window {
+            Ok(Some(window)) => self
+                .window_class(*window)
+                .unwrap_or_else(|error| format!("unknown ({error})")),
+            Ok(None) => "none (an application outside X11?)".to_owned(),
+            Err(error) => format!("unknown ({error})"),
+        };
+        let game = match window {
+            Ok(Some(window)) => self.window_rect(window).unwrap_or_else(|error| {
+                log::warn!("The window of the game can't be measured: {error}");
+                None
+            }),
+            _ => None,
+        };
         // The events the X server sends to every client, such as a change of the keyboard
         // mapping, are never needed: dropped so that they don't pile up.
         while let Ok(Some(_)) = self.connection.poll_for_event() {}
@@ -136,12 +162,19 @@ impl Keyboard {
         let (Some(control), Some(c)) = (keycode(XK_CONTROL_L), keycode(XK_C)) else {
             return Err("the keyboard has no Control or C key".into());
         };
-        let control_held = self
-            .connection
-            .query_pointer(self.root)?
-            .reply()?
-            .mask
-            .contains(KeyButMask::CONTROL);
+        let prepared = prepare();
+        // Read after the preparation, which may take a moment: where the item is, and Ctrl as
+        // the player holds it, when the keys leave.
+        let pointer = self.connection.query_pointer(self.root)?.reply()?;
+        let control_held = pointer.mask.contains(KeyButMask::CONTROL);
+        let target = game.map(|game| Target {
+            pointer: Point {
+                x: i32::from(pointer.root_x),
+                y: i32::from(pointer.root_y),
+            },
+            game,
+        });
+        tell(target, prepared);
         for (index, key) in copy_keys(control, c, control_held).into_iter().enumerate() {
             let (event, keycode) = match key {
                 Key::Down(keycode) => (xproto::KEY_PRESS_EVENT, keycode),
@@ -158,8 +191,8 @@ impl Keyboard {
         })
     }
 
-    /// The class of the active window (`WM_CLASS`), or why there is none.
-    fn active_window_class(&self) -> Result<String> {
+    /// The active window, none when the desktop gives the focus to a window outside X11.
+    fn active_window(&self) -> Result<Option<Window>> {
         let window = self
             .connection
             .get_property(false, self.root, self.active_window, AtomEnum::WINDOW, 0, 1)?
@@ -167,9 +200,29 @@ impl Keyboard {
             .value32()
             .and_then(|mut windows| windows.next())
             .unwrap_or(x11rb::NONE);
-        if window == x11rb::NONE {
-            return Ok("none (an application outside X11?)".to_owned());
-        }
+        Ok((window != x11rb::NONE).then_some(window))
+    }
+
+    /// Where `window` is on the screen, without its frame; none when it has no size.
+    fn window_rect(&self, window: Window) -> Result<Option<ScreenRect>> {
+        let geometry = self.connection.get_geometry(window)?.reply()?;
+        // The position of the geometry is in the frame of the desktop: the one on the screen
+        // comes from the root window.
+        let origin = self
+            .connection
+            .translate_coordinates(window, self.root, 0, 0)?
+            .reply()?;
+        let rect = ScreenRect {
+            x: i32::from(origin.dst_x),
+            y: i32::from(origin.dst_y),
+            width: i32::from(geometry.width),
+            height: i32::from(geometry.height),
+        };
+        Ok((rect.width > 0 && rect.height > 0).then_some(rect))
+    }
+
+    /// The class of `window` (`WM_CLASS`).
+    fn window_class(&self, window: Window) -> Result<String> {
         let class = self
             .connection
             .get_property(false, window, AtomEnum::WM_CLASS, AtomEnum::STRING, 0, 256)?

@@ -39,9 +39,11 @@ status-author = { $app } { $version } · Made by { $author } · { $site }
 
 ## Window before the first item
 
-# Followed by the keys "Ctrl + C".
+# Followed by the keys "Ctrl + D" ("Ctrl + C" on macOS, without hotkey).
 empty-copy = Copy an item in the game with
 empty-price = The price shows up here.
+# In faint text under the invitation: the game must not be in exclusive fullscreen.
+empty-display-mode = Play in windowed fullscreen: in fullscreen, the game lets no application copy the item or show its price over it.
 
 ## Copied item that can't be read
 
@@ -247,8 +249,8 @@ origin-vaal = Vaal
 origin-essence = Essence
 origin-alloy = Alloy
 # A desecrated modifier not revealed yet, in its group; and the note under the stats of its item.
-unrevealed-prefix = Unrevealed prefix
-unrevealed-suffix = Unrevealed suffix
+unrevealed-prefix = Unrevealed desecrated prefix
+unrevealed-suffix = Unrevealed desecrated suffix
 unrevealed-note = An unrevealed modifier can change the item: its other stats start unchecked.
 # Under the stats of a rare or magic item copied from the trade of the game, without the affixes and tiers of the advanced copy.
 trade-copy-note = The tiers are found from the values.

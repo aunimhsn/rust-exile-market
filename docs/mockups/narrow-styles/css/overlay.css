@@ -1,0 +1,40 @@
+/* The window over the game (14b1): a game screen of 2560 × 1440 drawn at half scale, its stash and inventory
+   panels, the items to click (each stands for Ctrl+D), and the window of the application over it. */
+.slot:has(.ov-screen) { width: 1280px; }
+.ov-screen {
+  position: relative; width: 1280px; height: 720px; overflow: hidden; border-radius: 6px; cursor: default;
+  background: radial-gradient(ellipse at 50% 60%, #2b2a24 0%, #15140f 70%, #0b0a08 100%);
+  user-select: none;
+}
+.ov-stage { position: absolute; left: 0; top: 0; width: 2560px; height: 1440px; transform: scale(.5); transform-origin: 0 0; }
+.ov-scene { position: absolute; left: 1060px; top: 1150px; color: #6d6656; font: 600 40px/1.3 system-ui, sans-serif; text-align: center; }
+.ov-scene i { display: block; width: 70px; height: 110px; margin: 0 auto 16px; border-radius: 50%; background: #3b382f; }
+.ov-panel { position: absolute; top: 0; width: 888px; height: 1440px; background: #17130e; border: 3px solid #3c3022; }
+.ov-panel h4 { margin: 34px 0 0; text-align: center; color: #c8b48a; font: 600 38px/1 Georgia, serif; letter-spacing: .06em; }
+.ov-stash { left: 0; }
+.ov-inventory { right: 0; }
+.ov-grid { position: absolute; display: grid; grid-template-columns: repeat(12, 70px); grid-auto-rows: 70px; }
+.ov-grid span { border: 1px solid #2b241a; background: #0e0c09; }
+.ov-equipment { position: absolute; left: 140px; top: 120px; width: 608px; height: 620px; border: 2px dashed #3c3022; border-radius: 12px; }
+.ov-item {
+  position: absolute; display: grid; place-items: center; padding: 6px; text-align: center; cursor: pointer;
+  font: 600 22px/1.15 system-ui, sans-serif; color: #e8e2d0; background: #2a2418; border: 2px solid #4a3e2a;
+}
+.ov-item:hover { outline: 4px solid #e8e2d0; z-index: 1; }
+.ov-item.is-unique { color: #d9a05b; }
+.ov-item.is-rare { color: #e8d45a; }
+/* The window of the application, at the place the rules give it. */
+.ov-window { position: absolute; top: 0; width: 420px; display: none; z-index: 2; transform-origin: 0 0; }
+.ov-window.is-open { display: block; }
+.ov-window .win { border-radius: 0; box-shadow: 0 0 40px rgba(0, 0, 0, .7); max-height: 1440px; overflow-y: auto; }
+/* Height: the content, level with the item (placed by the script), at most the height of the screen. */
+/* The status bar of the window over the game: the sources on the left, the league on the right, on the color of
+   its trade and the whole height of the bar, not clickable. */
+.ov-foot { display: flex; align-items: stretch; justify-content: space-between; padding: 0 0 0 14px; }
+.ov-foot > span:first-child { padding: 6px 0; }
+.ov-league { display: flex; align-items: center; padding: 0 10px; background: var(--league-bg); color: var(--text); }
+.ov-pointer-note { margin-top: 8px; color: var(--page-text); font-size: 13px; }
+.ov-pointer-note b { color: #e8e8e8; font-weight: 600; }
+.ov-key { display: inline-block; padding: 1px 6px; border: 1px solid #444a50; border-radius: 4px; color: #e8e8e8; font-size: 12px; }
+/* The note on the windowed fullscreen. */
+.ov-note-line { display: block; margin: 18px auto 0; max-width: 330px; color: var(--weak); font-size: 12px; line-height: 1.45; text-align: center; }

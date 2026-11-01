@@ -199,7 +199,8 @@ pub mod text {
         fonts::numbers(11.5)
     }
 
-    /// A note under the stats, e.g. an unrevealed modifier.
+    /// A note under the stats, e.g. an unrevealed modifier, or under the invitation of the
+    /// empty window.
     #[must_use]
     pub fn note() -> FontId {
         fonts::text(12.0, Weight::Regular)

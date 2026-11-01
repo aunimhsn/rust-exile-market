@@ -17,8 +17,12 @@ const KEY_HEIGHT: f32 = 26.0;
 const KEY_PADDING: f32 = 9.0;
 const KEY_GAP: f32 = 8.0;
 const SPACE: f32 = 14.0;
-/// The keys to press in the game.
-const KEYS: [&str; 2] = ["Ctrl", "C"];
+/// The keys to press in the game: the price-check hotkey, or the copy of the game on macOS,
+/// which has no hotkey.
+const KEYS: [&str; 2] = ["Ctrl", if cfg!(target_os = "macos") { "C" } else { "D" }];
+/// The space above the note on the display mode, and its width (the mock-up).
+const NOTE_GAP: f32 = 18.0;
+const NOTE_WIDTH: f32 = 330.0;
 const BAR_SIZE: Vec2 = vec2(220.0, 4.0);
 /// The space between the lines of the download.
 const DOWNLOAD_GAP: f32 = 10.0;
@@ -80,6 +84,8 @@ impl<'a> EmptyState<'a> {
                         Self::keys(ui);
                         ui.add_space(SPACE / 2.0);
                         self.hint(ui, Message::EmptyPrice);
+                        ui.add_space(NOTE_GAP - ui.spacing().item_spacing.y);
+                        self.note(ui);
                     }
                 });
                 let content_height = content.response.rect.height();
@@ -90,6 +96,18 @@ impl<'a> EmptyState<'a> {
                         .request_discard("the height of the empty state changed");
                 }
             });
+    }
+
+    /// The display mode the game needs, in faint text on a few centered lines.
+    fn note(&self, ui: &mut Ui) {
+        ui.scope(|ui| {
+            ui.set_max_width(NOTE_WIDTH);
+            ui.label(
+                RichText::new(self.i18n.text(Message::EmptyDisplayMode))
+                    .font(text::note())
+                    .color(color::WEAK),
+            );
+        });
     }
 
     fn hint(&self, ui: &mut Ui, message: Message) {

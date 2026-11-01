@@ -39,9 +39,11 @@ status-author = { $app } { $version } · Créé par { $author } · { $site }
 
 ## Fenêtre avant le premier objet
 
-# Suivi des touches « Ctrl + C ».
+# Suivi des touches « Ctrl + D » (« Ctrl + C » sous macOS, sans raccourci).
 empty-copy = Copiez un objet en jeu avec
 empty-price = Son prix s'affichera ici.
+# En texte pâle sous l'invitation : le jeu ne doit pas être en plein écran exclusif.
+empty-display-mode = Jouez en plein écran fenêtré : en plein écran, le jeu ne laisse aucune application copier l'objet ni afficher son prix par-dessus.
 
 ## Objet copié illisible
 
@@ -250,8 +252,8 @@ origin-vaal = Vaal
 origin-essence = Essence
 origin-alloy = Alliage
 # Un modificateur profané pas encore révélé, dans son groupe ; et la note sous les stats de son objet.
-unrevealed-prefix = Préfixe non révélé
-unrevealed-suffix = Suffixe non révélé
+unrevealed-prefix = Préfixe profané non révélé
+unrevealed-suffix = Suffixe profané non révélé
 unrevealed-note = Un modificateur non révélé peut changer l'objet : ses autres stats partent décochées.
 # Sous les stats d'un objet rare ou magique copié depuis l'échange du jeu, sans les affixes ni les paliers de la copie avancée.
 trade-copy-note = Les paliers sont trouvés d'après les valeurs.

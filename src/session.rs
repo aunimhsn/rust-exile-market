@@ -358,7 +358,7 @@ impl Session {
 
     pub fn apply(&mut self, event: ClipboardEvent) {
         match event {
-            ClipboardEvent::Copied(copied) => {
+            ClipboardEvent::Copied { item: copied, .. } => {
                 let trade = self.trade_stats.as_ref();
                 let prices = self.league_prices().map(|prices| &prices.list);
                 let shown = ShownItem::new(&copied, trade, self.item_names.as_ref(), prices);

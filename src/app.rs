@@ -5,17 +5,21 @@ use std::hash::{BuildHasher, RandomState};
 use std::time::{Duration, Instant, SystemTime};
 
 use eframe::{App, CreationContext, Frame};
-use egui::{Context, Key, OpenUrl, Ui, ViewportCommand};
+use egui::{
+    Context, Key, OpenUrl, Ui, ViewportBuilder, ViewportCommand, ViewportId, X11WindowType, pos2,
+    vec2,
+};
 
 use crate::clipboard::{ClipboardEvent, ClipboardWatch};
 use crate::estimate::{self, Estimate, Reference};
 use crate::filters::Filters;
 use crate::hotkey::PriceCheckHotkey;
 use crate::i18n::{DOWNLOAD_QUOTE_COUNT, Message, Translator};
-use crate::item::Item;
+use crate::item::{CopiedItem, Item};
 use crate::league::League;
 use crate::market::MarketWatch;
 use crate::offers::{LONG_WAIT, Offers, OffersState};
+use crate::overlay::{self, ClickWatch, Overlay, ScreenRect};
 use crate::prices::Rates;
 use crate::pricing::{FixedPrice, NoFixedPrice};
 use crate::session::{LeagueChange, PricesState, Session, ShownItem};
@@ -50,7 +54,7 @@ impl View {
     /// The view after `event`: a copied item closes the settings, so that the player sees it.
     fn after(self, event: &ClipboardEvent) -> Self {
         match event {
-            ClipboardEvent::Copied(_) => Self::Item,
+            ClipboardEvent::Copied { .. } => Self::Item,
             ClipboardEvent::Unreadable | ClipboardEvent::Readable => self,
         }
     }
@@ -65,8 +69,20 @@ pub struct ExileMarketApp {
     /// The list of the leagues is open over the view.
     leagues_open: bool,
     clipboard: ClipboardWatch,
-    /// Ctrl+D copies the item in the game: the copy then arrives through the clipboard.
-    _hotkey: PriceCheckHotkey,
+    /// Ctrl+D copies the item in the game: the copy then arrives through the clipboard, and
+    /// opens the window over the game.
+    hotkey: PriceCheckHotkey,
+    /// When the window over the game shows, and where.
+    overlay: Overlay,
+    /// The clicks in the game, which close the window over the game.
+    clicks: ClickWatch,
+    /// Where the window over the game was drawn, in physical pixels, while it is open.
+    overlay_window: Option<ScreenRect>,
+    /// The height of its content at the last frame, in points; none until it is laid out once.
+    overlay_height: Option<f32>,
+    /// The last item copied: the hotkey on the same item opens the window over the game without
+    /// clearing its filters and offers.
+    last_copied: Option<CopiedItem>,
     market: MarketWatch,
     item_names: ItemNamesWatch,
     /// The searches of the trade site, asked by the player.
@@ -98,6 +114,12 @@ impl ExileMarketApp {
         let market_ctx = creation.egui_ctx.clone();
         let names_ctx = creation.egui_ctx.clone();
         let search_ctx = creation.egui_ctx.clone();
+        let hotkey_ctx = creation.egui_ctx.clone();
+        let clicks_ctx = creation.egui_ctx.clone();
+        let clipboard = ClipboardWatch::start(move || clipboard_ctx.request_repaint());
+        let hotkey = PriceCheckHotkey::start(clipboard.copy_marker(), move || {
+            hotkey_ctx.request_repaint();
+        });
         // The prices of the league of the last session, until the leagues arrive.
         let market = MarketWatch::start(settings.league(), move || market_ctx.request_repaint());
 
@@ -111,8 +133,13 @@ impl ExileMarketApp {
             settings_file,
             view: View::Item,
             leagues_open: false,
-            clipboard: ClipboardWatch::start(move || clipboard_ctx.request_repaint()),
-            _hotkey: PriceCheckHotkey::start(),
+            clipboard,
+            hotkey,
+            overlay: Overlay::default(),
+            clicks: ClickWatch::start(move || clicks_ctx.request_repaint()),
+            overlay_window: None,
+            overlay_height: None,
+            last_copied: None,
             market,
             item_names: ItemNamesWatch::start(move || names_ctx.request_repaint()),
             search: OfferSearch::start(move || search_ctx.request_repaint()),
@@ -235,7 +262,15 @@ impl ExileMarketApp {
     }
 
     /// The item shown, with the `kind` of the search of its offers when it can be searched.
-    fn item(&mut self, ui: &mut Ui, prices: PricesState, kind: Option<SearchKind>) {
+    /// Draws the item shown, or the empty state; the height of its blocks, which sizes the
+    /// window over the game.
+    fn item(
+        &mut self,
+        ui: &mut Ui,
+        prices: PricesState,
+        kind: Option<SearchKind>,
+        to_top: bool,
+    ) -> f32 {
         let Some(shown) = self.session.item() else {
             let empty = EmptyState::new(&self.i18n);
             if let (PricesState::Downloading { progress }, Some((league, quote))) =
@@ -251,11 +286,11 @@ impl ExileMarketApp {
             } else {
                 empty.show(ui);
             }
-            return;
+            return EMPTY_HEIGHT;
         };
         let Ok(item) = shown.parsed() else {
             UnreadableItem::new(&self.i18n).show(ui);
-            return;
+            return EMPTY_HEIGHT;
         };
         // The pill shows only when its link can be opened: the league and the search known.
         let tradable = self.session.tradable(item);
@@ -264,9 +299,8 @@ impl ExileMarketApp {
         let estimate = shown_estimate(&self.offers, item, &fixed_price, self.session.rates());
         // Without a fixed price, the estimate tells the suspicious offers.
         let reference = reference(&fixed_price).or(estimate.map(|estimate| estimate.reference));
-        let to_top = std::mem::take(&mut self.scroll_to_top);
         let mut offers_action = None;
-        let action = ui::content(ui, to_top, |ui| {
+        let (action, height) = ui::content(ui, to_top, |ui| {
             let action = ItemBlock::new(
                 item,
                 shown.lines(),
@@ -318,6 +352,117 @@ impl ExileMarketApp {
         if let Some(order) = order {
             self.search.order(order);
         }
+        height
+    }
+
+    /// The window over the game, drawn at every frame and shown while it is open: the blocks of
+    /// the item without the title bar, beside the panel of the game the item is in, as high as
+    /// its content.
+    ///
+    /// Two rules keep it from a panic of egui ("the user callback was never called"), since
+    /// eframe 0.37 can't create a window while the main one is minimized (it then paints outside
+    /// of its event loop): it is called at every frame of `ui`, so that the window, created
+    /// hidden with the first frame, is never destroyed; and the fields of its builder that
+    /// eframe can only set by creating the window again (its type, override-redirect, active,
+    /// taskbar, decorations) never change. Step 14b2 gives it the keyboard through X11
+    /// (`SetInputFocus`), not through `with_active`.
+    fn show_overlay(
+        &mut self,
+        ctx: &Context,
+        prices: PricesState,
+        kind: Option<SearchKind>,
+        trade: TradeStatus,
+        to_top: bool,
+    ) {
+        // No window over the game on the other systems yet (step 14b3, Windows).
+        if !cfg!(target_os = "linux") {
+            return;
+        }
+        let target = self.overlay.shown();
+        // The pointer and the game come in the physical pixels of the screen; the points of the
+        // window are scaled like those of the main window: by the screen and the zoom of the
+        // player (Ctrl + plus).
+        let scale = ctx
+            .input(|input| input.viewport().native_pixels_per_point)
+            .unwrap_or(1.0)
+            * ctx.zoom_factor();
+        let width = to_pixels(overlay::WIDTH, scale);
+        let content = self
+            .overlay_height
+            .map(|height| height + ui::STATUS_BAR_HEIGHT);
+        let place = target.map(|target| {
+            target.place(
+                width,
+                content.map_or(target.game.height, |height| to_pixels(height, scale)),
+            )
+        });
+        self.overlay_window = place;
+        let mut builder = ViewportBuilder::default()
+            .with_title(crate::APP_NAME)
+            // Out of the hands of the window manager: above the game, which keeps the focus.
+            .with_override_redirect(true)
+            .with_window_type(X11WindowType::Tooltip)
+            .with_decorations(false)
+            .with_active(false)
+            .with_taskbar(false)
+            .with_resizable(false)
+            // Shown once its content is laid out, at its height.
+            .with_visible(place.is_some() && content.is_some());
+        // Hidden where it was: it doesn't move before it hides.
+        if let Some(place) = place {
+            builder = builder
+                .with_position(pos2(to_points(place.x, scale), to_points(place.y, scale)))
+                .with_inner_size(vec2(overlay::WIDTH, to_points(place.height, scale)));
+        }
+        let league = self.session.league().cloned();
+        // Drawn at every frame, hidden while it is closed (see above).
+        let height = ctx.show_viewport_immediate(
+            ViewportId::from_hash_of("window-over-the-game"),
+            builder,
+            |ui, _| {
+                place?;
+                // Its own ids: the scroll and the panels of the main window are its own.
+                let height = ui
+                    .push_id("window-over-the-game", |ui| {
+                        StatusBar::sources(&self.i18n, prices, trade)
+                            .league(league.as_ref())
+                            .show(ui);
+                        self.item(ui, prices, kind, to_top)
+                    })
+                    .inner;
+                Some(height)
+            },
+        );
+        if height.is_some() && self.overlay_height != height {
+            self.overlay_height = height;
+            ctx.request_repaint();
+        }
+    }
+
+    /// Takes in an event of the clipboard watching: an item copied opens the window over the
+    /// game when the hotkey copied it, and keeps its filters and offers when it is the item
+    /// shown, copied again by the hotkey.
+    fn take_clipboard_event(&mut self, event: ClipboardEvent) {
+        if let ClipboardEvent::Copied { item, hotkey } = &event {
+            let was_open = self.overlay.shown().is_some();
+            // A window that opens is laid out once before it shows; an open one keeps its
+            // height until the next frame, without blinking.
+            if self.overlay.copied(*hotkey) && !was_open {
+                self.overlay_height = None;
+            }
+            // The clipboard watching alone tells the copy of the hotkey.
+            if copied_again(hotkey.is_some(), self.last_copied.as_ref(), item) {
+                // Its filters and offers stay.
+                self.view = View::Item;
+                return;
+            }
+            self.last_copied = Some(item.clone());
+            self.scroll_to_top = true;
+            self.filters.clear();
+            self.offers.clear();
+        }
+        self.view = self.view.after(&event);
+        self.session.apply(event);
     }
 
     /// The search of the offers of the item shown, when it can be searched.
@@ -354,15 +499,36 @@ impl App for ExileMarketApp {
     /// Takes in what happened since the last frame; `ui` draws the session, and takes in the
     /// clicks of the components it draws.
     fn logic(&mut self, ctx: &Context, _frame: &mut Frame) {
-        self.clipboard.receive(|event| {
-            if matches!(event, ClipboardEvent::Copied(_)) {
-                self.scroll_to_top = true;
-                self.filters.clear();
-                self.offers.clear();
-            }
-            self.view = self.view.after(&event);
-            self.session.apply(event);
-        });
+        let now = Instant::now();
+        // In this order, so that each comes after what happened before it: the events of the
+        // clipboard read so far, then the presses of the hotkey (each told before its keys, so
+        // before its item), then the clicks (pressed before the items taken in below, they
+        // close the window as it was, not the one these items open), and only then the items.
+        let mut events = Vec::new();
+        self.clipboard.receive(|event| events.push(event));
+        self.hotkey
+            .receive(|press| self.overlay.hotkey(press.target, press.copy, now));
+        let window = self.overlay_window;
+        let clicks_read = self
+            .clicks
+            .receive(|point| self.overlay.clicked(point, window));
+        // Without its clicks, the window over the game couldn't close: it no longer opens.
+        if !clicks_read && self.overlay.turn_off() {
+            log::warn!(
+                "The window over the game is turned off: the clicks that close it can't be read"
+            );
+        }
+        for event in events {
+            self.take_clipboard_event(event);
+        }
+        if let Some(left) = self.overlay.expire(now) {
+            ctx.request_repaint_after(left);
+        }
+        self.clicks.watch(self.overlay.shown().is_some());
+        let main_visible = ctx.input(|input| input.viewport().visible());
+        if paint_while_hidden(self.overlay.shown().is_some(), main_visible) {
+            ctx.send_viewport_cmd(ViewportCommand::RequestPaintWhileHidden);
+        }
         if self
             .search
             .receive(|answer| self.offers.apply(answer, SystemTime::now()))
@@ -449,8 +615,13 @@ impl App for ExileMarketApp {
             View::Item => StatusBar::sources(&self.i18n, prices, trade).show(ui),
             View::Settings => StatusBar::author(&self.i18n).show(ui),
         }
+        // Taken once for both windows.
+        let to_top = std::mem::take(&mut self.scroll_to_top);
+        self.show_overlay(&ctx, prices, search_kind, trade, to_top);
         match self.view {
-            View::Item => self.item(ui, prices, search_kind),
+            View::Item => {
+                self.item(ui, prices, search_kind, to_top);
+            }
             View::Settings => {
                 if let Some(change) = SettingsPanel::new(&self.settings, &self.i18n).show(ui) {
                     self.change_setting(ui.ctx(), change);
@@ -464,6 +635,40 @@ impl App for ExileMarketApp {
     fn persist_egui_memory(&self) -> bool {
         false
     }
+}
+
+/// Whether the interface must run while the main window is hidden: while the window over the
+/// game shows, which eframe only draws with the main one. Not while the main window shows: the
+/// command also asks for the next frame, which would redraw both windows at every frame.
+fn paint_while_hidden(overlay_shown: bool, main_visible: Option<bool>) -> bool {
+    overlay_shown && main_visible == Some(false)
+}
+
+/// `item` copied by the hotkey again: the item already shown, which keeps its filters and
+/// offers. Copied with Ctrl+C after another text, it starts again.
+fn copied_again(by_hotkey: bool, last: Option<&CopiedItem>, item: &CopiedItem) -> bool {
+    by_hotkey && last == Some(item)
+}
+
+/// The height of the window over the game for an item that can't be read, in points.
+const EMPTY_HEIGHT: f32 = 160.0;
+
+/// `points` in the physical pixels of a screen of `scale` pixels per point.
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "a size of the screen, far within i32"
+)]
+fn to_pixels(points: f32, scale: f32) -> i32 {
+    (points * scale).ceil() as i32
+}
+
+/// `pixels` of the screen in points, for a screen of `scale` pixels per point.
+#[expect(
+    clippy::cast_precision_loss,
+    reason = "a position of the screen, far within f32"
+)]
+fn to_points(pixels: i32, scale: f32) -> f32 {
+    pixels as f32 / scale
 }
 
 /// The price of one item that tells a suspicious offer: the price of a fixed-name item.
@@ -531,13 +736,14 @@ mod tests {
         use crate::trade::query::Query;
 
         let mut session = Session::new(Some(League::new("Standard")));
-        session.apply(ClipboardEvent::Copied(
-            CopiedItem::from_text(
+        session.apply(ClipboardEvent::Copied {
+            item: CopiedItem::from_text(
                 "Item Class: Rings\nRarity: Rare\nWoe Loop\nRuby Ring\n--------\n\
                  Item Level: 80\n--------\nCorrupted",
             )
             .unwrap(),
-        ));
+            hotkey: None,
+        });
         let shown = session.item().expect("an item");
         let item = shown.parsed().expect("read");
         let corrupted = |filters: &Filters| {
@@ -557,6 +763,29 @@ mod tests {
     }
 
     #[test]
+    fn paints_while_hidden_only_for_the_window_over_the_game_and_a_hidden_main_window() {
+        assert!(paint_while_hidden(true, Some(false)));
+        assert!(!paint_while_hidden(true, Some(true)));
+        assert!(!paint_while_hidden(true, None));
+        assert!(!paint_while_hidden(false, Some(false)));
+    }
+
+    #[test]
+    fn the_hotkey_on_the_item_shown_keeps_it_as_it_is() {
+        let ring = CopiedItem::from_text("Item Class: Rings\nRarity: Rare\nWoe Loop\nRuby Ring")
+            .expect("an item");
+        let amulet =
+            CopiedItem::from_text("Item Class: Amulets\nRarity: Rare\nDoom Idol\nGold Amulet")
+                .expect("an item");
+
+        assert!(copied_again(true, Some(&ring), &ring));
+        assert!(!copied_again(true, Some(&ring), &amulet));
+        assert!(!copied_again(true, None, &ring));
+        // Copied with Ctrl+C after another text: a new copy, filters cleared.
+        assert!(!copied_again(false, Some(&ring), &ring));
+    }
+
+    #[test]
     fn the_gear_opens_the_settings_then_closes_them() {
         assert_eq!(View::Item.toggled(), View::Settings);
         assert_eq!(View::Settings.toggled(), View::Item);
@@ -564,9 +793,11 @@ mod tests {
 
     #[test]
     fn a_copied_item_closes_the_settings() {
-        let copied = ClipboardEvent::Copied(
-            CopiedItem::from_text("Item Class: Rings\nRarity: Rare\nWoe Loop\nRuby Ring").unwrap(),
-        );
+        let copied = ClipboardEvent::Copied {
+            item: CopiedItem::from_text("Item Class: Rings\nRarity: Rare\nWoe Loop\nRuby Ring")
+                .unwrap(),
+            hotkey: None,
+        };
 
         assert_eq!(View::Settings.after(&copied), View::Item);
         assert_eq!(View::Item.after(&copied), View::Item);

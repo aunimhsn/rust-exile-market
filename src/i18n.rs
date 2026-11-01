@@ -38,6 +38,7 @@ pub enum Message {
     StatusTradeIdle,
     EmptyCopy,
     EmptyPrice,
+    EmptyDisplayMode,
     ClipboardUnreadable,
     PricesUnavailable,
     ItemUnreadable,
@@ -175,7 +176,7 @@ pub enum Message {
 impl Message {
     /// Every message, for the tests.
     #[cfg(test)]
-    const ALL: [Self; 129] = [
+    const ALL: [Self; 130] = [
         Self::LeagueModeSoftcore,
         Self::LeagueModeHardcore,
         Self::LeagueLoading,
@@ -189,6 +190,7 @@ impl Message {
         Self::StatusTradeIdle,
         Self::EmptyCopy,
         Self::EmptyPrice,
+        Self::EmptyDisplayMode,
         Self::ClipboardUnreadable,
         Self::PricesUnavailable,
         Self::ItemUnreadable,
@@ -324,6 +326,7 @@ impl Message {
             Self::StatusTradeIdle => "status-trade-idle",
             Self::EmptyCopy => "empty-copy",
             Self::EmptyPrice => "empty-price",
+            Self::EmptyDisplayMode => "empty-display-mode",
             Self::ClipboardUnreadable => "clipboard-unreadable",
             Self::PricesUnavailable => "prices-unavailable",
             Self::ItemUnreadable => "item-unreadable",
