@@ -314,6 +314,38 @@ fn a_stat_is_searched_by_its_first_line_with_one_of_its_numbers() {
 }
 
 #[test]
+fn every_line_of_a_stat_the_trade_site_cant_search_shares_its_searched_line() {
+    // The stat of a unique as an implicit: no implicit id.
+    let item = unique(
+        "{ Implicit Modifier }\n\
+         20(15-25)% chance to gain Onslaught for 3 seconds when you kill an\n\
+         enemy affected by Abyssal Wasting",
+    );
+    let stats = line_stats(&item);
+
+    assert_eq!(stats.get(key(0, 0)), Some(&LineStat::Unsearchable));
+    assert_eq!(stats.get(key(0, 1)), Some(&LineStat::Unsearchable));
+    assert_eq!(stats.searched_line(key(0, 0)), key(0, 0));
+    assert_eq!(stats.searched_line(key(0, 1)), key(0, 0));
+}
+
+#[test]
+fn an_unknown_line_is_its_own_searched_line() {
+    // Two unknown lines of one modifier are never one stat.
+    let item = unique(
+        "Gain 3 Unknown Charges when you Dance\n\
+         Gain 4 Other Charges when you Sing",
+    );
+    let stats = line_stats(&item);
+
+    assert_eq!(stats.get(key(0, 0)), Some(&LineStat::Unsearchable));
+    assert_eq!(stats.searched_line(key(0, 0)), key(0, 0));
+    assert_eq!(stats.searched_line(key(0, 1)), key(0, 1));
+    // A line it doesn't hold.
+    assert_eq!(stats.searched_line(key(5, 2)), key(5, 2));
+}
+
+#[test]
 fn a_line_the_trade_site_cant_search_isnt_a_stat_filter() {
     let item = unique("+52 to maximum Life\nGain 3 Unknown Charges when you Dance");
     let stats = line_stats(&item);

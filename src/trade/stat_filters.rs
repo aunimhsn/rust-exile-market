@@ -203,7 +203,8 @@ fn written(value: f64) -> f64 {
 struct Line {
     key: StatKey,
     /// The line of its modifier that searches its stat, which every line of the stat shares,
-    /// also for a stat the trade site can't search.
+    /// also for a stat the trade site can't search; a line whose stat is unknown is its own:
+    /// `game_data::modifier_stats` gives an unknown stat one line only.
     searched: usize,
     stat: LineStat,
     /// The indexes of its numbers its stat counts; none when its stat isn't known.

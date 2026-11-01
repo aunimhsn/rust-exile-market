@@ -2428,6 +2428,74 @@ fn a_stat_on_two_lines_the_trade_site_cant_search_is_one_row() {
 }
 
 #[test]
+fn the_rolls_of_the_lines_of_a_stat_are_joined_when_one_text_can_tell_them() {
+    let ranges = || {
+        vec![Range {
+            min: 15.0,
+            max: 25.0,
+        }]
+    };
+    let tier = || {
+        Some(Box::new(TierRow::plain(ModifierTier {
+            number: Some(2),
+            ranges: ranges(),
+        })))
+    };
+    let affix = |share, tier, origin| Roll::Affix {
+        share,
+        tier,
+        origin,
+    };
+    let bar = |origin| Roll::Bar {
+        share: 0.5,
+        ranges: ranges(),
+        origin,
+    };
+    let desecrated = Some(Origin::Written(ModifierOrigin::Desecrated));
+    let vaal = Some(Origin::Written(ModifierOrigin::Vaal));
+    let tiers = Roll::Tiers {
+        rows: Vec::new(),
+        origin: desecrated,
+    };
+
+    for (roll, next, joined) in [
+        // The bar of the first line, the tier and the origin under the last.
+        (
+            affix(Some(0.8), None, None),
+            affix(None, tier(), desecrated),
+            Some(affix(Some(0.8), tier(), desecrated)),
+        ),
+        // The bar on the last line, under the words before it.
+        (
+            affix(None, None, None),
+            affix(Some(0.8), tier(), None),
+            Some(affix(Some(0.8), tier(), None)),
+        ),
+        // The bar of a unique, the origin of its Vaal modifier under its last line.
+        (bar(None), affix(None, None, vaal), Some(bar(vaal))),
+        (affix(None, None, vaal), bar(None), Some(bar(vaal))),
+        // Two bars or two tiers can't be told under one text.
+        (
+            affix(Some(0.8), None, None),
+            affix(Some(0.2), None, None),
+            None,
+        ),
+        (affix(None, tier(), None), affix(None, tier(), None), None),
+        (bar(None), bar(None), None),
+        (bar(None), affix(None, tier(), None), None),
+        // The tiers of a line that adds up two modifiers, under its bar: kept apart.
+        (affix(Some(0.8), None, None), tiers.clone(), None),
+        (tiers.clone(), affix(None, None, None), None),
+    ] {
+        assert_eq!(
+            joined_roll(roll.clone(), next.clone()),
+            joined,
+            "{roll:?} then {next:?}"
+        );
+    }
+}
+
+#[test]
 fn the_lines_of_a_stat_read_as_one_sentence() {
     // Joined by a space, also for a screen reader.
     let item = parse(include_str!(
