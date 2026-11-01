@@ -34,6 +34,10 @@ ureq.workspace = true
 # need it.
 [target.'cfg(target_os = "linux")'.dependencies]
 winit = { version = "0.30", default-features = false, features = ["x11", "wayland-dlopen"] }
+# The price-check hotkey (see src/hotkey.rs): heard by global-hotkey, the copy sent to the game
+# through XTest with the version of x11rb that global-hotkey, arboard and winit use.
+global-hotkey = "0.9"
+x11rb = { version = "0.13.2", features = ["xtest"] }
 
 [dev-dependencies]
 # The version used by fluent-bundle, whose resources the tests read as syntax trees: update
