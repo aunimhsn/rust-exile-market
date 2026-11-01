@@ -19,13 +19,25 @@ const XK_CONTROL_L: u32 = 0xffe3;
 /// game that reads the keys at each frame sees each of them (the delay of the `enigo` crate).
 const KEY_DELAY_MS: u32 = 12;
 
-/// The connection to the X server, opened at the first copy, and again after a failure.
-#[derive(Default)]
+/// The connection to the X server, opened at the start, and again at the next copy after a
+/// failure.
 pub struct CopySender {
     keyboard: Option<Keyboard>,
 }
 
 impl CopySender {
+    /// Opens the connection at once, so that an X server out of reach is told at the start:
+    /// `global-hotkey` only says so on its own thread, without the log.
+    ///
+    /// # Errors
+    ///
+    /// When the X server can't be reached or has no XTest extension.
+    pub fn connect() -> Result<Self> {
+        Ok(Self {
+            keyboard: Some(Keyboard::connect()?),
+        })
+    }
+
     /// Sends Ctrl+C to the window that has the focus, and writes to the log where it went.
     pub fn send_copy(&mut self) {
         let keyboard = match self.keyboard.take() {
@@ -93,6 +105,14 @@ impl Keyboard {
     }
 
     fn send_copy(&self) -> Result<Sent> {
+        // The window the keys go to, read before them; only for the log, so that a failure
+        // doesn't stop the copy.
+        let window_class = self
+            .active_window_class()
+            .unwrap_or_else(|error| format!("unknown ({error})"));
+        // The events the X server sends to every client, such as a change of the keyboard
+        // mapping, are never needed: dropped so that they don't pile up.
+        while let Ok(Some(_)) = self.connection.poll_for_event() {}
         // Read at each copy: the player may change the layout of the keyboard meanwhile.
         let setup = self.connection.setup();
         let mapping = self
@@ -127,7 +147,7 @@ impl Keyboard {
                 .check()?;
         }
         Ok(Sent {
-            window_class: self.active_window_class()?,
+            window_class,
             control_held,
         })
     }
@@ -177,8 +197,9 @@ fn copy_keys(control: Keycode, c: Keycode, control_held: bool) -> Vec<Key> {
     }
 }
 
-/// The keycode that gives `keysym` without modifier, otherwise with one, in the keyboard
-/// mapping of the X server: `keysyms_per_keycode` keysyms for each keycode from `min_keycode`.
+/// The keycode that gives `keysym` in the first column of the keyboard mapping of the X server
+/// (the first group, without Shift), otherwise in another column (another level or group):
+/// `keysyms_per_keycode` keysyms for each keycode from `min_keycode`.
 fn keycode_of(
     keysym: u32,
     min_keycode: Keycode,
@@ -271,5 +292,14 @@ mod tests {
             "PathOfExile2 (pathofexile2.exe)"
         );
         assert_eq!(window_class(b""), "unknown");
+    }
+
+    #[test]
+    fn reads_a_class_of_one_name_or_without_its_last_null_byte() {
+        assert_eq!(window_class(b"steam\0"), "steam");
+        assert_eq!(
+            window_class(b"pathofexile2.exe\0PathOfExile2"),
+            "PathOfExile2 (pathofexile2.exe)"
+        );
     }
 }

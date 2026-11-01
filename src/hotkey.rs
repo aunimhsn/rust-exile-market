@@ -27,6 +27,13 @@ impl PriceCheckHotkey {
         use global_hotkey::{GlobalHotKeyEvent, GlobalHotKeyManager, HotKeyState};
         use std::sync::{Mutex, PoisonError};
 
+        let sender = match x11::CopySender::connect() {
+            Ok(sender) => Mutex::new(sender),
+            Err(error) => {
+                log::warn!("The price-check hotkey can't listen: no X11 keyboard ({error})");
+                return Self { _manager: None };
+            }
+        };
         let manager = match GlobalHotKeyManager::new() {
             Ok(manager) => manager,
             Err(error) => {
@@ -36,7 +43,6 @@ impl PriceCheckHotkey {
         };
         let hotkey = HotKey::new(Some(Modifiers::CONTROL), Code::KeyD);
         let id = hotkey.id();
-        let sender = Mutex::new(x11::CopySender::default());
         GlobalHotKeyEvent::set_event_handler(Some(move |event: GlobalHotKeyEvent| {
             // At the release of D only: while it is held, the X server gives every key to the
             // application that listens to the hotkey, so that a copy sent then wouldn't reach
