@@ -7,4 +7,4 @@ disallowed-methods = [
 ]
 
 # The names written in the doc comments that aren't code (the default list kept with "..").
-doc-valid-idents = ["RePoE", ".."]
+doc-valid-idents = ["RePoE", "XWayland", "XTest", ".."]

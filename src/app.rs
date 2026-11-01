@@ -1,5 +1,5 @@
-//! The application: the session, the settings, the clipboard watching and the price
-//! database, and the window built from the components of [`crate::ui`].
+//! The application: the session, the settings, the clipboard watching, the price-check
+//! hotkey and the price database, and the window built from the components of [`crate::ui`].
 
 use std::hash::{BuildHasher, RandomState};
 use std::time::{Duration, Instant, SystemTime};
@@ -10,6 +10,7 @@ use egui::{Context, Key, OpenUrl, Ui, ViewportCommand};
 use crate::clipboard::{ClipboardEvent, ClipboardWatch};
 use crate::estimate::{self, Estimate, Reference};
 use crate::filters::Filters;
+use crate::hotkey::PriceCheckHotkey;
 use crate::i18n::{DOWNLOAD_QUOTE_COUNT, Message, Translator};
 use crate::item::Item;
 use crate::league::League;
@@ -64,6 +65,8 @@ pub struct ExileMarketApp {
     /// The list of the leagues is open over the view.
     leagues_open: bool,
     clipboard: ClipboardWatch,
+    /// Ctrl+D copies the item in the game: the copy then arrives through the clipboard.
+    _hotkey: PriceCheckHotkey,
     market: MarketWatch,
     item_names: ItemNamesWatch,
     /// The searches of the trade site, asked by the player.
@@ -109,6 +112,7 @@ impl ExileMarketApp {
             view: View::Item,
             leagues_open: false,
             clipboard: ClipboardWatch::start(move || clipboard_ctx.request_repaint()),
+            _hotkey: PriceCheckHotkey::start(),
             market,
             item_names: ItemNamesWatch::start(move || names_ctx.request_repaint()),
             search: OfferSearch::start(move || search_ctx.request_repaint()),
