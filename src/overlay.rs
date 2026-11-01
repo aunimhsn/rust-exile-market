@@ -12,7 +12,7 @@ mod keyboard;
 mod x11;
 
 #[cfg(target_os = "linux")]
-pub use self::keyboard::{KeyboardFocus, is_ours};
+pub use self::keyboard::KeyboardFocus;
 #[cfg(target_os = "linux")]
 pub use self::x11::ClickWatch;
 

@@ -423,9 +423,21 @@ impl ExileMarketApp {
             ViewportId::from_hash_of("window-over-the-game"),
             builder,
             |ui, _| {
-                // Closed, or the hotkey gave the keyboard back to the game: no field is edited,
-                // so that a window that opens again doesn't take the keyboard.
-                if place.is_none() || self.overlay.take_leave_field() {
+                // Closed, the hotkey gave the keyboard back to the game, or the window lost it
+                // (Alt+Tab, which egui doesn't take for leaving the field): no field is edited,
+                // so that the status bar doesn't say the keys go to the window, and a window that
+                // opens again doesn't take the keyboard. The number typed is settled, as leaving
+                // its field does.
+                let left = self.overlay.take_leave_field();
+                let lost = self.keyboard.held()
+                    && ui.input(|input| {
+                        input
+                            .events
+                            .iter()
+                            .any(|event| matches!(event, egui::Event::WindowFocused(false)))
+                    });
+                if (place.is_none() || left || lost) && ui.ctx().text_edit_focused() {
+                    self.filters.settle_edited();
                     ui.ctx().memory_mut(egui::Memory::stop_text_input);
                 }
                 place?;

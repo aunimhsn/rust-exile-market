@@ -124,6 +124,7 @@ impl XPointer {
 
 impl PointerSource for XPointer {
     fn read(&mut self) -> Result<(Point, bool), Box<dyn Error>> {
+        crate::x11::drop_events(&self.connection);
         let reply = self.connection.query_pointer(self.root)?.reply()?;
         let point = Point {
             x: i32::from(reply.root_x),

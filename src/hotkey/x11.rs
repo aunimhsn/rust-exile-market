@@ -1,19 +1,16 @@
 //! The copy sent to the game under X11: Ctrl+C pressed through the XTest extension, as the
 //! player would press it, in the window that has the focus.
 
-use std::error::Error;
-
 use global_hotkey::HotKeyState;
 use x11rb::connection::{Connection, RequestConnection as _};
 use x11rb::protocol::xproto::{
-    self, Atom, AtomEnum, ConnectionExt as _, InputFocus, KeyButMask, Keycode, Window,
+    self, AtomEnum, ConnectionExt as _, InputFocus, KeyButMask, Keycode, Window,
 };
 use x11rb::protocol::xtest::{self, ConnectionExt as _};
 use x11rb::rust_connection::RustConnection;
 
-use crate::overlay::{Point, ScreenRect, Target, is_ours};
-
-type Result<T> = std::result::Result<T, Box<dyn Error>>;
+use crate::overlay::{Point, ScreenRect, Target};
+use crate::x11::{self as shared, Atoms, Result};
 
 /// The keysyms of the keys pressed, from `X11/keysymdef.h`.
 const XK_C: u32 = 0x0063;
@@ -95,10 +92,7 @@ struct Sent {
 struct Keyboard {
     connection: RustConnection,
     root: Window,
-    /// `_NET_ACTIVE_WINDOW`, the window the desktop gives the focus to.
-    active_window: Atom,
-    /// `_NET_WM_PID`, the process of a window.
-    pid: Atom,
+    atoms: Atoms,
 }
 
 impl Keyboard {
@@ -111,16 +105,11 @@ impl Keyboard {
             return Err("the X server has no XTest extension".into());
         }
         let root = connection.setup().roots[screen].root;
-        let active_window = connection
-            .intern_atom(false, b"_NET_ACTIVE_WINDOW")?
-            .reply()?
-            .atom;
-        let pid = connection.intern_atom(false, b"_NET_WM_PID")?.reply()?.atom;
+        let atoms = Atoms::intern(&connection)?;
         Ok(Self {
             connection,
             root,
-            active_window,
-            pid,
+            atoms,
         })
     }
 
@@ -153,9 +142,7 @@ impl Keyboard {
             }),
             _ => None,
         };
-        // The events the X server sends to every client, such as a change of the keyboard
-        // mapping, are never needed: dropped so that they don't pile up.
-        while let Ok(Some(_)) = self.connection.poll_for_event() {}
+        shared::drop_events(&self.connection);
         // Read at each copy: the player may change the layout of the keyboard meanwhile.
         let setup = self.connection.setup();
         let mapping = self
@@ -203,14 +190,11 @@ impl Keyboard {
     }
 
     /// Gives the keyboard back to `game`, the active window, when the window over the game has
-    /// it: the window of this application with the keyboard, which the desktop didn't activate.
+    /// it, or no window has it (the window over the game just hid).
     fn give_back_keyboard(&self, game: Window) -> Result<()> {
         let focused = self.connection.get_input_focus()?.reply()?.focus;
-        if focused != game
-            && focused != self.root
-            && focused > u32::from(InputFocus::POINTER_ROOT)
-            && is_ours(&self.connection, self.pid, focused)?
-        {
+        let ours = || shared::is_ours(&self.connection, self.atoms, focused);
+        if gives_keyboard_back(focused, game, self.root, ours)? {
             self.connection
                 .set_input_focus(InputFocus::PARENT, game, x11rb::CURRENT_TIME)?
                 .check()?;
@@ -221,14 +205,7 @@ impl Keyboard {
 
     /// The active window, none when the desktop gives the focus to a window outside X11.
     fn active_window(&self) -> Result<Option<Window>> {
-        let window = self
-            .connection
-            .get_property(false, self.root, self.active_window, AtomEnum::WINDOW, 0, 1)?
-            .reply()?
-            .value32()
-            .and_then(|mut windows| windows.next())
-            .unwrap_or(x11rb::NONE);
-        Ok((window != x11rb::NONE).then_some(window))
+        shared::active_window(&self.connection, self.root, self.atoms)
     }
 
     /// Where `window` is on the screen, without its frame; none when it has no size.
@@ -258,6 +235,25 @@ impl Keyboard {
             .value;
         Ok(window_class(&class))
     }
+}
+
+/// Whether the hotkey gives the keyboard, at `focused`, back to `game`, the active window, before
+/// its copy: from a window of this application that the desktop didn't activate (`ours`, read
+/// only then: the window over the game, while one of its fields is edited), or from no window
+/// (the window over the game just hid); never from the game, nor from another window.
+fn gives_keyboard_back(
+    focused: Window,
+    game: Window,
+    root: Window,
+    ours: impl FnOnce() -> Result<bool>,
+) -> Result<bool> {
+    if focused == game {
+        return Ok(false);
+    }
+    if shared::is_nowhere(focused, root) {
+        return Ok(true);
+    }
+    ours()
 }
 
 /// A key pressed or released.
@@ -322,6 +318,43 @@ mod tests {
 
     const CONTROL: Keycode = 37;
     const C: Keycode = 54;
+
+    const ROOT: Window = 0x410;
+    const GAME: Window = 0x660_0001;
+    const OVERLAY: Window = 0x3e0_000a;
+    const BROWSER: Window = 0x220_0004;
+
+    /// Whether the hotkey gives the keyboard at `focused` back to the game, `focused` being a
+    /// window of this application or not.
+    fn gives_back(focused: Window, ours: bool) -> bool {
+        gives_keyboard_back(focused, GAME, ROOT, || Ok(ours)).unwrap()
+    }
+
+    #[test]
+    fn gives_the_keyboard_back_from_the_window_over_the_game() {
+        assert!(gives_back(OVERLAY, true));
+    }
+
+    #[test]
+    fn gives_the_keyboard_back_from_no_window() {
+        // The window over the game hid at the same frame: the keyboard went to the root window.
+        assert!(gives_back(ROOT, false));
+        assert!(gives_back(x11rb::NONE, false));
+        assert!(gives_back(u32::from(InputFocus::POINTER_ROOT), false));
+    }
+
+    #[test]
+    fn leaves_the_keyboard_in_the_game_and_in_another_application() {
+        assert!(!gives_back(GAME, true));
+        assert!(!gives_back(BROWSER, false));
+    }
+
+    #[test]
+    fn reads_the_owner_of_the_window_with_the_keyboard_only_when_needed() {
+        let unread = || -> Result<bool> { panic!("read") };
+        assert!(!gives_keyboard_back(GAME, GAME, ROOT, unread).unwrap());
+        assert!(gives_keyboard_back(ROOT, GAME, ROOT, unread).unwrap());
+    }
 
     #[test]
     fn taps_c_alone_while_the_player_holds_ctrl() {

@@ -7,13 +7,11 @@
 //! window meanwhile (`_NET_ACTIVE_WINDOW`), and doesn't take the keyboard back, which a probe in
 //! the owner's game checked on 2026-11-01 (Bazzite KDE, windowed fullscreen).
 
-use std::error::Error;
-
 use x11rb::connection::Connection as _;
-use x11rb::protocol::xproto::{AtomEnum, ConnectionExt as _, InputFocus, Window};
+use x11rb::protocol::xproto::{ConnectionExt as _, InputFocus, Window};
 use x11rb::rust_connection::RustConnection;
 
-type Result<T> = std::result::Result<T, Box<dyn Error>>;
+use crate::x11::{self as shared, Atoms, Result};
 
 /// The input focus of the X server, or a fake one in the tests.
 pub trait Focus {
@@ -114,17 +112,7 @@ impl<F: Focus> KeyboardFocus<F> {
 
     fn take(&mut self) {
         let Some(focus) = self.focus() else { return };
-        let held: Result<Held> = (|| {
-            let Some(overlay) = focus.ours_under_pointer()? else {
-                return Err("the window over the game isn't under the pointer".into());
-            };
-            let Some(game) = focus.active()? else {
-                return Err("no active window to give the keyboard back to".into());
-            };
-            focus.set_focus(overlay)?;
-            Ok(Held { overlay, game })
-        })();
-        self.held = held
+        self.held = take(focus)
             .map_err(|error| {
                 log::warn!("The window over the game can't take the keyboard: {error}");
             })
@@ -134,57 +122,64 @@ impl<F: Focus> KeyboardFocus<F> {
     fn give_back(&mut self) {
         let Some(held) = self.held.take() else { return };
         let Some(focus) = self.focus() else { return };
-        let given: Result<()> = (|| {
-            // Given meanwhile to another window (a click in the main window, Ctrl+D in the
-            // game), the keyboard stays there.
-            if gives_back(focus.focused()?, held, focus.root()) {
-                focus.set_focus(held.game)?;
-            }
-            Ok(())
-        })();
-        if let Err(error) = given {
+        if let Err(error) = give_back(focus, held) {
             log::warn!("The keyboard can't be given back to the game: {error}");
         }
     }
 }
 
+/// Gives the keyboard to the window over the game, under the pointer; who has it then.
+fn take(focus: &mut impl Focus) -> Result<Held> {
+    let Some(overlay) = focus.ours_under_pointer()? else {
+        return Err("the window over the game isn't under the pointer".into());
+    };
+    let Some(game) = focus.active()? else {
+        return Err("no active window to give the keyboard back to".into());
+    };
+    focus.set_focus(overlay)?;
+    Ok(Held { overlay, game })
+}
+
+/// Gives the keyboard back to the game, unless it went to another window meanwhile.
+fn give_back(focus: &mut impl Focus, held: Held) -> Result<()> {
+    let active = focus.active()?;
+    if gives_back(focus.focused()?, active, held, focus.root()) {
+        focus.set_focus(held.game)?;
+    }
+    Ok(())
+}
+
 /// Whether the keyboard, at `focused`, goes back to the game: while the window over the game
-/// has it, or the root window got it when the window hid; not when it went to another window.
-fn gives_back(focused: Window, held: Held, root: Window) -> bool {
-    focused == held.overlay
-        || focused == root
-        || focused == x11rb::NONE
-        || focused == u32::from(InputFocus::POINTER_ROOT)
+/// has it, or no window has it (the window hid), and the game is still the `active` window. Not
+/// when the keyboard went to another window, nor when the desktop activated another window
+/// (a click in the main window, Alt+Tab), which gets the keyboard from it.
+fn gives_back(focused: Window, active: Option<Window>, held: Held, root: Window) -> bool {
+    active == Some(held.game) && (focused == held.overlay || shared::is_nowhere(focused, root))
 }
 
 /// The input focus of the X server.
 pub struct XFocus {
     connection: RustConnection,
     root: Window,
-    active_window: u32,
-    pid: u32,
+    atoms: Atoms,
 }
 
 impl XFocus {
     fn connect() -> Result<Self> {
         let (connection, screen) = x11rb::connect(None)?;
         let root = connection.setup().roots[screen].root;
-        let active_window = connection
-            .intern_atom(false, b"_NET_ACTIVE_WINDOW")?
-            .reply()?
-            .atom;
-        let pid = connection.intern_atom(false, b"_NET_WM_PID")?.reply()?.atom;
+        let atoms = Atoms::intern(&connection)?;
         Ok(Self {
             connection,
             root,
-            active_window,
-            pid,
+            atoms,
         })
     }
 }
 
 impl Focus for XFocus {
     fn ours_under_pointer(&mut self) -> Result<Option<Window>> {
+        shared::drop_events(&self.connection);
         // The window over the game is a child of the root window, without the frame of the
         // window manager.
         let window = self.connection.query_pointer(self.root)?.reply()?.child;
@@ -197,18 +192,11 @@ impl Focus for XFocus {
         {
             return Ok(None);
         }
-        Ok(is_ours(&self.connection, self.pid, window)?.then_some(window))
+        Ok(shared::is_ours(&self.connection, self.atoms, window)?.then_some(window))
     }
 
     fn active(&mut self) -> Result<Option<Window>> {
-        let window = self
-            .connection
-            .get_property(false, self.root, self.active_window, AtomEnum::WINDOW, 0, 1)?
-            .reply()?
-            .value32()
-            .and_then(|mut windows| windows.next())
-            .unwrap_or(x11rb::NONE);
-        Ok((window != x11rb::NONE).then_some(window))
+        shared::active_window(&self.connection, self.root, self.atoms)
     }
 
     fn focused(&mut self) -> Result<Window> {
@@ -228,22 +216,12 @@ impl Focus for XFocus {
     }
 }
 
-/// Whether `window` belongs to this application: its `_NET_WM_PID` (the atom `pid`), which winit
-/// writes on each window, is the id of this process.
-pub fn is_ours(connection: &RustConnection, pid: u32, window: Window) -> Result<bool> {
-    let owner = connection
-        .get_property(false, window, pid, AtomEnum::CARDINAL, 0, 1)?
-        .reply()?
-        .value32()
-        .and_then(|mut values| values.next());
-    Ok(owner == Some(std::process::id()))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::cell::RefCell;
     use std::rc::Rc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
 
     const ROOT: Window = 0x410;
     const OVERLAY: Window = 0x3e0_000a;
@@ -371,23 +349,67 @@ mod tests {
     }
 
     #[test]
-    fn without_an_x_server_nothing_is_held() {
-        let mut keyboard = KeyboardFocus::<FakeFocus>::with(|| Err("no display".into()));
-        assert!(!keyboard.follow(true));
-        assert!(!keyboard.follow(false));
+    fn the_desktop_activating_another_window_keeps_the_keyboard_there() {
+        let (mut keyboard, server) = keyboard(Server::default());
+        keyboard.follow(true);
+        // Alt+Tab: the window manager activates the main window, the window over the game hides.
+        {
+            let mut server = server.borrow_mut();
+            server.active = Some(MAIN);
+            server.focused = ROOT;
+        }
+        keyboard.follow(false);
+        assert_eq!(server.borrow().set, [OVERLAY]);
     }
 
     #[test]
-    fn the_keyboard_goes_back_from_the_window_the_root_or_no_window_only() {
+    fn a_keyboard_that_couldnt_be_given_back_is_no_longer_held() {
+        let (mut keyboard, server) = keyboard(Server::default());
+        assert!(keyboard.follow(true));
+        server.borrow_mut().fails = true;
+        assert!(!keyboard.follow(false));
+        assert!(!keyboard.held());
+        // The next field edited tries again.
+        server.borrow_mut().fails = false;
+        assert!(keyboard.follow(true));
+    }
+
+    #[test]
+    fn without_an_x_server_the_connection_is_tried_once() {
+        static ATTEMPTS: AtomicUsize = AtomicUsize::new(0);
+        let mut keyboard = KeyboardFocus::<FakeFocus>::with(|| {
+            ATTEMPTS.fetch_add(1, Ordering::Relaxed);
+            Err("no display".into())
+        });
+        for editing in [true, false, true, false] {
+            assert!(!keyboard.follow(editing));
+        }
+        assert_eq!(ATTEMPTS.load(Ordering::Relaxed), 1);
+    }
+
+    #[test]
+    fn the_keyboard_goes_back_from_the_window_or_no_window_only() {
         let held = Held {
             overlay: OVERLAY,
             game: GAME,
         };
-        assert!(gives_back(OVERLAY, held, ROOT));
-        assert!(gives_back(ROOT, held, ROOT));
-        assert!(gives_back(x11rb::NONE, held, ROOT));
-        assert!(gives_back(u32::from(InputFocus::POINTER_ROOT), held, ROOT));
-        assert!(!gives_back(MAIN, held, ROOT));
-        assert!(!gives_back(GAME, held, ROOT));
+        let back = |focused| gives_back(focused, Some(GAME), held, ROOT);
+        assert!(back(OVERLAY));
+        assert!(back(ROOT));
+        assert!(back(x11rb::NONE));
+        assert!(back(u32::from(InputFocus::POINTER_ROOT)));
+        assert!(!back(MAIN));
+        assert!(!back(GAME));
+    }
+
+    #[test]
+    fn the_keyboard_stays_with_a_window_the_desktop_activated_meanwhile() {
+        let held = Held {
+            overlay: OVERLAY,
+            game: GAME,
+        };
+        // Its activation may reach the X server after the window over the game hid.
+        assert!(!gives_back(ROOT, Some(MAIN), held, ROOT));
+        assert!(!gives_back(OVERLAY, None, held, ROOT));
     }
 }

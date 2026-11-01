@@ -107,7 +107,7 @@ impl<'a> StatusBar<'a> {
                         // In the text color: the game no longer gets the keys the player types.
                         Line::Keyboard => {
                             let line = self.i18n.text(Message::StatusKeyboard);
-                            ui.add(Label::new(faint(line).color(color::TEXT)).truncate());
+                            ui.add(Label::new(small(line).color(color::TEXT)).truncate());
                         }
                     }
                 });
@@ -186,8 +186,14 @@ impl<'a> StatusBar<'a> {
     }
 }
 
+/// A line of the bar in its small face.
+fn small(line: impl Into<String>) -> RichText {
+    RichText::new(line).font(text::small())
+}
+
+/// A line of the bar in its small face, faint.
 fn faint(line: impl Into<String>) -> RichText {
-    RichText::new(line).font(text::small()).color(color::FAINT)
+    small(line).color(color::FAINT)
 }
 
 #[cfg(test)]
@@ -213,6 +219,21 @@ mod tests {
         // epaint panics when the texture changes of a frame are dropped unapplied.
         output.textures_delta.clear();
         widths
+    }
+
+    #[test]
+    fn the_keyboard_held_takes_the_place_of_the_sources() {
+        let i18n = Translator::new(crate::language::Language::English);
+        let bar = |held| {
+            StatusBar::sources(&i18n, PricesState::Unavailable, TradeStatus::Idle)
+                .keyboard(held)
+                .line
+        };
+        assert_eq!(bar(true), Line::Keyboard);
+        assert_eq!(
+            bar(false),
+            Line::Sources(PricesState::Unavailable, TradeStatus::Idle)
+        );
     }
 
     #[test]
