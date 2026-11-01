@@ -9,9 +9,24 @@
 //! window over the game there ([`crate::overlay`]).
 
 use std::sync::mpsc::Receiver;
+use std::time::{Duration, Instant};
 
 use crate::clipboard::CopyMarker;
 use crate::overlay::Target;
+
+/// How long the game may take to copy the item after the hotkey: past it, the hotkey copied
+/// nothing (an empty cell of the inventory). The clipboard watching and the window over the game
+/// both count it from [`Press::at`].
+pub const COPY_WAIT: Duration = Duration::from_secs(1);
+
+/// A press of the hotkey.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Press {
+    /// Where it was pressed, when the system could tell it.
+    pub target: Option<Target>,
+    /// When the copy was prepared, just before it was sent.
+    pub at: Instant,
+}
 
 #[cfg(target_os = "windows")]
 mod windows;
@@ -30,8 +45,8 @@ pub struct PriceCheckHotkey {
     /// Listens until it is dropped.
     #[cfg(any(target_os = "linux", target_os = "windows"))]
     _manager: Option<global_hotkey::GlobalHotKeyManager>,
-    /// Each hotkey, with where it was pressed when the system could tell it.
-    targets: Option<Receiver<Option<Target>>>,
+    /// Each press of the hotkey.
+    targets: Option<Receiver<Press>>,
 }
 
 impl PriceCheckHotkey {
@@ -78,13 +93,22 @@ impl PriceCheckHotkey {
             if event.id == id && event.state == keys::SENT_AT {
                 let mut sender = sender.lock().unwrap_or_else(PoisonError::into_inner);
                 let (keys, marker) = &mut *sender;
+                // Marked only when the keys can be sent: a copy that doesn't leave would leave
+                // the marker in place of the item of the player.
                 #[cfg(target_os = "linux")]
-                marker.before_copy();
+                let at = if keys.ready() {
+                    marker.before_copy()
+                } else {
+                    Instant::now()
+                };
                 #[cfg(not(target_os = "linux"))]
-                let _ = marker;
+                let at = {
+                    let _ = marker;
+                    Instant::now()
+                };
                 let target = keys.send_copy();
                 // The application stopped listening: nothing left to tell.
-                if targets.send(target).is_ok() {
+                if targets.send(Press { target, at }).is_ok() {
                     wake();
                 }
             }
@@ -109,9 +133,8 @@ impl PriceCheckHotkey {
 }
 
 impl PriceCheckHotkey {
-    /// Gives each hotkey since the last call to `handle`, with where it was pressed when the
-    /// system could tell it, without waiting.
-    pub fn receive(&mut self, mut handle: impl FnMut(Option<Target>)) {
+    /// Gives each press of the hotkey since the last call to `handle`, without waiting.
+    pub fn receive(&mut self, mut handle: impl FnMut(Press)) {
         if let Some(targets) = &self.targets {
             while let Ok(target) = targets.try_recv() {
                 handle(target);

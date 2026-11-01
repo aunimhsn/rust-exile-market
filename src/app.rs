@@ -355,8 +355,9 @@ impl ExileMarketApp {
         height
     }
 
-    /// The window over the game, while it is open: the blocks of the item without the title bar,
-    /// beside the panel of the game the item is in, as high as its content.
+    /// The window over the game, drawn at every frame and shown while it is open: the blocks of
+    /// the item without the title bar, beside the panel of the game the item is in, as high as
+    /// its content.
     ///
     /// Two rules keep it from a panic of egui ("the user callback was never called"), since
     /// eframe 0.37 can't create a window while the main one is minimized (it then paints outside
@@ -473,8 +474,9 @@ impl App for ExileMarketApp {
     /// clicks of the components it draws.
     fn logic(&mut self, ctx: &Context, _frame: &mut Frame) {
         let now = Instant::now();
+        // Counted from when the copy was prepared, like the clipboard watching.
         self.hotkey
-            .receive(|target| self.overlay.hotkey(target, now));
+            .receive(|press| self.overlay.hotkey(press.target, press.at));
         self.clipboard.receive(|event| {
             if let ClipboardEvent::Copied(item) = &event {
                 let was_open = self.overlay.shown().is_some();

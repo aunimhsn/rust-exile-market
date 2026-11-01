@@ -46,6 +46,17 @@ impl CopySender {
         })
     }
 
+    /// Whether the keys can be sent: the connection to the X server is open, or opens again.
+    pub fn ready(&mut self) -> bool {
+        if self.keyboard.is_none() {
+            match Keyboard::connect() {
+                Ok(keyboard) => self.keyboard = Some(keyboard),
+                Err(error) => log::warn!("The copy can't be sent: no X11 keyboard ({error})"),
+            }
+        }
+        self.keyboard.is_some()
+    }
+
     /// Sends Ctrl+C to the window that has the focus, and writes to the log where it went;
     /// where the window over the game opens, when the pointer and that window could be read.
     pub fn send_copy(&mut self) -> Option<Target> {

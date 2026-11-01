@@ -263,19 +263,22 @@ mod tests {
         assert!(watch.receive(|point| clicks.push(point)));
         assert_eq!(clicks, [AT]);
 
-        // The window closed by that click, then opened again while the button is still held.
-        // The first reading goes to the reading the thread waits for since the click.
+        // The window closed by that click, then opened again while the button is still held:
+        // the thread may take the first of these readings before or after the orders, and in
+        // both orders the button is still held when the watch starts again.
         watch.watch(false);
         watch.watch(true);
         for down in [true, true, false, true] {
             readings.send(down).unwrap();
         }
-        wakes
-            .recv_timeout(Duration::from_secs(5))
-            .expect("woken up by the next click");
-        // Time for a wrong click from the button held, if the watch took it for a new one.
-        std::thread::sleep(Duration::from_millis(300));
-        assert!(watch.receive(|point| clicks.push(point)));
+        // No more readings: the thread then tells that the pointer can't be read, after every
+        // click of these readings.
+        drop(readings);
+        while watch.receive(|point| clicks.push(point)) {
+            wakes
+                .recv_timeout(Duration::from_secs(10))
+                .expect("woken up by a click or by the end of the readings");
+        }
         assert_eq!(clicks, [AT, AT]);
     }
 

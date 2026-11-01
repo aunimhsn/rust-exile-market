@@ -13,12 +13,16 @@ pub use self::x11::ClickWatch;
 
 use std::time::{Duration, Instant};
 
+use crate::hotkey::COPY_WAIT;
+
+/// The time an item takes from the clipboard watching, which reads it within [`COPY_WAIT`] of the
+/// hotkey, to the window: the next frame, up to 200 ms while the main window is minimized
+/// (eframe then wakes up less often). So that the window never refuses an item the watching took
+/// for the copy of the hotkey.
+const DELIVERY: Duration = Duration::from_millis(500);
+
 /// The width of the window, in points: the one of the narrow layout.
 pub const WIDTH: f32 = 420.0;
-/// How long the game may take to copy the item after the hotkey: past it, the hotkey copied
-/// nothing (an empty cell of the inventory), and opens nothing; the clipboard watching also
-/// forgets the copy it expected.
-pub const COPY_WAIT: Duration = Duration::from_secs(1);
 /// The width of a panel of the game (inventory, stash) for its height: 370 for 600, the ratio
 /// Exiled Exchange 2 uses (`uiSidebarWidth` in `main/src/windowing/GameWindow.ts`).
 const PANEL_WIDTH_PER_HEIGHT: (i32, i32) = (370, 600);
@@ -101,11 +105,11 @@ pub struct Overlay {
 }
 
 impl Overlay {
-    /// The hotkey was pressed at `now`: the window opens at `target` when the item arrives;
+    /// The hotkey prepared its copy `at`: the window opens at `target` when the item arrives;
     /// without target (the pointer or the game couldn't be read), the item only shows in the
     /// main window.
-    pub fn hotkey(&mut self, target: Option<Target>, now: Instant) {
-        self.pending = Some((target.filter(|_| !self.off), now));
+    pub fn hotkey(&mut self, target: Option<Target>, at: Instant) {
+        self.pending = Some((target.filter(|_| !self.off), at));
     }
 
     /// An item arrived at `now`; `true` when the hotkey copied it. It then opens the window
@@ -113,7 +117,9 @@ impl Overlay {
     /// main window.
     pub fn copied(&mut self, now: Instant) -> bool {
         match self.pending.take() {
-            Some((target, pressed)) if now.duration_since(pressed) <= COPY_WAIT => {
+            Some((target, pressed))
+                if now.saturating_duration_since(pressed) <= COPY_WAIT + DELIVERY =>
+            {
                 // A hotkey pressed just before the window was turned off opens nothing either.
                 if target.is_some() && !self.off {
                     self.shown = target;
@@ -135,7 +141,7 @@ impl Overlay {
     /// it is forgotten.
     pub fn expire(&mut self, now: Instant) -> Option<Duration> {
         let (_, pressed) = self.pending?;
-        let left = COPY_WAIT.checked_sub(now.duration_since(pressed));
+        let left = (COPY_WAIT + DELIVERY).checked_sub(now.saturating_duration_since(pressed));
         if left.is_none() {
             self.pending = None;
             log::info!(
@@ -310,10 +316,10 @@ mod tests {
 
         assert_eq!(
             overlay.expire(now + Duration::from_millis(400)),
-            Some(Duration::from_millis(600))
+            Some(Duration::from_millis(1100))
         );
-        assert_eq!(overlay.expire(now + Duration::from_millis(1100)), None);
-        assert!(!overlay.copied(now + Duration::from_millis(1200)));
+        assert_eq!(overlay.expire(now + Duration::from_millis(1600)), None);
+        assert!(!overlay.copied(now + Duration::from_millis(1700)));
         assert_eq!(overlay.shown(), None);
     }
 
@@ -323,7 +329,7 @@ mod tests {
         let now = Instant::now();
         overlay.hotkey(Some(target(4557, 966)), now);
 
-        assert!(!overlay.copied(now + Duration::from_millis(1500)));
+        assert!(!overlay.copied(now + Duration::from_millis(1600)));
         assert_eq!(overlay.shown(), None);
     }
 
@@ -388,6 +394,17 @@ mod tests {
         // The item still counts as copied by the hotkey.
         assert!(overlay.copied(now));
         assert_eq!(overlay.shown(), None);
+    }
+
+    #[test]
+    fn an_item_the_watching_took_just_in_time_still_opens_it() {
+        // Read 900 ms after the hotkey, then 300 ms on its way to the window.
+        let mut overlay = Overlay::default();
+        let now = Instant::now();
+        overlay.hotkey(Some(target(4557, 966)), now);
+
+        assert!(overlay.copied(now + Duration::from_millis(1200)));
+        assert_eq!(overlay.shown(), Some(target(4557, 966)));
     }
 
     #[test]
