@@ -5,7 +5,8 @@
 // Checked in the owner's game on 2026-11-01 (Bazzite KDE, windowed fullscreen): such a window shows over the game,
 // doesn't take its focus, and a click on it stays in it. The screen is the owner's, 2560 × 1440, at half scale;
 // a click on an item stands for Ctrl+D. The height, chosen by the
-// owner on 2026-11-01: the height of the content, level with the item (its top at the top of the item, moved up as
+// owner on 2026-11-01: the height of the content, level with the item (its top at the cursor at the press of
+// Ctrl+D, the application doesn't know where the item starts; moved up as
 // much as the screen needs), growing when the stats are shown, at most the height of the screen, then its content
 // scrolls. No title bar (owner, 2026-11-01: the most bare; the league can't be changed over the game, the player
 // knows it, and the window closes by itself): the league on the right of the status bar. It stays open until a click
@@ -65,7 +66,7 @@ SECTIONS.unshift(["Window over the game (14b1): click an item of the screen, it 
 ]]);
 
 // The behaviour: open at a click on an item, placed by the half of the screen, closed by a click in the game.
-const ovState = { open: false, item: null, last: null, unfolded: false };
+const ovState = { open: false, item: null, press: null, last: null, unfolded: false };
 const ovStage = () => document.querySelector(".ov-stage");
 function ovStatus(text) {
   const status = document.querySelector(".ov-status");
@@ -78,12 +79,12 @@ function ovClose(why) {
   stage.querySelector(".ov-window").className = "ov-window";
   ovStatus(`Closed: ${why}.`);
 }
-// Level with the item: the top of the window at the top of the item, moved up as much as the screen needs, at
-// most the height of the screen (its content then scrolls).
+// Level with the item: the top of the window at the cursor of Ctrl+D, moved up as much as the screen needs, at most
+// the height of the screen (its content then scrolls).
 function ovPlace(windowElement) {
-  windowElement.style.top = `${Math.max(0, Math.min(ovState.item.y, 1440 - windowElement.offsetHeight))}px`;
+  windowElement.style.top = `${Math.max(0, Math.min(ovState.press.y, 1440 - windowElement.offsetHeight))}px`;
 }
-function ovOpen(key, element, unfolded = false) {
+function ovOpen(key, element, press, unfolded = false) {
   const it = OV_ITEMS[key];
   const box = { x: element.offsetLeft, y: element.offsetTop, w: element.offsetWidth, h: element.offsetHeight };
   const right = box.x + box.w / 2 > 1280;
@@ -91,7 +92,7 @@ function ovOpen(key, element, unfolded = false) {
   windowElement.innerHTML = it.window(unfolded);
   windowElement.className = "ov-window is-open";
   windowElement.style.left = `${right ? 2560 - OV.panel - OV.width : OV.panel}px`;
-  Object.assign(ovState, { open: true, item: box, last: key, unfolded });
+  Object.assign(ovState, { open: true, item: box, press, last: key, unfolded });
   ovPlace(windowElement);
   ovStatus(`Open ${right ? "left of the inventory" : "right of the stash"}: ${it.label}.`);
 }
@@ -99,13 +100,14 @@ document.addEventListener("click", event => {
   // A tab draws the sheet again (its own listener runs first): the window of the last item opens again.
   if (event.target.closest("#styles") && event.target.dataset.variant) {
     const element = ovState.open && document.querySelector(`[data-ov-item="${ovState.last}"]`);
-    if (element) ovOpen(ovState.last, element, ovState.unfolded);
+    if (element) ovOpen(ovState.last, element, ovState.press, ovState.unfolded);
     return;
   }
   if (!event.target.closest(".ov-screen")) return;
   const itemElement = event.target.closest(".ov-item");
   if (itemElement) {
-    ovOpen(itemElement.dataset.ovItem, itemElement);
+    const rect = event.target.closest(".ov-screen").getBoundingClientRect();
+    ovOpen(itemElement.dataset.ovItem, itemElement, { x: (event.clientX - rect.left) * 2, y: (event.clientY - rect.top) * 2 });
   } else if (event.target.closest(".ov-window .stats-toggle .pill")) {
     // Show or hide the stats: the window grows or shrinks, and moves up if the screen needs it.
     const windowElement = ovStage().querySelector(".ov-window");
@@ -119,5 +121,8 @@ document.addEventListener("click", event => {
 // `?ovopen=bow` opens the window of that item at load, as if Ctrl+D was pressed on it, `&ovstats` with its stats
 // shown (screenshots).
 if (params.get("ovopen") in OV_ITEMS) {
-  setTimeout(() => ovOpen(params.get("ovopen"), document.querySelector(`[data-ov-item="${params.get("ovopen")}"]`), params.has("ovstats")));
+  setTimeout(() => {
+    const element = document.querySelector(`[data-ov-item="${params.get("ovopen")}"]`);
+    ovOpen(params.get("ovopen"), element, { x: element.offsetLeft + element.offsetWidth / 2, y: element.offsetTop + element.offsetHeight / 2 }, params.has("ovstats"));
+  });
 }
