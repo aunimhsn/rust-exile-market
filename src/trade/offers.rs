@@ -283,8 +283,8 @@ struct ApiProperty {
     name: String,
     #[serde(default)]
     values: Vec<Value>,
-    /// 6 for the quality; none for most of the others. Read loosely: it only tells a quality
-    /// that can't be read, which mustn't fail the whole answer.
+    /// 6 for the quality, 5 for the level of a gem, 62 to 65 for the requirements; none for
+    /// most of the others. Read loosely: a type of another form mustn't fail the whole answer.
     #[serde(rename = "type", default)]
     kind: Value,
 }

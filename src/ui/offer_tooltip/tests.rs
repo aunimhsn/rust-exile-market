@@ -759,6 +759,18 @@ fn a_gem_without_quality_has_no_quality_line_and_another_item_no_gem_line() {
         [("Sockets: 2".to_owned(), color::WEAK, None)]
     );
     assert_eq!(gem_texts(&comet(16, None, None), &owners, &i18n), []);
+    // A copy without its sockets: no difference, never from 0.
+    let without = Item::parse(
+        &crate::item::CopiedItem::from_text(
+            "Item Class: Skill Gems\nRarity: Gem\nComet\n--------\nLevel: 15",
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        gem_texts(&comet(16, None, Some(2)), &without, &i18n),
+        [("Sockets: 2".to_owned(), color::WEAK, None)]
+    );
     assert_eq!(
         gem_texts(&comet(16, Some(20), Some(4)), &owners_waystone(), &i18n),
         []
@@ -789,16 +801,13 @@ fn an_offer_of_gem_writes_the_class_and_its_level_in_its_color() {
     assert_eq!(level_color(&comet(16, None, None)), Some(color::TEXT));
     // French.
     let french = Translator::new(crate::language::Language::French);
-    let comete = Item::parse(
-        &crate::item::CopiedItem::from_text(
-            "Classe d'objet: Gemmes d'aptitude\nRareté: Gemme\nComète\n--------\nNiveau: 15\n\
-             --------\nChâsses: G G",
-        )
-        .unwrap(),
+    let flame_wall = Item::parse(
+        &crate::item::CopiedItem::from_text(include_str!("../../item/test-items/fr-skill-gem.txt"))
+            .unwrap(),
     )
     .unwrap();
     assert_eq!(
-        meta(&comet(16, None, None), &comete, &french, 300.0).text,
+        meta(&comet(16, None, None), &flame_wall, &french, 300.0).text,
         "Gemmes d'aptitude · Niveau\u{a0}16"
     );
     // An offer of gem for another copied item: its base as it is.

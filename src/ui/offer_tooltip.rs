@@ -292,7 +292,8 @@ fn higher_better(value: f64, copied: f64) -> Option<Difference> {
 /// is a skill gem, written like their filters, each with its difference from the item, better
 /// higher: gray, white at their top (a quality of 20 % or more, 5 sockets). A quality of the
 /// item that the offer lacks is written faint, at 0, with its loss; sockets the trade site
-/// doesn't give aren't written. The level is under the name ([`meta`]).
+/// doesn't give aren't written, nor their difference when the copy doesn't give the item's
+/// (every gem has 2, never 0). The level is under the name ([`meta`]).
 fn gem_lines(offer: &ItemOffer, item: &Item, i18n: &Translator) -> Vec<Line> {
     if !item.is_skill_gem() {
         return Vec::new();
@@ -318,7 +319,9 @@ fn gem_lines(offer: &ItemOffer, item: &Item, i18n: &Translator) -> Vec<Line> {
         } else {
             color::WEAK
         },
-        difference: higher_better(f64::from(sockets), f64::from(item.sockets().unwrap_or(0))),
+        difference: item
+            .sockets()
+            .and_then(|copied| higher_better(f64::from(sockets), f64::from(copied))),
     });
     quality.into_iter().chain(sockets).collect()
 }

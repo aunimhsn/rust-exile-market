@@ -356,7 +356,8 @@ fn the_properties_of_an_offer_of_waystone_are_read_in_both_languages() {
 
 /// Offers of `/fetch` on 2026-11-01, shortened: a Comet of level 21 corrupted, as the English
 /// and the French trade sites give it; one of level 16 without quality nor corruption; a body
-/// armour and its requirements; a weapon whose strength is told by its name only.
+/// armour and its requirements. Then a weapon written by hand, whose strength is told by its
+/// name only: no strength was seen on 2026-11-01.
 const GEMS_AND_ARMOURS: &str = r#"{"result": [
     {"id": "g1", "listing": {"account": {}}, "item": {
         "support": false, "gemSockets": ["W", "W"], "name": "", "typeLine": "Comet", "baseType": "Comet",
