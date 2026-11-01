@@ -148,8 +148,8 @@ pub struct Filters {
     changed: HashMap<FilterKey, Filter>,
     /// The state tags lit: the offers of these states only.
     lit: Vec<ItemState>,
-    /// The half of a range field the player was in last: settled again when its field
-    /// disappears before they leave it, which settling twice leaves the same.
+    /// The half of a range field of the window over the game the player is in: settled when the
+    /// window closes before they leave it.
     edited: Option<(FilterKey, Half)>,
 }
 
@@ -197,6 +197,11 @@ impl Filters {
     /// The player is in `half` of the range field of `key`.
     pub fn edit(&mut self, key: FilterKey, half: Half) {
         self.edited = Some((key, half));
+    }
+
+    /// No half of a field of the window over the game is edited any more.
+    pub fn forget_edited(&mut self) {
+        self.edited = None;
     }
 
     /// Settles the half the player was in, as leaving it does, when its field disappears before

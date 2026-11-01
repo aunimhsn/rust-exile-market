@@ -31,7 +31,7 @@ use std::borrow::Cow;
 use egui::text::{LayoutJob, TextFormat};
 use egui::{
     Align, Align2, Area, Color32, CornerRadius, Frame, Id, Label, Layout, Margin, Order, Pos2,
-    Rect, Response, RichText, Sense, Stroke, TextEdit, Ui, Vec2, pos2, vec2,
+    Rect, Response, RichText, Sense, Stroke, TextEdit, Ui, Vec2, ViewportId, pos2, vec2,
 };
 
 use super::item_block::waystone_tier_color;
@@ -2212,7 +2212,10 @@ fn stat_row(ui: &mut Ui, stat: &Stat<'_>, filters: &mut Filters, i18n: &Translat
         if choice != before {
             filters.set(stat.key, choice);
         }
-        if let Some(half) = edited {
+        // In the window over the game only, which may close before the player leaves the field.
+        if let Some(half) = edited
+            && ui.ctx().viewport_id() != ViewportId::ROOT
+        {
             filters.edit(stat.key, half);
         }
     });
@@ -2335,7 +2338,9 @@ fn range_field(
                 if response.lost_focus() {
                     choice.settle(half);
                 }
-                if response.has_focus() {
+                // Read in egui, as `Context::text_edit_focused`: the window may not have the
+                // keyboard of the system yet.
+                if ui.memory(|memory| memory.has_focus(id)) {
                     edited = Some(half);
                 }
             }

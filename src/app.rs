@@ -456,6 +456,9 @@ impl ExileMarketApp {
         );
         let editing = height.is_some_and(|(_, editing)| editing);
         let height = height.map(|(height, _)| height);
+        if !editing {
+            self.filters.forget_edited();
+        }
         // The status bar, drawn before the fields, says it at the next frame.
         let held = self.keyboard.held();
         if self.keyboard.follow(editing) != held {

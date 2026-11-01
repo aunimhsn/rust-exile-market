@@ -340,13 +340,14 @@ mod tests {
         // The window over the game hid at the same frame: the keyboard went to the root window.
         assert!(gives_back(ROOT, false));
         assert!(gives_back(x11rb::NONE, false));
-        assert!(gives_back(u32::from(InputFocus::POINTER_ROOT), false));
     }
 
     #[test]
     fn leaves_the_keyboard_in_the_game_and_in_another_application() {
         assert!(!gives_back(GAME, true));
         assert!(!gives_back(BROWSER, false));
+        // The window manager gives it to the window under the pointer: its choice stays.
+        assert!(!gives_back(u32::from(InputFocus::POINTER_ROOT), false));
     }
 
     #[test]

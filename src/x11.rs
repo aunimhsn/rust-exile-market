@@ -5,7 +5,7 @@
 use std::error::Error;
 
 use x11rb::connection::Connection;
-use x11rb::protocol::xproto::{Atom, AtomEnum, ConnectionExt as _, InputFocus, Window};
+use x11rb::protocol::xproto::{Atom, AtomEnum, ConnectionExt as _, Window};
 use x11rb::rust_connection::RustConnection;
 
 pub type Result<T> = std::result::Result<T, Box<dyn Error>>;
@@ -56,10 +56,11 @@ pub fn is_ours(connection: &RustConnection, atoms: Atoms, window: Window) -> Res
 }
 
 /// Whether the keyboard, at `focused`, is in no window: the root window (which gets it when the
-/// window that had it hides), no window, or the window under the pointer.
+/// window that had it hides), or no window. Not the window under the pointer (`PointerRoot`), a
+/// mode the window manager chooses, which the keyboard of this application never leaves.
 #[must_use]
 pub fn is_nowhere(focused: Window, root: Window) -> bool {
-    focused == root || focused == x11rb::NONE || focused == u32::from(InputFocus::POINTER_ROOT)
+    focused == root || focused == x11rb::NONE
 }
 
 /// Drops the events the X server sends to every client, such as a change of the keyboard
@@ -71,14 +72,15 @@ pub fn drop_events(connection: &RustConnection) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use x11rb::protocol::xproto::InputFocus;
 
     const ROOT: Window = 0x410;
 
     #[test]
-    fn the_root_no_window_and_the_pointer_root_are_nowhere() {
+    fn the_root_and_no_window_are_nowhere_the_pointer_root_isnt() {
         assert!(is_nowhere(ROOT, ROOT));
         assert!(is_nowhere(x11rb::NONE, ROOT));
-        assert!(is_nowhere(u32::from(InputFocus::POINTER_ROOT), ROOT));
+        assert!(!is_nowhere(u32::from(InputFocus::POINTER_ROOT), ROOT));
         assert!(!is_nowhere(0x660_0001, ROOT));
     }
 }

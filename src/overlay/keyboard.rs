@@ -143,8 +143,13 @@ fn take(focus: &mut impl Focus) -> Result<Held> {
 /// Gives the keyboard back to the game, unless it went to another window meanwhile.
 fn give_back(focus: &mut impl Focus, held: Held) -> Result<()> {
     let active = focus.active()?;
-    if gives_back(focus.focused()?, active, held, focus.root()) {
+    let focused = focus.focused()?;
+    if gives_back(focused, active, held, focus.root()) {
         focus.set_focus(held.game)?;
+    } else {
+        log::info!(
+            "The keyboard stays where it went meanwhile (window {focused:#x}, active window {active:?})"
+        );
     }
     Ok(())
 }
@@ -152,9 +157,16 @@ fn give_back(focus: &mut impl Focus, held: Held) -> Result<()> {
 /// Whether the keyboard, at `focused`, goes back to the game: while the window over the game
 /// has it, or no window has it (the window hid), and the game is still the `active` window. Not
 /// when the keyboard went to another window, nor when the desktop activated another window
-/// (a click in the main window, Alt+Tab), which gets the keyboard from it.
+/// (a click in the main window, Alt+Tab), which gets the keyboard from it. A desktop may tell
+/// no active window while the window over the game has the keyboard (`KWin` keeps the game, other
+/// window managers are unchecked): the keyboard then goes back from the window only.
 fn gives_back(focused: Window, active: Option<Window>, held: Held, root: Window) -> bool {
-    active == Some(held.game) && (focused == held.overlay || shared::is_nowhere(focused, root))
+    match active {
+        Some(active) => {
+            active == held.game && (focused == held.overlay || shared::is_nowhere(focused, root))
+        }
+        None => focused == held.overlay,
+    }
 }
 
 /// The input focus of the X server.
@@ -397,7 +409,7 @@ mod tests {
         assert!(back(OVERLAY));
         assert!(back(ROOT));
         assert!(back(x11rb::NONE));
-        assert!(back(u32::from(InputFocus::POINTER_ROOT)));
+        assert!(!back(u32::from(InputFocus::POINTER_ROOT)));
         assert!(!back(MAIN));
         assert!(!back(GAME));
     }
@@ -410,6 +422,17 @@ mod tests {
         };
         // Its activation may reach the X server after the window over the game hid.
         assert!(!gives_back(ROOT, Some(MAIN), held, ROOT));
-        assert!(!gives_back(OVERLAY, None, held, ROOT));
+    }
+
+    #[test]
+    fn without_an_active_window_the_keyboard_goes_back_from_the_window_only() {
+        let held = Held {
+            overlay: OVERLAY,
+            game: GAME,
+        };
+        // A window manager that tells no active window while an unmanaged window has the keyboard.
+        assert!(gives_back(OVERLAY, None, held, ROOT));
+        assert!(!gives_back(ROOT, None, held, ROOT));
+        assert!(!gives_back(MAIN, None, held, ROOT));
     }
 }
