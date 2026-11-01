@@ -1,0 +1,360 @@
+//! The window over the game: the price beside the panel of the game the item is in, opened by
+//! the price-check hotkey and closed by a click in the game (`specs.md`, Window over the game).
+//!
+//! This module decides where the window goes, and when it opens and closes, without the system:
+//! the pointer and the game window come with the hotkey ([`crate::hotkey`]), the clicks from a
+//! thread of each system ([`ClickWatch`]), and the application draws the window.
+
+#[cfg(target_os = "linux")]
+mod x11;
+
+#[cfg(target_os = "linux")]
+pub use self::x11::ClickWatch;
+
+use std::time::{Duration, Instant};
+
+/// The width of the window, in points: the one of the narrow layout.
+pub const WIDTH: f32 = 420.0;
+/// How long the game may take to copy the item after the hotkey: past it, the hotkey copied
+/// nothing (an empty cell of the inventory), and opens nothing.
+const COPY_WAIT: Duration = Duration::from_secs(1);
+/// The width of a panel of the game (inventory, stash) for its height: 370 for 600, the ratio
+/// Exiled Exchange 2 uses (`uiSidebarWidth` in `main/src/windowing/GameWindow.ts`).
+const PANEL_WIDTH_PER_HEIGHT: (i32, i32) = (370, 600);
+
+/// A point of the screen, in physical pixels.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Point {
+    pub x: i32,
+    pub y: i32,
+}
+
+/// A rectangle of the screen, in physical pixels.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ScreenRect {
+    pub x: i32,
+    pub y: i32,
+    pub width: i32,
+    pub height: i32,
+}
+
+impl ScreenRect {
+    fn right(&self) -> i32 {
+        self.x + self.width
+    }
+
+    fn bottom(&self) -> i32 {
+        self.y + self.height
+    }
+
+    #[must_use]
+    pub fn contains(&self, point: Point) -> bool {
+        (self.x..self.right()).contains(&point.x) && (self.y..self.bottom()).contains(&point.y)
+    }
+}
+
+/// Where the hotkey was pressed: the pointer, and the window of the game, which has the focus.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Target {
+    pub pointer: Point,
+    pub game: ScreenRect,
+}
+
+impl Target {
+    /// The place of the window, `width` wide, with its content `content_height` high (physical
+    /// pixels): beside the panel of the game the item is in, which it never covers (left of the
+    /// inventory when the pointer is on the right half of the game, right of the stash
+    /// otherwise), its top level with the pointer, moved up as much as the game needs; at most
+    /// the height of the game, its content then scrolls.
+    #[must_use]
+    pub fn place(&self, width: i32, content_height: i32) -> ScreenRect {
+        let game = self.game;
+        let (panel_width, per_height) = PANEL_WIDTH_PER_HEIGHT;
+        let panel = game.height * panel_width / per_height;
+        let height = content_height.min(game.height).max(1);
+        let x = if self.pointer.x - game.x > game.width / 2 {
+            game.right() - panel - width
+        } else {
+            game.x + panel
+        };
+        let y = self.pointer.y.min(game.bottom() - height).max(game.y);
+        ScreenRect {
+            x,
+            y,
+            width,
+            height,
+        }
+    }
+}
+
+/// When the window shows: from the item the hotkey copied until a click in the game.
+#[derive(Debug, Default)]
+pub struct Overlay {
+    /// Where the window shows, while it is open.
+    shown: Option<Target>,
+    /// A hotkey whose item hasn't arrived yet, and when it was pressed.
+    pending: Option<(Target, Instant)>,
+}
+
+impl Overlay {
+    /// The hotkey was pressed at `now`: the window opens at `target` when the item arrives.
+    pub fn hotkey(&mut self, target: Target, now: Instant) {
+        self.pending = Some((target, now));
+    }
+
+    /// An item arrived at `now`. Copied by the hotkey, it opens the window where the hotkey was
+    /// pressed, or moves it there (`true`); copied with Ctrl+C, it only shows in the main
+    /// window.
+    pub fn copied(&mut self, now: Instant) -> bool {
+        match self.pending.take() {
+            Some((target, pressed)) if now.duration_since(pressed) <= COPY_WAIT => {
+                self.shown = Some(target);
+                true
+            }
+            _ => false,
+        }
+    }
+
+    /// Forgets a hotkey that copied nothing in time; while one is pending, the time left before
+    /// it is forgotten.
+    pub fn expire(&mut self, now: Instant) -> Option<Duration> {
+        let (_, pressed) = self.pending?;
+        let left = COPY_WAIT.checked_sub(now.duration_since(pressed));
+        if left.is_none() {
+            self.pending = None;
+            log::info!("The price-check hotkey copied no item");
+        }
+        left
+    }
+
+    /// A button of the mouse pressed at `point`: outside the `window` (in the game), it closes
+    /// it; in it, the window takes the click.
+    pub fn clicked(&mut self, point: Point, window: Option<ScreenRect>) {
+        if self.shown.is_some() && !window.is_some_and(|window| window.contains(point)) {
+            self.shown = None;
+        }
+    }
+
+    /// Where the window shows, while it is open.
+    #[must_use]
+    pub fn shown(&self) -> Option<Target> {
+        self.shown
+    }
+}
+
+/// No window over the game on this system yet: no click to watch.
+#[cfg(not(target_os = "linux"))]
+pub struct ClickWatch;
+
+#[cfg(not(target_os = "linux"))]
+impl ClickWatch {
+    #[must_use]
+    pub fn start(_wake: impl Fn() + Send + 'static) -> Self {
+        Self
+    }
+
+    pub fn watch(&mut self, _watching: bool) {}
+
+    pub fn receive(&mut self, _handle: impl FnMut(Point)) {}
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The owner's game on 2026-11-01: 2560 × 1440, on the second screen, right of the first.
+    const GAME: ScreenRect = ScreenRect {
+        x: 2560,
+        y: 0,
+        width: 2560,
+        height: 1440,
+    };
+    /// The panels of that game: 888 px wide.
+    const PANEL: i32 = 888;
+
+    fn target(x: i32, y: i32) -> Target {
+        Target {
+            pointer: Point { x, y },
+            game: GAME,
+        }
+    }
+
+    #[test]
+    fn opens_left_of_the_inventory_for_an_item_on_the_right_half() {
+        // The owner's pointer on 2026-11-01, on an item of the inventory.
+        let place = target(4557, 966).place(420, 300);
+
+        assert_eq!(place.x, 2560 + 2560 - PANEL - 420);
+        assert_eq!(place.width, 420);
+    }
+
+    #[test]
+    fn opens_right_of_the_stash_for_an_item_on_the_left_half() {
+        let place = target(2560 + 300, 500).place(420, 300);
+
+        assert_eq!(place.x, 2560 + PANEL);
+    }
+
+    #[test]
+    fn the_middle_of_the_game_counts_as_its_left_half() {
+        assert_eq!(target(2560 + 1280, 500).place(420, 300).x, 2560 + PANEL);
+        assert_eq!(
+            target(2560 + 1281, 500).place(420, 300).x,
+            2560 + 2560 - PANEL - 420
+        );
+    }
+
+    #[test]
+    fn its_top_is_level_with_the_pointer() {
+        let place = target(4400, 398).place(420, 600);
+
+        assert_eq!((place.y, place.height), (398, 600));
+    }
+
+    #[test]
+    fn moves_up_as_much_as_the_game_needs() {
+        let place = target(4400, 1200).place(420, 600);
+
+        assert_eq!((place.y, place.height), (1440 - 600, 600));
+    }
+
+    #[test]
+    fn is_at_most_the_height_of_the_game() {
+        let place = target(4400, 700).place(420, 2000);
+
+        assert_eq!((place.y, place.height), (0, 1440));
+    }
+
+    #[test]
+    fn stays_in_a_game_moved_down_and_never_above_it() {
+        let game = ScreenRect { y: 100, ..GAME };
+        let place = Target {
+            pointer: Point { x: 4400, y: 50 },
+            game,
+        }
+        .place(420, 600);
+
+        assert_eq!(place.y, 100);
+    }
+
+    #[test]
+    fn a_window_of_no_height_is_one_pixel_high() {
+        assert_eq!(target(4400, 700).place(420, 0).height, 1);
+    }
+
+    #[test]
+    fn contains_the_points_inside_it_only() {
+        let rect = ScreenRect {
+            x: 10,
+            y: 20,
+            width: 30,
+            height: 40,
+        };
+
+        assert!(rect.contains(Point { x: 10, y: 20 }));
+        assert!(rect.contains(Point { x: 39, y: 59 }));
+        assert!(!rect.contains(Point { x: 40, y: 30 }));
+        assert!(!rect.contains(Point { x: 20, y: 60 }));
+        assert!(!rect.contains(Point { x: 9, y: 30 }));
+    }
+
+    #[test]
+    fn opens_when_the_item_of_the_hotkey_arrives() {
+        let mut overlay = Overlay::default();
+        let now = Instant::now();
+
+        overlay.hotkey(target(4557, 966), now);
+        assert_eq!(overlay.shown(), None);
+        assert!(overlay.copied(now + Duration::from_millis(300)));
+        assert_eq!(overlay.shown(), Some(target(4557, 966)));
+    }
+
+    #[test]
+    fn an_item_copied_with_ctrl_c_opens_nothing() {
+        let mut overlay = Overlay::default();
+
+        assert!(!overlay.copied(Instant::now()));
+        assert_eq!(overlay.shown(), None);
+    }
+
+    #[test]
+    fn a_hotkey_that_copied_nothing_in_time_opens_nothing() {
+        let mut overlay = Overlay::default();
+        let now = Instant::now();
+        overlay.hotkey(target(4557, 966), now);
+
+        assert_eq!(
+            overlay.expire(now + Duration::from_millis(400)),
+            Some(Duration::from_millis(600))
+        );
+        assert_eq!(overlay.expire(now + Duration::from_millis(1100)), None);
+        assert!(!overlay.copied(now + Duration::from_millis(1200)));
+        assert_eq!(overlay.shown(), None);
+    }
+
+    #[test]
+    fn an_item_arriving_too_late_opens_nothing() {
+        let mut overlay = Overlay::default();
+        let now = Instant::now();
+        overlay.hotkey(target(4557, 966), now);
+
+        assert!(!overlay.copied(now + Duration::from_millis(1500)));
+        assert_eq!(overlay.shown(), None);
+    }
+
+    #[test]
+    fn the_hotkey_on_another_item_moves_the_open_window() {
+        let mut overlay = Overlay::default();
+        let now = Instant::now();
+        overlay.hotkey(target(4557, 966), now);
+        overlay.copied(now);
+
+        overlay.hotkey(target(2860, 500), now + Duration::from_secs(5));
+        assert_eq!(overlay.shown(), Some(target(4557, 966)));
+        overlay.copied(now + Duration::from_secs(5));
+        assert_eq!(overlay.shown(), Some(target(2860, 500)));
+    }
+
+    #[test]
+    fn the_hotkey_on_an_empty_cell_keeps_the_open_window() {
+        let mut overlay = Overlay::default();
+        let now = Instant::now();
+        overlay.hotkey(target(4557, 966), now);
+        overlay.copied(now);
+
+        overlay.hotkey(target(4400, 900), now + Duration::from_secs(5));
+        overlay.expire(now + Duration::from_secs(7));
+        assert_eq!(overlay.shown(), Some(target(4557, 966)));
+    }
+
+    #[test]
+    fn a_click_in_the_game_closes_it_and_a_click_in_it_doesnt() {
+        let mut overlay = Overlay::default();
+        let now = Instant::now();
+        overlay.hotkey(target(4557, 966), now);
+        overlay.copied(now);
+        let window = target(4557, 966).place(420, 300);
+
+        overlay.clicked(
+            Point {
+                x: window.x + 5,
+                y: window.y + 5,
+            },
+            Some(window),
+        );
+        assert!(overlay.shown().is_some());
+        overlay.clicked(Point { x: 4557, y: 966 }, Some(window));
+        assert_eq!(overlay.shown(), None);
+    }
+
+    #[test]
+    fn a_click_before_the_window_was_drawn_closes_it() {
+        let mut overlay = Overlay::default();
+        let now = Instant::now();
+        overlay.hotkey(target(4557, 966), now);
+        overlay.copied(now);
+
+        overlay.clicked(Point { x: 4000, y: 500 }, None);
+        assert_eq!(overlay.shown(), None);
+    }
+}

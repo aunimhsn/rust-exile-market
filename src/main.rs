@@ -20,6 +20,7 @@ mod league;
 mod logging;
 mod market;
 mod offers;
+mod overlay;
 mod prices;
 mod pricing;
 mod roll_difference;

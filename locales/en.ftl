@@ -39,9 +39,11 @@ status-author = { $app } { $version } · Made by { $author } · { $site }
 
 ## Window before the first item
 
-# Followed by the keys "Ctrl + C".
+# Followed by the keys "Ctrl + D" ("Ctrl + C" on macOS, without hotkey).
 empty-copy = Copy an item in the game with
 empty-price = The price shows up here.
+# In faint text under the invitation: the game must not be in exclusive fullscreen.
+empty-display-mode = Play in windowed fullscreen: in fullscreen, the game lets no application copy the item or show its price over it.
 
 ## Copied item that can't be read
 

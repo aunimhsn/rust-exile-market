@@ -6,6 +6,8 @@ use std::error::Error;
 use enigo::{Direction, Enigo, Key, Keyboard as _, Settings};
 use global_hotkey::HotKeyState;
 
+use crate::overlay::Target;
+
 /// At the press of D: `RegisterHotKey` takes D only, so that the keys sent then reach the game,
 /// and Ctrl is held, since the hotkey needs it. The press reaches the application as a message of
 /// the thread of its window, handled within a few milliseconds: a Ctrl released sooner (the
@@ -36,7 +38,9 @@ impl CopySender {
     /// Ctrl+C. Ctrl is neither pressed nor released, so that the keyboard is left as the player
     /// holds it, as Exiled Exchange 2 does on Windows: a Ctrl released while the player holds it
     /// would make their next D reach the game alone.
-    pub fn send_copy(&mut self) {
+    ///
+    /// No window over the game on Windows yet (step 14b2): no place to give.
+    pub fn send_copy(&mut self) -> Option<Target> {
         // The virtual key of C, which Windows maps to the key that writes C in the layout of the
         // window that has the focus.
         match self.keyboard.key(Key::C, Direction::Click) {
@@ -46,5 +50,6 @@ impl CopySender {
             }
             Err(error) => log::warn!("The copy can't be sent: {error}"),
         }
+        None
     }
 }

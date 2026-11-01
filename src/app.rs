@@ -5,17 +5,21 @@ use std::hash::{BuildHasher, RandomState};
 use std::time::{Duration, Instant, SystemTime};
 
 use eframe::{App, CreationContext, Frame};
-use egui::{Context, Key, OpenUrl, Ui, ViewportCommand};
+use egui::{
+    Context, Key, OpenUrl, Ui, ViewportBuilder, ViewportCommand, ViewportId, X11WindowType, pos2,
+    vec2,
+};
 
 use crate::clipboard::{ClipboardEvent, ClipboardWatch};
 use crate::estimate::{self, Estimate, Reference};
 use crate::filters::Filters;
 use crate::hotkey::PriceCheckHotkey;
 use crate::i18n::{DOWNLOAD_QUOTE_COUNT, Message, Translator};
-use crate::item::Item;
+use crate::item::{CopiedItem, Item};
 use crate::league::League;
 use crate::market::MarketWatch;
 use crate::offers::{LONG_WAIT, Offers, OffersState};
+use crate::overlay::{self, ClickWatch, Overlay, ScreenRect};
 use crate::prices::Rates;
 use crate::pricing::{FixedPrice, NoFixedPrice};
 use crate::session::{LeagueChange, PricesState, Session, ShownItem};
@@ -65,8 +69,20 @@ pub struct ExileMarketApp {
     /// The list of the leagues is open over the view.
     leagues_open: bool,
     clipboard: ClipboardWatch,
-    /// Ctrl+D copies the item in the game: the copy then arrives through the clipboard.
-    _hotkey: PriceCheckHotkey,
+    /// Ctrl+D copies the item in the game: the copy then arrives through the clipboard, and
+    /// opens the window over the game.
+    hotkey: PriceCheckHotkey,
+    /// When the window over the game shows, and where.
+    overlay: Overlay,
+    /// The clicks in the game, which close the window over the game.
+    clicks: ClickWatch,
+    /// Where the window over the game was drawn, in physical pixels, while it is open.
+    overlay_window: Option<ScreenRect>,
+    /// The height of its content at the last frame, in points; none until it is laid out once.
+    overlay_height: Option<f32>,
+    /// The last item copied: the hotkey on the same item opens the window over the game without
+    /// clearing its filters and offers.
+    last_copied: Option<CopiedItem>,
     market: MarketWatch,
     item_names: ItemNamesWatch,
     /// The searches of the trade site, asked by the player.
@@ -98,6 +114,12 @@ impl ExileMarketApp {
         let market_ctx = creation.egui_ctx.clone();
         let names_ctx = creation.egui_ctx.clone();
         let search_ctx = creation.egui_ctx.clone();
+        let hotkey_ctx = creation.egui_ctx.clone();
+        let clicks_ctx = creation.egui_ctx.clone();
+        let clipboard = ClipboardWatch::start(move || clipboard_ctx.request_repaint());
+        let hotkey = PriceCheckHotkey::start(clipboard.copy_marker(), move || {
+            hotkey_ctx.request_repaint();
+        });
         // The prices of the league of the last session, until the leagues arrive.
         let market = MarketWatch::start(settings.league(), move || market_ctx.request_repaint());
 
@@ -111,8 +133,13 @@ impl ExileMarketApp {
             settings_file,
             view: View::Item,
             leagues_open: false,
-            clipboard: ClipboardWatch::start(move || clipboard_ctx.request_repaint()),
-            _hotkey: PriceCheckHotkey::start(),
+            clipboard,
+            hotkey,
+            overlay: Overlay::default(),
+            clicks: ClickWatch::start(move || clicks_ctx.request_repaint()),
+            overlay_window: None,
+            overlay_height: None,
+            last_copied: None,
             market,
             item_names: ItemNamesWatch::start(move || names_ctx.request_repaint()),
             search: OfferSearch::start(move || search_ctx.request_repaint()),
@@ -235,7 +262,15 @@ impl ExileMarketApp {
     }
 
     /// The item shown, with the `kind` of the search of its offers when it can be searched.
-    fn item(&mut self, ui: &mut Ui, prices: PricesState, kind: Option<SearchKind>) {
+    /// Draws the item shown, or the empty state; the height of its blocks, which sizes the
+    /// window over the game.
+    fn item(
+        &mut self,
+        ui: &mut Ui,
+        prices: PricesState,
+        kind: Option<SearchKind>,
+        to_top: bool,
+    ) -> f32 {
         let Some(shown) = self.session.item() else {
             let empty = EmptyState::new(&self.i18n);
             if let (PricesState::Downloading { progress }, Some((league, quote))) =
@@ -251,11 +286,11 @@ impl ExileMarketApp {
             } else {
                 empty.show(ui);
             }
-            return;
+            return EMPTY_HEIGHT;
         };
         let Ok(item) = shown.parsed() else {
             UnreadableItem::new(&self.i18n).show(ui);
-            return;
+            return EMPTY_HEIGHT;
         };
         // The pill shows only when its link can be opened: the league and the search known.
         let tradable = self.session.tradable(item);
@@ -264,9 +299,8 @@ impl ExileMarketApp {
         let estimate = shown_estimate(&self.offers, item, &fixed_price, self.session.rates());
         // Without a fixed price, the estimate tells the suspicious offers.
         let reference = reference(&fixed_price).or(estimate.map(|estimate| estimate.reference));
-        let to_top = std::mem::take(&mut self.scroll_to_top);
         let mut offers_action = None;
-        let action = ui::content(ui, to_top, |ui| {
+        let (action, height) = ui::content(ui, to_top, |ui| {
             let action = ItemBlock::new(
                 item,
                 shown.lines(),
@@ -318,6 +352,68 @@ impl ExileMarketApp {
         if let Some(order) = order {
             self.search.order(order);
         }
+        height
+    }
+
+    /// The window over the game, while it is open: the blocks of the item without the title bar,
+    /// beside the panel of the game the item is in, as high as its content.
+    fn show_overlay(
+        &mut self,
+        ctx: &Context,
+        prices: PricesState,
+        kind: Option<SearchKind>,
+        trade: TradeStatus,
+        to_top: bool,
+    ) {
+        let Some(target) = self.overlay.shown() else {
+            self.overlay_window = None;
+            return;
+        };
+        // The pointer and the game come in the physical pixels of the screen.
+        let scale = ctx
+            .input(|input| input.viewport().native_pixels_per_point)
+            .unwrap_or(1.0);
+        let to_pixels = |points: f32| to_pixels(points, scale);
+        let content = self
+            .overlay_height
+            .map(|height| height + ui::STATUS_BAR_HEIGHT);
+        let place = target.place(
+            to_pixels(overlay::WIDTH),
+            content.map_or(target.game.height, to_pixels),
+        );
+        self.overlay_window = Some(place);
+        let builder = ViewportBuilder::default()
+            .with_title(crate::APP_NAME)
+            // Out of the hands of the window manager: above the game, which keeps the focus.
+            .with_override_redirect(true)
+            .with_window_type(X11WindowType::Tooltip)
+            .with_decorations(false)
+            .with_active(false)
+            .with_taskbar(false)
+            .with_resizable(false)
+            // Shown once its content is laid out, at its height.
+            .with_visible(content.is_some())
+            .with_position(pos2(to_points(place.x, scale), to_points(place.y, scale)))
+            .with_inner_size(vec2(overlay::WIDTH, to_points(place.height, scale)));
+        let league = self.session.league().cloned();
+        let height = ctx.show_viewport_immediate(
+            ViewportId::from_hash_of("window-over-the-game"),
+            builder,
+            |ui, _| {
+                // Its own ids: the scroll and the panels of the main window are its own.
+                ui.push_id("window-over-the-game", |ui| {
+                    StatusBar::sources(&self.i18n, prices, trade)
+                        .league(league.as_ref())
+                        .show(ui);
+                    self.item(ui, prices, kind, to_top)
+                })
+                .inner
+            },
+        );
+        if self.overlay_height != Some(height) {
+            self.overlay_height = Some(height);
+            ctx.request_repaint();
+        }
     }
 
     /// The search of the offers of the item shown, when it can be searched.
@@ -354,8 +450,26 @@ impl App for ExileMarketApp {
     /// Takes in what happened since the last frame; `ui` draws the session, and takes in the
     /// clicks of the components it draws.
     fn logic(&mut self, ctx: &Context, _frame: &mut Frame) {
+        let now = Instant::now();
+        self.hotkey
+            .receive(|target| self.overlay.hotkey(target, now));
         self.clipboard.receive(|event| {
-            if matches!(event, ClipboardEvent::Copied(_)) {
+            if let ClipboardEvent::Copied(item) = &event {
+                let was_open = self.overlay.shown().is_some();
+                let by_hotkey = self.overlay.copied(now);
+                if by_hotkey {
+                    // A window that opens is laid out once before it shows; an open one keeps
+                    // its height until the next frame, without blinking.
+                    if !was_open {
+                        self.overlay_height = None;
+                    }
+                    // The same item again: its filters and offers stay.
+                    if self.last_copied.as_ref() == Some(item) {
+                        self.view = View::Item;
+                        return;
+                    }
+                }
+                self.last_copied = Some(item.clone());
                 self.scroll_to_top = true;
                 self.filters.clear();
                 self.offers.clear();
@@ -363,6 +477,12 @@ impl App for ExileMarketApp {
             self.view = self.view.after(&event);
             self.session.apply(event);
         });
+        if let Some(left) = self.overlay.expire(now) {
+            ctx.request_repaint_after(left);
+        }
+        self.clicks
+            .receive(|point| self.overlay.clicked(point, self.overlay_window));
+        self.clicks.watch(self.overlay.shown().is_some());
         if self
             .search
             .receive(|answer| self.offers.apply(answer, SystemTime::now()))
@@ -449,8 +569,13 @@ impl App for ExileMarketApp {
             View::Item => StatusBar::sources(&self.i18n, prices, trade).show(ui),
             View::Settings => StatusBar::author(&self.i18n).show(ui),
         }
+        // Taken once for both windows.
+        let to_top = std::mem::take(&mut self.scroll_to_top);
+        self.show_overlay(&ctx, prices, search_kind, trade, to_top);
         match self.view {
-            View::Item => self.item(ui, prices, search_kind),
+            View::Item => {
+                self.item(ui, prices, search_kind, to_top);
+            }
             View::Settings => {
                 if let Some(change) = SettingsPanel::new(&self.settings, &self.i18n).show(ui) {
                     self.change_setting(ui.ctx(), change);
@@ -464,6 +589,27 @@ impl App for ExileMarketApp {
     fn persist_egui_memory(&self) -> bool {
         false
     }
+}
+
+/// The height of the window over the game for an item that can't be read, in points.
+const EMPTY_HEIGHT: f32 = 160.0;
+
+/// `points` in the physical pixels of a screen of `scale` pixels per point.
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "a size of the screen, far within i32"
+)]
+fn to_pixels(points: f32, scale: f32) -> i32 {
+    (points * scale).ceil() as i32
+}
+
+/// `pixels` of the screen in points, for a screen of `scale` pixels per point.
+#[expect(
+    clippy::cast_precision_loss,
+    reason = "a position of the screen, far within f32"
+)]
+fn to_points(pixels: i32, scale: f32) -> f32 {
+    pixels as f32 / scale
 }
 
 /// The price of one item that tells a suspicious offer: the price of a fixed-name item.

@@ -39,9 +39,11 @@ status-author = { $app } { $version } · Créé par { $author } · { $site }
 
 ## Fenêtre avant le premier objet
 
-# Suivi des touches « Ctrl + C ».
+# Suivi des touches « Ctrl + D » (« Ctrl + C » sous macOS, sans raccourci).
 empty-copy = Copiez un objet en jeu avec
 empty-price = Son prix s'affichera ici.
+# En texte pâle sous l'invitation : le jeu ne doit pas être en plein écran exclusif.
+empty-display-mode = Jouez en plein écran fenêtré : en plein écran, le jeu ne laisse aucune application copier l'objet ni afficher son prix par-dessus.
 
 ## Objet copié illisible
 

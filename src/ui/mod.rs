@@ -37,9 +37,17 @@ pub use title_bar::{TitleBar, TitleBarAction};
 pub use unreadable_item::UnreadableItem;
 pub use warning_band::WarningBand;
 
+/// The height of the status bar, under the content of the window over the game.
+pub const STATUS_BAR_HEIGHT: f32 = theme::size::STATUS_BAR_HEIGHT;
+
 /// The content under the title bar and the bands, on band B: the blocks of the copied item,
 /// which scroll together when they are taller than the window; back at the top when `to_top`.
-pub fn content<R>(ui: &mut egui::Ui, to_top: bool, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
+/// Also gives the height of the blocks, which sizes the window over the game.
+pub fn content<R>(
+    ui: &mut egui::Ui,
+    to_top: bool,
+    add: impl FnOnce(&mut egui::Ui) -> R,
+) -> (R, f32) {
     egui::CentralPanel::no_frame()
         .frame(egui::Frame::NONE.fill(theme::color::BAND_B))
         .show(ui, |ui| {
@@ -51,11 +59,11 @@ pub fn content<R>(ui: &mut egui::Ui, to_top: bool, add: impl FnOnce(&mut egui::U
             if to_top {
                 area = area.vertical_scroll_offset(0.0);
             }
-            area.show(ui, |ui| {
+            let output = area.show(ui, |ui| {
                 ui.visuals_mut().widgets = widgets;
                 add(ui)
-            })
-            .inner
+            });
+            (output.inner, output.content_size.y)
         })
         .inner
 }
