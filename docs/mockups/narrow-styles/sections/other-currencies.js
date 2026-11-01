@@ -103,6 +103,11 @@ SECTIONS.unshift(["Prices in other currencies (fix a): D chosen; the offers in W
       { text: "Monster have 112% increased Elemental Ailment Application", value: 112, yours: 106 },
     ],
   } })],
+  // With the name, the "?" of a suspicious offer (struck through, the price only) and the kind of quality of
+  // an offer of another kind (13k4) come after the name, the name faint with its price.
+  ["D · a suspicious offer and offers of another kind of quality", win(topBar(), item(AMULET_MANA), price(MANA_ONLY),
+    offers({ count: "10 of 27 online", columns: ["Price", "Listed"], rows: manaRows({ marked: true }).map((r, i) => ({
+      ...r, name: CURRENCY_NAMES[r.k][0], sus: (i === 2 && !r.other) || r.sus })) }), foot())],
   // The narrowest column: the price of the currency exchange, beside the stock and the listing time; its
   // offers are always paid in Exalted Orbs (in Divine Orbs for the Exalted Orb itself), whose name fits.
   ["D · the currency exchange in French, its narrow column", win(topBar(),

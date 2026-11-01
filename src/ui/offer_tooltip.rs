@@ -18,9 +18,8 @@ use super::item_block::{
 };
 use super::item_stats::property_value;
 use super::offers_block::{RowPrice, offer_price};
-use super::price_block::orb;
 use super::theme::{self, color, size, text};
-use super::widgets;
+use super::{images, widgets};
 use crate::filters::Property;
 use crate::format;
 use crate::game_data::{self, Category};
@@ -510,7 +509,7 @@ impl OfferTooltip<'_> {
         self.foot(ui)
     }
 
-    /// The name on the left, the price with its orb on the right.
+    /// The name on the left, the price with the icon of its currency on the right.
     fn head(&self, ui: &mut Ui) {
         let item = &self.offer.item;
         let price = self.offer.price.as_ref().map(offer_price);
@@ -737,32 +736,32 @@ fn signed(value: f64) -> String {
     format!("{sign}{}", crate::format::number(value.abs()))
 }
 
-/// The size of a price: its amount, then its orb or the name of its currency.
+/// The size of a price: its amount, then the icon of its currency, without its name.
 fn price_size(ui: &Ui, price: &RowPrice) -> Vec2 {
-    let amount = widgets::text_line(ui, price.text(), text::list_amount());
-    let orb = if price.currency.is_ok() {
+    let amount = widgets::text_line(ui, price.amount.as_str(), text::list_amount());
+    let icon = if price.currency.is_some() {
         ORB_GAP + ORB
     } else {
         0.0
     };
-    vec2(amount.size().x + orb, amount.size().y.max(ORB))
+    vec2(amount.size().x + icon, amount.size().y.max(ORB))
 }
 
 /// Paints `price` from `left_center`.
 fn paint_price(ui: &Ui, price: &RowPrice, left_center: Pos2) {
-    let amount = widgets::text_line(ui, price.text(), text::list_amount());
+    let amount = widgets::text_line(ui, price.amount.as_str(), text::list_amount());
     let size = amount.size();
     ui.painter().galley(
         pos2(left_center.x, left_center.y - size.y / 2.0),
         amount,
         color::TEXT,
     );
-    if let Ok(currency) = price.currency {
-        let orb_rect = Rect::from_min_size(
+    if let Some(currency) = price.currency {
+        let icon_rect = Rect::from_min_size(
             pos2(left_center.x + size.x + ORB_GAP, left_center.y - ORB / 2.0),
             Vec2::splat(ORB),
         );
-        orb(currency, ORB).paint_at(ui, orb_rect);
+        images::exchange_icon(currency).paint_at(ui, icon_rect);
     }
 }
 

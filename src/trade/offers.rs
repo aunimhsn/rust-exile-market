@@ -8,6 +8,7 @@ use serde::Deserialize;
 use serde::de::{self, Deserializer};
 use serde_json::Value;
 
+use crate::currencies;
 use crate::format::Currency;
 use crate::item::{
     Catalyst, ParseWarning, QualityKind, Rarity, Requirements, WaystoneValue, read_gem_level,
@@ -433,7 +434,8 @@ struct ApiExchangeSide {
 
 impl ApiFetch {
     /// The offers, in the order of the ids asked, from the trade site of `language`; an offer
-    /// gone since the search is left out.
+    /// gone since the search is left out, and so is an offer priced in a currency whose
+    /// offers aren't shown, the waystones or one the application doesn't know.
     pub fn offers(self, language: Language) -> Vec<ItemOffer> {
         let (offers, unreadable): (Vec<ItemOffer>, Vec<Unreadable>) = self
             .result
@@ -443,6 +445,24 @@ impl ApiFetch {
             .unzip();
         for warning in warnings(&unreadable) {
             log::warn!("{warning}");
+        }
+        let (offers, left_out): (Vec<ItemOffer>, Vec<ItemOffer>) =
+            offers.into_iter().partition(|offer| {
+                offer
+                    .price
+                    .as_ref()
+                    .is_none_or(|price| currencies::shown(&price.currency).is_some())
+            });
+        // A currency the application doesn't know was added to the trade site since the icons
+        // were taken: `tools/exchange-icons` takes them again.
+        let unknown_currencies: BTreeSet<&str> = left_out
+            .iter()
+            .filter_map(|offer| offer.price.as_ref())
+            .map(|price| price.currency.as_str())
+            .filter(|id| !currencies::known(id))
+            .collect();
+        for id in unknown_currencies {
+            log::warn!("Trade site: offers left out, priced in an unknown currency, {id}");
         }
         let unknown: BTreeSet<&str> = offers
             .iter()

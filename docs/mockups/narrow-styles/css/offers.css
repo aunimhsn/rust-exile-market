@@ -7,7 +7,9 @@
 .offers .row-o:nth-child(even) { background: var(--row-alt); }
 .offers .row-o .p { display: flex; align-items: center; gap: 6px; font-family: var(--font-number); font-weight: 600; }
 .offers .row-o img { width: 18px; height: 18px; }
-.offers .row-o.sus .p { color: var(--faint); text-decoration: line-through; }
+.offers .row-o.sus .p { color: var(--faint); }
+/* Only the amount struck through, not the name of its currency. */
+.offers .row-o.sus .app-amount { text-decoration: line-through; }
 /* An offer of another kind of quality (13k4): its price faint, the kind after it in weak text. */
 .offers .row-o.is-other .p { color: var(--faint); }
 .offers .row-o.is-other img { opacity: .45; }
@@ -116,3 +118,5 @@
 .app-currency-name { color: var(--weak); font: 500 12px var(--font-body); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .app-currency-name.is-alone { color: var(--text); font: 600 13px var(--font-body); }
 .offers .row-o .p, .tt-price { min-width: 0; }
+/* A suspicious offer, or one of another kind of quality: the name of its currency faint too. */
+.offers .row-o.sus .app-currency-name, .offers .row-o.is-other .app-currency-name { color: var(--faint); }

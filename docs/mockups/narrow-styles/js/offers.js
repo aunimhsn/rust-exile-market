@@ -65,7 +65,7 @@ function offers(o, lang = "en") {
     : `<div class="again waiting" title="Next search in 8s">8s</div>`;
   // An offer of another kind of quality (13k4, `r.other`: the kind): its price faint, the kind after it.
   const rows = o.rows.map((r, i) => `<div class="row-o ${r.sus ? "sus" : ""} ${r.other ? "is-other" : ""} ${o.hover === i ? "hovered" : ""}">
-      <span class="p">${r.v} ${currencyMark(r)}${r.other ? `<span class="app-other-kind">${r.other}</span>` : ""}</span>${three ? `<span>${r.stock}</span>` : ""}<span><i class="online ${r.away ? "away" : ""}"></i>${r.when}</span>${o.hover === i ? offerTooltip(o.tooltip) : ""}</div>`).join("");
+      <span class="p"><span class="app-amount">${r.v}</span> ${currencyMark(r)}${r.other ? `<span class="app-other-kind">${r.other}</span>` : ""}</span>${three ? `<span>${r.stock}</span>` : ""}<span><i class="online ${r.away ? "away" : ""}"></i>${r.when}</span>${o.hover === i ? offerTooltip(o.tooltip) : ""}</div>`).join("");
   return `<div class="band b">
     <div class="head flat-head"><span class="title-stack"><span class="label">${label}</span><span class="age">${o.age || "searched 2min ago"}</span></span><span class="right">${o.count}</span>${again}</div>
     <div class="offers ${three ? "three" : ""}"><div class="cols">${o.columns.map(c => `<span>${c}</span>`).join("")}</div>${rows}</div>

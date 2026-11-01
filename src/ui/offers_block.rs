@@ -17,13 +17,14 @@ use egui::{
 
 use super::item_block::rarity_color;
 use super::offer_tooltip::{OfferTooltip, Pointer, TooltipState, reach};
-use super::price_block::orb;
 use super::theme::{color, size, text};
-use super::widgets;
+use super::{images, widgets};
+use crate::currencies::{self, ExchangeCurrency};
 use crate::estimate::Reference;
 use crate::format::{self, Currency};
 use crate::i18n::{Message, Translator};
 use crate::item::{Catalyst, Item};
+use crate::language::Language;
 use crate::offers::{LONG_WAIT, Offers, OffersState};
 use crate::roll_difference::CopiedLines;
 use crate::trade::offers::{ExchangeOffer, ItemOffer, Price, SellerStatus, currency};
@@ -95,18 +96,20 @@ pub enum OffersAction {
 /// The price of a row, in its currency.
 #[derive(Debug, Clone, PartialEq)]
 pub(super) struct RowPrice {
-    amount: String,
-    /// One of the three currencies of the prices, shown by its orb, or another one by its
-    /// name on the trade site.
-    pub(super) currency: Result<Currency, String>,
+    pub(super) amount: String,
+    /// Its currency, drawn by its icon, its name after it in a row; `None` for a currency
+    /// the application doesn't know, whose offers of items are left out (the offers of the
+    /// currency exchange are paid in Exalted or Divine Orbs).
+    pub(super) currency: Option<&'static ExchangeCurrency>,
 }
 
 impl RowPrice {
-    /// The amount, followed by the name of a currency without orb.
-    pub(super) fn text(&self) -> String {
-        match &self.currency {
-            Ok(_) => self.amount.clone(),
-            Err(name) => format!("{} {name}", self.amount),
+    /// The amount and the name of its currency in `language`, as a screen reader reads the
+    /// row: `1 Vaal Orb`.
+    pub(super) fn label(&self, language: Language) -> String {
+        match self.currency {
+            Some(currency) => format!("{} {}", self.amount, currency.name(language)),
+            None => self.amount.clone(),
         }
     }
 }
@@ -127,17 +130,12 @@ struct Row {
     listed: Option<Duration>,
 }
 
-/// `amount` of the currency `id`, as a row writes it.
+/// `amount` of the currency `id`, as a row writes it: the other currencies than the three
+/// of the prices with the decimals of the Divine Orbs.
 fn row_price(amount: f64, id: &str) -> RowPrice {
-    match currency(id) {
-        Some(currency) => RowPrice {
-            amount: format::amount(amount, currency),
-            currency: Ok(currency),
-        },
-        None => RowPrice {
-            amount: format::amount(amount, Currency::Divine),
-            currency: Err(id.to_owned()),
-        },
+    RowPrice {
+        amount: format::amount(amount, currency(id).unwrap_or(Currency::Divine)),
+        currency: currencies::shown(id),
     }
 }
 
@@ -678,7 +676,12 @@ impl<'a> OffersBlock<'a> {
         for (index, (row, response)) in list.rows.iter().zip(&responses).enumerate() {
             let rect = response.rect;
             if list.items.is_some() {
-                let label = row.price.as_ref().map(RowPrice::text).unwrap_or_default();
+                let language = self.item.language();
+                let label = row
+                    .price
+                    .as_ref()
+                    .map(|price| price.label(language))
+                    .unwrap_or_default();
                 response.widget_info(|| WidgetInfo::labeled(Role::Button, true, &label));
             }
             let highlighted = list.items.is_some() && (response.hovered() || open == Some(index));
@@ -687,7 +690,16 @@ impl<'a> OffersBlock<'a> {
             } else if index % 2 == 0 {
                 ui.painter().rect_filled(rect, 0.0, color::ROW_ALT);
             }
-            self.row(ui, rect, row, list.exchange);
+            // The whole name of a currency cut, under the pointer; the offers of items have
+            // the tooltip of their item instead.
+            if self.row(ui, rect, row, list.exchange)
+                && list.items.is_none()
+                && let Some(price) = &row.price
+            {
+                response
+                    .clone()
+                    .on_hover_text(price.label(self.item.language()));
+            }
         }
     }
 
@@ -765,68 +777,20 @@ impl<'a> OffersBlock<'a> {
         open
     }
 
-    /// Draws `row` in `rect`.
-    fn row(&self, ui: &Ui, rect: Rect, row: &Row, exchange: bool) {
+    /// Draws `row` in `rect`: its stock and its listing time on the right, then its price
+    /// before them; whether the name of its currency was cut.
+    fn row(&self, ui: &Ui, rect: Rect, row: &Row, exchange: bool) -> bool {
         let columns = Columns::of(rect, exchange);
         let center_y = rect.center().y;
         let painter = ui.painter();
-        if let Some(price) = &row.price {
-            let galley = widgets::text_line(ui, price.text(), text::list_amount());
-            let size = galley.size();
-            let top = center_y - size.y / 2.0;
-            let tint = if row.suspicious || row.other_quality.is_some() {
-                color::FAINT
-            } else {
-                color::TEXT
-            };
-            painter.galley(pos2(columns.left, top), galley, tint);
-            if row.suspicious {
-                painter.hline(
-                    columns.left..=columns.left + size.x,
-                    center_y,
-                    Stroke::new(1.0, color::FAINT),
-                );
-            }
-            let mut right = columns.left + size.x;
-            if let Ok(currency) = price.currency {
-                let orb_rect = Rect::from_min_size(
-                    pos2(right + ORB_GAP, center_y - ROW_ORB / 2.0),
-                    Vec2::splat(ROW_ORB),
-                );
-                let orb = orb(currency, ROW_ORB);
-                if row.other_quality.is_some() {
-                    orb.tint(Color32::from_white_alpha(OTHER_QUALITY_ORB))
-                } else {
-                    orb
-                }
-                .paint_at(ui, orb_rect);
-                right = orb_rect.right();
-            }
-            if let Some(catalyst) = row.other_quality {
-                let kind =
-                    widgets::text_line(ui, self.i18n.offer_quality_kind(catalyst), text::note());
-                let top = center_y - kind.size().y / 2.0;
-                painter.galley(
-                    pos2(right + ORB_GAP + OTHER_QUALITY_GAP, top),
-                    kind,
-                    color::WEAK,
-                );
-            }
-            if row.suspicious {
-                let mark = widgets::text_line(ui, "?", text::list_amount());
-                let top = center_y - mark.size().y / 2.0;
-                painter.galley(
-                    pos2(right + ORB_GAP + SUSPICIOUS_GAP, top),
-                    mark,
-                    color::WARNING,
-                );
-            }
-        }
         let mut edges = columns.right_edges().into_iter();
+        // The left of what is drawn on the right, before which the price stops.
+        let mut used = columns.right;
         if let Some(stock) = row.stock {
             let galley = widgets::text_line(ui, stock.to_string(), text::body());
             let size = galley.size();
             let right = edges.next().unwrap_or(columns.right);
+            used = used.min(right - size.x);
             painter.galley(
                 pos2(right - size.x, center_y - size.y / 2.0),
                 galley,
@@ -847,7 +811,78 @@ impl<'a> OffersBlock<'a> {
         } else {
             color::RISE
         };
-        painter.circle_filled(pos2(left - DOT_GAP - DOT_RADIUS, center_y), DOT_RADIUS, dot);
+        let dot_center = pos2(left - DOT_GAP - DOT_RADIUS, center_y);
+        painter.circle_filled(dot_center, DOT_RADIUS, dot);
+        used = used.min(dot_center.x - DOT_RADIUS);
+        match &row.price {
+            Some(price) => {
+                let start = pos2(columns.left, center_y);
+                self.row_price(ui, row, price, start, used - COLUMN_GAP)
+            }
+            None => false,
+        }
+    }
+
+    /// Draws the price of `row` from `start`, on the left of the row at its middle, to
+    /// `limit` at most: its amount, the icon of its currency, its name, then the kind of
+    /// another quality or the "?" of a suspicious offer; whether the name was cut.
+    fn row_price(&self, ui: &Ui, row: &Row, price: &RowPrice, start: Pos2, limit: f32) -> bool {
+        let painter = ui.painter();
+        let center_y = start.y;
+        let faint = row.suspicious || row.other_quality.is_some();
+        let galley = widgets::text_line(ui, price.amount.as_str(), text::list_amount());
+        let size = galley.size();
+        let tint = if faint { color::FAINT } else { color::TEXT };
+        painter.galley(pos2(start.x, center_y - size.y / 2.0), galley, tint);
+        if row.suspicious {
+            painter.hline(
+                start.x..=start.x + size.x,
+                center_y,
+                Stroke::new(1.0, color::FAINT),
+            );
+        }
+        let mut right = start.x + size.x;
+        // The kind of another quality, or the "?", after the name, which leaves them room.
+        let after = if let Some(catalyst) = row.other_quality {
+            let kind = widgets::text_line(ui, self.i18n.offer_quality_kind(catalyst), text::note());
+            Some((kind, ORB_GAP + OTHER_QUALITY_GAP, color::WEAK))
+        } else if row.suspicious {
+            let mark = widgets::text_line(ui, "?", text::list_amount());
+            Some((mark, SUSPICIOUS_GAP, color::WARNING))
+        } else {
+            None
+        };
+        let after_width = after
+            .as_ref()
+            .map_or(0.0, |(galley, gap, _)| gap + galley.size().x);
+        let mut cut = false;
+        if let Some(currency) = price.currency {
+            let icon_rect = Rect::from_min_size(
+                pos2(right + ORB_GAP, center_y - ROW_ORB / 2.0),
+                Vec2::splat(ROW_ORB),
+            );
+            let icon = images::exchange_icon(currency);
+            if row.other_quality.is_some() {
+                icon.tint(Color32::from_white_alpha(OTHER_QUALITY_ORB))
+            } else {
+                icon
+            }
+            .paint_at(ui, icon_rect);
+            let left = icon_rect.right() + ORB_GAP;
+            let width = (limit - after_width - left).max(0.0);
+            let name = currency.name(self.item.language());
+            let galley = widgets::truncated_line(ui, name, text::note(), width);
+            cut = galley.elided;
+            let name_size = galley.size();
+            let name_tint = if faint { color::FAINT } else { color::WEAK };
+            painter.galley(pos2(left, center_y - name_size.y / 2.0), galley, name_tint);
+            right = left + name_size.x;
+        }
+        if let Some((galley, gap, tint)) = after {
+            let top = center_y - galley.size().y / 2.0;
+            painter.galley(pos2(right + gap, top), galley, tint);
+        }
+        cut
     }
 }
 
@@ -1109,7 +1144,7 @@ mod tests {
             Row {
                 price: Some(RowPrice {
                     amount: "3.2".to_owned(),
-                    currency: Ok(Currency::Divine),
+                    currency: currencies::shown("divine"),
                 }),
                 suspicious: false,
                 other_quality: None,
@@ -1161,7 +1196,7 @@ mod tests {
     }
 
     #[test]
-    fn another_currency_is_written_by_its_name_and_never_suspicious() {
+    fn another_currency_has_its_icon_and_its_name_and_is_never_suspicious() {
         let rows = item_rows(
             &[offer(1.0, "annul", SellerStatus::Online)],
             Some(REFERENCE),
@@ -1169,14 +1204,30 @@ mod tests {
             SystemTime::UNIX_EPOCH,
         );
 
+        let price = rows[0].price.as_ref().unwrap();
         assert_eq!(
-            rows[0].price,
-            Some(RowPrice {
-                amount: "1".to_owned(),
-                currency: Err("annul".to_owned()),
-            })
+            price.currency.map(|currency| currency.id.as_str()),
+            Some("annul")
         );
+        assert_eq!(price.label(Language::English), "1 Orb of Annulment");
+        assert_eq!(price.label(Language::French), "1 Orbe d'annulation");
         assert!(!rows[0].suspicious);
+    }
+
+    #[test]
+    fn every_currency_is_named_the_three_orbs_too() {
+        let price = row_price(12.4, "divine");
+
+        assert_eq!(price.label(Language::English), "12.4 Divine Orb");
+        assert_eq!(price.label(Language::French), "12.4 Orbe divin");
+    }
+
+    #[test]
+    fn a_currency_the_application_doesnt_know_has_no_icon_nor_name() {
+        let price = row_price(4.0, "gilded-effigy");
+
+        assert_eq!(price.currency, None);
+        assert_eq!(price.label(Language::English), "4");
     }
 
     #[test]
@@ -1207,7 +1258,7 @@ mod tests {
             [Row {
                 price: Some(RowPrice {
                     amount: "175".to_owned(),
-                    currency: Ok(Currency::Exalted),
+                    currency: currencies::shown("exalted"),
                 }),
                 suspicious: false,
                 other_quality: None,

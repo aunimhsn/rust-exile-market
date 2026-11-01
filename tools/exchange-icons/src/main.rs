@@ -18,8 +18,9 @@ use std::path::Path;
 use std::thread;
 use std::time::Duration;
 
+use image::RgbaImage;
 use image::codecs::png::{CompressionType, FilterType, PngEncoder};
-use image::imageops::FilterType as Resize;
+use image::imageops::{self, FilterType as Resize};
 use serde::{Deserialize, Serialize};
 
 type Result<T> = std::result::Result<T, Box<dyn Error>>;
@@ -83,8 +84,8 @@ fn main() -> Result<()> {
         println!("{language}: {} groups", data.result.len());
         languages.push(data);
     }
-    let [english, french] = <[StaticData; 2]>::try_from(languages)
-        .map_err(|_| "the static data of two languages")?;
+    let [english, french] =
+        <[StaticData; 2]>::try_from(languages).map_err(|_| "the static data of two languages")?;
     let french_names: BTreeMap<&str, &str> = french
         .result
         .iter()
@@ -130,12 +131,20 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-/// The image `png`, fit into [`SIZE`] pixels and encoded again, compressed.
+/// The image `png`, fit into [`SIZE`] pixels, centered on a transparent square of that size
+/// (a few items, the Starlit Ores, are taller than wide), and encoded again, compressed.
 fn shrunk(png: &[u8]) -> Result<Vec<u8>> {
     let image = image::load_from_memory_with_format(png, image::ImageFormat::Png)?;
     let small = image.resize(SIZE, SIZE, Resize::Lanczos3).into_rgba8();
+    let mut square = RgbaImage::new(SIZE, SIZE);
+    imageops::replace(
+        &mut square,
+        &small,
+        i64::from((SIZE - small.width()) / 2),
+        i64::from((SIZE - small.height()) / 2),
+    );
     let mut bytes = Vec::new();
-    small.write_with_encoder(PngEncoder::new_with_quality(
+    square.write_with_encoder(PngEncoder::new_with_quality(
         &mut bytes,
         CompressionType::Best,
         FilterType::Adaptive,
