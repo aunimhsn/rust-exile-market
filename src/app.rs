@@ -742,7 +742,9 @@ fn to_points(pixels: i32, scale: f32) -> f32 {
 }
 
 /// The price of one item that tells a suspicious offer: the price of a fixed-name item, with
-/// the `worth` of the currencies of its prices.
+/// the `worth` of the currencies of its prices. Both come from the prices of the league
+/// shown: the rates beside the fixed price are those of `worth`, which also prices the other
+/// currencies.
 fn reference<'a>(
     fixed_price: &Result<(FixedPrice, Rates), NoFixedPrice>,
     worth: Option<Worth<'a>>,
@@ -1094,6 +1096,45 @@ mod tests {
             shown_estimate(&offers, &amulet, &rare, Some(WORTH)),
             None,
             "while searching"
+        );
+    }
+
+    #[test]
+    fn the_price_of_a_unique_tells_its_suspicious_offers_in_every_priced_currency() {
+        use crate::prices::{CurrencyPrice, Price, UniqueModifiers, UniquePrice};
+
+        let price = |exalted| Price {
+            exalted,
+            quantity: 100,
+            history: Vec::new(),
+        };
+        let unique = UniquePrice {
+            name: "Storm Bite".to_owned(),
+            base_type: "Gemini Bow".to_owned(),
+            price: price(2000.0),
+            modifiers: UniqueModifiers::default(),
+        };
+        let currencies = [CurrencyPrice {
+            name: "Vaal Orb".to_owned(),
+            exchange_id: "vaal".to_owned(),
+            price: price(10.0),
+        }];
+        let worth = Worth {
+            rates: RATES,
+            currencies: &currencies,
+        };
+        let fixed = Ok((FixedPrice::Unique(&unique), RATES));
+
+        let unique_reference = reference(&fixed, Some(worth)).unwrap();
+
+        // 40 Vaal Orbs are 400 ex, under a quarter of 2,000; 60 are 600 ex.
+        assert!(unique_reference.suspicious(40.0, "vaal"));
+        assert!(!unique_reference.suspicious(60.0, "vaal"));
+        assert_eq!(reference(&fixed, None), None, "the prices not known");
+        assert_eq!(
+            reference(&Err(NoFixedPrice::NotFixedName), Some(worth)),
+            None,
+            "the estimate tells them"
         );
     }
 

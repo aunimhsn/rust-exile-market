@@ -119,6 +119,17 @@ pub struct PriceList {
     pub currencies: Vec<CurrencyPrice>,
 }
 
+/// The item of the currency exchange among `currencies` whose id is `exchange_id`.
+#[must_use]
+pub fn currency<'a>(
+    currencies: &'a [CurrencyPrice],
+    exchange_id: &str,
+) -> Option<&'a CurrencyPrice> {
+    currencies
+        .iter()
+        .find(|currency| currency.exchange_id == exchange_id)
+}
+
 impl PriceList {
     /// How long ago the price database gave them; none for prices dated in the future, e.g.
     /// after the clock of the system went back.
@@ -144,9 +155,7 @@ impl PriceList {
     /// The item of the currency exchange whose id is `exchange_id`.
     #[must_use]
     pub fn currency(&self, exchange_id: &str) -> Option<&CurrencyPrice> {
-        self.currencies
-            .iter()
-            .find(|currency| currency.exchange_id == exchange_id)
+        currency(&self.currencies, exchange_id)
     }
 
     /// The unique named `name` in English: the price database has one per name.

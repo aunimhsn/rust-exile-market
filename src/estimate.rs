@@ -7,7 +7,8 @@
 //!
 //! An offer is compared in Exalted Orbs: the Chaos and Divine Orbs at the rates of the price
 //! database, another item of the currency exchange at its price there (a Vaal Orb, a
-//! Mirror); an offer in a currency without price (a Waystone, a Soul Core) is left out.
+//! Mirror); an offer in a currency without price (a Soul Core, a Thaumaturgic Flux), or whose
+//! price stands on too few trades, is left out.
 //!
 //! The estimate is itself the reference of its offers: the median of the first page of
 //! offers, the answer to the search, tells the suspicious ones, which it leaves out. That
@@ -16,13 +17,19 @@
 
 use crate::format::Currency;
 use crate::item::Catalyst;
-use crate::prices::{CurrencyPrice, PriceList, Rates};
+use crate::prices::{self, CurrencyPrice, PriceList, Rates};
 use crate::trade::offers::{ItemOffer, currency};
 
 /// An offer under this share of the reference price is suspicious.
 const SUSPICIOUS_SHARE: f64 = 0.25;
 /// The cheapest offers counted in an estimate; fewer make it uncertain.
 pub const COUNTED: usize = 5;
+/// The quantity behind the price of a currency, under which its price is too thin to count
+/// an offer in it: 118 of the 638 currencies priced by poe2scout stand on one trade (league
+/// Forbidden Rites, 2026-11-01), some of them absurd (a Transmutation Shard at 11 ex, a
+/// Lesser Charging Rune at 40,156 ex), while the Mirror, the least traded of the currencies
+/// of the price filter of the trade site, has 14.
+const MIN_QUANTITY: u32 = 10;
 
 /// What the currencies an offer may be priced in are worth, from the prices of a league.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -45,18 +52,15 @@ impl<'a> Worth<'a> {
     }
 
     /// `amount` of the currency `id` of the trade site, in Exalted Orbs; `None` for a
-    /// currency without price.
+    /// currency without price, or whose price stands on fewer than [`MIN_QUANTITY`].
     fn in_exalted(self, amount: f64, id: &str) -> Option<f64> {
         let worth = match currency(id) {
             Some(Currency::Exalted) => 1.0,
             Some(Currency::Divine) => self.rates.divine,
             Some(Currency::Chaos) => self.rates.chaos,
             None => {
-                self.currencies
-                    .iter()
-                    .find(|currency| currency.exchange_id == id)?
-                    .price
-                    .exalted
+                let price = &prices::currency(self.currencies, id)?.price;
+                (price.quantity >= MIN_QUANTITY).then_some(price.exalted)?
             }
         };
         // A price of nothing, or none, would count an offer as free.
@@ -399,6 +403,71 @@ mod tests {
 
         assert!((divine.exalted - 700.0).abs() < 1e-9);
         assert!((chaos.exalted - 70.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn a_price_on_too_few_trades_isnt_counted() {
+        // A Lesser Charging Rune at 40,156 ex on one trade, as poe2scout priced it.
+        let mut rune = priced("lesser-charging-rune", 40_156.0);
+        rune.price.quantity = MIN_QUANTITY - 1;
+        let mut mirror = priced("mirror", 70_000.0);
+        mirror.price.quantity = MIN_QUANTITY;
+        let currencies = [rune, mirror];
+        let worth = Worth {
+            rates: RATES,
+            currencies: &currencies,
+        };
+        let reference = Reference {
+            exalted: 1_000_000.0,
+            worth,
+        };
+
+        let rune = [offer(1.0, "lesser-charging-rune")];
+        assert_eq!(estimate(&rune, 1, worth, None), None);
+        assert!(!reference.suspicious(1.0, "lesser-charging-rune"));
+        assert!(estimate(&[offer(1.0, "mirror")], 1, worth, None).is_some());
+        assert!(reference.suspicious(1.0, "mirror"));
+    }
+
+    #[test]
+    fn a_suspicious_offer_in_a_currency_of_the_price_database_isnt_counted() {
+        // 10 Vaal Orbs at 0.75 ex are 7.5 ex, under a quarter of the median of the page.
+        let currencies = [priced("vaal", 0.75)];
+        let worth = Worth {
+            rates: RATES,
+            currencies: &currencies,
+        };
+        let mut offers = vec![offer(10.0, "vaal")];
+        offers.extend(divines(&[1.0, 1.2, 1.4, 1.6]));
+
+        let baited = estimate(&offers, 5, worth, None).unwrap();
+
+        assert_eq!(baited.counted, 4);
+        assert!((baited.exalted - 1.3 * 700.0).abs() < 1e-9);
+        assert!(baited.reference.suspicious(10.0, "vaal"));
+    }
+
+    #[test]
+    fn a_rate_of_nothing_counts_no_offer_as_free() {
+        for rates in [
+            Rates {
+                chaos: 0.0,
+                divine: f64::NAN,
+            },
+            Rates {
+                chaos: f64::INFINITY,
+                divine: -1.0,
+            },
+        ] {
+            let worth = Worth {
+                rates,
+                currencies: &[],
+            };
+
+            for id in ["chaos", "divine"] {
+                assert_eq!(estimate(&[offer(1.0, id)], 1, worth, None), None, "{id}");
+            }
+        }
     }
 
     #[test]
