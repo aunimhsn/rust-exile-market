@@ -10,10 +10,12 @@ mod windows;
 #[cfg(target_os = "linux")]
 mod x11;
 
+// The keys of each system: `CopySender` (`connect` once at the start, `send_copy` at each
+// hotkey) and `SENT_AT`, the press or the release of D at which the copy is sent.
 #[cfg(target_os = "windows")]
-use windows as keys;
+use self::windows as keys;
 #[cfg(target_os = "linux")]
-use x11 as keys;
+use self::x11 as keys;
 
 /// The hotkey listened to for as long as this value lives.
 pub struct PriceCheckHotkey {
@@ -26,7 +28,9 @@ impl PriceCheckHotkey {
     /// Starts listening to Ctrl+D. A failure (the key taken by another application, such as
     /// Exiled Exchange 2) only writes to the log: the player can still copy with Ctrl+C.
     ///
-    /// Called once: the handler of the hotkey events can only be set once.
+    /// Called once: the handler of the hotkey events can only be set once. Called on the thread
+    /// of the window: on Windows, the hotkey is heard by a hidden window of that thread, through
+    /// its event loop.
     #[cfg(any(target_os = "linux", target_os = "windows"))]
     #[must_use]
     pub fn start() -> Self {
@@ -73,7 +77,7 @@ impl PriceCheckHotkey {
     #[cfg(not(any(target_os = "linux", target_os = "windows")))]
     #[must_use]
     pub fn start() -> Self {
-        log::info!("No price-check hotkey on this system yet");
+        log::info!("No price-check hotkey on this system");
         Self {}
     }
 }

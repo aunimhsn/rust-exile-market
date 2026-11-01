@@ -7,7 +7,9 @@ use enigo::{Direction, Enigo, Key, Keyboard as _, Settings};
 use global_hotkey::HotKeyState;
 
 /// At the press of D: `RegisterHotKey` takes D only, so that the keys sent then reach the game,
-/// and Ctrl is held for sure, since the hotkey needs it.
+/// and Ctrl is held, since the hotkey needs it. The press reaches the application as a message of
+/// the thread of its window, handled within a few milliseconds: a Ctrl released sooner (the
+/// window busy, the key barely tapped) would let C reach the game alone.
 pub const SENT_AT: HotKeyState = HotKeyState::Pressed;
 
 /// Sends the keys of the copy.
@@ -38,8 +40,9 @@ impl CopySender {
         // The virtual key of C, which Windows maps to the key that writes C in the layout of the
         // window that has the focus.
         match self.keyboard.key(Key::C, Direction::Click) {
+            // Windows doesn't tell a key it drops: a game run as administrator never gets it.
             Ok(()) => {
-                log::info!("Copy sent by the price-check hotkey (C, Ctrl held by the player)")
+                log::info!("Copy requested by the price-check hotkey (C, Ctrl held by the player)")
             }
             Err(error) => log::warn!("The copy can't be sent: {error}"),
         }
