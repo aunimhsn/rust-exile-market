@@ -13,7 +13,9 @@ const chosen = Object.fromEntries(Object.entries(VARIANTS).map(([key, v]) => [ke
 let theme = chosen.theme;
 
 const ORB = { div: "divine-orb", chaos: "chaos-orb", ex: "exalted-orb" };
-const orb = key => `<img src="../../assets/currencies/${ORB[key]}.png" alt="">`;
+// The three orbs of the prices by their short key; any other item of the currency exchange by its id on the
+// trade site, from the icons of assets/exchange/ (fix of the prices in other currencies).
+const orb = key => `<img src="../../assets/${ORB[key] ? `currencies/${ORB[key]}` : `exchange/${key}`}.png" alt="">`;
 
 // Icons, drawn with the current text color.
 const svg = (size, body) => `<svg class="ico" width="${size}" height="${size}" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${body}</svg>`;

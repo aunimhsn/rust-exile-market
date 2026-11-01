@@ -107,3 +107,12 @@
 .button.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent, var(--bg-a)); font-weight: 700; }
 .button.wait { color: var(--faint); }
 .spinner { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--control-line); border-top-color: var(--accent); }
+/* The currency of a price (fix of the prices in other currencies): its icon, its name after it in weak
+   text, its name alone in the amount's color for an item without icon; the name in a tooltip over the
+   icon, under the pointer. */
+.app-currency-icon { position: relative; display: inline-flex; }
+.app-currency-icon .app-tip { left: -6px; right: auto; }
+.app-currency-icon:hover .app-tip, .app-currency-icon.is-hovered .app-tip { display: block; }
+.app-currency-name { color: var(--weak); font: 500 12px var(--font-body); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.app-currency-name.is-alone { color: var(--text); font: 600 13px var(--font-body); }
+.offers .row-o .p, .tt-price { min-width: 0; }
