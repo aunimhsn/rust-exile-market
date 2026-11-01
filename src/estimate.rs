@@ -101,7 +101,8 @@ pub struct Estimate<'a> {
 /// The estimate from the `first_page` of offers of a search of items, the cheapest first, of
 /// the `total` found, with the `worth` of the currencies; the offers with the quality of a
 /// catalyst of another kind than `searched_catalyst`, when it was searched, are left out. `None`
-/// without an offer priced in a currency with a price.
+/// without an offer priced in a currency with a price on enough trades
+/// ([`prices::MIN_TRADES`]).
 #[must_use]
 pub fn estimate<'a>(
     first_page: &[ItemOffer],
