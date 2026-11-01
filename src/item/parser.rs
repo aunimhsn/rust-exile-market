@@ -558,7 +558,7 @@ fn read_properties(item: &mut Item, lines: &[&str], labels: &Labels) {
             }
         }
         if item.rarity == Rarity::Gem && name == labels.gem_level {
-            item.gem_level = gem::read_level(value);
+            item.gem_level = gem::read_gem_level(value);
             if item.gem_level.is_none() {
                 item.warnings
                     .push(ParseWarning::InvalidValue(Field::GemLevel));

@@ -13,8 +13,9 @@ pub const MAX_GEM_QUALITY: u32 = 23;
 /// The most sockets a gem has, for its support gems, also corrupted; every gem has 2.
 pub const MAX_GEM_SOCKETS: u32 = 5;
 
-/// The level of a gem, its number only: `20 (Max)` gives 20, as the trade site writes it
-/// (French `20 (Maxi)`).
-pub(super) fn read_level(value: &str) -> Option<u32> {
+/// The level of a gem, its number only: `20 (Max)` gives 20 (French `20 (Maxi)`); the trade
+/// site writes the number alone, `21`.
+#[must_use]
+pub fn read_gem_level(value: &str) -> Option<u32> {
     value.split_whitespace().next()?.parse().ok()
 }

@@ -33,6 +33,8 @@
 .tt-name { font-weight: 700; font-size: 14px; }
 .tt-price { font-family: var(--font-number); font-weight: 600; }
 .tt-meta { color: var(--weak); font-size: 12px; margin-top: 2px; }
+/* The requirements of an offer of gem (13k5d2), as the line of the item block. */
+.tt-req { color: var(--weak); font-size: 12px; margin-top: 2px; }
 .tt-mods { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--control-line); display: grid; gap: 3px; }
 .tt-mod { display: flex; justify-content: space-between; gap: 10px; color: var(--mod); }
 .tt-mod.prop { color: var(--text); }   /* item properties are white, as in the game */

@@ -29,7 +29,9 @@ mod waystone;
 mod weapon;
 
 pub use copied::CopiedItem;
-pub use gem::{MAX_GEM_LEVEL, MAX_GEM_QUALITY, MAX_GEM_SOCKETS, TOP_GEM_LEVEL, TOP_GEM_QUALITY};
+pub use gem::{
+    MAX_GEM_LEVEL, MAX_GEM_QUALITY, MAX_GEM_SOCKETS, TOP_GEM_LEVEL, TOP_GEM_QUALITY, read_gem_level,
+};
 pub use modifier::{
     Affix, AffixTier, Currency, Lord, Modifier, ModifierKind, ModifierOrigin, PartTier, Range,
     StatLine, TierDoubt,
