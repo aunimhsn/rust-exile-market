@@ -36,6 +36,8 @@ status-trade = GGG trade { $age }
 status-trade-wait = GGG trade : prochaine recherche dans { $wait }
 # Pendant que les réglages sont ouverts : la version et l'auteur ; le site, en dernier, est un lien.
 status-author = { $app } { $version } · Créé par { $author } · { $site }
+# Dans la fenêtre par-dessus le jeu, pendant la saisie d'un champ min ou max : les touches n'atteignent plus le jeu.
+status-keyboard = Les touches vont à cette fenêtre · Entrée ou Échap : retour au jeu
 
 ## Fenêtre avant le premier objet
 

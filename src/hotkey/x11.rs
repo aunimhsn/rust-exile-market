@@ -6,12 +6,12 @@ use std::error::Error;
 use global_hotkey::HotKeyState;
 use x11rb::connection::{Connection, RequestConnection as _};
 use x11rb::protocol::xproto::{
-    self, Atom, AtomEnum, ConnectionExt as _, KeyButMask, Keycode, Window,
+    self, Atom, AtomEnum, ConnectionExt as _, InputFocus, KeyButMask, Keycode, Window,
 };
 use x11rb::protocol::xtest::{self, ConnectionExt as _};
 use x11rb::rust_connection::RustConnection;
 
-use crate::overlay::{Point, ScreenRect, Target};
+use crate::overlay::{Point, ScreenRect, Target, is_ours};
 
 type Result<T> = std::result::Result<T, Box<dyn Error>>;
 
@@ -97,6 +97,8 @@ struct Keyboard {
     root: Window,
     /// `_NET_ACTIVE_WINDOW`, the window the desktop gives the focus to.
     active_window: Atom,
+    /// `_NET_WM_PID`, the process of a window.
+    pid: Atom,
 }
 
 impl Keyboard {
@@ -113,10 +115,12 @@ impl Keyboard {
             .intern_atom(false, b"_NET_ACTIVE_WINDOW")?
             .reply()?
             .atom;
+        let pid = connection.intern_atom(false, b"_NET_WM_PID")?.reply()?.atom;
         Ok(Self {
             connection,
             root,
             active_window,
+            pid,
         })
     }
 
@@ -135,6 +139,13 @@ impl Keyboard {
             Ok(None) => "none (an application outside X11?)".to_owned(),
             Err(error) => format!("unknown ({error})"),
         };
+        // While a field of the window over the game is edited, the keys of the copy would go to
+        // it: the game gets the keyboard back first.
+        if let Ok(Some(game)) = window
+            && let Err(error) = self.give_back_keyboard(game)
+        {
+            log::warn!("The keyboard can't be given back to the game: {error}");
+        }
         let game = match window {
             Ok(Some(window)) => self.window_rect(window).unwrap_or_else(|error| {
                 log::warn!("The window of the game can't be measured: {error}");
@@ -189,6 +200,23 @@ impl Keyboard {
             window_class,
             control_held,
         })
+    }
+
+    /// Gives the keyboard back to `game`, the active window, when the window over the game has
+    /// it: the window of this application with the keyboard, which the desktop didn't activate.
+    fn give_back_keyboard(&self, game: Window) -> Result<()> {
+        let focused = self.connection.get_input_focus()?.reply()?.focus;
+        if focused != game
+            && focused != self.root
+            && focused > u32::from(InputFocus::POINTER_ROOT)
+            && is_ours(&self.connection, self.pid, focused)?
+        {
+            self.connection
+                .set_input_focus(InputFocus::PARENT, game, x11rb::CURRENT_TIME)?
+                .check()?;
+            log::info!("The price-check hotkey gave the keyboard back to the game");
+        }
+        Ok(())
     }
 
     /// The active window, none when the desktop gives the focus to a window outside X11.
