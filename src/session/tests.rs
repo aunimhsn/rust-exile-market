@@ -21,7 +21,10 @@ fn session() -> Session {
 
 fn copy(session: &mut Session, text: &str) {
     let copied = CopiedItem::from_text(text).expect("an item");
-    session.apply(ClipboardEvent::Copied(copied));
+    session.apply(ClipboardEvent::Copied {
+        item: copied,
+        hotkey: None,
+    });
 }
 
 /// The base type of the item shown.

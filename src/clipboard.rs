@@ -26,8 +26,13 @@ const COPY_MARKER: &str = "Exile Market: copying an item from the game";
 /// What the watcher tells the application.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ClipboardEvent {
-    /// An item was copied, or copied again after another text.
-    Copied(CopiedItem),
+    /// An item was copied, or copied again after another text; by the hotkey, which prepared
+    /// the clipboard at that instant ([`crate::hotkey::Press::copy`]), when it was read within
+    /// [`COPY_WAIT`] of it.
+    Copied {
+        item: CopiedItem,
+        hotkey: Option<Instant>,
+    },
     Unreadable,
     /// Readable again, after [`ClipboardEvent::Unreadable`].
     Readable,
@@ -122,14 +127,14 @@ impl<S: ClipboardSource> ClipboardWatcher<S> {
                 }
                 let text_hash = self.hasher.hash_one(&text);
                 let item = CopiedItem::from_text(&text);
-                let expected = self.copy_expected(started, Instant::now(), item.is_some());
+                let hotkey = self.copy_expected(started, Instant::now(), item.is_some());
                 // Only a different text is a new copy: the same item read again after an
                 // empty or late reading is not, unless the hotkey copied it again.
-                if self.last_text_hash != Some(text_hash) || (expected && item.is_some()) {
+                if self.last_text_hash != Some(text_hash) || (hotkey.is_some() && item.is_some()) {
                     self.last_text_hash = Some(text_hash);
                     if let Some(item) = item {
                         log::info!("Item copied: {}", item.first_line());
-                        emit(ClipboardEvent::Copied(item));
+                        emit(ClipboardEvent::Copied { item, hotkey });
                     }
                 }
             }
@@ -139,25 +144,23 @@ impl<S: ClipboardSource> ClipboardWatcher<S> {
         }
     }
 
-    /// Whether the hotkey prepared a copy before the reading `started`, less than [`COPY_WAIT`]
+    /// When the hotkey prepared a copy before the reading `started`, less than [`COPY_WAIT`]
     /// before `now`; forgotten once an item is `read`, or once too old. A copy prepared during
     /// the reading is kept for the next one.
-    fn copy_expected(&self, started: Instant, now: Instant, read: bool) -> bool {
+    fn copy_expected(&self, started: Instant, now: Instant, read: bool) -> Option<Instant> {
         let mut prepared = self
             .copy_expected
             .lock()
             .unwrap_or_else(PoisonError::into_inner);
-        let Some(at) = *prepared else {
-            return false;
-        };
+        let at = (*prepared)?;
         if at > started {
-            return false;
+            return None;
         }
         let expected = now.saturating_duration_since(at) <= COPY_WAIT;
         if read || !expected {
             *prepared = None;
         }
-        expected
+        expected.then_some(at)
     }
 
     fn succeeded(&mut self, emit: &mut impl FnMut(ClipboardEvent)) {
@@ -252,18 +255,30 @@ pub struct CopyMarker {
 )]
 impl CopyMarker {
     /// Replaces an item in the clipboard with [`COPY_MARKER`] (any other text, that the player
-    /// may need, is kept), then tells the watcher that a copy comes; when, which the window
-    /// over the game counts from too.
-    pub fn before_copy(&mut self) -> Instant {
-        if let Err(error) = self.mark() {
-            log::warn!("The clipboard can't be prepared for the copy: {error}");
-        }
+    /// may need, is kept), then tells the watcher that a copy comes; when, which the watcher
+    /// gives back with the item. None when the clipboard couldn't be prepared, or only after
+    /// [`COPY_WAIT`] (arboard waits for an owner that doesn't answer): an item left in it would
+    /// then be taken for the copy of an empty cell.
+    pub fn before_copy(&mut self) -> Option<Instant> {
+        let started = Instant::now();
+        let marked = self.mark();
         let now = Instant::now();
+        if let Err(error) = marked {
+            log::warn!("The clipboard can't be prepared for the copy: {error}");
+            return None;
+        }
+        if now.duration_since(started) > COPY_WAIT {
+            log::warn!(
+                "The clipboard took {:?} to be prepared for the copy: its item only shows in the main window",
+                now.duration_since(started)
+            );
+            return None;
+        }
         *self
             .copy_expected
             .lock()
             .unwrap_or_else(PoisonError::into_inner) = Some(now);
-        now
+        Some(now)
     }
 
     fn mark(&mut self) -> Result<(), arboard::Error> {
@@ -356,7 +371,24 @@ mod tests {
     }
 
     fn copied(text: &str) -> ClipboardEvent {
-        ClipboardEvent::Copied(CopiedItem::from_text(text).expect("an item"))
+        ClipboardEvent::Copied {
+            item: CopiedItem::from_text(text).expect("an item"),
+            hotkey: None,
+        }
+    }
+
+    /// The events with, for each copy, whether the hotkey copied it, without its instant.
+    fn by_hotkey(events: Vec<ClipboardEvent>) -> Vec<(ClipboardEvent, bool)> {
+        events
+            .into_iter()
+            .map(|event| match event {
+                ClipboardEvent::Copied { item, hotkey } => (
+                    ClipboardEvent::Copied { item, hotkey: None },
+                    hotkey.is_some(),
+                ),
+                event => (event, false),
+            })
+            .collect()
     }
 
     fn watcher(readings: impl IntoIterator<Item = Reading>) -> ClipboardWatcher<FakeClipboard> {
@@ -465,8 +497,29 @@ mod tests {
         watcher.poll(|event| events.push(event));
         watcher.poll(|event| events.push(event));
 
-        assert_eq!(events, [copied(RING), copied(RING)]);
+        assert_eq!(
+            by_hotkey(events),
+            [(copied(RING), false), (copied(RING), true)]
+        );
         assert_eq!(*watcher.copy_expected.lock().unwrap(), None);
+    }
+
+    #[test]
+    fn the_copy_of_the_hotkey_carries_the_instant_it_was_prepared() {
+        let mut watcher = watcher([text(RING), text(AMULET)]);
+        let mut events = Vec::new();
+        watcher.poll(|event| events.push(event));
+        let prepared = Instant::now();
+        expect_copy(&watcher, prepared);
+        watcher.poll(|event| events.push(event));
+
+        assert_eq!(
+            events.last(),
+            Some(&ClipboardEvent::Copied {
+                item: CopiedItem::from_text(AMULET).unwrap(),
+                hotkey: Some(prepared),
+            })
+        );
     }
 
     #[test]
@@ -478,7 +531,10 @@ mod tests {
         watcher.poll(|event| events.push(event));
         watcher.poll(|event| events.push(event));
 
-        assert_eq!(events, [copied(RING), copied(RING)]);
+        assert_eq!(
+            by_hotkey(events),
+            [(copied(RING), false), (copied(RING), true)]
+        );
     }
 
     /// The hotkey prepared a copy at `at`.
@@ -549,12 +605,12 @@ mod tests {
     #[test]
     fn a_copy_expected_outlives_busy_and_empty_readings() {
         assert_eq!(
-            events_with_copy(
+            by_hotkey(events_with_copy(
                 [text(RING), Reading::Busy, Reading::NoText, text(RING)],
                 1,
                 Instant::now()
-            ),
-            [copied(RING), copied(RING)]
+            )),
+            [(copied(RING), false), (copied(RING), true)]
         );
     }
 
@@ -570,10 +626,9 @@ mod tests {
     impl ClipboardSource for HotkeyDuringReading {
         fn read(&mut self) -> Reading {
             if self.polls == self.during {
-                // Strictly after the start of the reading, and before the next one.
+                // Strictly after the start of the reading.
                 std::thread::sleep(Duration::from_millis(1));
                 *self.expected.lock().unwrap() = Some(Instant::now());
-                std::thread::sleep(Duration::from_millis(1));
             }
             self.polls += 1;
             self.readings.pop_front().unwrap_or(Reading::NoText)
@@ -617,16 +672,22 @@ mod tests {
     #[test]
     fn the_item_read_while_the_hotkey_marks_another_item_is_no_copy() {
         assert_eq!(
-            events_with_copy_during([text(RING), text(RING), text(COPY_MARKER), text(AMULET)], 1),
-            [copied(RING), copied(AMULET)]
+            by_hotkey(events_with_copy_during(
+                [text(RING), text(RING), text(COPY_MARKER), text(AMULET)],
+                1
+            )),
+            [(copied(RING), false), (copied(AMULET), true)]
         );
     }
 
     #[test]
     fn the_same_item_after_a_marker_written_during_a_reading_is_a_copy() {
         assert_eq!(
-            events_with_copy_during([text(RING), text(RING), text(COPY_MARKER), text(RING)], 1),
-            [copied(RING), copied(RING)]
+            by_hotkey(events_with_copy_during(
+                [text(RING), text(RING), text(COPY_MARKER), text(RING)],
+                1
+            )),
+            [(copied(RING), false), (copied(RING), true)]
         );
     }
 

@@ -54,7 +54,7 @@ impl View {
     /// The view after `event`: a copied item closes the settings, so that the player sees it.
     fn after(self, event: &ClipboardEvent) -> Self {
         match event {
-            ClipboardEvent::Copied(_) => Self::Item,
+            ClipboardEvent::Copied { .. } => Self::Item,
             ClipboardEvent::Unreadable | ClipboardEvent::Readable => self,
         }
     }
@@ -475,20 +475,22 @@ impl App for ExileMarketApp {
     fn logic(&mut self, ctx: &Context, _frame: &mut Frame) {
         let now = Instant::now();
         // Counted from when the copy was prepared, like the clipboard watching.
-        self.hotkey
-            .receive(|press| self.overlay.hotkey(press.target, press.at));
+        self.hotkey.receive(|press| {
+            // Without a prepared clipboard, its item only shows in the main window.
+            if let Some(copy) = press.copy {
+                self.overlay.hotkey(press.target, copy);
+            }
+        });
         self.clipboard.receive(|event| {
-            if let ClipboardEvent::Copied(item) = &event {
+            if let ClipboardEvent::Copied { item, hotkey } = &event {
                 let was_open = self.overlay.shown().is_some();
-                let by_hotkey = self.overlay.copied(now);
-                if by_hotkey {
-                    // A window that opens is laid out once before it shows; an open one keeps
-                    // its height until the next frame, without blinking.
-                    if !was_open {
-                        self.overlay_height = None;
-                    }
+                // A window that opens is laid out once before it shows; an open one keeps its
+                // height until the next frame, without blinking.
+                if self.overlay.copied(*hotkey) && !was_open {
+                    self.overlay_height = None;
                 }
-                if copied_again(by_hotkey, self.last_copied.as_ref(), item) {
+                // The clipboard watching alone tells the copy of the hotkey.
+                if copied_again(hotkey.is_some(), self.last_copied.as_ref(), item) {
                     // Its filters and offers stay.
                     self.view = View::Item;
                     return;
@@ -726,13 +728,14 @@ mod tests {
         use crate::trade::query::Query;
 
         let mut session = Session::new(Some(League::new("Standard")));
-        session.apply(ClipboardEvent::Copied(
-            CopiedItem::from_text(
+        session.apply(ClipboardEvent::Copied {
+            item: CopiedItem::from_text(
                 "Item Class: Rings\nRarity: Rare\nWoe Loop\nRuby Ring\n--------\n\
                  Item Level: 80\n--------\nCorrupted",
             )
             .unwrap(),
-        ));
+            hotkey: None,
+        });
         let shown = session.item().expect("an item");
         let item = shown.parsed().expect("read");
         let corrupted = |filters: &Filters| {
@@ -782,9 +785,11 @@ mod tests {
 
     #[test]
     fn a_copied_item_closes_the_settings() {
-        let copied = ClipboardEvent::Copied(
-            CopiedItem::from_text("Item Class: Rings\nRarity: Rare\nWoe Loop\nRuby Ring").unwrap(),
-        );
+        let copied = ClipboardEvent::Copied {
+            item: CopiedItem::from_text("Item Class: Rings\nRarity: Rare\nWoe Loop\nRuby Ring")
+                .unwrap(),
+            hotkey: None,
+        };
 
         assert_eq!(View::Settings.after(&copied), View::Item);
         assert_eq!(View::Item.after(&copied), View::Item);

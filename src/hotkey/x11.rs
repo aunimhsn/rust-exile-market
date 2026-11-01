@@ -57,20 +57,22 @@ impl CopySender {
         self.keyboard.is_some()
     }
 
-    /// Sends Ctrl+C to the window that has the focus, and writes to the log where it went;
-    /// where the window over the game opens, when the pointer and that window could be read.
-    pub fn send_copy(&mut self) -> Option<Target> {
+    /// Sends Ctrl+C to the window that has the focus, and writes to the log where it went.
+    /// Just before the keys, `tell` gets where the window over the game opens, when the pointer
+    /// and that window could be read: told before the game copies, the application never gets
+    /// the item before the press.
+    pub fn send_copy(&mut self, tell: impl FnOnce(Option<Target>)) {
         let keyboard = match self.keyboard.take() {
             Some(keyboard) => keyboard,
             None => match Keyboard::connect() {
                 Ok(keyboard) => keyboard,
                 Err(error) => {
                     log::warn!("The copy can't be sent: no X11 keyboard ({error})");
-                    return None;
+                    return;
                 }
             },
         };
-        match keyboard.send_copy() {
+        match keyboard.send_copy(tell) {
             Ok(sent) => {
                 log::info!(
                     "Copy sent by the price-check hotkey to the window of class {} (Ctrl {})",
@@ -82,13 +84,9 @@ impl CopySender {
                     }
                 );
                 self.keyboard = Some(keyboard);
-                sent.target
             }
             // The connection is opened again at the next copy.
-            Err(error) => {
-                log::warn!("The copy can't be sent: {error}");
-                None
-            }
+            Err(error) => log::warn!("The copy can't be sent: {error}"),
         }
     }
 }
@@ -98,7 +96,6 @@ struct Sent {
     /// The class of the active window, which tells the game from another application.
     window_class: String,
     control_held: bool,
-    target: Option<Target>,
 }
 
 struct Keyboard {
@@ -129,7 +126,7 @@ impl Keyboard {
         })
     }
 
-    fn send_copy(&self) -> Result<Sent> {
+    fn send_copy(&self, tell: impl FnOnce(Option<Target>)) -> Result<Sent> {
         // The window the keys go to, read before them; for the log and the window over the
         // game, so that a failure doesn't stop the copy.
         let window = self.active_window();
@@ -176,6 +173,7 @@ impl Keyboard {
             },
             game,
         });
+        tell(target);
         for (index, key) in copy_keys(control, c, control_held).into_iter().enumerate() {
             let (event, keycode) = match key {
                 Key::Down(keycode) => (xproto::KEY_PRESS_EVENT, keycode),
@@ -189,7 +187,6 @@ impl Keyboard {
         Ok(Sent {
             window_class,
             control_held,
-            target,
         })
     }
 

@@ -238,7 +238,7 @@ mod tests {
 
     impl PointerSource for ChannelPointer {
         fn read(&mut self) -> Result<(Point, bool), Box<dyn Error>> {
-            let down = self.0.recv_timeout(Duration::from_secs(5))?;
+            let down = self.0.recv()?;
             Ok((AT, down))
         }
     }

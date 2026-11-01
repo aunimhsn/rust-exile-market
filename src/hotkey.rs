@@ -15,17 +15,19 @@ use crate::clipboard::CopyMarker;
 use crate::overlay::Target;
 
 /// How long the game may take to copy the item after the hotkey: past it, the hotkey copied
-/// nothing (an empty cell of the inventory). The clipboard watching and the window over the game
-/// both count it from [`Press::at`].
+/// nothing (an empty cell of the inventory). The clipboard watching takes an item read within it
+/// for the copy of the hotkey, and tells it with [`Press::copy`].
 pub const COPY_WAIT: Duration = Duration::from_secs(1);
 
-/// A press of the hotkey.
+/// A press of the hotkey, told just before its keys, so that its item never comes first.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Press {
     /// Where it was pressed, when the system could tell it.
     pub target: Option<Target>,
-    /// When the copy was prepared, just before it was sent.
-    pub at: Instant,
+    /// When the clipboard was prepared for its copy, which the clipboard watching gives back
+    /// with the item it copied ([`crate::clipboard::ClipboardEvent::Copied`]); none when it
+    /// couldn't be prepared (then its item only shows in the main window).
+    pub copy: Option<Instant>,
 }
 
 #[cfg(target_os = "windows")]
@@ -96,21 +98,22 @@ impl PriceCheckHotkey {
                 // Marked only when the keys can be sent: a copy that doesn't leave would leave
                 // the marker in place of the item of the player.
                 #[cfg(target_os = "linux")]
-                let at = if keys.ready() {
+                let copy = if keys.ready() {
                     marker.before_copy()
                 } else {
-                    Instant::now()
+                    return;
                 };
                 #[cfg(not(target_os = "linux"))]
-                let at = {
+                let copy = {
                     let _ = marker;
-                    Instant::now()
+                    None
                 };
-                let target = keys.send_copy();
-                // The application stopped listening: nothing left to tell.
-                if targets.send(Press { target, at }).is_ok() {
-                    wake();
-                }
+                keys.send_copy(|target| {
+                    // The application stopped listening: nothing left to tell.
+                    if targets.send(Press { target, copy }).is_ok() {
+                        wake();
+                    }
+                });
             }
         }));
         match manager.register(hotkey) {
