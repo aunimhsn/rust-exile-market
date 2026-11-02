@@ -381,7 +381,7 @@ impl ExileMarketApp {
     /// keyboard through X11 (`SetInputFocus`, [`KeyboardFocus`]), not through `with_active`.
     /// On Windows, always on top, and shown without activation; a click in it activates it all
     /// the same, and it gives the focus back to the game, unless the click opens a link, the
-    /// browser then coming to the front.
+    /// browser then coming to the front, or goes to a field, which keeps it until it is left.
     fn show_overlay(
         &mut self,
         ctx: &Context,
@@ -437,14 +437,15 @@ impl ExileMarketApp {
                 .with_inner_size(vec2(overlay::WIDTH, to_points(place.height, scale)));
         }
         let league = self.session.league().cloned();
+        let held = self.keyboard.held();
         // Drawn at every frame, hidden while it is closed (see above).
         let height = ctx.show_viewport_immediate(id, builder, |ui, _| {
             // Closed, the hotkey gave the keyboard back to the game, or the window lost it
-            // (Alt+Tab, which egui doesn't take for leaving the field; on Windows, the focus
-            // given back to the game after each click until step 14b3b): no field is edited,
-            // so that the status bar doesn't say the keys go to the window, and a window that
-            // opens again doesn't take the keyboard. The number typed is settled, as leaving
-            // its field does.
+            // (Alt+Tab, which egui doesn't take for leaving the field; on Windows, whatever
+            // took the focus, even while no field had it): no field is edited, so that the
+            // status bar doesn't say the keys go to the window, and a window that opens again
+            // doesn't take the keyboard. The number typed is settled, as leaving its field
+            // does.
             let left = self.overlay.take_leave_field();
             let lost = (self.keyboard.held() || cfg!(target_os = "windows"))
                 && ui.input(|input| {
@@ -459,7 +460,7 @@ impl ExileMarketApp {
             }
             #[cfg(target_os = "windows")]
             if place.is_none() {
-                self.keyboard.give_back(None, false, false);
+                self.keyboard.give_back(overlay::Frame::HIDDEN);
             }
             place?;
             // Its own ids: the scroll and the panels of the main window are its own.
@@ -472,34 +473,21 @@ impl ExileMarketApp {
                     self.item(ui, prices, kind, to_top)
                 })
                 .inner;
+            let editing = ui.ctx().text_edit_focused();
             // A click in it took the focus of the game: given back once it is released,
-            // after the content, which may open a link with this click (Check on trade):
-            // the browser then comes to the front instead.
+            // after the content, which may open a link with this click; kept while a field is
+            // edited.
             #[cfg(target_os = "windows")]
-            {
-                let (focused, pressed) = ui.input(|input| {
-                    (
-                        input.viewport().focused == Some(true),
-                        input.pointer.any_down(),
-                    )
-                });
-                let opens_link = ui.ctx().output(|output| {
-                    output
-                        .commands
-                        .iter()
-                        .any(|command| matches!(command, egui::OutputCommand::OpenUrl(_)))
-                });
-                self.keyboard.give_back(Some(focused), pressed, opens_link);
-            }
-            Some((height, ui.ctx().text_edit_focused()))
+            self.keyboard.give_back(overlay_frame(ui, editing));
+            Some((height, editing))
         });
         let editing = height.is_some_and(|(_, editing)| editing);
         let height = height.map(|(height, _)| height);
         if !editing {
             self.filters.forget_edited(Window::OverTheGame);
         }
-        // The status bar, drawn before the fields, says it at the next frame.
-        let held = self.keyboard.held();
+        // The status bar, drawn before the fields, says it at the next frame: on Windows, the
+        // window took the keyboard during the frame already.
         if self.keyboard.follow(editing) != held {
             ctx.request_repaint();
         }
@@ -734,6 +722,31 @@ impl App for ExileMarketApp {
 /// command also asks for the next frame, which would redraw both windows at every frame.
 fn paint_while_hidden(overlay_shown: bool, main_visible: Option<bool>) -> bool {
     overlay_shown && main_visible == Some(false)
+}
+
+/// What a frame of the window over the game saw once its content is drawn, for the focus given
+/// back to the game on Windows: the content may open a link with the click (Check on trade), the
+/// browser then coming to the front instead; `editing`, whether one of its fields is edited.
+#[cfg(target_os = "windows")]
+fn overlay_frame(ui: &egui::Ui, editing: bool) -> overlay::Frame {
+    let (focused, pressed) = ui.input(|input| {
+        (
+            input.viewport().focused == Some(true),
+            input.pointer.any_down(),
+        )
+    });
+    let opens_link = ui.ctx().output(|output| {
+        output
+            .commands
+            .iter()
+            .any(|command| matches!(command, egui::OutputCommand::OpenUrl(_)))
+    });
+    overlay::Frame {
+        focused: Some(focused),
+        pressed,
+        opens_link,
+        editing,
+    }
 }
 
 /// The item shown came back with the shape `back` of its modifiers when it was left, and has the

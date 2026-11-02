@@ -52,6 +52,9 @@ impl CopySender {
         prepare: impl FnOnce() -> P,
         tell: impl FnOnce(Option<Target>, P),
     ) {
+        // While a field of the window over the game is edited, the keys of the copy would go to
+        // it: the game gets the focus back first.
+        let given_back = crate::overlay::give_keyboard_back();
         // The window the keys go to, read before them; for the log and the window over the
         // game, so that a failure doesn't stop the copy.
         let window = HWND::GetForegroundWindow();
@@ -87,7 +90,7 @@ impl CopySender {
         });
         tell(target, prepared);
         // Windows doesn't tell a key it drops: a game run as administrator never gets it.
-        match self.send_keys(control_held) {
+        match self.send_keys(control_held, given_back) {
             Ok(()) => log::info!(
                 "Copy requested by the price-check hotkey from the window of class {class} (Ctrl {})",
                 if control_held {
@@ -102,9 +105,14 @@ impl CopySender {
 
     /// The keys of [`copy_keys`], as virtual keys: C, which Windows maps to the key that writes C
     /// in the layout of the window that has the focus; after a failure, only the releases
-    /// ([`send_all`]).
-    fn send_keys(&mut self, control_held: bool) -> enigo::InputResult<()> {
-        let keys = copy_keys(enigo::Key::Control, enigo::Key::C, control_held);
+    /// ([`send_all`]). When the game was just `given_back` the focus, a Ctrl the player holds is
+    /// pressed once more, never released: the game may not know it is held, since it was
+    /// pressed while the window over the game had the focus, and would read C alone.
+    fn send_keys(&mut self, control_held: bool, given_back: bool) -> enigo::InputResult<()> {
+        let mut keys = copy_keys(enigo::Key::Control, enigo::Key::C, control_held);
+        if given_back && control_held {
+            keys.insert(0, Key::Down(enigo::Key::Control));
+        }
         send_all(keys, |key| match key {
             Key::Down(key) => self.keyboard.key(key, Direction::Press),
             Key::Up(key) => self.keyboard.key(key, Direction::Release),

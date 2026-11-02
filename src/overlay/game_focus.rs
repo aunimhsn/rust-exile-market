@@ -1,31 +1,33 @@
 //! The focus given back to the game after a click in the window over the game, on Windows
-//! (`specs.md`, Window over the game, Focus).
+//! (`specs.md`, Window over the game, Focus and Keyboard).
 //!
 //! winit can't make a window that is never activated (`WS_EX_NOACTIVATE`), and `unsafe` is
 //! forbidden in the application: a click in the window over the game activates it, and the game
 //! loses the keyboard. The window then gives the focus back to the game, as Exiled Exchange 2
 //! does (`focusTarget` of electron-overlay-window), once the buttons are released, so that the
-//! window still gets the release of its click (a checkbox, Search). A click that opens a link
-//! (Check on trade) leaves the foreground to the browser: Windows lets the browser come to the
-//! front only while this application has the foreground.
+//! window still gets the release of its click (a checkbox, Search). A click in a min or max
+//! field keeps it, so that the number typed reaches the field, until no field is edited any more
+//! (Enter, Esc, a click elsewhere in the window). A click that opens a link (Check on trade)
+//! leaves the foreground to the browser: Windows lets the browser come to the front only while
+//! this application has the foreground.
 //!
 //! Without the system, so that the rules are tested on Linux too: the windows come from a
 //! [`Desktop`].
 
 /// The windows of the desktop, or fake ones in the tests.
 pub trait Desktop {
-    type Window;
-    /// The foreground window, when it isn't a window of this application.
-    fn foreground_not_ours(&mut self) -> Option<Self::Window>;
-    /// Brings `window` to the foreground; `false` when it is gone, or the system refused.
-    fn activate(&mut self, window: &Self::Window) -> bool;
+    /// Remembers the foreground window as the game, unless it is a window of this application.
+    fn remember_game(&mut self);
+    /// Brings the game remembered to the foreground; `false` when none was seen, it is gone, or
+    /// the system refused.
+    fn activate_game(&mut self) -> bool;
 }
 
 /// What a frame of the window over the game did with the focus, for the tests.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Gave {
     /// Nothing to give back: the window doesn't have the focus, or gave it back already, or a
-    /// button is still held in it.
+    /// button is still held in it, or one of its fields is edited.
     Nothing,
     /// Given back to the game.
     Given,
@@ -35,12 +37,32 @@ pub enum Gave {
     Failed,
 }
 
+/// What a frame of the window over the game saw, once its content is drawn.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Frame {
+    /// Whether the window has the focus; none while it is hidden.
+    pub focused: Option<bool>,
+    /// A button of the mouse is held in it.
+    pub pressed: bool,
+    /// The frame opens a link in the browser.
+    pub opens_link: bool,
+    /// One of its fields is edited.
+    pub editing: bool,
+}
+
+impl Frame {
+    /// A frame of the window hidden.
+    pub const HIDDEN: Self = Self {
+        focused: None,
+        pressed: false,
+        opens_link: false,
+        editing: false,
+    };
+}
+
 /// Gives the focus back to the game each time a click in the window over the game takes it.
 pub struct GameFocus<D: Desktop> {
     desktop: D,
-    /// The foreground window while the window over the game showed without the focus: the game,
-    /// where the hotkey was pressed.
-    game: Option<D::Window>,
     /// The window over the game took the focus, and it was given back already (or failed).
     handled: bool,
 }
@@ -49,15 +71,18 @@ impl<D: Desktop> GameFocus<D> {
     pub fn new(desktop: D) -> Self {
         Self {
             desktop,
-            game: None,
             handled: false,
         }
     }
 
-    /// At each frame of the window over the game, once its content is drawn: `focused`,
-    /// whether it has the focus, none while it is hidden; `pressed`, whether a button of the
-    /// mouse is held in it; `opens_link`, whether the frame opens a link in the browser.
-    pub fn follow(&mut self, focused: Option<bool>, pressed: bool, opens_link: bool) -> Gave {
+    /// At each frame of the window over the game, once its content is drawn.
+    pub fn follow(&mut self, frame: Frame) -> Gave {
+        let Frame {
+            focused,
+            pressed,
+            opens_link,
+            editing,
+        } = frame;
         match focused {
             None => {
                 self.handled = false;
@@ -65,23 +90,19 @@ impl<D: Desktop> GameFocus<D> {
             }
             Some(false) => {
                 self.handled = false;
-                if let Some(window) = self.desktop.foreground_not_ours() {
-                    self.game = Some(window);
-                }
+                // The game, where the hotkey was pressed, while the window shows without the
+                // focus.
+                self.desktop.remember_game();
                 Gave::Nothing
             }
-            Some(true) if self.handled || pressed => Gave::Nothing,
+            Some(true) if self.handled || pressed || editing => Gave::Nothing,
             Some(true) if opens_link => {
                 self.handled = true;
                 Gave::Left
             }
             Some(true) => {
                 self.handled = true;
-                let given = self
-                    .game
-                    .as_ref()
-                    .is_some_and(|game| self.desktop.activate(game));
-                if given {
+                if self.desktop.activate_game() {
                     log::info!("The window over the game gave the focus back to the game");
                     Gave::Given
                 } else {
@@ -104,23 +125,24 @@ mod tests {
     #[derive(Default)]
     struct FakeDesktop {
         foreground: u32,
+        game: Option<u32>,
         activated: Vec<u32>,
         refuses: bool,
     }
 
     impl Desktop for FakeDesktop {
-        type Window = u32;
-
-        fn foreground_not_ours(&mut self) -> Option<u32> {
-            (self.foreground != 0).then_some(self.foreground)
+        fn remember_game(&mut self) {
+            if self.foreground != OURS {
+                self.game = Some(self.foreground);
+            }
         }
 
-        fn activate(&mut self, window: &u32) -> bool {
-            if self.refuses {
+        fn activate_game(&mut self) -> bool {
+            let Some(game) = self.game.filter(|_| !self.refuses) else {
                 return false;
-            }
-            self.activated.push(*window);
-            self.foreground = *window;
+            };
+            self.activated.push(game);
+            self.foreground = game;
             true
         }
     }
@@ -128,13 +150,25 @@ mod tests {
     const GAME: u32 = 7;
     const OURS: u32 = 0;
 
+    /// A frame of the window hidden, shown without the focus, or with it, nothing held nor
+    /// edited.
+    const HIDDEN: Frame = Frame::HIDDEN;
+    const UNFOCUSED: Frame = Frame {
+        focused: Some(false),
+        ..HIDDEN
+    };
+    const FOCUSED: Frame = Frame {
+        focused: Some(true),
+        ..HIDDEN
+    };
+
     /// The window over the game opened over the game, which has the focus.
     fn opened() -> GameFocus<FakeDesktop> {
         let mut focus = GameFocus::new(FakeDesktop {
             foreground: GAME,
             ..FakeDesktop::default()
         });
-        assert_eq!(focus.follow(Some(false), false, false), Gave::Nothing);
+        assert_eq!(focus.follow(UNFOCUSED), Gave::Nothing);
         focus
     }
 
@@ -148,8 +182,14 @@ mod tests {
         let mut focus = opened();
         click(&mut focus);
 
-        assert_eq!(focus.follow(Some(true), true, false), Gave::Nothing);
-        assert_eq!(focus.follow(Some(true), false, false), Gave::Given);
+        assert_eq!(
+            focus.follow(Frame {
+                pressed: true,
+                ..FOCUSED
+            }),
+            Gave::Nothing
+        );
+        assert_eq!(focus.follow(FOCUSED), Gave::Given);
         assert_eq!(focus.desktop.activated, [GAME]);
     }
 
@@ -157,13 +197,13 @@ mod tests {
     fn gives_it_back_once_per_click() {
         let mut focus = opened();
         click(&mut focus);
-        focus.follow(Some(true), false, false);
+        focus.follow(FOCUSED);
         // The frames before the system tells the window it lost the focus.
-        assert_eq!(focus.follow(Some(true), false, false), Gave::Nothing);
-        assert_eq!(focus.follow(Some(false), false, false), Gave::Nothing);
+        assert_eq!(focus.follow(FOCUSED), Gave::Nothing);
+        assert_eq!(focus.follow(UNFOCUSED), Gave::Nothing);
 
         click(&mut focus);
-        assert_eq!(focus.follow(Some(true), false, false), Gave::Given);
+        assert_eq!(focus.follow(FOCUSED), Gave::Given);
         assert_eq!(focus.desktop.activated, [GAME, GAME]);
     }
 
@@ -172,9 +212,9 @@ mod tests {
         let mut focus = opened();
         // The main window brought to the front, then a click in the window over the game.
         focus.desktop.foreground = OURS;
-        focus.follow(Some(false), false, false);
+        focus.follow(UNFOCUSED);
 
-        assert_eq!(focus.follow(Some(true), false, false), Gave::Given);
+        assert_eq!(focus.follow(FOCUSED), Gave::Given);
         assert_eq!(focus.desktop.activated, [GAME]);
     }
 
@@ -183,10 +223,10 @@ mod tests {
         let mut focus = opened();
         // Alt+Tab to a browser while the window over the game stays open.
         focus.desktop.foreground = 9;
-        focus.follow(Some(false), false, false);
+        focus.follow(UNFOCUSED);
         click(&mut focus);
 
-        assert_eq!(focus.follow(Some(true), false, false), Gave::Given);
+        assert_eq!(focus.follow(FOCUSED), Gave::Given);
         assert_eq!(focus.desktop.activated, [9]);
     }
 
@@ -194,8 +234,8 @@ mod tests {
     fn without_game_seen_nothing_is_given() {
         let mut focus = GameFocus::new(FakeDesktop::default());
 
-        assert_eq!(focus.follow(Some(true), false, false), Gave::Failed);
-        assert_eq!(focus.follow(Some(true), false, false), Gave::Nothing);
+        assert_eq!(focus.follow(FOCUSED), Gave::Failed);
+        assert_eq!(focus.follow(FOCUSED), Gave::Nothing);
     }
 
     #[test]
@@ -204,25 +244,84 @@ mod tests {
         focus.desktop.refuses = true;
         click(&mut focus);
 
-        assert_eq!(focus.follow(Some(true), false, false), Gave::Failed);
-        assert_eq!(focus.follow(Some(true), false, false), Gave::Nothing);
+        assert_eq!(focus.follow(FOCUSED), Gave::Failed);
+        assert_eq!(focus.follow(FOCUSED), Gave::Nothing);
         focus.desktop.refuses = false;
         // A click in the game gave it the focus back; the next click in the window takes it.
         focus.desktop.foreground = GAME;
-        focus.follow(Some(false), false, false);
+        focus.follow(UNFOCUSED);
         click(&mut focus);
-        assert_eq!(focus.follow(Some(true), false, false), Gave::Given);
+        assert_eq!(focus.follow(FOCUSED), Gave::Given);
     }
 
     #[test]
     fn hidden_it_gives_nothing_and_shown_again_it_gives_it_back() {
         let mut focus = opened();
         click(&mut focus);
-        focus.follow(Some(true), false, false);
+        focus.follow(FOCUSED);
 
-        assert_eq!(focus.follow(None, false, false), Gave::Nothing);
+        assert_eq!(focus.follow(HIDDEN), Gave::Nothing);
         // Opened again by the hotkey, then clicked before any frame saw it without the focus.
-        assert_eq!(focus.follow(Some(true), false, false), Gave::Given);
+        assert_eq!(focus.follow(FOCUSED), Gave::Given);
+    }
+
+    #[test]
+    fn keeps_the_focus_while_a_field_is_edited_and_gives_it_back_once_left() {
+        let mut focus = opened();
+        click(&mut focus);
+        let editing = Frame {
+            editing: true,
+            ..FOCUSED
+        };
+
+        assert_eq!(
+            focus.follow(Frame {
+                pressed: true,
+                ..editing
+            }),
+            Gave::Nothing
+        );
+        // The number typed, then Enter or Esc.
+        assert_eq!(focus.follow(editing), Gave::Nothing);
+        assert_eq!(focus.follow(editing), Gave::Nothing);
+        assert_eq!(focus.desktop.activated, [] as [u32; 0]);
+        assert_eq!(focus.follow(FOCUSED), Gave::Given);
+        assert_eq!(focus.desktop.activated, [GAME]);
+    }
+
+    #[test]
+    fn a_click_elsewhere_in_the_window_gives_it_back_once_released() {
+        let mut focus = opened();
+        click(&mut focus);
+        focus.follow(Frame {
+            editing: true,
+            ..FOCUSED
+        });
+
+        // A checkbox pressed, which leaves the field.
+        assert_eq!(
+            focus.follow(Frame {
+                pressed: true,
+                ..FOCUSED
+            }),
+            Gave::Nothing
+        );
+        assert_eq!(focus.follow(FOCUSED), Gave::Given);
+    }
+
+    #[test]
+    fn a_field_edited_then_left_for_another_window_gives_nothing() {
+        let mut focus = opened();
+        click(&mut focus);
+        focus.follow(Frame {
+            editing: true,
+            ..FOCUSED
+        });
+
+        // Alt+Tab to a browser: it keeps the focus.
+        focus.desktop.foreground = 9;
+        assert_eq!(focus.follow(UNFOCUSED), Gave::Nothing);
+        assert_eq!(focus.desktop.activated, [] as [u32; 0]);
     }
 
     #[test]
@@ -230,13 +329,19 @@ mod tests {
         let mut focus = opened();
         click(&mut focus);
 
-        assert_eq!(focus.follow(Some(true), false, true), Gave::Left);
-        assert_eq!(focus.follow(Some(true), false, false), Gave::Nothing);
+        assert_eq!(
+            focus.follow(Frame {
+                opens_link: true,
+                ..FOCUSED
+            }),
+            Gave::Left
+        );
+        assert_eq!(focus.follow(FOCUSED), Gave::Nothing);
         assert_eq!(focus.desktop.activated, [] as [u32; 0]);
         // Back in the game, the next click in the window gives the focus back again.
         focus.desktop.foreground = GAME;
-        focus.follow(Some(false), false, false);
+        focus.follow(UNFOCUSED);
         click(&mut focus);
-        assert_eq!(focus.follow(Some(true), false, false), Gave::Given);
+        assert_eq!(focus.follow(FOCUSED), Gave::Given);
     }
 }
