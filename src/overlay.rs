@@ -3,18 +3,34 @@
 //!
 //! This module decides where the window goes, and when it opens and closes, without the system:
 //! the pointer and the game window come with the hotkey ([`crate::hotkey`]), the clicks from a
-//! thread of each system ([`ClickWatch`]), and the application draws the window. The keyboard
-//! goes to the window while one of its fields is edited ([`KeyboardFocus`]).
+//! thread that reads the pointer of each system ([`ClickWatch`]), and the application draws the
+//! window. The keyboard goes to the window while one of its fields is edited ([`KeyboardFocus`],
+//! on Linux; on Windows the game gets it back after each click in the window, until step 14b3b).
 
+#[cfg(any(target_os = "linux", target_os = "windows"))]
+mod clicks;
+// The rules of the focus given back on Windows, tested on Linux too.
+#[cfg(any(target_os = "windows", test))]
+mod game_focus;
 #[cfg(target_os = "linux")]
 mod keyboard;
+#[cfg(target_os = "windows")]
+mod windows;
 #[cfg(target_os = "linux")]
 mod x11;
 
+// The pointer of each system, read by the click watch.
+#[cfg(target_os = "windows")]
+use self::windows as system;
+#[cfg(target_os = "linux")]
+use self::x11 as system;
+
+#[cfg(any(target_os = "linux", target_os = "windows"))]
+pub use self::clicks::ClickWatch;
 #[cfg(target_os = "linux")]
 pub use self::keyboard::KeyboardFocus;
-#[cfg(target_os = "linux")]
-pub use self::x11::ClickWatch;
+#[cfg(target_os = "windows")]
+pub use self::windows::KeyboardFocus;
 
 use std::time::{Duration, Instant};
 
@@ -200,14 +216,15 @@ impl Overlay {
     }
 }
 
-/// No window over the game on this system yet: no click to watch.
-#[cfg(not(target_os = "linux"))]
+/// No window over the game on this system (macOS, where Path of Exile 2 has no client): no
+/// click to watch.
+#[cfg(not(any(target_os = "linux", target_os = "windows")))]
 pub struct ClickWatch;
 
-#[cfg(not(target_os = "linux"))]
+#[cfg(not(any(target_os = "linux", target_os = "windows")))]
 #[expect(
     clippy::unused_self,
-    reason = "the interface of the click watch of Linux, without its state"
+    reason = "the interface of the click watch of Linux and Windows, without its state"
 )]
 impl ClickWatch {
     #[must_use]
@@ -223,12 +240,12 @@ impl ClickWatch {
     }
 }
 
-/// No window over the game on this system yet: the game keeps the keyboard.
-#[cfg(not(target_os = "linux"))]
+/// No window over the game on this system (macOS): no keyboard to give.
+#[cfg(not(any(target_os = "linux", target_os = "windows")))]
 #[derive(Default)]
 pub struct KeyboardFocus;
 
-#[cfg(not(target_os = "linux"))]
+#[cfg(not(any(target_os = "linux", target_os = "windows")))]
 #[expect(
     clippy::unused_self,
     reason = "the interface of the keyboard of Linux, without its state"

@@ -9,6 +9,7 @@ use x11rb::protocol::xproto::{
 use x11rb::protocol::xtest::{self, ConnectionExt as _};
 use x11rb::rust_connection::RustConnection;
 
+use super::{Key, copy_keys, send_all};
 use crate::overlay::{Point, ScreenRect, Target};
 use crate::x11::{self as shared, Atoms, Result};
 
@@ -173,16 +174,22 @@ impl Keyboard {
             game,
         });
         tell(target, prepared);
-        for (index, key) in copy_keys(control, c, control_held).into_iter().enumerate() {
+        let mut first = true;
+        send_all(copy_keys(control, c, control_held), |key| -> Result<()> {
             let (event, keycode) = match key {
                 Key::Down(keycode) => (xproto::KEY_PRESS_EVENT, keycode),
                 Key::Up(keycode) => (xproto::KEY_RELEASE_EVENT, keycode),
             };
-            let delay = if index == 0 { 0 } else { KEY_DELAY_MS };
+            let delay = if std::mem::take(&mut first) {
+                0
+            } else {
+                KEY_DELAY_MS
+            };
             self.connection
                 .xtest_fake_input(event, keycode, delay, self.root, 0, 0, 0)?
                 .check()?;
-        }
+            Ok(())
+        })?;
         Ok(Sent {
             window_class,
             control_held,
@@ -256,30 +263,6 @@ fn gives_keyboard_back(
     ours()
 }
 
-/// A key pressed or released.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Key {
-    Down(Keycode),
-    Up(Keycode),
-}
-
-/// The keys that copy the item: C alone while the player still holds Ctrl, otherwise Ctrl
-/// pressed around it, then released, so that the keyboard is left as the player holds it.
-/// Releasing a Ctrl the player holds would make the X server take it for released, and the
-/// next D of the player would reach the game alone.
-fn copy_keys(control: Keycode, c: Keycode, control_held: bool) -> Vec<Key> {
-    if control_held {
-        vec![Key::Down(c), Key::Up(c)]
-    } else {
-        vec![
-            Key::Down(control),
-            Key::Down(c),
-            Key::Up(c),
-            Key::Up(control),
-        ]
-    }
-}
-
 /// The keycode that gives `keysym` in the first column of the keyboard mapping of the X server
 /// (the first group, without Shift), otherwise in another column (another level or group):
 /// `keysyms_per_keycode` keysyms for each keycode from `min_keycode`.
@@ -315,9 +298,6 @@ fn window_class(property: &[u8]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    const CONTROL: Keycode = 37;
-    const C: Keycode = 54;
 
     const ROOT: Window = 0x410;
     const GAME: Window = 0x660_0001;
@@ -355,24 +335,6 @@ mod tests {
         let unread = || -> Result<bool> { panic!("read") };
         assert!(!gives_keyboard_back(GAME, GAME, ROOT, unread).unwrap());
         assert!(gives_keyboard_back(ROOT, GAME, ROOT, unread).unwrap());
-    }
-
-    #[test]
-    fn taps_c_alone_while_the_player_holds_ctrl() {
-        assert_eq!(copy_keys(CONTROL, C, true), [Key::Down(C), Key::Up(C)]);
-    }
-
-    #[test]
-    fn presses_ctrl_around_c_once_the_player_released_it() {
-        assert_eq!(
-            copy_keys(CONTROL, C, false),
-            [
-                Key::Down(CONTROL),
-                Key::Down(C),
-                Key::Up(C),
-                Key::Up(CONTROL)
-            ]
-        );
     }
 
     /// Two keysyms per keycode from keycode 8: `a A`, `c C`, `Control_L`, `ccedilla c`.

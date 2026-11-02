@@ -240,8 +240,8 @@ impl ClipboardWatch {
 /// reaches the application, even of the item already shown, and the hotkey on an empty cell
 /// shows nothing.
 #[cfg_attr(
-    not(target_os = "linux"),
-    allow(dead_code, reason = "the clipboard is only prepared on Linux")
+    not(any(target_os = "linux", target_os = "windows")),
+    allow(dead_code, reason = "no hotkey prepares the clipboard on this system")
 )]
 pub struct CopyMarker {
     /// Opened at the first copy, and again until it opens.
@@ -250,8 +250,8 @@ pub struct CopyMarker {
 }
 
 #[cfg_attr(
-    not(target_os = "linux"),
-    allow(dead_code, reason = "the clipboard is only prepared on Linux")
+    not(any(target_os = "linux", target_os = "windows")),
+    allow(dead_code, reason = "no hotkey prepares the clipboard on this system")
 )]
 impl CopyMarker {
     /// Replaces an item in the clipboard with [`COPY_MARKER`] (any other text, that the player
@@ -289,8 +289,8 @@ impl CopyMarker {
 /// (arboard waits for an owner that doesn't answer), since an item left in it would then be
 /// taken for the copy of an empty cell.
 #[cfg_attr(
-    not(target_os = "linux"),
-    allow(dead_code, reason = "the clipboard is only prepared on Linux")
+    not(any(target_os = "linux", target_os = "windows")),
+    allow(dead_code, reason = "no hotkey prepares the clipboard on this system")
 )]
 fn copy_prepared(
     marked: Result<(), arboard::Error>,
@@ -313,8 +313,8 @@ fn copy_prepared(
 
 /// Whether the clipboard, which holds `text`, needs the marker: when it holds an item.
 #[cfg_attr(
-    not(target_os = "linux"),
-    allow(dead_code, reason = "the clipboard is only prepared on Linux")
+    not(any(target_os = "linux", target_os = "windows")),
+    allow(dead_code, reason = "no hotkey prepares the clipboard on this system")
 )]
 fn needs_marker(text: Result<String, arboard::Error>) -> Result<bool, arboard::Error> {
     match text {
@@ -331,8 +331,18 @@ fn set_marker(clipboard: &mut arboard::Clipboard) -> Result<(), arboard::Error> 
     clipboard.set().exclude_from_history().text(COPY_MARKER)
 }
 
-#[cfg(not(target_os = "linux"))]
-#[allow(dead_code, reason = "the clipboard is only prepared on Linux")]
+/// Writes the marker, out of the history of the clipboard (Windows+V), of its copy to the other
+/// devices of the player and of the clipboard managers that honour the format of Windows for it
+/// (`ExcludeClipboardContentFromMonitorProcessing`): `exclude_from_monitoring`, which arboard
+/// advises against combining with the other two, covers them all.
+#[cfg(target_os = "windows")]
+fn set_marker(clipboard: &mut arboard::Clipboard) -> Result<(), arboard::Error> {
+    use arboard::SetExtWindows as _;
+    clipboard.set().exclude_from_monitoring().text(COPY_MARKER)
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "windows")))]
+#[allow(dead_code, reason = "no hotkey prepares the clipboard on this system")]
 fn set_marker(clipboard: &mut arboard::Clipboard) -> Result<(), arboard::Error> {
     clipboard.set_text(COPY_MARKER)
 }

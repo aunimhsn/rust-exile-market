@@ -6,8 +6,8 @@ use std::time::{Duration, Instant, SystemTime};
 
 use eframe::{App, CreationContext, Frame};
 use egui::{
-    Context, Key, OpenUrl, Ui, ViewportBuilder, ViewportCommand, ViewportId, X11WindowType, pos2,
-    vec2,
+    Context, Key, OpenUrl, Ui, ViewportBuilder, ViewportCommand, ViewportId, WindowLevel,
+    X11WindowType, pos2, vec2,
 };
 
 use crate::clipboard::{ClipboardEvent, ClipboardWatch};
@@ -379,6 +379,9 @@ impl ExileMarketApp {
     /// eframe can only set by creating the window again (its type, override-redirect, active,
     /// taskbar, decorations) never change. While one of its fields is edited, it has the
     /// keyboard through X11 (`SetInputFocus`, [`KeyboardFocus`]), not through `with_active`.
+    /// On Windows, always on top, and shown without activation; a click in it activates it all
+    /// the same, and it gives the focus back to the game, unless the click opens a link, the
+    /// browser then coming to the front.
     fn show_overlay(
         &mut self,
         ctx: &Context,
@@ -387,18 +390,20 @@ impl ExileMarketApp {
         trade: TradeStatus,
         to_top: bool,
     ) {
-        // No window over the game on the other systems yet (step 14b3, Windows).
-        if !cfg!(target_os = "linux") {
+        // No window over the game on macOS, where Path of Exile 2 has no client.
+        if !cfg!(any(target_os = "linux", target_os = "windows")) {
             return;
         }
         let target = self.overlay.shown();
+        let id = ViewportId::from_hash_of("window-over-the-game");
         // The pointer and the game come in the physical pixels of the screen; the points of the
-        // window are scaled like those of the main window: by the screen and the zoom of the
-        // player (Ctrl + plus).
-        let scale = ctx
-            .input(|input| input.viewport().native_pixels_per_point)
-            .unwrap_or(1.0)
-            * ctx.zoom_factor();
+        // window are scaled by its own screen, which egui-winit converts them back with (on
+        // Windows, each screen has its own scale), the main window's until it exists, and by
+        // the zoom of the player (Ctrl + plus).
+        let native = ctx
+            .input_for(id, |input| input.viewport().native_pixels_per_point)
+            .or_else(|| ctx.input(|input| input.viewport().native_pixels_per_point));
+        let scale = native.unwrap_or(1.0) * ctx.zoom_factor();
         let width = to_pixels(overlay::WIDTH, scale);
         let content = self
             .overlay_height
@@ -421,6 +426,10 @@ impl ExileMarketApp {
             .with_resizable(false)
             // Shown once its content is laid out, at its height.
             .with_visible(place.is_some() && content.is_some());
+        // Windows has no override-redirect: the window stays above the game by its level.
+        if cfg!(target_os = "windows") {
+            builder = builder.with_window_level(WindowLevel::AlwaysOnTop);
+        }
         // Hidden where it was: it doesn't move before it hides.
         if let Some(place) = place {
             builder = builder
@@ -429,41 +438,61 @@ impl ExileMarketApp {
         }
         let league = self.session.league().cloned();
         // Drawn at every frame, hidden while it is closed (see above).
-        let height = ctx.show_viewport_immediate(
-            ViewportId::from_hash_of("window-over-the-game"),
-            builder,
-            |ui, _| {
-                // Closed, the hotkey gave the keyboard back to the game, or the window lost it
-                // (Alt+Tab, which egui doesn't take for leaving the field): no field is edited,
-                // so that the status bar doesn't say the keys go to the window, and a window that
-                // opens again doesn't take the keyboard. The number typed is settled, as leaving
-                // its field does.
-                let left = self.overlay.take_leave_field();
-                let lost = self.keyboard.held()
-                    && ui.input(|input| {
-                        input
-                            .events
-                            .iter()
-                            .any(|event| matches!(event, egui::Event::WindowFocused(false)))
-                    });
-                if (place.is_none() || left || lost) && ui.ctx().text_edit_focused() {
-                    self.filters.settle_edited(Window::OverTheGame);
-                    ui.ctx().memory_mut(egui::Memory::stop_text_input);
-                }
-                place?;
-                // Its own ids: the scroll and the panels of the main window are its own.
-                let height = ui
-                    .push_id("window-over-the-game", |ui| {
-                        StatusBar::sources(&self.i18n, prices, trade)
-                            .league(league.as_ref())
-                            .keyboard(self.keyboard.held())
-                            .show(ui);
-                        self.item(ui, prices, kind, to_top)
-                    })
-                    .inner;
-                Some((height, ui.ctx().text_edit_focused()))
-            },
-        );
+        let height = ctx.show_viewport_immediate(id, builder, |ui, _| {
+            // Closed, the hotkey gave the keyboard back to the game, or the window lost it
+            // (Alt+Tab, which egui doesn't take for leaving the field; on Windows, the focus
+            // given back to the game after each click until step 14b3b): no field is edited,
+            // so that the status bar doesn't say the keys go to the window, and a window that
+            // opens again doesn't take the keyboard. The number typed is settled, as leaving
+            // its field does.
+            let left = self.overlay.take_leave_field();
+            let lost = (self.keyboard.held() || cfg!(target_os = "windows"))
+                && ui.input(|input| {
+                    input
+                        .events
+                        .iter()
+                        .any(|event| matches!(event, egui::Event::WindowFocused(false)))
+                });
+            if (place.is_none() || left || lost) && ui.ctx().text_edit_focused() {
+                self.filters.settle_edited(Window::OverTheGame);
+                ui.ctx().memory_mut(egui::Memory::stop_text_input);
+            }
+            #[cfg(target_os = "windows")]
+            if place.is_none() {
+                self.keyboard.give_back(None, false, false);
+            }
+            place?;
+            // Its own ids: the scroll and the panels of the main window are its own.
+            let height = ui
+                .push_id("window-over-the-game", |ui| {
+                    StatusBar::sources(&self.i18n, prices, trade)
+                        .league(league.as_ref())
+                        .keyboard(self.keyboard.held())
+                        .show(ui);
+                    self.item(ui, prices, kind, to_top)
+                })
+                .inner;
+            // A click in it took the focus of the game: given back once it is released,
+            // after the content, which may open a link with this click (Check on trade):
+            // the browser then comes to the front instead.
+            #[cfg(target_os = "windows")]
+            {
+                let (focused, pressed) = ui.input(|input| {
+                    (
+                        input.viewport().focused == Some(true),
+                        input.pointer.any_down(),
+                    )
+                });
+                let opens_link = ui.ctx().output(|output| {
+                    output
+                        .commands
+                        .iter()
+                        .any(|command| matches!(command, egui::OutputCommand::OpenUrl(_)))
+                });
+                self.keyboard.give_back(Some(focused), pressed, opens_link);
+            }
+            Some((height, ui.ctx().text_edit_focused()))
+        });
         let editing = height.is_some_and(|(_, editing)| editing);
         let height = height.map(|(height, _)| height);
         if !editing {

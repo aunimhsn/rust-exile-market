@@ -26,8 +26,7 @@ pub struct Press {
     pub target: Option<Target>,
     /// When the clipboard was prepared for its copy, which the clipboard watching gives back
     /// with the item it copied ([`crate::clipboard::ClipboardEvent::Copied`]); none when it
-    /// couldn't be prepared (then its item only shows in the main window), and always on
-    /// Windows until step 14b3.
+    /// couldn't be prepared (then its item only shows in the main window).
     pub copy: Option<Instant>,
 }
 
@@ -55,9 +54,7 @@ pub struct PriceCheckHotkey {
 impl PriceCheckHotkey {
     /// Starts listening to Ctrl+D. A failure (the key taken by another application, such as
     /// Exiled Exchange 2) only writes to the log: the player can still copy with Ctrl+C.
-    /// `marker` prepares the clipboard before each copy (on Linux: on Windows, reading the
-    /// clipboard first would delay the copy past a short press of Ctrl); `wake` is called after
-    /// each hotkey.
+    /// `marker` prepares the clipboard before each copy; `wake` is called after each hotkey.
     ///
     /// Called once: the handler of the hotkey events can only be set once. Called on the thread
     /// of the window: on Windows, the hotkey is heard by a hidden window of that thread, through
@@ -129,16 +126,54 @@ impl PriceCheckHotkey {
 /// Prepares the clipboard for the copy, just before the keys, once they are sure to leave: a
 /// copy that doesn't leave would leave the marker in place of the item of the player; when,
 /// which the item copied carries back.
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "windows"))]
 fn prepare_copy(marker: &mut CopyMarker) -> Option<Instant> {
     marker.before_copy()
 }
 
-/// Only on Linux until step 14b3 (on Windows, reading the clipboard first would delay the copy
-/// past a short press of Ctrl).
-#[cfg(target_os = "windows")]
-fn prepare_copy(_marker: &mut CopyMarker) -> Option<Instant> {
-    None
+/// A key pressed or released.
+#[cfg(any(target_os = "linux", target_os = "windows"))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Key<K> {
+    Down(K),
+    Up(K),
+}
+
+/// The keys that copy the item, the keys of each system as `K`: C alone while the player still
+/// holds Ctrl, otherwise Ctrl pressed around it, then released, so that the keyboard is left as
+/// the player holds it. Releasing a Ctrl the player holds would make the system take it for
+/// released, and the next D of the player would reach the game alone.
+#[cfg(any(target_os = "linux", target_os = "windows"))]
+fn copy_keys<K: Copy>(control: K, c: K, control_held: bool) -> Vec<Key<K>> {
+    if control_held {
+        vec![Key::Down(c), Key::Up(c)]
+    } else {
+        vec![
+            Key::Down(control),
+            Key::Down(c),
+            Key::Up(c),
+            Key::Up(control),
+        ]
+    }
+}
+
+/// Sends `keys` one by one with `send`, the call of each system: after a failure, only the
+/// releases, so that no key is left held (a Ctrl left held would make the next D of the player
+/// reach the game alone); the first error.
+#[cfg(any(target_os = "linux", target_os = "windows"))]
+fn send_all<K, E>(
+    keys: Vec<Key<K>>,
+    mut send: impl FnMut(Key<K>) -> Result<(), E>,
+) -> Result<(), E> {
+    let mut result = Ok(());
+    for key in keys {
+        if result.is_err() && matches!(key, Key::Down(_)) {
+            continue;
+        }
+        // Sent even after a failure: `and` keeps the first error.
+        result = result.and(send(key));
+    }
+    result
 }
 
 impl PriceCheckHotkey {
@@ -149,5 +184,85 @@ impl PriceCheckHotkey {
                 handle(target);
             }
         }
+    }
+}
+
+#[cfg(all(test, any(target_os = "linux", target_os = "windows")))]
+mod tests {
+    use super::*;
+
+    const CONTROL: u8 = 37;
+    const C: u8 = 54;
+
+    #[test]
+    fn taps_c_alone_while_the_player_holds_ctrl() {
+        assert_eq!(copy_keys(CONTROL, C, true), [Key::Down(C), Key::Up(C)]);
+    }
+
+    /// The keys `send_all` sends, failing on `fails`, and what it returns.
+    fn sent(control_held: bool, fails: Option<Key<u8>>) -> (Vec<Key<u8>>, Result<(), Key<u8>>) {
+        let mut sent = Vec::new();
+        let result = send_all(copy_keys(CONTROL, C, control_held), |key| {
+            sent.push(key);
+            if Some(key) == fails { Err(key) } else { Ok(()) }
+        });
+        (sent, result)
+    }
+
+    #[test]
+    fn sends_every_key_when_none_fails() {
+        assert_eq!(sent(false, None), (copy_keys(CONTROL, C, false), Ok(())));
+    }
+
+    #[test]
+    fn after_a_failed_c_only_the_releases_are_sent() {
+        assert_eq!(
+            sent(false, Some(Key::Down(C))),
+            (
+                vec![
+                    Key::Down(CONTROL),
+                    Key::Down(C),
+                    Key::Up(C),
+                    Key::Up(CONTROL)
+                ],
+                Err(Key::Down(C))
+            )
+        );
+    }
+
+    #[test]
+    fn after_a_failed_ctrl_c_is_never_pressed() {
+        assert_eq!(
+            sent(false, Some(Key::Down(CONTROL))),
+            (
+                vec![Key::Down(CONTROL), Key::Up(C), Key::Up(CONTROL)],
+                Err(Key::Down(CONTROL))
+            )
+        );
+    }
+
+    #[test]
+    fn keeps_the_first_error() {
+        let mut calls = 0;
+        let result = send_all(copy_keys(CONTROL, C, false), |_| {
+            calls += 1;
+            Err(calls)
+        });
+
+        // Ctrl pressed, then the two releases.
+        assert_eq!((calls, result), (3, Err(1)));
+    }
+
+    #[test]
+    fn presses_ctrl_around_c_once_the_player_released_it() {
+        assert_eq!(
+            copy_keys(CONTROL, C, false),
+            [
+                Key::Down(CONTROL),
+                Key::Down(C),
+                Key::Up(C),
+                Key::Up(CONTROL)
+            ]
+        );
     }
 }
