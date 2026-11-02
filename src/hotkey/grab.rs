@@ -36,13 +36,19 @@ impl Grab {
     /// Follows the active window, `game` when it is the game: grabs the key with `grab` when the
     /// game becomes the active window, and releases it with `release` when another window does.
     /// A failed grab is tried again at the next change, so that the hotkey comes back once the
-    /// application that took the key quits.
+    /// application that took the key quits. `None` when the desktop tells no active window, which
+    /// may be the window over the game keeping the keyboard (a desktop other than KWin): the key
+    /// stays as it is, so that Ctrl+D still gives the keyboard back to the game there; a window
+    /// outside X11 (Wayland) never hears a key grabbed under X11 anyway.
     pub fn follow<E: Display>(
         &mut self,
-        game: bool,
+        game: Option<bool>,
         grab: impl FnOnce() -> Result<(), E>,
         release: impl FnOnce() -> Result<(), E>,
     ) -> Change {
+        let Some(game) = game else {
+            return Change::Nothing;
+        };
         match (game, self.held) {
             (true, false) => match grab() {
                 Ok(()) => {
@@ -86,7 +92,7 @@ mod tests {
 
     /// What `grab` does when the game is `game`, the grab and the release giving `result`, and
     /// how many times each was called.
-    fn follow(grab: &mut Grab, game: bool, result: Result<(), &str>) -> (Change, u32, u32) {
+    fn follow(grab: &mut Grab, game: Option<bool>, result: Result<(), &str>) -> (Change, u32, u32) {
         let (mut grabs, mut releases) = (0, 0);
         let change = grab.follow(
             game,
@@ -106,61 +112,102 @@ mod tests {
     fn grabs_the_key_when_the_game_becomes_the_active_window() {
         let mut grab = Grab::default();
 
-        assert_eq!(follow(&mut grab, true, Ok(())), (Change::Grabbed, 1, 0));
+        assert_eq!(
+            follow(&mut grab, Some(true), Ok(())),
+            (Change::Grabbed, 1, 0)
+        );
     }
 
     #[test]
     fn leaves_the_key_to_another_window_active_at_the_start() {
         let mut grab = Grab::default();
 
-        assert_eq!(follow(&mut grab, false, Ok(())), (Change::Nothing, 0, 0));
+        assert_eq!(
+            follow(&mut grab, Some(false), Ok(())),
+            (Change::Nothing, 0, 0)
+        );
     }
 
     #[test]
     fn grabs_the_key_once_while_the_game_stays_the_active_window() {
         let mut grab = Grab::default();
-        follow(&mut grab, true, Ok(()));
+        follow(&mut grab, Some(true), Ok(()));
 
         // A change of its title, or of another property followed.
-        assert_eq!(follow(&mut grab, true, Ok(())), (Change::Nothing, 0, 0));
+        assert_eq!(
+            follow(&mut grab, Some(true), Ok(())),
+            (Change::Nothing, 0, 0)
+        );
     }
 
     #[test]
     fn releases_the_key_when_another_window_becomes_the_active_window() {
         let mut grab = Grab::default();
-        follow(&mut grab, true, Ok(()));
+        follow(&mut grab, Some(true), Ok(()));
 
-        assert_eq!(follow(&mut grab, false, Ok(())), (Change::Released, 0, 1));
-        assert_eq!(follow(&mut grab, false, Ok(())), (Change::Nothing, 0, 0));
-        assert_eq!(follow(&mut grab, true, Ok(())), (Change::Grabbed, 1, 0));
+        assert_eq!(
+            follow(&mut grab, Some(false), Ok(())),
+            (Change::Released, 0, 1)
+        );
+        assert_eq!(
+            follow(&mut grab, Some(false), Ok(())),
+            (Change::Nothing, 0, 0)
+        );
+        assert_eq!(
+            follow(&mut grab, Some(true), Ok(())),
+            (Change::Grabbed, 1, 0)
+        );
     }
 
     #[test]
     fn tries_a_key_taken_by_another_application_again_at_the_next_activation_of_the_game() {
         let mut grab = Grab::default();
         assert_eq!(
-            follow(&mut grab, true, Err("taken")),
+            follow(&mut grab, Some(true), Err("taken")),
             (Change::Failed, 1, 0)
         );
 
         // Never grabbed: nothing to release.
-        assert_eq!(follow(&mut grab, false, Ok(())), (Change::Nothing, 0, 0));
         assert_eq!(
-            follow(&mut grab, true, Err("taken")),
+            follow(&mut grab, Some(false), Ok(())),
+            (Change::Nothing, 0, 0)
+        );
+        assert_eq!(
+            follow(&mut grab, Some(true), Err("taken")),
             (Change::Failed, 1, 0)
         );
-        assert_eq!(follow(&mut grab, true, Ok(())), (Change::Grabbed, 1, 0));
+        assert_eq!(
+            follow(&mut grab, Some(true), Ok(())),
+            (Change::Grabbed, 1, 0)
+        );
+    }
+
+    #[test]
+    fn keeps_the_key_as_it_is_while_the_desktop_tells_no_active_window() {
+        let mut grab = Grab::default();
+        assert_eq!(follow(&mut grab, None, Ok(())), (Change::Nothing, 0, 0));
+        follow(&mut grab, Some(true), Ok(()));
+
+        // The window over the game keeping the keyboard, on a desktop other than KWin.
+        assert_eq!(follow(&mut grab, None, Ok(())), (Change::Nothing, 0, 0));
+        assert_eq!(
+            follow(&mut grab, Some(false), Ok(())),
+            (Change::Released, 0, 1)
+        );
     }
 
     #[test]
     fn tries_a_failed_release_again_at_the_next_change() {
         let mut grab = Grab::default();
-        follow(&mut grab, true, Ok(()));
+        follow(&mut grab, Some(true), Ok(()));
 
         assert_eq!(
-            follow(&mut grab, false, Err("lost")),
+            follow(&mut grab, Some(false), Err("lost")),
             (Change::Failed, 0, 1)
         );
-        assert_eq!(follow(&mut grab, false, Ok(())), (Change::Released, 0, 1));
+        assert_eq!(
+            follow(&mut grab, Some(false), Ok(())),
+            (Change::Released, 0, 1)
+        );
     }
 }

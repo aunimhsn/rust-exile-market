@@ -2,6 +2,8 @@
 //! player would press it, in the window that has the focus; and the active window followed, so
 //! that the hotkey is grabbed only while it is the game.
 
+use std::collections::HashSet;
+
 use global_hotkey::HotKeyState;
 use x11rb::connection::{Connection, RequestConnection as _};
 use x11rb::protocol::Event;
@@ -95,61 +97,94 @@ impl CopySender {
 }
 
 /// Follows the active window of the desktop on a thread of its own, and tells `game` whether it
-/// is the game: at the start, then at each change of the active window or of its class or title
-/// (a window may be titled after it is shown), until `game` returns `false`.
+/// is the game, `None` when the desktop tells no active window: at the start, then at each change
+/// of the active window or of its class or title (a window may be titled after it is shown),
+/// until `game` returns `false`. When the desktop never tells its active window, or the X server
+/// is lost, `game` is told once that the game is active, so that the hotkey falls back to every
+/// window, as before it followed the game, rather than never working.
 ///
 /// # Errors
 ///
 /// When the X server can't be reached: told at once, before the thread starts.
-pub fn follow_game(mut game: impl FnMut(bool) -> bool + Send + 'static) -> Result<()> {
+pub fn follow_game(mut game: impl FnMut(Option<bool>) -> bool + Send + 'static) -> Result<()> {
     let watch = ActiveWindow::connect()?;
     std::thread::Builder::new()
         .name("game-window".to_owned())
         .spawn(move || {
             if let Err(error) = watch.follow(&mut game) {
-                log::warn!("The game window can no longer be followed: {error}");
+                log::warn!(
+                    "The game window can't be followed ({error}): the price-check hotkey Ctrl+D \
+                     is listened to in every window"
+                );
+                game(Some(true));
             }
         })?;
     Ok(())
 }
 
-/// The connection that follows the active window.
-struct ActiveWindow {
-    connection: RustConnection,
-    root: Window,
-    atoms: Atoms,
+/// The atoms the active window is followed with.
+#[derive(Debug, Clone, Copy)]
+struct WatchAtoms {
+    /// `_NET_ACTIVE_WINDOW`, on the root window.
+    active_window: Atom,
+    /// `_NET_SUPPORTED`, the hints the desktop keeps, on the root window.
+    supported: Atom,
     /// `_NET_WM_NAME`, the title of a window in UTF-8.
     net_wm_name: Atom,
     /// `UTF8_STRING`, the type of `_NET_WM_NAME`.
     utf8_string: Atom,
 }
 
+/// The connection that follows the active window.
+struct ActiveWindow {
+    connection: RustConnection,
+    root: Window,
+    shared: Atoms,
+    atoms: WatchAtoms,
+}
+
 impl ActiveWindow {
     fn connect() -> Result<Self> {
         let (connection, screen) = x11rb::connect(None)?;
         let root = connection.setup().roots[screen].root;
-        let atoms = Atoms::intern(&connection)?;
-        let net_wm_name = connection
-            .intern_atom(false, b"_NET_WM_NAME")?
-            .reply()?
-            .atom;
-        let utf8_string = connection.intern_atom(false, b"UTF8_STRING")?.reply()?.atom;
+        let shared = Atoms::intern(&connection)?;
+        let intern = |name: &[u8]| -> Result<Atom> {
+            Ok(connection.intern_atom(false, name)?.reply()?.atom)
+        };
+        let atoms = WatchAtoms {
+            active_window: shared.active_window,
+            supported: intern(b"_NET_SUPPORTED")?,
+            net_wm_name: intern(b"_NET_WM_NAME")?,
+            utf8_string: intern(b"UTF8_STRING")?,
+        };
         Ok(Self {
             connection,
             root,
+            shared,
             atoms,
-            net_wm_name,
-            utf8_string,
         })
     }
 
-    fn follow(&self, game: &mut impl FnMut(bool) -> bool) -> Result<()> {
+    /// Follows the active window until `game` returns `false`.
+    ///
+    /// # Errors
+    ///
+    /// When the desktop doesn't tell its active window, or the X server is lost.
+    fn follow(&self, game: &mut impl FnMut(Option<bool>) -> bool) -> Result<()> {
+        if !self.tells_active_window()? {
+            return Err("the desktop doesn't tell its active window (_NET_SUPPORTED)".into());
+        }
         // Listened to before the active window is read, so that no change is missed.
         self.listen(self.root, EventMask::PROPERTY_CHANGE)?
             .check()?;
         let mut followed = None;
+        // The classes of the windows already written to the log.
+        let mut told = HashSet::new();
         loop {
-            let active = shared::active_window(&self.connection, self.root, self.atoms)?;
+            let active = known_active(
+                shared::active_window(&self.connection, self.root, self.shared)?,
+                self.root,
+            );
             if active != followed {
                 // The windows may be gone: their errors are dropped.
                 if let Some(window) = followed {
@@ -161,22 +196,46 @@ impl ActiveWindow {
                 }
                 followed = active;
             }
-            let is_game = active.is_some_and(|window| {
-                self.is_game(window).unwrap_or_else(|error| {
-                    log::debug!("The active window can't be read: {error}");
+            // None: the desktop tells no active window, which may be the window over the game
+            // keeping the keyboard (`crate::overlay::keyboard`), or a window outside X11.
+            let is_game = active.map(|window| {
+                self.is_game(window, &mut told).unwrap_or_else(|error| {
+                    log::info!("The active window can't be read: {error}");
                     false
                 })
             });
             if !game(is_game) {
                 return Ok(());
             }
-            // Until a change that matters.
-            loop {
-                if let Event::PropertyNotify(event) = self.connection.wait_for_event()?
-                    && self.matters(&event, followed)
-                {
-                    break;
-                }
+            self.wait_for_change(followed)?;
+        }
+    }
+
+    /// Whether the desktop keeps `_NET_ACTIVE_WINDOW` up to date.
+    fn tells_active_window(&self) -> Result<bool> {
+        let supported = self
+            .connection
+            .get_property(
+                false,
+                self.root,
+                self.atoms.supported,
+                AtomEnum::ATOM,
+                0,
+                1024,
+            )?
+            .reply()?;
+        Ok(supported
+            .value32()
+            .is_some_and(|mut atoms| atoms.any(|atom| atom == self.atoms.active_window)))
+    }
+
+    /// Waits for a change that may change whether the active window is the game.
+    fn wait_for_change(&self, followed: Option<Window>) -> Result<()> {
+        loop {
+            if let Event::PropertyNotify(event) = self.connection.wait_for_event()?
+                && matters(&event, self.root, followed, self.atoms)
+            {
+                return Ok(());
             }
         }
     }
@@ -193,23 +252,10 @@ impl ActiveWindow {
         )?)
     }
 
-    /// Whether `event` may change whether the active window is the game: the active window of
-    /// the root window, or the class or the title of the window `followed`.
-    fn matters(&self, event: &PropertyNotifyEvent, followed: Option<Window>) -> bool {
-        if event.window == self.root {
-            return event.atom == self.atoms.active_window;
-        }
-        Some(event.window) == followed
-            && [
-                AtomEnum::WM_CLASS.into(),
-                AtomEnum::WM_NAME.into(),
-                self.net_wm_name,
-            ]
-            .contains(&event.atom)
-    }
-
-    /// Whether `window` is the game, by its class or its title.
-    fn is_game(&self, window: Window) -> Result<bool> {
+    /// Whether `window` is the game, by its class or its title; the class of another window is
+    /// written to the log the first time it is active, never its title (the page of a browser),
+    /// so that the class of a client of the game not known yet can be found there.
+    fn is_game(&self, window: Window, told: &mut HashSet<String>) -> Result<bool> {
         let property = |name: Atom, kind: Atom| -> Result<Vec<u8>> {
             Ok(self
                 .connection
@@ -217,20 +263,61 @@ impl ActiveWindow {
                 .reply()?
                 .value)
         };
-        if is_game_class(&property(
-            AtomEnum::WM_CLASS.into(),
-            AtomEnum::STRING.into(),
-        )?) {
+        let class = property(AtomEnum::WM_CLASS.into(), AtomEnum::STRING.into())?;
+        if is_game_class(&class) {
             return Ok(true);
         }
-        let title = property(self.net_wm_name, self.utf8_string)?;
-        // The old title, in Latin-1, of a window without `_NET_WM_NAME`.
-        let title = if title.is_empty() {
-            property(AtomEnum::WM_NAME.into(), AtomEnum::STRING.into())?
-        } else {
-            title
-        };
-        Ok(is_game_title(&title))
+        // `WM_NAME` of any type: Wine or Xlib may write it in UTF-8 or as compound text, the
+        // title of the game being in ASCII alike in each.
+        let title = title(
+            property(self.atoms.net_wm_name, self.atoms.utf8_string)?,
+            || property(AtomEnum::WM_NAME.into(), AtomEnum::ANY.into()),
+        )?;
+        if is_game_title(&title) {
+            return Ok(true);
+        }
+        let class = window_class(&class);
+        if !told.contains(&class) {
+            log::info!("The active window, of class {class}, isn't the game");
+            told.insert(class);
+        }
+        Ok(false)
+    }
+}
+
+/// The active window read, none for the root window, which a desktop may write there: listened to
+/// for its active window, it must never be followed as one, whose events would be turned off once
+/// it is no longer active.
+fn known_active(active: Option<Window>, root: Window) -> Option<Window> {
+    active.filter(|&window| window != root)
+}
+
+/// Whether `event` may change whether the active window is the game: the active window of `root`,
+/// or the class or the title of the window `followed`.
+fn matters(
+    event: &PropertyNotifyEvent,
+    root: Window,
+    followed: Option<Window>,
+    atoms: WatchAtoms,
+) -> bool {
+    if event.window == root {
+        return event.atom == atoms.active_window;
+    }
+    Some(event.window) == followed
+        && [
+            AtomEnum::WM_CLASS.into(),
+            AtomEnum::WM_NAME.into(),
+            atoms.net_wm_name,
+        ]
+        .contains(&event.atom)
+}
+
+/// The title of a window: its `_NET_WM_NAME`, otherwise its old `WM_NAME`, read only then.
+fn title(net_wm_name: Vec<u8>, wm_name: impl FnOnce() -> Result<Vec<u8>>) -> Result<Vec<u8>> {
+    if net_wm_name.is_empty() {
+        wm_name()
+    } else {
+        Ok(net_wm_name)
     }
 }
 
@@ -526,6 +613,102 @@ mod tests {
         let mut mapping = vec![0; 300];
         mapping[299] = XK_C;
         assert_eq!(keycode_of(XK_C, 8, 1, &mapping), None);
+    }
+
+    const FOLLOWED: Window = 0x0060_0001;
+    const ATOMS: WatchAtoms = WatchAtoms {
+        active_window: 300,
+        supported: 301,
+        net_wm_name: 302,
+        utf8_string: 303,
+    };
+
+    /// A change of `atom` on `window`.
+    fn changed(window: Window, atom: Atom) -> PropertyNotifyEvent {
+        PropertyNotifyEvent {
+            response_type: xproto::PROPERTY_NOTIFY_EVENT,
+            sequence: 0,
+            window,
+            atom,
+            time: 0,
+            state: xproto::Property::NEW_VALUE,
+        }
+    }
+
+    #[test]
+    fn follows_the_active_window_of_the_root_window_only() {
+        assert!(matters(
+            &changed(ROOT, ATOMS.active_window),
+            ROOT,
+            None,
+            ATOMS
+        ));
+        // `_NET_CLIENT_LIST` and the others on the root window.
+        assert!(!matters(&changed(ROOT, 400), ROOT, None, ATOMS));
+        // The title of the root window.
+        assert!(!matters(
+            &changed(ROOT, ATOMS.net_wm_name),
+            ROOT,
+            Some(ROOT),
+            ATOMS
+        ));
+    }
+
+    #[test]
+    fn follows_the_class_and_the_titles_of_the_active_window() {
+        for atom in [
+            AtomEnum::WM_CLASS.into(),
+            AtomEnum::WM_NAME.into(),
+            ATOMS.net_wm_name,
+        ] {
+            assert!(matters(
+                &changed(FOLLOWED, atom),
+                ROOT,
+                Some(FOLLOWED),
+                ATOMS
+            ));
+        }
+    }
+
+    #[test]
+    fn leaves_the_other_properties_and_the_windows_no_longer_active() {
+        // `_NET_WM_USER_TIME`, written at each key.
+        assert!(!matters(
+            &changed(FOLLOWED, 401),
+            ROOT,
+            Some(FOLLOWED),
+            ATOMS
+        ));
+        // The title of a window that was active before.
+        assert!(!matters(
+            &changed(FOLLOWED + 1, ATOMS.net_wm_name),
+            ROOT,
+            Some(FOLLOWED),
+            ATOMS
+        ));
+        assert!(!matters(
+            &changed(FOLLOWED, ATOMS.net_wm_name),
+            ROOT,
+            None,
+            ATOMS
+        ));
+    }
+
+    #[test]
+    fn never_follows_the_root_window_as_the_active_window() {
+        assert_eq!(known_active(Some(ROOT), ROOT), None);
+        assert_eq!(known_active(Some(FOLLOWED), ROOT), Some(FOLLOWED));
+        assert_eq!(known_active(None, ROOT), None);
+    }
+
+    #[test]
+    fn reads_the_old_title_only_without_net_wm_name() {
+        let old = || -> Result<Vec<u8>> { Ok(b"Path of Exile 2".to_vec()) };
+        assert_eq!(title(Vec::new(), old).unwrap(), b"Path of Exile 2");
+        assert_eq!(
+            title(b"Steam".to_vec(), || panic!("read without need")).unwrap(),
+            b"Steam"
+        );
     }
 
     #[test]

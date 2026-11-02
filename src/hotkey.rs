@@ -48,7 +48,7 @@ use self::windows as keys;
 use self::x11 as keys;
 
 /// The hotkeys of the system, shared on Linux with the thread that grabs the key while the game is
-/// the active window, which stops once they are dropped.
+/// the active window, which stops at the next change of the active window once they are dropped.
 #[cfg(target_os = "linux")]
 type Manager = std::sync::Arc<global_hotkey::GlobalHotKeyManager>;
 /// The hotkeys of the system, heard by a hidden window of the thread of the window.
@@ -143,8 +143,9 @@ impl PriceCheckHotkey {
 }
 
 /// Grabs `hotkey` only while the game is the active window, followed on a thread of its own until
-/// `manager` is dropped, so that Ctrl+D stays to the other windows. When the active window can't
-/// be followed, the hotkey stays off, written to the log.
+/// `manager` is dropped, so that Ctrl+D stays to the other windows. When the X server can't be
+/// reached, the hotkey stays off, written to the log; when the desktop doesn't tell its active
+/// window, it is grabbed for every window.
 #[cfg(target_os = "linux")]
 fn grab_in_game(manager: &Manager, hotkey: global_hotkey::hotkey::HotKey) {
     let manager = std::sync::Arc::downgrade(manager);
