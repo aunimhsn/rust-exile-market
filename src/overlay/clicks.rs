@@ -1,33 +1,24 @@
-//! The clicks in the game under X11, while the window over the game is open: the buttons of the
-//! mouse read on the X server a few dozen times per second.
+//! The clicks in the game while the window over the game is open: the buttons of the mouse
+//! read a few dozen times per second, on X11 and on Windows.
 //!
 //! The game keeps the focus, so that its clicks never reach the application: the pointer of the
-//! X server is read instead (`QueryPointer`), which needs no grab and leaves every click to the
-//! game, only while the window is open.
+//! system is read instead ([`super::system::SystemPointer`]), which needs no grab nor hook and
+//! leaves every click to the game, only while the window is open.
 
 use std::error::Error;
 use std::time::Duration;
 
-use x11rb::connection::Connection as _;
-use x11rb::protocol::xproto::{ConnectionExt as _, KeyButMask, Window};
-use x11rb::rust_connection::RustConnection;
-
 use super::Point;
+use super::system::SystemPointer;
 use crate::worker::{OnDrop, Outbox, Waited, Worker};
 
 /// Shorter than a click: a press and its release are about 100 ms apart.
 const POLL_INTERVAL: Duration = Duration::from_millis(20);
 /// The wait of the thread while nothing is watched: it only ends with an order.
 const IDLE_WAIT: Duration = Duration::from_secs(3600);
-/// The buttons that count as a click: left, middle and right.
-const BUTTONS: [KeyButMask; 3] = [
-    KeyButMask::BUTTON1,
-    KeyButMask::BUTTON2,
-    KeyButMask::BUTTON3,
-];
 
-/// Where the thread reads the pointer: the X server, or a fake one in the tests.
-trait PointerSource {
+/// Where the thread reads the pointer: the system, or a fake one in the tests.
+pub(super) trait PointerSource {
     /// Where the pointer is, and whether a button is held.
     fn read(&mut self) -> Result<(Point, bool), Box<dyn Error>>;
 }
@@ -38,7 +29,8 @@ enum Read {
     /// A button pressed, where.
     Click(Point),
     /// The pointer can no longer be read (the X server out of reach), which the thread wrote to
-    /// the log; the thread then waits to be stopped.
+    /// the log; the thread then waits to be stopped. Never on Windows, where a pointer out of
+    /// reach for a moment (the secure desktop) reads as no button held.
     Unreadable,
 }
 
@@ -55,7 +47,7 @@ impl ClickWatch {
     /// and when the thread stops.
     #[must_use]
     pub fn start(wake: impl Fn() + Send + 'static) -> Self {
-        Self::spawn(XPointer::connect, wake)
+        Self::spawn(SystemPointer::connect, wake)
     }
 
     /// Reads the pointer that `open` gives, on the thread, where it is opened.
@@ -106,34 +98,6 @@ impl ClickWatch {
             self.stopped = true;
         }
         !self.stopped
-    }
-}
-
-struct XPointer {
-    connection: RustConnection,
-    root: Window,
-}
-
-impl XPointer {
-    fn connect() -> Result<Self, Box<dyn Error>> {
-        let (connection, screen) = x11rb::connect(None)?;
-        let root = connection.setup().roots[screen].root;
-        Ok(Self { connection, root })
-    }
-}
-
-impl PointerSource for XPointer {
-    fn read(&mut self) -> Result<(Point, bool), Box<dyn Error>> {
-        crate::x11::drop_events(&self.connection);
-        let reply = self.connection.query_pointer(self.root)?.reply()?;
-        let point = Point {
-            x: i32::from(reply.root_x),
-            y: i32::from(reply.root_y),
-        };
-        let down = BUTTONS
-            .into_iter()
-            .any(|button| reply.mask.contains(button));
-        Ok((point, down))
     }
 }
 

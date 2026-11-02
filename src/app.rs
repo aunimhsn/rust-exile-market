@@ -6,8 +6,8 @@ use std::time::{Duration, Instant, SystemTime};
 
 use eframe::{App, CreationContext, Frame};
 use egui::{
-    Context, Key, OpenUrl, Ui, ViewportBuilder, ViewportCommand, ViewportId, X11WindowType, pos2,
-    vec2,
+    Context, Key, OpenUrl, Ui, ViewportBuilder, ViewportCommand, ViewportId, WindowLevel,
+    X11WindowType, pos2, vec2,
 };
 
 use crate::clipboard::{ClipboardEvent, ClipboardWatch};
@@ -379,6 +379,8 @@ impl ExileMarketApp {
     /// eframe can only set by creating the window again (its type, override-redirect, active,
     /// taskbar, decorations) never change. While one of its fields is edited, it has the
     /// keyboard through X11 (`SetInputFocus`, [`KeyboardFocus`]), not through `with_active`.
+    /// On Windows, always on top, and shown without activation; a click in it activates it all
+    /// the same, and it gives the focus back to the game.
     fn show_overlay(
         &mut self,
         ctx: &Context,
@@ -387,8 +389,8 @@ impl ExileMarketApp {
         trade: TradeStatus,
         to_top: bool,
     ) {
-        // No window over the game on the other systems yet (step 14b3, Windows).
-        if !cfg!(target_os = "linux") {
+        // No window over the game on macOS, where Path of Exile 2 has no client.
+        if !cfg!(any(target_os = "linux", target_os = "windows")) {
             return;
         }
         let target = self.overlay.shown();
@@ -421,6 +423,10 @@ impl ExileMarketApp {
             .with_resizable(false)
             // Shown once its content is laid out, at its height.
             .with_visible(place.is_some() && content.is_some());
+        // Windows has no override-redirect: the window stays above the game by its level.
+        if cfg!(target_os = "windows") {
+            builder = builder.with_window_level(WindowLevel::AlwaysOnTop);
+        }
         // Hidden where it was: it doesn't move before it hides.
         if let Some(place) = place {
             builder = builder
@@ -449,6 +455,17 @@ impl ExileMarketApp {
                 if (place.is_none() || left || lost) && ui.ctx().text_edit_focused() {
                     self.filters.settle_edited(Window::OverTheGame);
                     ui.ctx().memory_mut(egui::Memory::stop_text_input);
+                }
+                // A click in it took the focus of the game: given back once it is released.
+                #[cfg(target_os = "windows")]
+                {
+                    let (focused, pressed) = ui.input(|input| {
+                        (
+                            input.viewport().focused == Some(true),
+                            input.pointer.any_down(),
+                        )
+                    });
+                    self.keyboard.give_back(place.map(|_| focused), pressed);
                 }
                 place?;
                 // Its own ids: the scroll and the panels of the main window are its own.

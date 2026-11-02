@@ -26,8 +26,7 @@ pub struct Press {
     pub target: Option<Target>,
     /// When the clipboard was prepared for its copy, which the clipboard watching gives back
     /// with the item it copied ([`crate::clipboard::ClipboardEvent::Copied`]); none when it
-    /// couldn't be prepared (then its item only shows in the main window), and always on
-    /// Windows until step 14b3.
+    /// couldn't be prepared (then its item only shows in the main window).
     pub copy: Option<Instant>,
 }
 
@@ -55,9 +54,7 @@ pub struct PriceCheckHotkey {
 impl PriceCheckHotkey {
     /// Starts listening to Ctrl+D. A failure (the key taken by another application, such as
     /// Exiled Exchange 2) only writes to the log: the player can still copy with Ctrl+C.
-    /// `marker` prepares the clipboard before each copy (on Linux: on Windows, reading the
-    /// clipboard first would delay the copy past a short press of Ctrl); `wake` is called after
-    /// each hotkey.
+    /// `marker` prepares the clipboard before each copy; `wake` is called after each hotkey.
     ///
     /// Called once: the handler of the hotkey events can only be set once. Called on the thread
     /// of the window: on Windows, the hotkey is heard by a hidden window of that thread, through
@@ -129,16 +126,9 @@ impl PriceCheckHotkey {
 /// Prepares the clipboard for the copy, just before the keys, once they are sure to leave: a
 /// copy that doesn't leave would leave the marker in place of the item of the player; when,
 /// which the item copied carries back.
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "windows"))]
 fn prepare_copy(marker: &mut CopyMarker) -> Option<Instant> {
     marker.before_copy()
-}
-
-/// Only on Linux until step 14b3 (on Windows, reading the clipboard first would delay the copy
-/// past a short press of Ctrl).
-#[cfg(target_os = "windows")]
-fn prepare_copy(_marker: &mut CopyMarker) -> Option<Instant> {
-    None
 }
 
 impl PriceCheckHotkey {
