@@ -14,6 +14,7 @@ use x11rb::protocol::xproto::{
 use x11rb::protocol::xtest::{self, ConnectionExt as _};
 use x11rb::rust_connection::RustConnection;
 
+use super::grab::Active;
 use super::{Key, copy_keys, send_all};
 use crate::overlay::{Point, ScreenRect, Target};
 use crate::x11::{self as shared, Atoms, Result};
@@ -96,27 +97,23 @@ impl CopySender {
     }
 }
 
-/// Follows the active window of the desktop on a thread of its own, and tells `game` whether it
-/// is the game, `None` when the desktop tells no active window: at the start, then at each change
-/// of the active window or of its class or title (a window may be titled after it is shown),
-/// until `game` returns `false`. When the desktop never tells its active window, or the X server
-/// is lost, `game` is told once that the game is active, so that the hotkey falls back to every
-/// window, as before it followed the game, rather than never working.
+/// Follows the active window of the desktop on a thread of its own, and tells `game` what it is:
+/// at the start, then at each change of the active window or of its class or title (a window may
+/// be titled after it is shown), until `game` returns `false`. When the desktop doesn't tell its
+/// active window (checked at the start), or the X server is lost, `game` is told once that it
+/// can't be followed ([`Active::NotFollowed`]), and the thread ends.
 ///
 /// # Errors
 ///
 /// When the X server can't be reached: told at once, before the thread starts.
-pub fn follow_game(mut game: impl FnMut(Option<bool>) -> bool + Send + 'static) -> Result<()> {
+pub fn follow_game(mut game: impl FnMut(Active) -> bool + Send + 'static) -> Result<()> {
     let watch = ActiveWindow::connect()?;
     std::thread::Builder::new()
         .name("game-window".to_owned())
         .spawn(move || {
             if let Err(error) = watch.follow(&mut game) {
-                log::warn!(
-                    "The game window can't be followed ({error}): the price-check hotkey Ctrl+D \
-                     is listened to in every window"
-                );
-                game(Some(true));
+                log::warn!("The game window can't be followed: {error}");
+                game(Active::NotFollowed);
             }
         })?;
     Ok(())
@@ -170,7 +167,7 @@ impl ActiveWindow {
     /// # Errors
     ///
     /// When the desktop doesn't tell its active window, or the X server is lost.
-    fn follow(&self, game: &mut impl FnMut(Option<bool>) -> bool) -> Result<()> {
+    fn follow(&self, game: &mut impl FnMut(Active) -> bool) -> Result<()> {
         if !self.tells_active_window()? {
             return Err("the desktop doesn't tell its active window (_NET_SUPPORTED)".into());
         }
@@ -179,7 +176,7 @@ impl ActiveWindow {
             .check()?;
         let mut followed = None;
         // The classes of the windows already written to the log.
-        let mut told = HashSet::new();
+        let mut classes_told = HashSet::new();
         loop {
             let active = known_active(
                 shared::active_window(&self.connection, self.root, self.shared)?,
@@ -198,11 +195,15 @@ impl ActiveWindow {
             }
             // None: the desktop tells no active window, which may be the window over the game
             // keeping the keyboard (`crate::overlay::keyboard`), or a window outside X11.
-            let is_game = active.map(|window| {
-                self.is_game(window, &mut told).unwrap_or_else(|error| {
-                    log::info!("The active window can't be read: {error}");
-                    false
-                })
+            let is_game = active.map_or(Active::Unknown, |window| {
+                match self.is_game(window, &mut classes_told) {
+                    Ok(true) => Active::Game,
+                    Ok(false) => Active::Other,
+                    Err(error) => {
+                        log::info!("The active window can't be read: {error}");
+                        Active::Other
+                    }
+                }
             });
             if !game(is_game) {
                 return Ok(());
@@ -211,8 +212,10 @@ impl ActiveWindow {
         }
     }
 
-    /// Whether the desktop keeps `_NET_ACTIVE_WINDOW` up to date.
+    /// Whether the desktop keeps `_NET_ACTIVE_WINDOW` up to date, read once at the start: a
+    /// desktop started after the application leaves the hotkey grabbed for every window.
     fn tells_active_window(&self) -> Result<bool> {
+        // Read whole: the server sends the property up to its length.
         let supported = self
             .connection
             .get_property(
@@ -221,12 +224,13 @@ impl ActiveWindow {
                 self.atoms.supported,
                 AtomEnum::ATOM,
                 0,
-                1024,
+                u32::MAX,
             )?
             .reply()?;
-        Ok(supported
-            .value32()
-            .is_some_and(|mut atoms| atoms.any(|atom| atom == self.atoms.active_window)))
+        Ok(supports(
+            supported.value32().into_iter().flatten(),
+            self.atoms.active_window,
+        ))
     }
 
     /// Waits for a change that may change whether the active window is the game.
@@ -255,7 +259,7 @@ impl ActiveWindow {
     /// Whether `window` is the game, by its class or its title; the class of another window is
     /// written to the log the first time it is active, never its title (the page of a browser),
     /// so that the class of a client of the game not known yet can be found there.
-    fn is_game(&self, window: Window, told: &mut HashSet<String>) -> Result<bool> {
+    fn is_game(&self, window: Window, classes_told: &mut HashSet<String>) -> Result<bool> {
         let property = |name: Atom, kind: Atom| -> Result<Vec<u8>> {
             Ok(self
                 .connection
@@ -277,12 +281,17 @@ impl ActiveWindow {
             return Ok(true);
         }
         let class = window_class(&class);
-        if !told.contains(&class) {
+        if !classes_told.contains(&class) {
             log::info!("The active window, of class {class}, isn't the game");
-            told.insert(class);
+            classes_told.insert(class);
         }
         Ok(false)
     }
+}
+
+/// Whether the hints of `_NET_SUPPORTED`, `supported`, hold `hint`.
+fn supports(mut supported: impl Iterator<Item = Atom>, hint: Atom) -> bool {
+    supported.any(|atom| atom == hint)
 }
 
 /// The active window read, none for the root window, which a desktop may write there: listened to
@@ -692,6 +701,15 @@ mod tests {
             None,
             ATOMS
         ));
+    }
+
+    #[test]
+    fn follows_the_game_only_on_a_desktop_that_tells_its_active_window() {
+        let supported = [ATOMS.supported, 404, ATOMS.active_window];
+        assert!(supports(supported.into_iter(), ATOMS.active_window));
+        assert!(!supports([404, 405].into_iter(), ATOMS.active_window));
+        // No `_NET_SUPPORTED` at all: a window manager not started yet, or none.
+        assert!(!supports(std::iter::empty(), ATOMS.active_window));
     }
 
     #[test]
