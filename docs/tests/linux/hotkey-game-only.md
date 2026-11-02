@@ -34,8 +34,8 @@ tail -f ~/.local/state/exile-market/exile-market.log
 3. **Le client Steam** : fais Alt+Tab vers le client Steam, puis **Ctrl+D**.
    ✅ Le journal écrit une fois la classe du client Steam (« … of class steam … isn't the game »), mais aucune ligne « Copy sent … ».
 
-4. **Une fenêtre Wayland** : ouvre **Kate** (une application KDE, donc Wayland), écris une ligne, fais Alt+Tab du jeu vers Kate, puis **Ctrl+D** sur la ligne. Note aussi la valeur de **Configuration du système › Applications et fenêtres › Gestion des fenêtres › Prise en charge des applications X11 historiques** (le titre peut varier un peu).
-   ✅ Kate fait son propre Ctrl+D (la ligne est mise en commentaire), et le journal n'écrit aucune ligne « Copy sent … ».
+4. **Une fenêtre Wayland** : ouvre **Kate** (une application KDE, donc Wayland), écris une ligne, enregistre le fichier sous `test.sh` (pour que Ctrl+D y commente la ligne), fais Alt+Tab du jeu vers Kate, puis **Ctrl+D** sur la ligne. Note aussi la valeur de **Configuration du système › Applications et fenêtres › Gestion des fenêtres › Prise en charge des applications X11 historiques** (le titre peut varier un peu).
+   ✅ Kate fait son propre Ctrl+D (un `#` apparaît devant la ligne), et le journal n'écrit ni ligne « Copy sent … », ni classe pour Kate (une fenêtre Wayland n'en a pas sous X11).
 
 5. **Retour au jeu** : reviens au jeu (Alt+Tab ou un clic), puis aussitôt **Ctrl+D** sur un objet.
    ✅ La fenêtre par-dessus le jeu s'ouvre du premier coup.

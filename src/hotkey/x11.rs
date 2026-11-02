@@ -195,7 +195,7 @@ impl ActiveWindow {
             }
             // None: the desktop tells no active window, which may be the window over the game
             // keeping the keyboard (`crate::overlay::keyboard`), or a window outside X11.
-            let is_game = active.map_or(Active::Unknown, |window| {
+            let kind = active.map_or(Active::Unknown, |window| {
                 match self.is_game(window, &mut classes_told) {
                     Ok(true) => Active::Game,
                     Ok(false) => Active::Other,
@@ -205,7 +205,7 @@ impl ActiveWindow {
                     }
                 }
             });
-            if !game(is_game) {
+            if !game(kind) {
                 return Ok(());
             }
             self.wait_for_change(followed)?;

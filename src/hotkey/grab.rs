@@ -14,7 +14,7 @@ pub enum Active {
     /// Another window.
     Other,
     /// No active window told: a window outside X11 (Wayland), or maybe the window over the game
-    /// keeping the keyboard on a desktop other than KDE.
+    /// keeping the keyboard on a desktop other than `KWin`.
     Unknown,
     /// The active window can't be followed (a desktop that doesn't tell it, the X server lost):
     /// the key falls back to every window, as before it followed the game, rather than never
@@ -120,8 +120,8 @@ impl Grab {
 mod tests {
     use super::*;
 
-    /// What `grab` does when the active window is `active`, the grab and the release giving `result`, and
-    /// how many times each was called.
+    /// What `grab` does when the active window is `active`, the grab and the release giving
+    /// `result`, and how many times each was called.
     fn follow(grab: &mut Grab, active: Active, result: Result<(), &str>) -> (Change, u32, u32) {
         let (mut grabs, mut releases) = (0, 0);
         let change = grab.follow(
@@ -251,7 +251,7 @@ mod tests {
         let mut grab = Grab::default();
         follow(&mut grab, Active::Game, Err("taken"));
         follow(&mut grab, Active::Other, Ok(()));
-        // Tried again, even after the same failure.
+        // Tried again after a failure.
         assert_eq!(
             follow(&mut grab, Active::NotFollowed, Err("taken")),
             (Change::Failed, 1, 0)

@@ -150,12 +150,12 @@ impl PriceCheckHotkey {
 fn grab_in_game(manager: &Manager, hotkey: global_hotkey::hotkey::HotKey) {
     let manager = std::sync::Arc::downgrade(manager);
     let mut grab = grab::Grab::default();
-    let followed = keys::follow_game(move |game| {
+    let followed = keys::follow_game(move |active| {
         let Some(manager) = manager.upgrade() else {
             return false;
         };
         grab.follow(
-            game,
+            active,
             || manager.register(hotkey),
             || manager.unregister(hotkey),
         );
