@@ -18,6 +18,7 @@
 - Exception: the translations of the user interface, if the project has any. Only the translated strings and their comments are in the other language; the code stays in English.
 - If the user interface is translated, its texts are never hard-coded: each message goes into the translation file of every language (English is the reference), read with the library chosen in `docs/technical-choices.md`.
 - Exception: the code review notes in `outputs/` are written in French.
+- Exception: the test guides in `docs/tests/` may be written in French, the language of the testers.
 
 ## Specifications and roadmap
 
@@ -53,6 +54,7 @@ Two folders are the exchange area between the owner and Claude Code. They are ig
 - `inputs/`: what the owner gives for context: screenshots, examples, references, copied texts. Read them when the owner points to them; never commit, move or delete them unless asked.
 - `outputs/`: what Claude Code produces for the owner: reports, code review notes, previews, screenshots. Name them `<YYYY-MM-DD>-<subject>.<ext>` when they are meant to be kept for a while.
 - Anything meant to last goes elsewhere and is committed: documentation in `docs/`, images used by the application in `assets/`, test data next to the tests.
+- The guides of the tests by hand (step by step, a blank results table, a free test last) go in `docs/tests/linux/` or `docs/tests/windows/`, named by feature (e.g. `docs/tests/linux/hotkey-game-only.md`) and listed in `docs/tests/README.md`, in the pull request of the step they test: they are run again before a release and after a change of the game. They stay blank templates: their results come back in the conversation or the pull request.
 
 ## Git workflow
 
