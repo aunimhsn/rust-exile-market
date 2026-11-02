@@ -160,7 +160,7 @@ fn copy_keys<K: Copy>(control: K, c: K, control_held: bool) -> Vec<Key<K>> {
 /// The keys of [`copy_keys`] for a game just `given_back` the focus by the window over the game:
 /// a Ctrl the player holds is pressed once more, never released, since the game may not know it
 /// is held, pressed while the window over the game had the focus, and would read C alone.
-#[cfg(any(target_os = "windows", test))]
+#[cfg(any(target_os = "windows", all(test, target_os = "linux")))]
 fn copy_keys_after_focus<K: Copy>(
     control: K,
     c: K,
