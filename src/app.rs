@@ -380,7 +380,8 @@ impl ExileMarketApp {
     /// taskbar, decorations) never change. While one of its fields is edited, it has the
     /// keyboard through X11 (`SetInputFocus`, [`KeyboardFocus`]), not through `with_active`.
     /// On Windows, always on top, and shown without activation; a click in it activates it all
-    /// the same, and it gives the focus back to the game.
+    /// the same, and it gives the focus back to the game, unless the click opens a link, the
+    /// browser then coming to the front.
     fn show_overlay(
         &mut self,
         ctx: &Context,

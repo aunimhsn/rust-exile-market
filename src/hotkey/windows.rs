@@ -7,7 +7,7 @@ use enigo::{Direction, Enigo, Keyboard as _, Settings};
 use global_hotkey::HotKeyState;
 use winsafe::{HWND, co};
 
-use super::{Key, copy_keys};
+use super::{Key, copy_keys, send_all};
 use crate::overlay::{Point, ScreenRect, Target};
 
 /// At the press of D: `RegisterHotKey` takes D only, so that the keys sent then reach the game,
@@ -101,24 +101,14 @@ impl CopySender {
     }
 
     /// The keys of [`copy_keys`], as virtual keys: C, which Windows maps to the key that writes C
-    /// in the layout of the window that has the focus. After a failure, only the releases are
-    /// sent, so that Ctrl is never left held.
+    /// in the layout of the window that has the focus; after a failure, only the releases
+    /// ([`send_all`]).
     fn send_keys(&mut self, control_held: bool) -> enigo::InputResult<()> {
-        let mut result = Ok(());
-        for key in copy_keys(enigo::Key::Control, enigo::Key::C, control_held) {
-            let (key, direction) = match key {
-                Key::Down(key) => (key, Direction::Press),
-                Key::Up(key) => (key, Direction::Release),
-            };
-            if result.is_err() && direction == Direction::Press {
-                continue;
-            }
-            let sent = self.keyboard.key(key, direction);
-            if result.is_ok() {
-                result = sent;
-            }
-        }
-        result
+        let keys = copy_keys(enigo::Key::Control, enigo::Key::C, control_held);
+        send_all(keys, |key| match key {
+            Key::Down(key) => self.keyboard.key(key, Direction::Press),
+            Key::Up(key) => self.keyboard.key(key, Direction::Release),
+        })
     }
 }
 

@@ -9,7 +9,7 @@ use x11rb::protocol::xproto::{
 use x11rb::protocol::xtest::{self, ConnectionExt as _};
 use x11rb::rust_connection::RustConnection;
 
-use super::{Key, copy_keys};
+use super::{Key, copy_keys, send_all};
 use crate::overlay::{Point, ScreenRect, Target};
 use crate::x11::{self as shared, Atoms, Result};
 
@@ -174,16 +174,22 @@ impl Keyboard {
             game,
         });
         tell(target, prepared);
-        for (index, key) in copy_keys(control, c, control_held).into_iter().enumerate() {
+        let mut first = true;
+        send_all(copy_keys(control, c, control_held), |key| -> Result<()> {
             let (event, keycode) = match key {
                 Key::Down(keycode) => (xproto::KEY_PRESS_EVENT, keycode),
                 Key::Up(keycode) => (xproto::KEY_RELEASE_EVENT, keycode),
             };
-            let delay = if index == 0 { 0 } else { KEY_DELAY_MS };
+            let delay = if std::mem::take(&mut first) {
+                0
+            } else {
+                KEY_DELAY_MS
+            };
             self.connection
                 .xtest_fake_input(event, keycode, delay, self.root, 0, 0, 0)?
                 .check()?;
-        }
+            Ok(())
+        })?;
         Ok(Sent {
             window_class,
             control_held,

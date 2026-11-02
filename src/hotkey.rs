@@ -157,6 +157,25 @@ fn copy_keys<K: Copy>(control: K, c: K, control_held: bool) -> Vec<Key<K>> {
     }
 }
 
+/// Sends `keys` one by one with `send`, the call of each system: after a failure, only the
+/// releases, so that no key is left held (a Ctrl left held would make the next D of the player
+/// reach the game alone); the first error.
+#[cfg(any(target_os = "linux", target_os = "windows"))]
+fn send_all<K, E>(
+    keys: Vec<Key<K>>,
+    mut send: impl FnMut(Key<K>) -> Result<(), E>,
+) -> Result<(), E> {
+    let mut result = Ok(());
+    for key in keys {
+        if result.is_err() && matches!(key, Key::Down(_)) {
+            continue;
+        }
+        // Sent even after a failure: `and` keeps the first error.
+        result = result.and(send(key));
+    }
+    result
+}
+
 impl PriceCheckHotkey {
     /// Gives each press of the hotkey since the last call to `handle`, without waiting.
     pub fn receive(&mut self, mut handle: impl FnMut(Press)) {
@@ -178,6 +197,60 @@ mod tests {
     #[test]
     fn taps_c_alone_while_the_player_holds_ctrl() {
         assert_eq!(copy_keys(CONTROL, C, true), [Key::Down(C), Key::Up(C)]);
+    }
+
+    /// The keys `send_all` sends, failing on `fails`, and what it returns.
+    fn sent(control_held: bool, fails: Option<Key<u8>>) -> (Vec<Key<u8>>, Result<(), Key<u8>>) {
+        let mut sent = Vec::new();
+        let result = send_all(copy_keys(CONTROL, C, control_held), |key| {
+            sent.push(key);
+            if Some(key) == fails { Err(key) } else { Ok(()) }
+        });
+        (sent, result)
+    }
+
+    #[test]
+    fn sends_every_key_when_none_fails() {
+        assert_eq!(sent(false, None), (copy_keys(CONTROL, C, false), Ok(())));
+    }
+
+    #[test]
+    fn after_a_failed_c_only_the_releases_are_sent() {
+        assert_eq!(
+            sent(false, Some(Key::Down(C))),
+            (
+                vec![
+                    Key::Down(CONTROL),
+                    Key::Down(C),
+                    Key::Up(C),
+                    Key::Up(CONTROL)
+                ],
+                Err(Key::Down(C))
+            )
+        );
+    }
+
+    #[test]
+    fn after_a_failed_ctrl_c_is_never_pressed() {
+        assert_eq!(
+            sent(false, Some(Key::Down(CONTROL))),
+            (
+                vec![Key::Down(CONTROL), Key::Up(C), Key::Up(CONTROL)],
+                Err(Key::Down(CONTROL))
+            )
+        );
+    }
+
+    #[test]
+    fn keeps_the_first_error() {
+        let mut calls = 0;
+        let result = send_all(copy_keys(CONTROL, C, false), |_| {
+            calls += 1;
+            Err(calls)
+        });
+
+        // Ctrl pressed, then the two releases.
+        assert_eq!((calls, result), (3, Err(1)));
     }
 
     #[test]
