@@ -4,8 +4,8 @@
 //! This module decides where the window goes, and when it opens and closes, without the system:
 //! the pointer and the game window come with the hotkey ([`crate::hotkey`]), the clicks from a
 //! thread that reads the pointer of each system ([`ClickWatch`]), and the application draws the
-//! window. The keyboard goes to the window while one of its fields is edited ([`KeyboardFocus`],
-//! on Linux; on Windows the game gets it back after each click in the window, until step 14b3b).
+//! window. The keyboard goes to the window while one of its fields is edited ([`KeyboardFocus`]);
+//! on Windows, the game gets it back after each other click in the window.
 
 #[cfg(any(target_os = "linux", target_os = "windows"))]
 mod clicks;
@@ -27,10 +27,12 @@ use self::x11 as system;
 
 #[cfg(any(target_os = "linux", target_os = "windows"))]
 pub use self::clicks::ClickWatch;
+#[cfg(target_os = "windows")]
+pub use self::game_focus::{Frame, KeyboardBack};
 #[cfg(target_os = "linux")]
 pub use self::keyboard::KeyboardFocus;
 #[cfg(target_os = "windows")]
-pub use self::windows::KeyboardFocus;
+pub use self::windows::{KeyboardFocus, give_keyboard_back};
 
 use std::time::{Duration, Instant};
 

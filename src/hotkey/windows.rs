@@ -7,8 +7,8 @@ use enigo::{Direction, Enigo, Keyboard as _, Settings};
 use global_hotkey::HotKeyState;
 use winsafe::{HWND, co};
 
-use super::{Key, copy_keys, send_all};
-use crate::overlay::{Point, ScreenRect, Target};
+use super::{Key, copy_keys_after_focus, send_all};
+use crate::overlay::{KeyboardBack, Point, ScreenRect, Target};
 
 /// At the press of D: `RegisterHotKey` takes D only, so that the keys sent then reach the game,
 /// and Ctrl is held, since the hotkey needs it. The press reaches the application as a message of
@@ -43,15 +43,24 @@ impl CopySender {
     /// reach the game alone, as Exiled Exchange 2 avoids on Windows (`keepModKeys` in
     /// `main/src/shortcuts/Shortcuts.ts`).
     ///
-    /// Once the window is read, `prepare` runs (it may take a moment), then the pointer and Ctrl
-    /// are read, as the game sees them when the keys leave, and `tell` gets where the window over
-    /// the game opens, when the pointer and the window could be read, with what `prepare` gave,
-    /// just before the keys.
+    /// While a field of the window over the game is edited, the game gets the focus back first;
+    /// when Windows refuses it, nothing is copied. Once the window is read, `prepare` runs (it may
+    /// take a moment), then the pointer is read, as the game sees it when the keys leave, and
+    /// `tell` gets where the window over the game opens, when the pointer and the window could
+    /// be read, with what `prepare` gave; Ctrl is read last, just before the keys.
     pub fn send_copy<P>(
         &mut self,
         prepare: impl FnOnce() -> P,
         tell: impl FnOnce(Option<Target>, P),
     ) {
+        // While a field of the window over the game is edited, the keys of the copy would go to
+        // it: the game gets the focus back first. Refused, the copy would copy nothing, and the
+        // marker would take the place of the item of the player in the clipboard.
+        let given_back = match crate::overlay::give_keyboard_back() {
+            KeyboardBack::NotHeld => false,
+            KeyboardBack::Given => true,
+            KeyboardBack::Refused => return,
+        };
         // The window the keys go to, read before them; for the log and the window over the
         // game, so that a failure doesn't stop the copy.
         let window = HWND::GetForegroundWindow();
@@ -72,12 +81,11 @@ impl CopySender {
             })
         });
         let prepared = prepare();
-        // Read after the preparation, which may take a moment: where the item is, and Ctrl as
-        // the player holds it, when the keys leave.
+        // Read after the preparation, which may take a moment: where the item is when the keys
+        // leave.
         let pointer = winsafe::GetCursorPos()
             .inspect_err(|error| log::warn!("The pointer can't be read: {error}"))
             .ok();
-        let control_held = winsafe::GetAsyncKeyState(co::VK::CONTROL);
         let target = game.zip(pointer).map(|(game, pointer)| Target {
             pointer: Point {
                 x: pointer.x,
@@ -86,8 +94,11 @@ impl CopySender {
             game,
         });
         tell(target, prepared);
+        // Read last, just before the keys, as the player holds it: a Ctrl released meanwhile
+        // and pressed once more for a game given the focus back would stay held.
+        let control_held = winsafe::GetAsyncKeyState(co::VK::CONTROL);
         // Windows doesn't tell a key it drops: a game run as administrator never gets it.
-        match self.send_keys(control_held) {
+        match self.send_keys(control_held, given_back) {
             Ok(()) => log::info!(
                 "Copy requested by the price-check hotkey from the window of class {class} (Ctrl {})",
                 if control_held {
@@ -102,9 +113,11 @@ impl CopySender {
 
     /// The keys of [`copy_keys`], as virtual keys: C, which Windows maps to the key that writes C
     /// in the layout of the window that has the focus; after a failure, only the releases
-    /// ([`send_all`]).
-    fn send_keys(&mut self, control_held: bool) -> enigo::InputResult<()> {
-        let keys = copy_keys(enigo::Key::Control, enigo::Key::C, control_held);
+    /// ([`send_all`]). When the game was just `given_back` the focus, a Ctrl the player holds is
+    /// pressed once more ([`copy_keys_after_focus`]).
+    fn send_keys(&mut self, control_held: bool, given_back: bool) -> enigo::InputResult<()> {
+        let keys =
+            copy_keys_after_focus(enigo::Key::Control, enigo::Key::C, control_held, given_back);
         send_all(keys, |key| match key {
             Key::Down(key) => self.keyboard.key(key, Direction::Press),
             Key::Up(key) => self.keyboard.key(key, Direction::Release),
