@@ -5,6 +5,9 @@
 //! like any copy ([`crate::clipboard`]). On Linux through X11 (XWayland under Wayland), like the
 //! game run by Proton, and on Windows. None on macOS, where Path of Exile 2 has no client.
 //!
+//! On Linux, the key is grabbed only while the game is the active window, so that Ctrl+D stays to
+//! the other windows.
+//!
 //! Each hotkey tells the application where it was pressed, so that the item it copied opens the
 //! window over the game there ([`crate::overlay`]).
 
@@ -30,6 +33,8 @@ pub struct Press {
     pub copy: Option<Instant>,
 }
 
+#[cfg(target_os = "linux")]
+mod grab;
 #[cfg(target_os = "windows")]
 mod windows;
 #[cfg(target_os = "linux")]
@@ -42,18 +47,27 @@ use self::windows as keys;
 #[cfg(target_os = "linux")]
 use self::x11 as keys;
 
+/// The hotkeys of the system, shared on Linux with the thread that grabs the key while the game is
+/// the active window, which stops once they are dropped.
+#[cfg(target_os = "linux")]
+type Manager = std::sync::Arc<global_hotkey::GlobalHotKeyManager>;
+/// The hotkeys of the system, heard by a hidden window of the thread of the window.
+#[cfg(target_os = "windows")]
+type Manager = global_hotkey::GlobalHotKeyManager;
+
 /// The hotkey listened to for as long as this value lives.
 pub struct PriceCheckHotkey {
     /// Listens until it is dropped.
     #[cfg(any(target_os = "linux", target_os = "windows"))]
-    _manager: Option<global_hotkey::GlobalHotKeyManager>,
+    _manager: Option<Manager>,
     /// Each press of the hotkey.
     targets: Option<Receiver<Press>>,
 }
 
 impl PriceCheckHotkey {
-    /// Starts listening to Ctrl+D. A failure (the key taken by another application, such as
-    /// Exiled Exchange 2) only writes to the log: the player can still copy with Ctrl+C.
+    /// Starts listening to Ctrl+D, on Linux only while the game is the active window. A failure
+    /// (the key taken by another application, such as Exiled Exchange 2) only writes to the log:
+    /// the player can still copy with Ctrl+C.
     /// `marker` prepares the clipboard before each copy; `wake` is called after each hotkey.
     ///
     /// Called once: the handler of the hotkey events can only be set once. Called on the thread
@@ -104,6 +118,11 @@ impl PriceCheckHotkey {
                 );
             }
         }));
+        #[cfg(target_os = "linux")]
+        let manager = std::sync::Arc::new(manager);
+        #[cfg(target_os = "linux")]
+        grab_in_game(&manager, hotkey);
+        #[cfg(target_os = "windows")]
         match manager.register(hotkey) {
             Ok(()) => log::info!("Price-check hotkey Ctrl+D listened to"),
             Err(error) => log::warn!("The price-check hotkey Ctrl+D can't be listened to: {error}"),
@@ -120,6 +139,29 @@ impl PriceCheckHotkey {
     pub fn start(_marker: CopyMarker, _wake: impl Fn() + Send + Sync + 'static) -> Self {
         log::info!("No price-check hotkey on this system");
         Self { targets: None }
+    }
+}
+
+/// Grabs `hotkey` only while the game is the active window, followed on a thread of its own until
+/// `manager` is dropped, so that Ctrl+D stays to the other windows. When the active window can't
+/// be followed, the hotkey stays off, written to the log.
+#[cfg(target_os = "linux")]
+fn grab_in_game(manager: &Manager, hotkey: global_hotkey::hotkey::HotKey) {
+    let manager = std::sync::Arc::downgrade(manager);
+    let mut grab = grab::Grab::default();
+    let followed = keys::follow_game(move |game| {
+        let Some(manager) = manager.upgrade() else {
+            return false;
+        };
+        grab.follow(
+            game,
+            || manager.register(hotkey),
+            || manager.unregister(hotkey),
+        );
+        true
+    });
+    if let Err(error) = followed {
+        log::warn!("The price-check hotkey can't follow the game window: {error}");
     }
 }
 

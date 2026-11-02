@@ -1,10 +1,13 @@
 //! The copy sent to the game under X11: Ctrl+C pressed through the XTest extension, as the
-//! player would press it, in the window that has the focus.
+//! player would press it, in the window that has the focus; and the active window followed, so
+//! that the hotkey is grabbed only while it is the game.
 
 use global_hotkey::HotKeyState;
 use x11rb::connection::{Connection, RequestConnection as _};
+use x11rb::protocol::Event;
 use x11rb::protocol::xproto::{
-    self, AtomEnum, ConnectionExt as _, InputFocus, KeyButMask, Keycode, Window,
+    self, Atom, AtomEnum, ChangeWindowAttributesAux, ConnectionExt as _, EventMask, InputFocus,
+    KeyButMask, Keycode, PropertyNotifyEvent, Window,
 };
 use x11rb::protocol::xtest::{self, ConnectionExt as _};
 use x11rb::rust_connection::RustConnection;
@@ -19,6 +22,14 @@ const XK_CONTROL_L: u32 = 0xffe3;
 /// The delay the X server waits before each key after the first, in milliseconds, so that a
 /// game that reads the keys at each frame sees each of them (the delay of the `enigo` crate).
 const KEY_DELAY_MS: u32 = 12;
+
+/// The class of the game run by Steam through Proton (`WM_CLASS`, its instance and class names
+/// alike), logged by step 14a1 in the owner's game on 2026-11-01.
+const GAME_CLASS: &[u8] = b"steam_app_2694490";
+/// The exact title of the window of the game, for the standalone client run by Wine, whose class
+/// is unknown: the title Exiled Exchange 2 looks for (`attachByTitle`). Never a part of the
+/// title: the page of a browser about the game is titled `Path of Exile 2 - …`.
+const GAME_TITLE: &[u8] = b"Path of Exile 2";
 
 /// At the release of D: while it is held, the X server gives every key to the application that
 /// listens to the hotkey, so that a copy sent then wouldn't reach the game.
@@ -81,6 +92,159 @@ impl CopySender {
             Err(error) => log::warn!("The copy can't be sent: {error}"),
         }
     }
+}
+
+/// Follows the active window of the desktop on a thread of its own, and tells `game` whether it
+/// is the game: at the start, then at each change of the active window or of its class or title
+/// (a window may be titled after it is shown), until `game` returns `false`.
+///
+/// # Errors
+///
+/// When the X server can't be reached: told at once, before the thread starts.
+pub fn follow_game(mut game: impl FnMut(bool) -> bool + Send + 'static) -> Result<()> {
+    let watch = ActiveWindow::connect()?;
+    std::thread::Builder::new()
+        .name("game-window".to_owned())
+        .spawn(move || {
+            if let Err(error) = watch.follow(&mut game) {
+                log::warn!("The game window can no longer be followed: {error}");
+            }
+        })?;
+    Ok(())
+}
+
+/// The connection that follows the active window.
+struct ActiveWindow {
+    connection: RustConnection,
+    root: Window,
+    atoms: Atoms,
+    /// `_NET_WM_NAME`, the title of a window in UTF-8.
+    net_wm_name: Atom,
+    /// `UTF8_STRING`, the type of `_NET_WM_NAME`.
+    utf8_string: Atom,
+}
+
+impl ActiveWindow {
+    fn connect() -> Result<Self> {
+        let (connection, screen) = x11rb::connect(None)?;
+        let root = connection.setup().roots[screen].root;
+        let atoms = Atoms::intern(&connection)?;
+        let net_wm_name = connection
+            .intern_atom(false, b"_NET_WM_NAME")?
+            .reply()?
+            .atom;
+        let utf8_string = connection.intern_atom(false, b"UTF8_STRING")?.reply()?.atom;
+        Ok(Self {
+            connection,
+            root,
+            atoms,
+            net_wm_name,
+            utf8_string,
+        })
+    }
+
+    fn follow(&self, game: &mut impl FnMut(bool) -> bool) -> Result<()> {
+        // Listened to before the active window is read, so that no change is missed.
+        self.listen(self.root, EventMask::PROPERTY_CHANGE)?
+            .check()?;
+        let mut followed = None;
+        loop {
+            let active = shared::active_window(&self.connection, self.root, self.atoms)?;
+            if active != followed {
+                // The windows may be gone: their errors are dropped.
+                if let Some(window) = followed {
+                    self.listen(window, EventMask::NO_EVENT)?.ignore_error();
+                }
+                if let Some(window) = active {
+                    self.listen(window, EventMask::PROPERTY_CHANGE)?
+                        .ignore_error();
+                }
+                followed = active;
+            }
+            let is_game = active.is_some_and(|window| {
+                self.is_game(window).unwrap_or_else(|error| {
+                    log::debug!("The active window can't be read: {error}");
+                    false
+                })
+            });
+            if !game(is_game) {
+                return Ok(());
+            }
+            // Until a change that matters.
+            loop {
+                if let Event::PropertyNotify(event) = self.connection.wait_for_event()?
+                    && self.matters(&event, followed)
+                {
+                    break;
+                }
+            }
+        }
+    }
+
+    /// Sets the events of `window` this connection gets.
+    fn listen(
+        &self,
+        window: Window,
+        events: EventMask,
+    ) -> Result<x11rb::cookie::VoidCookie<'_, RustConnection>> {
+        Ok(self.connection.change_window_attributes(
+            window,
+            &ChangeWindowAttributesAux::new().event_mask(events),
+        )?)
+    }
+
+    /// Whether `event` may change whether the active window is the game: the active window of
+    /// the root window, or the class or the title of the window `followed`.
+    fn matters(&self, event: &PropertyNotifyEvent, followed: Option<Window>) -> bool {
+        if event.window == self.root {
+            return event.atom == self.atoms.active_window;
+        }
+        Some(event.window) == followed
+            && [
+                AtomEnum::WM_CLASS.into(),
+                AtomEnum::WM_NAME.into(),
+                self.net_wm_name,
+            ]
+            .contains(&event.atom)
+    }
+
+    /// Whether `window` is the game, by its class or its title.
+    fn is_game(&self, window: Window) -> Result<bool> {
+        let property = |name: Atom, kind: Atom| -> Result<Vec<u8>> {
+            Ok(self
+                .connection
+                .get_property(false, window, name, kind, 0, 256)?
+                .reply()?
+                .value)
+        };
+        if is_game_class(&property(
+            AtomEnum::WM_CLASS.into(),
+            AtomEnum::STRING.into(),
+        )?) {
+            return Ok(true);
+        }
+        let title = property(self.net_wm_name, self.utf8_string)?;
+        // The old title, in Latin-1, of a window without `_NET_WM_NAME`.
+        let title = if title.is_empty() {
+            property(AtomEnum::WM_NAME.into(), AtomEnum::STRING.into())?
+        } else {
+            title
+        };
+        Ok(is_game_title(&title))
+    }
+}
+
+/// Whether a window title is the title of the game, exactly.
+fn is_game_title(title: &[u8]) -> bool {
+    title == GAME_TITLE
+}
+
+/// Whether a `WM_CLASS`, an instance name then a class name each ended by a null byte, is the
+/// class of the game.
+fn is_game_class(property: &[u8]) -> bool {
+    property
+        .split(|&byte| byte == 0)
+        .any(|name| name == GAME_CLASS)
 }
 
 /// What a copy sent did, for the log.
@@ -362,6 +526,30 @@ mod tests {
         let mut mapping = vec![0; 300];
         mapping[299] = XK_C;
         assert_eq!(keycode_of(XK_C, 8, 1, &mapping), None);
+    }
+
+    #[test]
+    fn tells_the_game_by_its_class_under_proton() {
+        assert!(is_game_class(b"steam_app_2694490\0steam_app_2694490\0"));
+        assert!(is_game_class(b"steam_app_2694490"));
+    }
+
+    #[test]
+    fn tells_the_game_by_its_exact_title_only() {
+        assert!(is_game_title(b"Path of Exile 2"));
+        // Path of Exile 1, a page of a browser about the game.
+        assert!(!is_game_title(b"Path of Exile"));
+        assert!(!is_game_title(b"Path of Exile 2 - Mozilla Firefox"));
+        assert!(!is_game_title(b""));
+    }
+
+    #[test]
+    fn tells_another_window_by_its_class() {
+        // Path of Exile 1, the Steam client, a class that only starts like the game's.
+        assert!(!is_game_class(b"steam_app_238960\0steam_app_238960\0"));
+        assert!(!is_game_class(b"steam\0steam\0"));
+        assert!(!is_game_class(b"steam_app_26944900\0"));
+        assert!(!is_game_class(b""));
     }
 
     #[test]
