@@ -157,6 +157,23 @@ fn copy_keys<K: Copy>(control: K, c: K, control_held: bool) -> Vec<Key<K>> {
     }
 }
 
+/// The keys of [`copy_keys`] for a game just `given_back` the focus by the window over the game:
+/// a Ctrl the player holds is pressed once more, never released, since the game may not know it
+/// is held, pressed while the window over the game had the focus, and would read C alone.
+#[cfg(any(target_os = "windows", test))]
+fn copy_keys_after_focus<K: Copy>(
+    control: K,
+    c: K,
+    control_held: bool,
+    given_back: bool,
+) -> Vec<Key<K>> {
+    let mut keys = copy_keys(control, c, control_held);
+    if given_back && control_held {
+        keys.insert(0, Key::Down(control));
+    }
+    keys
+}
+
 /// Sends `keys` one by one with `send`, the call of each system: after a failure, only the
 /// releases, so that no key is left held (a Ctrl left held would make the next D of the player
 /// reach the game alone); the first error.
@@ -193,6 +210,26 @@ mod tests {
 
     const CONTROL: u8 = 37;
     const C: u8 = 54;
+
+    #[test]
+    fn presses_ctrl_once_more_for_a_game_given_the_focus_back() {
+        assert_eq!(
+            copy_keys_after_focus(CONTROL, C, true, true),
+            [Key::Down(CONTROL), Key::Down(C), Key::Up(C)]
+        );
+    }
+
+    #[test]
+    fn the_game_given_the_focus_back_gets_ctrl_c_as_usual_once_ctrl_is_released() {
+        assert_eq!(
+            copy_keys_after_focus(CONTROL, C, false, true),
+            copy_keys(CONTROL, C, false)
+        );
+        assert_eq!(
+            copy_keys_after_focus(CONTROL, C, true, false),
+            copy_keys(CONTROL, C, true)
+        );
+    }
 
     #[test]
     fn taps_c_alone_while_the_player_holds_ctrl() {

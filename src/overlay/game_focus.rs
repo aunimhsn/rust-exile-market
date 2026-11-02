@@ -16,6 +16,8 @@
 
 /// The windows of the desktop, or fake ones in the tests.
 pub trait Desktop {
+    /// Whether the foreground window belongs to this application.
+    fn foreground_is_ours(&mut self) -> bool;
     /// Remembers the foreground window as the game, unless it is a window of this application.
     fn remember_game(&mut self);
     /// Brings the game remembered to the foreground; `false` when none was seen, it is gone, or
@@ -58,6 +60,43 @@ impl Frame {
         opens_link: false,
         editing: false,
     };
+
+    /// The window has the keyboard: it has the focus, and one of its fields is edited.
+    #[must_use]
+    pub fn holds_keyboard(self) -> bool {
+        self.focused == Some(true) && self.editing
+    }
+}
+
+/// What the price-check hotkey did with the focus before the keys of its copy.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum KeyboardBack {
+    /// No field of the window over the game was edited, or another window took the focus
+    /// meanwhile: the keys go to the foreground window.
+    NotHeld,
+    /// The game is in front again, the keys go to it.
+    Given,
+    /// The system refused it, or the game is gone: the keys would go to the window over the
+    /// game.
+    Refused,
+}
+
+/// At the price-check hotkey, before the keys of its copy: while a field of the window over the
+/// game is edited (`held`, as the last frame saw it), the window has the focus, so that the keys
+/// would go to it; the game gets it back first, and the field is left at the next frame
+/// ([`super::Overlay::take_leave_field`]).
+pub fn give_keyboard_back(desktop: &mut impl Desktop, held: bool) -> KeyboardBack {
+    // The player went to another window meanwhile, which keeps the focus.
+    if !held || !desktop.foreground_is_ours() {
+        return KeyboardBack::NotHeld;
+    }
+    if desktop.activate_game() {
+        log::info!("The price-check hotkey gave the keyboard back to the game");
+        KeyboardBack::Given
+    } else {
+        log::warn!("The keyboard can't be given back to the game: the hotkey copies nothing");
+        KeyboardBack::Refused
+    }
 }
 
 /// Gives the focus back to the game each time a click in the window over the game takes it.
@@ -131,6 +170,10 @@ mod tests {
     }
 
     impl Desktop for FakeDesktop {
+        fn foreground_is_ours(&mut self) -> bool {
+            self.foreground == OURS
+        }
+
         fn remember_game(&mut self) {
             if self.foreground != OURS {
                 self.game = Some(self.foreground);
@@ -322,6 +365,96 @@ mod tests {
         focus.desktop.foreground = 9;
         assert_eq!(focus.follow(UNFOCUSED), Gave::Nothing);
         assert_eq!(focus.desktop.activated, [] as [u32; 0]);
+    }
+
+    /// A field edited after a click in it: the window has the keyboard.
+    fn editing(focus: &mut GameFocus<FakeDesktop>) -> bool {
+        click(focus);
+        let frame = Frame {
+            editing: true,
+            ..FOCUSED
+        };
+        focus.follow(frame);
+        frame.holds_keyboard()
+    }
+
+    #[test]
+    fn holds_the_keyboard_while_focused_and_editing_only() {
+        let editing = Frame {
+            editing: true,
+            ..FOCUSED
+        };
+
+        assert!(editing.holds_keyboard());
+        assert!(!FOCUSED.holds_keyboard());
+        assert!(
+            !Frame {
+                focused: Some(false),
+                ..editing
+            }
+            .holds_keyboard()
+        );
+        assert!(
+            !Frame {
+                focused: None,
+                ..editing
+            }
+            .holds_keyboard()
+        );
+    }
+
+    #[test]
+    fn the_hotkey_gives_the_focus_back_to_the_game_while_a_field_is_edited() {
+        let mut focus = opened();
+        let held = editing(&mut focus);
+
+        assert_eq!(
+            give_keyboard_back(&mut focus.desktop, held),
+            KeyboardBack::Given
+        );
+        assert_eq!(focus.desktop.activated, [GAME]);
+        // The window lost the focus, then a click in it takes it, given back once released.
+        assert_eq!(focus.follow(UNFOCUSED), Gave::Nothing);
+        click(&mut focus);
+        assert_eq!(focus.follow(FOCUSED), Gave::Given);
+        assert_eq!(focus.desktop.activated, [GAME, GAME]);
+    }
+
+    #[test]
+    fn the_hotkey_without_field_edited_gives_nothing() {
+        let mut focus = opened();
+
+        assert_eq!(
+            give_keyboard_back(&mut focus.desktop, false),
+            KeyboardBack::NotHeld
+        );
+        assert_eq!(focus.desktop.activated, [] as [u32; 0]);
+    }
+
+    #[test]
+    fn the_hotkey_leaves_the_focus_to_another_window_that_took_it() {
+        let mut focus = opened();
+        let held = editing(&mut focus);
+        // Alt+Tab to a browser, before a frame saw it.
+        focus.desktop.foreground = 9;
+
+        assert_eq!(
+            give_keyboard_back(&mut focus.desktop, held),
+            KeyboardBack::NotHeld
+        );
+        assert_eq!(focus.desktop.activated, [] as [u32; 0]);
+    }
+
+    #[test]
+    fn the_hotkey_tells_a_refusal() {
+        let mut focus = opened();
+        let held = editing(&mut focus);
+        focus.desktop.refuses = true;
+
+        assert_eq!(
+            give_keyboard_back(&mut focus.desktop, held),
+            KeyboardBack::Refused
+        );
     }
 
     #[test]

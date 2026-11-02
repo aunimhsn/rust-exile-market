@@ -4,13 +4,13 @@
 //! of `winsafe`.
 
 use std::error::Error;
-use std::sync::{Mutex, MutexGuard, PoisonError};
+use std::sync::{Mutex, PoisonError};
 
 use winsafe::{HWND, co};
 
 use super::Point;
 use super::clicks::PointerSource;
-use super::game_focus::{Desktop, Frame, GameFocus};
+use super::game_focus::{self, Desktop, Frame, GameFocus, KeyboardBack};
 
 /// The buttons that count as a click: left, middle and right.
 const BUTTONS: [co::VK; 3] = [co::VK::LBUTTON, co::VK::MBUTTON, co::VK::RBUTTON];
@@ -66,9 +66,11 @@ impl PointerSource for SystemPointer {
 }
 
 /// The game, shared with the price-check hotkey, which gives it the focus back before its copy
-/// while a field of the window over the game is edited ([`give_keyboard_back`]). A static, since
-/// a handle of window can't be copied without `unsafe` (`raw_copy` of `winsafe`): the window
-/// over the game and the hotkey, on the thread of the window, take it in turn.
+/// while a field of the window over the game is edited ([`give_keyboard_back`]). A static
+/// rather than an `Arc` given to both: the hotkey starts with the same signature on every
+/// system, and the handle of the game, which can't be copied without `unsafe` (`raw_copy` of
+/// `winsafe`), stays in one place. The window over the game and the hotkey, on the thread of the
+/// window, take it in turn ([`with_game`]).
 static GAME: Mutex<Game> = Mutex::new(Game {
     window: None,
     keyboard_held: false,
@@ -82,10 +84,11 @@ struct Game {
     keyboard_held: bool,
 }
 
-/// Never kept across a call that may send messages to the windows of this thread (activating a
-/// window), whose handling could take it again.
-fn game() -> MutexGuard<'static, Game> {
-    GAME.lock().unwrap_or_else(PoisonError::into_inner)
+/// Runs `f` with the game, the lock released before it returns: never call Windows within `f`,
+/// since a call that sends messages to the windows of this thread (activating a window) could
+/// have their handling take the lock again.
+fn with_game<R>(f: impl FnOnce(&mut Game) -> R) -> R {
+    f(&mut GAME.lock().unwrap_or_else(PoisonError::into_inner))
 }
 
 /// Whether `window` belongs to this application.
@@ -94,52 +97,39 @@ fn is_ours(window: &HWND) -> bool {
     process == std::process::id()
 }
 
-/// Brings the game remembered to the foreground, allowed while this application has it, as
-/// after a click in its window; `false` when none was seen, it is gone, or Windows refused.
-fn activate_game() -> bool {
-    // Taken out of the lock while Windows activates it.
-    let Some(window) = game().window.take() else {
-        return false;
-    };
-    let given = window.IsWindow() && window.SetForegroundWindow();
-    // Unless another game was seen meanwhile.
-    game().window.get_or_insert(window);
-    given
-}
-
-/// At the price-check hotkey, before the keys of its copy: while a field of the window over the
-/// game is edited, the window has the focus, so that the keys would go to it; the game gets it
-/// back first, and the field is left at the next frame ([`super::Overlay::take_leave_field`]).
-/// `true` when the focus was given back, the keys then going to the game.
-pub fn give_keyboard_back() -> bool {
-    if !std::mem::take(&mut game().keyboard_held) {
-        return false;
-    }
-    // The player went to another window meanwhile, which keeps the focus.
-    if !HWND::GetForegroundWindow().is_some_and(|window| is_ours(&window)) {
-        return false;
-    }
-    let given = activate_game();
-    if given {
-        log::info!("The price-check hotkey gave the keyboard back to the game");
-    } else {
-        log::warn!("The keyboard can't be given back to the game: the copy goes to this window");
-    }
-    given
+/// At the price-check hotkey, before the keys of its copy: gives the focus back to the game
+/// while a field of the window over the game is edited ([`game_focus::give_keyboard_back`]).
+pub fn give_keyboard_back() -> KeyboardBack {
+    let held = with_game(|game| std::mem::take(&mut game.keyboard_held));
+    game_focus::give_keyboard_back(&mut WindowsDesktop, held)
 }
 
 /// The windows of Windows, the game remembered in [`GAME`].
 struct WindowsDesktop;
 
 impl Desktop for WindowsDesktop {
+    fn foreground_is_ours(&mut self) -> bool {
+        HWND::GetForegroundWindow().is_some_and(|window| is_ours(&window))
+    }
+
     fn remember_game(&mut self) {
         if let Some(window) = HWND::GetForegroundWindow().filter(|window| !is_ours(window)) {
-            game().window = Some(window);
+            with_game(|game| game.window = Some(window));
         }
     }
 
+    /// Allowed while this application has the foreground, as after a click in its window.
     fn activate_game(&mut self) -> bool {
-        activate_game()
+        // Taken out of the lock while Windows activates it.
+        let Some(window) = with_game(|game| game.window.take()) else {
+            return false;
+        };
+        let given = window.IsWindow() && window.SetForegroundWindow();
+        // Unless another game was seen meanwhile.
+        with_game(|game| {
+            game.window.get_or_insert(window);
+        });
+        given
     }
 }
 
@@ -185,8 +175,8 @@ impl KeyboardFocus {
     /// edited, until it is left.
     pub fn give_back(&mut self, frame: Frame) {
         self.game.follow(frame);
-        let held = frame.focused == Some(true) && frame.editing;
-        game().keyboard_held = held;
+        let held = frame.holds_keyboard();
+        with_game(|game| game.keyboard_held = held);
         if held && !self.held {
             log::info!("The window over the game took the keyboard");
         }

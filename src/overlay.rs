@@ -28,7 +28,7 @@ use self::x11 as system;
 #[cfg(any(target_os = "linux", target_os = "windows"))]
 pub use self::clicks::ClickWatch;
 #[cfg(target_os = "windows")]
-pub use self::game_focus::Frame;
+pub use self::game_focus::{Frame, KeyboardBack};
 #[cfg(target_os = "linux")]
 pub use self::keyboard::KeyboardFocus;
 #[cfg(target_os = "windows")]
