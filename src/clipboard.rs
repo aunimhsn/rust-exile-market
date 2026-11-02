@@ -331,16 +331,13 @@ fn set_marker(clipboard: &mut arboard::Clipboard) -> Result<(), arboard::Error> 
     clipboard.set().exclude_from_history().text(COPY_MARKER)
 }
 
-/// Writes the marker, out of the history of the clipboard (Windows+V) and of its copy to the
-/// other devices of the player.
+/// Writes the marker, out of the history of the clipboard (Windows+V), of its copy to the other
+/// devices of the player and of the clipboard managers (Ditto): `exclude_from_monitoring`, which
+/// arboard advises against combining with the other two, covers them all.
 #[cfg(target_os = "windows")]
 fn set_marker(clipboard: &mut arboard::Clipboard) -> Result<(), arboard::Error> {
     use arboard::SetExtWindows as _;
-    clipboard
-        .set()
-        .exclude_from_history()
-        .exclude_from_cloud()
-        .text(COPY_MARKER)
+    clipboard.set().exclude_from_monitoring().text(COPY_MARKER)
 }
 
 #[cfg(not(any(target_os = "linux", target_os = "windows")))]

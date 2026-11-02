@@ -120,10 +120,11 @@ impl KeyboardFocus {
         false
     }
 
-    /// At each frame of the window over the game: gives the focus back to the game once a click
-    /// in the window took it (`focused`, none while it is hidden) and its buttons are released
-    /// (`pressed`).
-    pub fn give_back(&mut self, focused: Option<bool>, pressed: bool) {
-        self.game.follow(focused, pressed);
+    /// At each frame of the window over the game, once its content is drawn: gives the focus
+    /// back to the game once a click in the window took it (`focused`, none while it is hidden)
+    /// and its buttons are released (`pressed`), unless the click opens a link (`opens_link`),
+    /// the browser then coming to the front.
+    pub fn give_back(&mut self, focused: Option<bool>, pressed: bool, opens_link: bool) {
+        self.game.follow(focused, pressed, opens_link);
     }
 }

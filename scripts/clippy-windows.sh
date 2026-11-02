@@ -6,6 +6,8 @@
 #
 # Needs the standard library of the target once: rustup target add x86_64-pc-windows-msvc
 set -eu
+# From the root of the project, wherever the script is run from.
+cd "$(dirname "$0")/.."
 
 target=x86_64-pc-windows-msvc
 stub=$(mktemp -d)

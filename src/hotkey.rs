@@ -131,6 +131,32 @@ fn prepare_copy(marker: &mut CopyMarker) -> Option<Instant> {
     marker.before_copy()
 }
 
+/// A key pressed or released.
+#[cfg(any(target_os = "linux", target_os = "windows"))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Key<K> {
+    Down(K),
+    Up(K),
+}
+
+/// The keys that copy the item, the keys of each system as `K`: C alone while the player still
+/// holds Ctrl, otherwise Ctrl pressed around it, then released, so that the keyboard is left as
+/// the player holds it. Releasing a Ctrl the player holds would make the system take it for
+/// released, and the next D of the player would reach the game alone.
+#[cfg(any(target_os = "linux", target_os = "windows"))]
+fn copy_keys<K: Copy>(control: K, c: K, control_held: bool) -> Vec<Key<K>> {
+    if control_held {
+        vec![Key::Down(c), Key::Up(c)]
+    } else {
+        vec![
+            Key::Down(control),
+            Key::Down(c),
+            Key::Up(c),
+            Key::Up(control),
+        ]
+    }
+}
+
 impl PriceCheckHotkey {
     /// Gives each press of the hotkey since the last call to `handle`, without waiting.
     pub fn receive(&mut self, mut handle: impl FnMut(Press)) {
@@ -139,5 +165,31 @@ impl PriceCheckHotkey {
                 handle(target);
             }
         }
+    }
+}
+
+#[cfg(all(test, any(target_os = "linux", target_os = "windows")))]
+mod tests {
+    use super::*;
+
+    const CONTROL: u8 = 37;
+    const C: u8 = 54;
+
+    #[test]
+    fn taps_c_alone_while_the_player_holds_ctrl() {
+        assert_eq!(copy_keys(CONTROL, C, true), [Key::Down(C), Key::Up(C)]);
+    }
+
+    #[test]
+    fn presses_ctrl_around_c_once_the_player_released_it() {
+        assert_eq!(
+            copy_keys(CONTROL, C, false),
+            [
+                Key::Down(CONTROL),
+                Key::Down(C),
+                Key::Up(C),
+                Key::Up(CONTROL)
+            ]
+        );
     }
 }

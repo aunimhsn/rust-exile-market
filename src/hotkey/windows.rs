@@ -3,10 +3,11 @@
 
 use std::error::Error;
 
-use enigo::{Direction, Enigo, Key, Keyboard as _, Settings};
+use enigo::{Direction, Enigo, Keyboard as _, Settings};
 use global_hotkey::HotKeyState;
 use winsafe::{HWND, co};
 
+use super::{Key, copy_keys};
 use crate::overlay::{Point, ScreenRect, Target};
 
 /// At the press of D: `RegisterHotKey` takes D only, so that the keys sent then reach the game,
@@ -54,13 +55,14 @@ impl CopySender {
         // The window the keys go to, read before them; for the log and the window over the
         // game, so that a failure doesn't stop the copy.
         let window = HWND::GetForegroundWindow();
-        let title = window.as_ref().map_or_else(
+        // Its class, never its title, which may be the page of a browser (Ctrl+D adds a bookmark
+        // there) or the subject of a mail: the log may be sent with a bug report.
+        let class = window.as_ref().map_or_else(
             || "none".to_owned(),
             |window| {
-                window.GetWindowText().map_or_else(
-                    |error| format!("unknown ({error})"),
-                    |title| format!("{title:?}"),
-                )
+                window
+                    .GetClassName()
+                    .unwrap_or_else(|error| format!("unknown ({error})"))
             },
         );
         let game = window.as_ref().and_then(|window| {
@@ -87,7 +89,7 @@ impl CopySender {
         // Windows doesn't tell a key it drops: a game run as administrator never gets it.
         match self.send_keys(control_held) {
             Ok(()) => log::info!(
-                "Copy requested by the price-check hotkey from the window {title} (Ctrl {})",
+                "Copy requested by the price-check hotkey from the window of class {class} (Ctrl {})",
                 if control_held {
                     "still held"
                 } else {
@@ -98,18 +100,25 @@ impl CopySender {
         }
     }
 
-    /// C, with Ctrl pressed around it unless the player still holds it. The virtual key of C,
-    /// which Windows maps to the key that writes C in the layout of the window that has the
-    /// focus.
+    /// The keys of [`copy_keys`], as virtual keys: C, which Windows maps to the key that writes C
+    /// in the layout of the window that has the focus. After a failure, only the releases are
+    /// sent, so that Ctrl is never left held.
     fn send_keys(&mut self, control_held: bool) -> enigo::InputResult<()> {
-        if control_held {
-            return self.keyboard.key(Key::C, Direction::Click);
+        let mut result = Ok(());
+        for key in copy_keys(enigo::Key::Control, enigo::Key::C, control_held) {
+            let (key, direction) = match key {
+                Key::Down(key) => (key, Direction::Press),
+                Key::Up(key) => (key, Direction::Release),
+            };
+            if result.is_err() && direction == Direction::Press {
+                continue;
+            }
+            let sent = self.keyboard.key(key, direction);
+            if result.is_ok() {
+                result = sent;
+            }
         }
-        self.keyboard.key(Key::Control, Direction::Press)?;
-        let copied = self.keyboard.key(Key::C, Direction::Click);
-        // Released even when C failed, so that Ctrl isn't left held.
-        let released = self.keyboard.key(Key::Control, Direction::Release);
-        copied.and(released)
+        result
     }
 }
 
