@@ -13,6 +13,7 @@ use egui::WindowLevel;
 use serde::{Deserialize, Serialize};
 
 use crate::files;
+use crate::hotkey::Shortcut;
 use crate::language::Language;
 use crate::league::League;
 use crate::logging;
@@ -53,12 +54,45 @@ pub struct HotkeySetting {
     /// Whether the hotkey copies in the game; off, its key is left to the game and to the other
     /// applications.
     pub on: bool,
+    /// Its keys, written joined (`keys = "Alt+D"`): Ctrl+D by default, and for keys that can't be
+    /// read or can't be the hotkey, written to the log, so that the other settings still read.
+    #[serde(
+        serialize_with = "serialize_shortcut",
+        deserialize_with = "deserialize_shortcut"
+    )]
+    pub keys: Shortcut,
 }
 
 impl Default for HotkeySetting {
     fn default() -> Self {
-        Self { on: true }
+        Self {
+            on: true,
+            keys: Shortcut::default(),
+        }
     }
+}
+
+#[expect(
+    clippy::trivially_copy_pass_by_ref,
+    reason = "the signature serde asks for"
+)]
+fn serialize_shortcut<S: serde::Serializer>(
+    shortcut: &Shortcut,
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
+    serializer.collect_str(shortcut)
+}
+
+/// The keys of the file, or Ctrl+D when they can't be the hotkey.
+fn deserialize_shortcut<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Shortcut, D::Error> {
+    let text = String::deserialize(deserializer)?;
+    Ok(text.parse().unwrap_or_else(|error| {
+        let shortcut = Shortcut::default();
+        log::warn!("The hotkey \"{text}\" can't be used ({error}): {shortcut} instead");
+        shortcut
+    }))
 }
 
 /// A change the player makes in the settings panel.
@@ -341,6 +375,34 @@ mod tests {
         assert_eq!(table["language"].as_str(), Some("french"));
         assert_eq!(table["always_on_top"].as_bool(), Some(true));
         assert_eq!(table["hotkey"]["on"].as_bool(), Some(false));
+        assert_eq!(table["hotkey"]["keys"].as_str(), Some("Ctrl+D"));
+    }
+
+    #[test]
+    fn the_keys_of_the_hotkey_are_read_from_the_file() {
+        let directory = TestDirectory::new("hotkey-keys");
+        directory.write("[hotkey]\nkeys = \"alt + d\"\n");
+
+        let settings = directory.file().load();
+
+        assert_eq!(settings.hotkey().keys.to_string(), "Alt+D");
+        assert!(settings.hotkey().on);
+    }
+
+    #[test]
+    fn keys_that_cant_be_the_hotkey_give_ctrl_d_and_keep_the_other_settings() {
+        for keys in ["Ctrl+C", "D", "Super+D", ""] {
+            let directory = TestDirectory::new("hotkey-refused");
+            directory.write(&format!(
+                "always_on_top = true\n[hotkey]\non = false\nkeys = \"{keys}\"\n"
+            ));
+
+            let settings = directory.file().load();
+
+            assert_eq!(settings.hotkey().keys, Shortcut::default(), "{keys}");
+            assert!(!settings.hotkey().on, "{keys}");
+            assert!(settings.always_on_top(), "{keys}");
+        }
     }
 
     #[test]
@@ -380,8 +442,8 @@ mod tests {
 
         assert_eq!(settings.language(), LanguageSetting::System);
         assert!(settings.always_on_top());
-        // Written before the hotkey setting existed: the hotkey stays on.
-        assert!(settings.hotkey().on);
+        // Written before the hotkey setting existed: the hotkey stays on, with Ctrl+D.
+        assert_eq!(settings.hotkey(), HotkeySetting::default());
     }
 
     #[test]

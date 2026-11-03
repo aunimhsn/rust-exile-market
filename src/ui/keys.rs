@@ -1,6 +1,6 @@
-//! The keys of the application: the price-check hotkey and the copy of the game, drawn as key
-//! caps (the empty window, the settings) or written joined in a sentence, in bold ("**Ctrl+D**
-//! is taken by another application.").
+//! The keys of the application: the price-check hotkey ([`crate::hotkey::Shortcut`]) and the
+//! copy of the game, drawn as key caps (the empty window, the settings) or written joined in a
+//! sentence, in bold ("**Ctrl+D** is taken by another application.").
 
 use egui::text::{LayoutJob, TextFormat};
 use egui::{Align2, Color32, FontId, Rect, Response, Sense, Stroke, StrokeKind, Ui, pos2, vec2};
@@ -8,8 +8,6 @@ use egui::{Align2, Color32, FontId, Rect, Response, Sense, Stroke, StrokeKind, U
 use super::theme::{color, size};
 use super::widgets;
 
-/// The keys of the price-check hotkey.
-pub const HOTKEY: [&str; 2] = ["Ctrl", "D"];
 /// The keys of the copy of the game.
 pub const COPY: [&str; 2] = ["Ctrl", "C"];
 
@@ -151,7 +149,7 @@ mod tests {
 
     #[test]
     fn the_keys_are_written_joined() {
-        assert_eq!(joined(&HOTKEY), "Ctrl+D");
+        assert_eq!(joined(&["Ctrl", "Shift", "D"]), "Ctrl+Shift+D");
         assert_eq!(joined(&COPY), "Ctrl+C");
     }
 

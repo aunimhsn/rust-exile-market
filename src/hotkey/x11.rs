@@ -15,13 +15,48 @@ use x11rb::protocol::xtest::{self, ConnectionExt as _};
 use x11rb::rust_connection::RustConnection;
 
 use super::grab::{Active, GAME_TITLE};
-use super::{Key, copy_keys, send_all};
+use super::{Held, Key, Shortcut, copy_keys, released_for_log, send_all};
 use crate::overlay::{Point, ScreenRect, Target};
 use crate::x11::{self as shared, Atoms, Result};
 
 /// The keysyms of the keys pressed, from `X11/keysymdef.h`.
 const XK_C: u32 = 0x0063;
 const XK_CONTROL_L: u32 = 0xffe3;
+/// The modifiers released around the copy while the player holds them (Alt+D, Ctrl+Shift+D),
+/// left and right, by their keysyms: Shift, Alt, and Meta, which some layouts give to the Alt
+/// key.
+const RELEASED_MODIFIERS: [(u32, Modifier); 6] = [
+    (0xffe1, Modifier::Shift),
+    (0xffe2, Modifier::Shift),
+    (0xffe9, Modifier::Alt),
+    (0xffea, Modifier::Alt),
+    (0xffe7, Modifier::Alt),
+    (0xffe8, Modifier::Alt),
+];
+
+/// A modifier released around the copy.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Modifier {
+    Shift,
+    Alt,
+}
+
+impl Modifier {
+    fn name(self) -> &'static str {
+        match self {
+            Self::Shift => "Shift",
+            Self::Alt => "Alt",
+        }
+    }
+
+    /// Whether `shortcut` holds it.
+    fn in_shortcut(self, shortcut: Shortcut) -> bool {
+        match self {
+            Self::Shift => shortcut.shift(),
+            Self::Alt => shortcut.alt(),
+        }
+    }
+}
 /// The delay the X server waits before each key after the first, in milliseconds, so that a
 /// game that reads the keys at each frame sees each of them (the delay of the `enigo` crate).
 const KEY_DELAY_MS: u32 = 12;
@@ -58,8 +93,12 @@ impl CopySender {
     /// the pointer is read, as the game sees it when the keys leave, and `tell` gets where the
     /// window over the game opens, when the pointer and the window could be read, with what
     /// `prepare` gave, just before the keys.
+    ///
+    /// The modifiers of `shortcut` the player released before its key are released once more
+    /// for the game, which didn't see them ([`Held::missed`]).
     pub fn send_copy<P>(
         &mut self,
+        shortcut: Shortcut,
         prepare: impl FnOnce() -> P,
         tell: impl FnOnce(Option<Target>, P),
     ) {
@@ -73,16 +112,17 @@ impl CopySender {
                 }
             },
         };
-        match keyboard.send_copy(prepare, tell) {
+        match keyboard.send_copy(shortcut, prepare, tell) {
             Ok(sent) => {
                 log::info!(
-                    "Copy sent by the price-check hotkey to the window of class {} (Ctrl {})",
+                    "Copy sent by the price-check hotkey to the window of class {} (Ctrl {}{})",
                     sent.window_class,
                     if sent.control_held {
                         "still held"
                     } else {
                         "pressed by the application"
-                    }
+                    },
+                    released_for_log(&sent.released),
                 );
                 self.keyboard = Some(keyboard);
             }
@@ -343,6 +383,8 @@ struct Sent {
     /// The class of the active window, which tells the game from another application.
     window_class: String,
     control_held: bool,
+    /// The names of the other modifiers released around the copy.
+    released: Vec<&'static str>,
 }
 
 struct Keyboard {
@@ -371,6 +413,7 @@ impl Keyboard {
 
     fn send_copy<P>(
         &self,
+        shortcut: Shortcut,
         prepare: impl FnOnce() -> P,
         tell: impl FnOnce(Option<Target>, P),
     ) -> Result<Sent> {
@@ -421,6 +464,13 @@ impl Keyboard {
         // the player holds it, when the keys leave.
         let pointer = self.connection.query_pointer(self.root)?.reply()?;
         let control_held = pointer.mask.contains(KeyButMask::CONTROL);
+        let keymap = self.connection.query_keymap()?.reply()?.keys;
+        let others = held_modifiers(
+            &keymap,
+            setup.min_keycode,
+            mapping.keysyms_per_keycode,
+            &mapping.keysyms,
+        );
         let target = game.map(|game| Target {
             pointer: Point {
                 x: i32::from(pointer.root_x),
@@ -430,7 +480,13 @@ impl Keyboard {
         });
         tell(target, prepared);
         let mut first = true;
-        send_all(copy_keys(control, c, control_held), |key| -> Result<()> {
+        let others_held: Vec<_> = others.iter().map(|&(keycode, _)| keycode).collect();
+        let held = Held {
+            control: control_held,
+            missed: missed_modifiers(shortcut, &others_held, keycode),
+            others: others_held,
+        };
+        send_all(copy_keys(control, c, &held), |key| -> Result<()> {
             let (event, keycode) = match key {
                 Key::Down(keycode) => (xproto::KEY_PRESS_EVENT, keycode),
                 Key::Up(keycode) => (xproto::KEY_RELEASE_EVENT, keycode),
@@ -448,6 +504,10 @@ impl Keyboard {
         Ok(Sent {
             window_class,
             control_held,
+            released: others
+                .into_iter()
+                .map(|(_, modifier)| modifier.name())
+                .collect(),
         })
     }
 
@@ -535,6 +595,53 @@ fn keycode_of(
     min_keycode.checked_add(u8::try_from(offset).ok()?)
 }
 
+/// The keys of [`RELEASED_MODIFIERS`] held in `keymap` (a bit for each keycode, from keycode 0),
+/// with their modifier, read from the first column of the keyboard mapping (`keysyms_per_keycode`
+/// keysyms for each keycode from `min_keycode`).
+fn held_modifiers(
+    keymap: &[u8],
+    min_keycode: Keycode,
+    keysyms_per_keycode: u8,
+    keysyms: &[u32],
+) -> Vec<(Keycode, Modifier)> {
+    keysyms
+        .chunks(usize::from(keysyms_per_keycode).max(1))
+        .zip(min_keycode..=Keycode::MAX)
+        .filter(|&(_, keycode)| {
+            keymap
+                .get(usize::from(keycode / 8))
+                .is_some_and(|byte| byte & (1 << (keycode % 8)) != 0)
+        })
+        .filter_map(|(keysyms, keycode)| {
+            let first = keysyms.first()?;
+            RELEASED_MODIFIERS
+                .iter()
+                .find(|(keysym, _)| keysym == first)
+                .map(|&(_, modifier)| (keycode, modifier))
+        })
+        .collect()
+}
+
+/// The keys of the modifiers of `shortcut` other than Ctrl (left and right, found by `keycode`)
+/// that the player no longer holds (`held`): they may have been released before the key of the
+/// hotkey, which the game didn't see ([`Held::missed`]).
+fn missed_modifiers(
+    shortcut: Shortcut,
+    held: &[Keycode],
+    keycode: impl Fn(u32) -> Option<Keycode>,
+) -> Vec<Keycode> {
+    let mut missed = Vec::new();
+    for (keysym, modifier) in RELEASED_MODIFIERS {
+        if let Some(key) = keycode(keysym).filter(|_| modifier.in_shortcut(shortcut))
+            && !held.contains(&key)
+            && !missed.contains(&key)
+        {
+            missed.push(key);
+        }
+    }
+    missed
+}
+
 /// The class of a window from its `WM_CLASS`, an instance name then a class name, each ended
 /// by a null byte.
 fn window_class(property: &[u8]) -> String {
@@ -599,6 +706,74 @@ mod tests {
     fn finds_the_keycode_of_a_keysym_without_modifier_first() {
         assert_eq!(keycode_of(XK_C, 8, 2, &MAPPING), Some(9));
         assert_eq!(keycode_of(XK_CONTROL_L, 8, 2, &MAPPING), Some(10));
+    }
+
+    /// A keyboard mapping from keycode 8: `a`, `Alt_L` (`Meta_L` with Shift), `Shift_R`,
+    /// `Control_L`, then `Alt_R` on keycode 17, in the third byte of the keymap.
+    const MODIFIERS: [u32; 20] = [
+        0x61,
+        0x41,
+        0xffe9,
+        0xffe7,
+        0xffe2,
+        0,
+        XK_CONTROL_L,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0xffea,
+        0,
+    ];
+
+    /// The keymap with `keycodes` held.
+    fn keymap(keycodes: &[u8]) -> [u8; 32] {
+        let mut keymap = [0; 32];
+        for keycode in keycodes {
+            keymap[usize::from(keycode / 8)] |= 1 << (keycode % 8);
+        }
+        keymap
+    }
+
+    #[test]
+    fn finds_the_alt_and_shift_keys_held_and_leaves_ctrl() {
+        assert_eq!(
+            held_modifiers(&keymap(&[8, 9, 10, 11, 17]), 8, 2, &MODIFIERS),
+            [
+                (9, Modifier::Alt),
+                (10, Modifier::Shift),
+                (17, Modifier::Alt)
+            ]
+        );
+        assert_eq!(held_modifiers(&keymap(&[8, 11]), 8, 2, &MODIFIERS), []);
+    }
+
+    /// The keycodes of [`MODIFIERS`].
+    fn modifier_keycode(keysym: u32) -> Option<Keycode> {
+        keycode_of(keysym, 8, 2, &MODIFIERS)
+    }
+
+    #[test]
+    fn the_modifiers_of_the_hotkey_no_longer_held_are_released_for_the_game() {
+        let alt_d: Shortcut = "Alt+D".parse().unwrap();
+        // Both Alt keys (Meta, on the left Alt too, once only); no Shift, not in the hotkey.
+        assert_eq!(missed_modifiers(alt_d, &[], modifier_keycode), [9, 17]);
+        // The left Alt still held: only the right one.
+        assert_eq!(missed_modifiers(alt_d, &[9], modifier_keycode), [17]);
+        // Ctrl+D: nothing.
+        assert_eq!(
+            missed_modifiers(Shortcut::default(), &[], modifier_keycode),
+            [] as [Keycode; 0]
+        );
+        let shift_d: Shortcut = "Ctrl+Shift+D".parse().unwrap();
+        assert_eq!(missed_modifiers(shift_d, &[], modifier_keycode), [10]);
     }
 
     #[test]

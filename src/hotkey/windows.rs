@@ -15,7 +15,7 @@ use global_hotkey::HotKeyState;
 use winsafe::{HWND, co};
 
 use super::grab::{Foreground, is_game_window};
-use super::{Key, copy_keys_after_focus, send_all};
+use super::{Held, Key, Shortcut, copy_keys_after_focus, released_for_log, send_all};
 use crate::overlay::{KeyboardBack, Point, ScreenRect, Target};
 
 /// How often the foreground window is read. Windows tells its changes only to a hook
@@ -24,6 +24,15 @@ use crate::overlay::{KeyboardBack, Point, ScreenRect, Target};
 /// coming to the front (150 ms while the main window is minimized, which eframe updates ten times
 /// a second then).
 const FOREGROUND_POLL: Duration = Duration::from_millis(50);
+
+/// The modifiers released around the copy while the player holds them (Alt+D, Ctrl+Shift+D),
+/// left and right, with their names for the log.
+const RELEASED_MODIFIERS: [(co::VK, enigo::Key, &str); 4] = [
+    (co::VK::LSHIFT, enigo::Key::LShift, "Shift"),
+    (co::VK::RSHIFT, enigo::Key::RShift, "Shift"),
+    (co::VK::LMENU, enigo::Key::LMenu, "Alt"),
+    (co::VK::RMENU, enigo::Key::RMenu, "Alt"),
+];
 
 /// At the press of D: `RegisterHotKey` takes D only, so that the keys sent then reach the game,
 /// and Ctrl is held, since the hotkey needs it. The press reaches the application as a message of
@@ -63,8 +72,12 @@ impl CopySender {
     /// take a moment), then the pointer is read, as the game sees it when the keys leave, and
     /// `tell` gets where the window over the game opens, when the pointer and the window could
     /// be read, with what `prepare` gave; Ctrl is read last, just before the keys.
+    ///
+    /// `_shortcut` is left to the other systems: `RegisterHotKey` takes D only, so that the game
+    /// sees every modifier of the hotkey pressed and released.
     pub fn send_copy<P>(
         &mut self,
+        _shortcut: Shortcut,
         prepare: impl FnOnce() -> P,
         tell: impl FnOnce(Option<Target>, P),
     ) {
@@ -109,18 +122,30 @@ impl CopySender {
             game,
         });
         tell(target, prepared);
-        // Read last, just before the keys, as the player holds it: a Ctrl released meanwhile
-        // and pressed once more for a game given the focus back would stay held.
+        // Read last, just before the keys, as the player holds them: a Ctrl released meanwhile
+        // and pressed once more for a game given the focus back would stay held, and so would an
+        // Alt pressed again.
         let control_held = winsafe::GetAsyncKeyState(co::VK::CONTROL);
+        let others: Vec<_> = RELEASED_MODIFIERS
+            .into_iter()
+            .filter(|&(virtual_key, _, _)| winsafe::GetAsyncKeyState(virtual_key))
+            .map(|(_, key, name)| (key, name))
+            .collect();
+        let held = Held {
+            control: control_held,
+            others: others.iter().map(|&(key, _)| key).collect(),
+            missed: Vec::new(),
+        };
         // Windows doesn't tell a key it drops: a game run as administrator never gets it.
-        match self.send_keys(control_held, given_back) {
+        match self.send_keys(&held, given_back) {
             Ok(()) => log::info!(
-                "Copy requested by the price-check hotkey from the window of class {class} (Ctrl {})",
+                "Copy requested by the price-check hotkey from the window of class {class} (Ctrl {}{})",
                 if control_held {
                     "still held"
                 } else {
                     "pressed by the application"
-                }
+                },
+                released_for_log(&others.iter().map(|&(_, name)| name).collect::<Vec<_>>()),
             ),
             Err(error) => log::warn!("The copy can't be sent: {error}"),
         }
@@ -130,9 +155,8 @@ impl CopySender {
     /// in the layout of the window that has the focus; after a failure, only the releases
     /// ([`send_all`]). When the game was just `given_back` the focus, a Ctrl the player holds is
     /// pressed once more ([`copy_keys_after_focus`]).
-    fn send_keys(&mut self, control_held: bool, given_back: bool) -> enigo::InputResult<()> {
-        let keys =
-            copy_keys_after_focus(enigo::Key::Control, enigo::Key::C, control_held, given_back);
+    fn send_keys(&mut self, held: &Held<enigo::Key>, given_back: bool) -> enigo::InputResult<()> {
+        let keys = copy_keys_after_focus(enigo::Key::Control, enigo::Key::C, held, given_back);
         send_all(keys, |key| match key {
             Key::Down(key) => self.keyboard.key(key, Direction::Press),
             Key::Up(key) => self.keyboard.key(key, Direction::Release),

@@ -120,10 +120,12 @@ impl ExileMarketApp {
         let hotkey_ctx = creation.egui_ctx.clone();
         let clicks_ctx = creation.egui_ctx.clone();
         let clipboard = ClipboardWatch::start(move || clipboard_ctx.request_repaint());
-        let hotkey =
-            PriceCheckHotkey::start(clipboard.copy_marker(), settings.hotkey().on, move || {
-                hotkey_ctx.request_repaint();
-            });
+        let hotkey = PriceCheckHotkey::start(
+            clipboard.copy_marker(),
+            settings.hotkey().on,
+            settings.hotkey().keys,
+            move || hotkey_ctx.request_repaint(),
+        );
         // The prices of the league of the last session, until the leagues arrive.
         let market = MarketWatch::start(settings.league(), move || market_ctx.request_repaint());
 
@@ -285,7 +287,7 @@ impl ExileMarketApp {
         to_top: bool,
     ) -> f32 {
         let Some(shown) = self.session.item() else {
-            let empty = EmptyState::new(&self.i18n, self.hotkey.state());
+            let empty = EmptyState::new(&self.i18n, self.hotkey.state(), self.hotkey.keys());
             if let (PricesState::Downloading { progress }, Some((league, quote))) =
                 (prices, &self.download_quote)
             {

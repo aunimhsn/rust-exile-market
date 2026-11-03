@@ -1,5 +1,5 @@
-//! The price-check hotkey: Ctrl+D pressed in the game copies the item under the cursor, so
-//! that the player no longer presses Ctrl+C.
+//! The price-check hotkey: Ctrl+D (or the keys of the settings, [`Shortcut`]) pressed in the
+//! game copies the item under the cursor, so that the player no longer presses Ctrl+C.
 //!
 //! The application sends Ctrl+C to the game itself, and the item arrives through the clipboard
 //! like any copy ([`crate::clipboard`]). On Linux through X11 (XWayland under Wayland), like the
@@ -16,6 +16,10 @@ use std::time::{Duration, Instant};
 
 use crate::clipboard::CopyMarker;
 use crate::overlay::Target;
+
+mod shortcut;
+
+pub use shortcut::Shortcut;
 
 /// How long the game may take to copy the item after the hotkey: past it, the hotkey copied
 /// nothing (an empty cell of the inventory). The clipboard watching takes an item read within it
@@ -80,6 +84,8 @@ pub struct PriceCheckHotkey {
     in_game: Option<InGame>,
     /// Each press of the hotkey.
     targets: Option<Receiver<Press>>,
+    /// Its keys.
+    keys: Shortcut,
 }
 
 /// The grab of the key, shared on Linux between the thread that follows the active window and the
@@ -236,7 +242,7 @@ impl InGame {
 }
 
 impl PriceCheckHotkey {
-    /// Starts listening to Ctrl+D, only while the game is the active window, and only once
+    /// Starts listening to `keys`, only while the game is the active window, and only once
     /// turned on when it starts `on` off (the settings). A key taken by another application, such
     /// as Exiled Exchange 2, is written to the log and told by [`Self::state`]: the player can
     /// still copy with Ctrl+C.
@@ -249,8 +255,12 @@ impl PriceCheckHotkey {
     /// its event loop, and registered there.
     #[cfg(any(target_os = "linux", target_os = "windows"))]
     #[must_use]
-    pub fn start(marker: CopyMarker, on: bool, wake: impl Fn() + Send + Sync + 'static) -> Self {
-        use global_hotkey::hotkey::{Code, HotKey, Modifiers};
+    pub fn start(
+        marker: CopyMarker,
+        on: bool,
+        keys: Shortcut,
+        wake: impl Fn() + Send + Sync + 'static,
+    ) -> Self {
         use global_hotkey::{GlobalHotKeyEvent, GlobalHotKeyManager};
         use std::sync::atomic::{AtomicBool, Ordering};
         use std::sync::{Arc, Mutex, PoisonError};
@@ -260,6 +270,7 @@ impl PriceCheckHotkey {
             on: Arc::clone(&on),
             in_game: None,
             targets: None,
+            keys,
         };
         let sender = match keys::CopySender::connect() {
             Ok(sender) => Mutex::new((sender, marker)),
@@ -276,7 +287,9 @@ impl PriceCheckHotkey {
             }
         };
         let (targets, receiver) = std::sync::mpsc::channel();
-        let hotkey = HotKey::new(Some(Modifiers::CONTROL), Code::KeyD);
+        let hotkey = keys.hotkey();
+        let shortcut = keys;
+        log::info!("Price-check hotkey: {keys}");
         let id = hotkey.id();
         let wake = Arc::new(wake);
         let wake_in_game = Arc::clone(&wake);
@@ -289,6 +302,7 @@ impl PriceCheckHotkey {
                 let mut sender = sender.lock().unwrap_or_else(PoisonError::into_inner);
                 let (keys, marker) = &mut *sender;
                 keys.send_copy(
+                    shortcut,
                     || prepare_copy(marker),
                     |target, copy| {
                         // The application stopped listening: nothing left to tell.
@@ -306,18 +320,31 @@ impl PriceCheckHotkey {
             on,
             in_game: Some(in_game),
             targets: Some(receiver),
+            keys,
         }
     }
 
     /// Nothing to listen to on this system.
     #[cfg(not(any(target_os = "linux", target_os = "windows")))]
     #[must_use]
-    pub fn start(_marker: CopyMarker, on: bool, _wake: impl Fn() + Send + Sync + 'static) -> Self {
+    pub fn start(
+        _marker: CopyMarker,
+        on: bool,
+        keys: Shortcut,
+        _wake: impl Fn() + Send + Sync + 'static,
+    ) -> Self {
         log::info!("No price-check hotkey on this system");
         Self {
             on: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(on)),
             targets: None,
+            keys,
         }
+    }
+
+    /// Its keys.
+    #[must_use]
+    pub fn keys(&self) -> Shortcut {
+        self.keys
     }
 
     /// Turns the hotkey on or off, as the player sets it: off, its key is released at once, left
@@ -416,22 +443,61 @@ enum Key<K> {
     Up(K),
 }
 
+/// The keys the player holds when the copy leaves, the keys of each system as `K`.
+#[cfg(any(target_os = "linux", target_os = "windows"))]
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Held<K> {
+    control: bool,
+    /// The other modifiers held (Alt, Shift), which would change the copy: Ctrl+Alt+C is the
+    /// advanced copy of the game, and Ctrl+Shift+C isn't the copy.
+    others: Vec<K>,
+    /// The modifiers of the hotkey the player released before its key, while X11 gave every key
+    /// to the application (until D is released): the game never saw them released, and would
+    /// take them for held. Released once more for it, first; none on Windows, which leaves them
+    /// to the game.
+    missed: Vec<K>,
+}
+
+#[cfg(any(target_os = "linux", target_os = "windows"))]
+impl<K> Held<K> {
+    /// Ctrl alone held, or none.
+    #[cfg(test)]
+    fn control(control: bool) -> Self {
+        Self {
+            control,
+            others: Vec::new(),
+            missed: Vec::new(),
+        }
+    }
+}
+
 /// The keys that copy the item, the keys of each system as `K`: C alone while the player still
 /// holds Ctrl, otherwise Ctrl pressed around it, then released, so that the keyboard is left as
 /// the player holds it. Releasing a Ctrl the player holds would make the system take it for
-/// released, and the next D of the player would reach the game alone.
+/// released, and the next D of the player would reach the game alone. The other modifiers the
+/// player holds (Alt+D, Ctrl+Shift+D) are released first, so that the game reads Ctrl+C, then
+/// pressed again last, for the same reason; those the game missed released ([`Held::missed`])
+/// are released before all.
 #[cfg(any(target_os = "linux", target_os = "windows"))]
-fn copy_keys<K: Copy>(control: K, c: K, control_held: bool) -> Vec<Key<K>> {
-    if control_held {
-        vec![Key::Down(c), Key::Up(c)]
+fn copy_keys<K: Copy>(control: K, c: K, held: &Held<K>) -> Vec<Key<K>> {
+    let mut keys: Vec<_> = held
+        .missed
+        .iter()
+        .chain(&held.others)
+        .map(|&key| Key::Up(key))
+        .collect();
+    if held.control {
+        keys.extend([Key::Down(c), Key::Up(c)]);
     } else {
-        vec![
+        keys.extend([
             Key::Down(control),
             Key::Down(c),
             Key::Up(c),
             Key::Up(control),
-        ]
+        ]);
     }
+    keys.extend(held.others.iter().rev().map(|&key| Key::Down(key)));
+    keys
 }
 
 /// The keys of [`copy_keys`] for a game just `given_back` the focus by the window over the game:
@@ -441,19 +507,32 @@ fn copy_keys<K: Copy>(control: K, c: K, control_held: bool) -> Vec<Key<K>> {
 fn copy_keys_after_focus<K: Copy>(
     control: K,
     c: K,
-    control_held: bool,
+    held: &Held<K>,
     given_back: bool,
 ) -> Vec<Key<K>> {
-    let mut keys = copy_keys(control, c, control_held);
-    if given_back && control_held {
-        keys.insert(0, Key::Down(control));
+    let mut keys = copy_keys(control, c, held);
+    if given_back && held.control {
+        // After the other modifiers released, just before C.
+        keys.insert(held.missed.len() + held.others.len(), Key::Down(control));
     }
     keys
 }
 
+/// The other modifiers released around the copy, by their names, for the end of the line of the
+/// log: `, Shift and Alt released around it`.
+#[cfg(any(target_os = "linux", target_os = "windows"))]
+fn released_for_log(released: &[&str]) -> String {
+    if released.is_empty() {
+        String::new()
+    } else {
+        format!(", {} released around it", released.join(" and "))
+    }
+}
+
 /// Sends `keys` one by one with `send`, the call of each system: after a failure, only the
 /// releases, so that no key is left held (a Ctrl left held would make the next D of the player
-/// reach the game alone); the first error.
+/// reach the game alone; an Alt released and not pressed again only asks the player to press it
+/// again); the first error.
 #[cfg(any(target_os = "linux", target_os = "windows"))]
 fn send_all<K, E>(
     keys: Vec<Key<K>>,
@@ -504,6 +583,128 @@ mod tests {
 
     const CONTROL: u8 = 37;
     const C: u8 = 54;
+    const ALT: u8 = 64;
+    const SHIFT: u8 = 50;
+
+    #[test]
+    fn releases_once_more_the_alt_the_game_missed_released() {
+        // Alt released before D, while X11 gave the keys to the application.
+        let held = Held {
+            control: false,
+            others: Vec::new(),
+            missed: vec![ALT],
+        };
+        assert_eq!(
+            copy_keys(CONTROL, C, &held),
+            [
+                Key::Up(ALT),
+                Key::Down(CONTROL),
+                Key::Down(C),
+                Key::Up(C),
+                Key::Up(CONTROL),
+            ]
+        );
+    }
+
+    #[test]
+    fn writes_the_modifiers_released_at_the_end_of_the_log_line() {
+        assert_eq!(released_for_log(&[]), "");
+        assert_eq!(
+            released_for_log(&["Shift", "Alt"]),
+            ", Shift and Alt released around it"
+        );
+    }
+
+    #[test]
+    fn releases_alt_around_the_copy_then_presses_it_again() {
+        // Alt+D: Ctrl pressed by the application, Alt released first.
+        let held = Held {
+            control: false,
+            others: vec![ALT],
+            missed: Vec::new(),
+        };
+        assert_eq!(
+            copy_keys(CONTROL, C, &held),
+            [
+                Key::Up(ALT),
+                Key::Down(CONTROL),
+                Key::Down(C),
+                Key::Up(C),
+                Key::Up(CONTROL),
+                Key::Down(ALT),
+            ]
+        );
+    }
+
+    #[test]
+    fn keeps_the_ctrl_held_and_presses_the_others_again_in_reverse() {
+        // Ctrl+Shift+Alt+D, still held.
+        let held = Held {
+            control: true,
+            others: vec![SHIFT, ALT],
+            missed: Vec::new(),
+        };
+        assert_eq!(
+            copy_keys(CONTROL, C, &held),
+            [
+                Key::Up(SHIFT),
+                Key::Up(ALT),
+                Key::Down(C),
+                Key::Up(C),
+                Key::Down(ALT),
+                Key::Down(SHIFT),
+            ]
+        );
+    }
+
+    #[test]
+    fn presses_ctrl_once_more_after_the_others_released_for_a_game_given_the_focus_back() {
+        let held = Held {
+            control: true,
+            others: vec![SHIFT],
+            missed: Vec::new(),
+        };
+        assert_eq!(
+            copy_keys_after_focus(CONTROL, C, &held, true),
+            [
+                Key::Up(SHIFT),
+                Key::Down(CONTROL),
+                Key::Down(C),
+                Key::Up(C),
+                Key::Down(SHIFT),
+            ]
+        );
+    }
+
+    #[test]
+    fn after_a_failure_the_modifiers_released_are_never_pressed_again() {
+        let held = Held {
+            control: false,
+            others: vec![ALT],
+            missed: Vec::new(),
+        };
+        let mut sent = Vec::new();
+        let result = send_all(copy_keys(CONTROL, C, &held), |key| {
+            sent.push(key);
+            if key == Key::Down(C) {
+                Err(key)
+            } else {
+                Ok(())
+            }
+        });
+
+        assert_eq!(result, Err(Key::Down(C)));
+        assert_eq!(
+            sent,
+            [
+                Key::Up(ALT),
+                Key::Down(CONTROL),
+                Key::Down(C),
+                Key::Up(C),
+                Key::Up(CONTROL),
+            ]
+        );
+    }
 
     #[test]
     fn the_state_told_goes_from_what_started_to_the_setting_then_to_the_key() {
@@ -519,7 +720,7 @@ mod tests {
     #[test]
     fn presses_ctrl_once_more_for_a_game_given_the_focus_back() {
         assert_eq!(
-            copy_keys_after_focus(CONTROL, C, true, true),
+            copy_keys_after_focus(CONTROL, C, &Held::control(true), true),
             [Key::Down(CONTROL), Key::Down(C), Key::Up(C)]
         );
     }
@@ -527,24 +728,27 @@ mod tests {
     #[test]
     fn the_game_given_the_focus_back_gets_ctrl_c_as_usual_once_ctrl_is_released() {
         assert_eq!(
-            copy_keys_after_focus(CONTROL, C, false, true),
-            copy_keys(CONTROL, C, false)
+            copy_keys_after_focus(CONTROL, C, &Held::control(false), true),
+            copy_keys(CONTROL, C, &Held::control(false))
         );
         assert_eq!(
-            copy_keys_after_focus(CONTROL, C, true, false),
-            copy_keys(CONTROL, C, true)
+            copy_keys_after_focus(CONTROL, C, &Held::control(true), false),
+            copy_keys(CONTROL, C, &Held::control(true))
         );
     }
 
     #[test]
     fn taps_c_alone_while_the_player_holds_ctrl() {
-        assert_eq!(copy_keys(CONTROL, C, true), [Key::Down(C), Key::Up(C)]);
+        assert_eq!(
+            copy_keys(CONTROL, C, &Held::control(true)),
+            [Key::Down(C), Key::Up(C)]
+        );
     }
 
     /// The keys `send_all` sends, failing on `fails`, and what it returns.
     fn sent(control_held: bool, fails: Option<Key<u8>>) -> (Vec<Key<u8>>, Result<(), Key<u8>>) {
         let mut sent = Vec::new();
-        let result = send_all(copy_keys(CONTROL, C, control_held), |key| {
+        let result = send_all(copy_keys(CONTROL, C, &Held::control(control_held)), |key| {
             sent.push(key);
             if Some(key) == fails { Err(key) } else { Ok(()) }
         });
@@ -553,7 +757,10 @@ mod tests {
 
     #[test]
     fn sends_every_key_when_none_fails() {
-        assert_eq!(sent(false, None), (copy_keys(CONTROL, C, false), Ok(())));
+        assert_eq!(
+            sent(false, None),
+            (copy_keys(CONTROL, C, &Held::control(false)), Ok(()))
+        );
     }
 
     #[test]
@@ -586,7 +793,7 @@ mod tests {
     #[test]
     fn keeps_the_first_error() {
         let mut calls = 0;
-        let result = send_all(copy_keys(CONTROL, C, false), |_| {
+        let result = send_all(copy_keys(CONTROL, C, &Held::control(false)), |_| {
             calls += 1;
             Err(calls)
         });
@@ -598,7 +805,7 @@ mod tests {
     #[test]
     fn presses_ctrl_around_c_once_the_player_released_it() {
         assert_eq!(
-            copy_keys(CONTROL, C, false),
+            copy_keys(CONTROL, C, &Held::control(false)),
             [
                 Key::Down(CONTROL),
                 Key::Down(C),
