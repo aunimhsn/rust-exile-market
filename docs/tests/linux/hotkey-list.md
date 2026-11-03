@@ -42,7 +42,7 @@ tail -f ~/.local/state/exile-market/exile-market.log
    ✅ Le fichier dit `keys = "Ctrl+G"` ; au lancement, le journal dit « Price-check hotkey: Ctrl+G », la fenêtre vide invite à copier avec `Ctrl` + `G`, et Ctrl+G copie dans le jeu.
 
 6. **Alt+G** : choisis `Alt+G`, puis dans le jeu **Alt+G** sur un objet, puis sur trois objets en tenant Alt. Alt lâché, survole un objet.
-   ✅ Chaque G ouvre la fenêtre avec le prix ; chaque ligne « Copy sent… » du journal finit par « (Ctrl pressed by the application) », ou par « (Ctrl pressed by the application, Alt released for the game) » quand Alt était tenu pendant G. Alt lâché, l'infobulle de l'objet survolé est normale (pas avancée).
+   ✅ Chaque G ouvre la fenêtre avec le prix ; chaque ligne « Copy sent… » du journal finit par « (Ctrl pressed by the application) », ou par « (Ctrl pressed by the application, Alt released for the game) » quand tu as lâché Alt avant G. Alt lâché, l'infobulle de l'objet survolé est normale (pas avancée).
 
 7. **F3 et F4** : choisis `F3`, puis **F3** sur un objet dans le jeu ; puis choisis `F4` et fais de même.
    ✅ F3, puis F4, ouvrent la fenêtre avec le prix, sans rien faire d'autre dans le jeu. Après le passage à F4, F3 ne copie plus.
