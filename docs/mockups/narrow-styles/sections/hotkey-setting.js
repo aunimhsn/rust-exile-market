@@ -14,7 +14,7 @@ const hkKeys = keys => keys.map(key => `<span class="key">${key}</span>`).join("
 
 // The settings with the hotkey group: `on` checked or not, `keys` the key caps or `capture` while the player
 // presses the new key, `note` a line under the row (`warn` in the color of the warnings).
-const hkSettings = ({ on = true, keys = ["Ctrl", "D"], capture = false, note = "", warn = false } = {}) => {
+const hkSettings = ({ on = true, keys = ["Ctrl", "D"], capture = false, note = "", warn = false, help = "" } = {}) => {
   const box = `<span class="check ${on ? "on" : ""}">${on ? ICON.check(11) : ""}</span>`;
   const keyCaps = capture
     ? `<span class="app-hotkey-keys is-capturing" title="Esc: cancel">Press the keys…</span>`
@@ -25,7 +25,7 @@ const hkSettings = ({ on = true, keys = ["Ctrl", "D"], capture = false, note = "
     <div class="field"><span class="label">Language</span>
       <div class="radio on"><i></i>System</div><div class="radio"><i></i>English</div><div class="radio"><i></i>Français</div></div>
     <div class="field"><div class="toggle"><span class="check"></span>Always on top</div></div>
-    <div class="field"><span class="label">Hotkey</span>
+    <div class="field">${help ? hkLabel(help) : `<span class="label">Hotkey</span>`}
       <div class="app-hotkey-row"><div class="toggle">${box}Price check in the game</div>${keyCaps}</div>
       ${line}</div>
     <div class="disclaimer">This product isn't affiliated with or endorsed by Grinding Gear Games in any way.</div>
@@ -58,4 +58,30 @@ SECTIONS.unshift(["Hotkey setting (14c3): on or off, and its key", [
   ["Off: the keys faint, Ctrl + D left to the game", hkWin({ on: false, note: HK_HELP })],
   ["Off, before the first item: Ctrl + C invited", win(topBar(), hkEmptyC, foot())],
   ["On, before the first item (today)", win(topBar(), hkEmptyD, foot())],
+]]);
+
+// Section Hotkey rules tooltip (14c3b): the owner's idea on 2026-11-03, a small "?" next to the label "Hotkey"
+// which shows, on hover, the keys the player may choose and those refused, with a few examples; a tooltip like the
+// others of the application rather than a pop-up. Two contents to compare: A, sentences with the keys in bold; B,
+// the examples as key caps under two small labels. Shown open here; it opens on hover in the application.
+const hkCaps = keys => `<span class="app-hotkey-chip">${keys.split("+").map(key => `<span class="key">${key}</span>`).join("+")}</span>`;
+const HK_TIPS = {
+  a: `<span class="app-hotkey-tip-line">Hold <b>Ctrl</b> or <b>Alt</b> with a letter, a number or <span class="app-hotkey-nowrap">F1–F12</span>.</span>
+    <span class="app-hotkey-tip-line is-weak">For example <b>Ctrl+Shift+D</b>, <b>Alt+Q</b> or <b>Ctrl+F5</b>.</span>
+    <span class="app-hotkey-tip-line is-weak">Refused: a key alone, the Windows key, <b>Ctrl+C</b>, <b>Ctrl+Alt+C</b> and <b>Alt+F4</b>, which the game or the system already use.</span>`,
+  b: `<span class="app-hotkey-tip-title">Allowed</span>
+    <span class="app-hotkey-tip-line is-weak">Ctrl or Alt with a letter, a number or <span class="app-hotkey-nowrap">F1–F12</span></span>
+    <span class="app-hotkey-chips">${["Ctrl+Shift+D", "Alt+Q", "Ctrl+F5"].map(hkCaps).join("")}</span>
+    <span class="app-hotkey-tip-title">Refused</span>
+    <span class="app-hotkey-tip-line is-weak">A key alone, the Windows key, and the keys of the game or of the system</span>
+    <span class="app-hotkey-chips">${["Ctrl+C", "Ctrl+Alt+C", "Alt+F4"].map(hkCaps).join("")}</span>`,
+};
+// The label "Hotkey" and its "?", the tooltip `help` (a key of HK_TIPS) open under it.
+const hkLabel = help => `<span class="app-hotkey-label"><span class="label">Hotkey</span>
+  <span class="app-hotkey-help is-hovered" title="">${svg(13, '<circle cx="8" cy="8" r="6.2"/><path d="M6.3 6.2a1.8 1.8 0 1 1 2.5 1.7c-.5.2-.8.6-.8 1.1v.4"/><path d="M8 11.4v.1"/>')}
+    <span class="app-tip app-hotkey-tip">${HK_TIPS[help]}</span></span></span>`;
+
+SECTIONS.unshift(["Hotkey rules tooltip (14c3b): a \"?\" next to the label, A or B", [
+  ["A · Sentences, the keys in bold", hkWin({ help: "a", note: HK_HELP })],
+  ["B · The examples as key caps, under two labels", hkWin({ help: "b", note: HK_HELP })],
 ]]);

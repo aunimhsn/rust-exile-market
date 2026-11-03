@@ -40,3 +40,26 @@
 .app-hotkey-keys.is-capturing { padding: 3px 9px; border: 1px dashed var(--accent); border-radius: 4px; color: var(--text); }
 .app-hotkey-note { color: var(--faint); font-size: 11.5px; line-height: 1.4; }
 .app-hotkey-note.warn, .ov-note-line.warn { color: var(--warn); }
+/* The "?" next to the label "Hotkey" (14c3b), faint, its tooltip of the rules under it, opening to the right. */
+.app-hotkey-label { display: flex; align-items: center; gap: 6px; }
+.app-hotkey-help { position: relative; display: grid; place-items: center; color: var(--faint); cursor: help; }
+.app-hotkey-help:hover, .app-hotkey-help.is-hovered { color: var(--weak); }
+.app-hotkey-help .app-tip { top: calc(100% + 6px); left: -4px; right: auto; white-space: normal; width: 270px; }
+.app-hotkey-help:hover .app-tip, .app-hotkey-help.is-hovered .app-tip { display: block; }
+.app-hotkey-tip .app-hotkey-tip-line { display: block; line-height: 1.4; }
+.app-hotkey-tip .app-hotkey-tip-line + .app-hotkey-tip-line { margin-top: 5px; }
+.app-hotkey-tip .is-weak { color: var(--weak); }
+.app-hotkey-tip b { color: var(--text); font-weight: 600; }
+.app-hotkey-tip .app-hotkey-tip-title { display: block; margin-top: 10px; color: var(--text); font-weight: 600; }
+.app-hotkey-tip .app-hotkey-tip-title:first-child { margin-top: 0; }
+.app-hotkey-tip .app-hotkey-tip-line { margin-top: 2px; }
+.app-hotkey-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.app-hotkey-chip { display: inline-flex; align-items: center; gap: 3px; color: var(--weak); font-size: 11px; }
+.app-hotkey-chip .key { padding: 1px 5px; font-size: 11px; }
+/* The key caps of the tooltip stay on their line (`.app-tip span` stacks the lines of the other tooltips), and the
+   window lets the open tooltip out, as the application draws it over the window. */
+.app-tip .app-hotkey-chips { display: flex; gap: 6px 12px; margin-top: 6px; color: inherit; }
+.app-tip .app-hotkey-chip, .app-tip .app-hotkey-chip .key { display: inline-flex; margin-top: 0; }
+.app-tip .app-hotkey-chip .key { color: var(--text); }
+.app-tip .app-hotkey-nowrap { display: inline; margin: 0; color: inherit; white-space: nowrap; }
+.win:has(.app-hotkey-help.is-hovered) { overflow: visible; }
