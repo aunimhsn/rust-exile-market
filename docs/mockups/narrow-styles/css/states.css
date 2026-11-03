@@ -120,3 +120,15 @@
 .app-hotkey-select.is-b { color: #5d6670; }
 .app-hotkey-select.is-c { min-width: 96px; justify-content: space-between; }
 .app-hotkey-name { font-weight: 600; }
+/* The hotkey as a split button (14c3b2, three tries): the key on the left, the chevron in a square on the right,
+   as high as "Use Ctrl+G" (22 px), the two of different backgrounds; D, the key white and the chevron on dark;
+   E, inverted; F, the chevron on a light gray. */
+.app-hotkey-select.is-split { align-items: stretch; gap: 0; height: 22px; padding: 0; overflow: hidden; }
+.app-hotkey-select.is-split .app-hotkey-label { display: flex; align-items: center; padding: 0 10px; }
+.app-hotkey-arrow { width: 22px; display: grid; place-items: center; }
+.app-hotkey-select.is-split:hover { background: var(--accent); }
+.is-d .app-hotkey-arrow { background: var(--control-line); color: var(--text); }
+.app-hotkey-select.is-e { background: var(--control-line); color: var(--text); }
+.app-hotkey-select.is-e:hover { background: var(--control-line); }
+.is-e .app-hotkey-arrow { background: var(--accent); color: var(--on-accent, var(--bg-a)); }
+.is-f .app-hotkey-arrow { background: color-mix(in srgb, var(--accent) 80%, var(--bg-a)); }

@@ -45,13 +45,17 @@ const hlList = (keys, fr, look) => {
 // The settings of 14c3 with the keys as a list: a chevron after them, pointing right like the one of the league
 // and turned down while the list is open under them (`open`). `look` the drawing of the button (see hlLabel);
 // `offer` the free key offered under a warning; `fr` the French window.
+const HL_SPLIT = ["d", "e", "f"];
 const hlWin = ({ keys = ["Ctrl", "D"], open = false, note = HK_HELP, warn = false, offer = null, fr = false, look = "caps" } = {}) => {
   const shift = hlKey(fr);
   const label = look === "caps"
     ? `<span class="app-hotkey-label">${hkKeys(keys.map(shift))}</span>`
     : `<span class="app-hotkey-label">${keys.map(shift).join("+")}</span>`;
+  // The looks "d", "e" and "f" split the button: the chevron in a square of its own (HL_SPLIT).
+  const split = HL_SPLIT.includes(look);
+  const chevron = split ? `<span class="app-hotkey-arrow">${ICON.chevron(11)}</span>` : ICON.chevron(11);
   const select = `<span class="app-hotkey-picker ${open ? "is-open" : ""}">
-    <span class="app-hotkey-select ${look === "caps" ? "app-hotkey-keys" : `is-button is-${look}`}" title="${fr ? "Changer la touche" : "Change the key"}">${label}${ICON.chevron(11)}</span>
+    <span class="app-hotkey-select ${look === "caps" ? "app-hotkey-keys" : `is-button is-${look} ${split ? "is-split" : ""}`}" title="${fr ? "Changer la touche" : "Change the key"}">${label}${chevron}</span>
     ${hlList(keys, fr, look)}</span>`;
   const button = offer ? `<span class="app-hotkey-offer"><span class="pill">${fr ? "Utiliser" : "Use"} ${offer.map(shift).join("+")}</span></span>` : "";
   let html = hkWin({ keys, note, warn }).replace(/<span class="app-hotkey-keys [^"]*" title="Change the key">[\s\S]*?<\/span><\/div>/,
@@ -100,6 +104,23 @@ SECTIONS.unshift(["Hotkey list look (14c3b2): a white button like Use Ctrl+G, it
   ["C · open", hlWin({ look: "c", open: true })],
   ["C · in French, a key captured by Autre…", hlWin({ look: "c", keys: ["Ctrl", "Shift", "D"], fr: true, note: "Copie l'objet sous le curseur et affiche son prix par-dessus le jeu." })],
   ["Before · the key caps and their chevron", hlWin()],
+]]);
+
+// Section Hotkey button split (14c3b2): the owner's request on 2026-11-03, after the three tries above: the
+// chevron set apart from the key by a square of its own, of another background, maybe the two inverted. D, the key
+// white and the chevron on the dark of the controls; E, inverted, the key dark and the chevron white; F, two tones
+// of white, the chevron on a light gray.
+SECTIONS.unshift(["Hotkey button split (14c3b2): the chevron in a square of its own, three tries", [
+  ["D · the key white, the chevron on dark", hlWin({ look: "d" })],
+  ["D · open", hlWin({ look: "d", open: true })],
+  ["D · key taken, with Use Ctrl+G", hlWin({ look: "d", note: HK_TAKEN, warn: true, offer: ["Ctrl", "G"] })],
+  ["E · inverted: the key dark, the chevron on white", hlWin({ look: "e" })],
+  ["E · open", hlWin({ look: "e", open: true })],
+  ["E · key taken, with Use Ctrl+G", hlWin({ look: "e", note: HK_TAKEN, warn: true, offer: ["Ctrl", "G"] })],
+  ["F · two whites: the chevron on light gray", hlWin({ look: "f" })],
+  ["F · open", hlWin({ look: "f", open: true })],
+  ["F · key taken, with Use Ctrl+G", hlWin({ look: "f", note: HK_TAKEN, warn: true, offer: ["Ctrl", "G"] })],
+  ["Before · A, one white button", hlWin({ look: "a" })],
 ]]);
 
 // The list works: the keys open and close it, a key chooses it; a click elsewhere or Esc closes it.
