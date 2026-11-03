@@ -76,3 +76,30 @@
 .app-tip .app-hotkey-columns + .app-hotkey-tip-title { margin-top: 10px; }
 .app-tip .app-hotkey-dots { display: inline; margin: 0 2px; color: var(--weak); }
 .app-hotkey-help:has(.app-hotkey-columns) .app-tip { width: 210px; }
+/* The keys as a list (14c3b2): a chevron after them, pointing right like the one of the league, turned down
+   while the list is open; the list under them, on the right, with the shadow and the opacity of the league list;
+   each shortcut as key caps, the chosen one checked and with the lighter background of the hover, "Other…" last
+   under a line of its own, so that its row is as high as the others. */
+.app-hotkey-picker { position: relative; }
+.app-hotkey-select .ico { margin-left: 2px; color: var(--faint); transition: transform .15s ease; }
+.app-hotkey-picker.is-open .app-hotkey-select .ico { transform: rotate(90deg); }
+.app-hotkey-picker.is-open .app-hotkey-select .key { border-color: var(--weak); }
+.app-hotkey-list {
+  position: absolute; z-index: 2; top: calc(100% + 4px); right: 0; min-width: 200px; padding: 4px 0;
+  border-radius: 3px; background: rgba(28, 32, 38, var(--menu-alpha)); box-shadow: 0 10px 30px rgba(0, 0, 0, .6);
+  opacity: 0; transform: translateY(-4px); pointer-events: none; transition: opacity .15s ease, transform .15s ease;
+}
+.app-hotkey-picker.is-open .app-hotkey-list { opacity: 1; transform: none; pointer-events: auto; }
+@media (prefers-reduced-motion: reduce) { .app-hotkey-select .ico, .app-hotkey-list { transition: none; } }
+.app-hotkey-option { display: flex; align-items: center; gap: 8px; height: 28px; padding: 0 10px 0 8px; font-size: 12.5px; color: var(--text); cursor: pointer; }
+.app-hotkey-option:hover, .app-hotkey-option.is-chosen { background: rgba(255, 255, 255, .06); }
+.app-hotkey-option .app-hotkey-chip .key { color: var(--text); }
+.app-hotkey-check { width: 12px; display: grid; place-items: center; color: var(--accent); }
+.app-hotkey-default { margin-left: auto; color: var(--faint); font-size: 11.5px; }
+.app-hotkey-separator { height: 1px; margin: 4px 0; background: var(--control-line); }
+.app-hotkey-option.is-other .app-hotkey-chip { margin-left: auto; }
+.win:has(.app-hotkey-picker.is-open) { overflow: visible; }
+/* The free key offered under the warning of the key taken, a click grabs it at once. */
+.app-hotkey-offer { display: flex; margin-top: 2px; }
+.app-hotkey-offer .pill { background: var(--accent); color: var(--on-accent, var(--bg-a)); cursor: pointer; font-weight: 600; }
+.app-hotkey-offer.is-centered { justify-content: center; margin-top: 10px; }
