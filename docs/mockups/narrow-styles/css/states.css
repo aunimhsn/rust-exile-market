@@ -85,16 +85,20 @@
 .app-hotkey-picker.is-open .app-hotkey-select .ico { transform: rotate(90deg); }
 .app-hotkey-picker.is-open .app-hotkey-select .key { border-color: var(--weak); }
 .app-hotkey-list {
-  position: absolute; z-index: 2; top: calc(100% + 4px); right: 0; min-width: 200px; padding: 4px 0;
+  position: absolute; z-index: 2; top: calc(100% + 4px); right: 0; width: max-content; min-width: 200px; padding: 4px 0;
   border-radius: 3px; background: rgba(28, 32, 38, var(--menu-alpha)); box-shadow: 0 10px 30px rgba(0, 0, 0, .6);
   opacity: 0; transform: translateY(-4px); pointer-events: none; transition: opacity .15s ease, transform .15s ease;
 }
 .app-hotkey-picker.is-open .app-hotkey-list { opacity: 1; transform: none; pointer-events: auto; }
 @media (prefers-reduced-motion: reduce) { .app-hotkey-select .ico, .app-hotkey-list { transition: none; } }
-.app-hotkey-option { display: flex; align-items: center; gap: 8px; height: 28px; padding: 0 10px 0 8px; font-size: 12.5px; color: var(--text); cursor: pointer; }
+/* The rows never wrap nor shrink: the list grows with its longest row ("Autre… Ctrl+Maj+D" in French), so that
+   the check stays centered on every row whatever the metrics of the font. */
+.app-hotkey-option { display: flex; align-items: center; gap: 8px; height: 28px; padding: 0 10px 0 8px; font-size: 12.5px; color: var(--text); white-space: nowrap; cursor: pointer; }
+.app-hotkey-option > * { flex: none; }
 .app-hotkey-option:hover, .app-hotkey-option.is-chosen { background: rgba(255, 255, 255, .06); }
 .app-hotkey-option .app-hotkey-chip .key { color: var(--text); }
-.app-hotkey-check { width: 12px; display: grid; place-items: center; color: var(--accent); }
+.app-hotkey-check { width: 12px; height: 12px; display: grid; place-items: center; color: var(--accent); }
+.app-hotkey-check .ico { display: block; }
 .app-hotkey-default { margin-left: auto; color: var(--faint); font-size: 11.5px; }
 .app-hotkey-separator { height: 1px; margin: 4px 0; background: var(--control-line); }
 .app-hotkey-option.is-other .app-hotkey-chip { margin-left: auto; }
