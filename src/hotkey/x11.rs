@@ -14,7 +14,7 @@ use x11rb::protocol::xproto::{
 use x11rb::protocol::xtest::{self, ConnectionExt as _};
 use x11rb::rust_connection::RustConnection;
 
-use super::grab::Active;
+use super::grab::{Active, GAME_TITLE};
 use super::{Key, copy_keys, send_all};
 use crate::overlay::{Point, ScreenRect, Target};
 use crate::x11::{self as shared, Atoms, Result};
@@ -29,11 +29,6 @@ const KEY_DELAY_MS: u32 = 12;
 /// The class of the game run by Steam through Proton (`WM_CLASS`, its instance and class names
 /// alike), logged by step 14a1 in the owner's game on 2026-11-01.
 const GAME_CLASS: &[u8] = b"steam_app_2694490";
-/// The exact title of the window of the game, for the standalone client run by Wine, whose class
-/// is unknown: the title Exiled Exchange 2 looks for (`attachByTitle`). Never a part of the
-/// title: the page of a browser about the game is titled `Path of Exile 2 - …`.
-const GAME_TITLE: &[u8] = b"Path of Exile 2";
-
 /// At the release of D: while it is held, the X server gives every key to the application that
 /// listens to the hotkey, so that a copy sent then wouldn't reach the game.
 pub const SENT_AT: HotKeyState = HotKeyState::Released;
@@ -332,7 +327,7 @@ fn title(net_wm_name: Vec<u8>, wm_name: impl FnOnce() -> Result<Vec<u8>>) -> Res
 
 /// Whether a window title is the title of the game, exactly.
 fn is_game_title(title: &[u8]) -> bool {
-    title == GAME_TITLE
+    title == GAME_TITLE.as_bytes()
 }
 
 /// Whether a `WM_CLASS`, an instance name then a class name each ended by a null byte, is the

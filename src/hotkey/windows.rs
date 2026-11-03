@@ -1,14 +1,29 @@
 //! The copy sent to the game under Windows: C pressed through `SendInput`, as the player would
-//! press it, in the window that has the focus, with Ctrl when the player already released it.
+//! press it, in the window that has the focus, with Ctrl when the player already released it;
+//! and the foreground window followed, so that the hotkey is registered only while it is the
+//! game.
 
+use std::collections::HashSet;
 use std::error::Error;
+use std::io;
+use std::sync::mpsc::{self, Receiver};
+use std::thread;
+use std::time::Duration;
 
 use enigo::{Direction, Enigo, Keyboard as _, Settings};
 use global_hotkey::HotKeyState;
 use winsafe::{HWND, co};
 
+use super::grab::{Foreground, is_game_window};
 use super::{Key, copy_keys_after_focus, send_all};
 use crate::overlay::{KeyboardBack, Point, ScreenRect, Target};
+
+/// How often the foreground window is read. Windows tells its changes only to a hook
+/// (`SetWinEventHook`), whose callback can't be written without `unsafe`: read 20 times a second
+/// instead, a few microseconds each, so that the hotkey is registered within 50 ms of the game
+/// coming to the front (150 ms while the main window is minimized, which eframe updates ten times
+/// a second then).
+const FOREGROUND_POLL: Duration = Duration::from_millis(50);
 
 /// At the press of D: `RegisterHotKey` takes D only, so that the keys sent then reach the game,
 /// and Ctrl is held, since the hotkey needs it. The press reaches the application as a message of
@@ -122,6 +137,78 @@ impl CopySender {
             Key::Down(key) => self.keyboard.key(key, Direction::Press),
             Key::Up(key) => self.keyboard.key(key, Direction::Release),
         })
+    }
+}
+
+/// Follows the foreground window on a thread of its own, and sends what it is: at the start, then
+/// at each change, calling `wake` after each, so that the thread of the window registers or
+/// unregisters the hotkey (Windows allows it only there). The thread ends at the first change
+/// after the receiver is dropped.
+///
+/// # Errors
+///
+/// When the thread can't start.
+pub fn follow_foreground(wake: impl Fn() + Send + 'static) -> io::Result<Receiver<Foreground>> {
+    let (sender, receiver) = mpsc::channel();
+    thread::Builder::new()
+        .name("game-window".to_owned())
+        .spawn(move || {
+            let mut classes_told = ClassesTold::default();
+            let mut last = None;
+            loop {
+                let foreground = foreground(&mut classes_told);
+                if last != Some(foreground) {
+                    if sender.send(foreground).is_err() {
+                        return;
+                    }
+                    wake();
+                    last = Some(foreground);
+                }
+                thread::sleep(FOREGROUND_POLL);
+            }
+        })?;
+    Ok(receiver)
+}
+
+/// The classes of the windows already written to the log, each once.
+#[derive(Default)]
+struct ClassesTold {
+    /// Of the windows taken for the game.
+    games: HashSet<String>,
+    /// Of the other windows.
+    others: HashSet<String>,
+}
+
+/// What the foreground window is: the game by its exact title and its class
+/// ([`is_game_window`]), read for the windows of the other applications only (the title of a
+/// window of this process is read through a message to the thread of the window, which this one
+/// would wait for). The class of each window is written to the log the first time it is in
+/// front, never its title (the page of a browser): of the game, so that the window taken for it
+/// can be checked, and of another window, so that a client of the game titled otherwise can be
+/// found there.
+fn foreground(classes_told: &mut ClassesTold) -> Foreground {
+    let Some(window) = HWND::GetForegroundWindow() else {
+        return Foreground::NoWindow;
+    };
+    if crate::overlay::is_ours(&window) {
+        return Foreground::Ours;
+    }
+    let class = window
+        .GetClassName()
+        .unwrap_or_else(|error| format!("unknown ({error})"));
+    let title = window.GetWindowText().unwrap_or_default();
+    if is_game_window(&title, &class) {
+        if !classes_told.games.contains(&class) {
+            log::info!("The foreground window, of class {class}, is the game");
+            classes_told.games.insert(class);
+        }
+        Foreground::Game
+    } else {
+        if !classes_told.others.contains(&class) {
+            log::info!("The foreground window, of class {class}, isn't the game");
+            classes_told.others.insert(class);
+        }
+        Foreground::Other
     }
 }
 

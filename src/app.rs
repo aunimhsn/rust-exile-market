@@ -595,6 +595,8 @@ impl App for ExileMarketApp {
             ctx.request_repaint_after(left);
         }
         self.clicks.watch(self.overlay.shown().is_some());
+        let main_focused = ctx.input(|input| input.viewport().focused.unwrap_or(false));
+        self.hotkey.follow_game(main_focused);
         let main_visible = ctx.input(|input| input.viewport().visible());
         if paint_while_hidden(self.overlay.shown().is_some(), main_visible) {
             ctx.send_viewport_cmd(ViewportCommand::RequestPaintWhileHidden);

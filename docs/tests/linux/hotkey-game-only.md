@@ -13,7 +13,7 @@ tail -f ~/.local/state/exile-market/exile-market.log
 ## Avant
 
 1. Ferme Exile Market, Exiled Exchange 2 et le jeu.
-2. Lance, dans un terminal :
+2. Lance, dans Konsole (pas dans le terminal de VS Code : son bac à sable Flatpak n'a pas X11, la fenêtre ne s'ouvre pas) :
 
    ```
    cargo run --release

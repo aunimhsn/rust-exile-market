@@ -32,7 +32,7 @@ pub use self::game_focus::{Frame, KeyboardBack};
 #[cfg(target_os = "linux")]
 pub use self::keyboard::KeyboardFocus;
 #[cfg(target_os = "windows")]
-pub use self::windows::{KeyboardFocus, give_keyboard_back};
+pub use self::windows::{KeyboardFocus, give_keyboard_back, is_ours};
 
 use std::time::{Duration, Instant};
 
