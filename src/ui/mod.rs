@@ -5,6 +5,7 @@
 
 mod empty_state;
 mod fonts;
+mod hotkey_list;
 mod images;
 mod item_block;
 mod item_stats;
@@ -32,7 +33,7 @@ pub use new_league_bubble::{BubbleAction, NewLeagueBubble};
 pub use offers_block::{OffersAction, OffersBlock};
 pub use price_block::PriceBlock;
 pub use resize_edges::ResizeEdges;
-pub use settings_panel::SettingsPanel;
+pub use settings_panel::{SettingsAction, SettingsPanel};
 pub use status_bar::{StatusBar, TradeStatus};
 pub use title_bar::{TitleBar, TitleBarAction};
 pub use unreadable_item::UnreadableItem;

@@ -443,10 +443,16 @@ language-french = Français
 settings-always-on-top = Toujours au premier plan
 # Libellé au-dessus du raccourci d'estimation du prix.
 settings-hotkey = Raccourci
-# Le raccourci activé ou non, ses touches dessinées après.
+# Le raccourci activé ou non, ses touches après lui, dans un bouton qui ouvre la liste des touches.
 settings-hotkey-price-check = Estimer le prix en jeu
 settings-hotkey-help = Copie l'objet sous le curseur et affiche son prix par-dessus le jeu.
-# La touche du raccourci prise par une autre application, dans les réglages. $hotkey ses touches (Ctrl+D), $copy les touches de la copie du jeu (Ctrl+C), toutes deux en gras.
-hotkey-taken-settings = { $hotkey } est déjà pris par une autre application. Choisissez une autre touche, ou copiez avec { $copy }.
+# L'infobulle du bouton des touches du raccourci.
+settings-hotkey-change = Changer la touche
+# À droite des touches par défaut, dans la liste des touches du raccourci.
+settings-hotkey-default = Par défaut
+# La touche du raccourci prise par une autre application, dans les réglages : « hotkey-taken » d'abord, puis cette phrase sur une ligne à elle. $copy les touches de la copie du jeu (Ctrl+C), en gras.
+hotkey-taken-settings = Choisissez une autre touche, ou copiez avec { $copy }.
+# Le nom de la touche Maj, dans les touches du raccourci (Ctrl+Maj+D), comme sur les claviers français et dans les textes de Windows.
+key-shift = Maj
 # Demandée par Grinding Gear Games pour les outils de la communauté.
 disclaimer = Ce produit n'est ni affilié à Grinding Gear Games ni approuvé par ce studio, de quelque manière que ce soit.

@@ -120,17 +120,14 @@ impl<'a> EmptyState<'a> {
     /// The key of the hotkey taken by another application, in the color of the warnings, its
     /// keys in bold, then on a line of its own where to choose another.
     fn taken(&self, ui: &mut Ui) {
-        let hotkey = keys::joined(&self.keys.keys());
-        let regular = TextFormat::simple(text::note(), color::WARNING);
-        let bold = TextFormat::simple(text::note_strong(), color::WARNING);
-        let mut job = keys::emphasized(
+        let hotkey = keys::joined(&keys::named(&self.keys.keys(), self.i18n));
+        let mut job = keys::two_lines(
             &self.i18n.hotkey_taken(&hotkey),
+            &self.i18n.text(Message::HotkeyTakenChoose),
             &[&hotkey],
-            &regular,
-            &bold,
+            &TextFormat::simple(text::note(), color::WARNING),
+            &TextFormat::simple(text::note_strong(), color::WARNING),
         );
-        job.append("\n", 0.0, regular.clone());
-        job.append(&self.i18n.text(Message::HotkeyTakenChoose), 0.0, regular);
         job.halign = egui::Align::Center;
         ui.scope(|ui| {
             ui.set_max_width(NOTE_WIDTH);
@@ -194,7 +191,8 @@ impl<'a> EmptyState<'a> {
     /// copies, otherwise the copy of the game (macOS, which has no hotkey; the hotkey turned off
     /// or its key taken).
     fn keys(&self, ui: &mut Ui) {
-        let pressed = invited_keys(self.hotkey, self.keys);
+        let pressed = keys::named(&invited_keys(self.hotkey, self.keys), self.i18n);
+        let pressed: Vec<&str> = pressed.iter().map(String::as_str).collect();
         let caps = Caps {
             font: text::keys(),
             height: KEY_HEIGHT,

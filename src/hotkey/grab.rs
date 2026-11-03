@@ -107,7 +107,7 @@ pub struct Grab {
     /// Whether the log already said the key is listened to, so that it doesn't say it at each
     /// activation of the game.
     told: bool,
-    /// The keys, for the log.
+    /// The keys grabbed, or to grab.
     keys: Shortcut,
 }
 
@@ -134,6 +134,40 @@ impl Grab {
     /// by another application, the likeliest case.
     pub fn taken(&self) -> bool {
         self.on && self.failure.is_some()
+    }
+
+    /// The keys grabbed, or to grab.
+    pub fn keys(&self) -> Shortcut {
+        self.keys
+    }
+
+    /// Replaces the keys with `keys`, chosen by the player: the previous ones released at once with
+    /// `release` when they are held, then the new ones grabbed with `grab` as the last active
+    /// window wants them, at once while the game is the active window. Whether the new keys are
+    /// taken is only known once they are tried: the failure of the previous ones is forgotten.
+    /// When the previous keys can't be released, they stay, tried again at the next change; the
+    /// new keys wait for the next launch, which reads them from the settings.
+    pub fn change_keys<E: Display>(
+        &mut self,
+        keys: Shortcut,
+        grab: impl FnOnce() -> Result<(), E>,
+        release: impl FnOnce() -> Result<(), E>,
+    ) -> Change {
+        if keys == self.keys {
+            return Change::Nothing;
+        }
+        if self.held && self.release(release) == Change::Failed {
+            return Change::Failed;
+        }
+        log::info!("Price-check hotkey changed from {} to {keys}", self.keys);
+        self.keys = keys;
+        self.failure = None;
+        self.told = false;
+        match self.last {
+            // Not held any more: `follow` releases nothing.
+            Some(active) if self.on => self.follow(active, grab, || Ok::<(), E>(())),
+            _ => Change::Nothing,
+        }
     }
 
     /// Turns the hotkey on or off, as the player sets it: off, the key is released at once (a
@@ -313,6 +347,22 @@ impl ForegroundFollow {
     /// Whether the key of the hotkey is taken ([`Grab::taken`]).
     pub fn taken(&self) -> bool {
         self.grab.taken()
+    }
+
+    /// The keys grabbed, or to grab.
+    pub fn keys(&self) -> Shortcut {
+        self.grab.keys()
+    }
+
+    /// Replaces the keys ([`Grab::change_keys`]): `grab` grabs the new ones, `release` releases
+    /// the previous ones.
+    pub fn change_keys<E: Display>(
+        &mut self,
+        keys: Shortcut,
+        grab: impl FnOnce() -> Result<(), E>,
+        release: impl FnOnce() -> Result<(), E>,
+    ) -> Change {
+        self.grab.change_keys(keys, grab, release)
     }
 
     /// Turns the hotkey on or off ([`Grab::turn`]).
@@ -816,5 +866,151 @@ mod tests {
             follow(&mut grab, Active::Other, Ok(())),
             (Change::Released, 0, 1)
         );
+    }
+
+    /// What replacing the keys with `keys` does, the grab of the new ones giving `on_grab` and the
+    /// release of the previous ones `on_release`.
+    fn change(
+        grab: &mut Grab,
+        keys: &str,
+        on_grab: Result<(), &str>,
+        on_release: Result<(), &str>,
+    ) -> (Change, u32, u32) {
+        let (mut grabs, mut releases) = (0, 0);
+        let change = grab.change_keys(
+            keys.parse().unwrap(),
+            || {
+                grabs += 1;
+                on_grab
+            },
+            || {
+                releases += 1;
+                on_release
+            },
+        );
+        (change, grabs, releases)
+    }
+
+    #[test]
+    fn new_keys_in_the_game_replace_the_previous_ones_at_once() {
+        let mut grab = Grab::default();
+        follow(&mut grab, Active::Game, Ok(()));
+
+        assert_eq!(
+            change(&mut grab, "Ctrl+G", Ok(()), Ok(())),
+            (Change::Grabbed, 1, 1)
+        );
+        assert_eq!(grab.keys().to_string(), "Ctrl+G");
+        // Released with the new keys when another window becomes the active window.
+        assert_eq!(
+            follow(&mut grab, Active::Other, Ok(())),
+            (Change::Released, 0, 1)
+        );
+    }
+
+    #[test]
+    fn new_keys_chosen_in_another_window_wait_for_the_game() {
+        let mut grab = Grab::default();
+        follow(&mut grab, Active::Game, Ok(()));
+        follow(&mut grab, Active::Other, Ok(()));
+
+        assert_eq!(
+            change(&mut grab, "F3", Ok(()), Ok(())),
+            (Change::Nothing, 0, 0)
+        );
+        assert_eq!(
+            follow(&mut grab, Active::Game, Ok(())),
+            (Change::Grabbed, 1, 0)
+        );
+    }
+
+    #[test]
+    fn the_same_keys_change_nothing() {
+        let mut grab = Grab::default();
+        follow(&mut grab, Active::Game, Ok(()));
+
+        assert_eq!(
+            change(&mut grab, "Ctrl+D", Ok(()), Ok(())),
+            (Change::Nothing, 0, 0)
+        );
+    }
+
+    #[test]
+    fn new_keys_are_no_longer_taken_until_they_are_tried() {
+        let mut grab = Grab::default();
+        follow(&mut grab, Active::Game, Err("taken"));
+        follow(&mut grab, Active::Other, Ok(()));
+        assert!(grab.taken());
+
+        change(&mut grab, "Alt+G", Ok(()), Ok(()));
+        assert!(!grab.taken());
+        assert_eq!(
+            follow(&mut grab, Active::Game, Err("taken")),
+            (Change::Failed, 1, 0)
+        );
+        assert!(grab.taken());
+    }
+
+    #[test]
+    fn new_keys_taken_in_the_game_say_so_at_once() {
+        let mut grab = Grab::default();
+        follow(&mut grab, Active::Game, Err("taken"));
+
+        assert_eq!(
+            change(&mut grab, "Ctrl+G", Err("taken"), Ok(())),
+            (Change::Failed, 1, 0)
+        );
+        assert!(grab.taken());
+    }
+
+    #[test]
+    fn new_keys_of_a_hotkey_off_wait_for_it_to_be_turned_on() {
+        let mut grab = Grab::new(false, Shortcut::default());
+        follow(&mut grab, Active::Game, Ok(()));
+
+        assert_eq!(
+            change(&mut grab, "F4", Ok(()), Ok(())),
+            (Change::Nothing, 0, 0)
+        );
+        assert_eq!(turn(&mut grab, true, Ok(())), (Change::Grabbed, 1, 0));
+        assert_eq!(grab.keys().to_string(), "F4");
+    }
+
+    #[test]
+    fn previous_keys_that_cant_be_released_stay() {
+        let mut grab = Grab::default();
+        follow(&mut grab, Active::Game, Ok(()));
+
+        assert_eq!(
+            change(&mut grab, "Ctrl+G", Ok(()), Err("lost")),
+            (Change::Failed, 0, 1)
+        );
+        assert_eq!(grab.keys().to_string(), "Ctrl+D");
+        // Released at the next change, as any failed release.
+        assert_eq!(
+            follow(&mut grab, Active::Other, Ok(())),
+            (Change::Released, 0, 1)
+        );
+    }
+
+    #[test]
+    fn new_keys_with_the_game_in_front_on_windows_replace_the_previous_ones_at_once() {
+        let mut follow = ForegroundFollow::default();
+        follow_foreground(&mut follow, Foreground::Game, false, Ok(()));
+
+        let (mut grabs, mut releases) = (0, 0);
+        let change = follow.change_keys(
+            "Alt+G".parse().unwrap(),
+            || {
+                grabs += 1;
+                Ok::<(), &str>(())
+            },
+            || {
+                releases += 1;
+                Ok(())
+            },
+        );
+        assert_eq!((change, grabs, releases), (Change::Grabbed, 1, 1));
+        assert_eq!(follow.keys().to_string(), "Alt+G");
     }
 }

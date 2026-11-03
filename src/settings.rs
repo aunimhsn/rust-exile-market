@@ -114,6 +114,8 @@ pub enum SettingChange {
     AlwaysOnTop(bool),
     /// The price-check hotkey turned on or off.
     HotkeyOn(bool),
+    /// The keys of the price-check hotkey chosen.
+    HotkeyKeys(Shortcut),
 }
 
 /// The settings of the player. A missing value takes its default, so that a file written by
@@ -195,6 +197,7 @@ impl Settings {
                 mem::replace(&mut self.always_on_top, always_on_top) != always_on_top
             }
             SettingChange::HotkeyOn(on) => mem::replace(&mut self.hotkey.on, on) != on,
+            SettingChange::HotkeyKeys(keys) => mem::replace(&mut self.hotkey.keys, keys) != keys,
         }
     }
 }
@@ -332,6 +335,19 @@ mod tests {
         assert!(settings.apply(SettingChange::HotkeyOn(false)));
         assert!(!settings.apply(SettingChange::HotkeyOn(false)));
         assert!(!settings.hotkey().on);
+    }
+
+    #[test]
+    fn the_keys_chosen_are_kept_and_saved() {
+        let directory = TestDirectory::new("hotkey-keys-chosen");
+        let mut settings = Settings::default();
+        let keys = Shortcut::CHOICES[2];
+
+        assert!(settings.apply(SettingChange::HotkeyKeys(keys)));
+        assert!(!settings.apply(SettingChange::HotkeyKeys(keys)));
+        directory.file().save(&settings);
+
+        assert_eq!(directory.file().load().hotkey().keys.to_string(), "Alt+G");
     }
 
     #[test]
