@@ -1,6 +1,8 @@
 //! The application: the session, the settings, the clipboard watching, the price-check
 //! hotkey and the price database, and the window built from the components of [`crate::ui`].
 
+mod open_lists;
+
 use std::hash::{BuildHasher, RandomState};
 use std::time::{Duration, Instant, SystemTime};
 
@@ -10,6 +12,7 @@ use egui::{
     X11WindowType, pos2, vec2,
 };
 
+use self::open_lists::{OpenList, OpenLists};
 use crate::clipboard::{ClipboardEvent, ClipboardWatch};
 use crate::estimate::{self, Estimate, Reference, Worth};
 use crate::filters::{Filters, Window};
@@ -31,18 +34,9 @@ use crate::trade::search::{OfferSearch, Search};
 use crate::ui::{
     self, BubbleAction, EmptyState, ItemBlock, ItemBlockAction, LeagueList, LeagueListAction,
     NewLeagueBubble, OffersAction, OffersBlock, PriceBlock, PriceDownload, ResizeEdges,
-    SettingsAction, SettingsPanel, Stats, StatusBar, TitleBar, TitleBarAction, TradeStatus,
-    UnreadableItem, WarningBand,
+    SettingsPanel, Stats, StatusBar, TitleBar, TitleBarAction, TradeStatus, UnreadableItem,
+    WarningBand,
 };
-
-/// A list open over the view: one at a time, so that opening one closes the other.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum OpenList {
-    /// The leagues, under the title bar.
-    Leagues,
-    /// The keys of the hotkey, in the settings.
-    Keys,
-}
 
 /// What the window shows under the title bar.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -77,7 +71,7 @@ pub struct ExileMarketApp {
     settings_file: SettingsFile,
     view: View,
     /// The list open over the view, if any.
-    open_list: Option<OpenList>,
+    lists: OpenLists,
     clipboard: ClipboardWatch,
     /// Ctrl+D copies the item in the game: the copy then arrives through the clipboard, and
     /// opens the window over the game.
@@ -147,7 +141,7 @@ impl ExileMarketApp {
             settings,
             settings_file,
             view: View::Item,
-            open_list: None,
+            lists: OpenLists::default(),
             clipboard,
             hotkey,
             overlay: Overlay::default(),
@@ -167,32 +161,21 @@ impl ExileMarketApp {
         }
     }
 
-    /// Whether `list` is open over the view.
-    fn is_open(&self, list: OpenList) -> bool {
-        self.open_list == Some(list)
-    }
-
-    /// Closes `list`, when it is the one open.
-    fn close(&mut self, list: OpenList) {
-        if self.is_open(list) {
-            self.open_list = None;
-        }
-    }
-
     fn act_on(&mut self, ctx: &Context, action: TitleBarAction) {
         match action {
             TitleBarAction::Move => ctx.send_viewport_cmd(ViewportCommand::StartDrag),
             TitleBarAction::Home => {
                 self.view = View::Item;
-                self.open_list = None;
+                self.lists.close_all();
             }
-            TitleBarAction::Leagues => {
-                let open = !self.is_open(OpenList::Leagues) && self.session.leagues().is_some();
-                self.open_list = open.then_some(OpenList::Leagues);
+            TitleBarAction::Leagues if self.session.leagues().is_some() => {
+                self.lists.toggle(OpenList::Leagues);
             }
+            // Still a click outside the list of the keys.
+            TitleBarAction::Leagues => self.lists.close_all(),
             TitleBarAction::Settings => {
                 self.view = self.view.toggled();
-                self.open_list = None;
+                self.lists.close_all();
             }
             TitleBarAction::Minimize => ctx.send_viewport_cmd(ViewportCommand::Minimized(true)),
             TitleBarAction::Close => ctx.send_viewport_cmd(ViewportCommand::Close),
@@ -202,7 +185,7 @@ impl ExileMarketApp {
     /// Shows `league`, chosen by the player, and keeps it in the settings. Choosing answers
     /// the bubble of a new league too: it doesn't come back for that league.
     fn choose_league(&mut self, league: League) {
-        self.close(OpenList::Leagues);
+        self.lists.close(OpenList::Leagues);
         let mut changed = self.settings.set_league(&league);
         if let Some(offered) = self.session.close_new_league() {
             changed |= self.settings.close_new_league(&offered);
@@ -238,19 +221,19 @@ impl ExileMarketApp {
     fn league_overlays(&mut self, ctx: &Context, title_bar_action: Option<TitleBarAction>) {
         if let Some(leagues) = self.session.leagues() {
             let list = LeagueList::new(leagues.rows(), self.session.league(), &self.i18n);
-            match list.show(ctx, self.is_open(OpenList::Leagues)) {
+            match list.show(ctx, self.lists.is_open(OpenList::Leagues)) {
                 Some(LeagueListAction::Choose(league)) => self.choose_league(league),
                 // The click on the league block that opened the list isn't outside it.
                 Some(LeagueListAction::Close)
                     if title_bar_action != Some(TitleBarAction::Leagues) =>
                 {
-                    self.close(OpenList::Leagues);
+                    self.lists.close(OpenList::Leagues);
                 }
                 Some(LeagueListAction::Close) | None => {}
             }
         }
         // Once the list is gone: the bubble would show through it while it fades out.
-        if LeagueList::visibility(ctx, self.is_open(OpenList::Leagues)) > 0.0
+        if LeagueList::visibility(ctx, self.lists.is_open(OpenList::Leagues)) > 0.0
             || self.view != View::Item
         {
             return;
@@ -658,12 +641,11 @@ impl App for ExileMarketApp {
             }
         });
         // Escape closes what is on top: a list, then the settings.
-        if ctx.input(|input| input.key_pressed(Key::Escape)) {
-            if self.open_list.is_some() {
-                self.open_list = None;
-            } else if self.view == View::Settings {
-                self.view = View::Item;
-            }
+        if ctx.input(|input| input.key_pressed(Key::Escape))
+            && !self.lists.escape()
+            && self.view == View::Settings
+        {
+            self.view = View::Item;
         }
     }
 
@@ -676,7 +658,7 @@ impl App for ExileMarketApp {
         let action = TitleBar::new(self.session.league(), &self.i18n)
             .leagues_known(self.session.leagues().is_some())
             .settings_open(self.view == View::Settings)
-            .leagues_open(self.is_open(OpenList::Leagues))
+            .leagues_open(self.lists.is_open(OpenList::Leagues))
             .show(ui);
         if let Some(action) = action {
             self.act_on(&ctx, action);
@@ -730,29 +712,14 @@ impl App for ExileMarketApp {
             }
             View::Settings => {
                 let action = SettingsPanel::new(&self.settings, &self.i18n, self.hotkey.state())
-                    .keys_open(self.is_open(OpenList::Keys))
+                    .keys_open(self.lists.is_open(OpenList::Keys))
                     .show(ui);
-                match action {
-                    Some(SettingsAction::Change(change)) => {
-                        // Keys chosen close their list.
-                        if matches!(change, SettingChange::HotkeyKeys(_)) {
-                            self.close(OpenList::Keys);
-                        }
-                        self.change_setting(ui.ctx(), change);
-                    }
-                    Some(SettingsAction::ToggleKeys) => {
-                        let open = !self.is_open(OpenList::Keys);
-                        self.open_list = open.then_some(OpenList::Keys);
-                    }
-                    Some(SettingsAction::CloseKeys) => self.close(OpenList::Keys),
-                    None => {}
+                if let Some(change) = action.and_then(|action| self.lists.settings(action)) {
+                    self.change_setting(ui.ctx(), change);
                 }
             }
         }
-        // The list of the keys goes with the settings, so that it is closed when they open again.
-        if self.view != View::Settings {
-            self.close(OpenList::Keys);
-        }
+        self.lists.follow_view(self.view == View::Settings);
         // No field of the main window edited, or its field no longer drawn (the settings
         // opened): its number settled, again when leaving it settled it already.
         if !ctx.text_edit_focused() {

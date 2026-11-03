@@ -81,6 +81,7 @@ impl<'a> SettingsPanel<'a> {
                     None
                 };
                 self.disclaimer(ui);
+                // A change wins over the click outside the list of the keys, which it closes too.
                 language
                     .or(always_on_top)
                     .map(SettingsAction::Change)
@@ -190,7 +191,8 @@ impl<'a> SettingsPanel<'a> {
 
 /// What the player did with the hotkey in a frame: the checkbox `turned` on or off, the button of
 /// the keys `toggled`, and what they did with the `list`. The click on the button that closes the
-/// list is outside it too: the button wins, so that the list doesn't close then open again.
+/// list is outside it too: the button wins, so that the list doesn't close then open again. The
+/// checkbox wins over the click outside the list, which its change closes too.
 fn hotkey_action(
     turned: Option<bool>,
     toggled: bool,
@@ -241,5 +243,14 @@ mod tests {
             Some(SettingsAction::Change(SettingChange::HotkeyOn(false)))
         );
         assert_eq!(hotkey_action(None, false, None), None);
+    }
+
+    #[test]
+    fn the_checkbox_clicked_while_the_list_is_open_changes_the_setting() {
+        // A change of a setting closes the list too (`OpenLists::settings`).
+        assert_eq!(
+            hotkey_action(Some(false), false, Some(HotkeyListAction::Close)),
+            Some(SettingsAction::Change(SettingChange::HotkeyOn(false)))
+        );
     }
 }
