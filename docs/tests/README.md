@@ -3,7 +3,7 @@
 The step-by-step guides of the tests by hand, in the game, kept to be run again: before a release, after Path of Exile 2 1.0, after a change of the code they test. Each one is a blank template: its results are given in the conversation or in the pull request, never written here.
 
 - `linux/`: the tests of the owner, on Linux (Bazzite KDE).
-- `windows/`: the tests of the Windows tester, who downloads the archive of the release workflow of the pull request.
+- `windows/`: the tests of the Windows tester, who downloads the archive of the release workflow of the pull request. Not at hand step after step: they run every Windows guide at once before the first release (step 17 of `roadmap.md`).
 
 They may be written in French, the language of the testers (an exception to the English of the project, see `CLAUDE.md`).
 
