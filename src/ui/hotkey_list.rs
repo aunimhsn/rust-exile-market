@@ -578,8 +578,8 @@ mod tests {
     #[test]
     fn a_list_forgotten_open_doesnt_fade_out_and_starts_on_the_chosen_keys_again() {
         let window = Window::new();
-        window.frame(true, vec![]);
-        window.frame(true, vec![]);
+        // Opened from the keyboard: a row has it.
+        window.keys(&[]);
         // The chevron turned down, as the button draws it over an open list.
         window.ctx.animate_bool_with_time(chevron_id(), true, 0.0);
         forget(&window.ctx);
@@ -588,6 +588,9 @@ mod tests {
         let value = |id| window.ctx.animate_bool_with_time(id, true, f32::INFINITY);
         assert_eq!(value(shown_id()), 0.0);
         assert_eq!(value(chevron_id()), 0.0);
+        // Forgotten open: the keyboard doesn't go back to the button, which would stay lit.
+        window.frame(false, vec![]);
+        assert!(!window.button_focused());
         // Opened again: the keyboard on the chosen keys, Enter chooses them.
         assert_eq!(
             window.keys(&[Key::Enter]),

@@ -35,7 +35,8 @@ pub struct SettingsPanel<'a> {
     i18n: &'a Translator,
     hotkey: HotkeyState,
     /// The keys the hotkey holds, which the line of the key taken names: those of the settings,
-    /// unless the previous ones couldn't be released (until the next launch).
+    /// unless the previous ones couldn't be released (until another choice of keys or the next
+    /// launch).
     held: Shortcut,
     keys_open: bool,
 }
