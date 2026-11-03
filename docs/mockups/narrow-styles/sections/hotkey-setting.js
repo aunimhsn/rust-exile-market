@@ -17,10 +17,11 @@ const hkKeys = keys => keys.map(key => `<span class="key">${key}</span>`).join("
 const hkSettings = ({ on = true, keys = ["Ctrl", "D"], capture = false, note = "", warn = false, help = "" } = {}) => {
   const box = `<span class="check ${on ? "on" : ""}">${on ? ICON.check(11) : ""}</span>`;
   const keyCaps = capture
+    // Waiting for the keys: the colors of the text and of the background swapped, pulsing softly (the owner's
+    // choice on 2026-11-03, rather than a dashed edge).
     ? `<span class="app-hotkey-keys is-capturing" title="Esc: cancel">Press the keys…</span>`
     : `<span class="app-hotkey-keys ${on ? "" : "is-off"}" title="Change the key">${hkKeys(keys)}</span>`;
-  // `warn`: true in the color of the warnings, "refused" in red (the key not taken, the previous one kept).
-  const line = note ? `<span class="app-hotkey-note ${warn === "refused" ? "is-refused" : warn ? "warn" : ""}">${note}</span>` : "";
+  const line = note ? `<span class="app-hotkey-note ${warn ? "warn" : ""}">${note}</span>` : "";
   return `<div class="band b settings">
     <h3>Settings</h3>
     <div class="field"><span class="label">Language</span>
@@ -53,8 +54,8 @@ SECTIONS.unshift(["Hotkey key taken (14c3a): B chosen, a line in the empty windo
 ]]);
 SECTIONS.unshift(["Hotkey setting (14c3): on or off, and its key", [
   ["On, Ctrl + D by default: a click on the keys changes them", hkWin({ note: HK_HELP })],
-  ["Choosing the key (14c3b): the next keys pressed, Esc cancels", hkWin({ capture: true, note: "Hold Ctrl or Alt with a letter, a number or a function key. Esc: cancel." })],
-  ["A key refused (14c3b): the previous one stays", hkWin({ keys: ["Ctrl", "D"], note: "<b>Ctrl+C</b> copies the item already: choose another key.", warn: "refused" })],
+  ["Choosing the key (14c3b): the next keys pressed, Esc cancels", hkWin({ capture: true, note: "Hold Ctrl or Alt with a letter or a number, or press F2 to F11. Esc: cancel." })],
+  ["A key refused (14c3b): the previous one stays", hkWin({ keys: ["Ctrl", "D"], note: "<b>Ctrl+C</b> copies the item already: choose another key.", warn: true })],
   ["Another key chosen (14c3b)", hkWin({ keys: ["Alt", "D"], note: HK_HELP })],
   ["Off: the keys faint, Ctrl + D left to the game", hkWin({ on: false, note: HK_HELP })],
   ["Off, before the first item: Ctrl + C invited", win(topBar(), hkEmptyC, foot())],
@@ -85,14 +86,16 @@ const HK_TIPS = {
   // KDE): F1 shows the resources the game uses (accepted, with a warning); F2 to F11 do nothing (accepted alone,
   // the line of the function keys); Alt+F2 opens the search of KDE, which takes it before XWayland, so that the grab
   // succeeds and never hears it (refused); Alt+F4 closes the game (refused, no longer a warning). F12 is kept by
-  // Windows for its debugger (`RegisterHotKey`, to check in 14c3b): refused alone. Red for what is refused (the
-  // title of the tooltip, the line under a key refused), yellow for a warning (a risky key accepted, a key taken):
-  // the owner's choice on 2026-11-03, so that the player sees at once whether the key was taken.
+  // Windows for its debugger (`RegisterHotKey`, to check in 14c3b): refused alone. Then the owner's choice on
+  // 2026-11-03: the second column is the "Danger zone", in yellow, the keys accepted with a warning (Ctrl+V, Ctrl+F,
+  // Alt+F4, F1), the title matching what the application does with them; the keys that can't work (Ctrl+C,
+  // Alt+Tab, Alt+F2, the Windows key, F12 alone, a letter alone) leave the tooltip, rare, refused when chosen with
+  // a line in yellow too (red was tried and dropped: the owner keeps one color for every warning).
   c: `<span class="app-hotkey-columns">
       <span class="app-hotkey-column"><span class="app-hotkey-tip-title">Allowed</span>
         ${["Ctrl+D", "Ctrl+E", "Alt+Q", "Alt+2"].map(hkCaps).join("")}</span>
-      <span class="app-hotkey-column"><span class="app-hotkey-tip-title is-refused">Refused</span>
-        ${["Ctrl+C", "Alt+Tab", "Alt+F4", "Alt+F2"].map(hkCaps).join("")}</span>
+      <span class="app-hotkey-column"><span class="app-hotkey-tip-title is-danger">Danger zone</span>
+        ${["Ctrl+V", "Ctrl+F", "Alt+F4", "F1"].map(hkCaps).join("")}</span>
     </span>
     <span class="app-hotkey-tip-title">Function keys</span>
     <span class="app-hotkey-chips"><span class="app-hotkey-chip"><span class="key">F2</span><span class="app-hotkey-dots">…</span><span class="key">F11</span></span></span>`,
@@ -102,11 +105,11 @@ const hkLabel = help => `<span class="app-hotkey-label"><span class="label">Hotk
   <span class="app-hotkey-help is-hovered" title="">${svg(13, '<circle cx="8" cy="8" r="6.2"/><path d="M6.3 6.2a1.8 1.8 0 1 1 2.5 1.7c-.5.2-.8.6-.8 1.1v.4"/><path d="M8 11.4v.1"/>')}
     <span class="app-tip app-hotkey-tip">${HK_TIPS[help]}</span></span></span>`;
 
-SECTIONS.unshift(["Hotkey rules tooltip (14c3b): refused only what can't work, a warning for a risky key, the keys tried in the game", [
-  ["Two columns: four allowed, four refused (impossible only), then F2 … F11 alone", hkWin({ help: "c", note: HK_HELP })],
+SECTIONS.unshift(["Hotkey rules tooltip (14c3b): allowed and danger zone, the keys tried in the game", [
+  ["Two columns: four allowed, four in the danger zone (accepted with a warning), then F2 … F11 alone", hkWin({ help: "c", note: HK_HELP })],
   ["A risky key chosen: accepted, a warning under it", hkWin({ keys: ["Ctrl", "V"], note: "<b>Ctrl+V</b> no longer pastes in the game while it is your hotkey.", warn: true })],
   ["Another risky key chosen, F1 alone", hkWin({ keys: ["F1"], note: "<b>F1</b> no longer shows the resources the game uses while it is your hotkey.", warn: true })],
-  ["A key refused, the previous one kept (section Hotkey setting)", hkWin({ keys: ["Ctrl", "D"], note: "<b>Ctrl+C</b> copies the item already: choose another key.", warn: "refused" })],
+  ["A key that can't work, refused, the previous one kept (out of the tooltip)", hkWin({ keys: ["Ctrl", "D"], note: "<b>Ctrl+C</b> copies the item already: choose another key.", warn: true })],
   ["Before · A, sentences, the keys in bold", hkWin({ help: "a", note: HK_HELP })],
   ["Before · B, the examples as key caps, under two labels", hkWin({ help: "b", note: HK_HELP })],
 ]]);
