@@ -6,6 +6,8 @@ Pour le testeur Windows. Le raccourci n'est plus forcément Ctrl+D : ses touches
 
 ## Avant
 
+**Modifie le fichier des réglages seulement quand Exile Market est fermé** : il lit les touches à son lancement, et réécrit le fichier à chaque changement dans ses réglages (une case cochée), avec les touches qu'il a lues. Un fichier modifié pendant qu'il tourne est donc ignoré, puis écrasé.
+
 1. Ferme Exile Market et Exiled Exchange 2 s'il tourne.
 2. Télécharge la nouvelle archive Windows `rust-exile-market-test-x86_64-pc-windows-msvc.zip` (lien donné par le propriétaire ; il faut être connecté à un compte GitHub pour la télécharger), décompresse-la, puis lance `rust-exile-market.exe` une fois et ferme-le (il crée son fichier des réglages au premier changement : coche puis décoche « Always on top » dans ses réglages avant de le fermer, « Toujours au premier plan » si ton Windows est en français).
 3. Ouvre le fichier des réglages dans le Bloc-notes : `%APPDATA%\exile-market\config\settings.toml` (colle ce chemin dans la barre d'adresse de l'Explorateur). Sous la ligne `[hotkey]` (ajoute-la à la fin du fichier si elle n'y est pas), écris la ligne `keys = "Alt+D"`, puis enregistre :

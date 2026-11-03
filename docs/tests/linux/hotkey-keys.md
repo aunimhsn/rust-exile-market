@@ -14,6 +14,8 @@ tail -f ~/.local/state/exile-market/exile-market.log
 
 ## Avant
 
+**Modifie le fichier des réglages seulement quand Exile Market est fermé** : il lit les touches à son lancement, et réécrit le fichier à chaque changement dans ses réglages (une case cochée), avec les touches qu'il a lues. Un fichier modifié pendant qu'il tourne est donc ignoré, puis écrasé.
+
 1. Ferme Exile Market, Exiled Exchange 2 et le jeu.
 2. Ouvre le fichier des réglages dans un éditeur : `~/.config/exile-market/settings.toml`. Sous la ligne `[hotkey]` (ajoute-la à la fin du fichier si elle n'y est pas), écris la ligne `keys = "Alt+D"`, puis enregistre :
 
