@@ -1,10 +1,16 @@
 //! The hotkey grabbed only while the game is the active window, so that Ctrl+D stays to the other
 //! windows (`specs.md`, Item detection): grabbed when the game becomes the active window, released
-//! when another one does.
+//! when another one does; registered and unregistered on Windows alike.
 //!
 //! Without the system, so that the rules are tested: the grab and the release come as closures.
 
 use std::fmt::Display;
+
+/// The exact title of the window of the game: the title Exiled Exchange 2 looks for
+/// (`attachByTitle`), the standalone client and the one of Steam alike on Windows, and the
+/// standalone client run by Wine on Linux, whose class is unknown. Never a part of the title: the
+/// page of a browser about the game is titled `Path of Exile 2 - …`.
+pub const GAME_TITLE: &str = "Path of Exile 2";
 
 /// The active window, as the desktop tells it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -14,12 +20,47 @@ pub enum Active {
     /// Another window.
     Other,
     /// No active window told: a window outside X11 (Wayland), or maybe the window over the game
-    /// keeping the keyboard on a desktop other than `KWin`.
+    /// keeping the keyboard on a desktop other than `KWin`; on Windows, no foreground window for
+    /// a moment, or the window over the game in front (a field edited).
     Unknown,
     /// The active window can't be followed (a desktop that doesn't tell it, the X server lost):
     /// the key falls back to every window, as before it followed the game, rather than never
     /// working.
     NotFollowed,
+}
+
+/// The foreground window on Windows, as the thread that follows it reads it.
+#[cfg(any(target_os = "windows", test))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Foreground {
+    /// The game, by its exact title ([`GAME_TITLE`]).
+    Game,
+    /// A window of this application: the window over the game, in front after a click in it
+    /// (until the game gets the focus back, or while one of its fields is edited), or the main
+    /// window.
+    Ours,
+    /// Another window.
+    Other,
+    /// No foreground window: Windows tells none for a moment while the foreground changes.
+    None,
+}
+
+#[cfg(any(target_os = "windows", test))]
+impl Foreground {
+    /// The active window it is for the hotkey, the window over the game being `overlay_shown` or
+    /// not: a window of this application in front while the window over the game shows is taken
+    /// for that window, and leaves the key as it is, so that Ctrl+D still copies while one of its
+    /// fields is edited (giving the keyboard back to the game first); the main window in front
+    /// releases the key, as another window, once the window over the game is closed (a click in
+    /// the main window closes it; brought to the front by Alt+Tab, it keeps the key meanwhile).
+    pub fn active(self, overlay_shown: bool) -> Active {
+        match self {
+            Self::Game => Active::Game,
+            Self::Ours if overlay_shown => Active::Unknown,
+            Self::Ours | Self::Other => Active::Other,
+            Self::None => Active::Unknown,
+        }
+    }
 }
 
 /// What a change of the active window did, for the tests.
@@ -55,7 +96,7 @@ impl Grab {
     /// key quits. With no active window told, the key stays as it is, so that Ctrl+D still gives
     /// the keyboard back to the game from the window over the game; a window outside X11 never
     /// hears a key grabbed under X11 anyway. Once the active window can't be followed, the key is
-    /// grabbed for every window.
+    /// grabbed for every window. Called at each change only: a failed grab is tried at each call.
     pub fn follow<E: Display>(
         &mut self,
         active: Active,
@@ -256,6 +297,40 @@ mod tests {
             follow(&mut grab, Active::NotFollowed, Err("taken")),
             (Change::Failed, 1, 0)
         );
+    }
+
+    #[test]
+    fn the_window_over_the_game_in_front_keeps_the_key_as_it_is() {
+        // In front after a click in it, or while one of its fields is edited.
+        assert_eq!(Foreground::Ours.active(true), Active::Unknown);
+
+        let mut grab = Grab::default();
+        follow(&mut grab, Foreground::Game.active(false), Ok(()));
+        assert_eq!(
+            follow(&mut grab, Foreground::Ours.active(true), Ok(())),
+            (Change::Nothing, 0, 0)
+        );
+    }
+
+    #[test]
+    fn the_main_window_in_front_releases_the_key_as_another_window() {
+        assert_eq!(Foreground::Ours.active(false), Active::Other);
+        assert_eq!(Foreground::Other.active(true), Active::Other);
+
+        let mut grab = Grab::default();
+        follow(&mut grab, Foreground::Game.active(false), Ok(()));
+        // The window over the game in front, then closed by a click in the main window.
+        follow(&mut grab, Foreground::Ours.active(true), Ok(()));
+        assert_eq!(
+            follow(&mut grab, Foreground::Ours.active(false), Ok(())),
+            (Change::Released, 0, 1)
+        );
+    }
+
+    #[test]
+    fn no_foreground_window_for_a_moment_keeps_the_key_as_it_is() {
+        assert_eq!(Foreground::None.active(false), Active::Unknown);
+        assert_eq!(Foreground::Game.active(true), Active::Game);
     }
 
     #[test]

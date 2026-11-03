@@ -92,7 +92,7 @@ fn with_game<R>(f: impl FnOnce(&mut Game) -> R) -> R {
 }
 
 /// Whether `window` belongs to this application.
-fn is_ours(window: &HWND) -> bool {
+pub fn is_ours(window: &HWND) -> bool {
     let (_, process) = window.GetWindowThreadProcessId();
     process == std::process::id()
 }

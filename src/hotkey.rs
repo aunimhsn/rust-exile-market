@@ -5,8 +5,8 @@
 //! like any copy ([`crate::clipboard`]). On Linux through X11 (XWayland under Wayland), like the
 //! game run by Proton, and on Windows. None on macOS, where Path of Exile 2 has no client.
 //!
-//! On Linux, the key is grabbed only while the game is the active window, so that Ctrl+D stays to
-//! the other windows.
+//! The key is grabbed only while the game is the active window, so that Ctrl+D stays to the other
+//! windows.
 //!
 //! Each hotkey tells the application where it was pressed, so that the item it copied opens the
 //! window over the game there ([`crate::overlay`]).
@@ -33,7 +33,7 @@ pub struct Press {
     pub copy: Option<Instant>,
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "windows"))]
 mod grab;
 #[cfg(target_os = "windows")]
 mod windows;
@@ -58,21 +58,105 @@ type Manager = global_hotkey::GlobalHotKeyManager;
 /// The hotkey listened to for as long as this value lives.
 pub struct PriceCheckHotkey {
     /// Listens until it is dropped.
-    #[cfg(any(target_os = "linux", target_os = "windows"))]
+    #[cfg(target_os = "linux")]
     _manager: Option<Manager>,
+    /// Listens until it is dropped, registered while the game is the foreground window.
+    #[cfg(target_os = "windows")]
+    in_game: Option<InGame>,
     /// Each press of the hotkey.
     targets: Option<Receiver<Press>>,
 }
 
+/// The hotkey registered only while the game is the foreground window, on the thread of the
+/// window (Windows registers it only for a window of the thread that calls it), followed by
+/// [`PriceCheckHotkey::follow_game`].
+#[cfg(target_os = "windows")]
+struct InGame {
+    manager: Manager,
+    hotkey: global_hotkey::hotkey::HotKey,
+    /// The foreground window, read by a thread of its own; none once it can't be followed.
+    foreground: Option<Receiver<grab::Foreground>>,
+    /// The last foreground window told.
+    last: grab::Foreground,
+    /// The active window the key last followed, so that it follows each change once.
+    active: Option<grab::Active>,
+    grab: grab::Grab,
+}
+
+#[cfg(target_os = "windows")]
+impl InGame {
+    /// Starts following the foreground window, `wake` called at each change; when it can't be
+    /// followed, the key is registered for every window, as before step 14c2.
+    fn start(
+        manager: Manager,
+        hotkey: global_hotkey::hotkey::HotKey,
+        wake: impl Fn() + Send + 'static,
+    ) -> Self {
+        let foreground = keys::follow_foreground(wake)
+            .inspect_err(|error| {
+                log::warn!("The price-check hotkey can't follow the game window: {error}");
+            })
+            .ok();
+        let mut in_game = Self {
+            manager,
+            hotkey,
+            foreground,
+            last: grab::Foreground::None,
+            active: None,
+            grab: grab::Grab::default(),
+        };
+        if in_game.foreground.is_none() {
+            in_game.follow_active(grab::Active::NotFollowed);
+        }
+        in_game
+    }
+
+    /// Takes in the changes of the foreground window, then registers or unregisters the key for
+    /// the active window they and `overlay_shown` make.
+    fn follow(&mut self, overlay_shown: bool) {
+        let Some(foreground) = &self.foreground else {
+            return;
+        };
+        loop {
+            match foreground.try_recv() {
+                Ok(window) => self.last = window,
+                Err(std::sync::mpsc::TryRecvError::Empty) => break,
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                    log::warn!("The price-check hotkey can't follow the game window any more");
+                    self.foreground = None;
+                    self.follow_active(grab::Active::NotFollowed);
+                    return;
+                }
+            }
+        }
+        self.follow_active(self.last.active(overlay_shown));
+    }
+
+    /// Registers or unregisters the key for `active`, once per change.
+    fn follow_active(&mut self, active: grab::Active) {
+        if self.active.replace(active) == Some(active) {
+            return;
+        }
+        let (manager, hotkey) = (&self.manager, self.hotkey);
+        self.grab.follow(
+            active,
+            || manager.register(hotkey),
+            || manager.unregister(hotkey),
+        );
+    }
+}
+
 impl PriceCheckHotkey {
-    /// Starts listening to Ctrl+D, on Linux only while the game is the active window. A failure
+    /// Starts listening to Ctrl+D, only while the game is the active window. A failure
     /// (the key taken by another application, such as Exiled Exchange 2) only writes to the log:
     /// the player can still copy with Ctrl+C.
-    /// `marker` prepares the clipboard before each copy; `wake` is called after each hotkey.
+    /// `marker` prepares the clipboard before each copy; `wake` is called after each hotkey, and
+    /// on Windows at each change of the foreground window, which [`Self::follow_game`] then takes
+    /// in.
     ///
     /// Called once: the handler of the hotkey events can only be set once. Called on the thread
     /// of the window: on Windows, the hotkey is heard by a hidden window of that thread, through
-    /// its event loop.
+    /// its event loop, and registered there.
     #[cfg(any(target_os = "linux", target_os = "windows"))]
     #[must_use]
     pub fn start(marker: CopyMarker, wake: impl Fn() + Send + Sync + 'static) -> Self {
@@ -81,7 +165,10 @@ impl PriceCheckHotkey {
         use std::sync::{Mutex, PoisonError};
 
         let off = || Self {
+            #[cfg(target_os = "linux")]
             _manager: None,
+            #[cfg(target_os = "windows")]
+            in_game: None,
             targets: None,
         };
         let sender = match keys::CopySender::connect() {
@@ -101,6 +188,9 @@ impl PriceCheckHotkey {
         let (targets, receiver) = std::sync::mpsc::channel();
         let hotkey = HotKey::new(Some(Modifiers::CONTROL), Code::KeyD);
         let id = hotkey.id();
+        let wake = std::sync::Arc::new(wake);
+        #[cfg(target_os = "windows")]
+        let wake_at_foreground = std::sync::Arc::clone(&wake);
         GlobalHotKeyEvent::set_event_handler(Some(move |event: GlobalHotKeyEvent| {
             // At the press or at the release of D, as each system lets the keys sent reach the
             // game.
@@ -112,7 +202,7 @@ impl PriceCheckHotkey {
                     |target, copy| {
                         // The application stopped listening: nothing left to tell.
                         if targets.send(Press { target, copy }).is_ok() {
-                            wake();
+                            (*wake)();
                         }
                     },
                 );
@@ -122,13 +212,13 @@ impl PriceCheckHotkey {
         let manager = std::sync::Arc::new(manager);
         #[cfg(target_os = "linux")]
         grab_in_game(&manager, hotkey);
-        #[cfg(target_os = "windows")]
-        match manager.register(hotkey) {
-            Ok(()) => log::info!("Price-check hotkey Ctrl+D listened to"),
-            Err(error) => log::warn!("The price-check hotkey Ctrl+D can't be listened to: {error}"),
-        }
         Self {
+            #[cfg(target_os = "linux")]
             _manager: Some(manager),
+            #[cfg(target_os = "windows")]
+            in_game: Some(InGame::start(manager, hotkey, move || {
+                (*wake_at_foreground)();
+            })),
             targets: Some(receiver),
         }
     }
@@ -237,6 +327,23 @@ fn send_all<K, E>(
 }
 
 impl PriceCheckHotkey {
+    /// At each frame, on the thread of the window: on Windows, registers the key while the game
+    /// is the foreground window, or the window over the game, `overlay_shown` or not, after a
+    /// click in it; unregisters it otherwise. Nothing on the other systems, which follow the game
+    /// on a thread of their own.
+    #[cfg_attr(
+        not(target_os = "windows"),
+        expect(clippy::unused_self, reason = "the same call on every system")
+    )]
+    pub fn follow_game(&mut self, overlay_shown: bool) {
+        #[cfg(target_os = "windows")]
+        if let Some(in_game) = &mut self.in_game {
+            in_game.follow(overlay_shown);
+        }
+        #[cfg(not(target_os = "windows"))]
+        let _ = overlay_shown;
+    }
+
     /// Gives each press of the hotkey since the last call to `handle`, without waiting.
     pub fn receive(&mut self, mut handle: impl FnMut(Press)) {
         if let Some(targets) = &self.targets {
