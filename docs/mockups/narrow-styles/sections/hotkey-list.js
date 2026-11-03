@@ -1,6 +1,6 @@
 // Section Hotkey list (14c3b2): option C, chosen by the owner on 2026-11-03: the key chosen from a list of safe
 // shortcuts, "Other…" last for a free capture (14c3b3, drawn in the sections below), and, when the key is taken,
-// the warning offering a free key of the list at once, tried before it is offered.
+// the empty window offering a free key of the list at once, tried before it is offered (14c3b3).
 //
 // The shortcuts of the list, checked on 2026-11-03 against:
 // - the keys of Path of Exile 2 (the owner's `poe2_production_Config.ini`, both schemes): Ctrl+Q, W, E, R, T (the
@@ -73,9 +73,10 @@ const hlWin = ({ keys = ["Ctrl", "D"], open = false, note = HK_HELP, warn = fals
 };
 
 const HL_TAKEN_FR = "<b>Ctrl+D</b> est déjà pris par une autre application.<br>Choisissez une autre touche, ou copiez avec <b>Ctrl+C</b>.";
-// The line of the empty window when the key is taken, the free key offered under it rather than the settings.
-const hlEmptyTaken = hkEmptyC.replace(`<span>The price shows up here.</span>`, `<span>The price shows up here.</span>
-  <span class="ov-note-line warn"><b>Ctrl+D</b> is taken by another application.</span>
+// The lines of the empty window when the key is taken (14c3a), the free key offered under them: one click and the
+// player can play; the sentence leads the one who wants another key to the settings. Only there: in the settings,
+// the list is one click away (the owner's choices on 2026-11-03).
+const hlEmptyTaken = hkEmptyTaken.replace(`Choose another key in the settings.</span>`, `Choose another key in the settings.</span>
   <span class="app-hotkey-offer is-centered"><span class="pill">Use Ctrl+G</span></span>`);
 
 // Section Hotkey list look (14c3b2): the owner's request on 2026-11-03: the key caps, pretty but heavy, and
@@ -121,12 +122,12 @@ SECTIONS.unshift(["Hotkey list (14c3b2): option C, five safe keys, Other… last
   ["Open: five keys of two keys at most, the default told, Other… last", hlWin({ open: true })],
   ["Open, a key captured by Other… (14c3b3) shown checked on its row", hlWin({ keys: ["Alt", "D"], open: true })],
   ["En français : Par défaut, Autre…, et Maj pour Shift (une touche capturée)", hlWin({ keys: ["Ctrl", "Shift", "D"], open: true, fr: true, note: "Copie l'objet sous le curseur et affiche son prix par-dessus le jeu." })],
-  ["Key taken: the next free key of the list offered under the warning", hlWin({ note: HK_TAKEN, warn: true, offer: ["Ctrl", "G"] })],
-  ["Key taken, before the first item: the same offer, without opening the settings", win(topBar(), hlEmptyTaken, foot())],
-  ["The free key used: grabbed at once, the warning gone", hlWin({ keys: ["Ctrl", "G"] })],
+  ["Key taken: the warning on two lines, the list one click above it", hlWin({ note: HK_TAKEN, warn: true })],
+  ["Key taken, before the first item: the next free key of the list offered (14c3b3), without opening the settings", win(topBar(), hlEmptyTaken, foot())],
+  ["Ctrl+G used or chosen: grabbed at once, the warning gone", hlWin({ keys: ["Ctrl", "G"] })],
   ["Off: the key faint, the list still opens to choose another", hlWin({ on: false })],
   ["Hovered: the dark part lightens, the whole button opens the list", hlWin({ hover: true })],
-  ["Clé prise, en français", hlWin({ note: HL_TAKEN_FR, warn: true, offer: ["Ctrl", "G"], fr: true })],
+  ["Clé prise, en français", hlWin({ note: HL_TAKEN_FR, warn: true, fr: true })],
 ]]);
 
 // The list works: the keys open and close it, a key chooses it; a click elsewhere or Esc closes it.
