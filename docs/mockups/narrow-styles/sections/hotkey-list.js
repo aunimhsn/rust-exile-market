@@ -22,10 +22,17 @@ const hlSame = (a, b) => a.join("+") === b.join("+");
 // The name of a key on its cap: Shift is Maj on the French keyboards and in the French texts of Windows.
 const hlKey = fr => key => (fr && key === "Shift" ? "Maj" : key);
 
-// The list under the keys: each shortcut as key caps, the default told, the chosen one checked; "Other…" last,
-// under a line, with the key captured when it isn't one of the list. `fr` the French texts.
-const hlList = (keys, fr) => {
-  const caps = combo => `<span class="app-hotkey-chip">${combo.map(key => `<span class="key">${hlKey(fr)(key)}</span>`).join("+")}</span>`;
+// The keys of a shortcut as the list and its button write them: key caps (`look` "caps", the first drawing), or
+// a text, "Ctrl+D", in the white button (the looks "a", "b" and "c" asked by the owner on 2026-11-03: the key caps
+// kept for the empty window only). The class `app-hotkey-label` marks what a choice copies into the button.
+const hlLabel = (combo, fr, look) => (look === "caps"
+  ? `<span class="app-hotkey-chip app-hotkey-label">${combo.map(key => `<span class="key">${hlKey(fr)(key)}</span>`).join("+")}</span>`
+  : `<span class="app-hotkey-name app-hotkey-label">${combo.map(hlKey(fr)).join("+")}</span>`);
+
+// The list under the keys: each shortcut, the default told, the chosen one checked; "Other…" last, under a line,
+// with the key captured when it isn't one of the list. `fr` the French texts.
+const hlList = (keys, fr, look) => {
+  const caps = combo => hlLabel(combo, fr, look);
   const check = chosen => `<span class="app-hotkey-check">${chosen ? ICON.check(11) : ""}</span>`;
   const row = (combo, index) => `<div class="app-hotkey-option ${hlSame(combo, keys) ? "is-chosen" : ""}">
     ${check(hlSame(combo, keys))}${caps(combo)}${index === 0 ? `<span class="app-hotkey-default">${fr ? "Par défaut" : "Default"}</span>` : ""}</div>`;
@@ -36,13 +43,16 @@ const hlList = (keys, fr) => {
 };
 
 // The settings of 14c3 with the keys as a list: a chevron after them, pointing right like the one of the league
-// and turned down while the list is open under them (`open`).
+// and turned down while the list is open under them (`open`). `look` the drawing of the button (see hlLabel);
 // `offer` the free key offered under a warning; `fr` the French window.
-const hlWin = ({ keys = ["Ctrl", "D"], open = false, note = HK_HELP, warn = false, offer = null, fr = false } = {}) => {
+const hlWin = ({ keys = ["Ctrl", "D"], open = false, note = HK_HELP, warn = false, offer = null, fr = false, look = "caps" } = {}) => {
   const shift = hlKey(fr);
+  const label = look === "caps"
+    ? `<span class="app-hotkey-label">${hkKeys(keys.map(shift))}</span>`
+    : `<span class="app-hotkey-label">${keys.map(shift).join("+")}</span>`;
   const select = `<span class="app-hotkey-picker ${open ? "is-open" : ""}">
-    <span class="app-hotkey-keys app-hotkey-select" title="${fr ? "Changer la touche" : "Change the key"}">${hkKeys(keys.map(shift))}${ICON.chevron(11)}</span>
-    ${hlList(keys, fr)}</span>`;
+    <span class="app-hotkey-select ${look === "caps" ? "app-hotkey-keys" : `is-button is-${look}`}" title="${fr ? "Changer la touche" : "Change the key"}">${label}${ICON.chevron(11)}</span>
+    ${hlList(keys, fr, look)}</span>`;
   const button = offer ? `<span class="app-hotkey-offer"><span class="pill">${fr ? "Utiliser" : "Use"} ${offer.map(shift).join("+")}</span></span>` : "";
   let html = hkWin({ keys, note, warn }).replace(/<span class="app-hotkey-keys [^"]*" title="Change the key">[\s\S]*?<\/span><\/div>/,
     `${select}</div>`).replace("</div>\n    <div class=\"disclaimer\">", `${button}</div>\n    <div class="disclaimer">`);
@@ -74,6 +84,24 @@ SECTIONS.unshift(["Hotkey list (14c3b2): option C, five safe keys, Other… last
   ["Clé prise, en français", hlWin({ note: HL_TAKEN_FR, warn: true, offer: ["Ctrl", "G"], fr: true })],
 ]]);
 
+// Section Hotkey list look (14c3b2): the owner's request on 2026-11-03: the key caps, pretty but heavy, and
+// their chevron hard to see, are kept for the empty window only; the hotkey of the settings becomes a white button
+// in the style of "Use Ctrl+G", its chevron inside. Three tries: A, the text black, the chevron right after it;
+// B, the same in gray; C, a classic select of a fixed width, the chevron at its right edge. The list keeps the
+// background of the league list, its shortcuts written as text.
+SECTIONS.unshift(["Hotkey list look (14c3b2): a white button like Use Ctrl+G, its chevron inside, three tries", [
+  ["A · black text, the chevron right after it", hlWin({ look: "a" })],
+  ["A · open: the shortcuts as text", hlWin({ look: "a", open: true })],
+  ["A · key taken: the button and Use Ctrl+G together", hlWin({ look: "a", note: HK_TAKEN, warn: true, offer: ["Ctrl", "G"] })],
+  ["B · gray text, the chevron right after it", hlWin({ look: "b" })],
+  ["B · open", hlWin({ look: "b", open: true })],
+  ["B · key taken", hlWin({ look: "b", note: HK_TAKEN, warn: true, offer: ["Ctrl", "G"] })],
+  ["C · a classic select, the chevron at its right edge", hlWin({ look: "c" })],
+  ["C · open", hlWin({ look: "c", open: true })],
+  ["C · in French, a key captured by Autre…", hlWin({ look: "c", keys: ["Ctrl", "Shift", "D"], fr: true, note: "Copie l'objet sous le curseur et affiche son prix par-dessus le jeu." })],
+  ["Before · the key caps and their chevron", hlWin()],
+]]);
+
 // The list works: the keys open and close it, a key chooses it; a click elsewhere or Esc closes it.
 document.getElementById("sheet").addEventListener("click", event => {
   const option = event.target.closest(".app-hotkey-option");
@@ -85,7 +113,7 @@ document.getElementById("sheet").addEventListener("click", event => {
       row.classList.toggle("is-chosen", row === option);
       row.querySelector(".app-hotkey-check").innerHTML = row === option ? ICON.check(11) : "";
     });
-    picker.querySelector(".app-hotkey-select").innerHTML = option.querySelector(".app-hotkey-chip").innerHTML + ICON.chevron(11);
+    picker.querySelector(".app-hotkey-select .app-hotkey-label").innerHTML = option.querySelector(".app-hotkey-label").innerHTML;
     picker.classList.remove("is-open");
   } else if (!option) {
     picker.classList.toggle("is-open");

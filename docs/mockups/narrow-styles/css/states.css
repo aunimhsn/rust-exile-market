@@ -107,3 +107,16 @@
 .app-hotkey-offer { display: flex; margin-top: 2px; }
 .app-hotkey-offer .pill { background: var(--accent); color: var(--on-accent, var(--bg-a)); cursor: pointer; font-weight: 600; }
 .app-hotkey-offer.is-centered { justify-content: center; margin-top: 10px; }
+/* The hotkey as a white button (14c3b2, three tries): the style of "Use Ctrl+G", its chevron inside; A, the text
+   near black; B, in gray; C, of a fixed width, the chevron at its right edge like a classic select. The list
+   writes its shortcuts as text. */
+.app-hotkey-select.is-button {
+  display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px 4px 10px; border-radius: var(--radius);
+  background: var(--accent); color: var(--on-accent, var(--bg-a)); font-size: 12px; font-weight: 600; line-height: 1.2;
+  white-space: nowrap; cursor: pointer;
+}
+.app-hotkey-select.is-button:hover { background: color-mix(in srgb, var(--accent) 88%, var(--bg-a)); }
+.app-hotkey-select.is-button .ico { margin-left: 0; color: inherit; }
+.app-hotkey-select.is-b { color: #5d6670; }
+.app-hotkey-select.is-c { min-width: 96px; justify-content: space-between; }
+.app-hotkey-name { font-weight: 600; }
