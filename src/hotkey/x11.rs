@@ -489,8 +489,7 @@ impl Keyboard {
         });
         tell(target, prepared);
         let mut first = true;
-        let keycodes_held: Vec<_> = modifiers_held.iter().map(|&(keycode, _)| keycode).collect();
-        let missed = missed_modifiers(shortcut, &keycodes_held, keycode);
+        let missed = missed_modifiers(shortcut, &modifiers_held, keycode);
         // Alt left held: Ctrl+Alt+C copies the same text.
         let released: Vec<_> = modifiers_held
             .into_iter()
@@ -639,18 +638,20 @@ fn held_modifiers(
         .collect()
 }
 
-/// The keys of the modifiers of `shortcut` other than Ctrl (left and right, found by `keycode`)
-/// that the player no longer holds (`held`): they may have been released before the key of the
-/// hotkey, which the game didn't see ([`Held::missed`]).
+/// The keys of the modifiers of `shortcut` other than Ctrl that the player no longer holds, none
+/// of their keys left or right among `held`: they were released before the key of the hotkey,
+/// which the game didn't see ([`Held::missed`]). Each of their keys (found by `keycode`), since
+/// which one the player pressed is unknown; none of a modifier one of whose keys is held.
 fn missed_modifiers(
     shortcut: Shortcut,
-    held: &[Keycode],
+    held: &[(Keycode, Modifier)],
     keycode: impl Fn(u32) -> Option<Keycode>,
 ) -> Vec<(Keycode, Modifier)> {
     let mut missed: Vec<(Keycode, Modifier)> = Vec::new();
     for (keysym, modifier) in MODIFIERS {
-        if let Some(key) = keycode(keysym).filter(|_| modifier.in_shortcut(shortcut))
-            && !held.contains(&key)
+        if modifier.in_shortcut(shortcut)
+            && !held.iter().any(|&(_, held)| held == modifier)
+            && let Some(key) = keycode(keysym)
             && !missed.iter().any(|&(missed, _)| missed == key)
         {
             missed.push((key, modifier));
@@ -784,10 +785,19 @@ mod tests {
             missed_modifiers(alt_d, &[], modifier_keycode),
             [(9, Modifier::Alt), (17, Modifier::Alt)]
         );
-        // The left Alt still held: only the right one.
+        // An Alt still held, left or right: none, the other one never pressed.
         assert_eq!(
-            missed_modifiers(alt_d, &[9], modifier_keycode),
-            [(17, Modifier::Alt)]
+            missed_modifiers(alt_d, &[(9, Modifier::Alt)], modifier_keycode),
+            []
+        );
+        assert_eq!(
+            missed_modifiers(alt_d, &[(17, Modifier::Alt)], modifier_keycode),
+            []
+        );
+        // A Shift held tells nothing of Alt.
+        assert_eq!(
+            missed_modifiers(alt_d, &[(10, Modifier::Shift)], modifier_keycode),
+            [(9, Modifier::Alt), (17, Modifier::Alt)]
         );
         // Ctrl+D: nothing.
         assert_eq!(
