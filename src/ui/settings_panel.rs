@@ -57,6 +57,12 @@ impl<'a> SettingsPanel<'a> {
         self
     }
 
+    /// The settings no longer drawn: the list of the keys forgets its animation, so that it
+    /// doesn't fade out when they open again.
+    pub fn forget(ctx: &egui::Context) {
+        hotkey_list::forget(ctx);
+    }
+
     /// Draws the settings; what the player did, if anything.
     pub fn show(self, ui: &mut Ui) -> Option<SettingsAction> {
         CentralPanel::no_frame()
@@ -155,7 +161,7 @@ impl<'a> SettingsPanel<'a> {
                 (checked, button)
             })
             .inner;
-        let list = HotkeyList::new(shortcut, self.i18n).show(ui.ctx(), button.rect, self.keys_open);
+        let list = HotkeyList::new(shortcut, self.i18n).show(ui.ctx(), &button, self.keys_open);
         ui.add_space(CHOICE_GAP);
         let note = if self.hotkey == HotkeyState::Taken {
             let copy = keys::joined(&keys::COPY);

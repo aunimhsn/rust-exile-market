@@ -720,6 +720,9 @@ impl App for ExileMarketApp {
             }
         }
         self.lists.follow_view(self.view == View::Settings);
+        if self.view != View::Settings {
+            SettingsPanel::forget(&ctx);
+        }
         // No field of the main window edited, or its field no longer drawn (the settings
         // opened): its number settled, again when leaving it settled it already.
         if !ctx.text_edit_focused() {

@@ -3,8 +3,8 @@
 //! player may choose (`specs.md`, Settings; mock-up section "Hotkey list (14c3b2)").
 
 use egui::{
-    Area, Context, CornerRadius, CursorIcon, Id, Order, Pos2, Rect, Response, Role, Sense, Ui,
-    Vec2, WidgetInfo, pos2, vec2,
+    Area, Context, CornerRadius, CursorIcon, FocusDirection, Id, Key, Modifiers, Order, Pos2, Rect,
+    Response, Role, Sense, Ui, Vec2, WidgetInfo, pos2, vec2,
 };
 
 use super::keys;
@@ -35,6 +35,39 @@ const LIST_MIN_WIDTH: f32 = 200.0;
 const GAP_UNDER_BUTTON: f32 = 4.0;
 /// The keys let the settings show through a little, like the leagues.
 const OPACITY: f32 = 0.94;
+
+/// The animation of the list, which opens and closes.
+fn shown_id() -> Id {
+    Id::NULL.with("hotkey-list")
+}
+
+/// The animation of the chevron of the button, which turns down while the list is open.
+fn chevron_id() -> Id {
+    Id::NULL.with("hotkey-list-chevron")
+}
+
+/// What the list remembers from the last frame it was drawn ([`Seen`]).
+fn seen_id() -> Id {
+    Id::NULL.with("hotkey-list-seen")
+}
+
+/// What the list was in the last frame it was drawn.
+#[derive(Debug, Clone, Copy, Default)]
+struct Seen {
+    open: bool,
+    /// One of its rows had the keyboard, given back to the button when the list closes.
+    row_focused: bool,
+}
+
+/// The list no longer drawn, the settings left while it was open or closing: it forgets its
+/// animation and that of the chevron, so that it doesn't fade out when the settings open again,
+/// and that it was open, so that the keyboard starts on the chosen keys again.
+pub fn forget(ctx: &Context) {
+    // No time: egui goes straight to the end.
+    ctx.animate_bool_with_time(shown_id(), false, 0.0);
+    ctx.animate_bool_with_time(chevron_id(), false, 0.0);
+    ctx.data_mut(|data| data.remove::<Seen>(seen_id()));
+}
 
 /// The split button of the keys, `label` the keys joined, `on` whether the hotkey is on (its keys
 /// faint while off), `open` whether the list is open (its chevron turned down). The whole button
@@ -83,7 +116,7 @@ pub fn button(ui: &mut Ui, label: &str, on: bool, open: bool, tooltip: &str) -> 
     );
     let turn = ui
         .ctx()
-        .animate_bool_with_time(response.id.with("chevron"), open, motion::OPEN);
+        .animate_bool_with_time(chevron_id(), open, motion::OPEN);
     widgets::chevron(
         ui.painter(),
         square.center(),
@@ -117,21 +150,26 @@ impl<'a> HotkeyList<'a> {
     }
 
     /// Draws the list under `button`, its right edge on the right of the button, while it is
-    /// `open` and while it closes; what the player did with it.
-    pub fn show(&self, ctx: &Context, button: Rect, open: bool) -> Option<HotkeyListAction> {
-        let shown = ctx.animate_bool_with_time(Id::NULL.with("hotkey-list"), open, motion::OPEN);
+    /// `open` and while it closes; what the player did with it. The keyboard starts on the
+    /// chosen keys when it opens, the arrows go from row to row, and it goes back to the button
+    /// when the list closes.
+    pub fn show(&self, ctx: &Context, button: &Response, open: bool) -> Option<HotkeyListAction> {
+        let shown = ctx.animate_bool_with_time(shown_id(), open, motion::OPEN);
+        let seen: Seen = ctx.data(|data| data.get_temp(seen_id()).unwrap_or_default());
+        let just_opened = open && !seen.open;
+        // Also when a slow frame skips the closing.
+        if !open && seen.open && seen.row_focused {
+            button.request_focus();
+        }
         if shown == 0.0 {
+            if seen.open {
+                ctx.data_mut(|data| data.insert_temp(seen_id(), Seen::default()));
+            }
             return None;
         }
-        // The keyboard starts on the chosen keys, when the list opens.
-        let opened_id = Id::NULL.with("hotkey-list-opened");
-        let just_opened = open && !ctx.data(|data| data.get_temp(opened_id).unwrap_or(false));
-        ctx.data_mut(|data| data.insert_temp(opened_id, open));
+        let button = button.rect;
         let rows = self.rows(ctx);
-        let width = rows
-            .iter()
-            .map(|row| row.width)
-            .fold(LIST_MIN_WIDTH, f32::max);
+        let width = list_width(&rows);
         #[expect(clippy::cast_precision_loss, reason = "a few keys")]
         let list_size = vec2(width, 2.0 * LIST_PADDING + rows.len() as f32 * ROW_HEIGHT);
         let top_left = pos2(
@@ -151,6 +189,8 @@ impl<'a> HotkeyList<'a> {
                 ui.painter()
                     .rect_filled(list, radius, color::BUBBLE.gamma_multiply(OPACITY));
                 let mut action = None;
+                let mut focused = None;
+                let mut responses = Vec::with_capacity(rows.len());
                 for (index, row) in rows.iter().enumerate() {
                     #[expect(clippy::cast_precision_loss, reason = "a few keys")]
                     let rect = Rect::from_min_size(
@@ -164,7 +204,23 @@ impl<'a> HotkeyList<'a> {
                     if response.clicked() {
                         action = Some(HotkeyListAction::Choose(row.shortcut));
                     }
+                    if response.has_focus() {
+                        focused = Some(index);
+                    }
+                    responses.push(response);
                 }
+                if open && let Some(index) = focused {
+                    arrows(ui, &responses, index);
+                }
+                ctx.data_mut(|data| {
+                    data.insert_temp(
+                        seen_id(),
+                        Seen {
+                            open,
+                            row_focused: focused.is_some(),
+                        },
+                    );
+                });
                 ui.allocate_rect(list, Sense::hover());
                 let clicked_outside = ui.input(|input| {
                     input.pointer.any_click()
@@ -242,6 +298,40 @@ impl<'a> HotkeyList<'a> {
     }
 }
 
+/// The arrows up and down move the keyboard from the row `focused` of `rows` to the one above or
+/// under it, stopping at the first and the last; no arrow leaves the list, which would reach a
+/// setting hidden under it.
+fn arrows(ui: &Ui, rows: &[Response], focused: usize) {
+    let (up, down, side) = ui.input_mut(|input| {
+        (
+            input.consume_key(Modifiers::NONE, Key::ArrowUp),
+            input.consume_key(Modifiers::NONE, Key::ArrowDown),
+            input.consume_key(Modifiers::NONE, Key::ArrowLeft)
+                | input.consume_key(Modifiers::NONE, Key::ArrowRight),
+        )
+    });
+    if !(up || down || side) {
+        return;
+    }
+    // egui would move the keyboard to the nearest widget of the whole window.
+    ui.memory_mut(|memory| memory.move_focus(FocusDirection::None));
+    let next = if down {
+        (focused + 1).min(rows.len() - 1)
+    } else if up {
+        focused.saturating_sub(1)
+    } else {
+        focused
+    };
+    rows[next].request_focus();
+}
+
+/// The width of the list: its longest row, or its narrowest width.
+fn list_width(rows: &[Row]) -> f32 {
+    rows.iter()
+        .map(|row| row.width)
+        .fold(LIST_MIN_WIDTH, f32::max)
+}
+
 /// A row to draw.
 struct Row {
     shortcut: Shortcut,
@@ -262,7 +352,7 @@ fn centered(left: f32, rect: Rect, size: Vec2) -> Pos2 {
 mod tests {
     use super::*;
     use crate::language::Language;
-    use egui::{Event, Modifiers, PointerButton, RawInput};
+    use egui::{Event, PointerButton, RawInput};
 
     /// The button, at the top left of the window.
     const BUTTON: Rect = Rect {
@@ -299,12 +389,28 @@ mod tests {
             };
             let list = HotkeyList::new(Shortcut::default(), &self.i18n);
             let mut action = None;
-            let mut output = self
-                .ctx
-                .run_ui(input, |ui| action = list.show(ui.ctx(), BUTTON, open));
+            let mut output = self.ctx.run_ui(input, |ui| {
+                let button = ui.interact(BUTTON, button_id(), Sense::click());
+                action = list.show(ui.ctx(), &button, open);
+            });
             // epaint panics when the texture changes of a frame are dropped unapplied.
             output.textures_delta.clear();
             action
+        }
+
+        /// The action of `keys` pressed one per frame, the list open, after it opened.
+        fn keys(&self, keys: &[Key]) -> Option<HotkeyListAction> {
+            self.frame(true, vec![]);
+            self.frame(true, vec![]);
+            keys.iter()
+                .map(|&key| self.frame(true, vec![press(key)]))
+                .last()
+                .flatten()
+        }
+
+        /// Whether the button has the keyboard.
+        fn button_focused(&self) -> bool {
+            self.ctx.memory(|memory| memory.has_focus(button_id()))
         }
 
         /// The actions of a click at `at`, the list `open`, after it finished moving.
@@ -322,6 +428,20 @@ mod tests {
                 self.frame(open, vec![button(true)]),
                 self.frame(open, vec![button(false)]),
             ]
+        }
+    }
+
+    fn button_id() -> Id {
+        Id::NULL.with("button")
+    }
+
+    fn press(key: Key) -> Event {
+        Event::Key {
+            key,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: Modifiers::NONE,
         }
     }
 
@@ -359,6 +479,78 @@ mod tests {
     }
 
     #[test]
+    fn the_keyboard_starts_on_the_chosen_keys_and_the_arrows_go_from_row_to_row() {
+        let window = Window::new();
+        assert_eq!(
+            window.keys(&[Key::Enter]),
+            Some(HotkeyListAction::Choose(Shortcut::CHOICES[0]))
+        );
+
+        let window = Window::new();
+        assert_eq!(
+            window.keys(&[Key::ArrowDown, Key::ArrowDown, Key::Enter]),
+            Some(HotkeyListAction::Choose(Shortcut::CHOICES[2]))
+        );
+    }
+
+    #[test]
+    fn the_arrows_stop_at_the_first_and_the_last_rows() {
+        let window = Window::new();
+        assert_eq!(
+            window.keys(&[Key::ArrowUp, Key::ArrowLeft, Key::Enter]),
+            Some(HotkeyListAction::Choose(Shortcut::CHOICES[0]))
+        );
+
+        let window = Window::new();
+        let mut keys = vec![Key::ArrowDown; Shortcut::CHOICES.len() + 2];
+        keys.push(Key::Enter);
+        assert_eq!(
+            window.keys(&keys),
+            Some(HotkeyListAction::Choose(*Shortcut::CHOICES.last().unwrap()))
+        );
+    }
+
+    #[test]
+    fn the_keyboard_goes_back_to_the_button_when_the_list_closes() {
+        let window = Window::new();
+        window.keys(&[Key::ArrowDown]);
+        assert!(!window.button_focused());
+
+        window.frame(false, vec![]);
+        assert!(window.button_focused());
+    }
+
+    #[test]
+    fn a_list_closed_by_the_mouse_leaves_the_keyboard_where_it_is() {
+        let window = Window::new();
+        // The click outside takes the keyboard from the row.
+        window.click(true, pos2(200.0, 600.0));
+
+        window.frame(false, vec![]);
+        assert!(!window.button_focused());
+    }
+
+    #[test]
+    fn a_list_forgotten_open_doesnt_fade_out_and_starts_on_the_chosen_keys_again() {
+        let window = Window::new();
+        window.frame(true, vec![]);
+        window.frame(true, vec![]);
+        // The chevron turned down, as the button draws it over an open list.
+        window.ctx.animate_bool_with_time(chevron_id(), true, 0.0);
+        forget(&window.ctx);
+
+        // Read without moving: no time passes in an endless animation.
+        let value = |id| window.ctx.animate_bool_with_time(id, true, f32::INFINITY);
+        assert_eq!(value(shown_id()), 0.0);
+        assert_eq!(value(chevron_id()), 0.0);
+        // Opened again: the keyboard on the chosen keys, Enter chooses them.
+        assert_eq!(
+            window.keys(&[Key::Enter]),
+            Some(HotkeyListAction::Choose(Shortcut::CHOICES[0]))
+        );
+    }
+
+    #[test]
     fn the_list_grows_with_its_longest_row_from_its_narrowest() {
         let window = Window::new();
         window.frame(true, vec![]);
@@ -371,8 +563,12 @@ mod tests {
         assert_eq!(english[0].note.as_deref(), Some("Default"));
         assert!(english[1..].iter().all(|row| row.note.is_none()));
         assert!(english.iter().all(|row| row.width < LIST_MIN_WIDTH));
+        assert_eq!(list_width(&english), LIST_MIN_WIDTH);
         // "Par défaut" is longer than "Default".
         let french = rows(Language::French);
         assert!(french[0].width > english[0].width);
+        let mut long = rows(Language::French);
+        long[0].width = LIST_MIN_WIDTH + 30.0;
+        assert_eq!(list_width(&long), LIST_MIN_WIDTH + 30.0);
     }
 }
