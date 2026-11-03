@@ -129,6 +129,8 @@
 .app-hotkey-select.is-split:hover { background: var(--accent); }
 .is-d .app-hotkey-arrow { background: var(--control-line); color: var(--text); }
 .app-hotkey-select.is-e { background: var(--control-line); color: var(--text); }
-.app-hotkey-select.is-e:hover { background: var(--control-line); }
+.app-hotkey-select.is-e:hover, .app-hotkey-select.is-e.is-hovered { background: color-mix(in srgb, var(--control-line) 82%, var(--text)); }
+/* The hotkey off: its key faint, the square kept, since the list still opens. */
+.app-hotkey-select.is-e.is-off .app-hotkey-label { color: var(--faint); }
 .is-e .app-hotkey-arrow { background: var(--accent); color: var(--on-accent, var(--bg-a)); }
 .is-f .app-hotkey-arrow { background: color-mix(in srgb, var(--accent) 80%, var(--bg-a)); }

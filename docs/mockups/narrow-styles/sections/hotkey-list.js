@@ -43,10 +43,11 @@ const hlList = (keys, fr, look) => {
 };
 
 // The settings of 14c3 with the keys as a list: a chevron after them, pointing right like the one of the league
-// and turned down while the list is open under them (`open`). `look` the drawing of the button (see hlLabel);
-// `offer` the free key offered under a warning; `fr` the French window.
+// and turned down while the list is open under them (`open`). `look` the drawing of the button (see hlLabel),
+// "e" chosen by the owner on 2026-11-03; `on` the hotkey on, `hover` the pointer over the button; `offer` the free
+// key offered under a warning; `fr` the French window.
 const HL_SPLIT = ["d", "e", "f"];
-const hlWin = ({ keys = ["Ctrl", "D"], open = false, note = HK_HELP, warn = false, offer = null, fr = false, look = "caps" } = {}) => {
+const hlWin = ({ keys = ["Ctrl", "D"], open = false, note = HK_HELP, warn = false, offer = null, fr = false, look = "e", on = true, hover = false } = {}) => {
   const shift = hlKey(fr);
   const label = look === "caps"
     ? `<span class="app-hotkey-label">${hkKeys(keys.map(shift))}</span>`
@@ -55,10 +56,10 @@ const hlWin = ({ keys = ["Ctrl", "D"], open = false, note = HK_HELP, warn = fals
   const split = HL_SPLIT.includes(look);
   const chevron = split ? `<span class="app-hotkey-arrow">${ICON.chevron(11)}</span>` : ICON.chevron(11);
   const select = `<span class="app-hotkey-picker ${open ? "is-open" : ""}">
-    <span class="app-hotkey-select ${look === "caps" ? "app-hotkey-keys" : `is-button is-${look} ${split ? "is-split" : ""}`}" title="${fr ? "Changer la touche" : "Change the key"}">${label}${chevron}</span>
+    <span class="app-hotkey-select ${look === "caps" ? "app-hotkey-keys" : `is-button is-${look} ${split ? "is-split" : ""}`} ${on ? "" : "is-off"} ${hover ? "is-hovered" : ""}" title="${fr ? "Changer la touche" : "Change the key"}">${label}${chevron}</span>
     ${hlList(keys, fr, look)}</span>`;
   const button = offer ? `<span class="app-hotkey-offer"><span class="pill">${fr ? "Utiliser" : "Use"} ${offer.map(shift).join("+")}</span></span>` : "";
-  let html = hkWin({ keys, note, warn }).replace(/<span class="app-hotkey-keys [^"]*" title="Change the key">[\s\S]*?<\/span><\/div>/,
+  let html = hkWin({ on, keys, note, warn }).replace(/<span class="app-hotkey-keys [^"]*" title="Change the key">[\s\S]*?<\/span><\/div>/,
     `${select}</div>`).replace("</div>\n    <div class=\"disclaimer\">", `${button}</div>\n    <div class="disclaimer">`);
   if (fr) {
     [["<h3>Settings</h3>", "<h3>Réglages</h3>"], [">Language<", ">Langue<"], ["</i>System<", "</i>Système<"],
@@ -77,6 +78,44 @@ const hlEmptyTaken = hkEmptyC.replace(`<span>The price shows up here.</span>`, `
   <span class="ov-note-line warn"><b>Ctrl+D</b> is taken by another application.</span>
   <span class="app-hotkey-offer is-centered"><span class="pill">Use Ctrl+G</span></span>`);
 
+// Section Hotkey list look (14c3b2): the owner's request on 2026-11-03: the key caps, pretty but heavy, and
+// their chevron hard to see, are kept for the empty window only; the hotkey of the settings becomes a white button
+// in the style of "Use Ctrl+G", its chevron inside. Three tries: A, the text black, the chevron right after it;
+// B, the same in gray; C, a classic select of a fixed width, the chevron at its right edge. The list keeps the
+// background of the league list, its shortcuts written as text.
+SECTIONS.unshift(["Hotkey list look (14c3b2): a white button like Use Ctrl+G, its chevron inside, the first tries", [
+  ["Before · A, black text, the chevron right after it", hlWin({ look: "a" })],
+  ["Before · A · open: the shortcuts as text", hlWin({ look: "a", open: true })],
+  ["Before · A · key taken: the button and Use Ctrl+G together", hlWin({ look: "a", note: HK_TAKEN, warn: true, offer: ["Ctrl", "G"] })],
+  ["Before · B · gray text, the chevron right after it", hlWin({ look: "b" })],
+  ["Before · B · open", hlWin({ look: "b", open: true })],
+  ["Before · B · key taken", hlWin({ look: "b", note: HK_TAKEN, warn: true, offer: ["Ctrl", "G"] })],
+  ["Before · C · a classic select, the chevron at its right edge", hlWin({ look: "c" })],
+  ["Before · C · open", hlWin({ look: "c", open: true })],
+  ["Before · C · in French, a key captured by Autre…", hlWin({ look: "c", keys: ["Ctrl", "Shift", "D"], fr: true, note: "Copie l'objet sous le curseur et affiche son prix par-dessus le jeu." })],
+  ["Before · the key caps and their chevron", hlWin({ look: "caps" })],
+]]);
+
+// Section Hotkey button split (14c3b2): the owner's request on 2026-11-03, after the three tries above: the
+// chevron set apart from the key by a square of its own, of another background, maybe the two inverted. D, the key
+// white and the chevron on the dark of the controls; E, inverted, the key dark and the chevron white; F, two tones
+// of white, the chevron on a light gray. E chosen by the owner on 2026-11-03, the whole button clickable: white
+// stays the color of the main action (the chevron, which opens the list), the key a value in the text of the
+// window; with the key taken, only the square and "Use Ctrl+G" are white.
+SECTIONS.unshift(["Hotkey button split (14c3b2): E chosen, the chevron white in a square, the whole button clickable", [
+  ["Rejected · D · the key white, the chevron on dark", hlWin({ look: "d" })],
+  ["Rejected · D · open", hlWin({ look: "d", open: true })],
+  ["Rejected · D · key taken, with Use Ctrl+G", hlWin({ look: "d", note: HK_TAKEN, warn: true, offer: ["Ctrl", "G"] })],
+  ["Chosen · E · inverted: the key dark, the chevron on white", hlWin({ look: "e" })],
+  ["Chosen · E · open", hlWin({ look: "e", open: true })],
+  ["Chosen · E · key taken, with Use Ctrl+G", hlWin({ look: "e", note: HK_TAKEN, warn: true, offer: ["Ctrl", "G"] })],
+  ["Rejected · F · two whites: the chevron on light gray", hlWin({ look: "f" })],
+  ["Rejected · F · open", hlWin({ look: "f", open: true })],
+  ["Rejected · F · key taken, with Use Ctrl+G", hlWin({ look: "f", note: HK_TAKEN, warn: true, offer: ["Ctrl", "G"] })],
+  ["Before · A, one white button", hlWin({ look: "a" })],
+]]);
+
+// The section of the list, drawn with the button chosen (E), put first.
 SECTIONS.unshift(["Hotkey list (14c3b2): option C, five safe keys, Other… last, a free key offered", [
   ["Closed: the keys and a chevron pointing right, a click opens the list", hlWin()],
   ["Open: five keys of two keys at most, the default told, Other… last", hlWin({ open: true })],
@@ -85,42 +124,9 @@ SECTIONS.unshift(["Hotkey list (14c3b2): option C, five safe keys, Other… last
   ["Key taken: the next free key of the list offered under the warning", hlWin({ note: HK_TAKEN, warn: true, offer: ["Ctrl", "G"] })],
   ["Key taken, before the first item: the same offer, without opening the settings", win(topBar(), hlEmptyTaken, foot())],
   ["The free key used: grabbed at once, the warning gone", hlWin({ keys: ["Ctrl", "G"] })],
+  ["Off: the key faint, the list still opens to choose another", hlWin({ on: false })],
+  ["Hovered: the dark part lightens, the whole button opens the list", hlWin({ hover: true })],
   ["Clé prise, en français", hlWin({ note: HL_TAKEN_FR, warn: true, offer: ["Ctrl", "G"], fr: true })],
-]]);
-
-// Section Hotkey list look (14c3b2): the owner's request on 2026-11-03: the key caps, pretty but heavy, and
-// their chevron hard to see, are kept for the empty window only; the hotkey of the settings becomes a white button
-// in the style of "Use Ctrl+G", its chevron inside. Three tries: A, the text black, the chevron right after it;
-// B, the same in gray; C, a classic select of a fixed width, the chevron at its right edge. The list keeps the
-// background of the league list, its shortcuts written as text.
-SECTIONS.unshift(["Hotkey list look (14c3b2): a white button like Use Ctrl+G, its chevron inside, three tries", [
-  ["A · black text, the chevron right after it", hlWin({ look: "a" })],
-  ["A · open: the shortcuts as text", hlWin({ look: "a", open: true })],
-  ["A · key taken: the button and Use Ctrl+G together", hlWin({ look: "a", note: HK_TAKEN, warn: true, offer: ["Ctrl", "G"] })],
-  ["B · gray text, the chevron right after it", hlWin({ look: "b" })],
-  ["B · open", hlWin({ look: "b", open: true })],
-  ["B · key taken", hlWin({ look: "b", note: HK_TAKEN, warn: true, offer: ["Ctrl", "G"] })],
-  ["C · a classic select, the chevron at its right edge", hlWin({ look: "c" })],
-  ["C · open", hlWin({ look: "c", open: true })],
-  ["C · in French, a key captured by Autre…", hlWin({ look: "c", keys: ["Ctrl", "Shift", "D"], fr: true, note: "Copie l'objet sous le curseur et affiche son prix par-dessus le jeu." })],
-  ["Before · the key caps and their chevron", hlWin()],
-]]);
-
-// Section Hotkey button split (14c3b2): the owner's request on 2026-11-03, after the three tries above: the
-// chevron set apart from the key by a square of its own, of another background, maybe the two inverted. D, the key
-// white and the chevron on the dark of the controls; E, inverted, the key dark and the chevron white; F, two tones
-// of white, the chevron on a light gray.
-SECTIONS.unshift(["Hotkey button split (14c3b2): the chevron in a square of its own, three tries", [
-  ["D · the key white, the chevron on dark", hlWin({ look: "d" })],
-  ["D · open", hlWin({ look: "d", open: true })],
-  ["D · key taken, with Use Ctrl+G", hlWin({ look: "d", note: HK_TAKEN, warn: true, offer: ["Ctrl", "G"] })],
-  ["E · inverted: the key dark, the chevron on white", hlWin({ look: "e" })],
-  ["E · open", hlWin({ look: "e", open: true })],
-  ["E · key taken, with Use Ctrl+G", hlWin({ look: "e", note: HK_TAKEN, warn: true, offer: ["Ctrl", "G"] })],
-  ["F · two whites: the chevron on light gray", hlWin({ look: "f" })],
-  ["F · open", hlWin({ look: "f", open: true })],
-  ["F · key taken, with Use Ctrl+G", hlWin({ look: "f", note: HK_TAKEN, warn: true, offer: ["Ctrl", "G"] })],
-  ["Before · A, one white button", hlWin({ look: "a" })],
 ]]);
 
 // The list works: the keys open and close it, a key chooses it; a click elsewhere or Esc closes it.
