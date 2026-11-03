@@ -28,8 +28,8 @@ Pour le testeur Windows. Les touches du raccourci se choisissent maintenant dans
 5. **Alt+G, F3 et F4** : choisis `Alt+G`, puis **Alt+G** sur un objet dans le jeu ; fais de même avec `F3`, puis `F4`.
    ✅ Chaque touche ouvre la fenêtre avec le prix, et la précédente ne copie plus. Après Alt+G, Alt lâché, l'infobulle d'un objet survolé est normale (pas avancée).
 
-6. **La touche prise** : choisis `Ctrl+D`, ferme le jeu, lance Exiled Exchange 2 (il prend Ctrl+D), puis le jeu, et reviens dans les réglages d'Exile Market ; choisis ensuite `Ctrl+G` et fais **Ctrl+G** dans le jeu.
-   ✅ Avec Ctrl+D, en jaune et sur deux lignes : « **Ctrl+D** is taken by another application. » puis « Choose another key, or copy with **Ctrl+C**. ». Une fois Ctrl+G choisi, le message disparaît, et Ctrl+G copie dans le jeu. Ferme Exiled Exchange 2 ensuite, et rechoisis `Ctrl+D`.
+6. **La touche prise** : choisis `Ctrl+D`, ferme le jeu, lance Exiled Exchange 2 (il prend Ctrl+D), puis le jeu, et reviens dans les réglages d'Exile Market. Si le message n'apparaît pas, repasse au jeu puis reviens, jusqu'à ce qu'il apparaisse : les deux applications se disputent Ctrl+D à chaque retour au jeu, et la première la garde. Message affiché, réduis la fenêtre à sa hauteur minimale (bord du bas vers le haut) et ouvre la liste ; choisis ensuite `Ctrl+G` et fais **Ctrl+G** dans le jeu.
+   ✅ Avec Ctrl+D, en jaune et sur deux lignes : « **Ctrl+D** is taken by another application. » puis « Choose another key, or copy with **Ctrl+C**. ». À la hauteur minimale, la liste tient entière dans la fenêtre, sous le bouton, sans le recouvrir. Une fois Ctrl+G choisi, le message disparaît, et Ctrl+G copie dans le jeu. Ferme Exiled Exchange 2 ensuite, et rechoisis `Ctrl+D`.
 
 7. **Tes propres scénarios** : essaie ce qui te passe par la tête (changer de touche pendant que la fenêtre par-dessus le jeu est ouverte, plusieurs changements de suite…).
    ✅ Rien d'étrange ; sinon, décris ce que tu as fait et ce que tu as vu.

@@ -47,8 +47,8 @@ tail -f ~/.local/state/exile-market/exile-market.log
 7. **F3 et F4** : choisis `F3`, puis **F3** sur un objet dans le jeu ; puis choisis `F4` et fais de même.
    ✅ F3, puis F4, ouvrent la fenêtre avec le prix, sans rien faire d'autre dans le jeu. Après le passage à F4, F3 ne copie plus.
 
-8. **La touche prise, sur deux lignes** : choisis `Ctrl+D`, ferme le jeu, lance Exiled Exchange 2 (il prend Ctrl+D), puis le jeu, et reviens dans les réglages d'Exile Market.
-   ✅ Sous la ligne du raccourci, en jaune et sur deux lignes : « **Ctrl+D** is taken by another application. » puis « Choose another key, or copy with **Ctrl+C**. ». La liste s'ouvre toujours au-dessus.
+8. **La touche prise, sur deux lignes** : choisis `Ctrl+D`, ferme le jeu, lance Exiled Exchange 2 (il prend Ctrl+D), puis le jeu, et reviens dans les réglages d'Exile Market. Si le message n'apparaît pas, repasse au jeu puis reviens, jusqu'à ce qu'il apparaisse : les deux applications se disputent Ctrl+D à chaque retour au jeu, et la première la garde. Message affiché, réduis la fenêtre à sa hauteur minimale (bord du bas vers le haut), puis ouvre la liste.
+   ✅ Sous la ligne du raccourci, en jaune et sur deux lignes : « **Ctrl+D** is taken by another application. » puis « Choose another key, or copy with **Ctrl+C**. ». La liste s'ouvre toujours au-dessus ; à la hauteur minimale, elle tient entière dans la fenêtre, sous le bouton, sans le recouvrir.
 
 9. **Une autre touche quand elle est prise** : toujours avec Exiled Exchange 2 ouvert, choisis `Ctrl+G` dans la liste, puis dans le jeu **Ctrl+G** sur un objet.
    ✅ Le message jaune disparaît dès le choix, et la ligne grise « Copies the item under the cursor… » revient. Dans le jeu, Ctrl+G ouvre la fenêtre d'Exile Market avec le prix, et Ctrl+D reste à Exiled Exchange 2. Ferme Exiled Exchange 2 ensuite.
