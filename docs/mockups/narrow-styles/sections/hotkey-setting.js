@@ -38,7 +38,8 @@ const hkWin = options => win(topBar(true), hkSettings(options), hkFoot);
 
 const HK_HELP = "Copies the item under the cursor and shows its price over the game.";
 const HK_BANNER = "<b>Ctrl+D</b> is taken by another application: copy with <b>Ctrl+C</b>, or choose another key in the settings.";
-const HK_TAKEN = "<b>Ctrl+D</b> is taken by another application. Choose another key, or copy with <b>Ctrl+C</b>.";
+// Its two sentences on two lines, as in the empty window (the owner's choice on 2026-11-03, step 14c3b2).
+const HK_TAKEN = "<b>Ctrl+D</b> is taken by another application.<br>Choose another key, or copy with <b>Ctrl+C</b>.";
 
 // The invitation of the empty window with the Ctrl + D of the window over the game (14b1), and with Ctrl + C when
 // the hotkey is off or taken, so that it never shows a key that does nothing.

@@ -57,7 +57,7 @@ const hlWin = ({ keys = ["Ctrl", "D"], open = false, note = HK_HELP, warn = fals
   return html;
 };
 
-const HL_TAKEN_FR = "<b>Ctrl+D</b> est déjà pris par une autre application. Choisissez une autre touche, ou copiez avec <b>Ctrl+C</b>.";
+const HL_TAKEN_FR = "<b>Ctrl+D</b> est déjà pris par une autre application.<br>Choisissez une autre touche, ou copiez avec <b>Ctrl+C</b>.";
 // The line of the empty window when the key is taken, the free key offered under it rather than the settings.
 const hlEmptyTaken = hkEmptyC.replace(`<span>The price shows up here.</span>`, `<span>The price shows up here.</span>
   <span class="ov-note-line warn"><b>Ctrl+D</b> is taken by another application.</span>
