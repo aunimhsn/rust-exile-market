@@ -191,11 +191,7 @@ impl<'a> EmptyState<'a> {
     /// copies, otherwise the copy of the game (macOS, which has no hotkey; the hotkey turned off
     /// or its key taken).
     fn keys(&self, ui: &mut Ui) {
-        let pressed: &[&str] = if self.hotkey == HotkeyState::Listening {
-            &keys::HOTKEY
-        } else {
-            &keys::COPY
-        };
+        let pressed = invited_keys(self.hotkey);
         let caps = Caps {
             font: text::keys(),
             height: KEY_HEIGHT,
@@ -203,5 +199,31 @@ impl<'a> EmptyState<'a> {
             gap: KEY_GAP,
         };
         keys::caps(ui, pressed, &caps, color::TEXT, true);
+    }
+}
+
+/// The keys the empty window invites to press: the price-check hotkey while it copies, otherwise
+/// the copy of the game, so that it never shows a key that does nothing.
+fn invited_keys(hotkey: HotkeyState) -> &'static [&'static str] {
+    match hotkey {
+        HotkeyState::Listening => &keys::HOTKEY,
+        HotkeyState::Off | HotkeyState::Taken | HotkeyState::Unavailable => &keys::COPY,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_invitation_never_shows_a_key_that_does_nothing() {
+        assert_eq!(invited_keys(HotkeyState::Listening), ["Ctrl", "D"]);
+        for state in [
+            HotkeyState::Off,
+            HotkeyState::Taken,
+            HotkeyState::Unavailable,
+        ] {
+            assert_eq!(invited_keys(state), ["Ctrl", "C"], "{state:?}");
+        }
     }
 }

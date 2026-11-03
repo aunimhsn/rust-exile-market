@@ -4,7 +4,7 @@ Pour le testeur Windows. Les réglages ont maintenant un groupe **Hotkey** : la 
 
 ## Avant
 
-1. Ferme Exile Market et Exiled Exchange 2 s'il tourne (les tests 5 à 7 le relancent exprès).
+1. Ferme Exile Market et Exiled Exchange 2 s'il tourne (les tests 5 et 7 le lancent exprès).
 2. Télécharge la nouvelle archive Windows `rust-exile-market-test-x86_64-pc-windows-msvc.zip` (lien donné par le propriétaire ; il faut être connecté à un compte GitHub pour la télécharger), décompresse-la, puis lance `rust-exile-market.exe`. Si Windows SmartScreen bloque : « Informations complémentaires », puis « Exécuter quand même ».
 3. Lance Path of Exile 2 en **plein écran fenêtré** (pas en plein écran exclusif), **sans** le lancer en administrateur, et va dans ton repaire.
 4. Le log est dans `%LOCALAPPDATA%\exile-market\data\exile-market.log` (colle ce chemin dans la barre d'adresse de l'Explorateur). Il est écrit au fur et à mesure : ouvre-le dans le Bloc-notes à la fin, ou rouvre-le pour voir les nouvelles lignes.
@@ -23,14 +23,14 @@ Pour le testeur Windows. Les réglages ont maintenant un groupe **Hotkey** : la 
 4. **Rallumer le raccourci** : coche la case, reviens au jeu, puis **Ctrl+D** sur un objet.
    ✅ La fenêtre par-dessus le jeu s'ouvre avec son prix ; le log dit « Price-check hotkey turned on », puis « … listened to while the game is the active window ».
 
-5. **La touche prise** : ferme Exile Market, lance **Exiled Exchange 2**, puis Exile Market. Reviens au jeu, fais **Ctrl+D** sur un objet, puis regarde la fenêtre principale d'Exile Market, sans y avoir copié d'objet.
-   ✅ La fenêtre vide invite à copier avec `Ctrl` + `C`, et dessous, en jaune, « **Ctrl+D** is taken by another application. » puis, à la ligne, « Choose another key in the settings. ». Dans les réglages, la ligne sous le raccourci est en jaune : « **Ctrl+D** is taken by another application. Choose another key, or copy with **Ctrl+C**. ». Le log dit une fois « The price-check hotkey Ctrl+D can't be listened to: … » (recopie la fin de la ligne dans la remarque).
+5. **La touche prise** : ferme Exile Market et le jeu, lance **Exiled Exchange 2**, puis Exile Market, puis le jeu. Une fois en jeu, **n'appuie pas sur Ctrl+D** (Exiled Exchange 2 copierait l'objet, et Exile Market l'afficherait à la place de sa fenêtre vide) : fais Alt+Tab vers la fenêtre principale d'Exile Market, regarde sa fenêtre vide, puis reviens au jeu ; fais cinq allers-retours.
+   ✅ À chaque retour au jeu, Exile Market et Exiled Exchange 2 essaient tous deux de prendre Ctrl+D, et le premier la garde : les lignes peuvent donc apparaître à un passage et disparaître au suivant. Quand elles apparaissent, la fenêtre vide invite à copier avec `Ctrl` + `C`, et dessous, en jaune, « **Ctrl+D** is taken by another application. » puis, à la ligne, « Choose another key in the settings. » ; ouvre alors les réglages : la ligne sous le raccourci est en jaune, « **Ctrl+D** is taken by another application. Choose another key, or copy with **Ctrl+C**. » (referme-les ensuite). Quand elles n'apparaissent pas, la fenêtre vide invite à `Ctrl` + `D`. Note combien de fois sur cinq tu as vu les lignes jaunes, et, si tu les as vues, recopie la fin de la ligne « The price-check hotkey Ctrl+D can't be listened to: … » du log dans la remarque.
 
-6. **La touche libérée** (suite du test 5) : quitte Exiled Exchange 2 (aussi depuis l'icône près de l'horloge), fais Alt+Tab hors du jeu puis retour, et **Ctrl+D** sur un objet.
-   ✅ La fenêtre par-dessus le jeu s'ouvre ; dans les réglages, la ligne sous le raccourci est redevenue pâle (« Copies the item… »).
+6. **La touche libérée** : quitte Exiled Exchange 2 (aussi depuis son icône près de l'horloge), reviens au jeu, puis **Ctrl+D** sur un objet.
+   ✅ La fenêtre par-dessus le jeu s'ouvre du premier coup ; dans les réglages de la fenêtre principale, la ligne sous le raccourci est pâle (« Copies the item… »).
 
-7. **Couper le raccourci quand la touche est prise** : refais le test 5, puis décoche la case dans les réglages.
-   ✅ Les lignes jaunes disparaissent aussitôt, dans les réglages comme dans la fenêtre vide. Quitte ensuite Exiled Exchange 2 et recoche la case.
+7. **Couper le raccourci quand la touche est prise** : ferme et relance Exile Market (pour retrouver sa fenêtre vide), puis relance Exiled Exchange 2 et fais des allers-retours entre le jeu et la fenêtre principale jusqu'à voir les lignes jaunes dans sa fenêtre vide. Ouvre les réglages, vérifie que la ligne jaune y est, puis décoche la case. Referme les réglages (l'engrenage).
+   ✅ Dans les réglages, la ligne jaune redevient la ligne pâle dès que la case est décochée ; une fois les réglages fermés, la fenêtre vide invite à `Ctrl` + `C`, sans ligne jaune. Pour finir, quitte Exiled Exchange 2 et recoche la case.
 
 8. **En français** : passe la langue sur Français et regarde les réglages.
    ✅ « RACCOURCI », « Estimer le prix en jeu », « Copie l'objet sous le curseur et affiche son prix par-dessus le jeu. » ; rien de coupé ni de mal aligné.

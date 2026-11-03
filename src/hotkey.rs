@@ -97,7 +97,14 @@ struct InGame {
     manager: Manager,
     hotkey: global_hotkey::hotkey::HotKey,
     grab: SharedGrab,
+    /// [`grab::Grab::taken`], written under the lock of the grab and read by each frame without
+    /// it: the follow thread holds the lock while `global-hotkey` answers, up to 50 ms.
+    taken: SharedTaken,
 }
+
+/// Whether the key is taken, published on Linux by whoever changes the grab.
+#[cfg(target_os = "linux")]
+type SharedTaken = std::sync::Arc<std::sync::atomic::AtomicBool>;
 
 #[cfg(target_os = "linux")]
 impl InGame {
@@ -111,33 +118,35 @@ impl InGame {
     ) -> Self {
         let manager = std::sync::Arc::new(manager);
         let grab = std::sync::Arc::new(std::sync::Mutex::new(grab::Grab::new(on)));
-        grab_in_game(&manager, hotkey, &grab, wake);
+        let taken = SharedTaken::default();
+        grab_in_game(&manager, hotkey, &grab, &taken, wake);
         Self {
             manager,
             hotkey,
             grab,
+            taken,
         }
-    }
-
-    fn grab(&self) -> std::sync::MutexGuard<'_, grab::Grab> {
-        self.grab
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
     /// Turns the hotkey on or off at once.
     fn turn(&mut self, on: bool) {
         let (manager, hotkey) = (&self.manager, self.hotkey);
-        self.grab().turn(
+        let mut grab = self
+            .grab
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        grab.turn(
             on,
             || manager.register(hotkey),
             || manager.unregister(hotkey),
         );
+        self.taken
+            .store(grab.taken(), std::sync::atomic::Ordering::Relaxed);
     }
 
     /// Whether its key couldn't be grabbed the last time it was tried.
     fn taken(&self) -> bool {
-        self.grab().taken()
+        self.taken.load(std::sync::atomic::Ordering::Relaxed)
     }
 }
 
@@ -329,7 +338,7 @@ impl PriceCheckHotkey {
         let taken = self.in_game.as_ref().is_some_and(InGame::taken);
         #[cfg(not(any(target_os = "linux", target_os = "windows")))]
         let taken = false;
-        state(
+        state_of(
             self.targets.is_some(),
             self.on.load(std::sync::atomic::Ordering::Relaxed),
             taken,
@@ -339,7 +348,7 @@ impl PriceCheckHotkey {
 
 /// What the hotkey does, `available` when it started, `on` as the settings say, its key `taken`
 /// or not: a hotkey that didn't start says nothing of its setting.
-fn state(available: bool, on: bool, taken: bool) -> HotkeyState {
+fn state_of(available: bool, on: bool, taken: bool) -> HotkeyState {
     match (available, on, taken) {
         (false, _, _) => HotkeyState::Unavailable,
         (true, false, _) => HotkeyState::Off,
@@ -358,10 +367,12 @@ fn grab_in_game(
     manager: &Manager,
     hotkey: global_hotkey::hotkey::HotKey,
     grab: &SharedGrab,
+    taken: &SharedTaken,
     wake: impl Fn() + Send + 'static,
 ) {
     let manager = std::sync::Arc::downgrade(manager);
     let grab = std::sync::Arc::clone(grab);
+    let taken = std::sync::Arc::clone(taken);
     let followed = keys::follow_game(move |active| {
         let Some(manager) = manager.upgrade() else {
             return false;
@@ -371,13 +382,13 @@ fn grab_in_game(
             let mut grab = grab
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            let was_taken = grab.taken();
             grab.follow(
                 active,
                 || manager.register(hotkey),
                 || manager.unregister(hotkey),
             );
-            grab.taken() != was_taken
+            let now = grab.taken();
+            taken.swap(now, std::sync::atomic::Ordering::Relaxed) != now
         };
         if changed {
             wake();
@@ -497,12 +508,12 @@ mod tests {
     #[test]
     fn the_state_told_goes_from_what_started_to_the_setting_then_to_the_key() {
         // Not started: unavailable, whatever the setting.
-        assert_eq!(state(false, true, false), HotkeyState::Unavailable);
-        assert_eq!(state(false, false, true), HotkeyState::Unavailable);
+        assert_eq!(state_of(false, true, false), HotkeyState::Unavailable);
+        assert_eq!(state_of(false, false, true), HotkeyState::Unavailable);
         // Off: never taken.
-        assert_eq!(state(true, false, true), HotkeyState::Off);
-        assert_eq!(state(true, true, true), HotkeyState::Taken);
-        assert_eq!(state(true, true, false), HotkeyState::Listening);
+        assert_eq!(state_of(true, false, true), HotkeyState::Off);
+        assert_eq!(state_of(true, true, true), HotkeyState::Taken);
+        assert_eq!(state_of(true, true, false), HotkeyState::Listening);
     }
 
     #[test]

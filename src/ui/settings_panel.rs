@@ -30,7 +30,8 @@ pub struct SettingsPanel<'a> {
 }
 
 impl<'a> SettingsPanel<'a> {
-    /// The settings, with what the price-check `hotkey` does now: none on a system without it.
+    /// The settings, with what the price-check `hotkey` does now: `Unavailable` on a system
+    /// without it, whose group isn't drawn.
     #[must_use]
     pub fn new(settings: &'a Settings, i18n: &'a Translator, hotkey: HotkeyState) -> Self {
         Self {

@@ -740,6 +740,28 @@ mod tests {
     }
 
     #[test]
+    fn turned_on_again_after_a_failed_release_the_key_held_is_not_grabbed_twice() {
+        let mut grab = Grab::default();
+        follow(&mut grab, Active::Game, Ok(()));
+        turn(&mut grab, false, Err("lost"));
+
+        // Grabbed again, global-hotkey would answer that it is already registered, told as taken.
+        assert_eq!(turn(&mut grab, true, Ok(())), (Change::Nothing, 0, 0));
+        assert!(!grab.taken());
+    }
+
+    #[test]
+    fn turned_on_before_any_active_window_is_told_the_key_waits_for_the_game() {
+        let mut grab = Grab::new(false);
+
+        assert_eq!(turn(&mut grab, true, Ok(())), (Change::Nothing, 0, 0));
+        assert_eq!(
+            follow(&mut grab, Active::Game, Ok(())),
+            (Change::Grabbed, 1, 0)
+        );
+    }
+
+    #[test]
     fn a_release_failed_when_turned_off_is_tried_again_at_the_next_change() {
         let mut grab = Grab::default();
         follow(&mut grab, Active::Game, Ok(()));
