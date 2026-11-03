@@ -84,9 +84,13 @@ pub struct PriceCheckHotkey {
     in_game: Option<InGame>,
     /// Each press of the hotkey.
     targets: Option<Receiver<Press>>,
-    /// Its keys.
-    shortcut: Shortcut,
+    /// Its keys, also read by the handler of the hotkey events, which only copies at a press of
+    /// them: the keys replaced, a press of the previous ones still on its way is ignored.
+    shortcut: SharedShortcut,
 }
+
+/// The keys of the hotkey, shared with the handler of the hotkey events.
+type SharedShortcut = std::sync::Arc<std::sync::Mutex<Shortcut>>;
 
 /// The grab of the key, shared on Linux between the thread that follows the active window and the
 /// thread of the window, which turns the hotkey on or off and reads whether its key is taken.
@@ -101,7 +105,6 @@ type SharedGrab = std::sync::Arc<std::sync::Mutex<grab::Grab>>;
 #[cfg(target_os = "linux")]
 struct InGame {
     manager: Manager,
-    hotkey: global_hotkey::hotkey::HotKey,
     grab: SharedGrab,
     /// [`grab::Grab::taken`], written under the lock of the grab and read by each frame without
     /// it: the follow thread holds the lock while `global-hotkey` answers, up to 50 ms.
@@ -122,14 +125,12 @@ impl InGame {
         on: bool,
         wake: impl Fn() + Send + 'static,
     ) -> Self {
-        let hotkey = shortcut.hotkey();
         let manager = std::sync::Arc::new(manager);
         let grab = std::sync::Arc::new(std::sync::Mutex::new(grab::Grab::new(on, shortcut)));
         let taken = SharedTaken::default();
-        grab_in_game(&manager, hotkey, &grab, &taken, wake);
+        grab_in_game(&manager, &grab, &taken, wake);
         Self {
             manager,
-            hotkey,
             grab,
             taken,
         }
@@ -137,11 +138,9 @@ impl InGame {
 
     /// Turns the hotkey on or off at once.
     fn turn(&mut self, on: bool) {
-        let (manager, hotkey) = (&self.manager, self.hotkey);
-        let mut grab = self
-            .grab
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let manager = &self.manager;
+        let mut grab = self.lock();
+        let hotkey = grab.keys().hotkey();
         grab.turn(
             on,
             || manager.register(hotkey),
@@ -149,6 +148,29 @@ impl InGame {
         );
         self.taken
             .store(grab.taken(), std::sync::atomic::Ordering::Relaxed);
+    }
+
+    /// Replaces its keys at once; the keys of the grab after the change, the previous ones when
+    /// they couldn't be released.
+    fn change_keys(&mut self, keys: Shortcut) -> Shortcut {
+        let manager = &self.manager;
+        let mut grab = self.lock();
+        let previous = grab.keys().hotkey();
+        grab.change_keys(
+            keys,
+            || manager.register(keys.hotkey()),
+            || manager.unregister(previous),
+        );
+        self.taken
+            .store(grab.taken(), std::sync::atomic::Ordering::Relaxed);
+        grab.keys()
+    }
+
+    /// The grab, held by the thread of the window (see [`SharedGrab`]).
+    fn lock(&self) -> std::sync::MutexGuard<'_, grab::Grab> {
+        self.grab
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
     /// Whether its key couldn't be grabbed the last time it was tried.
@@ -163,7 +185,6 @@ impl InGame {
 #[cfg(target_os = "windows")]
 struct InGame {
     manager: Manager,
-    hotkey: global_hotkey::hotkey::HotKey,
     /// The foreground window, read by a thread of its own; none once it can't be followed.
     foreground: Option<Receiver<grab::Foreground>>,
     follow: grab::ForegroundFollow,
@@ -180,7 +201,6 @@ impl InGame {
         on: bool,
         wake: impl Fn() + Send + 'static,
     ) -> Self {
-        let hotkey = shortcut.hotkey();
         let foreground = system::follow_foreground(wake)
             .inspect_err(|error| {
                 log::warn!("The price-check hotkey can't follow the game window: {error}");
@@ -192,7 +212,6 @@ impl InGame {
         }
         let mut in_game = Self {
             manager,
-            hotkey,
             foreground,
             follow,
         };
@@ -219,7 +238,7 @@ impl InGame {
                 }
             }
         }
-        let (manager, hotkey) = (&self.manager, self.hotkey);
+        let (manager, hotkey) = (&self.manager, self.follow.keys().hotkey());
         self.follow.follow(
             main_focused,
             || manager.register(hotkey),
@@ -229,12 +248,24 @@ impl InGame {
 
     /// Turns the hotkey on or off at once.
     fn turn(&mut self, on: bool) {
-        let (manager, hotkey) = (&self.manager, self.hotkey);
+        let (manager, hotkey) = (&self.manager, self.follow.keys().hotkey());
         self.follow.turn(
             on,
             || manager.register(hotkey),
             || manager.unregister(hotkey),
         );
+    }
+
+    /// Replaces its keys at once; the keys of the grab after the change, the previous ones when
+    /// they couldn't be released.
+    fn change_keys(&mut self, keys: Shortcut) -> Shortcut {
+        let (manager, previous) = (&self.manager, self.follow.keys().hotkey());
+        self.follow.change_keys(
+            keys,
+            || manager.register(keys.hotkey()),
+            || manager.unregister(previous),
+        );
+        self.follow.keys()
     }
 
     /// Whether its key couldn't be grabbed the last time it was tried.
@@ -268,11 +299,12 @@ impl PriceCheckHotkey {
         use std::sync::{Arc, Mutex, PoisonError};
 
         let on = Arc::new(AtomicBool::new(on));
+        let keys = Arc::new(Mutex::new(shortcut));
         let off = || Self {
             on: Arc::clone(&on),
             in_game: None,
             targets: None,
-            shortcut,
+            shortcut: Arc::clone(&keys),
         };
         let sender = match system::CopySender::connect() {
             Ok(sender) => Mutex::new((sender, marker)),
@@ -290,17 +322,13 @@ impl PriceCheckHotkey {
         };
         let (targets, receiver) = std::sync::mpsc::channel();
         log::info!("Price-check hotkey: {shortcut}");
-        let id = shortcut.hotkey().id();
         let wake = Arc::new(wake);
         let wake_in_game = Arc::clone(&wake);
         let on_at_press = Arc::clone(&on);
+        let keys_at_press = Arc::clone(&keys);
         GlobalHotKeyEvent::set_event_handler(Some(move |event: GlobalHotKeyEvent| {
-            // At the press or at the release of D, as each system lets the keys sent reach the
-            // game; none while the hotkey is off.
-            if event.id == id
-                && event.state == system::SENT_AT
-                && on_at_press.load(Ordering::Relaxed)
-            {
+            let shortcut = *keys_at_press.lock().unwrap_or_else(PoisonError::into_inner);
+            if copies_at(event, shortcut, on_at_press.load(Ordering::Relaxed)) {
                 let mut sender = sender.lock().unwrap_or_else(PoisonError::into_inner);
                 let (copy_sender, marker) = &mut *sender;
                 copy_sender.send_copy(
@@ -322,7 +350,7 @@ impl PriceCheckHotkey {
             on,
             in_game: Some(in_game),
             targets: Some(receiver),
-            shortcut,
+            shortcut: keys,
         }
     }
 
@@ -339,14 +367,35 @@ impl PriceCheckHotkey {
         Self {
             on: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(on)),
             targets: None,
-            shortcut,
+            shortcut: std::sync::Arc::new(std::sync::Mutex::new(shortcut)),
         }
     }
 
     /// Its keys.
     #[must_use]
     pub fn shortcut(&self) -> Shortcut {
-        self.shortcut
+        *self
+            .shortcut
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
+    /// Replaces its keys with `keys`, as the player chooses them: the previous ones released at
+    /// once, the new ones grabbed at once while the game is the active window, otherwise the next
+    /// time it becomes it. When the previous ones can't be released, they stay and still copy;
+    /// the new ones wait for the next launch, which reads them from the settings.
+    pub fn change_keys(&mut self, keys: Shortcut) {
+        // The keys the grab holds, or will hold, written for the handler once it decided: the
+        // keys it grabs and the keys it copies at stay the same.
+        #[cfg(any(target_os = "linux", target_os = "windows"))]
+        let keys = self
+            .in_game
+            .as_mut()
+            .map_or(keys, |in_game| in_game.change_keys(keys));
+        *self
+            .shortcut
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = keys;
     }
 
     /// Turns the hotkey on or off, as the player sets it: off, its key is released at once, left
@@ -386,15 +435,14 @@ fn state_of(available: bool, on: bool, taken: bool) -> HotkeyState {
     }
 }
 
-/// Grabs `hotkey` only while the game is the active window, followed on a thread of its own until
-/// `manager` is dropped, so that Ctrl+D stays to the other windows; `wake` is called when its key
-/// becomes taken or free, which the window tells. When the X server can't be reached, the hotkey
-/// stays off, written to the log; when the desktop doesn't tell its active window, it is grabbed
-/// for every window.
+/// Grabs the keys of `grab` only while the game is the active window, followed on a thread of its
+/// own until `manager` is dropped, so that Ctrl+D stays to the other windows; `wake` is called
+/// when its key becomes taken or free, which the window tells. When the X server can't be
+/// reached, the hotkey stays off, written to the log; when the desktop doesn't tell its active
+/// window, it is grabbed for every window.
 #[cfg(target_os = "linux")]
 fn grab_in_game(
     manager: &Manager,
-    hotkey: global_hotkey::hotkey::HotKey,
     grab: &SharedGrab,
     taken: &SharedTaken,
     wake: impl Fn() + Send + 'static,
@@ -411,6 +459,8 @@ fn grab_in_game(
             let mut grab = grab
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
+            // The keys of the moment: the player may have replaced them.
+            let hotkey = grab.keys().hotkey();
             grab.follow(
                 active,
                 || manager.register(hotkey),
@@ -592,9 +642,60 @@ impl PriceCheckHotkey {
     }
 }
 
+/// Whether `event` sends the copy, the hotkey of `keys` turned `on` or off: a press of these keys
+/// only, so that a press of the previous ones still on its way once they are replaced is ignored;
+/// at the press or at the release of D, as each system lets the keys sent reach the game; none
+/// while the hotkey is off.
+#[cfg(any(target_os = "linux", target_os = "windows"))]
+fn copies_at(event: global_hotkey::GlobalHotKeyEvent, keys: Shortcut, on: bool) -> bool {
+    on && event.id == keys.hotkey().id() && event.state == system::SENT_AT
+}
+
 #[cfg(all(test, any(target_os = "linux", target_os = "windows")))]
 mod tests {
     use super::*;
+    use global_hotkey::{GlobalHotKeyEvent, HotKeyState};
+
+    /// An event of the hotkey of `keys`, in `state`.
+    fn event(keys: &str, state: HotKeyState) -> GlobalHotKeyEvent {
+        let keys: Shortcut = keys.parse().unwrap();
+        GlobalHotKeyEvent {
+            id: keys.hotkey().id(),
+            state,
+        }
+    }
+
+    /// The state of the key at which the copy isn't sent.
+    fn not_sent_at() -> HotKeyState {
+        match system::SENT_AT {
+            HotKeyState::Pressed => HotKeyState::Released,
+            HotKeyState::Released => HotKeyState::Pressed,
+        }
+    }
+
+    #[test]
+    fn a_press_of_the_keys_copies() {
+        let ctrl_g = "Ctrl+G".parse().unwrap();
+        assert!(copies_at(event("Ctrl+G", system::SENT_AT), ctrl_g, true));
+    }
+
+    #[test]
+    fn a_press_of_the_previous_keys_still_on_its_way_copies_nothing() {
+        let ctrl_g = "Ctrl+G".parse().unwrap();
+        assert!(!copies_at(event("Ctrl+D", system::SENT_AT), ctrl_g, true));
+    }
+
+    #[test]
+    fn the_other_state_of_the_key_copies_nothing() {
+        let ctrl_d = Shortcut::default();
+        assert!(!copies_at(event("Ctrl+D", not_sent_at()), ctrl_d, true));
+    }
+
+    #[test]
+    fn the_hotkey_off_copies_nothing() {
+        let ctrl_d = Shortcut::default();
+        assert!(!copies_at(event("Ctrl+D", system::SENT_AT), ctrl_d, false));
+    }
 
     const CONTROL: u8 = 37;
     const C: u8 = 54;

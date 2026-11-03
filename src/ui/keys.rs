@@ -7,14 +7,30 @@ use egui::{Align2, Color32, FontId, Rect, Response, Sense, Stroke, StrokeKind, U
 
 use super::theme::{color, size};
 use super::widgets;
+use crate::i18n::{Message, Translator};
 
 /// The keys of the copy of the game.
 pub const COPY: [&str; 2] = ["Ctrl", "C"];
 
 /// `keys` written joined, as in a sentence: `Ctrl+D`.
 #[must_use]
-pub fn joined(keys: &[&str]) -> String {
-    keys.join("+")
+pub fn joined<K: AsRef<str>>(keys: &[K]) -> String {
+    keys.iter().map(AsRef::as_ref).collect::<Vec<_>>().join("+")
+}
+
+/// The names of `keys` in the language of the interface: Shift is "Maj" in French, as on French
+/// keyboards; the others are the same in every language.
+#[must_use]
+pub fn named(keys: &[&str], i18n: &Translator) -> Vec<String> {
+    keys.iter()
+        .map(|&key| {
+            if key == "Shift" {
+                i18n.text(Message::KeyShift)
+            } else {
+                key.to_owned()
+            }
+        })
+        .collect()
 }
 
 /// The measures of a row of key caps.
@@ -30,10 +46,16 @@ pub struct Caps {
 
 /// `keys` drawn as key caps joined by "+", their letters in `letters`; on the color of the
 /// controls when `filled`, otherwise only outlined (a hotkey turned off).
-pub fn caps(ui: &mut Ui, keys: &[&str], caps: &Caps, letters: Color32, filled: bool) -> Response {
+pub fn caps<K: AsRef<str>>(
+    ui: &mut Ui,
+    keys: &[K],
+    caps: &Caps,
+    letters: Color32,
+    filled: bool,
+) -> Response {
     let galleys: Vec<_> = keys
         .iter()
-        .map(|&key| widgets::text_line(ui, key, caps.font.clone()))
+        .map(|key| widgets::text_line(ui, key.as_ref(), caps.font.clone()))
         .collect();
     let plus = widgets::text_line(ui, "+", caps.font.clone());
 
@@ -89,6 +111,22 @@ pub fn caps(ui: &mut Ui, keys: &[&str], caps: &Caps, letters: Color32, filled: b
     response
 }
 
+/// `first` then, on a line of its own, `second`, each of `strong` in the format `bold` and the rest
+/// in `regular`: the two sentences of the key of the hotkey taken.
+#[must_use]
+pub fn two_lines(
+    first: &str,
+    second: &str,
+    strong: &[&str],
+    regular: &TextFormat,
+    bold: &TextFormat,
+) -> LayoutJob {
+    let mut job = emphasized(first, strong, regular, bold);
+    job.append("\n", 0.0, regular.clone());
+    append_emphasized(&mut job, second, strong, regular, bold);
+    job
+}
+
 /// `sentence` with each of `strong` in the format `bold`, the rest in `regular`: the keys of a
 /// warning in bold.
 #[must_use]
@@ -99,6 +137,18 @@ pub fn emphasized(
     bold: &TextFormat,
 ) -> LayoutJob {
     let mut job = LayoutJob::default();
+    append_emphasized(&mut job, sentence, strong, regular, bold);
+    job
+}
+
+/// Appends `sentence` to `job` as [`emphasized`] writes it.
+fn append_emphasized(
+    job: &mut LayoutJob,
+    sentence: &str,
+    strong: &[&str],
+    regular: &TextFormat,
+    bold: &TextFormat,
+) {
     let mut rest = sentence;
     loop {
         // The first of the strong parts left, the longest when two start at the same place.
@@ -119,7 +169,6 @@ pub fn emphasized(
     if !rest.is_empty() {
         job.append(rest, 0.0, regular.clone());
     }
-    job
 }
 
 #[cfg(test)]
@@ -174,6 +223,47 @@ mod tests {
                 ("Ctrl+C", true),
                 (".", false),
             ]
+        );
+    }
+
+    #[test]
+    fn the_second_sentence_goes_on_a_line_of_its_own_its_keys_bold_too() {
+        let (regular, bold) = formats();
+        let job = two_lines(
+            "Ctrl+D is taken by another application.",
+            "Choose another key, or copy with Ctrl+C.",
+            &["Ctrl+D", "Ctrl+C"],
+            &regular,
+            &bold,
+        );
+
+        assert_eq!(
+            parts(&job),
+            [
+                ("Ctrl+D", true),
+                // egui joins the parts of the same format.
+                (
+                    " is taken by another application.\nChoose another key, or copy with ",
+                    false
+                ),
+                ("Ctrl+C", true),
+                (".", false),
+            ]
+        );
+    }
+
+    #[test]
+    fn shift_is_maj_in_french() {
+        use crate::language::Language;
+
+        let keys = ["Ctrl", "Shift", "D"];
+        assert_eq!(
+            named(&keys, &Translator::new(Language::French)),
+            ["Ctrl", "Maj", "D"]
+        );
+        assert_eq!(
+            named(&keys, &Translator::new(Language::English)),
+            ["Ctrl", "Shift", "D"]
         );
     }
 

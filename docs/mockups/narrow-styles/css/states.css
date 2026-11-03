@@ -76,3 +76,61 @@
 .app-tip .app-hotkey-columns + .app-hotkey-tip-title { margin-top: 10px; }
 .app-tip .app-hotkey-dots { display: inline; margin: 0 2px; color: var(--weak); }
 .app-hotkey-help:has(.app-hotkey-columns) .app-tip { width: 210px; }
+/* The keys as a list (14c3b2): a chevron after them, pointing right like the one of the league, turned down
+   while the list is open; the list under them, on the right, with the shadow and the opacity of the league list;
+   each shortcut as key caps, the chosen one checked and with the lighter background of the hover, "Other…" last
+   under a line of its own, so that its row is as high as the others. */
+.app-hotkey-picker { position: relative; }
+.app-hotkey-select .ico { margin-left: 2px; color: var(--faint); transition: transform .15s ease; }
+.app-hotkey-picker.is-open .app-hotkey-select .ico { transform: rotate(90deg); }
+.app-hotkey-picker.is-open .app-hotkey-select .key { border-color: var(--weak); }
+.app-hotkey-list {
+  position: absolute; z-index: 2; top: calc(100% + 4px); right: 0; width: max-content; min-width: 200px; padding: 4px 0;
+  border-radius: 3px; background: rgba(28, 32, 38, var(--menu-alpha)); box-shadow: 0 10px 30px rgba(0, 0, 0, .6);
+  opacity: 0; transform: translateY(-4px); pointer-events: none; transition: opacity .15s ease, transform .15s ease;
+}
+.app-hotkey-picker.is-open .app-hotkey-list { opacity: 1; transform: none; pointer-events: auto; }
+@media (prefers-reduced-motion: reduce) { .app-hotkey-select .ico, .app-hotkey-list { transition: none; } }
+/* The rows never wrap nor shrink: the list grows with its longest row ("Autre… Ctrl+Maj+D" in French), so that
+   the check stays centered on every row whatever the metrics of the font. */
+.app-hotkey-option { display: flex; align-items: center; gap: 8px; height: 28px; padding: 0 10px 0 8px; font-size: 12.5px; color: var(--text); white-space: nowrap; cursor: pointer; }
+.app-hotkey-option > * { flex: none; }
+.app-hotkey-option:hover, .app-hotkey-option.is-chosen { background: rgba(255, 255, 255, .06); }
+.app-hotkey-option .app-hotkey-chip .key { color: var(--text); }
+.app-hotkey-check { width: 12px; height: 12px; display: grid; place-items: center; color: var(--accent); }
+.app-hotkey-check .ico { display: block; }
+.app-hotkey-default { margin-left: auto; color: var(--faint); font-size: 11.5px; }
+.app-hotkey-separator { height: 1px; margin: 4px 0; background: var(--control-line); }
+.app-hotkey-option.is-other .app-hotkey-chip { margin-left: auto; }
+.win:has(.app-hotkey-picker.is-open) { overflow: visible; }
+/* The free key offered under the warning of the key taken, a click grabs it at once. */
+.app-hotkey-offer { display: flex; margin-top: 2px; }
+.app-hotkey-offer .pill { background: var(--accent); color: var(--on-accent, var(--bg-a)); cursor: pointer; font-weight: 600; }
+.app-hotkey-offer.is-centered { justify-content: center; margin-top: 10px; }
+/* The hotkey as a white button (14c3b2, three tries): the style of "Use Ctrl+G", its chevron inside; A, the text
+   near black; B, in gray; C, of a fixed width, the chevron at its right edge like a classic select. The list
+   writes its shortcuts as text. */
+.app-hotkey-select.is-button {
+  display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px 4px 10px; border-radius: var(--radius);
+  background: var(--accent); color: var(--on-accent, var(--bg-a)); font-size: 12px; font-weight: 600; line-height: 1.2;
+  white-space: nowrap; cursor: pointer;
+}
+.app-hotkey-select.is-button:hover { background: color-mix(in srgb, var(--accent) 88%, var(--bg-a)); }
+.app-hotkey-select.is-button .ico { margin-left: 0; color: inherit; }
+.app-hotkey-select.is-b { color: #5d6670; }
+.app-hotkey-select.is-c { min-width: 96px; justify-content: space-between; }
+.app-hotkey-name { font-weight: 600; }
+/* The hotkey as a split button (14c3b2, three tries): the key on the left, the chevron in a square on the right,
+   as high as "Use Ctrl+G" (22 px), the two of different backgrounds; D, the key white and the chevron on dark;
+   E, inverted; F, the chevron on a light gray. */
+.app-hotkey-select.is-split { align-items: stretch; gap: 0; height: 22px; padding: 0; overflow: hidden; }
+.app-hotkey-select.is-split .app-hotkey-label { display: flex; align-items: center; padding: 0 10px; }
+.app-hotkey-arrow { width: 22px; display: grid; place-items: center; }
+.app-hotkey-select.is-split:hover { background: var(--accent); }
+.is-d .app-hotkey-arrow { background: var(--control-line); color: var(--text); }
+.app-hotkey-select.is-e { background: var(--control-line); color: var(--text); }
+.app-hotkey-select.is-e:hover, .app-hotkey-select.is-e.is-hovered { background: color-mix(in srgb, var(--control-line) 82%, var(--text)); }
+/* The hotkey off: its key faint, the square kept, since the list still opens. */
+.app-hotkey-select.is-e.is-off .app-hotkey-label { color: var(--faint); }
+.is-e .app-hotkey-arrow { background: var(--accent); color: var(--on-accent, var(--bg-a)); }
+.is-f .app-hotkey-arrow { background: color-mix(in srgb, var(--accent) 80%, var(--bg-a)); }

@@ -32,6 +32,13 @@ pub mod color {
     pub const WARNING_TEXT: Color32 = Color32::from_rgb(0xf8, 0xed, 0xc2);
     /// The bubbles that open over the content: the tooltip of an offer, a new league.
     pub const BUBBLE: Color32 = Color32::from_rgb(0x20, 0x27, 0x2f);
+    /// The list of the keys of the hotkey, darker than the bubbles (the mock-up).
+    pub const LIST: Color32 = Color32::from_rgb(0x1c, 0x20, 0x26);
+    /// The keys of the hotkey in the settings under the pointer: their dark lighter, the control
+    /// line mixed with 18 % of the text.
+    pub const KEYS_LIT: Color32 = Color32::from_rgb(0x4b, 0x54, 0x5f);
+    /// A row of a list under the pointer, or chosen: white at 6 % over it.
+    pub const ROW_LIT: Color32 = Color32::from_rgba_premultiplied(15, 15, 15, 15);
     /// The emblem behind the empty state: white at 2.25 %, rounded to the nearest alpha.
     pub const WATERMARK: Color32 = Color32::from_rgba_premultiplied(6, 6, 6, 6);
 
@@ -218,11 +225,10 @@ pub mod text {
         fonts::text(11.5, Weight::SemiBold)
     }
 
-    /// The keys of the hotkey in the settings, drawn as key caps, smaller than in the empty
-    /// window.
+    /// The keys of a row of the list of the hotkey, in the settings.
     #[must_use]
-    pub fn setting_keys() -> FontId {
-        fonts::numbers(12.0)
+    pub fn list_keys() -> FontId {
+        fonts::text(12.5, Weight::SemiBold)
     }
 
     /// The tier of a modifier, before its range.

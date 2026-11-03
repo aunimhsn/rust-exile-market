@@ -87,12 +87,40 @@ impl fmt::Display for ShortcutError {
 
 impl Shortcut {
     /// Ctrl+D, the default, the one of Exiled Exchange 2.
-    pub const PRICE_CHECK: Self = Self {
-        control: true,
-        shift: false,
-        alt: false,
-        key: KeyName::Letter(3),
-    };
+    pub const PRICE_CHECK: Self = Self::control(KeyName::Letter(3));
+
+    /// The keys the settings offer, the default first: two keys at most, none the game, the chat,
+    /// Exiled Exchange 2 or the systems use by default (`specs.md`, Settings, checked on
+    /// 2026-11-03): G sits at the same place on QWERTY, AZERTY and QWERTZ, and the game leaves F3
+    /// and F4 free.
+    pub const CHOICES: [Self; 5] = [
+        Self::PRICE_CHECK,
+        Self::control(KeyName::Letter(6)),
+        Self {
+            alt: true,
+            ..Self::alone(KeyName::Letter(6))
+        },
+        Self::alone(KeyName::Function(3)),
+        Self::alone(KeyName::Function(4)),
+    ];
+
+    /// `key` without modifier.
+    const fn alone(key: KeyName) -> Self {
+        Self {
+            control: false,
+            shift: false,
+            alt: false,
+            key,
+        }
+    }
+
+    /// Ctrl and `key`.
+    const fn control(key: KeyName) -> Self {
+        Self {
+            control: true,
+            ..Self::alone(key)
+        }
+    }
 
     /// Its keys in order, the modifiers first, as key caps or joined by "+": `Ctrl`, `D`.
     #[must_use]
@@ -280,6 +308,21 @@ mod tests {
         assert_eq!(Shortcut::default().keys(), ["Ctrl", "D"]);
         assert_eq!(Shortcut::default().to_string(), "Ctrl+D");
         assert_eq!(read("Ctrl+D"), Ok("Ctrl+D".to_owned()));
+    }
+
+    #[test]
+    fn the_choices_are_the_default_then_ctrl_g_alt_g_f3_and_f4() {
+        let choices = Shortcut::CHOICES.map(|shortcut| shortcut.to_string());
+        assert_eq!(choices, ["Ctrl+D", "Ctrl+G", "Alt+G", "F3", "F4"]);
+        assert_eq!(Shortcut::CHOICES[0], Shortcut::default());
+    }
+
+    #[test]
+    fn each_choice_is_two_keys_at_most_and_reads_back_from_the_file() {
+        for choice in Shortcut::CHOICES {
+            assert!(choice.keys().len() <= 2, "{choice}");
+            assert_eq!(choice.to_string().parse(), Ok(choice));
+        }
     }
 
     #[test]

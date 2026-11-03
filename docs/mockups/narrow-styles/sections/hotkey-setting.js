@@ -38,7 +38,8 @@ const hkWin = options => win(topBar(true), hkSettings(options), hkFoot);
 
 const HK_HELP = "Copies the item under the cursor and shows its price over the game.";
 const HK_BANNER = "<b>Ctrl+D</b> is taken by another application: copy with <b>Ctrl+C</b>, or choose another key in the settings.";
-const HK_TAKEN = "<b>Ctrl+D</b> is taken by another application. Choose another key, or copy with <b>Ctrl+C</b>.";
+// Its two sentences on two lines, as in the empty window (the owner's choice on 2026-11-03, step 14c3b2).
+const HK_TAKEN = "<b>Ctrl+D</b> is taken by another application.<br>Choose another key, or copy with <b>Ctrl+C</b>.";
 
 // The invitation of the empty window with the Ctrl + D of the window over the game (14b1), and with Ctrl + C when
 // the hotkey is off or taken, so that it never shows a key that does nothing.
@@ -90,15 +91,20 @@ const HK_TIPS = {
   // 2026-11-03: the second column is the "Danger zone", in yellow, the keys accepted with a warning (Ctrl+V, Ctrl+F,
   // Alt+F4, F1), the title matching what the application does with them; the keys that can't work (Ctrl+C,
   // Alt+Tab, Alt+F2, the Windows key, F12 alone, a letter alone) leave the tooltip, rare, refused when chosen with
-  // a line in yellow too (red was tried and dropped: the owner keeps one color for every warning).
+  // a line in yellow too (red was tried and dropped: the owner keeps one color for every warning). Corrected in
+  // 14c3b2 against the owner's `poe2_production_Config.ini`: Ctrl+E casts a skill of the second bar, Q and 2 a
+  // skill and a flask that Alt held (the highlight) would block, so that the examples allowed are those of the list
+  // (Ctrl+D, Ctrl+G, Alt+G) and Ctrl+B, Alt+B; F8 takes a screenshot in the game, so that it joins the danger zone
+  // and leaves the line of the function keys.
   c: `<span class="app-hotkey-columns">
       <span class="app-hotkey-column"><span class="app-hotkey-tip-title">Allowed</span>
-        ${["Ctrl+D", "Ctrl+E", "Alt+Q", "Alt+2"].map(hkCaps).join("")}</span>
+        ${["Ctrl+D", "Ctrl+G", "Alt+G", "Ctrl+B", "Alt+B"].map(hkCaps).join("")}</span>
       <span class="app-hotkey-column"><span class="app-hotkey-tip-title is-danger">Danger zone</span>
-        ${["Ctrl+V", "Ctrl+F", "Alt+F4", "F1"].map(hkCaps).join("")}</span>
+        ${["Ctrl+V", "Ctrl+F", "Alt+F4", "F1", "F8"].map(hkCaps).join("")}</span>
     </span>
     <span class="app-hotkey-tip-title">Function keys</span>
-    <span class="app-hotkey-chips"><span class="app-hotkey-chip"><span class="key">F2</span><span class="app-hotkey-dots">…</span><span class="key">F11</span></span></span>`,
+    <span class="app-hotkey-chips">${[["F2", "F7"], ["F9", "F11"]].map(([first, last]) =>
+      `<span class="app-hotkey-chip"><span class="key">${first}</span><span class="app-hotkey-dots">…</span><span class="key">${last}</span></span>`).join("")}</span>`,
 };
 // The label "Hotkey" and its "?", the tooltip `help` (a key of HK_TIPS) open under it.
 const hkLabel = help => `<span class="app-hotkey-label"><span class="label">Hotkey</span>
@@ -106,9 +112,10 @@ const hkLabel = help => `<span class="app-hotkey-label"><span class="label">Hotk
     <span class="app-tip app-hotkey-tip">${HK_TIPS[help]}</span></span></span>`;
 
 SECTIONS.unshift(["Hotkey rules tooltip (14c3b): allowed and danger zone, the keys tried in the game", [
-  ["Two columns: four allowed, four in the danger zone (accepted with a warning), then F2 … F11 alone", hkWin({ help: "c", note: HK_HELP })],
+  ["Two columns: five allowed, five in the danger zone (accepted with a warning), then F2 … F7 and F9 … F11 alone", hkWin({ help: "c", note: HK_HELP })],
   ["A risky key chosen: accepted, a warning under it", hkWin({ keys: ["Ctrl", "V"], note: "<b>Ctrl+V</b> no longer pastes in the game while it is your hotkey.", warn: true })],
   ["Another risky key chosen, F1 alone", hkWin({ keys: ["F1"], note: "<b>F1</b> no longer shows the resources the game uses while it is your hotkey.", warn: true })],
+  ["F8 chosen: accepted, the screenshots of the game lost (14c3b2)", hkWin({ keys: ["F8"], note: "<b>F8</b> no longer takes screenshots in the game while it is your hotkey.", warn: true })],
   ["A key that can't work, refused, the previous one kept (out of the tooltip)", hkWin({ keys: ["Ctrl", "D"], note: "<b>Ctrl+C</b> copies the item already: choose another key.", warn: true })],
   ["Before · A, sentences, the keys in bold", hkWin({ help: "a", note: HK_HELP })],
   ["Before · B, the examples as key caps, under two labels", hkWin({ help: "b", note: HK_HELP })],

@@ -53,6 +53,9 @@ pub enum Message {
     SettingsHotkey,
     SettingsHotkeyPriceCheck,
     SettingsHotkeyHelp,
+    SettingsHotkeyChange,
+    SettingsHotkeyDefault,
+    KeyShift,
     HotkeyTakenChoose,
     Disclaimer,
     CheckOnTrade,
@@ -181,7 +184,7 @@ pub enum Message {
 impl Message {
     /// Every message, for the tests.
     #[cfg(test)]
-    const ALL: [Self; 135] = [
+    const ALL: [Self; 138] = [
         Self::LeagueModeSoftcore,
         Self::LeagueModeHardcore,
         Self::LeagueLoading,
@@ -210,6 +213,9 @@ impl Message {
         Self::SettingsHotkey,
         Self::SettingsHotkeyPriceCheck,
         Self::SettingsHotkeyHelp,
+        Self::SettingsHotkeyChange,
+        Self::SettingsHotkeyDefault,
+        Self::KeyShift,
         Self::HotkeyTakenChoose,
         Self::Disclaimer,
         Self::CheckOnTrade,
@@ -351,6 +357,9 @@ impl Message {
             Self::SettingsHotkey => "settings-hotkey",
             Self::SettingsHotkeyPriceCheck => "settings-hotkey-price-check",
             Self::SettingsHotkeyHelp => "settings-hotkey-help",
+            Self::SettingsHotkeyChange => "settings-hotkey-change",
+            Self::SettingsHotkeyDefault => "settings-hotkey-default",
+            Self::KeyShift => "key-shift",
             Self::HotkeyTakenChoose => "hotkey-taken-choose",
             Self::Disclaimer => "disclaimer",
             Self::CheckOnTrade => "check-on-trade",
@@ -1025,12 +1034,11 @@ impl Translator {
         self.format(HOTKEY_TAKEN, Some(&args))
     }
 
-    /// The key of the hotkey taken by another application, in the settings, with the keys that
-    /// still `copy`.
+    /// The key of the hotkey taken by another application, in the settings, on the line after
+    /// [`Self::hotkey_taken`]: where to choose another, and the keys that still `copy`.
     #[must_use]
-    pub fn hotkey_taken_settings(&self, hotkey: &str, copy: &str) -> String {
+    pub fn hotkey_taken_settings(&self, copy: &str) -> String {
         let mut args = FluentArgs::new();
-        args.set("hotkey", hotkey);
         args.set("copy", copy);
         self.format(HOTKEY_TAKEN_SETTINGS, Some(&args))
     }

@@ -434,10 +434,16 @@ language-french = Français
 settings-always-on-top = Always on top
 # Label above the price-check hotkey.
 settings-hotkey = Hotkey
-# The hotkey turned on or off; its keys are drawn after it.
+# The hotkey turned on or off; its keys are drawn after it, in a button that opens the list of the keys.
 settings-hotkey-price-check = Price check in the game
 settings-hotkey-help = Copies the item under the cursor and shows its price over the game.
-# The key of the hotkey taken by another application, in the settings: $hotkey its keys (Ctrl+D), $copy the keys of the copy of the game (Ctrl+C), both in bold.
-hotkey-taken-settings = { $hotkey } is taken by another application. Choose another key, or copy with { $copy }.
+# The tooltip of the button of the keys of the hotkey.
+settings-hotkey-change = Change the key
+# On the right of the default keys, in the list of the keys of the hotkey.
+settings-hotkey-default = Default
+# The key of the hotkey taken by another application, in the settings: "hotkey-taken" first, then this sentence on a line of its own. $copy the keys of the copy of the game (Ctrl+C), in bold.
+hotkey-taken-settings = Choose another key, or copy with { $copy }.
+# The name of the Shift key, in the keys of the hotkey (Ctrl+Shift+D).
+key-shift = Shift
 # Required by Grinding Gear Games for the tools of the community.
 disclaimer = This product isn't affiliated with or endorsed by Grinding Gear Games in any way.

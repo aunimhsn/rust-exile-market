@@ -16,6 +16,7 @@ They may be written in French, the language of the testers (an exception to the 
 - [Ctrl+D in the game only](linux/hotkey-game-only.md) (14c1)
 - [Hotkey turned on or off, its key taken](linux/hotkey-setting.md) (14c3a)
 - [Keys of the hotkey from the settings file](linux/hotkey-keys.md) (14c3b1)
+- [Key of the hotkey chosen from a list](linux/hotkey-list.md) (14c3b2)
 
 ## Windows
 
@@ -25,3 +26,4 @@ They may be written in French, the language of the testers (an exception to the 
 - [Ctrl+D in the game only](windows/hotkey-game-only.md) (14c2)
 - [Hotkey turned on or off, its key taken](windows/hotkey-setting.md) (14c3a)
 - [Keys of the hotkey from the settings file](windows/hotkey-keys.md) (14c3b1)
+- [Key of the hotkey chosen from a list](windows/hotkey-list.md) (14c3b2)
