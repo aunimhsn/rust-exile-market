@@ -80,25 +80,29 @@ const HK_TIPS = {
   // on a line of their own. Refused lists only what can't work (option 1, the owner's choice on 2026-11-03): Ctrl+C,
   // the copy the application sends itself, and the keys the system keeps (Alt+Tab, the Windows key, Ctrl+Esc); a key
   // that works but takes a function from the game or the system (Ctrl+V, Alt+F4, Ctrl+F) is accepted, with a line
-  // in the color of the warnings under the hotkey once chosen.
+  // in the color of the warnings under the hotkey once chosen. Tried in the owner's game on 2026-11-03 (Bazzite
+  // KDE): F1 shows the resources the game uses (accepted, with a warning); F2 to F11 do nothing (accepted alone,
+  // the line of the function keys); Alt+F2 opens the search of KDE, which takes it before XWayland, so that the grab
+  // succeeds and never hears it (refused); Alt+F4 closes the game (refused, no longer a warning). F12 is kept by
+  // Windows for its debugger (`RegisterHotKey`, to check in 14c3b): refused alone.
   c: `<span class="app-hotkey-columns">
       <span class="app-hotkey-column"><span class="app-hotkey-tip-title">Allowed</span>
         ${["Ctrl+D", "Ctrl+E", "Alt+Q", "Alt+2"].map(hkCaps).join("")}</span>
       <span class="app-hotkey-column"><span class="app-hotkey-tip-title is-refused">Refused</span>
-        ${["Ctrl+C", "Alt+Tab", "Win+D", "Ctrl+Esc"].map(hkCaps).join("")}</span>
+        ${["Ctrl+C", "Alt+Tab", "Alt+F4", "Alt+F2"].map(hkCaps).join("")}</span>
     </span>
     <span class="app-hotkey-tip-title">Function keys</span>
-    <span class="app-hotkey-chips"><span class="app-hotkey-chip"><span class="key">F1</span><span class="app-hotkey-dots">…</span><span class="key">F12</span></span></span>`,
+    <span class="app-hotkey-chips"><span class="app-hotkey-chip"><span class="key">F2</span><span class="app-hotkey-dots">…</span><span class="key">F11</span></span></span>`,
 };
 // The label "Hotkey" and its "?", the tooltip `help` (a key of HK_TIPS) open under it.
 const hkLabel = help => `<span class="app-hotkey-label"><span class="label">Hotkey</span>
   <span class="app-hotkey-help is-hovered" title="">${svg(13, '<circle cx="8" cy="8" r="6.2"/><path d="M6.3 6.2a1.8 1.8 0 1 1 2.5 1.7c-.5.2-.8.6-.8 1.1v.4"/><path d="M8 11.4v.1"/>')}
     <span class="app-tip app-hotkey-tip">${HK_TIPS[help]}</span></span></span>`;
 
-SECTIONS.unshift(["Hotkey rules tooltip (14c3b): refused only what can't work, a warning for a risky key", [
-  ["Two columns: four allowed, four refused (impossible only), then F1 … F12", hkWin({ help: "c", note: HK_HELP })],
+SECTIONS.unshift(["Hotkey rules tooltip (14c3b): refused only what can't work, a warning for a risky key, the keys tried in the game", [
+  ["Two columns: four allowed, four refused (impossible only), then F2 … F11 alone", hkWin({ help: "c", note: HK_HELP })],
   ["A risky key chosen: accepted, a warning under it", hkWin({ keys: ["Ctrl", "V"], note: "<b>Ctrl+V</b> no longer pastes in the game while it is your hotkey.", warn: true })],
-  ["Another risky key chosen", hkWin({ keys: ["Alt", "F4"], note: "<b>Alt+F4</b> no longer closes the game while it is your hotkey.", warn: true })],
+  ["Another risky key chosen, F1 alone", hkWin({ keys: ["F1"], note: "<b>F1</b> no longer shows the resources the game uses while it is your hotkey.", warn: true })],
   ["A key refused, the previous one kept (section Hotkey setting)", hkWin({ keys: ["Ctrl", "D"], note: "<b>Ctrl+C</b> copies the item already: choose another key.", warn: true })],
   ["Before · A, sentences, the keys in bold", hkWin({ help: "a", note: HK_HELP })],
   ["Before · B, the examples as key caps, under two labels", hkWin({ help: "b", note: HK_HELP })],
