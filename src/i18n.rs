@@ -50,6 +50,10 @@ pub enum Message {
     LanguageEnglish,
     LanguageFrench,
     SettingsAlwaysOnTop,
+    SettingsHotkey,
+    SettingsHotkeyPriceCheck,
+    SettingsHotkeyHelp,
+    HotkeyTakenChoose,
     Disclaimer,
     CheckOnTrade,
     TagCorrupted,
@@ -177,7 +181,7 @@ pub enum Message {
 impl Message {
     /// Every message, for the tests.
     #[cfg(test)]
-    const ALL: [Self; 131] = [
+    const ALL: [Self; 135] = [
         Self::LeagueModeSoftcore,
         Self::LeagueModeHardcore,
         Self::LeagueLoading,
@@ -203,6 +207,10 @@ impl Message {
         Self::LanguageEnglish,
         Self::LanguageFrench,
         Self::SettingsAlwaysOnTop,
+        Self::SettingsHotkey,
+        Self::SettingsHotkeyPriceCheck,
+        Self::SettingsHotkeyHelp,
+        Self::HotkeyTakenChoose,
         Self::Disclaimer,
         Self::CheckOnTrade,
         Self::TagCorrupted,
@@ -340,6 +348,10 @@ impl Message {
             Self::LanguageEnglish => "language-english",
             Self::LanguageFrench => "language-french",
             Self::SettingsAlwaysOnTop => "settings-always-on-top",
+            Self::SettingsHotkey => "settings-hotkey",
+            Self::SettingsHotkeyPriceCheck => "settings-hotkey-price-check",
+            Self::SettingsHotkeyHelp => "settings-hotkey-help",
+            Self::HotkeyTakenChoose => "hotkey-taken-choose",
             Self::Disclaimer => "disclaimer",
             Self::CheckOnTrade => "check-on-trade",
             Self::TagCorrupted => "tag-corrupted",
@@ -472,6 +484,8 @@ const STATUS_BAR: &str = "status-bar";
 const LEAGUE_TOOLTIP: &str = "league-tooltip";
 const STATUS_AUTHOR: &str = "status-author";
 const NEW_LEAGUE: &str = "new-league";
+const HOTKEY_TAKEN: &str = "hotkey-taken";
+const HOTKEY_TAKEN_SETTINGS: &str = "hotkey-taken-settings";
 const STATUS_PRICES: &str = "status-prices";
 const STATUS_PRICES_OFFLINE: &str = "status-prices-offline";
 const PRICES_UNREACHABLE: &str = "prices-unreachable";
@@ -1002,6 +1016,25 @@ impl Translator {
         self.format(NEW_LEAGUE, Some(&args))
     }
 
+    /// The key of the hotkey taken by another application, under the invitation of the empty
+    /// window: "Ctrl+D is taken by another application."
+    #[must_use]
+    pub fn hotkey_taken(&self, hotkey: &str) -> String {
+        let mut args = FluentArgs::new();
+        args.set("hotkey", hotkey);
+        self.format(HOTKEY_TAKEN, Some(&args))
+    }
+
+    /// The key of the hotkey taken by another application, in the settings, with the keys that
+    /// still `copy`.
+    #[must_use]
+    pub fn hotkey_taken_settings(&self, hotkey: &str, copy: &str) -> String {
+        let mut args = FluentArgs::new();
+        args.set("hotkey", hotkey);
+        args.set("copy", copy);
+        self.format(HOTKEY_TAKEN_SETTINGS, Some(&args))
+    }
+
     /// The line of the status bar while the settings are open: the application, its version,
     /// the author, then the author's site.
     #[must_use]
@@ -1173,6 +1206,8 @@ mod tests {
                 LEAGUE_TOOLTIP,
                 STATUS_AUTHOR,
                 NEW_LEAGUE,
+                HOTKEY_TAKEN,
+                HOTKEY_TAKEN_SETTINGS,
                 STATUS_PRICES,
                 STATUS_PRICES_OFFLINE,
                 PRICES_UNREACHABLE,

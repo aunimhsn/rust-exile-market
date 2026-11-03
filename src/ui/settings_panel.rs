@@ -1,10 +1,13 @@
-//! The settings, in place of the content of the window: the language, always on top, and
-//! the disclaimer at the bottom.
+//! The settings, in place of the content of the window: the language, always on top, the
+//! price-check hotkey, and the disclaimer at the bottom.
 
-use egui::{CentralPanel, Frame, Label, RichText, Ui, Vec2, vec2};
+use egui::text::TextFormat;
+use egui::{Align, CentralPanel, Frame, Label, Layout, RichText, Ui, Vec2, vec2};
 
+use super::keys::{self, Caps};
 use super::theme::{color, size, text};
 use super::widgets::{self, Mark};
+use crate::hotkey::HotkeyState;
 use crate::i18n::{Message, Translator};
 use crate::settings::{LanguageSetting, SettingChange, Settings};
 
@@ -15,16 +18,26 @@ const GROUP_GAP: f32 = 16.0;
 /// The space between the choices of a group, and under its label.
 const CHOICE_GAP: f32 = 6.0;
 const DISCLAIMER_GAP: f32 = 22.0;
+/// The key caps of the hotkey, smaller than in the empty window (the mock-up).
+const KEY_HEIGHT: f32 = 20.0;
+const KEY_PADDING: f32 = 7.0;
+const KEY_GAP: f32 = 4.0;
 
 pub struct SettingsPanel<'a> {
     settings: &'a Settings,
     i18n: &'a Translator,
+    hotkey: HotkeyState,
 }
 
 impl<'a> SettingsPanel<'a> {
+    /// The settings, with what the price-check `hotkey` does now: none on a system without it.
     #[must_use]
-    pub fn new(settings: &'a Settings, i18n: &'a Translator) -> Self {
-        Self { settings, i18n }
+    pub fn new(settings: &'a Settings, i18n: &'a Translator, hotkey: HotkeyState) -> Self {
+        Self {
+            settings,
+            i18n,
+            hotkey,
+        }
     }
 
     /// Draws the settings; the change the player clicked, if any.
@@ -44,22 +57,33 @@ impl<'a> SettingsPanel<'a> {
                 );
                 let language = self.language(ui);
                 let always_on_top = self.always_on_top(ui);
+                // macOS has no hotkey: Path of Exile 2 has no client there.
+                let hotkey = if cfg!(any(target_os = "linux", target_os = "windows")) {
+                    self.hotkey(ui)
+                } else {
+                    None
+                };
                 self.disclaimer(ui);
-                language.or(always_on_top)
+                language.or(always_on_top).or(hotkey)
             })
             .inner
     }
 
-    fn language(&self, ui: &mut Ui) -> Option<SettingChange> {
+    /// The label above a group of choices, after the space above the group.
+    fn group_label(&self, ui: &mut Ui, message: Message) {
         ui.add_space(GROUP_GAP);
         let label = widgets::spaced_line(
             ui,
-            self.i18n.text(Message::SettingsLanguage).to_uppercase(),
+            self.i18n.text(message).to_uppercase(),
             text::label(),
             text::LABEL_LETTER_SPACING,
         );
         let (rect, _) = ui.allocate_exact_size(label.size(), egui::Sense::hover());
         ui.painter().galley(rect.min, label, color::WEAK);
+    }
+
+    fn language(&self, ui: &mut Ui) -> Option<SettingChange> {
+        self.group_label(ui, Message::SettingsLanguage);
 
         let mut change = None;
         for setting in LanguageSetting::ALL {
@@ -86,6 +110,49 @@ impl<'a> SettingsPanel<'a> {
         widgets::choice(ui, Mark::Check { checked }, &label)
             .clicked()
             .then_some(SettingChange::AlwaysOnTop(!checked))
+    }
+
+    /// The price-check hotkey: its checkbox, its keys on the right of the row, then a line under
+    /// it, what it does, or in the color of the warnings that its key is taken.
+    fn hotkey(&self, ui: &mut Ui) -> Option<SettingChange> {
+        self.group_label(ui, Message::SettingsHotkey);
+        ui.add_space(CHOICE_GAP);
+        let on = self.settings.hotkey().on;
+        let label = self.i18n.text(Message::SettingsHotkeyPriceCheck);
+        let clicked = ui
+            .horizontal(|ui| {
+                let clicked = widgets::choice(ui, Mark::Check { checked: on }, &label).clicked();
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    let caps = Caps {
+                        font: text::setting_keys(),
+                        height: KEY_HEIGHT,
+                        padding: KEY_PADDING,
+                        gap: KEY_GAP,
+                    };
+                    let letters = if on { color::TEXT } else { color::FAINT };
+                    keys::caps(ui, &keys::HOTKEY, &caps, letters, on);
+                });
+                clicked
+            })
+            .inner;
+        ui.add_space(CHOICE_GAP);
+        let note = if self.hotkey == HotkeyState::Taken {
+            let hotkey = keys::joined(&keys::HOTKEY);
+            let copy = keys::joined(&keys::COPY);
+            keys::emphasized(
+                &self.i18n.hotkey_taken_settings(&hotkey, &copy),
+                &[&hotkey, &copy],
+                &TextFormat::simple(text::small(), color::WARNING),
+                &TextFormat::simple(text::small_strong(), color::WARNING),
+            )
+        } else {
+            egui::text::LayoutJob::simple_format(
+                self.i18n.text(Message::SettingsHotkeyHelp),
+                TextFormat::simple(text::small(), color::FAINT),
+            )
+        };
+        ui.add(Label::new(note).wrap());
+        clicked.then_some(SettingChange::HotkeyOn(!on))
     }
 
     fn disclaimer(&self, ui: &mut Ui) {

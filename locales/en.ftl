@@ -41,11 +41,14 @@ status-keyboard = Keys go to this window · Enter or Esc: back to the game
 
 ## Window before the first item
 
-# Followed by the keys "Ctrl + D" ("Ctrl + C" on macOS, without hotkey).
+# Followed by the keys "Ctrl + D" ("Ctrl + C" on macOS, without hotkey, or when the hotkey doesn't copy).
 empty-copy = Copy an item in the game with
 empty-price = The price shows up here.
 # In faint text under the invitation: the game must not be in exclusive fullscreen.
 empty-display-mode = Play in windowed fullscreen: in fullscreen, the game lets no application copy the item or show its price over it.
+# Under the invitation, in the color of the warnings, when the key of the hotkey is taken by another application: $hotkey its keys (Ctrl+D), in bold. The next sentence on a line of its own.
+hotkey-taken = { $hotkey } is taken by another application.
+hotkey-taken-choose = Choose another key in the settings.
 
 ## Copied item that can't be read
 
@@ -429,5 +432,12 @@ language-system = System
 language-english = English
 language-french = Français
 settings-always-on-top = Always on top
+# Label above the price-check hotkey.
+settings-hotkey = Hotkey
+# The hotkey turned on or off; its keys are drawn after it.
+settings-hotkey-price-check = Price check in the game
+settings-hotkey-help = Copies the item under the cursor and shows its price over the game.
+# The key of the hotkey taken by another application, in the settings: $hotkey its keys (Ctrl+D), $copy the keys of the copy of the game (Ctrl+C), both in bold.
+hotkey-taken-settings = { $hotkey } is taken by another application. Choose another key, or copy with { $copy }.
 # Required by Grinding Gear Games for the tools of the community.
 disclaimer = This product isn't affiliated with or endorsed by Grinding Gear Games in any way.

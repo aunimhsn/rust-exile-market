@@ -3,13 +3,12 @@
 //! download of the prices.
 
 use egui::text::{LayoutJob, TextFormat};
-use egui::{
-    Align2, CentralPanel, Frame, Image, Rect, RichText, Sense, Stroke, StrokeKind, Ui, Vec2, pos2,
-    vec2,
-};
+use egui::{CentralPanel, Frame, Image, Rect, RichText, Sense, Ui, Vec2, vec2};
 
-use super::theme::{color, motion, size, text};
-use super::{images, widgets};
+use super::images;
+use super::keys::{self, Caps};
+use super::theme::{color, motion, text};
+use crate::hotkey::HotkeyState;
 use crate::i18n::{Message, Translator};
 
 const WATERMARK_SIZE: f32 = 190.0;
@@ -17,9 +16,6 @@ const KEY_HEIGHT: f32 = 26.0;
 const KEY_PADDING: f32 = 9.0;
 const KEY_GAP: f32 = 8.0;
 const SPACE: f32 = 14.0;
-/// The keys to press in the game: the price-check hotkey, or the copy of the game on macOS,
-/// which has no hotkey.
-const KEYS: [&str; 2] = ["Ctrl", if cfg!(target_os = "macos") { "C" } else { "D" }];
 /// The space above the note on the display mode, and its width (the mock-up).
 const NOTE_GAP: f32 = 18.0;
 const NOTE_WIDTH: f32 = 330.0;
@@ -40,14 +36,18 @@ pub struct PriceDownload<'a> {
 
 pub struct EmptyState<'a> {
     i18n: &'a Translator,
+    hotkey: HotkeyState,
     download: Option<PriceDownload<'a>>,
 }
 
 impl<'a> EmptyState<'a> {
+    /// The invitation to copy with the price-check hotkey when it copies (`hotkey`), otherwise
+    /// with the copy of the game, so that it never shows a key that does nothing.
     #[must_use]
-    pub fn new(i18n: &'a Translator) -> Self {
+    pub fn new(i18n: &'a Translator, hotkey: HotkeyState) -> Self {
         Self {
             i18n,
+            hotkey,
             download: None,
         }
     }
@@ -81,9 +81,13 @@ impl<'a> EmptyState<'a> {
                     } else {
                         self.hint(ui, Message::EmptyCopy);
                         ui.add_space(SPACE / 2.0);
-                        Self::keys(ui);
+                        self.keys(ui);
                         ui.add_space(SPACE / 2.0);
                         self.hint(ui, Message::EmptyPrice);
+                        if self.hotkey == HotkeyState::Taken {
+                            ui.add_space(NOTE_GAP - ui.spacing().item_spacing.y);
+                            self.taken(ui);
+                        }
                         ui.add_space(NOTE_GAP - ui.spacing().item_spacing.y);
                         self.note(ui);
                     }
@@ -107,6 +111,27 @@ impl<'a> EmptyState<'a> {
                     .font(text::note())
                     .color(color::WEAK),
             );
+        });
+    }
+
+    /// The key of the hotkey taken by another application, in the color of the warnings, its
+    /// keys in bold, then on a line of its own where to choose another.
+    fn taken(&self, ui: &mut Ui) {
+        let hotkey = keys::joined(&keys::HOTKEY);
+        let regular = TextFormat::simple(text::note(), color::WARNING);
+        let bold = TextFormat::simple(text::note_strong(), color::WARNING);
+        let mut job = keys::emphasized(
+            &self.i18n.hotkey_taken(&hotkey),
+            &[&hotkey],
+            &regular,
+            &bold,
+        );
+        job.append("\n", 0.0, regular.clone());
+        job.append(&self.i18n.text(Message::HotkeyTakenChoose), 0.0, regular);
+        job.halign = egui::Align::Center;
+        ui.scope(|ui| {
+            ui.set_max_width(NOTE_WIDTH);
+            ui.label(job);
         });
     }
 
@@ -162,58 +187,21 @@ impl<'a> EmptyState<'a> {
         );
     }
 
-    /// The keys drawn as key caps, joined by "+".
-    fn keys(ui: &mut Ui) {
-        let caps: Vec<_> = KEYS
-            .iter()
-            .map(|&key| widgets::text_line(ui, key, text::keys()))
-            .collect();
-        let plus = widgets::text_line(ui, "+", text::keys());
-
-        // Each key cap, and a "+" between two of them.
-        let caps_width: f32 = caps
-            .iter()
-            .map(|cap| cap.size().x + 2.0 * KEY_PADDING)
-            .sum();
-        let separators_width: f32 = caps
-            .iter()
-            .skip(1)
-            .map(|_| plus.size().x + 2.0 * KEY_GAP)
-            .sum();
-        let width = caps_width + separators_width;
-        let (rect, _) = ui.allocate_exact_size(vec2(width, KEY_HEIGHT), Sense::hover());
-
-        let painter = ui.painter();
-        let mut left = rect.left();
-        for (index, cap) in caps.into_iter().enumerate() {
-            if index > 0 {
-                left += KEY_GAP;
-                painter.galley(
-                    pos2(left, rect.center().y - plus.size().y / 2.0),
-                    plus.clone(),
-                    color::WEAK,
-                );
-                left += plus.size().x + KEY_GAP;
-            }
-            let key = Rect::from_min_size(
-                pos2(left, rect.top()),
-                vec2(cap.size().x + 2.0 * KEY_PADDING, KEY_HEIGHT),
-            );
-            painter.rect_filled(key, f32::from(size::RADIUS), color::CONTROL);
-            painter.rect_stroke(
-                key,
-                f32::from(size::RADIUS),
-                Stroke::new(1.0, color::CONTROL_LINE),
-                StrokeKind::Inside,
-            );
-            painter.galley(
-                Align2::CENTER_CENTER
-                    .anchor_size(key.center(), cap.size())
-                    .min,
-                cap,
-                color::TEXT,
-            );
-            left = key.right();
-        }
+    /// The keys to press in the game, drawn as key caps: the price-check hotkey while it
+    /// copies, otherwise the copy of the game (macOS, which has no hotkey; the hotkey turned off
+    /// or its key taken).
+    fn keys(&self, ui: &mut Ui) {
+        let pressed: &[&str] = if self.hotkey == HotkeyState::Listening {
+            &keys::HOTKEY
+        } else {
+            &keys::COPY
+        };
+        let caps = Caps {
+            font: text::keys(),
+            height: KEY_HEIGHT,
+            padding: KEY_PADDING,
+            gap: KEY_GAP,
+        };
+        keys::caps(ui, pressed, &caps, color::TEXT, true);
     }
 }

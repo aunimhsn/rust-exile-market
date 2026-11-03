@@ -41,11 +41,14 @@ status-keyboard = Les touches vont dans cette fenêtre · Entrée ou Échap : r
 
 ## Fenêtre avant le premier objet
 
-# Suivi des touches « Ctrl + D » (« Ctrl + C » sous macOS, sans raccourci).
+# Suivi des touches « Ctrl + D » (« Ctrl + C » sous macOS, sans raccourci, ou quand le raccourci ne copie pas).
 empty-copy = Copiez un objet en jeu avec
 empty-price = Son prix s'affichera ici.
 # En texte pâle sous l'invitation : le jeu ne doit pas être en plein écran exclusif.
 empty-display-mode = Jouez en plein écran fenêtré : en plein écran, le jeu ne laisse aucune application copier l'objet ni afficher son prix par-dessus.
+# Sous l'invitation, en couleur d'avertissement, quand la touche du raccourci est prise par une autre application. $hotkey ses touches (Ctrl+D), en gras. La phrase suivante sur une ligne à elle.
+hotkey-taken = { $hotkey } est déjà pris par une autre application.
+hotkey-taken-choose = Choisissez une autre touche dans les réglages.
 
 ## Objet copié illisible
 
@@ -438,5 +441,12 @@ language-system = Système
 language-english = English
 language-french = Français
 settings-always-on-top = Toujours au premier plan
+# Libellé au-dessus du raccourci d'estimation du prix.
+settings-hotkey = Raccourci
+# Le raccourci activé ou non, ses touches dessinées après.
+settings-hotkey-price-check = Estimer le prix en jeu
+settings-hotkey-help = Copie l'objet sous le curseur et affiche son prix par-dessus le jeu.
+# La touche du raccourci prise par une autre application, dans les réglages. $hotkey ses touches (Ctrl+D), $copy les touches de la copie du jeu (Ctrl+C), toutes deux en gras.
+hotkey-taken-settings = { $hotkey } est déjà pris par une autre application. Choisissez une autre touche, ou copiez avec { $copy }.
 # Demandée par Grinding Gear Games pour les outils de la communauté.
 disclaimer = Ce produit n'est ni affilié à Grinding Gear Games ni approuvé par ce studio, de quelque manière que ce soit.

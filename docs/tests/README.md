@@ -14,6 +14,7 @@ They may be written in French, the language of the testers (an exception to the 
 - [Filters of the last items remembered](linux/remembered-filters.md) (#155)
 - [Prices in other currencies](linux/prices-other-currencies.md) (#156)
 - [Ctrl+D in the game only](linux/hotkey-game-only.md) (14c1)
+- [Hotkey turned on or off, its key taken](linux/hotkey-setting.md) (14c3a)
 
 ## Windows
 

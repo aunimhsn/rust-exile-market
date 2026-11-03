@@ -55,17 +55,39 @@ type Manager = std::sync::Arc<global_hotkey::GlobalHotKeyManager>;
 #[cfg(target_os = "windows")]
 type Manager = global_hotkey::GlobalHotKeyManager;
 
+/// What the hotkey does now, which the window tells the player (`specs.md`, Settings).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HotkeyState {
+    /// On: its key is grabbed while the game is the active window, or will be the next time.
+    Listening,
+    /// Turned off in the settings.
+    Off,
+    /// On, but its key couldn't be grabbed the last time the game became the active window:
+    /// taken by another application (Exiled Exchange 2 takes Ctrl+D too).
+    Taken,
+    /// None on this system (macOS), or it couldn't start (written to the log).
+    Unavailable,
+}
+
 /// The hotkey listened to for as long as this value lives.
 pub struct PriceCheckHotkey {
-    /// Listens until it is dropped.
+    /// Whether the player wants it, as the settings say.
+    on: bool,
+    /// Listens until it is dropped, grabbed while the game is the active window by a thread of its
+    /// own, which shares the grab.
     #[cfg(target_os = "linux")]
-    _manager: Option<Manager>,
+    in_game: Option<(Manager, global_hotkey::hotkey::HotKey, SharedGrab)>,
     /// Listens until it is dropped, registered while the game is the foreground window.
     #[cfg(target_os = "windows")]
     in_game: Option<InGame>,
     /// Each press of the hotkey.
     targets: Option<Receiver<Press>>,
 }
+
+/// The grab of the key, shared on Linux between the thread that follows the active window and the
+/// thread of the window, which turns the hotkey on or off and reads whether its key is taken.
+#[cfg(target_os = "linux")]
+type SharedGrab = std::sync::Arc<std::sync::Mutex<grab::Grab>>;
 
 /// The hotkey registered only while the game is the foreground window, on the thread of the
 /// window (Windows registers it only for a window of the thread that calls it), followed by
@@ -82,10 +104,12 @@ struct InGame {
 #[cfg(target_os = "windows")]
 impl InGame {
     /// Starts following the foreground window, `wake` called at each change; when it can't be
-    /// followed, the key is registered for every window, as before step 14c2.
+    /// followed, the key is registered for every window, as before step 14c2. The hotkey `on` or
+    /// off.
     fn start(
         manager: Manager,
         hotkey: global_hotkey::hotkey::HotKey,
+        on: bool,
         wake: impl Fn() + Send + 'static,
     ) -> Self {
         let foreground = keys::follow_foreground(wake)
@@ -93,7 +117,7 @@ impl InGame {
                 log::warn!("The price-check hotkey can't follow the game window: {error}");
             })
             .ok();
-        let mut follow = grab::ForegroundFollow::default();
+        let mut follow = grab::ForegroundFollow::new(on);
         if foreground.is_none() {
             follow.lose();
         }
@@ -133,30 +157,39 @@ impl InGame {
             || manager.unregister(hotkey),
         );
     }
+
+    /// Turns the hotkey on or off at once.
+    fn turn(&mut self, on: bool) {
+        let (manager, hotkey) = (&self.manager, self.hotkey);
+        self.follow.turn(
+            on,
+            || manager.register(hotkey),
+            || manager.unregister(hotkey),
+        );
+    }
 }
 
 impl PriceCheckHotkey {
-    /// Starts listening to Ctrl+D, only while the game is the active window. A failure
-    /// (the key taken by another application, such as Exiled Exchange 2) only writes to the log:
-    /// the player can still copy with Ctrl+C.
-    /// `marker` prepares the clipboard before each copy; `wake` is called after each hotkey, and
-    /// on Windows at each change of the foreground window, which [`Self::follow_game`] then takes
-    /// in.
+    /// Starts listening to Ctrl+D, only while the game is the active window, and only once
+    /// turned on when it starts `on` off (the settings). A key taken by another application, such
+    /// as Exiled Exchange 2, is written to the log and told by [`Self::state`]: the player can
+    /// still copy with Ctrl+C.
+    /// `marker` prepares the clipboard before each copy; `wake` is called after each hotkey, when
+    /// the key becomes taken or free on Linux, and on Windows at each change of the foreground
+    /// window, which [`Self::follow_game`] then takes in.
     ///
     /// Called once: the handler of the hotkey events can only be set once. Called on the thread
     /// of the window: on Windows, the hotkey is heard by a hidden window of that thread, through
     /// its event loop, and registered there.
     #[cfg(any(target_os = "linux", target_os = "windows"))]
     #[must_use]
-    pub fn start(marker: CopyMarker, wake: impl Fn() + Send + Sync + 'static) -> Self {
+    pub fn start(marker: CopyMarker, on: bool, wake: impl Fn() + Send + Sync + 'static) -> Self {
         use global_hotkey::hotkey::{Code, HotKey, Modifiers};
         use global_hotkey::{GlobalHotKeyEvent, GlobalHotKeyManager};
-        use std::sync::{Mutex, PoisonError};
+        use std::sync::{Arc, Mutex, PoisonError};
 
         let off = || Self {
-            #[cfg(target_os = "linux")]
-            _manager: None,
-            #[cfg(target_os = "windows")]
+            on,
             in_game: None,
             targets: None,
         };
@@ -177,10 +210,11 @@ impl PriceCheckHotkey {
         let (targets, receiver) = std::sync::mpsc::channel();
         let hotkey = HotKey::new(Some(Modifiers::CONTROL), Code::KeyD);
         let id = hotkey.id();
+        let wake = Arc::new(wake);
         #[cfg(target_os = "windows")]
-        let wake = std::sync::Arc::new(wake);
-        #[cfg(target_os = "windows")]
-        let wake_at_foreground = std::sync::Arc::clone(&wake);
+        let wake_at_foreground = Arc::clone(&wake);
+        #[cfg(target_os = "linux")]
+        let wake_at_taken = Arc::clone(&wake);
         GlobalHotKeyEvent::set_event_handler(Some(move |event: GlobalHotKeyEvent| {
             // At the press or at the release of D, as each system lets the keys sent reach the
             // game.
@@ -199,16 +233,19 @@ impl PriceCheckHotkey {
             }
         }));
         #[cfg(target_os = "linux")]
-        let manager = std::sync::Arc::new(manager);
-        #[cfg(target_os = "linux")]
-        grab_in_game(&manager, hotkey);
+        let in_game = {
+            let manager = Arc::new(manager);
+            let grab = Arc::new(Mutex::new(grab::Grab::new(on)));
+            grab_in_game(&manager, hotkey, &grab, move || wake_at_taken());
+            (manager, hotkey, grab)
+        };
+        #[cfg(target_os = "windows")]
+        let in_game = InGame::start(manager, hotkey, on, move || {
+            wake_at_foreground();
+        });
         Self {
-            #[cfg(target_os = "linux")]
-            _manager: Some(manager),
-            #[cfg(target_os = "windows")]
-            in_game: Some(InGame::start(manager, hotkey, move || {
-                wake_at_foreground();
-            })),
+            on,
+            in_game: Some(in_game),
             targets: Some(receiver),
         }
     }
@@ -216,29 +253,93 @@ impl PriceCheckHotkey {
     /// Nothing to listen to on this system.
     #[cfg(not(any(target_os = "linux", target_os = "windows")))]
     #[must_use]
-    pub fn start(_marker: CopyMarker, _wake: impl Fn() + Send + Sync + 'static) -> Self {
+    pub fn start(_marker: CopyMarker, on: bool, _wake: impl Fn() + Send + Sync + 'static) -> Self {
         log::info!("No price-check hotkey on this system");
-        Self { targets: None }
+        Self { on, targets: None }
+    }
+
+    /// Turns the hotkey on or off, as the player sets it: off, its key is released at once, left
+    /// to the game and to the other applications; on, it is grabbed at once while the game is the
+    /// active window.
+    pub fn turn(&mut self, on: bool) {
+        self.on = on;
+        #[cfg(target_os = "linux")]
+        if let Some((manager, hotkey, grab)) = &self.in_game {
+            grab.lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .turn(
+                    on,
+                    || manager.register(*hotkey),
+                    || manager.unregister(*hotkey),
+                );
+        }
+        #[cfg(target_os = "windows")]
+        if let Some(in_game) = &mut self.in_game {
+            in_game.turn(on);
+        }
+    }
+
+    /// What the hotkey does now.
+    #[must_use]
+    pub fn state(&self) -> HotkeyState {
+        if self.targets.is_none() {
+            HotkeyState::Unavailable
+        } else if !self.on {
+            HotkeyState::Off
+        } else if self.taken() {
+            HotkeyState::Taken
+        } else {
+            HotkeyState::Listening
+        }
+    }
+
+    /// Whether its key couldn't be grabbed the last time it was tried.
+    fn taken(&self) -> bool {
+        #[cfg(target_os = "linux")]
+        if let Some((_, _, grab)) = &self.in_game {
+            return grab
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .taken();
+        }
+        #[cfg(target_os = "windows")]
+        if let Some(in_game) = &self.in_game {
+            return in_game.follow.taken();
+        }
+        false
     }
 }
 
 /// Grabs `hotkey` only while the game is the active window, followed on a thread of its own until
-/// `manager` is dropped, so that Ctrl+D stays to the other windows. When the X server can't be
-/// reached, the hotkey stays off, written to the log; when the desktop doesn't tell its active
-/// window, it is grabbed for every window.
+/// `manager` is dropped, so that Ctrl+D stays to the other windows; `wake` is called when its key
+/// becomes taken or free, which the window tells. When the X server can't be reached, the hotkey
+/// stays off, written to the log; when the desktop doesn't tell its active window, it is grabbed
+/// for every window.
 #[cfg(target_os = "linux")]
-fn grab_in_game(manager: &Manager, hotkey: global_hotkey::hotkey::HotKey) {
+fn grab_in_game(
+    manager: &Manager,
+    hotkey: global_hotkey::hotkey::HotKey,
+    grab: &SharedGrab,
+    wake: impl Fn() + Send + 'static,
+) {
     let manager = std::sync::Arc::downgrade(manager);
-    let mut grab = grab::Grab::default();
+    let grab = std::sync::Arc::clone(grab);
     let followed = keys::follow_game(move |active| {
         let Some(manager) = manager.upgrade() else {
             return false;
         };
+        let mut grab = grab
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let was_taken = grab.taken();
         grab.follow(
             active,
             || manager.register(hotkey),
             || manager.unregister(hotkey),
         );
+        if grab.taken() != was_taken {
+            wake();
+        }
         true
     });
     if let Err(error) = followed {

@@ -45,11 +45,29 @@ impl LanguageSetting {
     }
 }
 
+/// The price-check hotkey (`specs.md`, Settings): on by default, so that a file written before
+/// it existed keeps it on.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct HotkeySetting {
+    /// Whether the hotkey copies in the game; off, its key is left to the game and to the other
+    /// applications.
+    pub on: bool,
+}
+
+impl Default for HotkeySetting {
+    fn default() -> Self {
+        Self { on: true }
+    }
+}
+
 /// A change the player makes in the settings panel.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SettingChange {
     Language(LanguageSetting),
     AlwaysOnTop(bool),
+    /// The price-check hotkey turned on or off.
+    HotkeyOn(bool),
 }
 
 /// The settings of the player. A missing value takes its default, so that a file written by
@@ -59,6 +77,7 @@ pub enum SettingChange {
 pub struct Settings {
     language: LanguageSetting,
     always_on_top: bool,
+    hotkey: HotkeySetting,
     /// The chosen league; none until the player or the default chooses one.
     league: Option<League>,
     /// The new leagues whose bubble the player closed, or answered by choosing a league.
@@ -74,6 +93,11 @@ impl Settings {
     #[must_use]
     pub fn always_on_top(&self) -> bool {
         self.always_on_top
+    }
+
+    #[must_use]
+    pub fn hotkey(&self) -> HotkeySetting {
+        self.hotkey
     }
 
     /// The league chosen at the last session, if any.
@@ -124,6 +148,7 @@ impl Settings {
             SettingChange::AlwaysOnTop(always_on_top) => {
                 mem::replace(&mut self.always_on_top, always_on_top) != always_on_top
             }
+            SettingChange::HotkeyOn(on) => mem::replace(&mut self.hotkey.on, on) != on,
         }
     }
 }
@@ -240,6 +265,7 @@ mod tests {
         let mut settings = Settings::default();
         settings.apply(SettingChange::Language(LanguageSetting::French));
         settings.apply(SettingChange::AlwaysOnTop(true));
+        settings.apply(SettingChange::HotkeyOn(false));
         settings
     }
 
@@ -250,6 +276,16 @@ mod tests {
         assert_eq!(settings.language(), LanguageSetting::System);
         assert!(!settings.always_on_top());
         assert_eq!(settings.window_level(), WindowLevel::Normal);
+    }
+
+    #[test]
+    fn the_hotkey_is_on_by_default_and_can_be_turned_off() {
+        let mut settings = Settings::default();
+        assert!(settings.hotkey().on);
+
+        assert!(settings.apply(SettingChange::HotkeyOn(false)));
+        assert!(!settings.apply(SettingChange::HotkeyOn(false)));
+        assert!(!settings.hotkey().on);
     }
 
     #[test]
@@ -304,6 +340,7 @@ mod tests {
 
         assert_eq!(table["language"].as_str(), Some("french"));
         assert_eq!(table["always_on_top"].as_bool(), Some(true));
+        assert_eq!(table["hotkey"]["on"].as_bool(), Some(false));
     }
 
     #[test]
@@ -343,6 +380,8 @@ mod tests {
 
         assert_eq!(settings.language(), LanguageSetting::System);
         assert!(settings.always_on_top());
+        // Written before the hotkey setting existed: the hotkey stays on.
+        assert!(settings.hotkey().on);
     }
 
     #[test]
