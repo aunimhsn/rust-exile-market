@@ -119,6 +119,7 @@ impl<'a> SettingsPanel<'a> {
         self.group_label(ui, Message::SettingsHotkey);
         ui.add_space(CHOICE_GAP);
         let on = self.settings.hotkey().on;
+        let hotkey_keys = self.settings.hotkey().keys.keys();
         let label = self.i18n.text(Message::SettingsHotkeyPriceCheck);
         let clicked = ui
             .horizontal(|ui| {
@@ -131,14 +132,14 @@ impl<'a> SettingsPanel<'a> {
                         gap: KEY_GAP,
                     };
                     let letters = if on { color::TEXT } else { color::FAINT };
-                    keys::caps(ui, &keys::HOTKEY, &caps, letters, on);
+                    keys::caps(ui, &hotkey_keys, &caps, letters, on);
                 });
                 clicked
             })
             .inner;
         ui.add_space(CHOICE_GAP);
         let note = if self.hotkey == HotkeyState::Taken {
-            let hotkey = keys::joined(&keys::HOTKEY);
+            let hotkey = keys::joined(&hotkey_keys);
             let copy = keys::joined(&keys::COPY);
             keys::emphasized(
                 &self.i18n.hotkey_taken_settings(&hotkey, &copy),

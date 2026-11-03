@@ -8,7 +8,7 @@ use egui::{CentralPanel, Frame, Image, Rect, RichText, Sense, Ui, Vec2, vec2};
 use super::images;
 use super::keys::{self, Caps};
 use super::theme::{color, motion, text};
-use crate::hotkey::HotkeyState;
+use crate::hotkey::{HotkeyState, Shortcut};
 use crate::i18n::{Message, Translator};
 
 const WATERMARK_SIZE: f32 = 190.0;
@@ -37,17 +37,20 @@ pub struct PriceDownload<'a> {
 pub struct EmptyState<'a> {
     i18n: &'a Translator,
     hotkey: HotkeyState,
+    /// The keys of the hotkey.
+    keys: Shortcut,
     download: Option<PriceDownload<'a>>,
 }
 
 impl<'a> EmptyState<'a> {
-    /// The invitation to copy with the price-check hotkey when it copies (`hotkey`), otherwise
-    /// with the copy of the game, so that it never shows a key that does nothing.
+    /// The invitation to copy with the price-check hotkey, its `keys`, when it copies (`hotkey`),
+    /// otherwise with the copy of the game, so that it never shows a key that does nothing.
     #[must_use]
-    pub fn new(i18n: &'a Translator, hotkey: HotkeyState) -> Self {
+    pub fn new(i18n: &'a Translator, hotkey: HotkeyState, keys: Shortcut) -> Self {
         Self {
             i18n,
             hotkey,
+            keys,
             download: None,
         }
     }
@@ -117,7 +120,7 @@ impl<'a> EmptyState<'a> {
     /// The key of the hotkey taken by another application, in the color of the warnings, its
     /// keys in bold, then on a line of its own where to choose another.
     fn taken(&self, ui: &mut Ui) {
-        let hotkey = keys::joined(&keys::HOTKEY);
+        let hotkey = keys::joined(&self.keys.keys());
         let regular = TextFormat::simple(text::note(), color::WARNING);
         let bold = TextFormat::simple(text::note_strong(), color::WARNING);
         let mut job = keys::emphasized(
@@ -191,23 +194,23 @@ impl<'a> EmptyState<'a> {
     /// copies, otherwise the copy of the game (macOS, which has no hotkey; the hotkey turned off
     /// or its key taken).
     fn keys(&self, ui: &mut Ui) {
-        let pressed = invited_keys(self.hotkey);
+        let pressed = invited_keys(self.hotkey, self.keys);
         let caps = Caps {
             font: text::keys(),
             height: KEY_HEIGHT,
             padding: KEY_PADDING,
             gap: KEY_GAP,
         };
-        keys::caps(ui, pressed, &caps, color::TEXT, true);
+        keys::caps(ui, &pressed, &caps, color::TEXT, true);
     }
 }
 
 /// The keys the empty window invites to press: the price-check hotkey while it copies, otherwise
 /// the copy of the game, so that it never shows a key that does nothing.
-fn invited_keys(hotkey: HotkeyState) -> &'static [&'static str] {
+fn invited_keys(hotkey: HotkeyState, keys: Shortcut) -> Vec<&'static str> {
     match hotkey {
-        HotkeyState::Listening => &keys::HOTKEY,
-        HotkeyState::Off | HotkeyState::Taken | HotkeyState::Unavailable => &keys::COPY,
+        HotkeyState::Listening => keys.keys(),
+        HotkeyState::Off | HotkeyState::Taken | HotkeyState::Unavailable => keys::COPY.to_vec(),
     }
 }
 
@@ -217,13 +220,18 @@ mod tests {
 
     #[test]
     fn the_invitation_never_shows_a_key_that_does_nothing() {
-        assert_eq!(invited_keys(HotkeyState::Listening), ["Ctrl", "D"]);
+        let alt_d = "Alt+D".parse().unwrap();
+        assert_eq!(
+            invited_keys(HotkeyState::Listening, Shortcut::default()),
+            ["Ctrl", "D"]
+        );
+        assert_eq!(invited_keys(HotkeyState::Listening, alt_d), ["Alt", "D"]);
         for state in [
             HotkeyState::Off,
             HotkeyState::Taken,
             HotkeyState::Unavailable,
         ] {
-            assert_eq!(invited_keys(state), ["Ctrl", "C"], "{state:?}");
+            assert_eq!(invited_keys(state, alt_d), ["Ctrl", "C"], "{state:?}");
         }
     }
 }
