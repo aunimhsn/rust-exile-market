@@ -15,7 +15,7 @@ use global_hotkey::HotKeyState;
 use winsafe::{HWND, co};
 
 use super::grab::{Foreground, is_game_window};
-use super::{Held, Key, Shortcut, copy_keys_after_focus, released_for_log, send_all};
+use super::{Held, Key, Shortcut, copy_keys_after_focus, modifiers_for_log, send_all};
 use crate::overlay::{KeyboardBack, Point, ScreenRect, Target};
 
 /// How often the foreground window is read. Windows tells its changes only to a hook
@@ -25,13 +25,12 @@ use crate::overlay::{KeyboardBack, Point, ScreenRect, Target};
 /// a second then).
 const FOREGROUND_POLL: Duration = Duration::from_millis(50);
 
-/// The modifiers released around the copy while the player holds them (Alt+D, Ctrl+Shift+D),
-/// left and right, with their names for the log.
-const RELEASED_MODIFIERS: [(co::VK, enigo::Key, &str); 4] = [
+/// The modifiers released around the copy while the player holds them (Ctrl+Shift+D), left and
+/// right, with their names for the log: Shift, since Ctrl+Shift+C isn't the copy. Alt is left
+/// held: Ctrl+Alt+C is the advanced copy of the game, the same text.
+const RELEASED_MODIFIERS: [(co::VK, enigo::Key, &str); 2] = [
     (co::VK::LSHIFT, enigo::Key::LShift, "Shift"),
     (co::VK::RSHIFT, enigo::Key::RShift, "Shift"),
-    (co::VK::LMENU, enigo::Key::LMenu, "Alt"),
-    (co::VK::RMENU, enigo::Key::RMenu, "Alt"),
 ];
 
 /// At the press of D: `RegisterHotKey` takes D only, so that the keys sent then reach the game,
@@ -123,8 +122,8 @@ impl CopySender {
         });
         tell(target, prepared);
         // Read last, just before the keys, as the player holds them: a Ctrl released meanwhile
-        // and pressed once more for a game given the focus back would stay held, and so would an
-        // Alt pressed again.
+        // and pressed once more for a game given the focus back would stay held, and so would a
+        // Shift pressed again.
         let control_held = winsafe::GetAsyncKeyState(co::VK::CONTROL);
         let others: Vec<_> = RELEASED_MODIFIERS
             .into_iter()
@@ -145,7 +144,10 @@ impl CopySender {
                 } else {
                     "pressed by the application"
                 },
-                released_for_log(&others.iter().map(|&(_, name)| name).collect::<Vec<_>>()),
+                modifiers_for_log(
+                    &others.iter().map(|&(_, name)| name).collect::<Vec<_>>(),
+                    &[]
+                ),
             ),
             Err(error) => log::warn!("The copy can't be sent: {error}"),
         }

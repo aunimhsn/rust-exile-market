@@ -83,16 +83,28 @@ fn serialize_shortcut<S: serde::Serializer>(
     serializer.collect_str(shortcut)
 }
 
-/// The keys of the file, or Ctrl+D when they can't be the hotkey.
+/// The keys of the file, or Ctrl+D when they can't be the hotkey, or aren't text (`keys = 5`).
 fn deserialize_shortcut<'de, D: serde::Deserializer<'de>>(
     deserializer: D,
 ) -> Result<Shortcut, D::Error> {
-    let text = String::deserialize(deserializer)?;
-    Ok(text.parse().unwrap_or_else(|error| {
-        let shortcut = Shortcut::default();
-        log::warn!("The hotkey \"{text}\" can't be used ({error}): {shortcut} instead");
-        shortcut
-    }))
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum Keys {
+        Text(String),
+        Other(serde::de::IgnoredAny),
+    }
+
+    let shortcut = Shortcut::default();
+    Ok(match Keys::deserialize(deserializer)? {
+        Keys::Text(text) => text.parse().unwrap_or_else(|error| {
+            log::warn!("The hotkey \"{text}\" can't be used ({error}): {shortcut} instead");
+            shortcut
+        }),
+        Keys::Other(_) => {
+            log::warn!("The hotkey of the settings isn't text: {shortcut} instead");
+            shortcut
+        }
+    })
 }
 
 /// A change the player makes in the settings panel.
@@ -391,10 +403,17 @@ mod tests {
 
     #[test]
     fn keys_that_cant_be_the_hotkey_give_ctrl_d_and_keep_the_other_settings() {
-        for keys in ["Ctrl+C", "D", "Super+D", ""] {
+        for keys in [
+            "\"Ctrl+C\"",
+            "\"D\"",
+            "\"Super+D\"",
+            "\"\"",
+            "5",
+            "[\"Alt\", \"D\"]",
+        ] {
             let directory = TestDirectory::new("hotkey-refused");
             directory.write(&format!(
-                "always_on_top = true\n[hotkey]\non = false\nkeys = \"{keys}\"\n"
+                "always_on_top = true\n[hotkey]\non = false\nkeys = {keys}\n"
             ));
 
             let settings = directory.file().load();

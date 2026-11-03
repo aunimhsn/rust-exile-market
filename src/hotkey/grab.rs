@@ -6,6 +6,8 @@
 
 use std::fmt::Display;
 
+use super::Shortcut;
+
 /// The exact title of the window of the game: the title Exiled Exchange 2 looks for
 /// (`attachByTitle`), the standalone client and the one of Steam alike on Windows, and the
 /// standalone client run by Wine on Linux, whose class is unknown. Never a part of the title: the
@@ -105,23 +107,26 @@ pub struct Grab {
     /// Whether the log already said the key is listened to, so that it doesn't say it at each
     /// activation of the game.
     told: bool,
+    /// The keys, for the log.
+    keys: Shortcut,
 }
 
 impl Default for Grab {
     fn default() -> Self {
-        Self::new(true)
+        Self::new(true, Shortcut::default())
     }
 }
 
 impl Grab {
-    /// The key not grabbed yet, the hotkey `on` or off.
-    pub fn new(on: bool) -> Self {
+    /// The key not grabbed yet, the hotkey `on` or off, its `keys` written in the log.
+    pub fn new(on: bool, keys: Shortcut) -> Self {
         Self {
             on,
             held: false,
             last: None,
             failure: None,
             told: false,
+            keys,
         }
     }
 
@@ -187,7 +192,10 @@ impl Grab {
             (Active::Game, false) => self.grab(grab, false),
             (Active::NotFollowed, false) => self.grab(grab, true),
             (Active::NotFollowed, true) => {
-                log::info!("Price-check hotkey Ctrl+D listened to in every window");
+                log::info!(
+                    "Price-check hotkey {} listened to in every window",
+                    self.keys
+                );
                 Change::Nothing
             }
             (Active::Other, true) => self.release(release),
@@ -204,7 +212,10 @@ impl Grab {
                 Change::Released
             }
             Err(error) => {
-                log::warn!("The price-check hotkey Ctrl+D can't be released: {error}");
+                log::warn!(
+                    "The price-check hotkey {} can't be released: {error}",
+                    self.keys
+                );
                 Change::Failed
             }
         }
@@ -224,10 +235,14 @@ impl Grab {
                 // No longer taken, whatever window it is grabbed for.
                 let recovered = self.failure.take().is_some();
                 if every_window {
-                    log::info!("Price-check hotkey Ctrl+D listened to in every window");
+                    log::info!(
+                        "Price-check hotkey {} listened to in every window",
+                        self.keys
+                    );
                 } else if recovered || first {
                     log::info!(
-                        "Price-check hotkey Ctrl+D listened to while the game is the active window"
+                        "Price-check hotkey {} listened to while the game is the active window",
+                        self.keys
                     );
                 }
                 Change::Grabbed
@@ -235,7 +250,10 @@ impl Grab {
             Err(error) => {
                 let error = error.to_string();
                 if every_window || self.failure.as_ref() != Some(&error) {
-                    log::warn!("The price-check hotkey Ctrl+D can't be listened to: {error}");
+                    log::warn!(
+                        "The price-check hotkey {} can't be listened to: {error}",
+                        self.keys
+                    );
                     self.failure = Some(error);
                 }
                 Change::Failed
@@ -262,19 +280,19 @@ pub struct ForegroundFollow {
 #[cfg(any(target_os = "windows", test))]
 impl Default for ForegroundFollow {
     fn default() -> Self {
-        Self::new(true)
+        Self::new(true, Shortcut::default())
     }
 }
 
 #[cfg(any(target_os = "windows", test))]
 impl ForegroundFollow {
-    /// No foreground window told yet, the hotkey `on` or off.
-    pub fn new(on: bool) -> Self {
+    /// No foreground window told yet, the hotkey `on` or off, its `keys` written in the log.
+    pub fn new(on: bool, keys: Shortcut) -> Self {
         Self {
             last: Foreground::NoWindow,
             lost: false,
             followed: None,
-            grab: Grab::new(on),
+            grab: Grab::new(on, keys),
         }
     }
 }
@@ -650,7 +668,7 @@ mod tests {
 
     #[test]
     fn off_from_the_start_the_key_is_never_grabbed() {
-        let mut grab = Grab::new(false);
+        let mut grab = Grab::new(false, Shortcut::default());
 
         assert_eq!(
             follow(&mut grab, Active::Game, Ok(())),
@@ -664,7 +682,7 @@ mod tests {
 
     #[test]
     fn turned_on_while_the_game_is_active_the_key_is_grabbed_at_once() {
-        let mut grab = Grab::new(false);
+        let mut grab = Grab::new(false, Shortcut::default());
         follow(&mut grab, Active::Game, Ok(()));
 
         assert_eq!(turn(&mut grab, true, Ok(())), (Change::Grabbed, 1, 0));
@@ -672,7 +690,7 @@ mod tests {
 
     #[test]
     fn turned_on_while_another_window_is_active_the_key_waits_for_the_game() {
-        let mut grab = Grab::new(false);
+        let mut grab = Grab::new(false, Shortcut::default());
         follow(&mut grab, Active::Other, Ok(()));
 
         assert_eq!(turn(&mut grab, true, Ok(())), (Change::Nothing, 0, 0));
@@ -721,7 +739,7 @@ mod tests {
 
     #[test]
     fn turned_on_once_the_active_window_cant_be_followed_the_key_is_grabbed_for_every_window() {
-        let mut grab = Grab::new(false);
+        let mut grab = Grab::new(false, Shortcut::default());
         follow(&mut grab, Active::NotFollowed, Ok(()));
 
         assert_eq!(turn(&mut grab, true, Ok(())), (Change::Grabbed, 1, 0));
@@ -752,7 +770,7 @@ mod tests {
 
     #[test]
     fn turned_on_before_any_active_window_is_told_the_key_waits_for_the_game() {
-        let mut grab = Grab::new(false);
+        let mut grab = Grab::new(false, Shortcut::default());
 
         assert_eq!(turn(&mut grab, true, Ok(())), (Change::Nothing, 0, 0));
         assert_eq!(
@@ -775,7 +793,7 @@ mod tests {
 
     #[test]
     fn turned_on_in_front_of_the_game_on_windows_grabs_the_key_at_once() {
-        let mut follow = ForegroundFollow::new(false);
+        let mut follow = ForegroundFollow::new(false, Shortcut::default());
         follow_foreground(&mut follow, Foreground::Game, false, Ok(()));
 
         assert_eq!(

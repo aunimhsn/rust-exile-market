@@ -5,7 +5,7 @@ use std::fmt;
 use std::str::FromStr;
 
 /// A combination of keys: Ctrl, Shift or Alt held, then one key pressed.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Shortcut {
     control: bool,
     shift: bool,
@@ -68,7 +68,8 @@ pub enum ShortcutError {
     Unreadable,
     /// A letter or a number without Ctrl nor Alt, which would type in the chat of the game.
     WithoutControlOrAlt,
-    /// Ctrl+C, the copy the hotkey sends itself: it would press itself again.
+    /// Ctrl+C, the copy the hotkey sends itself, or Ctrl+Alt+C, which it sends while the player
+    /// holds Alt: it would press itself again.
     Copy,
 }
 
@@ -79,7 +80,7 @@ impl fmt::Display for ShortcutError {
                 "not Ctrl, Shift or Alt with one letter, number or function key (F1 to F12)"
             }
             Self::WithoutControlOrAlt => "a letter or a number needs Ctrl or Alt",
-            Self::Copy => "Ctrl+C is the copy the hotkey sends",
+            Self::Copy => "Ctrl+C and Ctrl+Alt+C are the copies the hotkey sends",
         })
     }
 }
@@ -201,6 +202,13 @@ impl Default for Shortcut {
     }
 }
 
+impl fmt::Debug for Shortcut {
+    /// Its keys joined, as the log writes the settings: `Shortcut(Alt+D)`.
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(formatter, "Shortcut({self})")
+    }
+}
+
 impl fmt::Display for Shortcut {
     /// Its keys joined, as in a sentence and in the settings file: `Ctrl+Shift+D`.
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -241,7 +249,7 @@ impl FromStr for Shortcut {
         if !matches!(key, KeyName::Function(_)) && !control && !alt {
             return Err(ShortcutError::WithoutControlOrAlt);
         }
-        if control && !shift && !alt && key == KeyName::Letter(2) {
+        if control && !shift && key == KeyName::Letter(2) {
             return Err(ShortcutError::Copy);
         }
         Ok(Self {
@@ -260,6 +268,11 @@ mod tests {
     fn read(text: &str) -> Result<String, ShortcutError> {
         text.parse::<Shortcut>()
             .map(|shortcut| shortcut.to_string())
+    }
+
+    #[test]
+    fn the_log_writes_its_keys() {
+        assert_eq!(format!("{:?}", Shortcut::default()), "Shortcut(Ctrl+D)");
     }
 
     #[test]
@@ -314,8 +327,12 @@ mod tests {
     fn refuses_the_copy_it_sends() {
         assert_eq!(read("Ctrl+C"), Err(ShortcutError::Copy));
         assert_eq!(read("ctrl + c"), Err(ShortcutError::Copy));
-        // Another combination: the copy sent never presses it.
+        // Sent while the player holds Alt.
+        assert_eq!(read("Ctrl+Alt+C"), Err(ShortcutError::Copy));
+        // Other combinations: the copy sent never presses them (Shift released, Ctrl pressed).
         assert_eq!(read("Ctrl+Shift+C"), Ok("Ctrl+Shift+C".to_owned()));
+        assert_eq!(read("Ctrl+Shift+Alt+C"), Ok("Ctrl+Shift+Alt+C".to_owned()));
+        assert_eq!(read("Alt+C"), Ok("Alt+C".to_owned()));
     }
 
     #[cfg(any(target_os = "linux", target_os = "windows"))]

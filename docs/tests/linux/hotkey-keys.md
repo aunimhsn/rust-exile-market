@@ -2,7 +2,7 @@
 
 ## Pourquoi
 
-Le raccourci n'est plus forcément Ctrl+D : ses touches se lisent dans le fichier des réglages (`keys = "Alt+D"`), en attendant de les choisir dans les réglages (14c3b2). Le point délicat, c'est la copie : quand tu tiens Alt (Alt+D) ou Shift (Ctrl+Shift+D), Exile Market doit les relâcher le temps d'envoyer Ctrl+C, puis les presser de nouveau, pour que le jeu lise bien Ctrl+C et que le clavier reste comme tu le tiens. Ces tests vérifient qu'aucune touche ne reste coincée pour le jeu. Fais-les d'affilée, sans m'attendre. Un ✅ suffit quand ça marche ; détaille seulement ce qui cloche. Puis dis-moi « fait ».
+Le raccourci n'est plus forcément Ctrl+D : ses touches se lisent dans le fichier des réglages (`keys = "Alt+D"`), en attendant de les choisir dans les réglages (14c3b2). Le point délicat, c'est la copie : quand tu tiens Shift (Ctrl+Shift+D), Exile Market le relâche le temps d'envoyer Ctrl+C, puis le presse de nouveau, pour que le jeu lise bien Ctrl+C et que le clavier reste comme tu le tiens ; quand tu tiens Alt (Alt+D), il le laisse tenu et le jeu reçoit Ctrl+Alt+C, la copie avancée, qui donne le même texte. Ces tests vérifient que chaque copie arrive et qu'aucune touche ne reste coincée pour le jeu. Fais-les d'affilée, sans m'attendre. Un ✅ suffit quand ça marche ; détaille seulement ce qui cloche. Puis dis-moi « fait ».
 
 Pour lire le journal, garde un second terminal ouvert :
 
@@ -39,13 +39,13 @@ tail -f ~/.local/state/exile-market/exile-market.log
    ✅ La fenêtre vide invite à copier avec `Alt` + `D` ; dans les réglages, les touches `Alt` + `D` à droite de la case. Le journal dit « Price-check hotkey: Alt+D ».
 
 2. **Alt+D** : dans le jeu, **Alt+D** sur un objet de ton inventaire, en lâchant D puis Alt.
-   ✅ La fenêtre par-dessus le jeu s'ouvre avec le prix de l'objet. Le journal dit « Copy sent by the price-check hotkey … (Ctrl pressed by the application, Alt released around it) ». Ensuite, Alt lâché, survole un objet : son infobulle est normale (pas avancée).
+   ✅ La fenêtre par-dessus le jeu s'ouvre avec le prix de l'objet. Le journal dit « Copy sent by the price-check hotkey … (Ctrl pressed by the application) », sans « released ». Ensuite, Alt lâché, survole un objet : son infobulle est normale (pas avancée).
 
 3. **Alt tenu sur plusieurs objets** : tiens Alt, et appuie sur D sur trois objets l'un après l'autre sans lâcher Alt. Lâche Alt à la fin.
    ✅ Chaque D ouvre la fenêtre par-dessus le jeu avec le prix de l'objet survolé, les trois fois. Après avoir lâché Alt, l'infobulle d'un objet survolé est normale.
 
 4. **Alt lâché avant D** : appuie sur Alt, puis D, puis **lâche Alt d'abord**, puis D.
-   ✅ La fenêtre par-dessus le jeu s'ouvre avec le prix de l'objet. Ensuite, l'infobulle d'un objet survolé est normale, et une lettre tapée dans le chat du jeu (Entrée, une lettre, puis Échap) s'écrit normalement.
+   ✅ La fenêtre par-dessus le jeu s'ouvre avec le prix de l'objet ; le journal dit « (Ctrl pressed by the application, Alt released for the game) ». Ensuite, l'infobulle d'un objet survolé est normale, et une lettre tapée dans le chat du jeu (Entrée, une lettre, puis Échap) s'écrit normalement.
 
 5. **Alt lâché très vite** : fais **Alt+D** d'un geste rapide, en lâchant les deux touches presque en même temps, dix fois de suite sur des objets différents.
    ✅ Chaque fois, le prix s'affiche ; à la fin, l'infobulle d'un objet survolé est normale. Si l'infobulle reste avancée une fois, appuie et relâche Alt : elle doit redevenir normale ; note combien de fois sur dix c'est arrivé.
@@ -54,7 +54,7 @@ tail -f ~/.local/state/exile-market/exile-market.log
    ✅ Les réglages montrent `Ctrl` + `Shift` + `D`. Chaque D ouvre la fenêtre avec le prix ; le journal dit « (Ctrl still held, Shift released around it) ». Ctrl et Shift lâchés, rien d'étrange dans le jeu (pas de déplacement, ni de clic qui agit comme avec Shift tenu).
 
 7. **Une touche refusée** : ferme Exile Market, écris `keys = "Ctrl+C"`, relance-le.
-   ✅ Le journal dit « The hotkey "Ctrl+C" can't be used (Ctrl+C is the copy the hotkey sends): Ctrl+D instead » ; les réglages et la fenêtre vide montrent `Ctrl` + `D`, et **Ctrl+D** copie dans le jeu comme avant.
+   ✅ Le journal dit « The hotkey "Ctrl+C" can't be used (Ctrl+C and Ctrl+Alt+C are the copies the hotkey sends): Ctrl+D instead » ; les réglages et la fenêtre vide montrent `Ctrl` + `D`, et **Ctrl+D** copie dans le jeu comme avant.
 
 8. **Retour à Ctrl+D** : ferme Exile Market, supprime la ligne `keys`, relance-le, puis **Ctrl+D** sur un objet, puis sur trois objets en tenant Ctrl.
    ✅ Comme avant : le prix s'affiche à chaque fois, et le journal dit « (Ctrl still held) » sans « released around it ».

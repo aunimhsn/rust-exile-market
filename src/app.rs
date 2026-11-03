@@ -287,7 +287,7 @@ impl ExileMarketApp {
         to_top: bool,
     ) -> f32 {
         let Some(shown) = self.session.item() else {
-            let empty = EmptyState::new(&self.i18n, self.hotkey.state(), self.hotkey.keys());
+            let empty = EmptyState::new(&self.i18n, self.hotkey.state(), self.hotkey.shortcut());
             if let (PricesState::Downloading { progress }, Some((league, quote))) =
                 (prices, &self.download_quote)
             {
