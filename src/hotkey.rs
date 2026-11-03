@@ -76,11 +76,7 @@ struct InGame {
     hotkey: global_hotkey::hotkey::HotKey,
     /// The foreground window, read by a thread of its own; none once it can't be followed.
     foreground: Option<Receiver<grab::Foreground>>,
-    /// The last foreground window told.
-    last: grab::Foreground,
-    /// The active window the key last followed, so that it follows each change once.
-    active: Option<grab::Active>,
-    grab: grab::Grab,
+    follow: grab::ForegroundFollow,
 }
 
 #[cfg(target_os = "windows")]
@@ -97,49 +93,42 @@ impl InGame {
                 log::warn!("The price-check hotkey can't follow the game window: {error}");
             })
             .ok();
+        let mut follow = grab::ForegroundFollow::default();
+        if foreground.is_none() {
+            follow.lose();
+        }
         let mut in_game = Self {
             manager,
             hotkey,
             foreground,
-            last: grab::Foreground::None,
-            active: None,
-            grab: grab::Grab::default(),
+            follow,
         };
-        if in_game.foreground.is_none() {
-            in_game.follow_active(grab::Active::NotFollowed);
-        }
+        // At once when the key falls back to every window; otherwise the first window told
+        // follows.
+        in_game.follow(false);
         in_game
     }
 
     /// Takes in the changes of the foreground window, then registers or unregisters the key for
-    /// the active window they and `overlay_shown` make.
-    fn follow(&mut self, overlay_shown: bool) {
-        let Some(foreground) = &self.foreground else {
-            return;
-        };
-        loop {
-            match foreground.try_recv() {
-                Ok(window) => self.last = window,
-                Err(std::sync::mpsc::TryRecvError::Empty) => break,
-                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
-                    log::warn!("The price-check hotkey can't follow the game window any more");
-                    self.foreground = None;
-                    self.follow_active(grab::Active::NotFollowed);
-                    return;
+    /// the active window they and `main_focused` make.
+    fn follow(&mut self, main_focused: bool) {
+        if let Some(foreground) = &self.foreground {
+            loop {
+                match foreground.try_recv() {
+                    Ok(window) => self.follow.told(window),
+                    Err(std::sync::mpsc::TryRecvError::Empty) => break,
+                    Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                        log::warn!("The price-check hotkey can't follow the game window any more");
+                        self.foreground = None;
+                        self.follow.lose();
+                        break;
+                    }
                 }
             }
         }
-        self.follow_active(self.last.active(overlay_shown));
-    }
-
-    /// Registers or unregisters the key for `active`, once per change.
-    fn follow_active(&mut self, active: grab::Active) {
-        if self.active.replace(active) == Some(active) {
-            return;
-        }
         let (manager, hotkey) = (&self.manager, self.hotkey);
-        self.grab.follow(
-            active,
+        self.follow.follow(
+            main_focused,
             || manager.register(hotkey),
             || manager.unregister(hotkey),
         );
@@ -188,6 +177,7 @@ impl PriceCheckHotkey {
         let (targets, receiver) = std::sync::mpsc::channel();
         let hotkey = HotKey::new(Some(Modifiers::CONTROL), Code::KeyD);
         let id = hotkey.id();
+        #[cfg(target_os = "windows")]
         let wake = std::sync::Arc::new(wake);
         #[cfg(target_os = "windows")]
         let wake_at_foreground = std::sync::Arc::clone(&wake);
@@ -202,7 +192,7 @@ impl PriceCheckHotkey {
                     |target, copy| {
                         // The application stopped listening: nothing left to tell.
                         if targets.send(Press { target, copy }).is_ok() {
-                            (*wake)();
+                            wake();
                         }
                     },
                 );
@@ -217,7 +207,7 @@ impl PriceCheckHotkey {
             _manager: Some(manager),
             #[cfg(target_os = "windows")]
             in_game: Some(InGame::start(manager, hotkey, move || {
-                (*wake_at_foreground)();
+                wake_at_foreground();
             })),
             targets: Some(receiver),
         }
@@ -328,20 +318,20 @@ fn send_all<K, E>(
 
 impl PriceCheckHotkey {
     /// At each frame, on the thread of the window: on Windows, registers the key while the game
-    /// is the foreground window, or the window over the game, `overlay_shown` or not, after a
-    /// click in it; unregisters it otherwise. Nothing on the other systems, which follow the game
-    /// on a thread of their own.
+    /// is the foreground window, or the window over the game after a click in it; unregisters it
+    /// otherwise, as for the main window when it has the keyboard (`main_focused`). Nothing on the
+    /// other systems, which follow the game on a thread of their own.
     #[cfg_attr(
         not(target_os = "windows"),
         expect(clippy::unused_self, reason = "the same call on every system")
     )]
-    pub fn follow_game(&mut self, overlay_shown: bool) {
+    pub fn follow_game(&mut self, main_focused: bool) {
         #[cfg(target_os = "windows")]
         if let Some(in_game) = &mut self.in_game {
-            in_game.follow(overlay_shown);
+            in_game.follow(main_focused);
         }
         #[cfg(not(target_os = "windows"))]
-        let _ = overlay_shown;
+        let _ = main_focused;
     }
 
     /// Gives each press of the hotkey since the last call to `handle`, without waiting.

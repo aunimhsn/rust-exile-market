@@ -12,6 +12,19 @@ use std::fmt::Display;
 /// page of a browser about the game is titled `Path of Exile 2 - …`.
 pub const GAME_TITLE: &str = "Path of Exile 2";
 
+/// The class of a window of the File Explorer of Windows, titled after its folder: the folder of
+/// the game is titled `Path of Exile 2` too, and Ctrl+D there must stay to it (a copy sent there
+/// would copy the files selected).
+#[cfg(any(target_os = "windows", test))]
+const EXPLORER_CLASS: &str = "CabinetWClass";
+
+/// Whether a window of another application, of `title` and `class`, is the game on Windows: its
+/// exact title, unless it is a folder of the File Explorer.
+#[cfg(any(target_os = "windows", test))]
+pub fn is_game_window(title: &str, class: &str) -> bool {
+    title == GAME_TITLE && class != EXPLORER_CLASS
+}
+
 /// The active window, as the desktop tells it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Active {
@@ -42,23 +55,22 @@ pub enum Foreground {
     /// Another window.
     Other,
     /// No foreground window: Windows tells none for a moment while the foreground changes.
-    None,
+    NoWindow,
 }
 
 #[cfg(any(target_os = "windows", test))]
 impl Foreground {
-    /// The active window it is for the hotkey, the window over the game being `overlay_shown` or
-    /// not: a window of this application in front while the window over the game shows is taken
-    /// for that window, and leaves the key as it is, so that Ctrl+D still copies while one of its
-    /// fields is edited (giving the keyboard back to the game first); the main window in front
-    /// releases the key, as another window, once the window over the game is closed (a click in
-    /// the main window closes it; brought to the front by Alt+Tab, it keeps the key meanwhile).
-    pub fn active(self, overlay_shown: bool) -> Active {
+    /// The active window it is for the hotkey, the main window having the keyboard or not
+    /// (`main_focused`, as egui tells it): a window of this application in front while the main
+    /// window hasn't the keyboard is the window over the game, which leaves the key as it is, so
+    /// that Ctrl+D still copies while one of its fields is edited (giving the keyboard back to the
+    /// game first); the main window in front releases the key, as another window.
+    pub fn active(self, main_focused: bool) -> Active {
         match self {
             Self::Game => Active::Game,
-            Self::Ours if overlay_shown => Active::Unknown,
+            Self::Ours if !main_focused => Active::Unknown,
             Self::Ours | Self::Other => Active::Other,
-            Self::None => Active::Unknown,
+            Self::NoWindow => Active::Unknown,
         }
     }
 }
@@ -96,7 +108,8 @@ impl Grab {
     /// key quits. With no active window told, the key stays as it is, so that Ctrl+D still gives
     /// the keyboard back to the game from the window over the game; a window outside X11 never
     /// hears a key grabbed under X11 anyway. Once the active window can't be followed, the key is
-    /// grabbed for every window. Called at each change only: a failed grab is tried at each call.
+    /// grabbed for every window. Each call tries a failed grab again: call it once per change of
+    /// the active window.
     pub fn follow<E: Display>(
         &mut self,
         active: Active,
@@ -154,6 +167,66 @@ impl Grab {
                 Change::Failed
             }
         }
+    }
+}
+
+/// The foreground window followed on Windows, on the thread of the window: the changes the thread
+/// that reads it sends are taken in, then the key follows the active window they make, once per
+/// change (a failed grab is tried again at the next change, as on Linux, not at each frame).
+#[cfg(any(target_os = "windows", test))]
+#[derive(Debug)]
+pub struct ForegroundFollow {
+    /// The last foreground window told.
+    last: Foreground,
+    /// The foreground window can no longer be followed: the key is grabbed for every window.
+    lost: bool,
+    /// The active window the key last followed.
+    followed: Option<Active>,
+    grab: Grab,
+}
+
+#[cfg(any(target_os = "windows", test))]
+impl Default for ForegroundFollow {
+    fn default() -> Self {
+        Self {
+            last: Foreground::NoWindow,
+            lost: false,
+            followed: None,
+            grab: Grab::default(),
+        }
+    }
+}
+
+#[cfg(any(target_os = "windows", test))]
+impl ForegroundFollow {
+    /// A change of the foreground window, told by the thread that reads it.
+    pub fn told(&mut self, foreground: Foreground) {
+        self.last = foreground;
+    }
+
+    /// The foreground window can no longer be followed (its thread didn't start, or stopped):
+    /// from the next [`Self::follow`], the key is grabbed for every window, as before step 14c2.
+    pub fn lose(&mut self) {
+        self.lost = true;
+    }
+
+    /// Grabs or releases the key for the active window that the last foreground window told and
+    /// `main_focused` make, when it changed since the last call.
+    pub fn follow<E: Display>(
+        &mut self,
+        main_focused: bool,
+        grab: impl FnOnce() -> Result<(), E>,
+        release: impl FnOnce() -> Result<(), E>,
+    ) -> Change {
+        let active = if self.lost {
+            Active::NotFollowed
+        } else {
+            self.last.active(main_focused)
+        };
+        if self.followed.replace(active) == Some(active) {
+            return Change::Nothing;
+        }
+        self.grab.follow(active, grab, release)
     }
 }
 
@@ -299,38 +372,153 @@ mod tests {
         );
     }
 
+    /// What `follow` does when the foreground window told is `foreground`, the main window
+    /// `main_focused` or not, the grab and the release giving `result`, and how many times each
+    /// was called.
+    fn follow_foreground(
+        follow: &mut ForegroundFollow,
+        foreground: Foreground,
+        main_focused: bool,
+        result: Result<(), &str>,
+    ) -> (Change, u32, u32) {
+        follow.told(foreground);
+        let (mut grabs, mut releases) = (0, 0);
+        let change = follow.follow(
+            main_focused,
+            || {
+                grabs += 1;
+                result
+            },
+            || {
+                releases += 1;
+                result
+            },
+        );
+        (change, grabs, releases)
+    }
+
+    #[test]
+    fn the_game_is_told_by_its_exact_title_out_of_the_file_explorer() {
+        assert!(is_game_window("Path of Exile 2", "POEWindowClass"));
+        // A page of a browser about the game.
+        assert!(!is_game_window(
+            "Path of Exile 2 - Wiki",
+            "Chrome_WidgetWin_1"
+        ));
+        // The folder of the game.
+        assert!(!is_game_window("Path of Exile 2", "CabinetWClass"));
+    }
+
+    #[test]
+    fn the_game_in_front_is_the_game_whether_the_main_window_has_the_keyboard_or_not() {
+        assert_eq!(Foreground::Game.active(false), Active::Game);
+        // The keyboard of the main window not told yet as lost.
+        assert_eq!(Foreground::Game.active(true), Active::Game);
+    }
+
     #[test]
     fn the_window_over_the_game_in_front_keeps_the_key_as_it_is() {
-        // In front after a click in it, or while one of its fields is edited.
-        assert_eq!(Foreground::Ours.active(true), Active::Unknown);
+        let mut follow = ForegroundFollow::default();
+        follow_foreground(&mut follow, Foreground::Game, false, Ok(()));
 
-        let mut grab = Grab::default();
-        follow(&mut grab, Foreground::Game.active(false), Ok(()));
+        // In front after a click in it, or while one of its fields is edited.
         assert_eq!(
-            follow(&mut grab, Foreground::Ours.active(true), Ok(())),
+            follow_foreground(&mut follow, Foreground::Ours, false, Ok(())),
             (Change::Nothing, 0, 0)
         );
     }
 
     #[test]
     fn the_main_window_in_front_releases_the_key_as_another_window() {
-        assert_eq!(Foreground::Ours.active(false), Active::Other);
-        assert_eq!(Foreground::Other.active(true), Active::Other);
+        let mut follow = ForegroundFollow::default();
+        follow_foreground(&mut follow, Foreground::Game, false, Ok(()));
 
-        let mut grab = Grab::default();
-        follow(&mut grab, Foreground::Game.active(false), Ok(()));
-        // The window over the game in front, then closed by a click in the main window.
-        follow(&mut grab, Foreground::Ours.active(true), Ok(()));
+        // Alt+Tab to the main window: in front, then its keyboard told by egui.
+        follow_foreground(&mut follow, Foreground::Ours, false, Ok(()));
         assert_eq!(
-            follow(&mut grab, Foreground::Ours.active(false), Ok(())),
+            follow_foreground(&mut follow, Foreground::Ours, true, Ok(())),
             (Change::Released, 0, 1)
+        );
+        assert_eq!(
+            follow_foreground(&mut follow, Foreground::Other, false, Ok(())),
+            (Change::Nothing, 0, 0)
         );
     }
 
     #[test]
     fn no_foreground_window_for_a_moment_keeps_the_key_as_it_is() {
-        assert_eq!(Foreground::None.active(false), Active::Unknown);
-        assert_eq!(Foreground::Game.active(true), Active::Game);
+        let mut follow = ForegroundFollow::default();
+        follow_foreground(&mut follow, Foreground::Game, false, Ok(()));
+
+        assert_eq!(
+            follow_foreground(&mut follow, Foreground::NoWindow, false, Ok(())),
+            (Change::Nothing, 0, 0)
+        );
+        assert_eq!(
+            follow_foreground(&mut follow, Foreground::Other, false, Ok(())),
+            (Change::Released, 0, 1)
+        );
+    }
+
+    #[test]
+    fn the_last_foreground_window_told_is_the_one_followed() {
+        let mut follow = ForegroundFollow::default();
+        // Several changes between two frames: the last one counts.
+        follow.told(Foreground::Other);
+        follow.told(Foreground::NoWindow);
+
+        assert_eq!(
+            follow_foreground(&mut follow, Foreground::Game, false, Ok(())),
+            (Change::Grabbed, 1, 0)
+        );
+    }
+
+    #[test]
+    fn follows_each_change_of_the_foreground_window_once() {
+        let mut follow = ForegroundFollow::default();
+        follow_foreground(&mut follow, Foreground::Game, false, Ok(()));
+
+        // The next frames, the game still in front.
+        assert_eq!(
+            follow_foreground(&mut follow, Foreground::Game, false, Ok(())),
+            (Change::Nothing, 0, 0)
+        );
+    }
+
+    #[test]
+    fn tries_a_key_taken_by_another_application_again_at_the_next_change_not_at_each_frame() {
+        let mut follow = ForegroundFollow::default();
+        assert_eq!(
+            follow_foreground(&mut follow, Foreground::Game, false, Err("taken")),
+            (Change::Failed, 1, 0)
+        );
+        assert_eq!(
+            follow_foreground(&mut follow, Foreground::Game, false, Err("taken")),
+            (Change::Nothing, 0, 0)
+        );
+
+        follow_foreground(&mut follow, Foreground::Other, false, Ok(()));
+        assert_eq!(
+            follow_foreground(&mut follow, Foreground::Game, false, Ok(())),
+            (Change::Grabbed, 1, 0)
+        );
+    }
+
+    #[test]
+    fn grabs_the_key_for_every_window_once_the_foreground_window_is_lost() {
+        let mut follow = ForegroundFollow::default();
+        follow_foreground(&mut follow, Foreground::Other, false, Ok(()));
+
+        follow.lose();
+        assert_eq!(
+            follow_foreground(&mut follow, Foreground::Other, false, Ok(())),
+            (Change::Grabbed, 1, 0)
+        );
+        // Kept, whatever window comes to the front.
+        assert_eq!(
+            follow_foreground(&mut follow, Foreground::Ours, true, Ok(())),
+            (Change::Nothing, 0, 0)
+        );
     }
 
     #[test]

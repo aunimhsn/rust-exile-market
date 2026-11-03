@@ -7,7 +7,7 @@ La sonde a montré que le clavier peut aller à la fenêtre et revenir au jeu. V
 ## Avant
 
 1. Ferme Exile Market et Exiled Exchange 2.
-2. Lance, dans un terminal :
+2. Lance, dans Konsole (pas dans le terminal de VS Code : son bac à sable Flatpak n'a pas X11, la fenêtre ne s'ouvre pas) :
 
    ```
    cargo run --release
