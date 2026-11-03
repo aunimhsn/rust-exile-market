@@ -31,3 +31,12 @@
    under the pointer. */
 .app-author a { color: var(--weak); text-decoration: none; }
 .app-author a:hover { color: var(--text); text-decoration: underline; }
+/* The hotkey in the settings (14c3): its checkbox on the left, its keys on the right, clicked to change them. */
+.app-hotkey-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.app-hotkey-keys { display: flex; align-items: center; gap: 4px; color: var(--weak); font-size: 12px; cursor: pointer; }
+.app-hotkey-keys .key { padding: 2px 7px; font-size: 12px; }
+.app-hotkey-keys:hover .key { border-color: var(--weak); }
+.app-hotkey-keys.is-off .key { color: var(--faint); background: transparent; }
+.app-hotkey-keys.is-capturing { padding: 3px 9px; border: 1px dashed var(--accent); border-radius: 4px; color: var(--text); }
+.app-hotkey-note { color: var(--faint); font-size: 11.5px; line-height: 1.4; }
+.app-hotkey-note.warn, .ov-note-line.warn { color: var(--warn); }
