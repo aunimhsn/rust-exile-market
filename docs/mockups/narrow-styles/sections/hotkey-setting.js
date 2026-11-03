@@ -5,8 +5,9 @@
 // three places to tell the player were drawn: A, the settings only; B, the empty window; C, a band at the top.
 // The key is only known taken once the game comes to the front, when the application tries to grab it; the
 // message goes away as soon as the key is grabbed (the other application quit) or the hotkey is turned off. The
-// owner's choices on 2026-11-03: C, the band at the top and the line in the settings; the keys written joined and
-// in bold in the warnings (**Ctrl+D**, **Ctrl+C**); the rest of the setting as drawn.
+// owner's choices on 2026-11-03: B, the line under the invitation of the empty window and the line in the
+// settings (C first, then B), its two sentences on two lines; the keys written joined and in bold in the warnings
+// (**Ctrl+D**, **Ctrl+C**); the rest of the setting as drawn.
 
 // The keys of a hotkey as key caps, e.g. ["Ctrl", "D"].
 const hkKeys = keys => keys.map(key => `<span class="key">${key}</span>`).join("+");
@@ -42,13 +43,12 @@ const HK_TAKEN = "<b>Ctrl+D</b> is taken by another application. Choose another 
 const hkEmptyD = ovEmptyNote;
 const hkEmptyC = ovEmptyNote.replace(`<span class="key">D</span>`, `<span class="key">C</span>`);
 const hkEmptyTaken = hkEmptyC.replace(`<span>The price shows up here.</span>`, `<span>The price shows up here.</span>
-  <span class="ov-note-line warn"><b>Ctrl+D</b> is taken by another application: choose another key in the settings.</span>`);
+  <span class="ov-note-line warn"><b>Ctrl+D</b> is taken by another application.<br>Choose another key in the settings.</span>`);
 
-SECTIONS.unshift(["Hotkey key taken (14c3a): C chosen, a band at the top and a line in the settings", [
-  ["Chosen · C, a warning band at the top, whatever the window shows", win(topBar(), banner(HK_BANNER), item(HH), price(HH_PRICE), offers({ state: "idle" }), foot())],
-  ["Chosen · C, the same band before the first item, Ctrl + C invited", win(topBar(), banner(HK_BANNER), hkEmptyC, foot())],
-  ["Chosen · C, and in the settings a line under the row of the hotkey", hkWin({ note: HK_TAKEN, warn: true })],
-  ["Rejected · B, in the empty window: Ctrl + C invited, a line under it", win(topBar(), hkEmptyTaken, foot())],
+SECTIONS.unshift(["Hotkey key taken (14c3a): B chosen, a line in the empty window and in the settings", [
+  ["Chosen · B, in the empty window: Ctrl + C invited, a line under it", win(topBar(), hkEmptyTaken, foot())],
+  ["Chosen · B, and in the settings a line under the row of the hotkey", hkWin({ note: HK_TAKEN, warn: true })],
+  ["Rejected · C, a warning band at the top, whatever the window shows", win(topBar(), banner(HK_BANNER), item(HH), price(HH_PRICE), offers({ state: "idle" }), foot())],
 ]]);
 SECTIONS.unshift(["Hotkey setting (14c3): on or off, and its key", [
   ["On, Ctrl + D by default: a click on the keys changes them", hkWin({ note: HK_HELP })],
