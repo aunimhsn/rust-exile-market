@@ -89,19 +89,77 @@ pub enum Change {
 }
 
 /// Whether the key is grabbed, followed at each change of the active window.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct Grab {
+    /// Whether the player wants the hotkey (the settings): off, the key is never grabbed.
+    on: bool,
     /// Whether the key is grabbed.
     held: bool,
+    /// The last active window told, so that the hotkey turned on grabs the key at once while the
+    /// game is the active window.
+    last: Option<Active>,
     /// The last failure to grab it, written to the log once until it changes: the key taken by
-    /// another application fails at each activation of the game.
+    /// another application fails at each activation of the game. Kept until the key is grabbed or
+    /// the hotkey turned off, so that the player is told the key is taken.
     failure: Option<String>,
     /// Whether the log already said the key is listened to, so that it doesn't say it at each
     /// activation of the game.
     told: bool,
 }
 
+impl Default for Grab {
+    fn default() -> Self {
+        Self::new(true)
+    }
+}
+
 impl Grab {
+    /// The key not grabbed yet, the hotkey `on` or off.
+    pub fn new(on: bool) -> Self {
+        Self {
+            on,
+            held: false,
+            last: None,
+            failure: None,
+            told: false,
+        }
+    }
+
+    /// Whether the hotkey is on and its key couldn't be grabbed the last time it was tried: taken
+    /// by another application, the likeliest case.
+    pub fn taken(&self) -> bool {
+        self.on && self.failure.is_some()
+    }
+
+    /// Turns the hotkey on or off, as the player sets it: off, the key is released at once (a
+    /// failed release tried again at the next change); on, it is grabbed at once while the game is
+    /// the active window, or the active window not followed.
+    pub fn turn<E: Display>(
+        &mut self,
+        on: bool,
+        grab: impl FnOnce() -> Result<(), E>,
+        release: impl FnOnce() -> Result<(), E>,
+    ) -> Change {
+        if std::mem::replace(&mut self.on, on) == on {
+            return Change::Nothing;
+        }
+        if on {
+            log::info!("Price-check hotkey turned on");
+            match self.last {
+                Some(active) => self.follow(active, grab, release),
+                None => Change::Nothing,
+            }
+        } else {
+            log::info!("Price-check hotkey turned off");
+            self.failure = None;
+            if self.held {
+                self.release(release)
+            } else {
+                Change::Nothing
+            }
+        }
+    }
+
     /// Follows the active window: grabs the key with `grab` when the game becomes the active
     /// window, and releases it with `release` when another window does. A failed grab is tried
     /// again at the next change, so that the hotkey comes back once the application that took the
@@ -116,6 +174,15 @@ impl Grab {
         grab: impl FnOnce() -> Result<(), E>,
         release: impl FnOnce() -> Result<(), E>,
     ) -> Change {
+        self.last = Some(active);
+        if !self.on {
+            // A release that failed when the hotkey was turned off.
+            return if self.held {
+                self.release(release)
+            } else {
+                Change::Nothing
+            };
+        }
         match (active, self.held) {
             (Active::Game, false) => self.grab(grab, false),
             (Active::NotFollowed, false) => self.grab(grab, true),
@@ -123,18 +190,23 @@ impl Grab {
                 log::info!("Price-check hotkey Ctrl+D listened to in every window");
                 Change::Nothing
             }
-            (Active::Other, true) => match release() {
-                Ok(()) => {
-                    self.held = false;
-                    Change::Released
-                }
-                // Still held: tried again at the next change.
-                Err(error) => {
-                    log::warn!("The price-check hotkey Ctrl+D can't be released: {error}");
-                    Change::Failed
-                }
-            },
+            (Active::Other, true) => self.release(release),
             (Active::Game, true) | (Active::Other, false) | (Active::Unknown, _) => Change::Nothing,
+        }
+    }
+
+    /// Releases the key with `release`; still held after a failure, tried again at the next
+    /// change.
+    fn release<E: Display>(&mut self, release: impl FnOnce() -> Result<(), E>) -> Change {
+        match release() {
+            Ok(()) => {
+                self.held = false;
+                Change::Released
+            }
+            Err(error) => {
+                log::warn!("The price-check hotkey Ctrl+D can't be released: {error}");
+                Change::Failed
+            }
         }
     }
 
@@ -149,9 +221,11 @@ impl Grab {
             Ok(()) => {
                 self.held = true;
                 let first = !std::mem::replace(&mut self.told, true);
+                // No longer taken, whatever window it is grabbed for.
+                let recovered = self.failure.take().is_some();
                 if every_window {
                     log::info!("Price-check hotkey Ctrl+D listened to in every window");
-                } else if self.failure.take().is_some() || first {
+                } else if recovered || first {
                     log::info!(
                         "Price-check hotkey Ctrl+D listened to while the game is the active window"
                     );
@@ -188,11 +262,19 @@ pub struct ForegroundFollow {
 #[cfg(any(target_os = "windows", test))]
 impl Default for ForegroundFollow {
     fn default() -> Self {
+        Self::new(true)
+    }
+}
+
+#[cfg(any(target_os = "windows", test))]
+impl ForegroundFollow {
+    /// No foreground window told yet, the hotkey `on` or off.
+    pub fn new(on: bool) -> Self {
         Self {
             last: Foreground::NoWindow,
             lost: false,
             followed: None,
-            grab: Grab::default(),
+            grab: Grab::new(on),
         }
     }
 }
@@ -208,6 +290,21 @@ impl ForegroundFollow {
     /// from the next [`Self::follow`], the key is grabbed for every window, as before step 14c2.
     pub fn lose(&mut self) {
         self.lost = true;
+    }
+
+    /// Whether the key of the hotkey is taken ([`Grab::taken`]).
+    pub fn taken(&self) -> bool {
+        self.grab.taken()
+    }
+
+    /// Turns the hotkey on or off ([`Grab::turn`]).
+    pub fn turn<E: Display>(
+        &mut self,
+        on: bool,
+        grab: impl FnOnce() -> Result<(), E>,
+        release: impl FnOnce() -> Result<(), E>,
+    ) -> Change {
+        self.grab.turn(on, grab, release)
     }
 
     /// Grabs or releases the key for the active window that the last foreground window told and
@@ -519,6 +616,173 @@ mod tests {
             follow_foreground(&mut follow, Foreground::Ours, true, Ok(())),
             (Change::Nothing, 0, 0)
         );
+    }
+
+    /// What turning the hotkey `on` or off does, the grab and the release giving `result`.
+    fn turn(grab: &mut Grab, on: bool, result: Result<(), &str>) -> (Change, u32, u32) {
+        let (mut grabs, mut releases) = (0, 0);
+        let change = grab.turn(
+            on,
+            || {
+                grabs += 1;
+                result
+            },
+            || {
+                releases += 1;
+                result
+            },
+        );
+        (change, grabs, releases)
+    }
+
+    #[test]
+    fn turned_off_the_key_is_released_at_once_and_never_grabbed() {
+        let mut grab = Grab::default();
+        follow(&mut grab, Active::Game, Ok(()));
+
+        assert_eq!(turn(&mut grab, false, Ok(())), (Change::Released, 0, 1));
+        follow(&mut grab, Active::Other, Ok(()));
+        assert_eq!(
+            follow(&mut grab, Active::Game, Ok(())),
+            (Change::Nothing, 0, 0)
+        );
+    }
+
+    #[test]
+    fn off_from_the_start_the_key_is_never_grabbed() {
+        let mut grab = Grab::new(false);
+
+        assert_eq!(
+            follow(&mut grab, Active::Game, Ok(())),
+            (Change::Nothing, 0, 0)
+        );
+        assert_eq!(
+            follow(&mut grab, Active::NotFollowed, Ok(())),
+            (Change::Nothing, 0, 0)
+        );
+    }
+
+    #[test]
+    fn turned_on_while_the_game_is_active_the_key_is_grabbed_at_once() {
+        let mut grab = Grab::new(false);
+        follow(&mut grab, Active::Game, Ok(()));
+
+        assert_eq!(turn(&mut grab, true, Ok(())), (Change::Grabbed, 1, 0));
+    }
+
+    #[test]
+    fn turned_on_while_another_window_is_active_the_key_waits_for_the_game() {
+        let mut grab = Grab::new(false);
+        follow(&mut grab, Active::Other, Ok(()));
+
+        assert_eq!(turn(&mut grab, true, Ok(())), (Change::Nothing, 0, 0));
+        assert_eq!(
+            follow(&mut grab, Active::Game, Ok(())),
+            (Change::Grabbed, 1, 0)
+        );
+        // Turned on again: nothing to do.
+        assert_eq!(turn(&mut grab, true, Ok(())), (Change::Nothing, 0, 0));
+    }
+
+    #[test]
+    fn the_key_is_taken_until_it_is_grabbed_or_the_hotkey_turned_off() {
+        let mut grab = Grab::default();
+        assert!(!grab.taken());
+
+        follow(&mut grab, Active::Game, Err("taken"));
+        assert!(grab.taken());
+        // Still taken in another window: the player is told until it works.
+        follow(&mut grab, Active::Other, Ok(()));
+        assert!(grab.taken());
+        follow(&mut grab, Active::Game, Ok(()));
+        assert!(!grab.taken());
+
+        follow(&mut grab, Active::Other, Ok(()));
+        follow(&mut grab, Active::Game, Err("taken"));
+        // Never grabbed: nothing to release.
+        assert_eq!(turn(&mut grab, false, Ok(())), (Change::Nothing, 0, 0));
+        assert!(!grab.taken());
+        // Turned on again in the game: tried at once, still taken.
+        assert_eq!(turn(&mut grab, true, Err("taken")), (Change::Failed, 1, 0));
+        assert!(grab.taken());
+    }
+
+    #[test]
+    fn the_key_grabbed_for_every_window_is_no_longer_taken() {
+        let mut grab = Grab::default();
+        follow(&mut grab, Active::Game, Err("taken"));
+
+        assert_eq!(
+            follow(&mut grab, Active::NotFollowed, Ok(())),
+            (Change::Grabbed, 1, 0)
+        );
+        assert!(!grab.taken());
+    }
+
+    #[test]
+    fn turned_on_once_the_active_window_cant_be_followed_the_key_is_grabbed_for_every_window() {
+        let mut grab = Grab::new(false);
+        follow(&mut grab, Active::NotFollowed, Ok(()));
+
+        assert_eq!(turn(&mut grab, true, Ok(())), (Change::Grabbed, 1, 0));
+    }
+
+    #[test]
+    fn turned_off_the_key_grabbed_for_every_window_is_released() {
+        let mut grab = Grab::default();
+        follow(&mut grab, Active::NotFollowed, Ok(()));
+
+        assert_eq!(turn(&mut grab, false, Ok(())), (Change::Released, 0, 1));
+        assert_eq!(
+            follow(&mut grab, Active::NotFollowed, Ok(())),
+            (Change::Nothing, 0, 0)
+        );
+    }
+
+    #[test]
+    fn turned_on_again_after_a_failed_release_the_key_held_is_not_grabbed_twice() {
+        let mut grab = Grab::default();
+        follow(&mut grab, Active::Game, Ok(()));
+        turn(&mut grab, false, Err("lost"));
+
+        // Grabbed again, global-hotkey would answer that it is already registered, told as taken.
+        assert_eq!(turn(&mut grab, true, Ok(())), (Change::Nothing, 0, 0));
+        assert!(!grab.taken());
+    }
+
+    #[test]
+    fn turned_on_before_any_active_window_is_told_the_key_waits_for_the_game() {
+        let mut grab = Grab::new(false);
+
+        assert_eq!(turn(&mut grab, true, Ok(())), (Change::Nothing, 0, 0));
+        assert_eq!(
+            follow(&mut grab, Active::Game, Ok(())),
+            (Change::Grabbed, 1, 0)
+        );
+    }
+
+    #[test]
+    fn a_release_failed_when_turned_off_is_tried_again_at_the_next_change() {
+        let mut grab = Grab::default();
+        follow(&mut grab, Active::Game, Ok(()));
+
+        assert_eq!(turn(&mut grab, false, Err("lost")), (Change::Failed, 0, 1));
+        assert_eq!(
+            follow(&mut grab, Active::Game, Ok(())),
+            (Change::Released, 0, 1)
+        );
+    }
+
+    #[test]
+    fn turned_on_in_front_of_the_game_on_windows_grabs_the_key_at_once() {
+        let mut follow = ForegroundFollow::new(false);
+        follow_foreground(&mut follow, Foreground::Game, false, Ok(()));
+
+        assert_eq!(
+            follow.turn(true, || Ok::<(), &str>(()), || Ok(())),
+            Change::Grabbed
+        );
+        assert!(!follow.taken());
     }
 
     #[test]

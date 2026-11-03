@@ -14,6 +14,7 @@ They may be written in French, the language of the testers (an exception to the 
 - [Filters of the last items remembered](linux/remembered-filters.md) (#155)
 - [Prices in other currencies](linux/prices-other-currencies.md) (#156)
 - [Ctrl+D in the game only](linux/hotkey-game-only.md) (14c1)
+- [Hotkey turned on or off, its key taken](linux/hotkey-setting.md) (14c3a)
 
 ## Windows
 
@@ -21,3 +22,4 @@ They may be written in French, the language of the testers (an exception to the 
 - [Keyboard in the window over the game](windows/overlay-keyboard.md) (14b3b)
 - [Window over the game on a second screen](windows/second-screen.md) (left to step 21)
 - [Ctrl+D in the game only](windows/hotkey-game-only.md) (14c2)
+- [Hotkey turned on or off, its key taken](windows/hotkey-setting.md) (14c3a)

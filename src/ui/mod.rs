@@ -8,6 +8,7 @@ mod fonts;
 mod images;
 mod item_block;
 mod item_stats;
+mod keys;
 mod league_list;
 mod new_league_bubble;
 mod number_field;

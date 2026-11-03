@@ -206,6 +206,25 @@ pub mod text {
         fonts::text(12.0, Weight::Regular)
     }
 
+    /// The bold words of a note: the keys of the hotkey taken.
+    #[must_use]
+    pub fn note_strong() -> FontId {
+        fonts::text(12.0, Weight::SemiBold)
+    }
+
+    /// The bold words of the small texts: the keys of the hotkey taken, in the settings.
+    #[must_use]
+    pub fn small_strong() -> FontId {
+        fonts::text(11.5, Weight::SemiBold)
+    }
+
+    /// The keys of the hotkey in the settings, drawn as key caps, smaller than in the empty
+    /// window.
+    #[must_use]
+    pub fn setting_keys() -> FontId {
+        fonts::numbers(12.0)
+    }
+
     /// The tier of a modifier, before its range.
     #[must_use]
     pub fn tier() -> FontId {

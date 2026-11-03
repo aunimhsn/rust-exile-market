@@ -120,9 +120,10 @@ impl ExileMarketApp {
         let hotkey_ctx = creation.egui_ctx.clone();
         let clicks_ctx = creation.egui_ctx.clone();
         let clipboard = ClipboardWatch::start(move || clipboard_ctx.request_repaint());
-        let hotkey = PriceCheckHotkey::start(clipboard.copy_marker(), move || {
-            hotkey_ctx.request_repaint();
-        });
+        let hotkey =
+            PriceCheckHotkey::start(clipboard.copy_marker(), settings.hotkey().on, move || {
+                hotkey_ctx.request_repaint();
+            });
         // The prices of the league of the last session, until the leagues arrive.
         let market = MarketWatch::start(settings.league(), move || market_ctx.request_repaint());
 
@@ -250,6 +251,7 @@ impl ExileMarketApp {
             SettingChange::AlwaysOnTop(_) => {
                 ctx.send_viewport_cmd(ViewportCommand::WindowLevel(self.settings.window_level()));
             }
+            SettingChange::HotkeyOn(on) => self.hotkey.turn(on),
         }
         self.settings_file.save(&self.settings);
         // The bands above the settings were drawn with the previous values.
@@ -283,7 +285,7 @@ impl ExileMarketApp {
         to_top: bool,
     ) -> f32 {
         let Some(shown) = self.session.item() else {
-            let empty = EmptyState::new(&self.i18n);
+            let empty = EmptyState::new(&self.i18n, self.hotkey.state());
             if let (PricesState::Downloading { progress }, Some((league, quote))) =
                 (prices, &self.download_quote)
             {
@@ -700,7 +702,9 @@ impl App for ExileMarketApp {
                 self.item(ui, prices, search_kind, to_top);
             }
             View::Settings => {
-                if let Some(change) = SettingsPanel::new(&self.settings, &self.i18n).show(ui) {
+                if let Some(change) =
+                    SettingsPanel::new(&self.settings, &self.i18n, self.hotkey.state()).show(ui)
+                {
                     self.change_setting(ui.ctx(), change);
                 }
             }
