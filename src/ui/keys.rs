@@ -44,12 +44,11 @@ pub fn caps(ui: &mut Ui, keys: &[&str], caps: &Caps, letters: Color32, filled: b
         .iter()
         .map(|cap| cap.size().x + 2.0 * caps.padding)
         .sum();
-    let separators = galleys.len().saturating_sub(1);
-    #[expect(
-        clippy::cast_precision_loss,
-        reason = "a hotkey has a few keys at most"
-    )]
-    let separators_width = separators as f32 * (plus.size().x + 2.0 * caps.gap);
+    let separators_width: f32 = galleys
+        .iter()
+        .skip(1)
+        .map(|_| plus.size().x + 2.0 * caps.gap)
+        .sum();
     let (rect, response) = ui.allocate_exact_size(
         vec2(caps_width + separators_width, caps.height),
         Sense::hover(),

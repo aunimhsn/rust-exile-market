@@ -221,9 +221,11 @@ impl Grab {
             Ok(()) => {
                 self.held = true;
                 let first = !std::mem::replace(&mut self.told, true);
+                // No longer taken, whatever window it is grabbed for.
+                let recovered = self.failure.take().is_some();
                 if every_window {
                     log::info!("Price-check hotkey Ctrl+D listened to in every window");
-                } else if self.failure.take().is_some() || first {
+                } else if recovered || first {
                     log::info!(
                         "Price-check hotkey Ctrl+D listened to while the game is the active window"
                     );
@@ -703,6 +705,38 @@ mod tests {
         // Turned on again in the game: tried at once, still taken.
         assert_eq!(turn(&mut grab, true, Err("taken")), (Change::Failed, 1, 0));
         assert!(grab.taken());
+    }
+
+    #[test]
+    fn the_key_grabbed_for_every_window_is_no_longer_taken() {
+        let mut grab = Grab::default();
+        follow(&mut grab, Active::Game, Err("taken"));
+
+        assert_eq!(
+            follow(&mut grab, Active::NotFollowed, Ok(())),
+            (Change::Grabbed, 1, 0)
+        );
+        assert!(!grab.taken());
+    }
+
+    #[test]
+    fn turned_on_once_the_active_window_cant_be_followed_the_key_is_grabbed_for_every_window() {
+        let mut grab = Grab::new(false);
+        follow(&mut grab, Active::NotFollowed, Ok(()));
+
+        assert_eq!(turn(&mut grab, true, Ok(())), (Change::Grabbed, 1, 0));
+    }
+
+    #[test]
+    fn turned_off_the_key_grabbed_for_every_window_is_released() {
+        let mut grab = Grab::default();
+        follow(&mut grab, Active::NotFollowed, Ok(()));
+
+        assert_eq!(turn(&mut grab, false, Ok(())), (Change::Released, 0, 1));
+        assert_eq!(
+            follow(&mut grab, Active::NotFollowed, Ok(())),
+            (Change::Nothing, 0, 0)
+        );
     }
 
     #[test]
