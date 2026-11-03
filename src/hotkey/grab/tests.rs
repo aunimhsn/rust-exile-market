@@ -595,13 +595,70 @@ fn previous_keys_that_cant_be_released_stay() {
 }
 
 #[test]
-fn new_keys_with_the_game_in_front_on_windows_replace_the_previous_ones_at_once() {
-    let mut follow = ForegroundFollow::default();
-    follow_foreground(&mut follow, Foreground::Game, false, Ok(()));
+fn a_later_change_tries_the_previous_keys_that_couldnt_be_released_again() {
+    let mut grab = Grab::default();
+    follow(&mut grab, Active::Game, Ok(()));
+    change(&mut grab, "Ctrl+G", Ok(()), Err("lost"));
 
+    assert_eq!(
+        change(&mut grab, "F3", Ok(()), Ok(())),
+        (Change::Grabbed, 1, 1)
+    );
+    assert_eq!(grab.keys().to_string(), "F3");
+}
+
+#[test]
+fn new_keys_once_the_active_window_cant_be_followed_are_grabbed_for_every_window() {
+    let mut grab = Grab::default();
+    follow(&mut grab, Active::NotFollowed, Ok(()));
+
+    assert_eq!(
+        change(&mut grab, "Alt+G", Ok(()), Ok(())),
+        (Change::Grabbed, 1, 1)
+    );
+    // Held for every window: another window releases nothing.
+    assert_eq!(
+        follow(&mut grab, Active::NotFollowed, Ok(())),
+        (Change::Nothing, 0, 0)
+    );
+}
+
+#[test]
+fn new_keys_while_no_active_window_is_told_wait_for_the_game() {
+    let mut grab = Grab::default();
+    follow(&mut grab, Active::Game, Ok(()));
+    follow(&mut grab, Active::Unknown, Ok(()));
+
+    // The previous keys released, the new ones not grabbed until the game is told.
+    assert_eq!(
+        change(&mut grab, "F4", Ok(()), Ok(())),
+        (Change::Nothing, 0, 1)
+    );
+    assert_eq!(
+        follow(&mut grab, Active::Game, Ok(())),
+        (Change::Grabbed, 1, 0)
+    );
+}
+
+#[test]
+fn new_keys_of_a_hotkey_off_release_the_previous_ones_still_held() {
+    let mut grab = Grab::default();
+    follow(&mut grab, Active::Game, Ok(()));
+    assert_eq!(turn(&mut grab, false, Err("lost")), (Change::Failed, 0, 1));
+
+    assert_eq!(
+        change(&mut grab, "Ctrl+G", Ok(()), Ok(())),
+        (Change::Nothing, 0, 1)
+    );
+    assert_eq!(turn(&mut grab, true, Ok(())), (Change::Grabbed, 1, 0));
+    assert_eq!(grab.keys().to_string(), "Ctrl+G");
+}
+
+/// What replacing the keys of `follow` with `keys` does, the grab and the release giving `Ok`.
+fn change_foreground(follow: &mut ForegroundFollow, keys: &str) -> (Change, u32, u32) {
     let (mut grabs, mut releases) = (0, 0);
     let change = follow.change_keys(
-        "Alt+G".parse().unwrap(),
+        keys.parse().unwrap(),
         || {
             grabs += 1;
             Ok::<(), &str>(())
@@ -611,6 +668,35 @@ fn new_keys_with_the_game_in_front_on_windows_replace_the_previous_ones_at_once(
             Ok(())
         },
     );
-    assert_eq!((change, grabs, releases), (Change::Grabbed, 1, 1));
+    (change, grabs, releases)
+}
+
+#[test]
+fn new_keys_with_the_game_in_front_on_windows_replace_the_previous_ones_at_once() {
+    let mut follow = ForegroundFollow::default();
+    follow_foreground(&mut follow, Foreground::Game, false, Ok(()));
+
+    assert_eq!(
+        change_foreground(&mut follow, "Alt+G"),
+        (Change::Grabbed, 1, 1)
+    );
     assert_eq!(follow.keys().to_string(), "Alt+G");
+}
+
+#[test]
+fn new_keys_as_the_foreground_window_is_lost_stay_held_for_every_window() {
+    let mut follow = ForegroundFollow::default();
+    follow_foreground(&mut follow, Foreground::Game, false, Ok(()));
+    follow.lose();
+
+    // Grabbed for the game, the last window followed, then kept for every window.
+    assert_eq!(
+        change_foreground(&mut follow, "Ctrl+G"),
+        (Change::Grabbed, 1, 1)
+    );
+    assert_eq!(
+        follow_foreground(&mut follow, Foreground::Other, false, Ok(())),
+        (Change::Nothing, 0, 0)
+    );
+    assert_eq!(follow.keys().to_string(), "Ctrl+G");
 }
