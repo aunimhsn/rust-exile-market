@@ -157,6 +157,10 @@ impl Grab {
             return Change::Nothing;
         }
         if self.held && self.release(release) == Change::Failed {
+            log::warn!(
+                "The price-check hotkey stays {} until the next launch, which takes {keys}",
+                self.keys
+            );
             return Change::Failed;
         }
         log::info!("Price-check hotkey changed from {} to {keys}", self.keys);

@@ -150,14 +150,17 @@ impl<'a> HotkeyList<'a> {
     }
 
     /// Draws the list under `button`, its right edge on the right of the button, while it is
-    /// `open` and while it closes; what the player did with it. The keyboard starts on the
-    /// chosen keys when it opens, the arrows go from row to row, and it goes back to the button
-    /// when the list closes.
+    /// `open` and while it closes; what the player did with it. Opened from the keyboard (the
+    /// button had it), the keyboard starts on the chosen keys, or on the first row when none is
+    /// chosen (keys written by hand); the arrows go from row to row, and the keyboard goes back
+    /// to the button when the list closes. Opened with the mouse, no row takes the keyboard, so
+    /// that the button isn't lit as under the pointer once the list closes.
     pub fn show(&self, ctx: &Context, button: &Response, open: bool) -> Option<HotkeyListAction> {
         let shown = ctx.animate_bool_with_time(shown_id(), open, motion::OPEN);
         let seen: Seen = ctx.data(|data| data.get_temp(seen_id()).unwrap_or_default());
-        let just_opened = open && !seen.open;
-        // Also when a slow frame skips the closing.
+        let by_keyboard = open && !seen.open && button.has_focus();
+        // From the last frame: Escape takes the keyboard away before this one (egui), and a row
+        // chosen with Enter was clicked in the last one. Also when a slow frame skips the closing.
         if !open && seen.open && seen.row_focused {
             button.request_focus();
         }
@@ -170,6 +173,10 @@ impl<'a> HotkeyList<'a> {
         let button = button.rect;
         let rows = self.rows(ctx);
         let width = list_width(&rows);
+        let start = rows
+            .iter()
+            .position(|row| row.shortcut == self.chosen)
+            .unwrap_or(0);
         #[expect(clippy::cast_precision_loss, reason = "a few keys")]
         let list_size = vec2(width, 2.0 * LIST_PADDING + rows.len() as f32 * ROW_HEIGHT);
         let top_left = pos2(
@@ -187,7 +194,7 @@ impl<'a> HotkeyList<'a> {
                 ui.painter()
                     .add(theme::floating_shadow().as_shape(list, radius));
                 ui.painter()
-                    .rect_filled(list, radius, color::BUBBLE.gamma_multiply(OPACITY));
+                    .rect_filled(list, radius, color::LIST.gamma_multiply(OPACITY));
                 let mut action = None;
                 let mut focused = None;
                 let mut responses = Vec::with_capacity(rows.len());
@@ -198,7 +205,7 @@ impl<'a> HotkeyList<'a> {
                         vec2(width, ROW_HEIGHT),
                     );
                     let response = self.row(ui, rect, row);
-                    if just_opened && row.shortcut == self.chosen {
+                    if by_keyboard && index == start {
                         response.request_focus();
                     }
                     if response.clicked() {
@@ -237,20 +244,20 @@ impl<'a> HotkeyList<'a> {
     /// The rows of the list, with the width each needs.
     fn rows(&self, ctx: &Context) -> Vec<Row> {
         let default = self.i18n.text(Message::SettingsHotkeyDefault);
+        let text_width = |value: &str, font| {
+            ctx.fonts_mut(|fonts| {
+                fonts
+                    .layout_no_wrap(value.to_owned(), font, color::TEXT)
+                    .size()
+                    .x
+            })
+        };
         Shortcut::CHOICES
             .into_iter()
             .enumerate()
             .map(|(index, shortcut)| {
                 let label = keys::joined(&keys::named(&shortcut.keys(), self.i18n));
                 let note = (index == 0).then(|| default.clone());
-                let text_width = |value: &str, font| {
-                    ctx.fonts_mut(|fonts| {
-                        fonts
-                            .layout_no_wrap(value.to_owned(), font, color::TEXT)
-                            .size()
-                            .x
-                    })
-                };
                 let note_width = note
                     .as_deref()
                     .map_or(0.0, |note| ROW_GAP + text_width(note, text::small()));
@@ -365,16 +372,24 @@ mod tests {
         ctx: Context,
         i18n: Translator,
         time: std::cell::Cell<f64>,
+        /// The keys of the hotkey.
+        chosen: Shortcut,
     }
 
     impl Window {
         fn new() -> Self {
+            Self::with(Shortcut::default())
+        }
+
+        /// The keys of the hotkey `chosen`.
+        fn with(chosen: Shortcut) -> Self {
             let ctx = Context::default();
             crate::ui::install(&ctx);
             Self {
                 ctx,
                 i18n: Translator::new(Language::English),
                 time: std::cell::Cell::new(0.0),
+                chosen,
             }
         }
 
@@ -387,7 +402,7 @@ mod tests {
                 events,
                 ..Default::default()
             };
-            let list = HotkeyList::new(Shortcut::default(), &self.i18n);
+            let list = HotkeyList::new(self.chosen, &self.i18n);
             let mut action = None;
             let mut output = self.ctx.run_ui(input, |ui| {
                 let button = ui.interact(BUTTON, button_id(), Sense::click());
@@ -398,8 +413,12 @@ mod tests {
             action
         }
 
-        /// The action of `keys` pressed one per frame, the list open, after it opened.
+        /// The action of `keys` pressed one per frame, the list opened from the keyboard (the
+        /// button having it).
         fn keys(&self, keys: &[Key]) -> Option<HotkeyListAction> {
+            self.frame(false, vec![]);
+            self.ctx
+                .memory_mut(|memory| memory.request_focus(button_id()));
             self.frame(true, vec![]);
             self.frame(true, vec![]);
             keys.iter()
@@ -511,20 +530,46 @@ mod tests {
     }
 
     #[test]
-    fn the_keyboard_goes_back_to_the_button_when_the_list_closes() {
+    fn keys_written_by_hand_start_the_keyboard_on_the_first_row() {
+        let window = Window::with("Ctrl+Shift+D".parse().unwrap());
+        assert_eq!(
+            window.keys(&[Key::ArrowUp, Key::Enter]),
+            Some(HotkeyListAction::Choose(Shortcut::CHOICES[0]))
+        );
+    }
+
+    #[test]
+    fn escape_gives_the_keyboard_back_to_the_button() {
         let window = Window::new();
         window.keys(&[Key::ArrowDown]);
         assert!(!window.button_focused());
+
+        // egui takes the keyboard away at Escape, before the list closes in that same frame.
+        window.frame(false, vec![press(Key::Escape)]);
+        assert!(window.button_focused());
+    }
+
+    #[test]
+    fn keys_chosen_with_enter_give_the_keyboard_back_to_the_button() {
+        let window = Window::new();
+        assert_eq!(
+            window.keys(&[Key::ArrowDown, Key::Enter]),
+            Some(HotkeyListAction::Choose(Shortcut::CHOICES[1]))
+        );
 
         window.frame(false, vec![]);
         assert!(window.button_focused());
     }
 
     #[test]
-    fn a_list_closed_by_the_mouse_leaves_the_keyboard_where_it_is() {
+    fn a_list_opened_with_the_mouse_leaves_the_button_unlit_once_closed() {
         let window = Window::new();
-        // The click outside takes the keyboard from the row.
-        window.click(true, pos2(200.0, 600.0));
+        // A click on the chosen keys, which the pointer leaves the keyboard on.
+        let actions = window.click(true, row(0.0));
+        assert_eq!(
+            actions.last(),
+            Some(&Some(HotkeyListAction::Choose(Shortcut::CHOICES[0])))
+        );
 
         window.frame(false, vec![]);
         assert!(!window.button_focused());

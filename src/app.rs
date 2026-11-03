@@ -712,6 +712,7 @@ impl App for ExileMarketApp {
             }
             View::Settings => {
                 let action = SettingsPanel::new(&self.settings, &self.i18n, self.hotkey.state())
+                    .held_keys(self.hotkey.shortcut())
                     .keys_open(self.lists.is_open(OpenList::Keys))
                     .show(ui);
                 if let Some(change) = action.and_then(|action| self.lists.settings(action)) {

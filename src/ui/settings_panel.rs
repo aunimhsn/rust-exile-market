@@ -8,7 +8,7 @@ use super::hotkey_list::{self, HotkeyList, HotkeyListAction};
 use super::keys;
 use super::theme::{color, size, text};
 use super::widgets::{self, Mark};
-use crate::hotkey::HotkeyState;
+use crate::hotkey::{HotkeyState, Shortcut};
 use crate::i18n::{Message, Translator};
 use crate::settings::{LanguageSetting, SettingChange, Settings};
 
@@ -34,6 +34,9 @@ pub struct SettingsPanel<'a> {
     settings: &'a Settings,
     i18n: &'a Translator,
     hotkey: HotkeyState,
+    /// The keys the hotkey holds, which the line of the key taken names: those of the settings,
+    /// unless the previous ones couldn't be released (until the next launch).
+    held: Shortcut,
     keys_open: bool,
 }
 
@@ -46,8 +49,16 @@ impl<'a> SettingsPanel<'a> {
             settings,
             i18n,
             hotkey,
+            held: settings.hotkey().keys,
             keys_open: false,
         }
+    }
+
+    /// The keys the hotkey holds, when they aren't those of the settings.
+    #[must_use]
+    pub fn held_keys(mut self, keys: Shortcut) -> Self {
+        self.held = keys;
+        self
     }
 
     /// Opens the list of the keys of the hotkey under its button.
@@ -164,11 +175,12 @@ impl<'a> SettingsPanel<'a> {
         let list = HotkeyList::new(shortcut, self.i18n).show(ui.ctx(), &button, self.keys_open);
         ui.add_space(CHOICE_GAP);
         let note = if self.hotkey == HotkeyState::Taken {
+            let held = keys::joined(&keys::named(&self.held.keys(), self.i18n));
             let copy = keys::joined(&keys::COPY);
             keys::two_lines(
-                &self.i18n.hotkey_taken(&hotkey),
+                &self.i18n.hotkey_taken(&held),
                 &self.i18n.hotkey_taken_settings(&copy),
-                &[&hotkey, &copy],
+                &[&held, &copy],
                 &TextFormat::simple(text::small(), color::WARNING),
                 &TextFormat::simple(text::small_strong(), color::WARNING),
             )
@@ -219,7 +231,6 @@ fn hotkey_action(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::hotkey::Shortcut;
 
     #[test]
     fn keys_chosen_in_the_list_change_the_setting() {

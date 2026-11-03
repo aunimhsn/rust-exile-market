@@ -30,9 +30,10 @@ pub mod color {
     /// The warning band under the title bar: dark yellow, apart from the league colors.
     pub const WARNING_BAND: Color32 = Color32::from_rgb(0x8a, 0x6a, 0x10);
     pub const WARNING_TEXT: Color32 = Color32::from_rgb(0xf8, 0xed, 0xc2);
-    /// The bubbles that open over the content: the tooltip of an offer, a new league, the list of
-    /// the keys of the hotkey.
+    /// The bubbles that open over the content: the tooltip of an offer, a new league.
     pub const BUBBLE: Color32 = Color32::from_rgb(0x20, 0x27, 0x2f);
+    /// The list of the keys of the hotkey, darker than the bubbles (the mock-up).
+    pub const LIST: Color32 = Color32::from_rgb(0x1c, 0x20, 0x26);
     /// The keys of the hotkey in the settings under the pointer: their dark lighter, the control
     /// line mixed with 18 % of the text.
     pub const KEYS_LIT: Color32 = Color32::from_rgb(0x4b, 0x54, 0x5f);
