@@ -75,13 +75,25 @@ const HK_TIPS = {
     <span class="app-hotkey-tip-title">Refused</span>
     <span class="app-hotkey-tip-line is-weak">A key alone, the Windows key, and the keys of the game or of the system</span>
     <span class="app-hotkey-chips">${["Ctrl+C", "Ctrl+Alt+C", "Alt+F4"].map(hkCaps).join("")}</span>`,
+  // The owner's layout on 2026-11-03: two columns of key caps, four combinations of two keys each (the examples
+  // to check in 14c3b against the default keys of Path of Exile 2 and of Exiled Exchange 2), then the function keys
+  // on a line of their own.
+  c: `<span class="app-hotkey-columns">
+      <span class="app-hotkey-column"><span class="app-hotkey-tip-title">Allowed</span>
+        ${["Ctrl+D", "Ctrl+E", "Alt+Q", "Alt+2"].map(hkCaps).join("")}</span>
+      <span class="app-hotkey-column"><span class="app-hotkey-tip-title is-refused">Refused</span>
+        ${["Ctrl+C", "Ctrl+V", "Alt+Tab", "Alt+F4"].map(hkCaps).join("")}</span>
+    </span>
+    <span class="app-hotkey-tip-title">Function keys</span>
+    <span class="app-hotkey-chips"><span class="app-hotkey-chip"><span class="key">F1</span><span class="app-hotkey-dots">…</span><span class="key">F12</span></span></span>`,
 };
 // The label "Hotkey" and its "?", the tooltip `help` (a key of HK_TIPS) open under it.
 const hkLabel = help => `<span class="app-hotkey-label"><span class="label">Hotkey</span>
   <span class="app-hotkey-help is-hovered" title="">${svg(13, '<circle cx="8" cy="8" r="6.2"/><path d="M6.3 6.2a1.8 1.8 0 1 1 2.5 1.7c-.5.2-.8.6-.8 1.1v.4"/><path d="M8 11.4v.1"/>')}
     <span class="app-tip app-hotkey-tip">${HK_TIPS[help]}</span></span></span>`;
 
-SECTIONS.unshift(["Hotkey rules tooltip (14c3b): a \"?\" next to the label, A or B", [
-  ["A · Sentences, the keys in bold", hkWin({ help: "a", note: HK_HELP })],
-  ["B · The examples as key caps, under two labels", hkWin({ help: "b", note: HK_HELP })],
+SECTIONS.unshift(["Hotkey rules tooltip (14c3b): two columns of key caps, the function keys last", [
+  ["Two columns: four allowed, four refused, then F1 … F12", hkWin({ help: "c", note: HK_HELP })],
+  ["Before · A, sentences, the keys in bold", hkWin({ help: "a", note: HK_HELP })],
+  ["Before · B, the examples as key caps, under two labels", hkWin({ help: "b", note: HK_HELP })],
 ]]);

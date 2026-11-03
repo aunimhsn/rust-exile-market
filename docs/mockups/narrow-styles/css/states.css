@@ -63,3 +63,12 @@
 .app-tip .app-hotkey-chip .key { color: var(--text); }
 .app-tip .app-hotkey-nowrap { display: inline; margin: 0; color: inherit; white-space: nowrap; }
 .win:has(.app-hotkey-help.is-hovered) { overflow: visible; }
+/* The tooltip of the rules in two columns (the owner's layout): one combination per line, the refused title in the
+   color of the warnings; the function keys under them, "…" between F1 and F12. */
+.app-tip .app-hotkey-columns { display: grid; grid-template-columns: 1fr 1fr; gap: 0 18px; margin: 0; color: inherit; }
+.app-tip .app-hotkey-column { display: flex; flex-direction: column; align-items: flex-start; gap: 5px; margin: 0; color: inherit; }
+.app-tip .app-hotkey-column .app-hotkey-tip-title { margin: 0 0 1px; }
+.app-tip .app-hotkey-tip-title.is-refused { color: var(--warn); }
+.app-tip .app-hotkey-columns + .app-hotkey-tip-title { margin-top: 10px; }
+.app-tip .app-hotkey-dots { display: inline; margin: 0 2px; color: var(--weak); }
+.app-hotkey-help:has(.app-hotkey-columns) .app-tip { width: 210px; }
