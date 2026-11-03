@@ -19,7 +19,8 @@ const hkSettings = ({ on = true, keys = ["Ctrl", "D"], capture = false, note = "
   const keyCaps = capture
     ? `<span class="app-hotkey-keys is-capturing" title="Esc: cancel">Press the keys…</span>`
     : `<span class="app-hotkey-keys ${on ? "" : "is-off"}" title="Change the key">${hkKeys(keys)}</span>`;
-  const line = note ? `<span class="app-hotkey-note ${warn ? "warn" : ""}">${note}</span>` : "";
+  // `warn`: true in the color of the warnings, "refused" in red (the key not taken, the previous one kept).
+  const line = note ? `<span class="app-hotkey-note ${warn === "refused" ? "is-refused" : warn ? "warn" : ""}">${note}</span>` : "";
   return `<div class="band b settings">
     <h3>Settings</h3>
     <div class="field"><span class="label">Language</span>
@@ -53,7 +54,7 @@ SECTIONS.unshift(["Hotkey key taken (14c3a): B chosen, a line in the empty windo
 SECTIONS.unshift(["Hotkey setting (14c3): on or off, and its key", [
   ["On, Ctrl + D by default: a click on the keys changes them", hkWin({ note: HK_HELP })],
   ["Choosing the key (14c3b): the next keys pressed, Esc cancels", hkWin({ capture: true, note: "Hold Ctrl or Alt with a letter, a number or a function key. Esc: cancel." })],
-  ["A key refused (14c3b): the previous one stays", hkWin({ keys: ["Ctrl", "D"], note: "<b>Ctrl+C</b> copies the item already: choose another key.", warn: true })],
+  ["A key refused (14c3b): the previous one stays", hkWin({ keys: ["Ctrl", "D"], note: "<b>Ctrl+C</b> copies the item already: choose another key.", warn: "refused" })],
   ["Another key chosen (14c3b)", hkWin({ keys: ["Alt", "D"], note: HK_HELP })],
   ["Off: the keys faint, Ctrl + D left to the game", hkWin({ on: false, note: HK_HELP })],
   ["Off, before the first item: Ctrl + C invited", win(topBar(), hkEmptyC, foot())],
@@ -84,7 +85,9 @@ const HK_TIPS = {
   // KDE): F1 shows the resources the game uses (accepted, with a warning); F2 to F11 do nothing (accepted alone,
   // the line of the function keys); Alt+F2 opens the search of KDE, which takes it before XWayland, so that the grab
   // succeeds and never hears it (refused); Alt+F4 closes the game (refused, no longer a warning). F12 is kept by
-  // Windows for its debugger (`RegisterHotKey`, to check in 14c3b): refused alone.
+  // Windows for its debugger (`RegisterHotKey`, to check in 14c3b): refused alone. Red for what is refused (the
+  // title of the tooltip, the line under a key refused), yellow for a warning (a risky key accepted, a key taken):
+  // the owner's choice on 2026-11-03, so that the player sees at once whether the key was taken.
   c: `<span class="app-hotkey-columns">
       <span class="app-hotkey-column"><span class="app-hotkey-tip-title">Allowed</span>
         ${["Ctrl+D", "Ctrl+E", "Alt+Q", "Alt+2"].map(hkCaps).join("")}</span>
@@ -103,7 +106,7 @@ SECTIONS.unshift(["Hotkey rules tooltip (14c3b): refused only what can't work, a
   ["Two columns: four allowed, four refused (impossible only), then F2 … F11 alone", hkWin({ help: "c", note: HK_HELP })],
   ["A risky key chosen: accepted, a warning under it", hkWin({ keys: ["Ctrl", "V"], note: "<b>Ctrl+V</b> no longer pastes in the game while it is your hotkey.", warn: true })],
   ["Another risky key chosen, F1 alone", hkWin({ keys: ["F1"], note: "<b>F1</b> no longer shows the resources the game uses while it is your hotkey.", warn: true })],
-  ["A key refused, the previous one kept (section Hotkey setting)", hkWin({ keys: ["Ctrl", "D"], note: "<b>Ctrl+C</b> copies the item already: choose another key.", warn: true })],
+  ["A key refused, the previous one kept (section Hotkey setting)", hkWin({ keys: ["Ctrl", "D"], note: "<b>Ctrl+C</b> copies the item already: choose another key.", warn: "refused" })],
   ["Before · A, sentences, the keys in bold", hkWin({ help: "a", note: HK_HELP })],
   ["Before · B, the examples as key caps, under two labels", hkWin({ help: "b", note: HK_HELP })],
 ]]);
