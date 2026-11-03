@@ -192,7 +192,6 @@ impl<'a> EmptyState<'a> {
     /// or its key taken).
     fn keys(&self, ui: &mut Ui) {
         let pressed = keys::named(&invited_keys(self.hotkey, self.keys), self.i18n);
-        let pressed: Vec<&str> = pressed.iter().map(String::as_str).collect();
         let caps = Caps {
             font: text::keys(),
             height: KEY_HEIGHT,

@@ -46,10 +46,16 @@ pub struct Caps {
 
 /// `keys` drawn as key caps joined by "+", their letters in `letters`; on the color of the
 /// controls when `filled`, otherwise only outlined (a hotkey turned off).
-pub fn caps(ui: &mut Ui, keys: &[&str], caps: &Caps, letters: Color32, filled: bool) -> Response {
+pub fn caps<K: AsRef<str>>(
+    ui: &mut Ui,
+    keys: &[K],
+    caps: &Caps,
+    letters: Color32,
+    filled: bool,
+) -> Response {
     let galleys: Vec<_> = keys
         .iter()
-        .map(|&key| widgets::text_line(ui, key, caps.font.clone()))
+        .map(|key| widgets::text_line(ui, key.as_ref(), caps.font.clone()))
         .collect();
     let plus = widgets::text_line(ui, "+", caps.font.clone());
 

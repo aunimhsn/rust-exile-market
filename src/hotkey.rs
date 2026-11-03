@@ -435,11 +435,11 @@ fn state_of(available: bool, on: bool, taken: bool) -> HotkeyState {
     }
 }
 
-/// Grabs the keys of `grab` only while the game is the active window, followed on a thread of its own until
-/// `manager` is dropped, so that Ctrl+D stays to the other windows; `wake` is called when its key
-/// becomes taken or free, which the window tells. When the X server can't be reached, the hotkey
-/// stays off, written to the log; when the desktop doesn't tell its active window, it is grabbed
-/// for every window.
+/// Grabs the keys of `grab` only while the game is the active window, followed on a thread of its
+/// own until `manager` is dropped, so that Ctrl+D stays to the other windows; `wake` is called
+/// when its key becomes taken or free, which the window tells. When the X server can't be
+/// reached, the hotkey stays off, written to the log; when the desktop doesn't tell its active
+/// window, it is grabbed for every window.
 #[cfg(target_os = "linux")]
 fn grab_in_game(
     manager: &Manager,
