@@ -40,27 +40,39 @@ tail -f ~/.local/state/exile-market/exile-market.log
    ✅ Le bug ferme l'aperçu ; Échap aussi ; l'engrenage ouvre les réglages à sa place (l'engrenage allumé, le bug éteint), et le bug depuis les réglages rouvre l'aperçu.
 
 5. **Depuis un objet** : lance le jeu, copie un objet unique (Ctrl+D ou Ctrl+C), puis clique sur le bug dans la fenêtre principale.
-   ✅ La case « Joindre l'objet affiché, **son nom** » est cochée, le nom en gras ; le résumé dit aussi « Items: … » (la langue du jeu).
+   ✅ La case « Joindre l'objet affiché : **son nom** » est cochée, le nom en gras après les deux-points ; le résumé dit aussi « Items: … » (la langue du jeu).
+
+   Puis ferme l'aperçu, copie un objet **magique** au nom long (un flacon avec ses deux affixes), et rouvre l'aperçu.
+   ✅ Si le nom ne tient pas, il est coupé par « … », jamais le début de la phrase ; au survol, une infobulle montre la phrase entière.
 
 6. **Ouvrir sur GitHub** : clique sur **Ouvrir sur GitHub**.
-   ✅ Le navigateur ouvre le formulaire « Bug report » du dépôt, sans erreur ; « Version and settings » contient le résumé, « Item » le texte de l'objet tel que copié, « Log » les mêmes lignes que la boîte de l'aperçu (la première et la dernière identiques) ; l'aperçu reste ouvert ; le journal dit « Bug report opened on GitHub: … characters, the item joined ».
+   ✅ Le navigateur ouvre le formulaire « Bug report » du dépôt, sans erreur ; « Version and settings » contient le résumé, « Item » le texte de l'objet tel que copié, « Log » les mêmes lignes que la boîte de l'aperçu (la première et la dernière identiques), les espaces, les deux-points et les parenthèses intacts ; l'aperçu reste ouvert ; le journal dit « Bug report opened on GitHub: N characters, the item joined », avec N au plus 6000.
 
-7. **Sans l'objet** : décoche la case, puis rouvre sur GitHub.
-   ✅ La boîte du journal montre plus de lignes qu'avant ; le champ « Item » du formulaire est vide ; « Log » a les lignes de l'aperçu.
+7. **Sans l'objet** : décoche la case, puis rouvre sur GitHub. Si ta session est courte, copie d'abord une vingtaine d'objets, pour que le journal ne tienne plus en entier.
+   ✅ La boîte du journal montre plus de lignes qu'avant (sa première ligne commence plus tôt) ; le champ « Item » du formulaire est vide ; « Log » a les lignes de l'aperçu.
 
 8. **Un objet copié ferme l'aperçu** : aperçu ouvert, copie un autre objet dans le jeu.
    ✅ L'aperçu se ferme et la fenêtre montre le nouvel objet.
 
-9. **Un objet illisible** : copie dans le jeu un objet que l'application ne sait pas lire, s'il en existe un (sinon passe ce test), puis ouvre l'aperçu.
-   ✅ La case dit « Joindre l'objet qui n'a pas pu être lu », cochée ; sur GitHub, « Item » contient son texte.
+9. **Un objet illisible** : dans Konsole, sélectionne et copie (Ctrl+Maj+C) le texte `Item Class: Belts` seul, sur une ligne. La fenêtre dit que l'objet n'a pas pu être lu ; ouvre alors l'aperçu.
+   ✅ La case dit « Joindre l'objet qui n'a pas pu être lu », cochée ; sur GitHub, « Item » contient `Item Class: Belts`.
 
-10. **En français et en anglais** : change la langue dans les réglages, puis rouvre l'aperçu.
+10. **L'objet gardé sous les réglages** : copie un objet, ouvre les réglages, puis clique sur le bug.
+    ✅ L'aperçu propose toujours de joindre cet objet, par son nom.
+
+11. **Rouvert en bas** : dans l'aperçu, remonte tout en haut de la boîte du journal, ferme l'aperçu, puis rouvre-le.
+    ✅ La boîte du journal est de nouveau déroulée jusqu'à sa dernière ligne.
+
+12. **En français et en anglais** : change la langue dans les réglages, puis rouvre l'aperçu.
     ✅ Les textes de l'aperçu changent de langue ; le résumé et le journal restent en anglais.
 
-11. **Une petite fenêtre** : réduis la fenêtre à sa hauteur minimale, aperçu ouvert.
+13. **Une petite fenêtre** : réduis la fenêtre à sa hauteur minimale, aperçu ouvert.
     ✅ L'aperçu défile ; le bouton **Ouvrir sur GitHub** reste atteignable.
 
-12. **Tes propres scénarios** : ce qui te vient à l'esprit.
+14. **Déconnecté de GitHub** : dans une fenêtre de navigation privée de ton navigateur par défaut (ou après t'être déconnecté de GitHub), rouvre sur GitHub.
+    ✅ GitHub demande de se connecter ; une fois connecté, il revient au formulaire, ses champs toujours remplis.
+
+15. **Tes propres scénarios** : ce qui te vient à l'esprit.
 
 ## Résultats
 
@@ -75,6 +87,9 @@ tail -f ~/.local/state/exile-market/exile-market.log
 | 7. Sans l'objet | | |
 | 8. Un objet copié ferme l'aperçu | | |
 | 9. Un objet illisible | | |
-| 10. En français et en anglais | | |
-| 11. Une petite fenêtre | | |
-| 12. Tes propres scénarios | | |
+| 10. L'objet gardé sous les réglages | | |
+| 11. Rouvert en bas | | |
+| 12. En français et en anglais | | |
+| 13. Une petite fenêtre | | |
+| 14. Déconnecté de GitHub | | |
+| 15. Tes propres scénarios | | |
