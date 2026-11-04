@@ -489,7 +489,7 @@ bug-report-join-item = Joindre l'objet affiché : { $name }
 bug-report-join-unreadable = Joindre l'objet qui n'a pas pu être lu
 # L'action principale : le formulaire de GitHub ouvert dans le navigateur, ses champs remplis.
 bug-report-open = Ouvrir sur GitHub
-# Copie tout le journal de la session choisie, à coller dans l'issue ; « Copié » après un clic, jusqu'à la fermeture de l'aperçu.
+# Copie tout le journal de la session choisie, à coller dans l'issue ; « Copié » après un clic, jusqu'à la fermeture de l'aperçu ou le choix de l'autre journal, pas encore copié.
 bug-report-copy = Copier le journal
 bug-report-copied = Copié
 bug-report-account = Un compte GitHub est nécessaire.

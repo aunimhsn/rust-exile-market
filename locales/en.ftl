@@ -480,7 +480,7 @@ bug-report-join-item = Join the item shown: { $name }
 bug-report-join-unreadable = Join the item that couldn't be read
 # The main action: the issue form of GitHub opened in the browser, its fields filled.
 bug-report-open = Open on GitHub
-# Copies the whole log of the session chosen, to paste into the issue; "Copied" after a click, until the preview closes.
+# Copies the whole log of the session chosen, to paste into the issue; "Copied" after a click, until the preview closes or the other log, not copied yet, is chosen.
 bug-report-copy = Copy the log
 bug-report-copied = Copied
 bug-report-account = A GitHub account is needed.

@@ -309,10 +309,45 @@ mod segmented {
     pub const PADDING: Vec2 = vec2(9.0, 3.0);
 }
 
+/// The slide of the white pill of two pills joined, kept from one frame to the next.
+#[derive(Debug, Clone, Copy)]
+struct Slide {
+    /// Where it started: 0 under the first pill, 1 under the second, or between.
+    from: f32,
+    /// Where it goes.
+    to: f32,
+    /// When it started, in seconds of `egui::InputState::time`.
+    start: f64,
+}
+
+impl Slide {
+    /// Where the white pill stands at `now`.
+    fn at(self, now: f64) -> f32 {
+        // A few tenths of a second: no precision lost that matters.
+        #[expect(clippy::cast_possible_truncation)]
+        let elapsed = (now - self.start) as f32;
+        slide_at(self.from, self.to, elapsed / super::theme::motion::SLIDE)
+    }
+}
+
+/// Where a slide from `from` to `to` stands after `progress` of its time (0 to 1, clamped), slowing
+/// down at its end.
+fn slide_at(from: f32, to: f32, progress: f32) -> f32 {
+    from + (to - from) * super::theme::motion::slowing(progress.clamp(0.0, 1.0))
+}
+
 /// Two pills joined on the dark of the controls, `labels`, the one of `chosen` (0 or 1) white
-/// like the main action; at a click, the white pill slides to the other one (`motion::SLIDE`),
-/// placed at once the first time `id` is drawn. The pill clicked, if another one.
-pub fn segmented(ui: &mut Ui, id: egui::Id, labels: [&str; 2], chosen: usize) -> Option<usize> {
+/// like the main action; at a click, the white pill slides to the other one (`motion::SLIDE`)
+/// from where it stands, even in the middle of a slide, and is placed at once the first time
+/// `id` is drawn. `group` names the choice for the screen readers ("Log"). The pill clicked, if
+/// another one.
+pub fn segmented(
+    ui: &mut Ui,
+    id: egui::Id,
+    group: &str,
+    labels: [&str; 2],
+    chosen: usize,
+) -> Option<usize> {
     use segmented::{INSET, PADDING};
     let galleys = labels.map(|label| text_line(ui, label, text::small_strong()));
     let sizes = galleys
@@ -330,13 +365,41 @@ pub fn segmented(ui: &mut Ui, id: egui::Id, labels: [&str; 2], chosen: usize) ->
             vec2(sizes[1].x, height),
         ),
     ];
+    let responses = [0, 1].map(|index| {
+        let response = ui.interact(pills[index], id.with(index), Sense::click());
+        response.widget_info(|| {
+            WidgetInfo::selected(
+                Role::RadioButton,
+                true,
+                index == chosen,
+                format!("{group}: {}", labels[index]),
+            )
+        });
+        response
+    });
+
     // 0 under the first pill, 1 under the second.
-    let t = ui.ctx().animate_bool_with_time_and_easing(
-        id,
-        chosen == 1,
-        super::theme::motion::SLIDE,
-        super::theme::motion::slowing,
-    );
+    let target = if chosen == 1 { 1.0 } else { 0.0 };
+    let now = ui.input(|input| input.time);
+    let t = ui.data_mut(|data| {
+        let slide = data.get_temp_mut_or_insert_with(id, || Slide {
+            from: target,
+            to: target,
+            start: f64::NEG_INFINITY,
+        });
+        if (slide.to - target).abs() > f32::EPSILON {
+            *slide = Slide {
+                from: slide.at(now),
+                to: target,
+                start: now,
+            };
+        }
+        slide.at(now)
+    });
+    if (t - target).abs() > f32::EPSILON {
+        ui.ctx().request_repaint();
+    }
+
     let painter = ui.painter();
     let radius = CornerRadius::same(size::RADIUS);
     painter.rect_filled(track, radius, color::CONTROL);
@@ -344,14 +407,16 @@ pub fn segmented(ui: &mut Ui, id: egui::Id, labels: [&str; 2], chosen: usize) ->
         pills[0].min.lerp(pills[1].min, t),
         pills[0].max.lerp(pills[1].max, t),
     );
-    painter.rect_filled(white, radius, color::ACCENT);
+    // Dimmed a little when the pill chosen has the focus of the keyboard.
+    let fill = if responses[chosen.min(1)].has_focus() {
+        color::ACCENT.lerp_to_gamma(Color32::BLACK, 0.12)
+    } else {
+        color::ACCENT
+    };
+    painter.rect_filled(white, radius, fill);
 
     let mut clicked = None;
-    for (index, (galley, pill)) in galleys.into_iter().zip(pills).enumerate() {
-        let response = ui.interact(pill, id.with(index), Sense::click());
-        response.widget_info(|| {
-            WidgetInfo::selected(Role::RadioButton, true, index == chosen, labels[index])
-        });
+    for (index, (galley, response)) in galleys.into_iter().zip(responses).enumerate() {
         // How much of the white pill is under this one: its text dark on it, and fading back.
         let under = if index == 1 { t } else { 1.0 - t };
         let rest = if response.hovered() || response.has_focus() {
@@ -360,10 +425,57 @@ pub fn segmented(ui: &mut Ui, id: egui::Id, labels: [&str; 2], chosen: usize) ->
             color::WEAK
         };
         let tint = rest.lerp_to_gamma(color::ON_ACCENT, under);
-        ui.painter().galley(pill.min + PADDING, galley, tint);
-        if response.on_hover_cursor(CursorIcon::PointingHand).clicked() && index != chosen {
+        ui.painter()
+            .galley(pills[index].min + PADDING, galley, tint);
+        if index != chosen && response.on_hover_cursor(CursorIcon::PointingHand).clicked() {
             clicked = Some(index);
         }
     }
     clicked
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_white_pill_is_placed_at_once_the_first_time() {
+        let placed = Slide {
+            from: 1.0,
+            to: 1.0,
+            start: f64::NEG_INFINITY,
+        };
+
+        assert!((placed.at(0.0) - 1.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn a_slide_turned_back_starts_from_where_the_pill_stands() {
+        let going = Slide {
+            from: 0.0,
+            to: 1.0,
+            start: 10.0,
+        };
+        let midway = going.at(10.066);
+        let back = Slide {
+            from: midway,
+            to: 0.0,
+            start: 10.066,
+        };
+
+        assert!(midway > 0.5 && midway < 1.0, "{midway}");
+        assert!((back.at(10.066) - midway).abs() < f32::EPSILON, "no jump");
+        assert!(back.at(10.1) < midway, "on its way back");
+        assert!(back.at(11.0).abs() < f32::EPSILON, "arrived");
+    }
+
+    #[test]
+    fn a_slide_ends_on_its_target() {
+        assert!((slide_at(0.3, 1.0, 1.0) - 1.0).abs() < f32::EPSILON);
+        assert!(
+            (slide_at(0.3, 1.0, 7.0) - 1.0).abs() < f32::EPSILON,
+            "past its time"
+        );
+        assert!((slide_at(0.3, 1.0, 0.0) - 0.3).abs() < f32::EPSILON);
+    }
 }

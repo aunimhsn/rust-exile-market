@@ -81,8 +81,8 @@ pub struct Report {
     previous_log: Option<Vec<LogLine>>,
     session: LogSession,
     join_item: bool,
-    /// Whether the player copied the log of the session chosen.
-    copied: bool,
+    /// The session whose log the player copied last.
+    copied: Option<LogSession>,
     sent: Sent,
     /// Which opening of the bug report it is, so that the preview starts again at each one:
     /// its log scrolled to its end.
@@ -120,6 +120,8 @@ impl Report {
                 .map(short),
         );
         let previous = crate::logging::previous_path().and_then(|path| match read_log(&path) {
+            // A session stopped before its first line has nothing to show.
+            Ok(log) if log.trim().is_empty() => None,
             Ok(log) => Some(log),
             // The first session.
             Err(error) if error.kind() == io::ErrorKind::NotFound => None,
@@ -152,7 +154,7 @@ impl Report {
             previous_log: None,
             session: LogSession::This,
             join_item: true,
-            copied: false,
+            copied: None,
             sent,
             opening: OPENINGS.fetch_add(1, Ordering::Relaxed),
         }
@@ -217,14 +219,17 @@ impl Report {
         self.send();
     }
 
-    /// Sends the log of `session`, when it has one; the lines that fit change with it, and "Copy
-    /// the log" is offered again.
+    /// Sends the log of `session`, when it has one; the lines that fit change with it.
     pub fn choose(&mut self, session: LogSession) {
-        if session == LogSession::Previous && !self.has_previous() || session == self.session {
+        // Already chosen.
+        if session == self.session {
+            return;
+        }
+        // Nothing to choose in the first session.
+        if session == LogSession::Previous && !self.has_previous() {
             return;
         }
         self.session = session;
-        self.copied = false;
         self.send();
     }
 
@@ -255,28 +260,39 @@ impl Report {
         self.log().map(|log| &log[self.sent.first_line..])
     }
 
+    /// Whether the log of the session chosen can be read: "Copy the log" is offered. Asked at
+    /// each frame, without building the log.
+    #[must_use]
+    pub fn has_log(&self) -> bool {
+        self.log().is_some()
+    }
+
     /// The whole log of the session chosen, written short as the preview shows it, for "Copy the
     /// log"; none when it can't be read.
     #[must_use]
     pub fn whole_log(&self) -> Option<String> {
         self.log().map(|log| {
-            log.iter()
-                .map(|line| line.text.as_str())
-                .collect::<Vec<_>>()
-                .join("\n")
+            let mut whole = String::with_capacity(log.iter().map(|line| line.text.len() + 1).sum());
+            for (index, line) in log.iter().enumerate() {
+                if index > 0 {
+                    whole.push('\n');
+                }
+                whole.push_str(&line.text);
+            }
+            whole
         })
     }
 
     /// Whether the player copied the log of the session chosen: "✓ Copied" until the preview
-    /// closes, or another log is chosen.
+    /// closes; the other log, not copied yet, offers "Copy the log".
     #[must_use]
     pub fn copied(&self) -> bool {
-        self.copied
+        self.copied == Some(self.session)
     }
 
-    /// Tells that the player copied the log.
+    /// Tells that the player copied the log of the session chosen.
     pub fn mark_copied(&mut self) {
-        self.copied = true;
+        self.copied = Some(self.session);
     }
 
     /// The address of the issue form, its fields filled.

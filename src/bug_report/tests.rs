@@ -282,7 +282,7 @@ fn copy_the_log_copies_the_whole_log_of_the_session_chosen() {
 }
 
 #[test]
-fn copied_until_another_log_is_chosen() {
+fn copied_while_the_log_copied_is_chosen() {
     let mut report = Report::new("Exile Market 0.1.0".to_owned(), None, Some(log(3)))
         .with_previous(previous_log(2), false);
     report.mark_copied();
@@ -292,6 +292,9 @@ fn copied_until_another_log_is_chosen() {
 
     report.choose(LogSession::Previous);
     assert!(!report.copied(), "another log, not copied yet");
+
+    report.choose(LogSession::This);
+    assert!(report.copied(), "back to the log copied");
 }
 
 #[test]

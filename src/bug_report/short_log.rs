@@ -94,14 +94,17 @@ pub fn short_lines(log: &str, home: Option<&str>) -> Vec<LogLine> {
     lines
 }
 
-/// Whether `log`, the text of a log file, ended without `closed`, the last message of a session
-/// closed by the player: a crash, or a stop by the system. An empty log ended with nothing.
+/// Whether `log`, the text of a log file, ended without `closed`, the message written once at
+/// the end of a session closed by the player: a crash, or a stop by the system. Its presence, not
+/// its place: a thread may still write a line after it. An empty log ended with nothing.
 #[must_use]
 pub fn ended_without_closing(log: &str, closed: &str) -> bool {
-    log.lines()
-        .rev()
-        .find_map(stamped)
-        .is_some_and(|(_, _, message)| message != closed)
+    let mut messages = log
+        .lines()
+        .filter_map(stamped)
+        .map(|(_, _, message)| message)
+        .peekable();
+    messages.peek().is_some() && !messages.any(|message| message == closed)
 }
 
 /// The classes of the windows the log tells as the game: the one of Proton, and on Windows those
@@ -352,6 +355,14 @@ mod tests {
 
         assert!(ended_without_closing(panic, CLOSED));
         assert!(ended_without_closing(stopped, CLOSED));
+    }
+
+    #[test]
+    fn a_line_written_after_the_closing_tells_no_crash() {
+        let log = "2026-11-04T21:02:41.5+01:00 [INFO] Exile Market closed\n\
+                   2026-11-04T21:02:41.6+01:00 [INFO] The update-check thread ended\n";
+
+        assert!(!ended_without_closing(log, CLOSED));
     }
 
     #[test]

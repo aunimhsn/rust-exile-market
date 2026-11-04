@@ -14,7 +14,7 @@ tail -f ~/.local/state/exile-market/exile-market.log
 
 ## Avant
 
-1. Ferme Exile Market, Exiled Exchange 2 et le jeu.
+1. Ferme Exile Market par sa croix (Ctrl+C dans le terminal compte comme un plantage : la session suivante choisirait « La précédente » d'office), Exiled Exchange 2 et le jeu.
 2. Lance, dans Konsole (pas dans le terminal de VS Code : son bac à sable Flatpak n'a pas X11, la fenêtre ne s'ouvre pas) :
 
    ```
@@ -36,8 +36,8 @@ tail -f ~/.local/state/exile-market/exile-market.log
 3. **Le journal** : regarde la boîte « Journal ».
    ✅ Elle montre les dernières lignes, déroulée jusqu'en bas ; chaque ligne commence par l'heure sans la date (`18:48:03 INFO …`) ; elle défile à l'intérieur sans agrandir la fenêtre ; une fenêtre autre que le jeu est écrite *another window*, en gris et en italique (fais un Alt+Tab vers une autre application avant d'ouvrir l'aperçu si tu n'en vois pas).
 
-4. **Le choix du journal** : regarde à droite du libellé « Journal ». Clique sur **La précédente**, puis sur **Cette session**.
-   ✅ Deux pastilles jointes sur fond sombre, « Cette session » en blanc (si la session précédente s'est fermée normalement). Au clic, la pastille blanche glisse vers l'autre, calmement (environ un quart de seconde, elle ralentit en arrivant, sans rebond), sa largeur suit le mot ; la boîte montre alors les lignes de la session précédente (son heure de fin, sa dernière ligne `… Exile Market closed`), puis de nouveau celles de cette session.
+4. **Le choix du journal** : regarde à droite du libellé « Journal ». Clique sur **La précédente**, puis sur **Cette session**. Puis clique vite sur l'une puis l'autre, avant la fin du glissement.
+   ✅ Deux pastilles jointes sur fond sombre, « Cette session » en blanc (si la session précédente s'est fermée normalement). Au clic, la pastille blanche glisse vers l'autre, calmement (environ un quart de seconde, elle ralentit en arrivant, sans rebond), sa largeur suit le mot ; la boîte montre alors les lignes de la session précédente (son heure de fin, sa dernière ligne `… Exile Market closed`), puis de nouveau celles de cette session. Recliquée en plein glissement, la pastille repart de là où elle est, sans saut ; la main du pointeur n'apparaît que sur la pastille non choisie.
 
 5. **Après un plantage** : dans un autre terminal, tue Exile Market sans le laisser se fermer : `pkill -9 -f target/release/rust-exile-market`. Relance-le (`cargo run --release`), puis ouvre l'aperçu.
    ✅ « La précédente » est déjà en blanc à l'ouverture, sans glisser ; la boîte montre la session tuée, qui s'arrête sur sa dernière ligne, **sans** « Exile Market closed ». Puis ferme Exile Market normalement (la croix), relance-le et rouvre l'aperçu : ✅ « Cette session » est choisie.
@@ -46,7 +46,7 @@ tail -f ~/.local/state/exile-market/exile-market.log
    ✅ Pas de pastilles : « Journal » seul au-dessus de la boîte. Ferme ensuite Exile Market et relance-le normalement (`cargo run --release`).
 
 7. **Copier le journal** : clique sur **Copier le journal**, puis colle (Ctrl+V) dans un éditeur de texte (Kate). Choisis ensuite l'autre journal ; puis ferme l'aperçu et rouvre-le.
-   ✅ La pastille devient « ✓ Copié » (la coche avant le mot, en gris), à droite de « Ouvrir sur GitHub ». Le texte collé est tout le journal de la session choisie, écrit comme dans la boîte (l'heure sans la date, *another window*), de sa première ligne (`… INFO Log file: ~/…`) à sa dernière, plus de lignes que la boîte quand la session est longue ; la fenêtre ne réagit pas à ce texte (pas de « objet illisible »). L'autre journal choisi, la pastille redevient « Copier le journal » ; rouvert, l'aperçu aussi.
+   ✅ La pastille devient « ✓ Copié » (la coche avant le mot, en gris), à droite de « Ouvrir sur GitHub ». Le texte collé est tout le journal de la session choisie, écrit comme dans la boîte (l'heure sans la date, *another window*), de sa première ligne (`… INFO Log file: ~/…`) à sa dernière, plus de lignes que la boîte quand la session est longue ; la fenêtre ne réagit pas à ce texte (pas de « objet illisible »). L'autre journal choisi, la pastille redevient « Copier le journal », et « ✓ Copié » revient avec le journal copié ; rouvert, l'aperçu montre « Copier le journal ».
 
 8. **Fermer** : clique de nouveau sur le bug ; rouvre-le, puis appuie sur **Échap** ; rouvre-le, puis clique sur l'**engrenage**.
    ✅ Le bug ferme l'aperçu ; Échap aussi ; l'engrenage ouvre les réglages à sa place (l'engrenage allumé, le bug éteint), et le bug depuis les réglages rouvre l'aperçu.

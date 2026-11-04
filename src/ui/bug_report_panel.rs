@@ -144,7 +144,7 @@ impl<'a> BugReportPanel<'a> {
             }
             if self.report.copied() {
                 copied_pill(ui, &self.i18n.text(Message::BugReportCopied));
-            } else if self.report.whole_log().is_some()
+            } else if self.report.has_log()
                 && widgets::control_pill(ui, &self.i18n.text(Message::BugReportCopy)).clicked()
             {
                 action = Some(BugReportAction::CopyLog);
@@ -186,20 +186,18 @@ impl<'a> BugReportPanel<'a> {
         let chosen = usize::from(self.report.session() == LogSession::Previous);
         let clicked = ui
             .horizontal(|ui| {
-                ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
-                    self.label_text(ui, Message::BugReportLog);
-                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                        widgets::segmented(
-                            ui,
-                            ui.make_persistent_id(("bug-report-session", self.report.opening())),
-                            [
-                                &self.i18n.text(Message::BugReportThisSession),
-                                &self.i18n.text(Message::BugReportPreviousSession),
-                            ],
-                            chosen,
-                        )
-                    })
-                    .inner
+                self.label_text(ui, Message::BugReportLog);
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    widgets::segmented(
+                        ui,
+                        ui.make_persistent_id(("bug-report-session", self.report.opening())),
+                        &self.i18n.text(Message::BugReportLog),
+                        [
+                            &self.i18n.text(Message::BugReportThisSession),
+                            &self.i18n.text(Message::BugReportPreviousSession),
+                        ],
+                        chosen,
+                    )
                 })
                 .inner
             })

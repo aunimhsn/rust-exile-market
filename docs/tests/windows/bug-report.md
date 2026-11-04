@@ -23,8 +23,8 @@ Pour le testeur Windows. Un bug à gauche de l'engrenage ouvre l'aperçu du rapp
 3. **Le journal** : regarde la boîte « Log ».
    ✅ Les dernières lignes, déroulée jusqu'en bas ; chaque ligne commence par l'heure sans la date (`18:48:03 INFO …`) ; la boîte défile à l'intérieur sans agrandir la fenêtre ; aucun chemin ne montre ton nom de compte Windows (`C:\Users\<toi>` est écrit `~`) ; une fenêtre autre que le jeu est écrite *another window*, en gris et en italique.
 
-4. **Le choix du journal** : regarde à droite du libellé « Log ». Clique sur **The previous one**, puis sur **This session**.
-   ✅ Deux pastilles jointes sur fond sombre, celle choisie en blanc. Au clic, la pastille blanche glisse vers l'autre, calmement (environ un quart de seconde, sans rebond), sa largeur suit le mot ; la boîte montre alors les lignes de la session précédente, puis de nouveau celles de cette session.
+4. **Le choix du journal** : regarde à droite du libellé « Log ». S'il n'y a pas de pastilles (le premier lancement de l'application sur ce PC), ferme Exile Market par sa croix, relance-le et rouvre l'aperçu. Clique sur **The previous one**, puis sur **This session** ; puis vite sur l'une puis l'autre, avant la fin du glissement.
+   ✅ Deux pastilles jointes sur fond sombre, celle choisie en blanc. Au clic, la pastille blanche glisse vers l'autre, calmement (environ un quart de seconde, sans rebond), sa largeur suit le mot ; la boîte montre alors les lignes de la session précédente, puis de nouveau celles de cette session. Recliquée en plein glissement, la pastille repart de là où elle est, sans saut.
 
 5. **Après un plantage** : ouvre PowerShell et tue Exile Market sans le laisser se fermer : `taskkill /F /IM rust-exile-market.exe`. Relance-le, puis ouvre l'aperçu.
    ✅ « The previous one » est déjà en blanc à l'ouverture, sans glisser ; la boîte montre la session tuée, qui s'arrête sur sa dernière ligne, **sans** « Exile Market closed ». Puis ferme Exile Market normalement (la croix), relance-le et rouvre l'aperçu : ✅ « This session » est choisie.
@@ -33,7 +33,7 @@ Pour le testeur Windows. Un bug à gauche de l'engrenage ouvre l'aperçu du rapp
    ✅ Pas de pastilles : « Log » seul au-dessus de la boîte.
 
 7. **Copier le journal** : clique sur **Copy the log**, puis colle (Ctrl+V) dans le Bloc-notes. Choisis ensuite l'autre journal (après le test 6, ferme et relance d'abord Exile Market pour en avoir deux) ; puis ferme l'aperçu et rouvre-le.
-   ✅ La pastille devient « ✓ Copied » (la coche avant le mot, en gris), à droite de « Open on GitHub ». Le texte collé est tout le journal de la session choisie, écrit comme dans la boîte, de sa première ligne (`… INFO Log file: ~\…`) à sa dernière ; la fenêtre ne réagit pas à ce texte. L'autre journal choisi, la pastille redevient « Copy the log » ; rouvert, l'aperçu aussi.
+   ✅ La pastille devient « ✓ Copied » (la coche avant le mot, en gris), à droite de « Open on GitHub ». Le texte collé est tout le journal de la session choisie, écrit comme dans la boîte, de sa première ligne (`… INFO Log file: ~\…`) à sa dernière ; la fenêtre ne réagit pas à ce texte. L'autre journal choisi, la pastille redevient « Copy the log », et « ✓ Copied » revient avec le journal copié ; rouvert, l'aperçu montre « Copy the log ».
 
 8. **Depuis un objet** : lance Path of Exile 2 en plein écran fenêtré, copie un objet unique (Ctrl+D ou Ctrl+C), puis clique sur le bug dans la fenêtre principale.
    ✅ La case « Join the item shown: **son nom** » est cochée ; le résumé dit aussi « Items: … ».
