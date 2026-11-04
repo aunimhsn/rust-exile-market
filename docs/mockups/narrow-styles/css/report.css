@@ -40,4 +40,8 @@
 .app-report-sessions .radio.on { color: var(--text); }
 .app-report-item { margin-top: 12px; }
 .app-report-item .toggle { font-size: 12.5px; }
-.app-report-item .toggle b { font-weight: 600; }
+.app-report-item .toggle { min-width: 0; }
+/* The name in bold after the colon, cut with "…" when the line runs out, never the start of the sentence. */
+.app-report-item-text { display: flex; gap: .3em; min-width: 0; white-space: nowrap; }
+.app-report-item-text span { flex: none; }
+.app-report-item .toggle b { font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
