@@ -92,9 +92,15 @@ impl Mark {
 
 /// A choice that can be clicked: its mark, then its text.
 pub fn choice(ui: &mut Ui, mark: Mark, label: &str) -> Response {
+    let galley = text_line(ui, label, text::body());
+    choice_galley(ui, mark, galley, label)
+}
+
+/// A choice whose text, `galley`, has parts of several styles (a name in bold); `label`, its
+/// text, for the screen readers.
+pub fn choice_galley(ui: &mut Ui, mark: Mark, galley: Arc<Galley>, label: &str) -> Response {
     use choice::{MARK_GAP, MARK_SIZE};
 
-    let galley = text_line(ui, label, text::body());
     let size = vec2(
         MARK_SIZE + MARK_GAP + galley.size().x,
         MARK_SIZE.max(galley.size().y),

@@ -20,6 +20,8 @@ update-download = Télécharger
 # Infobulle de l'emblème, qui ramène à l'objet.
 home-tooltip = Accueil
 settings-tooltip = Réglages
+# Infobulle du bug, à gauche de l'engrenage, qui ouvre le rapport de bug.
+bug-report-tooltip = Signaler un bug
 minimize-tooltip = Réduire
 close-tooltip = Fermer
 
@@ -462,3 +464,25 @@ hotkey-taken-settings = Choisissez une autre touche, ou copiez avec { $copy }.
 key-shift = Maj
 # Demandée par Grinding Gear Games pour les outils de la communauté.
 disclaimer = Ce produit n'est ni affilié à Grinding Gear Games ni approuvé par ce studio, de quelque manière que ce soit.
+
+## Rapport de bug
+
+# L'aperçu du rapport de bug, à la place du contenu de la fenêtre. Le rapport lui-même est écrit en anglais, la
+# langue des issues, quelle que soit la langue de l'interface.
+bug-report-title = Signaler un bug
+bug-report-intro = Le rapport s'ouvre sur GitHub avec le texte ci-dessous. Décrivez-y ce qui s'est passé, puis envoyez-le.
+# Libellé au-dessus du résumé du rapport : la version, le système, les langues, la ligue et les réglages.
+bug-report-sent = Envoyé avec le rapport
+# Libellé au-dessus des dernières lignes du journal.
+bug-report-log = Journal
+# Sous les lignes du journal. « another window » reste en anglais : le rapport l'écrit ainsi.
+bug-report-log-note = Ses dernières lignes. Les autres fenêtres sont écrites « another window ».
+# À la place des lignes du journal, quand il ne peut pas être lu.
+bug-report-no-log = Le journal ne peut pas être lu.
+# Case qui joint l'objet affiché au rapport, $name son nom, en gras.
+bug-report-join-item = Joindre l'objet affiché, { $name }
+# Case qui joint le texte d'un objet qui n'a pas pu être lu.
+bug-report-join-unreadable = Joindre l'objet qui n'a pas pu être lu
+# L'action principale : le formulaire de GitHub ouvert dans le navigateur, ses champs remplis.
+bug-report-open = Ouvrir sur GitHub
+bug-report-account = Un compte GitHub est nécessaire.

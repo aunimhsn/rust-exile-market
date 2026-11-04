@@ -225,6 +225,12 @@ pub mod text {
         fonts::text(11.5, Weight::SemiBold)
     }
 
+    /// The text of the bug report, as it will be sent: its summary and its log.
+    #[must_use]
+    pub fn report() -> FontId {
+        fonts::numbers(11.0)
+    }
+
     /// The keys of a row of the list of the hotkey, in the settings.
     #[must_use]
     pub fn list_keys() -> FontId {

@@ -32,6 +32,7 @@ pub enum Message {
     UpdateDownload,
     HomeTooltip,
     SettingsTooltip,
+    BugReportTooltip,
     MinimizeTooltip,
     CloseTooltip,
     StatusPricesUnavailable,
@@ -59,6 +60,15 @@ pub enum Message {
     KeyShift,
     HotkeyTakenChoose,
     Disclaimer,
+    BugReportTitle,
+    BugReportIntro,
+    BugReportSent,
+    BugReportLog,
+    BugReportLogNote,
+    BugReportNoLog,
+    BugReportJoinUnreadable,
+    BugReportOpen,
+    BugReportAccount,
     CheckOnTrade,
     TagCorrupted,
     TagTwiceCorrupted,
@@ -185,7 +195,7 @@ pub enum Message {
 impl Message {
     /// Every message, for the tests.
     #[cfg(test)]
-    const ALL: [Self; 139] = [
+    const ALL: [Self; 149] = [
         Self::LeagueModeSoftcore,
         Self::LeagueModeHardcore,
         Self::LeagueLoading,
@@ -193,6 +203,7 @@ impl Message {
         Self::UpdateDownload,
         Self::HomeTooltip,
         Self::SettingsTooltip,
+        Self::BugReportTooltip,
         Self::MinimizeTooltip,
         Self::CloseTooltip,
         Self::StatusPricesUnavailable,
@@ -220,6 +231,15 @@ impl Message {
         Self::KeyShift,
         Self::HotkeyTakenChoose,
         Self::Disclaimer,
+        Self::BugReportTitle,
+        Self::BugReportIntro,
+        Self::BugReportSent,
+        Self::BugReportLog,
+        Self::BugReportLogNote,
+        Self::BugReportNoLog,
+        Self::BugReportJoinUnreadable,
+        Self::BugReportOpen,
+        Self::BugReportAccount,
         Self::CheckOnTrade,
         Self::TagCorrupted,
         Self::TagTwiceCorrupted,
@@ -338,6 +358,7 @@ impl Message {
             Self::UpdateDownload => "update-download",
             Self::HomeTooltip => "home-tooltip",
             Self::SettingsTooltip => "settings-tooltip",
+            Self::BugReportTooltip => "bug-report-tooltip",
             Self::MinimizeTooltip => "minimize-tooltip",
             Self::CloseTooltip => "close-tooltip",
             Self::StatusPricesUnavailable => "status-prices-unavailable",
@@ -365,6 +386,15 @@ impl Message {
             Self::KeyShift => "key-shift",
             Self::HotkeyTakenChoose => "hotkey-taken-choose",
             Self::Disclaimer => "disclaimer",
+            Self::BugReportTitle => "bug-report-title",
+            Self::BugReportIntro => "bug-report-intro",
+            Self::BugReportSent => "bug-report-sent",
+            Self::BugReportLog => "bug-report-log",
+            Self::BugReportLogNote => "bug-report-log-note",
+            Self::BugReportNoLog => "bug-report-no-log",
+            Self::BugReportJoinUnreadable => "bug-report-join-unreadable",
+            Self::BugReportOpen => "bug-report-open",
+            Self::BugReportAccount => "bug-report-account",
             Self::CheckOnTrade => "check-on-trade",
             Self::TagCorrupted => "tag-corrupted",
             Self::TagTwiceCorrupted => "tag-twice-corrupted",
@@ -500,6 +530,7 @@ const UPDATE_AVAILABLE: &str = "update-available";
 const STATUS_UPDATE: &str = "status-update";
 const HOTKEY_TAKEN: &str = "hotkey-taken";
 const HOTKEY_TAKEN_SETTINGS: &str = "hotkey-taken-settings";
+const BUG_REPORT_JOIN_ITEM: &str = "bug-report-join-item";
 const STATUS_PRICES: &str = "status-prices";
 const STATUS_PRICES_OFFLINE: &str = "status-prices-offline";
 const PRICES_UNREACHABLE: &str = "prices-unreachable";
@@ -599,6 +630,7 @@ pub const DOWNLOAD_QUOTE_COUNT: usize = DOWNLOAD_QUOTES.len();
 /// Gives the texts of the interface in one language.
 pub struct Translator {
     bundle: FluentBundle<FluentResource>,
+    language: Language,
 }
 
 impl Translator {
@@ -615,7 +647,13 @@ impl Translator {
         bundle
             .add_resource(resource)
             .unwrap_or_else(|errors| panic!("duplicate messages for {language:?}: {errors:?}"));
-        Self { bundle }
+        Self { bundle, language }
+    }
+
+    /// The language of its messages, the language of the interface.
+    #[must_use]
+    pub fn language(&self) -> Language {
+        self.language
     }
 
     /// The text of `message`.
@@ -1056,6 +1094,14 @@ impl Translator {
         self.format(HOTKEY_TAKEN, Some(&args))
     }
 
+    /// The checkbox that joins the item shown to the bug report, `name` its name, in bold.
+    #[must_use]
+    pub fn bug_report_join_item(&self, name: &str) -> String {
+        let mut args = FluentArgs::new();
+        args.set("name", name);
+        self.format(BUG_REPORT_JOIN_ITEM, Some(&args))
+    }
+
     /// The key of the hotkey taken by another application, in the settings, on the line after
     /// [`Self::hotkey_taken`]: where to choose another, and the keys that still `copy`.
     #[must_use]
@@ -1240,6 +1286,7 @@ mod tests {
                 STATUS_UPDATE,
                 HOTKEY_TAKEN,
                 HOTKEY_TAKEN_SETTINGS,
+                BUG_REPORT_JOIN_ITEM,
                 STATUS_PRICES,
                 STATUS_PRICES_OFFLINE,
                 PRICES_UNREACHABLE,

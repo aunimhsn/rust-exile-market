@@ -1,0 +1,194 @@
+use super::*;
+use crate::hotkey::Shortcut;
+
+fn facts(league: Option<&League>) -> Facts<'_> {
+    Facts {
+        interface: Language::French,
+        items: Some(Language::French),
+        league,
+        always_on_top: false,
+        hotkey: Some(HotkeySetting {
+            on: true,
+            keys: "F4".parse::<Shortcut>().expect("keys"),
+        }),
+    }
+}
+
+fn line(text: &str) -> LogLine {
+    LogLine {
+        text: text.to_owned(),
+        level: Some(Level::Info),
+        hidden: None,
+    }
+}
+
+/// `count` lines of the log, numbered, of about 60 characters each once encoded.
+fn log(count: usize) -> Vec<LogLine> {
+    (0..count)
+        .map(|index| {
+            line(&format!(
+                "18:48:03 INFO Item copied: Item Class: Belts {index:04}"
+            ))
+        })
+        .collect()
+}
+
+/// The value of `field` in `address`, decoded.
+fn field(address: &str, field: &str) -> Option<String> {
+    let query = address.split_once('?')?.1;
+    let value = query
+        .split('&')
+        .find_map(|pair| pair.strip_prefix(&format!("{field}=")))?;
+    let bytes = value.as_bytes();
+    let mut decoded = Vec::new();
+    let mut index = 0;
+    while index < bytes.len() {
+        if bytes[index] == b'%' {
+            let hex = std::str::from_utf8(&bytes[index + 1..index + 3]).ok()?;
+            decoded.push(u8::from_str_radix(hex, 16).ok()?);
+            index += 3;
+        } else {
+            decoded.push(bytes[index]);
+            index += 1;
+        }
+    }
+    String::from_utf8(decoded).ok()
+}
+
+#[test]
+fn the_summary_tells_the_version_the_system_the_languages_the_league_and_the_settings() {
+    let league = League::new("Forbidden Rites");
+
+    assert_eq!(
+        summary(&facts(Some(&league)), "Linux · KDE Plasma · X11"),
+        format!(
+            "Exile Market {}\nLinux · KDE Plasma · X11\nInterface: French · Items: French\n\
+             League: Forbidden Rites (softcore)\nAlways on top: off · Hotkey: on, F4",
+            crate::VERSION
+        )
+    );
+}
+
+#[test]
+fn the_summary_before_the_first_item_and_the_leagues() {
+    let facts = Facts {
+        items: None,
+        hotkey: None,
+        always_on_top: true,
+        ..facts(None)
+    };
+    let summary = summary(&facts, "macOS 15.1");
+
+    assert!(summary.contains("\nInterface: French\n"), "{summary}");
+    assert!(summary.contains("\nLeague: not known yet\n"), "{summary}");
+    assert!(summary.ends_with("\nAlways on top: on"), "{summary}");
+}
+
+#[test]
+fn the_hardcore_league_is_told() {
+    let league = League::new("HC Forbidden Rites");
+
+    assert!(summary(&facts(Some(&league)), "Linux").contains("(hardcore)"));
+}
+
+#[test]
+fn the_address_opens_the_form_with_its_fields_filled() {
+    let item = JoinedItem {
+        text: "Item Class: Belts\nRarity: Unique\nHeadhunter\nHeavy Belt".to_owned(),
+        name: Some("Headhunter".to_owned()),
+    };
+    let report = Report::new(
+        "Exile Market 0.1.0".to_owned(),
+        Some(item.clone()),
+        Some(log(3)),
+    );
+    let address = report.address();
+
+    assert!(
+        address.starts_with(
+            "https://github.com/aunimhsn/rust-exile-market/issues/new?template=bug-report.yml&"
+        ),
+        "{address}"
+    );
+    assert_eq!(
+        field(address, "report").as_deref(),
+        Some("Exile Market 0.1.0")
+    );
+    assert_eq!(field(address, "item"), Some(item.text));
+    let sent = field(address, "log").expect("log");
+    assert_eq!(sent.lines().count(), 3);
+    assert_eq!(report.log_sent().map(<[LogLine]>::len), Some(3));
+}
+
+#[test]
+fn the_address_keeps_the_last_lines_of_the_log_that_fit() {
+    let report = Report::new("Exile Market 0.1.0".to_owned(), None, Some(log(500)));
+    let sent = report.log_sent().expect("log");
+
+    assert!(report.address().len() <= ADDRESS_BUDGET);
+    assert!(sent.len() > 50 && sent.len() < 500, "{}", sent.len());
+    assert_eq!(sent.last(), log(500).last());
+    let decoded = field(report.address(), "log").expect("log");
+    assert_eq!(
+        decoded,
+        sent.iter()
+            .map(|line| line.text.as_str())
+            .collect::<Vec<_>>()
+            .join("\n"),
+        "the preview shows exactly the lines sent"
+    );
+}
+
+#[test]
+fn leaving_the_item_out_leaves_room_for_more_lines_of_the_log() {
+    let item = JoinedItem {
+        text: "Item Class: Belts\n".repeat(60),
+        name: Some("Headhunter".to_owned()),
+    };
+    let mut report = Report::new("Exile Market 0.1.0".to_owned(), Some(item), Some(log(500)));
+    let with_item = report.log_sent().expect("log").len();
+    report.join_item(false);
+
+    assert!(!report.joins_item());
+    assert_eq!(field(report.address(), "item"), None);
+    assert!(report.log_sent().expect("log").len() > with_item);
+}
+
+#[test]
+fn an_item_too_long_for_the_address_keeps_its_first_lines() {
+    let text = (0..400)
+        .map(|index| format!("+{index} to maximum Life"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let item = JoinedItem {
+        text: text.clone(),
+        name: None,
+    };
+    let report = Report::new("Exile Market 0.1.0".to_owned(), Some(item), Some(log(10)));
+    let sent = field(report.address(), "item").expect("item");
+
+    assert!(report.address().len() <= ADDRESS_BUDGET);
+    assert!(
+        text.starts_with(&sent) && sent.ends_with("maximum Life"),
+        "{sent}"
+    );
+    assert_eq!(report.log_sent().map(<[LogLine]>::len), Some(0));
+    assert_eq!(field(report.address(), "log"), None);
+}
+
+#[test]
+fn without_a_log_the_report_sends_the_summary_and_the_item() {
+    let report = Report::new("Exile Market 0.1.0".to_owned(), None, None);
+
+    assert_eq!(report.log_sent(), None);
+    assert_eq!(field(report.address(), "log"), None);
+    assert!(!report.joins_item(), "no item shown");
+}
+
+#[test]
+fn the_address_encodes_every_character_but_the_unreserved_ones() {
+    assert_eq!(encode("a-z_0.9~"), "a-z_0.9~");
+    assert_eq!(encode("a b&c=d\n"), "a%20b%26c%3Dd%0A");
+    assert_eq!(encode("é·"), "%C3%A9%C2%B7");
+    assert_eq!(encoded_len("é·a"), encode("é·a").len());
+}

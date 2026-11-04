@@ -1,5 +1,5 @@
 //! The title bar, in place of the one of the system: the emblem, the league block, then the
-//! settings, minimize and close icons on the right. Its empty space moves the window.
+//! bug report, settings, minimize and close icons on the right. Its empty space moves the window.
 
 use egui::{
     Align, Color32, CursorIcon, Frame, Image, Layout, Painter, Panel, PointerButton, Pos2, Rect,
@@ -16,6 +16,7 @@ const EMBLEM_SIZE: f32 = 16.0;
 const EMBLEM_GAP: f32 = 10.0;
 /// The ring around the emblem with the keyboard focus: the pointer never shows it.
 const EMBLEM_FOCUS_MARGIN: f32 = 3.0;
+/// The gear, and the bug of the bug report.
 const SETTINGS_ICON_SIZE: f32 = 15.0;
 /// The width of the minimize line and of the close cross.
 const WINDOW_MARK_SIZE: f32 = 9.0;
@@ -38,6 +39,7 @@ pub enum TitleBarAction {
     /// Clicked the emblem, to go back to the item.
     Home,
     Leagues,
+    BugReport,
     Settings,
     Minimize,
     Close,
@@ -46,17 +48,19 @@ pub enum TitleBarAction {
 /// An icon on the right of the title bar.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Icon {
+    BugReport,
     Settings,
     Minimize,
     Close,
 }
 
-/// The icons on the right, from the right edge.
-const ICONS: [Icon; 3] = [Icon::Close, Icon::Minimize, Icon::Settings];
+/// The icons on the right, from the right edge: the bug left of the gear.
+const ICONS: [Icon; 4] = [Icon::Close, Icon::Minimize, Icon::Settings, Icon::BugReport];
 
 impl Icon {
     fn action(self) -> TitleBarAction {
         match self {
+            Self::BugReport => TitleBarAction::BugReport,
             Self::Settings => TitleBarAction::Settings,
             Self::Minimize => TitleBarAction::Minimize,
             Self::Close => TitleBarAction::Close,
@@ -65,6 +69,7 @@ impl Icon {
 
     fn tooltip(self) -> Message {
         match self {
+            Self::BugReport => Message::BugReportTooltip,
             Self::Settings => Message::SettingsTooltip,
             Self::Minimize => Message::MinimizeTooltip,
             Self::Close => Message::CloseTooltip,
@@ -82,7 +87,8 @@ pub struct TitleBar<'a> {
     i18n: &'a Translator,
     /// The leagues arrived: a click on the league block opens their list.
     leagues_known: bool,
-    settings_open: bool,
+    /// The icon lit while its panel is open: the gear or the bug.
+    lit: Option<Icon>,
     leagues_open: bool,
 }
 
@@ -93,7 +99,7 @@ impl<'a> TitleBar<'a> {
             league,
             i18n,
             leagues_known: false,
-            settings_open: false,
+            lit: None,
             leagues_open: false,
         }
     }
@@ -116,8 +122,24 @@ impl<'a> TitleBar<'a> {
     /// Lights the gear up while the settings are open.
     #[must_use]
     pub fn settings_open(mut self, open: bool) -> Self {
-        self.settings_open = open;
+        self.light(Icon::Settings, open);
         self
+    }
+
+    /// Lights the bug up while the bug report is open.
+    #[must_use]
+    pub fn bug_report_open(mut self, open: bool) -> Self {
+        self.light(Icon::BugReport, open);
+        self
+    }
+
+    /// Lights `icon` up while `open`, or no longer.
+    fn light(&mut self, icon: Icon, open: bool) {
+        if open {
+            self.lit = Some(icon);
+        } else if self.lit == Some(icon) {
+            self.lit = None;
+        }
     }
 
     /// Draws the title bar; what the player did in it, if anything.
@@ -139,7 +161,7 @@ impl<'a> TitleBar<'a> {
                     if self.emblem(ui).clicked() {
                         action = Some(TitleBarAction::Home);
                     }
-                    #[expect(clippy::cast_precision_loss, reason = "three icons")]
+                    #[expect(clippy::cast_precision_loss, reason = "four icons")]
                     let icons_width = ICONS.len() as f32 * size::ICON_ZONE;
                     if self.league_block(ui, icons_width).clicked() {
                         action = Some(TitleBarAction::Leagues);
@@ -302,16 +324,19 @@ impl<'a> TitleBar<'a> {
     }
 
     /// An icon without a block, clickable on its zone across the height of the bar; white
-    /// under the pointer, and the gear while the settings are open.
+    /// under the pointer, the gear while the settings are open and the bug while the bug report
+    /// is.
     fn icon(&self, ui: &mut Ui, icon: Icon) -> Response {
         let (rect, response) = ui.allocate_exact_size(
             vec2(size::ICON_ZONE, size::TITLE_BAR_HEIGHT),
             Sense::click(),
         );
-        let on = icon == Icon::Settings && self.settings_open;
+        let on = self.lit == Some(icon);
         let tooltip = self.i18n.text(icon.tooltip());
         response.widget_info(|| match icon {
-            Icon::Settings => WidgetInfo::selected(Role::Button, true, on, &tooltip),
+            Icon::BugReport | Icon::Settings => {
+                WidgetInfo::selected(Role::Button, true, on, &tooltip)
+            }
             Icon::Minimize | Icon::Close => WidgetInfo::labeled(Role::Button, true, &tooltip),
         });
 
@@ -321,11 +346,15 @@ impl<'a> TitleBar<'a> {
             color::WEAK
         };
         let center = rect.center();
-        match icon {
-            Icon::Settings => Image::new(images::settings()).tint(tint).paint_at(
+        let image = |source| {
+            Image::new(source).tint(tint).paint_at(
                 ui,
                 Rect::from_center_size(center, Vec2::splat(SETTINGS_ICON_SIZE)),
-            ),
+            );
+        };
+        match icon {
+            Icon::BugReport => image(images::bug()),
+            Icon::Settings => image(images::settings()),
             Icon::Minimize => minimize_mark(ui.painter(), center, tint),
             // A little smaller than the minimize line, so that both look the same size.
             Icon::Close => widgets::cross(ui.painter(), center, WINDOW_MARK_SIZE * 0.8, tint),
@@ -469,6 +498,14 @@ mod tests {
             !actions.contains(&Some(TitleBarAction::Home)),
             "{actions:?}"
         );
+    }
+
+    #[test]
+    fn a_click_left_of_the_gear_opens_the_bug_report() {
+        let bug = pos2(420.0 - 3.5 * size::ICON_ZONE, size::TITLE_BAR_HEIGHT / 2.0);
+        let actions = Window::new().press_and_release(bug, Vec2::ZERO);
+
+        assert_eq!(actions.last(), Some(&Some(TitleBarAction::BugReport)));
     }
 
     #[test]

@@ -13,6 +13,7 @@ use egui::{
 };
 
 use self::open_lists::{OpenList, OpenLists};
+use crate::bug_report::{Facts, JoinedItem, Report};
 use crate::clipboard::{ClipboardEvent, ClipboardWatch};
 use crate::estimate::{self, Estimate, Reference, Worth};
 use crate::filters::{Filters, Window};
@@ -32,10 +33,10 @@ use crate::trade::ItemNamesWatch;
 use crate::trade::query::{SearchFilters, SearchKind};
 use crate::trade::search::{OfferSearch, Search};
 use crate::ui::{
-    self, Bubble, BubbleAction, EmptyState, ItemBlock, ItemBlockAction, LeagueList,
-    LeagueListAction, OffersAction, OffersBlock, PriceBlock, PriceDownload, ResizeEdges,
-    SettingsPanel, Stats, StatusBar, TitleBar, TitleBarAction, TradeStatus, UnreadableItem,
-    WarningBand,
+    self, Bubble, BubbleAction, BugReportAction, BugReportPanel, EmptyState, ItemBlock,
+    ItemBlockAction, LeagueList, LeagueListAction, OffersAction, OffersBlock, PriceBlock,
+    PriceDownload, ResizeEdges, SettingsPanel, Stats, StatusBar, TitleBar, TitleBarAction,
+    TradeStatus, UnreadableItem, WarningBand,
 };
 use crate::update::{LeagueOfTheMoment, Release, UpdateCheck};
 
@@ -45,18 +46,19 @@ enum View {
     /// The copied item, or the empty state before the first one.
     Item,
     Settings,
+    /// The preview of the bug report.
+    BugReport,
 }
 
 impl View {
-    /// The view after a click on the gear: it opens the settings, and closes them.
-    fn toggled(self) -> Self {
-        match self {
-            Self::Item => Self::Settings,
-            Self::Settings => Self::Item,
-        }
+    /// The view after a click on the icon of `panel`, the gear or the bug: it opens its panel in
+    /// place of what the window shows, and closes it.
+    fn toggled(self, panel: Self) -> Self {
+        if self == panel { Self::Item } else { panel }
     }
 
-    /// The view after `event`: a copied item closes the settings, so that the player sees it.
+    /// The view after `event`: a copied item closes the settings and the bug report, so that the
+    /// player sees it.
     fn after(self, event: &ClipboardEvent) -> Self {
         match event {
             ClipboardEvent::Copied { .. } => Self::Item,
@@ -111,6 +113,8 @@ pub struct ExileMarketApp {
     release: Option<Release>,
     /// Its page was opened from the bubble: the bubble is hidden until the next launch.
     release_opened: bool,
+    /// The bug report, built when its preview opens; shown while the view is the bug report.
+    bug_report: Option<Report>,
 }
 
 impl ExileMarketApp {
@@ -169,6 +173,7 @@ impl ExileMarketApp {
             update_check: UpdateCheck::start(move || update_ctx.request_repaint()),
             release: None,
             release_opened: false,
+            bug_report: None,
         }
     }
 
@@ -184,12 +189,64 @@ impl ExileMarketApp {
             }
             // Still a click outside the list of the keys.
             TitleBarAction::Leagues => self.lists.close_all(),
+            TitleBarAction::BugReport => {
+                self.view = self.view.toggled(View::BugReport);
+                self.lists.close_all();
+                if self.view == View::BugReport {
+                    self.bug_report = Some(self.new_bug_report());
+                }
+            }
             TitleBarAction::Settings => {
-                self.view = self.view.toggled();
+                self.view = self.view.toggled(View::Settings);
                 self.lists.close_all();
             }
             TitleBarAction::Minimize => ctx.send_viewport_cmd(ViewportCommand::Minimized(true)),
             TitleBarAction::Close => ctx.send_viewport_cmd(ViewportCommand::Close),
+        }
+    }
+
+    /// The bug report of what the window shows now: the summary, the log of this session, and
+    /// the item shown, joined by default.
+    fn new_bug_report(&self) -> Report {
+        let copied = self.recent.shown();
+        let facts = Facts {
+            interface: self.i18n.language(),
+            items: copied.map(CopiedItem::language),
+            league: self.session.league(),
+            always_on_top: self.settings.always_on_top(),
+            hotkey: cfg!(any(target_os = "linux", target_os = "windows"))
+                .then(|| self.settings.hotkey()),
+        };
+        let item = copied.map(|copied| JoinedItem {
+            text: copied.text().to_owned(),
+            name: self
+                .session
+                .item()
+                .and_then(|shown| shown.parsed().ok())
+                .map(|item| item.name().unwrap_or(item.base_type()).to_owned()),
+        });
+        Report::of_this_session(&facts, item)
+    }
+
+    /// What the player did in the bug report.
+    fn act_on_bug_report(&mut self, ctx: &Context, action: BugReportAction) {
+        let Some(report) = &mut self.bug_report else {
+            return;
+        };
+        match action {
+            BugReportAction::JoinItem(join) => report.join_item(join),
+            BugReportAction::Open => {
+                log::info!(
+                    "Bug report opened on GitHub: {} characters, the item {}",
+                    report.address().len(),
+                    if report.joins_item() {
+                        "joined"
+                    } else {
+                        "left out"
+                    }
+                );
+                ctx.open_url(OpenUrl::new_tab(report.address()));
+            }
         }
     }
 
@@ -706,10 +763,10 @@ impl App for ExileMarketApp {
                 self.filters.forget_stats();
             }
         });
-        // Escape closes what is on top: a list, then the settings.
+        // Escape closes what is on top: a list, then the settings or the bug report.
         if ctx.input(|input| input.key_pressed(Key::Escape))
             && !self.lists.escape()
-            && self.view == View::Settings
+            && self.view != View::Item
         {
             self.view = View::Item;
         }
@@ -724,6 +781,7 @@ impl App for ExileMarketApp {
         let action = TitleBar::new(self.session.league(), &self.i18n)
             .leagues_known(self.session.leagues().is_some())
             .settings_open(self.view == View::Settings)
+            .bug_report_open(self.view == View::BugReport)
             .leagues_open(self.lists.is_open(OpenList::Leagues))
             .show(ui);
         if let Some(action) = action {
@@ -761,7 +819,7 @@ impl App for ExileMarketApp {
             TradeStatus::Idle => {}
         }
         match self.view {
-            View::Item => StatusBar::sources(&self.i18n, prices, trade).show(ui),
+            View::Item | View::BugReport => StatusBar::sources(&self.i18n, prices, trade).show(ui),
             View::Settings => StatusBar::author(&self.i18n, self.release.as_ref()).show(ui),
         }
         // Taken once for both windows.
@@ -785,6 +843,18 @@ impl App for ExileMarketApp {
                     self.change_setting(ui.ctx(), change);
                 }
             }
+            View::BugReport => {
+                let action = self
+                    .bug_report
+                    .as_ref()
+                    .and_then(|report| BugReportPanel::new(report, &self.i18n).show(ui));
+                if let Some(action) = action {
+                    self.act_on_bug_report(&ctx, action);
+                }
+            }
+        }
+        if self.view != View::BugReport {
+            self.bug_report = None;
         }
         self.lists.follow_view(self.view == View::Settings);
         if self.view != View::Settings {
@@ -1005,8 +1075,31 @@ mod tests {
 
     #[test]
     fn the_gear_opens_the_settings_then_closes_them() {
-        assert_eq!(View::Item.toggled(), View::Settings);
-        assert_eq!(View::Settings.toggled(), View::Item);
+        assert_eq!(View::Item.toggled(View::Settings), View::Settings);
+        assert_eq!(View::Settings.toggled(View::Settings), View::Item);
+    }
+
+    #[test]
+    fn the_bug_opens_the_bug_report_and_the_gear_the_settings_in_its_place() {
+        assert_eq!(View::Item.toggled(View::BugReport), View::BugReport);
+        assert_eq!(View::BugReport.toggled(View::BugReport), View::Item);
+        assert_eq!(View::BugReport.toggled(View::Settings), View::Settings);
+        assert_eq!(View::Settings.toggled(View::BugReport), View::BugReport);
+    }
+
+    #[test]
+    fn a_copied_item_closes_the_bug_report() {
+        let copied = ClipboardEvent::Copied {
+            item: CopiedItem::from_text("Item Class: Rings\nRarity: Rare\nWoe Loop\nRuby Ring")
+                .unwrap(),
+            hotkey: None,
+        };
+
+        assert_eq!(View::BugReport.after(&copied), View::Item);
+        assert_eq!(
+            View::BugReport.after(&ClipboardEvent::Unreadable),
+            View::BugReport
+        );
     }
 
     #[test]

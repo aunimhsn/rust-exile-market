@@ -68,9 +68,9 @@ impl Modifier {
 /// game that reads the keys at each frame sees each of them (the delay of the `enigo` crate).
 const KEY_DELAY_MS: u32 = 12;
 
-/// The class of the game run by Steam through Proton (`WM_CLASS`, its instance and class names
-/// alike), logged by step 14a1 in the owner's game on 2026-11-01.
-const GAME_CLASS: &[u8] = b"steam_app_2694490";
+/// The class of the game run by Steam through Proton, its instance and class names alike in
+/// `WM_CLASS`.
+const GAME_CLASS: &[u8] = super::GAME_CLASS.as_bytes();
 /// At the release of D: while it is held, the X server gives every key to the application that
 /// listens to the hotkey, so that a copy sent then wouldn't reach the game.
 pub const SENT_AT: HotKeyState = HotKeyState::Released;

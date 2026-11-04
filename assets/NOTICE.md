@@ -23,6 +23,7 @@ The icons in `icons/` come from [Lucide](https://lucide.dev), © Lucide Icons an
 
 | File | Lucide icon |
 |---|---|
+| `icons/bug.svg` | `bug` |
 | `icons/settings.svg` | `settings` |
 
 The files in `logo/` belong to this project and are covered by its license: `exile-market.png` (the full logo) and `emblem.svg` (the emblem without the text, white so that the application can tint it).
