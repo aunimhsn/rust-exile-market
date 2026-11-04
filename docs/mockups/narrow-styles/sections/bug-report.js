@@ -93,8 +93,11 @@ const rpPreview = ({ first = false, previous = false, panic = false, item = "Hea
   const box = `<span class="check ${itemOn ? "on" : ""}">${itemOn ? ICON.check(11) : ""}</span>`;
   const what = unreadable
     ? tx("Join the item that couldn't be read", "Joindre l'objet qui n'a pas pu être lu")
-    : `${tx("Join the item shown", "Joindre l'objet affiché")}, <b>${item}</b>`;
-  const itemRow = item || unreadable ? `<div class="app-report-item"><div class="toggle">${box}<span>${what}</span></div></div>` : "";
+    : `<span>${tx("Join the item shown:", "Joindre l'objet affiché\u00a0:")}</span><b>${item}</b>`;
+  // The name cut with "…" when it doesn't fit, the whole sentence in the tooltip (the owner's choice on 2026-11-04, with
+  // the colon in place of a comma).
+  const whole = unreadable ? "" : ` title="${tx("Join the item shown:", "Joindre l'objet affiché\u00a0:")} ${item}"`;
+  const itemRow = item || unreadable ? `<div class="app-report-item"><div class="toggle">${box}<span class="app-report-item-text"${whole}>${what}</span></div></div>` : "";
   const log = previous && panic ? RP_PANIC_LOG : RP_LOG;
   const copy = copied
     ? `<span class="pill is-copied">${ICON.check(11)}${tx("Copied", "Copié")}</span>`
@@ -137,6 +140,8 @@ SECTIONS.unshift(["Bug report (16): the Lucide bug left of the gear, and the rep
   ["The first session: no previous log, no choice", rpPreviewWin({ first: true })],
   ["Opened over an item that couldn't be read: its text joined", rpPreviewWin({ item: null, unreadable: true })],
   ["Opened before the first item: nothing to join", rpPreviewWin({ item: null })],
+  ["A long name (a magic flask): cut with “…”, the whole sentence in its tooltip", rpPreviewWin({ item: "Concentrated Ultimate Life Flask of the Surgeon" })],
+  ["En français, un nom long coupé", rpPreviewWin({ fr: true, item: "Flacon de vie ultime concentré du chirurgien" })],
   ["After Copy the log", rpPreviewWin({ copied: true })],
   ["En français : le rapport reste en anglais, la langue des issues", rpPreviewWin({ fr: true, item: "Chasseur de têtes" })],
   ["Before the first item, the bug in the title bar", win(rpTopBar(), hkEmptyD, foot("poe2scout 12min ago"))],

@@ -68,9 +68,9 @@ impl Modifier {
 /// game that reads the keys at each frame sees each of them (the delay of the `enigo` crate).
 const KEY_DELAY_MS: u32 = 12;
 
-/// The class of the game run by Steam through Proton (`WM_CLASS`, its instance and class names
-/// alike), logged by step 14a1 in the owner's game on 2026-11-01.
-const GAME_CLASS: &[u8] = b"steam_app_2694490";
+/// The class of the game run by Steam through Proton, its instance and class names alike in
+/// `WM_CLASS`.
+const GAME_CLASS: &[u8] = super::GAME_CLASS.as_bytes();
 /// At the release of D: while it is held, the X server gives every key to the application that
 /// listens to the hotkey, so that a copy sent then wouldn't reach the game.
 pub const SENT_AT: HotKeyState = HotKeyState::Released;
@@ -298,9 +298,10 @@ impl ActiveWindow {
         )?)
     }
 
-    /// Whether `window` is the game, by its class or its title; the class of another window is
-    /// written to the log the first time it is active, never its title (the page of a browser),
-    /// so that the class of a client of the game not known yet can be found there.
+    /// Whether `window` is the game, by its class or its title; the class of a window told by its
+    /// title, the game or not, is written to the log the first time it is active, never its
+    /// title (the page of a browser), so that the class of a client of the game not known yet can
+    /// be found there.
     fn is_game(&self, window: Window, classes_told: &mut HashSet<String>) -> Result<bool> {
         let property = |name: Atom, kind: Atom| -> Result<Vec<u8>> {
             Ok(self
@@ -319,15 +320,19 @@ impl ActiveWindow {
             property(self.atoms.net_wm_name, self.atoms.utf8_string)?,
             || property(AtomEnum::WM_NAME.into(), AtomEnum::ANY.into()),
         )?;
-        if is_game_title(&title) {
-            return Ok(true);
-        }
+        let is_game = is_game_title(&title);
         let class = window_class(&class);
         if !classes_told.contains(&class) {
-            log::info!("The active window, of class {class}, isn't the game");
+            // The class of the game told by its title (a client run by Wine, whose class is
+            // unknown): the bug report keeps it in the log as the game's.
+            if is_game {
+                log::info!("The active window, of class {class}, is the game");
+            } else {
+                log::info!("The active window, of class {class}, isn't the game");
+            }
             classes_told.insert(class);
         }
-        Ok(false)
+        Ok(is_game)
     }
 }
 

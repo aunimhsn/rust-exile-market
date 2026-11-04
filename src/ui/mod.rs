@@ -4,6 +4,7 @@
 //! application ([`crate::app`]).
 
 mod bubble;
+mod bug_report_panel;
 mod empty_state;
 mod fonts;
 mod hotkey_list;
@@ -26,6 +27,7 @@ mod warning_band;
 mod widgets;
 
 pub use bubble::{Bubble, BubbleAction};
+pub use bug_report_panel::{BugReportAction, BugReportPanel};
 pub use empty_state::{EmptyState, PriceDownload};
 pub use item_block::{ItemBlock, ItemBlockAction};
 pub use item_stats::Stats;

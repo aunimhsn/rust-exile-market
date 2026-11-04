@@ -20,6 +20,8 @@ update-download = Download
 # Tooltip of the emblem, which goes back to the item.
 home-tooltip = Home
 settings-tooltip = Settings
+# Tooltip of the bug, left of the gear, which opens the bug report.
+bug-report-tooltip = Report a bug
 minimize-tooltip = Minimize
 close-tooltip = Close
 
@@ -453,3 +455,25 @@ hotkey-taken-settings = Choose another key, or copy with { $copy }.
 key-shift = Shift
 # Required by Grinding Gear Games for the tools of the community.
 disclaimer = This product isn't affiliated with or endorsed by Grinding Gear Games in any way.
+
+## Bug report
+
+# The preview of the bug report, in place of the content of the window. The report itself is written in English,
+# the language of the issues, whatever the language of the interface.
+bug-report-title = Report a bug
+bug-report-intro = The report opens on GitHub with the text below. Describe what happened there, then send it.
+# Label above the summary of the report: the version, the system, the languages, the league and the settings.
+bug-report-sent = Sent with the report
+# Label above the last lines of the log.
+bug-report-log = Log
+# Under the lines of the log. "another window" stays in English: the report writes it so.
+bug-report-log-note = Its last lines. The other windows are written “another window”.
+# In place of the lines of the log, when it can't be read.
+bug-report-no-log = The log can't be read.
+# Checkbox that joins the item shown to the report, $name its name, in bold after the colon; a long name is cut with "…".
+bug-report-join-item = Join the item shown: { $name }
+# Checkbox that joins the text of an item that couldn't be read.
+bug-report-join-unreadable = Join the item that couldn't be read
+# The main action: the issue form of GitHub opened in the browser, its fields filled.
+bug-report-open = Open on GitHub
+bug-report-account = A GitHub account is needed.

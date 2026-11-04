@@ -40,3 +40,9 @@ pub fn exchange_icon(currency: &'static ExchangeCurrency) -> egui::Image<'static
 pub fn settings() -> ImageSource<'static> {
     include_image!("../../assets/icons/settings.svg")
 }
+
+/// The bug of the title bar, which opens the bug report, white, to tint.
+#[must_use]
+pub fn bug() -> ImageSource<'static> {
+    include_image!("../../assets/icons/bug.svg")
+}

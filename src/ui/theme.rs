@@ -225,6 +225,18 @@ pub mod text {
         fonts::text(11.5, Weight::SemiBold)
     }
 
+    /// The bold name in the text of a choice of 12.5: the item joined to the bug report.
+    #[must_use]
+    pub fn name_in_choice() -> FontId {
+        fonts::text(12.5, Weight::SemiBold)
+    }
+
+    /// The text of the bug report, as it will be sent: its summary and its log.
+    #[must_use]
+    pub fn report() -> FontId {
+        fonts::numbers(11.0)
+    }
+
     /// The keys of a row of the list of the hotkey, in the settings.
     #[must_use]
     pub fn list_keys() -> FontId {

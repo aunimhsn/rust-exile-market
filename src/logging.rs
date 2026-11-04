@@ -9,6 +9,7 @@
 use std::fs::{self, File};
 use std::io;
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 
 use directories::BaseDirs;
 use log::{Level, LevelFilter, Log, Metadata, Record};
@@ -16,6 +17,9 @@ use simplelog::{CombinedLogger, Config, ConfigBuilder, SharedLogger, WriteLogger
 
 const FILE_NAME: &str = "exile-market.log";
 const PREVIOUS_FILE_NAME: &str = "exile-market.previous.log";
+
+/// The log file of this session, once it is open.
+static PATH: OnceLock<PathBuf> = OnceLock::new();
 
 /// The log file of this session.
 struct LogFile {
@@ -59,6 +63,7 @@ pub fn init() {
     match log_file {
         Ok((path, rotation_error)) => {
             log::info!("Log file: {}", without_home(&path).display());
+            let _ = PATH.set(path);
             if let Some(error) = rotation_error {
                 log::warn!("The log of the previous session couldn't be kept: {error}");
             }
@@ -115,6 +120,11 @@ impl<L: SharedLogger + 'static> SharedLogger for QuietClipboard<L> {
     fn as_log(self: Box<Self>) -> Box<dyn Log> {
         self
     }
+}
+
+/// The log file of this session; none without a log file.
+pub fn path() -> Option<&'static Path> {
+    PATH.get().map(PathBuf::as_path)
 }
 
 /// Opens the log file of this session, after keeping the one of the previous session when

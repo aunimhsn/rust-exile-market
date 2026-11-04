@@ -21,6 +21,10 @@ mod shortcut;
 
 pub use shortcut::Shortcut;
 
+/// The class of the window of the game run by Steam through Proton, logged by step 14a1 in the
+/// owner's game on 2026-11-01; the bug report keeps it in the log, as the name of the game.
+pub const GAME_CLASS: &str = "steam_app_2694490";
+
 /// How long the game may take to copy the item after the hotkey: past it, the hotkey copied
 /// nothing (an empty cell of the inventory). The clipboard watching takes an item read within it
 /// for the copy of the hotkey, and tells it with [`Press::copy`].
