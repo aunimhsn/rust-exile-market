@@ -71,3 +71,10 @@
 :root, [data-league="softcore"] { --league-bg: #13263a; --league-kind: "Softcore"; --league-bg-hover: #1a3350; }
 [data-league="hardcore"] { --league-bg: #351417; --league-kind: "Hardcore"; --league-bg-hover: #4a1b20; }
 .spacer { flex: 1; }
+/* A newer version (step 15): the bubble of a new league, under the league block (A) or under the settings icon,
+   its right edge at the right of the window (B), as wide as its text; under the bubble of a new league when both
+   show (A). The new version told in the status bar of the settings (B). */
+.app-update.is-right { left: auto; right: 8px; width: auto; }
+.app-update.is-below:not(.is-right) { top: 82px; }
+.app-update.is-right.is-below { top: 82px; }
+.app-update-link { color: var(--text) !important; }
