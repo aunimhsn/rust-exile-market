@@ -40,15 +40,19 @@ pub fn amount(value: f64, currency: Currency) -> String {
     format!("{}M", trimmed(millions, 1))
 }
 
-/// A number of a modifier or of its range, e.g. `40`, `1.5`: two decimals at most, without
-/// trailing zeros.
+/// The decimals a number of a modifier or of its range is written with, at most.
+pub const NUMBER_DECIMALS: u8 = 2;
+
+/// A number of a modifier or of its range, e.g. `40`, `1.5`: [`NUMBER_DECIMALS`] decimals at
+/// most, without trailing zeros.
 #[must_use]
 pub fn number(value: f64) -> String {
-    trimmed(rounded(value, 2), 2)
+    trimmed(rounded(value, NUMBER_DECIMALS), NUMBER_DECIMALS)
 }
 
 /// `value` rounded to `decimals` decimals.
-fn rounded(value: f64, decimals: u8) -> f64 {
+#[must_use]
+pub fn rounded(value: f64, decimals: u8) -> f64 {
     let scale = 10f64.powi(i32::from(decimals));
     (value * scale).round() / scale
 }

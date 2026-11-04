@@ -2150,11 +2150,64 @@ fn a_rare_limit_keeps_the_decimals_of_the_copied_value_so_that_it_fits_in_its_fi
     assert!((comparable(1.55, 2, Half::Minimum) - 1.4).abs() < 1e-9);
     assert!((comparable(0.3, 1, Half::Minimum) - 0.3).abs() < 1e-9);
     assert!((comparable(2.4, 1, Half::Maximum) - 2.6).abs() < 1e-9);
-    // The item passes its own filter.
-    for value in [0.1, 0.3, 0.5, 1.2, 4.7, 12.2, 33.3, 99.9] {
-        assert!(comparable(value, 1, Half::Minimum) <= value);
-        assert!(comparable(value, 1, Half::Maximum) >= value);
+    assert!((comparable(-12.2, 1, Half::Minimum) - -13.4).abs() < 1e-9);
+}
+
+#[test]
+fn a_rare_item_always_passes_its_own_filter() {
+    let passes = |value: f64, decimals: u8| {
+        comparable(value, decimals, Half::Minimum) <= value
+            && comparable(value, decimals, Half::Maximum) >= value
+    };
+    // Every value written with 0, 1 or 2 decimals, positive or negative.
+    for decimals in 0..=2 {
+        let scale = 10f64.powi(i32::from(decimals));
+        for step in -3000..=3000 {
+            let value = f64::from(step) / scale;
+            assert!(passes(value, decimals), "{value} with {decimals} decimals");
+        }
     }
+    // The rounding would cross the value: the average of three whole rolls, and a value with
+    // more decimals than the numbers are written with.
+    assert!((comparable(4.0 / 3.0, 0, Half::Maximum) - 4.0 / 3.0).abs() < 1e-9);
+    assert!((comparable(5.0 / 3.0, 0, Half::Minimum) - 5.0 / 3.0).abs() < 1e-9);
+    assert!((comparable(0.019, 2, Half::Minimum) - 0.019).abs() < 1e-9);
+}
+
+#[test]
+fn a_line_of_two_decimal_rolls_gets_a_limit_of_their_decimals() {
+    let line = StatLine {
+        text: "Adds # to # Fire Damage".to_owned(),
+        rolls: vec![
+            item::Roll {
+                value: 2.4,
+                range: None,
+            },
+            item::Roll {
+                value: 4.4,
+                range: None,
+            },
+        ],
+    };
+    let filter = comparable_filter(&line, None, true, Half::Minimum, true);
+    // 90 % of their average, 3.4: 3.06, written with one decimal.
+    assert!((filter.limit.unwrap().value - 3.1).abs() < 1e-9);
+    // Two whole rolls averaged to 37.5 get a whole minimum: 34, not 33.75.
+    let whole = StatLine {
+        rolls: vec![
+            item::Roll {
+                value: 30.0,
+                range: None,
+            },
+            item::Roll {
+                value: 45.0,
+                range: None,
+            },
+        ],
+        ..line
+    };
+    let filter = comparable_filter(&whole, None, true, Half::Minimum, true);
+    assert!((filter.limit.unwrap().value - 34.0).abs() < 1e-9);
 }
 
 #[test]
@@ -2165,6 +2218,11 @@ fn the_decimals_of_a_value_are_two_at_most() {
     assert_eq!(decimals(-7.5), 1);
     assert_eq!(decimals(1.55), 2);
     assert_eq!(decimals(0.123), 2);
+    assert_eq!(decimals(7.59), 2);
+    assert_eq!(decimals(-1.55), 2);
+    // Floating-point noise isn't a decimal.
+    assert_eq!(decimals(0.1 + 0.2), 1);
+    assert_eq!(decimals(1e6 + 0.2), 1);
 }
 
 #[test]

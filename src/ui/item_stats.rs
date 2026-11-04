@@ -1583,8 +1583,8 @@ fn comparable_filter(
     StatFilter {
         checked,
         limit: varies.then(|| value(line)).flatten().map(|value| {
-            let decimals = line.rolls.iter().map(|roll| decimals(roll.value)).max();
-            let limit = comparable(value, decimals.unwrap_or(0), half);
+            let written = line.rolls.iter().map(|roll| decimals(roll.value)).max();
+            let limit = comparable(value, written.unwrap_or(0), half);
             Limit::new(limit, half, bounds, value, line)
         }),
     }
@@ -1592,28 +1592,24 @@ fn comparable_filter(
 
 /// The limit 10 % of `value` below it for a minimum, above it for a maximum, also for a
 /// negative value (`-15` gets a minimum of `-17`, not `-14`, which the item itself wouldn't
-/// pass): rounded to the `decimals` of the copied numbers, so that it fits in its field
-/// (`12.2` gets `11`, not `10.98`). The item still passes it: its own value is one of the
-/// rounded numbers, and the limit before rounding is on its worse side.
+/// pass): rounded to `decimals`, those of the copied numbers, so that it is written as short
+/// as them (`12.2` gets `11`, not `10.98`). Never beyond `value`, so that the item always
+/// passes its own filter, also when the rounding would cross it: the average of three rolls
+/// (`1.333` written whole) or a value with more decimals than the numbers are written with.
 fn comparable(value: f64, decimals: u8, half: Half) -> f64 {
     let margin = value.abs() * COMPARABLE_MARGIN;
-    let limit = match half {
-        Half::Minimum => value - margin,
-        Half::Maximum => value + margin,
-    };
-    let scale = 10f64.powi(i32::from(decimals));
-    (limit * scale).round() / scale
+    match half {
+        Half::Minimum => format::rounded(value - margin, decimals).min(value),
+        Half::Maximum => format::rounded(value + margin, decimals).max(value),
+    }
 }
 
-/// The decimals `value` is written with, two at most like the numbers of the stats: `0` for
-/// `12`, `1` for `12.2`, `2` for `1.55`.
+/// The decimals `value` is written with, [`format::NUMBER_DECIMALS`] at most like the numbers
+/// of the stats: `0` for `12`, `1` for `12.2`, `2` for `1.55`.
 fn decimals(value: f64) -> u8 {
-    (0..2)
-        .find(|&decimals| {
-            let scale = 10f64.powi(i32::from(decimals));
-            ((value * scale).round() - value * scale).abs() < 1e-6
-        })
-        .unwrap_or(2)
+    (0..format::NUMBER_DECIMALS)
+        .find(|&decimals| (format::rounded(value, decimals) - value).abs() < 1e-6)
+        .unwrap_or(format::NUMBER_DECIMALS)
 }
 
 /// The prefixes or suffixes of `affix` that `modifier` counts in the room of its item: one of

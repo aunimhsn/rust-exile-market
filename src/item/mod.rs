@@ -32,6 +32,9 @@ pub use copied::CopiedItem;
 pub use gem::{
     MAX_GEM_LEVEL, MAX_GEM_QUALITY, MAX_GEM_SOCKETS, TOP_GEM_LEVEL, TOP_GEM_QUALITY, read_gem_level,
 };
+/// The values of a line, built by hand in the tests of the filters.
+#[cfg(test)]
+pub(crate) use modifier::Roll;
 pub use modifier::{
     Affix, AffixTier, Currency, Lord, Modifier, ModifierKind, ModifierOrigin, PartTier, Range,
     StatLine, TierDoubt,
