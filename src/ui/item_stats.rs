@@ -1358,7 +1358,6 @@ fn property_filter(property: Property, value: f64, limit: Limit, checked: bool) 
 
 /// The filter of a pseudo total, with a minimum at 90 % of its value.
 fn pseudo_filter(total: &PseudoTotal, checked: bool) -> Stat<'static> {
-    let whole = total.value.fract() == 0.0;
     Stat {
         key: FilterKey::Pseudo(total.pseudo),
         text: StatText::Pseudo(total.pseudo, total.value),
@@ -1366,7 +1365,7 @@ fn pseudo_filter(total: &PseudoTotal, checked: bool) -> Stat<'static> {
             checked,
             limit: Some(Limit::minimum(comparable(
                 total.value,
-                whole,
+                decimals(total.value),
                 Half::Minimum,
             ))),
         }),
@@ -1584,8 +1583,8 @@ fn comparable_filter(
     StatFilter {
         checked,
         limit: varies.then(|| value(line)).flatten().map(|value| {
-            let whole = line.rolls.iter().all(|roll| roll.value.fract() == 0.0);
-            let limit = comparable(value, whole, half);
+            let written = line.rolls.iter().map(|roll| decimals(roll.value)).max();
+            let limit = comparable(value, written.unwrap_or(0), half);
             Limit::new(limit, half, bounds, value, line)
         }),
     }
@@ -1593,14 +1592,24 @@ fn comparable_filter(
 
 /// The limit 10 % of `value` below it for a minimum, above it for a maximum, also for a
 /// negative value (`-15` gets a minimum of `-17`, not `-14`, which the item itself wouldn't
-/// pass): rounded when the numbers are `whole`.
-fn comparable(value: f64, whole: bool, half: Half) -> f64 {
+/// pass): rounded to `decimals`, those of the copied numbers, so that it is written as short
+/// as them (`12.2` gets `11`, not `10.98`). Never beyond `value`, so that the item always
+/// passes its own filter, also when the rounding would cross it: the average of three rolls
+/// (`1.333` written whole) or a value with more decimals than the numbers are written with.
+fn comparable(value: f64, decimals: u8, half: Half) -> f64 {
     let margin = value.abs() * COMPARABLE_MARGIN;
-    let limit = match half {
-        Half::Minimum => value - margin,
-        Half::Maximum => value + margin,
-    };
-    if whole { limit.round() } else { limit }
+    match half {
+        Half::Minimum => format::rounded(value - margin, decimals).min(value),
+        Half::Maximum => format::rounded(value + margin, decimals).max(value),
+    }
+}
+
+/// The decimals `value` is written with, [`format::NUMBER_DECIMALS`] at most like the numbers
+/// of the stats: `0` for `12`, `1` for `12.2`, `2` for `1.55`.
+fn decimals(value: f64) -> u8 {
+    (0..format::NUMBER_DECIMALS)
+        .find(|&decimals| (format::rounded(value, decimals) - value).abs() < 1e-6)
+        .unwrap_or(format::NUMBER_DECIMALS)
 }
 
 /// The prefixes or suffixes of `affix` that `modifier` counts in the room of its item: one of
