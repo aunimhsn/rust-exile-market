@@ -18,7 +18,7 @@ const UP_CLOSE = `<span class="app-notice-close" title="Close">${svg(12, '<path 
 // bubble of a new league (A, both at once).
 const upBubble = ({ right = false, below = false, fr = false } = {}) => `
   <div class="app-notice app-update ${right ? "is-right" : ""} ${below ? "is-below" : ""}"><span class="app-notice-text">${fr
-    ? "Exile Market <b>0.2.0</b> est disponible."
+    ? "Exile Market <b>0.2.0</b> disponible."
     : "Exile Market <b>0.2.0</b> is available."}</span>
     <span class="pill" title="https://github.com/aunimhsn/rust-exile-market/releases/tag/v0.2.0">${fr ? "Télécharger" : "Download"}</span>${UP_CLOSE}</div>`;
 
@@ -31,9 +31,9 @@ SECTIONS.unshift(["Update notice (15): A chosen, the bubble under the league blo
   ["Chosen · A · under the league block, like the bubble of a new league", win(topBar(), upBubble(), ...UP_ITEM)],
   ["Chosen · A · with a new league too: the two bubbles stacked, aligned", win(topBar(false, "Standard"), newLeague("Rise of the Abyssal"), upBubble({ below: true }), ...UP_ITEM)],
   ["Chosen · A · before the first item", win(topBar(), upBubble(), hkEmptyD, foot("poe2scout 12min ago"))],
-  ["Chosen · A · en français", win(topBar(), upBubble({ fr: true }), ...UP_ITEM)],
-  ["Proposed · the bubble closed: the settings still tell it, a link like sylent.art", upSettings()],
-  ["Proposed · en français, les réglages", upSettings({ fr: true })],
+  ["Chosen · A · en français, sur une ligne : « Exile Market 0.2.0 disponible. »", win(topBar(), upBubble({ fr: true }), ...UP_ITEM)],
+  ["Chosen · the bubble closed: the settings still tell it, a link like sylent.art", upSettings()],
+  ["Chosen · en français, les réglages", upSettings({ fr: true })],
   ["Before · the link in the color of the text", upSettings({ strong: true })],
   ["Rejected · B · under the settings icon", win(topBar(), upBubble({ right: true }), ...UP_ITEM)],
   ["Rejected · B · with a new league too: under it, on the right", win(topBar(false, "Standard"), newLeague("Rise of the Abyssal"), upBubble({ right: true, below: true }), ...UP_ITEM)],

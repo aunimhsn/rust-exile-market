@@ -273,7 +273,7 @@ The settings are saved as soon as they change. Their bottom shows the sentence "
 
 ### Updates
 
-At launch, the application asks the GitHub releases for the latest version, once (the latest release, never a draft nor a pre-release). When it is newer than the running one, a bubble under the league block says "Exile Market **0.2.0** is available." ("Exile Market **0.2.0** est disponible."), the version in bold, with a **Download** pill ("Télécharger") that opens the page of the release in the browser, and a close icon; the player installs it (the automatic updates are step 20). Mock-up section "Update notice (15)", option A chosen by the owner on 2026-11-04.
+At launch, the application asks the GitHub releases for the latest version, once (the latest release, never a draft nor a pre-release). When it is newer than the running one, a bubble under the league block says "Exile Market **0.2.0** is available." ("Exile Market **0.2.0** disponible.", one line like the English, the owner's choice on 2026-11-04), the version in bold, with a **Download** pill ("Télécharger") that opens the page of the release in the browser, and a close icon; the player installs it (the automatic updates are step 20). Mock-up section "Update notice (15)", option A chosen by the owner on 2026-11-04.
 
 - The bubble has the look and the place of the bubble of a new league; when both show, it goes under it, aligned on its left. It shows over the item, the empty window and the download of the prices, not over the settings, nor in the window over the game, which has no title bar.
 - **Download** opens the page and hides the bubble until the next launch, where it comes back while the running version is still older: the player may not have installed it.

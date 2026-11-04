@@ -15,7 +15,7 @@ new-league = { $league } a commencé.
 new-league-switch = Y aller
 # Bulle sous le bloc de la ligue, quand une version plus récente de l'application est sortie : sa version,
 # puis une pastille qui ouvre la page de la version.
-update-available = { $app } { $version } est disponible.
+update-available = { $app } { $version } disponible.
 update-download = Télécharger
 # Infobulle de l'emblème, qui ramène à l'objet.
 home-tooltip = Accueil

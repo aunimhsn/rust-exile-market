@@ -225,12 +225,15 @@ mod tests {
     }
 
     #[test]
-    fn the_french_update_bubble_wraps_under_the_bubble_of_a_new_league() {
-        // "Exile Market 0.2.0 est disponible." wraps before its pill, as in the mock-up.
+    fn the_french_update_bubble_holds_on_one_line_too() {
+        // "Exile Market 0.2.0 disponible.", with "Télécharger", as in the mock-up.
         let (first, second) = bottoms(Language::French);
         let height = first - size::TITLE_BAR_HEIGHT - GAP;
 
-        assert!(second > first + GAP + height + 5.0, "{first} {second}");
+        assert!(
+            (second - (first + GAP + height)).abs() < 0.5,
+            "{first} {second}"
+        );
     }
 
     #[test]
@@ -245,6 +248,6 @@ mod tests {
             .map(|section| &job.text[section.byte_range.start.0..section.byte_range.end.0])
             .collect();
         assert_eq!(bold, ["0.2.0"]);
-        assert_eq!(job.text, "Exile Market 0.2.0 est disponible.");
+        assert_eq!(job.text, "Exile Market 0.2.0 disponible.");
     }
 }

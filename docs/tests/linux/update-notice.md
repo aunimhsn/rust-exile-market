@@ -49,7 +49,7 @@ tail -f ~/.local/state/exile-market/exile-market.log
    ✅ La bulle revient : pour Exile Market, une nouvelle ligue a commencé depuis sa fermeture.
 
 7. **En français** : dans les réglages, choisis *Français*, ferme-les, puis relance Exile Market.
-   ✅ La bulle dit « Exile Market **0.1.0** est disponible. », sur deux lignes, avec **Télécharger** ; dans les réglages, « 0.1.0 disponible ».
+   ✅ La bulle dit « Exile Market **0.1.0** disponible. », sur une ligne, avec **Télécharger** ; dans les réglages, « 0.1.0 disponible ».
 
 8. **Sans réseau** : ferme Exile Market et relance-le sans réseau :
 
