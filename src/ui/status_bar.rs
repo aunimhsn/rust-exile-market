@@ -1,5 +1,5 @@
 //! The status bar: the age of each data source, or, while the settings are open, the version
-//! and the author, with a link to the author's site. In the window over the game, the league on
+//! and the author, with a link to the author's site (and to a newer version, when one is out). In the window over the game, the league on
 //! its right, and while a field of it has the keyboard, a line that says so in place of the ages.
 
 use egui::{
@@ -14,6 +14,7 @@ use super::widgets;
 use crate::i18n::{Message, Translator};
 use crate::league::League;
 use crate::session::PricesState;
+use crate::update::Release;
 
 /// The state of the trade site in the status bar.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -28,9 +29,10 @@ pub enum TradeStatus {
 
 /// What the status bar shows.
 #[derive(Debug, Clone, Copy, PartialEq)]
-enum Line {
+enum Line<'a> {
     Sources(PricesState, TradeStatus),
-    Author,
+    /// With the newer version, if one is out.
+    Author(Option<&'a Release>),
     /// The keys go to the window over the game, not to the game.
     Keyboard,
 }
@@ -40,7 +42,7 @@ const LEAGUE_PADDING: f32 = 10.0;
 
 pub struct StatusBar<'a> {
     i18n: &'a Translator,
-    line: Line,
+    line: Line<'a>,
     league: Option<&'a League>,
 }
 
@@ -73,12 +75,13 @@ impl<'a> StatusBar<'a> {
         self
     }
 
-    /// The version and the author, while the settings are open.
+    /// The version and the author, while the settings are open, and `update`, a newer version
+    /// out, as a link after the running one.
     #[must_use]
-    pub fn author(i18n: &'a Translator) -> Self {
+    pub fn author(i18n: &'a Translator, update: Option<&'a Release>) -> Self {
         Self {
             i18n,
-            line: Line::Author,
+            line: Line::Author(update),
             league: None,
         }
     }
@@ -103,7 +106,7 @@ impl<'a> StatusBar<'a> {
                     ui.add_space(size::BAND_PADDING);
                     match self.line {
                         Line::Sources(prices, trade) => self.sources_line(ui, prices, trade),
-                        Line::Author => self.author_line(ui),
+                        Line::Author(update) => self.author_line(ui, update),
                         // In the text color: the game no longer gets the keys the player types.
                         Line::Keyboard => {
                             let line = self.i18n.text(Message::StatusKeyboard);
@@ -157,32 +160,51 @@ impl<'a> StatusBar<'a> {
     }
 
     /// The version and the author, then the site as a link: lighter, white and underlined
-    /// under the pointer.
-    fn author_line(&self, ui: &mut Ui) {
+    /// under the pointer; `update`, a newer version, as a link of the same look after the
+    /// running version.
+    fn author_line(&self, ui: &mut Ui, update: Option<&Release>) {
         let site = crate::AUTHOR_SITE_LABEL;
         let author = self
             .i18n
             .author_line(crate::APP_NAME, crate::VERSION, crate::AUTHOR, site);
-        // The translations end with the site (checked by the tests of `i18n`).
-        let Some(before) = author.strip_suffix(site) else {
+        // The translations start with the version and end with the site (checked by the tests
+        // of `i18n`).
+        let running = format!("{} {}", crate::APP_NAME, crate::VERSION);
+        let Some(middle) = author
+            .strip_prefix(&running)
+            .and_then(|rest| rest.strip_suffix(site))
+        else {
             ui.add(Label::new(faint(author)).truncate());
             return;
         };
-        ui.add(Label::new(faint(before)));
+        ui.add(Label::new(faint(running)));
+        if let Some(release) = update {
+            ui.add(Label::new(faint(SEPARATOR)));
+            let label = self.i18n.status_update(&release.version.to_string());
+            link(ui, &label, &release.page);
+        }
+        ui.add(Label::new(faint(middle)));
+        link(ui, site, crate::AUTHOR_SITE);
+    }
+}
 
-        let galley = widgets::text_line(ui, site, text::small());
-        let (rect, link) = ui.allocate_exact_size(galley.size(), Sense::click());
-        link.widget_info(|| WidgetInfo::labeled(Role::Link, true, site));
-        let lit = link.hovered() || link.has_focus();
-        let tint = if lit { color::TEXT } else { color::WEAK };
-        let painter = ui.painter();
-        painter.galley(rect.min, galley, tint);
-        if lit {
-            painter.hline(rect.x_range(), rect.bottom(), Stroke::new(1.0, tint));
-        }
-        if link.on_hover_cursor(CursorIcon::PointingHand).clicked() {
-            ui.ctx().open_url(OpenUrl::new_tab(crate::AUTHOR_SITE));
-        }
+/// The separator of the parts of the line.
+const SEPARATOR: &str = " · ";
+
+/// `label` as a link to `url`: gray, lighter and underlined under the pointer.
+fn link(ui: &mut Ui, label: &str, url: &str) {
+    let galley = widgets::text_line(ui, label, text::small());
+    let (rect, link) = ui.allocate_exact_size(galley.size(), Sense::click());
+    link.widget_info(|| WidgetInfo::labeled(Role::Link, true, label));
+    let lit = link.hovered() || link.has_focus();
+    let tint = if lit { color::TEXT } else { color::WEAK };
+    let painter = ui.painter();
+    painter.galley(rect.min, galley, tint);
+    if lit {
+        painter.hline(rect.x_range(), rect.bottom(), Stroke::new(1.0, tint));
+    }
+    if link.on_hover_cursor(CursorIcon::PointingHand).clicked() {
+        ui.ctx().open_url(OpenUrl::new_tab(url));
     }
 }
 

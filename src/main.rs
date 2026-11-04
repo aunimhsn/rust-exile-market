@@ -31,6 +31,7 @@ mod settings;
 mod tier_rolls;
 mod trade;
 mod ui;
+mod update;
 mod worker;
 #[cfg(target_os = "linux")]
 mod x11;

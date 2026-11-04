@@ -3,6 +3,7 @@
 //! Each component borrows the data it shows and draws itself; the state lives in the
 //! application ([`crate::app`]).
 
+mod bubble;
 mod empty_state;
 mod fonts;
 mod hotkey_list;
@@ -11,7 +12,6 @@ mod item_block;
 mod item_stats;
 mod keys;
 mod league_list;
-mod new_league_bubble;
 mod number_field;
 mod offer_tooltip;
 mod offers_block;
@@ -25,11 +25,11 @@ mod unreadable_item;
 mod warning_band;
 mod widgets;
 
+pub use bubble::{Bubble, BubbleAction};
 pub use empty_state::{EmptyState, PriceDownload};
 pub use item_block::{ItemBlock, ItemBlockAction};
 pub use item_stats::Stats;
 pub use league_list::{LeagueList, LeagueListAction};
-pub use new_league_bubble::{BubbleAction, NewLeagueBubble};
 pub use offers_block::{OffersAction, OffersBlock};
 pub use price_block::PriceBlock;
 pub use resize_edges::ResizeEdges;

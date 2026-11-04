@@ -17,6 +17,7 @@ They may be written in French, the language of the testers (an exception to the 
 - [Hotkey turned on or off, its key taken](linux/hotkey-setting.md) (14c3a)
 - [Keys of the hotkey from the settings file](linux/hotkey-keys.md) (14c3b1)
 - [Key of the hotkey chosen from a list](linux/hotkey-list.md) (14c3b2)
+- [Update notice](linux/update-notice.md) (15, once a first release is out)
 
 ## Windows
 
