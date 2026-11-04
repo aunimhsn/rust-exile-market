@@ -80,6 +80,13 @@ const rpTopBar = ({ place = "left", on = false, faint = false, hover = false, se
     gear => (place === "left" ? bug + gear : gear + bug));
 };
 
+// The slides of the white pill compared (16b2): its duration and its curve, the width following the word.
+const RP_MOTIONS = {
+  overshoot: "180ms cubic-bezier(.34, 1.36, .64, 1)",
+  smooth: "220ms cubic-bezier(.22, 1, .36, 1)",
+  quick: "140ms cubic-bezier(.25, .8, .25, 1)",
+};
+
 // The preview, in place of what the window shows: what the report carries, the log of this session or of the
 // previous one (no choice in the first session, without a previous log), the item shown, the white "Open on GitHub" and "Copy the log". `previous` the log of the previous
 // session chosen (`panic` when it ended on a crash), `item` the name of the item shown (or none; `unreadable` an
@@ -87,11 +94,12 @@ const rpTopBar = ({ place = "left", on = false, faint = false, hover = false, se
 // (the report stays in English, the language of the issues). `choice` draws the choice of the log (16b2): "radios"
 // on the right of its label (16a), "tabs" on the top of its box, or "segmented", two pills joined on the right of
 // its label, the chosen one white.
-const rpPreview = ({ first = false, previous = false, panic = false, item = "Headhunter", unreadable = false, itemOn = true, copied = false, fr = false, choice = "radios" } = {}) => {
+// `motion` the slide of the white pill at a click (16b2), a key of RP_MOTIONS.
+const rpPreview = ({ first = false, previous = false, panic = false, item = "Headhunter", unreadable = false, itemOn = true, copied = false, fr = false, choice = "radios", motion = "overshoot" } = {}) => {
   const tx = (en, french) => (fr ? french : en);
   const names = [[!previous, tx("This session", "Cette session")], [previous, tx("The previous one", "La précédente")]];
   const sessions = first || choice === "tabs" ? "" : choice === "segmented"
-    ? `<span class="app-report-segmented">${names.map(([on, name]) => `<span class="${on ? "on" : ""}">${name}</span>`).join("")}</span>`
+    ? `<span class="app-report-segmented" style="--slide: ${RP_MOTIONS[motion]}"><i class="app-report-thumb"></i>${names.map(([on, name]) => `<span class="${on ? "on" : ""}">${name}</span>`).join("")}</span>`
     : `<span class="app-report-sessions">${names.map(([on, name]) => `<span class="radio ${on ? "on" : ""}"><i></i>${name}</span>`).join("")}</span>`;
   const tabs = !first && choice === "tabs"
     ? `<div class="app-report-tabs">${names.map(([on, name]) => `<span class="${on ? "on" : ""}">${name}</span>`).join("")}</div>`
