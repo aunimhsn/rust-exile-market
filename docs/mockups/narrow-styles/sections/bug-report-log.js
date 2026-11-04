@@ -3,19 +3,17 @@
 // after a crash the session in progress holds only its start. The previous one is chosen at once when its session
 // ended without "Exile Market closed"; no choice in the first session. Three ways, compared by eye: tabs on the
 // top of the box of the log (the note under it then says that only the log of the tab shown is sent), two pills
-// joined on the right of its label, or the radios of 16a. The owner leans to B (2026-11-04: the white tells a
-// thing to click), with the white pill sliding to the other word at a click, never when the preview opens: three
-// slides to try, by clicking the words.
+// joined on the right of its label, or the radios of 16a. The owner chose B on 2026-11-04 (the white tells a thing
+// to click), the white pill sliding to the other word at a click, never when the preview opens, in 220 ms that
+// slow down at the end ("smooth", the calmest of the three slides tried).
 
-SECTIONS.unshift(["Bug report log (16b2): this session or the previous one, three ways to choose", [
-  ["B · click the words: 180 ms, a slight overshoot", rpPreviewWin({ previous: true, panic: true, choice: "segmented", motion: "overshoot" })],
-  ["B · click the words: 220 ms, smooth", rpPreviewWin({ previous: true, panic: true, choice: "segmented", motion: "smooth" })],
-  ["B · click the words: 140 ms, quick", rpPreviewWin({ previous: true, panic: true, choice: "segmented", motion: "quick" })],
-  ["B · pills, en français : cette session", rpPreviewWin({ fr: true, item: "Chasseur de têtes", choice: "segmented" })],
-  ["A · tabs on the box: after a crash, the previous one chosen", rpPreviewWin({ previous: true, panic: true, choice: "tabs" })],
-  ["A · tabs, en français : cette session", rpPreviewWin({ fr: true, item: "Chasseur de têtes", choice: "tabs" })],
-  ["C · the radios of 16a: after a crash, the previous one chosen", rpPreviewWin({ previous: true, panic: true })],
-  ["C · radios, en français : cette session", rpPreviewWin({ fr: true, item: "Chasseur de têtes" })],
+SECTIONS.unshift(["Bug report log (16b2): this session or the previous one, two pills joined, the white one sliding", [
+  ["Chosen · B · after a crash, the previous one chosen; click the words: 220 ms, smooth", rpPreviewWin({ previous: true, panic: true })],
+  ["Chosen · B · en français : cette session", rpPreviewWin({ fr: true, item: "Chasseur de têtes" })],
+  ["Rejected · slide of 180 ms with a slight overshoot", rpPreviewWin({ previous: true, panic: true, motion: "overshoot" })],
+  ["Rejected · slide of 140 ms, quick", rpPreviewWin({ previous: true, panic: true, motion: "quick" })],
+  ["Rejected · A · tabs on the box: after a crash, the previous one chosen", rpPreviewWin({ previous: true, panic: true, choice: "tabs" })],
+  ["Rejected · C · the radios of 16a", rpPreviewWin({ previous: true, panic: true, choice: "radios" })],
 ]]);
 
 // The white pill under the word chosen: placed at once when the page is drawn, then slid at a click, the log of

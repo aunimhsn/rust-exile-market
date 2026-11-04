@@ -80,7 +80,8 @@ const rpTopBar = ({ place = "left", on = false, faint = false, hover = false, se
     gear => (place === "left" ? bug + gear : gear + bug));
 };
 
-// The slides of the white pill compared (16b2): its duration and its curve, the width following the word.
+// The slides of the white pill compared (16b2): its duration and its curve, the width following the word. The
+// owner chose "smooth" on 2026-11-04, the calmest; the overshoot and the quick one rejected.
 const RP_MOTIONS = {
   overshoot: "180ms cubic-bezier(.34, 1.36, .64, 1)",
   smooth: "220ms cubic-bezier(.22, 1, .36, 1)",
@@ -91,11 +92,11 @@ const RP_MOTIONS = {
 // previous one (no choice in the first session, without a previous log), the item shown, the white "Open on GitHub" and "Copy the log". `previous` the log of the previous
 // session chosen (`panic` when it ended on a crash), `item` the name of the item shown (or none; `unreadable` an
 // item that couldn't be read, its text joined), `copied` after a click on "Copy the log", `fr` the French window
-// (the report stays in English, the language of the issues). `choice` draws the choice of the log (16b2): "radios"
-// on the right of its label (16a), "tabs" on the top of its box, or "segmented", two pills joined on the right of
-// its label, the chosen one white.
-// `motion` the slide of the white pill at a click (16b2), a key of RP_MOTIONS.
-const rpPreview = ({ first = false, previous = false, panic = false, item = "Headhunter", unreadable = false, itemOn = true, copied = false, fr = false, choice = "radios", motion = "overshoot" } = {}) => {
+// (the report stays in English, the language of the issues). `choice` draws the choice of the log (16b2):
+// "segmented", two pills joined on the right of its label, the chosen one white (chosen on 2026-11-04); "tabs" on
+// the top of its box, or "radios" on the right of its label (16a), rejected. `motion` the slide of the white pill
+// at a click, a key of RP_MOTIONS.
+const rpPreview = ({ first = false, previous = false, panic = false, item = "Headhunter", unreadable = false, itemOn = true, copied = false, fr = false, choice = "segmented", motion = "smooth" } = {}) => {
   const tx = (en, french) => (fr ? french : en);
   const names = [[!previous, tx("This session", "Cette session")], [previous, tx("The previous one", "La précédente")]];
   const sessions = first || choice === "tabs" ? "" : choice === "segmented"
