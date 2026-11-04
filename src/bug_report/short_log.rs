@@ -94,6 +94,16 @@ pub fn short_lines(log: &str, home: Option<&str>) -> Vec<LogLine> {
     lines
 }
 
+/// Whether `log`, the text of a log file, ended without `closed`, the last message of a session
+/// closed by the player: a crash, or a stop by the system. An empty log ended with nothing.
+#[must_use]
+pub fn ended_without_closing(log: &str, closed: &str) -> bool {
+    log.lines()
+        .rev()
+        .find_map(stamped)
+        .is_some_and(|(_, _, message)| message != closed)
+}
+
 /// The classes of the windows the log tells as the game: the one of Proton, and on Windows those
 /// told by the title of the game.
 fn game_classes(log: &str) -> HashSet<&str> {
@@ -318,5 +328,35 @@ mod tests {
     #[test]
     fn a_line_without_a_date_stays_as_it_is() {
         assert_eq!(texts("Something else"), ["Something else"]);
+    }
+
+    const CLOSED: &str = "Exile Market closed";
+
+    #[test]
+    fn a_session_closed_by_the_player_ends_with_its_closing() {
+        let log = "2026-11-04T21:02:11.0+01:00 [INFO] Item copied: Item Class: Belts\n\
+                   2026-11-04T21:02:41.5+01:00 [INFO] Exile Market closed\n";
+
+        assert!(!ended_without_closing(log, CLOSED));
+    }
+
+    #[test]
+    fn a_session_that_crashed_ends_on_another_message() {
+        // A panic, its message on several lines.
+        let panic = "2026-11-04T21:02:11.0+01:00 [INFO] Item copied: Item Class: Wands\n\
+                     2026-11-04T21:02:40.5+01:00 [ERROR] Panic in the main thread: panicked at \
+                     src/game_data/modifiers.rs:412:\n\
+                     index out of bounds\n";
+        // Stopped by the system, without a panic.
+        let stopped = "2026-11-04T21:02:11.0+01:00 [INFO] Price of Headhunter: 12.4 ex";
+
+        assert!(ended_without_closing(panic, CLOSED));
+        assert!(ended_without_closing(stopped, CLOSED));
+    }
+
+    #[test]
+    fn an_empty_log_tells_no_crash() {
+        assert!(!ended_without_closing("", CLOSED));
+        assert!(!ended_without_closing("\n", CLOSED));
     }
 }

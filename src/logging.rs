@@ -127,6 +127,18 @@ pub fn path() -> Option<&'static Path> {
     PATH.get().map(PathBuf::as_path)
 }
 
+/// The log file of the previous session, next to the one of this session; it may not exist (the
+/// first session).
+pub fn previous_path() -> Option<PathBuf> {
+    path().map(|path| path.with_file_name(PREVIOUS_FILE_NAME))
+}
+
+/// The last message of a session closed by the player; a log that ends otherwise tells a crash.
+#[must_use]
+pub fn closed_message() -> String {
+    format!("{} closed", crate::APP_NAME)
+}
+
 /// Opens the log file of this session, after keeping the one of the previous session when
 /// it can.
 fn open_file() -> io::Result<LogFile> {

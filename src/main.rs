@@ -71,7 +71,7 @@ fn main() -> eframe::Result {
         }),
     );
     match &result {
-        Ok(()) => log::info!("{APP_NAME} closed"),
+        Ok(()) => log::info!("{}", logging::closed_message()),
         Err(error) => log::error!("The window failed: {error}"),
     }
     result

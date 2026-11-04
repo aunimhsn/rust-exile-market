@@ -298,3 +298,72 @@ pub fn control_pill(ui: &mut Ui, label: &str) -> Response {
 
 /// The space around the text of a pill.
 const PILL_PADDING: Vec2 = vec2(10.0, 4.0);
+
+/// The measures of two pills joined.
+mod segmented {
+    use egui::{Vec2, vec2};
+
+    /// The space between the dark of the controls and the pills.
+    pub const INSET: f32 = 2.0;
+    /// The space around the text of a pill.
+    pub const PADDING: Vec2 = vec2(9.0, 3.0);
+}
+
+/// Two pills joined on the dark of the controls, `labels`, the one of `chosen` (0 or 1) white
+/// like the main action; at a click, the white pill slides to the other one (`motion::SLIDE`),
+/// placed at once the first time `id` is drawn. The pill clicked, if another one.
+pub fn segmented(ui: &mut Ui, id: egui::Id, labels: [&str; 2], chosen: usize) -> Option<usize> {
+    use segmented::{INSET, PADDING};
+    let galleys = labels.map(|label| text_line(ui, label, text::small_strong()));
+    let sizes = galleys
+        .each_ref()
+        .map(|galley| galley.size() + 2.0 * PADDING);
+    let height = sizes[0].y.max(sizes[1].y);
+    let (track, _) = ui.allocate_exact_size(
+        vec2(sizes[0].x + sizes[1].x + 2.0 * INSET, height + 2.0 * INSET),
+        Sense::hover(),
+    );
+    let pills = [
+        Rect::from_min_size(track.min + vec2(INSET, INSET), vec2(sizes[0].x, height)),
+        Rect::from_min_size(
+            track.min + vec2(INSET + sizes[0].x, INSET),
+            vec2(sizes[1].x, height),
+        ),
+    ];
+    // 0 under the first pill, 1 under the second.
+    let t = ui.ctx().animate_bool_with_time_and_easing(
+        id,
+        chosen == 1,
+        super::theme::motion::SLIDE,
+        super::theme::motion::slowing,
+    );
+    let painter = ui.painter();
+    let radius = CornerRadius::same(size::RADIUS);
+    painter.rect_filled(track, radius, color::CONTROL);
+    let white = Rect::from_min_max(
+        pills[0].min.lerp(pills[1].min, t),
+        pills[0].max.lerp(pills[1].max, t),
+    );
+    painter.rect_filled(white, radius, color::ACCENT);
+
+    let mut clicked = None;
+    for (index, (galley, pill)) in galleys.into_iter().zip(pills).enumerate() {
+        let response = ui.interact(pill, id.with(index), Sense::click());
+        response.widget_info(|| {
+            WidgetInfo::selected(Role::RadioButton, true, index == chosen, labels[index])
+        });
+        // How much of the white pill is under this one: its text dark on it, and fading back.
+        let under = if index == 1 { t } else { 1.0 - t };
+        let rest = if response.hovered() || response.has_focus() {
+            color::TEXT
+        } else {
+            color::WEAK
+        };
+        let tint = rest.lerp_to_gamma(color::ON_ACCENT, under);
+        ui.painter().galley(pill.min + PADDING, galley, tint);
+        if response.on_hover_cursor(CursorIcon::PointingHand).clicked() && index != chosen {
+            clicked = Some(index);
+        }
+    }
+    clicked
+}

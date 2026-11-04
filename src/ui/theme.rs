@@ -339,6 +339,16 @@ pub mod motion {
     pub const OPEN: f32 = 0.15;
     /// The bar of a download, from one step to the next.
     pub const PROGRESS: f32 = 0.3;
+    /// The white pill of two pills joined, sliding to the other one at a click: slower and
+    /// calmer than a list (the owner's choice on 2026-11-04, in step 16b2), with [`slowing`].
+    pub const SLIDE: f32 = 0.22;
+
+    /// A motion that starts fast and slows down at its end, without overshooting: the
+    /// `cubic-bezier(.22, 1, .36, 1)` of the mock-up, close to a quintic ease-out.
+    #[must_use]
+    pub fn slowing(t: f32) -> f32 {
+        1.0 - (1.0 - t).powi(5)
+    }
 }
 
 /// The shadow of what opens over the content: the bubbles, the list of the leagues.
@@ -446,5 +456,20 @@ mod tests {
                 "{mode:?}"
             );
         }
+    }
+
+    #[test]
+    fn the_slide_slows_down_at_its_end_without_overshooting() {
+        assert!(motion::slowing(0.0).abs() < f32::EPSILON);
+        assert!((motion::slowing(1.0) - 1.0).abs() < f32::EPSILON);
+        assert!(motion::slowing(0.3) > 0.8, "most of the way early");
+        let steps: Vec<f32> = (0..=20u8)
+            .map(|step| motion::slowing(f32::from(step) / 20.0))
+            .collect();
+        assert!(
+            steps
+                .windows(2)
+                .all(|pair| pair[0] <= pair[1] && pair[1] <= 1.0)
+        );
     }
 }

@@ -477,6 +477,10 @@ bug-report-sent = Envoyé avec le rapport
 bug-report-log = Journal
 # Sous les lignes du journal. « another window » reste en anglais : le rapport l'écrit ainsi.
 bug-report-log-note = Ses dernières lignes. Les autres fenêtres sont écrites « another window ».
+# Deux pastilles jointes à droite du libellé du journal, qui choisissent le journal envoyé : celui de cette session, ou
+# de la session précédente, choisi d'office après un plantage.
+bug-report-this-session = Cette session
+bug-report-previous-session = La précédente
 # À la place des lignes du journal, quand il ne peut pas être lu.
 bug-report-no-log = Le journal ne peut pas être lu.
 # Case qui joint l'objet affiché au rapport, $name son nom, en gras après les deux-points ; un nom long est coupé par « … ».
@@ -485,4 +489,7 @@ bug-report-join-item = Joindre l'objet affiché : { $name }
 bug-report-join-unreadable = Joindre l'objet qui n'a pas pu être lu
 # L'action principale : le formulaire de GitHub ouvert dans le navigateur, ses champs remplis.
 bug-report-open = Ouvrir sur GitHub
+# Copie tout le journal de la session choisie, à coller dans l'issue ; « Copié » après un clic, jusqu'à la fermeture de l'aperçu.
+bug-report-copy = Copier le journal
+bug-report-copied = Copié
 bug-report-account = Un compte GitHub est nécessaire.

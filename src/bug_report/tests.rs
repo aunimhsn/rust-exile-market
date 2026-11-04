@@ -210,6 +210,97 @@ fn an_item_that_doesnt_fit_at_all_isnt_sent() {
     assert_eq!(field(report.address(), "item"), None);
 }
 
+/// `count` lines of the log of the previous session, told apart from those of [`log`].
+fn previous_log(count: usize) -> Vec<LogLine> {
+    (0..count)
+        .map(|index| line(&format!("21:02:11 INFO Price of Headhunter: {index} ex")))
+        .collect()
+}
+
+#[test]
+fn the_first_session_offers_no_choice_of_the_log() {
+    let mut report = Report::new("Exile Market 0.1.0".to_owned(), None, Some(log(3)));
+    report.choose(LogSession::Previous);
+
+    assert!(!report.has_previous());
+    assert_eq!(report.session(), LogSession::This, "nothing to choose");
+}
+
+#[test]
+fn the_previous_log_is_chosen_at_once_after_a_crash() {
+    let crashed = Report::new("Exile Market 0.1.0".to_owned(), None, Some(log(3)))
+        .with_previous(previous_log(2), true);
+    let closed = Report::new("Exile Market 0.1.0".to_owned(), None, Some(log(3)))
+        .with_previous(previous_log(2), false);
+
+    assert!(crashed.has_previous());
+    assert_eq!(crashed.session(), LogSession::Previous);
+    assert_eq!(crashed.log_sent(), Some(&previous_log(2)[..]));
+    assert_eq!(
+        field(crashed.address(), "log").as_deref(),
+        Some("21:02:11 INFO Price of Headhunter: 0 ex\n21:02:11 INFO Price of Headhunter: 1 ex")
+    );
+    assert!(closed.has_previous());
+    assert_eq!(closed.session(), LogSession::This);
+    assert_eq!(closed.log_sent(), Some(&log(3)[..]));
+}
+
+#[test]
+fn one_log_is_sent_at_a_time() {
+    let mut report = Report::new("Exile Market 0.1.0".to_owned(), None, Some(log(500)))
+        .with_previous(previous_log(3), false);
+    report.choose(LogSession::Previous);
+
+    assert_eq!(report.log_sent(), Some(&previous_log(3)[..]));
+    let sent = field(report.address(), "log").expect("log");
+    assert!(!sent.contains("Item copied"), "{sent}");
+
+    report.choose(LogSession::This);
+    let this = report.log_sent().expect("log");
+    assert!(
+        this.len() > 3 && this.len() < 500,
+        "its last lines that fit"
+    );
+    assert_eq!(this.last(), log(500).last());
+}
+
+#[test]
+fn copy_the_log_copies_the_whole_log_of_the_session_chosen() {
+    let mut report = Report::new("Exile Market 0.1.0".to_owned(), None, Some(log(500)))
+        .with_previous(previous_log(2), false);
+    let whole = report.whole_log().expect("log");
+
+    assert_eq!(whole.lines().count(), 500, "beyond the lines sent");
+    assert!(whole.starts_with("18:48:03 INFO Item copied: Item Class: Belts 0000\n"));
+    assert!(whole.ends_with("Belts 0499"));
+
+    report.choose(LogSession::Previous);
+    assert_eq!(
+        report.whole_log().as_deref(),
+        Some("21:02:11 INFO Price of Headhunter: 0 ex\n21:02:11 INFO Price of Headhunter: 1 ex")
+    );
+}
+
+#[test]
+fn copied_until_another_log_is_chosen() {
+    let mut report = Report::new("Exile Market 0.1.0".to_owned(), None, Some(log(3)))
+        .with_previous(previous_log(2), false);
+    report.mark_copied();
+    report.join_item(false);
+
+    assert!(report.copied(), "the same log");
+
+    report.choose(LogSession::Previous);
+    assert!(!report.copied(), "another log, not copied yet");
+}
+
+#[test]
+fn without_a_log_nothing_is_copied() {
+    let report = Report::new("Exile Market 0.1.0".to_owned(), None, None);
+
+    assert_eq!(report.whole_log(), None);
+}
+
 #[test]
 fn each_opening_is_told_apart() {
     let first = Report::new(String::new(), None, None);
