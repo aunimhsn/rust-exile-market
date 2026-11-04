@@ -152,7 +152,7 @@ impl UpdateCheck {
     /// If the system can't start a thread.
     #[must_use]
     pub fn start(wake: impl Fn() + Send + 'static) -> Self {
-        let worker = Worker::spawn("update-check", OnDrop::Detach, wake, |outbox, wake| {
+        let worker = Worker::spawn_once("update-check", OnDrop::Detach, wake, |outbox, wake| {
             if let Some(release) = check(crate::VERSION, latest_tag)
                 && outbox.send(release)
             {

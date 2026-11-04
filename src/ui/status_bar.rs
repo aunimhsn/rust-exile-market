@@ -199,16 +199,16 @@ impl<'a> StatusBar<'a> {
 /// `label` as a link to `url`: gray, lighter and underlined under the pointer.
 fn link(ui: &mut Ui, label: &str, url: &str) {
     let galley = widgets::text_line(ui, label, text::small());
-    let (rect, link) = ui.allocate_exact_size(galley.size(), Sense::click());
-    link.widget_info(|| WidgetInfo::labeled(Role::Link, true, label));
-    let lit = link.hovered() || link.has_focus();
+    let (rect, response) = ui.allocate_exact_size(galley.size(), Sense::click());
+    response.widget_info(|| WidgetInfo::labeled(Role::Link, true, label));
+    let lit = response.hovered() || response.has_focus();
     let tint = if lit { color::TEXT } else { color::WEAK };
     let painter = ui.painter();
     painter.galley(rect.min, galley, tint);
     if lit {
         painter.hline(rect.x_range(), rect.bottom(), Stroke::new(1.0, tint));
     }
-    if link.on_hover_cursor(CursorIcon::PointingHand).clicked() {
+    if response.on_hover_cursor(CursorIcon::PointingHand).clicked() {
         ui.ctx().open_url(OpenUrl::new_tab(url));
     }
 }

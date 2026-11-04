@@ -104,6 +104,9 @@ pub struct Worker<E, C = Infallible> {
     orders: Option<Sender<C>>,
     /// Taken once the thread is found gone, or when the worker is dropped.
     thread: Option<JoinHandle<()>>,
+    /// The thread has one thing to do, then ends by itself (a check made once); any other ends
+    /// only when told to.
+    once: bool,
 }
 
 impl<E: Send + 'static, C: Send + 'static> Worker<E, C> {
@@ -140,7 +143,24 @@ impl<E: Send + 'static, C: Send + 'static> Worker<E, C> {
             events,
             orders: Some(orders),
             thread: Some(thread),
+            once: false,
         }
+    }
+
+    /// Runs `body` as [`Self::spawn`] does, for a thread that ends by itself once done.
+    ///
+    /// # Panics
+    ///
+    /// If the system can't start a thread.
+    pub fn spawn_once(
+        name: &'static str,
+        on_drop: OnDrop,
+        wake: impl Fn() + Send + 'static,
+        body: impl FnOnce(&Outbox<E, C>, &dyn Fn()) + Send + 'static,
+    ) -> Self {
+        let mut worker = Self::spawn(name, on_drop, wake, body);
+        worker.once = true;
+        worker
     }
 
     /// Gives `order` to the thread, which takes it at its next wait; a thread that ended
@@ -152,8 +172,8 @@ impl<E: Send + 'static, C: Send + 'static> Worker<E, C> {
     }
 
     /// Gives each event received since the last call to `handle`, without waiting; `true` the
-    /// first time the thread is found gone by a panic, after its last events. A thread that
-    /// had nothing more to do (a check made once) ends without it.
+    /// first time the thread is found gone without being asked to (a panic), after its last
+    /// events. A thread spawned once ([`Self::spawn_once`]) ends by itself without it.
     pub fn receive(&mut self, mut handle: impl FnMut(E)) -> bool {
         loop {
             match self.events.try_recv() {
@@ -164,18 +184,22 @@ impl<E: Send + 'static, C: Send + 'static> Worker<E, C> {
         }
     }
 
-    /// The thread found gone: `true` the first time when it panicked; how it ended goes to the
-    /// log.
+    /// The thread found gone: `true` the first time when it shouldn't have ended (a panic, or a
+    /// return of a thread not spawned once); how it ended goes to the log.
     fn ended(&mut self) -> bool {
         let Some(thread) = self.thread.take() else {
             return false;
         };
         // Its events are closed as it ends, so the join only waits for its last wake-up.
-        if thread.join().is_ok() {
+        if thread.join().is_err() {
+            log::error!("The {} thread stopped", self.name);
+            return true;
+        }
+        if self.once {
             log::info!("The {} thread ended", self.name);
             return false;
         }
-        log::error!("The {} thread stopped", self.name);
+        log::warn!("The {} thread ended without being asked to", self.name);
         true
     }
 }
@@ -212,23 +236,34 @@ impl<F: Fn()> Drop for WakeOnExit<F> {
 mod tests {
     use super::*;
 
-    /// A worker whose thread sends `events`, then ends, by a panic when `panics`, and is gone
-    /// once it returns.
-    fn ended<E: Send + 'static>(events: Vec<E>, panics: bool) -> Worker<E> {
+    /// How the thread of a test ends.
+    #[derive(Clone, Copy, PartialEq, Eq)]
+    enum End {
+        Panic,
+        /// Spawned once, it returns when done.
+        Done,
+        /// Spawned to last, it returns without being asked to.
+        Unasked,
+    }
+
+    /// A worker whose thread sends `events`, then ends as `end` says, and is gone once it
+    /// returns.
+    fn ended<E: Send + 'static>(events: Vec<E>, end: End) -> Worker<E> {
         let (woken, wakes) = mpsc::channel();
-        let worker = Worker::spawn(
-            "test",
-            OnDrop::Join,
-            move || {
-                let _ = woken.send(());
-            },
-            move |outbox, _| {
-                for event in events {
-                    assert!(outbox.send(event));
-                }
-                assert!(!panics, "the test thread panics");
-            },
-        );
+        let wake = move || {
+            let _ = woken.send(());
+        };
+        let body = move |outbox: &Outbox<E>, _: &dyn Fn()| {
+            for event in events {
+                assert!(outbox.send(event));
+            }
+            assert!(end != End::Panic, "the test thread panics");
+        };
+        let worker = if end == End::Done {
+            Worker::spawn_once("test", OnDrop::Join, wake, body)
+        } else {
+            Worker::spawn("test", OnDrop::Join, wake, body)
+        };
         wakes
             .recv_timeout(Duration::from_secs(5))
             .expect("woken up when the thread ends");
@@ -237,7 +272,7 @@ mod tests {
 
     #[test]
     fn the_events_sent_before_the_thread_panicked_are_received_first() {
-        let mut worker = ended(vec![1, 2], true);
+        let mut worker = ended(vec![1, 2], End::Panic);
 
         let mut received = Vec::new();
         let lost = worker.receive(|event| received.push(event));
@@ -312,9 +347,9 @@ mod tests {
     }
 
     #[test]
-    fn a_thread_that_ends_by_itself_after_its_events_isnt_taken_for_a_panic() {
-        // As the check of an update, made once; `ended` waits for the wake-up of its end.
-        let mut worker = ended(vec![1], false);
+    fn a_thread_spawned_once_that_ends_after_its_events_isnt_taken_for_a_panic() {
+        // As the check of an update; `ended` waits for the wake-up of its end.
+        let mut worker = ended(vec![1], End::Done);
 
         let mut received = Vec::new();
         assert!(!worker.receive(|event| received.push(event)));
@@ -322,5 +357,17 @@ mod tests {
         assert_eq!(received, [1]);
         assert!(!worker.receive(|event| received.push(event)));
         assert!(worker.thread.is_none(), "joined");
+    }
+
+    #[test]
+    fn a_lasting_thread_that_ends_without_being_asked_to_is_lost() {
+        // As the clipboard watching would, ended by a mistake rather than a panic.
+        let mut worker = ended(vec![1], End::Unasked);
+
+        let mut received = Vec::new();
+        assert!(worker.receive(|event| received.push(event)));
+
+        assert_eq!(received, [1]);
+        assert!(!worker.receive(|event| received.push(event)), "told once");
     }
 }

@@ -2,7 +2,7 @@
 
 ## Pourquoi
 
-Au lancement, Exile Market demande une fois à GitHub sa dernière version. Si elle est plus récente que celle qui tourne, une bulle sous le bloc de la ligue dit « Exile Market **0.2.0** is available. », avec **Download** qui ouvre la page de la version, et une croix. Fermée, la bulle ne revient pas pour cette version pendant la ligue en cours ; elle revient pour une version plus récente, et quand une nouvelle ligue commence. Tant qu'une version plus récente existe, la barre d'état des réglages la dit, en lien. Fais ces tests d'affilée, sans m'attendre. Un ✅ suffit quand ça marche ; détaille seulement ce qui cloche. Puis dis-moi « fait ».
+Au lancement, Exile Market demande une fois à GitHub sa dernière version. Si elle est plus récente que celle qui tourne, une bulle sous le bloc de la ligue dit « Exile Market **0.2.0** is available. », avec **Download** qui ouvre la page de la version, et une croix. Fermée, la bulle ne revient pas pour cette version pendant la ligue du moment ; elle revient pour une version plus récente, et quand une nouvelle ligue commence. Tant qu'une version plus récente existe, la barre d'état des réglages la dit, en lien. Fais ces tests d'affilée, sans m'attendre. Un ✅ suffit quand ça marche ; détaille seulement ce qui cloche. Puis dis-moi « fait ».
 
 Ces tests ne se font qu'une fois une première version publiée sur GitHub (étape 17) : avant, GitHub n'en connaît aucune, et rien ne s'affiche.
 

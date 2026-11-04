@@ -227,7 +227,8 @@ impl ClipboardWatch {
     }
 
     /// Gives each event received since the last call to `handle`, without waiting. If the
-    /// thread ended by itself (a panic), the clipboard counts as unreadable.
+    /// thread is found gone without being asked to stop (a panic), the clipboard counts as
+    /// unreadable.
     pub fn receive(&mut self, mut handle: impl FnMut(ClipboardEvent)) {
         if self.worker.receive(&mut handle) {
             handle(ClipboardEvent::Unreadable);
