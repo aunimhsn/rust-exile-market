@@ -1,7 +1,8 @@
 //! The bug report (`specs.md`, Bug report): what the application knows (the version, the system,
-//! the languages, the league and the settings), the item shown and the last lines of the log,
-//! seen by the player in a preview, then opened in the issue form of the repository through its
-//! address. Nothing is sent from the application: the player signs in to GitHub and sends it.
+//! the languages, the league and the settings), the item shown and the last lines of the log of
+//! this session or of the previous one, seen by the player in a preview, then opened in the issue
+//! form of the repository through its address. Nothing is sent from the application: the player
+//! signs in to GitHub and sends it.
 //!
 //! The report is written in English, the language of the issues, whatever the language of the
 //! interface.
@@ -11,6 +12,8 @@ mod system;
 
 use std::fmt::Write as _;
 use std::fs;
+use std::io;
+use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use directories::BaseDirs;
@@ -59,14 +62,28 @@ pub struct JoinedItem {
     pub name: Option<String>,
 }
 
+/// The session whose log the report sends, one at a time: both would halve the lines of each in
+/// the address.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LogSession {
+    This,
+    Previous,
+}
+
 /// The report, as the preview shows it and as its address sends it.
 #[derive(Debug, Clone)]
 pub struct Report {
     summary: String,
     item: Option<JoinedItem>,
-    /// None when the log can't be read.
+    /// The log of this session; none when it can't be read.
     log: Option<Vec<LogLine>>,
+    /// The log of the previous session; none in the first session, when it couldn't be kept at
+    /// the start, when it is empty, or when it can't be read.
+    previous_log: Option<Vec<LogLine>>,
+    session: LogSession,
     join_item: bool,
+    /// The session whose log the player copied last.
+    copied: Option<LogSession>,
     sent: Sent,
     /// Which opening of the bug report it is, so that the preview starts again at each one:
     /// its log scrolled to its end.
@@ -85,23 +102,41 @@ struct Sent {
 }
 
 impl Report {
-    /// The report of this session, with the system read now and the log of this session; the
-    /// item joined by default.
+    /// The report, with the system read now, the log of this session and the one of the previous
+    /// session, chosen at once when that session ended without closing (a crash); the item joined
+    /// by default.
     #[must_use]
-    pub fn of_this_session(facts: &Facts<'_>, item: Option<JoinedItem>) -> Self {
+    pub fn read(facts: &Facts<'_>, item: Option<JoinedItem>) -> Self {
         let home = BaseDirs::new().map(|directories| directories.home_dir().display().to_string());
-        // A character cut in the middle (a log written while the application stopped) stays
-        // readable.
-        let log = crate::logging::path().and_then(|path| {
-            fs::read(path)
-                .inspect_err(|error| log::warn!("The log can't be read: {error}"))
-                .ok()
-        });
-        Self::new(
+        let short = |log: String| short_log::short_lines(&log, home.as_deref());
+        let report = Self::new(
             summary(facts, &system::describe()),
             item,
-            log.map(|log| short_log::short_lines(&String::from_utf8_lossy(&log), home.as_deref())),
-        )
+            crate::logging::path()
+                .and_then(|path| {
+                    read_log(path)
+                        .inspect_err(|error| log::warn!("The log can't be read: {error}"))
+                        .ok()
+                })
+                .map(short),
+        );
+        let previous = crate::logging::previous_path().and_then(|path| match read_log(&path) {
+            Ok(log) => Some(log),
+            // The first session.
+            Err(error) if error.kind() == io::ErrorKind::NotFound => None,
+            Err(error) => {
+                log::warn!("The log of the previous session can't be read: {error}");
+                None
+            }
+        });
+        match previous {
+            Some(log) => {
+                let crashed =
+                    short_log::ended_without_closing(&log, &crate::logging::closed_message());
+                report.with_previous(short(log), crashed)
+            }
+            None => report,
+        }
     }
 
     fn new(summary: String, item: Option<JoinedItem>, log: Option<Vec<LogLine>>) -> Self {
@@ -115,10 +150,26 @@ impl Report {
             summary,
             item,
             log,
+            previous_log: None,
+            session: LogSession::This,
             join_item: true,
+            copied: None,
             sent,
             opening: OPENINGS.fetch_add(1, Ordering::Relaxed),
         }
+    }
+
+    /// The report with the log of the previous session, `lines`, chosen at once when that session
+    /// `crashed`; a session stopped before its first line has nothing to show, nor to choose.
+    fn with_previous(mut self, lines: Vec<LogLine>, crashed: bool) -> Self {
+        if lines.iter().all(|line| line.text.trim().is_empty()) {
+            return self;
+        }
+        self.previous_log = Some(lines);
+        if crashed {
+            self.choose(LogSession::Previous);
+        }
+        self
     }
 
     /// The version, the system, the languages, the league and the settings, on five lines.
@@ -151,25 +202,100 @@ impl Report {
         self.opening
     }
 
+    /// Whether the log of the previous session can be chosen: not in the first session, nor when
+    /// that log couldn't be kept at the start, or is empty.
+    #[must_use]
+    pub fn has_previous(&self) -> bool {
+        self.previous_log.is_some()
+    }
+
+    /// The session whose log the report sends.
+    #[must_use]
+    pub fn session(&self) -> LogSession {
+        self.session
+    }
+
     /// Joins the item shown to the report, or leaves it out; the lines of the log that fit
     /// change with it.
     pub fn join_item(&mut self, join: bool) {
         self.join_item = join;
+        self.send();
+    }
+
+    /// Sends the log of `session`, when it has one; the lines that fit change with it.
+    pub fn choose(&mut self, session: LogSession) {
+        // Already chosen.
+        if session == self.session {
+            return;
+        }
+        // Nothing to choose in the first session.
+        if session == LogSession::Previous && !self.has_previous() {
+            return;
+        }
+        self.session = session;
+        self.send();
+    }
+
+    /// The address and the lines of the log sent, again.
+    fn send(&mut self) {
         self.sent = sent(
             &self.summary,
             self.item
                 .as_ref()
-                .filter(|_| join)
+                .filter(|_| self.join_item)
                 .map(|item| item.text.as_str()),
-            self.log.as_deref().unwrap_or_default(),
+            self.log().unwrap_or_default(),
             ADDRESS_BUDGET,
         );
+    }
+
+    /// The log of the session chosen, written short; none when it can't be read.
+    fn log(&self) -> Option<&[LogLine]> {
+        match self.session {
+            LogSession::This => self.log.as_deref(),
+            LogSession::Previous => self.previous_log.as_deref(),
+        }
     }
 
     /// The lines of the log the address sends, its last ones; none when the log can't be read.
     #[must_use]
     pub fn log_sent(&self) -> Option<&[LogLine]> {
-        self.log.as_deref().map(|log| &log[self.sent.first_line..])
+        self.log().map(|log| &log[self.sent.first_line..])
+    }
+
+    /// Whether the log of the session chosen can be read: "Copy the log" is offered. Asked at
+    /// each frame, without building the log.
+    #[must_use]
+    pub fn has_log(&self) -> bool {
+        self.log().is_some()
+    }
+
+    /// The whole log of the session chosen, written short as the preview shows it, for "Copy the
+    /// log"; none when it can't be read.
+    #[must_use]
+    pub fn whole_log(&self) -> Option<String> {
+        self.log().map(|log| {
+            let mut whole = String::with_capacity(log.iter().map(|line| line.text.len() + 1).sum());
+            for (index, line) in log.iter().enumerate() {
+                if index > 0 {
+                    whole.push('\n');
+                }
+                whole.push_str(&line.text);
+            }
+            whole
+        })
+    }
+
+    /// Whether the player copied the log of the session chosen: "✓ Copied" until the preview
+    /// closes; the other log, not copied yet, offers "Copy the log".
+    #[must_use]
+    pub fn copied(&self) -> bool {
+        self.copied == Some(self.session)
+    }
+
+    /// Tells that the player copied the log of the session chosen.
+    pub fn mark_copied(&mut self) {
+        self.copied = Some(self.session);
     }
 
     /// The address of the issue form, its fields filled.
@@ -177,6 +303,12 @@ impl Report {
     pub fn address(&self) -> &str {
         &self.sent.address
     }
+}
+
+/// The text of the log file at `path`; a character cut in the middle (a log written while the
+/// application stopped) stays readable.
+fn read_log(path: &Path) -> io::Result<String> {
+    fs::read(path).map(|log| String::from_utf8_lossy(&log).into_owned())
 }
 
 /// The summary of the report: the version, the system (`system`), the languages, the league and

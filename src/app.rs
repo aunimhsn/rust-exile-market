@@ -13,7 +13,7 @@ use egui::{
 };
 
 use self::open_lists::{OpenList, OpenLists};
-use crate::bug_report::{Facts, JoinedItem, Report};
+use crate::bug_report::{Facts, JoinedItem, LogSession, Report};
 use crate::clipboard::{ClipboardEvent, ClipboardWatch};
 use crate::estimate::{self, Estimate, Reference, Worth};
 use crate::filters::{Filters, Window};
@@ -205,8 +205,8 @@ impl ExileMarketApp {
         }
     }
 
-    /// The bug report of what the window shows now: the summary, the log of this session, and
-    /// the item shown, joined by default.
+    /// The bug report of what the window shows now: the summary, the log of this session or of
+    /// the previous one after a crash, and the item shown, joined by default.
     fn new_bug_report(&self) -> Report {
         let copied = self.recent.shown();
         let facts = Facts {
@@ -225,7 +225,7 @@ impl ExileMarketApp {
                 .and_then(|shown| shown.parsed().ok())
                 .map(|item| item.name().unwrap_or(item.base_type()).to_owned()),
         });
-        Report::of_this_session(&facts, item)
+        Report::read(&facts, item)
     }
 
     /// What the player did in the bug report.
@@ -235,17 +235,28 @@ impl ExileMarketApp {
         };
         match action {
             BugReportAction::JoinItem(join) => report.join_item(join),
+            BugReportAction::Choose(session) => report.choose(session),
             BugReportAction::Open => {
                 log::info!(
-                    "Bug report opened on GitHub: {} characters, the item {}",
+                    "Bug report opened on GitHub: {} characters, the item {}, the log of {}",
                     report.address().len(),
                     if report.sends_item() {
                         "joined"
                     } else {
                         "left out"
+                    },
+                    match report.session() {
+                        LogSession::This => "this session",
+                        LogSession::Previous => "the previous session",
                     }
                 );
                 ctx.open_url(OpenUrl::new_tab(report.address()));
+            }
+            BugReportAction::CopyLog => {
+                if let Some(log) = report.whole_log() {
+                    ctx.copy_text(log);
+                    report.mark_copied();
+                }
             }
         }
     }

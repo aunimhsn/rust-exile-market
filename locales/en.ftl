@@ -468,6 +468,12 @@ bug-report-sent = Sent with the report
 bug-report-log = Log
 # Under the lines of the log. "another window" stays in English: the report writes it so.
 bug-report-log-note = Its last lines. The other windows are written “another window”.
+# Two pills joined on the right of the label of the log, that choose the log sent: the one of this session, or of the
+# previous session, chosen at once after a crash.
+bug-report-this-session = This session
+bug-report-previous-session = The previous one
+# What a screen reader says of one of these pills, $session its word.
+bug-report-log-session = Log: { $session }
 # In place of the lines of the log, when it can't be read.
 bug-report-no-log = The log can't be read.
 # Checkbox that joins the item shown to the report, $name its name, in bold after the colon; a long name is cut with "…".
@@ -476,4 +482,7 @@ bug-report-join-item = Join the item shown: { $name }
 bug-report-join-unreadable = Join the item that couldn't be read
 # The main action: the issue form of GitHub opened in the browser, its fields filled.
 bug-report-open = Open on GitHub
+# Copies the whole log of the session chosen, to paste into the issue; "Copied" after a click, until the preview closes or the other log, not copied yet, is chosen.
+bug-report-copy = Copy the log
+bug-report-copied = Copied
 bug-report-account = A GitHub account is needed.

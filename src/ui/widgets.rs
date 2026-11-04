@@ -298,3 +298,200 @@ pub fn control_pill(ui: &mut Ui, label: &str) -> Response {
 
 /// The space around the text of a pill.
 const PILL_PADDING: Vec2 = vec2(10.0, 4.0);
+
+/// The measures of two pills joined.
+mod segmented {
+    use egui::{Vec2, vec2};
+
+    /// The space between the dark of the controls and the pills.
+    pub const INSET: f32 = 2.0;
+    /// The space around the text of a pill.
+    pub const PADDING: Vec2 = vec2(9.0, 3.0);
+}
+
+/// The slide of the white pill of two pills joined, kept from one frame to the next.
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct Slide {
+    /// Where it started: 0 under the first pill, 1 under the second, or between.
+    from: f32,
+    /// Whether it goes to the second pill.
+    to_second: bool,
+    /// When it started, in seconds of `egui::InputState::time`; minus infinity for a pill placed
+    /// at once.
+    start: f64,
+}
+
+impl Slide {
+    /// The white pill placed at once under the second pill, or the first.
+    fn placed(second: bool) -> Self {
+        Self {
+            from: f32::from(u8::from(second)),
+            to_second: second,
+            start: f64::NEG_INFINITY,
+        }
+    }
+
+    /// The slide toward the second pill, or the first, at `now`: the same one when it already
+    /// goes there, else a new one from where the pill stands.
+    fn toward(self, to_second: bool, now: f64) -> Self {
+        if self.to_second == to_second {
+            self
+        } else {
+            Self {
+                from: self.at(now),
+                to_second,
+                start: now,
+            }
+        }
+    }
+
+    /// Where the white pill stands at `now`.
+    fn at(self, now: f64) -> f32 {
+        // Any duration, infinite for a pill placed at once: clamped after, so no precision
+        // lost that matters.
+        #[expect(clippy::cast_possible_truncation)]
+        let elapsed = (now - self.start) as f32;
+        let to = f32::from(u8::from(self.to_second));
+        slide_at(self.from, to, elapsed / super::theme::motion::SLIDE)
+    }
+
+    /// Whether it is still on its way at `now`, told by the time: never for a pill placed at
+    /// once.
+    fn sliding(self, now: f64) -> bool {
+        now - self.start < f64::from(super::theme::motion::SLIDE)
+    }
+}
+
+/// Where a slide from `from` to `to` stands after `progress` of its time (0 to 1, clamped), slowing
+/// down at its end.
+fn slide_at(from: f32, to: f32, progress: f32) -> f32 {
+    from + (to - from) * super::theme::motion::slowing(progress.clamp(0.0, 1.0))
+}
+
+/// Two pills joined on the dark of the controls, `labels`, the one of `chosen` (0 or 1) white
+/// like the main action; at a click, the white pill slides to the other one (`motion::SLIDE`)
+/// from where it stands, even in the middle of a slide, and is placed at once the first time
+/// `id` is drawn. `spoken` is what a screen reader says of each pill ("Log: This session"). The
+/// pill clicked, if another one.
+pub fn segmented(
+    ui: &mut Ui,
+    id: egui::Id,
+    labels: [&str; 2],
+    spoken: &[String; 2],
+    chosen: usize,
+) -> Option<usize> {
+    use segmented::{INSET, PADDING};
+    let galleys = labels.map(|label| text_line(ui, label, text::small_strong()));
+    let sizes = galleys
+        .each_ref()
+        .map(|galley| galley.size() + 2.0 * PADDING);
+    let height = sizes[0].y.max(sizes[1].y);
+    let (track, _) = ui.allocate_exact_size(
+        vec2(sizes[0].x + sizes[1].x + 2.0 * INSET, height + 2.0 * INSET),
+        Sense::hover(),
+    );
+    let pills = [
+        Rect::from_min_size(track.min + vec2(INSET, INSET), vec2(sizes[0].x, height)),
+        Rect::from_min_size(
+            track.min + vec2(INSET + sizes[0].x, INSET),
+            vec2(sizes[1].x, height),
+        ),
+    ];
+    let responses = [0, 1].map(|index| {
+        let response = ui.interact(pills[index], id.with(index), Sense::click());
+        response.widget_info(|| {
+            WidgetInfo::selected(Role::RadioButton, true, index == chosen, &spoken[index])
+        });
+        response
+    });
+
+    let to_second = chosen == 1;
+    let now = ui.input(|input| input.time);
+    let slide = ui.data_mut(|data| {
+        let slide = data.get_temp_mut_or_insert_with(id, || Slide::placed(to_second));
+        *slide = slide.toward(to_second, now);
+        *slide
+    });
+    if slide.sliding(now) {
+        ui.ctx().request_repaint();
+    }
+    // 0 under the first pill, 1 under the second.
+    let t = slide.at(now);
+
+    let painter = ui.painter();
+    let radius = CornerRadius::same(size::RADIUS);
+    painter.rect_filled(track, radius, color::CONTROL);
+    let white = Rect::from_min_max(
+        pills[0].min.lerp(pills[1].min, t),
+        pills[0].max.lerp(pills[1].max, t),
+    );
+    // Dimmed a little when the pill chosen has the focus of the keyboard.
+    let fill = if responses[chosen.min(1)].has_focus() {
+        color::ACCENT_DIMMED
+    } else {
+        color::ACCENT
+    };
+    painter.rect_filled(white, radius, fill);
+
+    let mut clicked = None;
+    for (index, (galley, response)) in galleys.into_iter().zip(responses).enumerate() {
+        // How much of the white pill is under this one: its text dark on it, and fading back.
+        let under = if index == 1 { t } else { 1.0 - t };
+        let rest = if response.hovered() || response.has_focus() {
+            color::TEXT
+        } else {
+            color::WEAK
+        };
+        let tint = rest.lerp_to_gamma(color::ON_ACCENT, under);
+        ui.painter()
+            .galley(pills[index].min + PADDING, galley, tint);
+        if index != chosen && response.on_hover_cursor(CursorIcon::PointingHand).clicked() {
+            clicked = Some(index);
+        }
+    }
+    clicked
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_white_pill_is_placed_at_once_the_first_time() {
+        let placed = Slide::placed(true);
+
+        assert!((placed.at(0.0) - 1.0).abs() < f32::EPSILON);
+        assert!(!placed.sliding(0.0));
+    }
+
+    #[test]
+    fn the_same_target_keeps_the_slide() {
+        let going = Slide::placed(false).toward(true, 10.0);
+
+        assert_eq!(going.toward(true, 10.1), going, "a frame drawn again");
+        assert!(going.sliding(10.1));
+        assert!(!going.sliding(10.3), "over after its time");
+    }
+
+    #[test]
+    fn a_slide_turned_back_starts_from_where_the_pill_stands() {
+        let going = Slide::placed(false).toward(true, 10.0);
+        let midway = going.at(10.066);
+        let back = going.toward(false, 10.066);
+
+        assert!(midway > 0.5 && midway < 1.0, "{midway}");
+        assert!((back.at(10.066) - midway).abs() < f32::EPSILON, "no jump");
+        assert!(back.at(10.1) < midway, "on its way back");
+        assert!(back.at(11.0).abs() < f32::EPSILON, "arrived");
+    }
+
+    #[test]
+    fn a_slide_ends_on_its_target() {
+        assert!((slide_at(0.3, 1.0, 1.0) - 1.0).abs() < f32::EPSILON);
+        assert!(
+            (slide_at(0.3, 1.0, 7.0) - 1.0).abs() < f32::EPSILON,
+            "past its time"
+        );
+        assert!((slide_at(0.3, 1.0, 0.0) - 0.3).abs() < f32::EPSILON);
+    }
+}

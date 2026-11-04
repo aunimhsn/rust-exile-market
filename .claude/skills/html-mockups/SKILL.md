@@ -34,7 +34,14 @@ python3 -m http.server 8765 --bind 127.0.0.1
 
 The owner opens `http://127.0.0.1:8765/docs/mockups/<name>.html` and reloads after each change.
 
-Before asking for a review, check each change with a headless screenshot (`scripts/screenshot.sh <url> <output.png> [width] [height]`, Firefox normal or Flatpak) and look at it, then delete it: the screenshots are for this check only, the owner looks at the mock-up itself. Capture only the window concerned rather than the whole page.
+Before asking for a review, check each change with a headless screenshot (`scripts/screenshot.sh <url> <output.png> [width] [height | full] [selector]`) and look at it, then delete it: the screenshots are for this check only, the owner looks at the mock-up itself. Capture only the window concerned, with a selector (`'#section-1 .slot:nth-child(4) .win'`), rather than the whole page.
+
+The script uses **Playwright** and its own Chromium when installed, otherwise Firefox (normal or Flatpak). Prefer Playwright: its Chromium is closer to the one of VS Code where the owner looks at the mock-up (Firefox draws the fonts a few pixels wider or narrower); it prints the errors of the browser console (scripts, missing files) and fails on them; with a selector it captures that window only and lists its texts cut (wider than their box) or wrapped (on more lines than written), with their widths, the measures a screenshot doesn't give; `full` captures the whole page; `SCALE=1.5` takes the scale of a screen other than 100 %. It is also the only choice when Claude Code runs in a sandbox that doesn't see the browsers of the system, such as VS Code installed as a Flatpak. Install it once, outside the projects (about 150 MB):
+
+```sh
+mkdir -p ~/.local/share/mockup-tools && cd ~/.local/share/mockup-tools
+npm init -y && npm install playwright && npx playwright install chromium
+```
 
 ## 3. Iterate with the owner
 

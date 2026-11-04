@@ -80,16 +80,31 @@ const rpTopBar = ({ place = "left", on = false, faint = false, hover = false, se
     gear => (place === "left" ? bug + gear : gear + bug));
 };
 
+// The slides of the white pill compared (16b2): its duration and its curve, the width following the word. The
+// owner chose "smooth" on 2026-11-04, the calmest; the overshoot and the quick one rejected.
+const RP_MOTIONS = {
+  overshoot: "180ms cubic-bezier(.34, 1.36, .64, 1)",
+  smooth: "220ms cubic-bezier(.22, 1, .36, 1)",
+  quick: "140ms cubic-bezier(.25, .8, .25, 1)",
+};
+
 // The preview, in place of what the window shows: what the report carries, the log of this session or of the
 // previous one (no choice in the first session, without a previous log), the item shown, the white "Open on GitHub" and "Copy the log". `previous` the log of the previous
 // session chosen (`panic` when it ended on a crash), `item` the name of the item shown (or none; `unreadable` an
 // item that couldn't be read, its text joined), `copied` after a click on "Copy the log", `fr` the French window
-// (the report stays in English, the language of the issues).
-const rpPreview = ({ first = false, previous = false, panic = false, item = "Headhunter", unreadable = false, itemOn = true, copied = false, fr = false } = {}) => {
+// (the report stays in English, the language of the issues). `choice` draws the choice of the log (16b2):
+// "segmented", two pills joined on the right of its label, the chosen one white (chosen on 2026-11-04); "tabs" on
+// the top of its box, or "radios" on the right of its label (16a), rejected. `motion` the slide of the white pill
+// at a click, a key of RP_MOTIONS.
+const rpPreview = ({ first = false, previous = false, panic = false, item = "Headhunter", unreadable = false, itemOn = true, copied = false, fr = false, choice = "segmented", motion = "smooth" } = {}) => {
   const tx = (en, french) => (fr ? french : en);
-  const sessions = first ? "" : `<span class="app-report-sessions">
-      <span class="radio ${previous ? "" : "on"}"><i></i>${tx("This session", "Cette session")}</span>
-      <span class="radio ${previous ? "on" : ""}"><i></i>${tx("The previous one", "La précédente")}</span></span>`;
+  const names = [[!previous, tx("This session", "Cette session")], [previous, tx("The previous one", "La précédente")]];
+  const sessions = first || choice === "tabs" ? "" : choice === "segmented"
+    ? `<span class="app-report-segmented" style="--slide: ${RP_MOTIONS[motion]}"><i class="app-report-thumb"></i>${names.map(([on, name]) => `<span class="${on ? "on" : ""}" tabindex="0" role="radio" aria-checked="${on}">${name}</span>`).join("")}</span>`
+    : `<span class="app-report-sessions">${names.map(([on, name]) => `<span class="radio ${on ? "on" : ""}"><i></i>${name}</span>`).join("")}</span>`;
+  const tabs = !first && choice === "tabs"
+    ? `<div class="app-report-tabs">${names.map(([on, name]) => `<span class="${on ? "on" : ""}">${name}</span>`).join("")}</div>`
+    : "";
   const box = `<span class="check ${itemOn ? "on" : ""}">${itemOn ? ICON.check(11) : ""}</span>`;
   const what = unreadable
     ? tx("Join the item that couldn't be read", "Joindre l'objet qui n'a pas pu être lu")
@@ -110,8 +125,10 @@ const rpPreview = ({ first = false, previous = false, panic = false, item = "Hea
     <div class="app-report-label"><span class="label">${tx("Sent with the report", "Envoyé avec le rapport")}</span></div>
     ${rpBox(RP_SUMMARY)}
     <div class="app-report-label"><span class="label">${tx("Log", "Journal")}</span>${sessions}</div>
-    ${rpBox(log, true)}
-    <div class="app-report-note" style="margin-top: 6px">${tx(
+    ${tabs}${rpBox(log, true)}
+    <div class="app-report-note" style="margin-top: 6px">${tabs ? tx(
+      "Only the log of the tab shown is sent, its last lines. The other windows are written “another window”.",
+      "Seul le journal de l'onglet affiché est envoyé, ses dernières lignes. Les autres fenêtres sont écrites « another window ».") : tx(
       "Its last lines. The other windows are written “another window”.",
       "Ses dernières lignes. Les autres fenêtres sont écrites « another window ».")}</div>
     ${itemRow}

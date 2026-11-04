@@ -18,15 +18,34 @@ use simplelog::{CombinedLogger, Config, ConfigBuilder, SharedLogger, WriteLogger
 const FILE_NAME: &str = "exile-market.log";
 const PREVIOUS_FILE_NAME: &str = "exile-market.previous.log";
 
-/// The log file of this session, once it is open.
-static PATH: OnceLock<PathBuf> = OnceLock::new();
+/// The log files of this session, once open.
+static FILES: OnceLock<Files> = OnceLock::new();
+
+/// The log files of this session.
+struct Files {
+    /// The log of this session.
+    path: PathBuf,
+    /// Whether the log of the previous session was kept at the start, next to it: not in the
+    /// first session, nor when it couldn't be renamed (the file next to it would then be the log
+    /// of an older session).
+    previous_kept: bool,
+}
 
 /// The log file of this session.
 struct LogFile {
     path: PathBuf,
     file: File,
-    /// Why the log of the previous session couldn't be kept, if it couldn't.
-    rotation_error: Option<io::Error>,
+    rotation: Rotation,
+}
+
+/// What became of the log of the previous session at the start.
+enum Rotation {
+    /// Kept next to the log of this session.
+    Kept,
+    /// The first session: no previous log.
+    None,
+    /// It couldn't be renamed: the file next to it would be the log of an older session.
+    Failed(io::Error),
 }
 
 /// Starts the log, and logs the panics. Without a log file (a folder that can't be written),
@@ -54,17 +73,20 @@ pub fn init() {
             config,
             log_file.file,
         ))));
-        (log_file.path, log_file.rotation_error)
+        (log_file.path, log_file.rotation)
     });
     if CombinedLogger::init(loggers).is_err() {
         // A logger is already installed: keep it.
         return;
     }
     match log_file {
-        Ok((path, rotation_error)) => {
+        Ok((path, rotation)) => {
             log::info!("Log file: {}", without_home(&path).display());
-            let _ = PATH.set(path);
-            if let Some(error) = rotation_error {
+            let _ = FILES.set(Files {
+                path,
+                previous_kept: matches!(rotation, Rotation::Kept),
+            });
+            if let Rotation::Failed(error) = rotation {
                 log::warn!("The log of the previous session couldn't be kept: {error}");
             }
         }
@@ -124,7 +146,23 @@ impl<L: SharedLogger + 'static> SharedLogger for QuietClipboard<L> {
 
 /// The log file of this session; none without a log file.
 pub fn path() -> Option<&'static Path> {
-    PATH.get().map(PathBuf::as_path)
+    FILES.get().map(|files| files.path.as_path())
+}
+
+/// The log file of the previous session, next to the one of this session; none in the first
+/// session, or when it couldn't be kept at the start.
+pub fn previous_path() -> Option<PathBuf> {
+    FILES
+        .get()
+        .filter(|files| files.previous_kept)
+        .map(|files| files.path.with_file_name(PREVIOUS_FILE_NAME))
+}
+
+/// The message written once at the end of a session closed by the player; a log without it
+/// tells a crash.
+#[must_use]
+pub fn closed_message() -> String {
+    format!("{} closed", crate::APP_NAME)
 }
 
 /// Opens the log file of this session, after keeping the one of the previous session when
@@ -138,17 +176,16 @@ fn open_file() -> io::Result<LogFile> {
     })?;
     fs::create_dir_all(&directory)?;
     let path = directory.join(FILE_NAME);
-    let rotation_error = match fs::rename(&path, directory.join(PREVIOUS_FILE_NAME)) {
-        Ok(()) => None,
-        // The first session: no previous log.
-        Err(error) if error.kind() == io::ErrorKind::NotFound => None,
-        Err(error) => Some(error),
+    let rotation = match fs::rename(&path, directory.join(PREVIOUS_FILE_NAME)) {
+        Ok(()) => Rotation::Kept,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Rotation::None,
+        Err(error) => Rotation::Failed(error),
     };
     let file = File::create(&path)?;
     Ok(LogFile {
         path,
         file,
-        rotation_error,
+        rotation,
     })
 }
 

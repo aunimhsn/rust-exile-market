@@ -1,15 +1,16 @@
 //! The bug report, in place of the content of the window like the settings: a preview of what
-//! the report carries, as it will be sent (`specs.md`, Bug report), then the pill that opens it
-//! on GitHub.
+//! the report carries, as it will be sent (`specs.md`, Bug report), the log of this session or of
+//! the previous one, then the pill that opens it on GitHub and the one that copies the log.
 
 use egui::text::{LayoutJob, TextFormat, TextWrapping};
 use egui::{
-    CentralPanel, CornerRadius, Frame, Label, Margin, RichText, ScrollArea, Ui, Vec2, vec2,
+    Align, CentralPanel, CornerRadius, Frame, Label, Layout, Margin, RichText, Role, ScrollArea,
+    Sense, Ui, Vec2, WidgetInfo, pos2, vec2,
 };
 
 use super::theme::{color, size, text};
 use super::widgets::{self, Mark};
-use crate::bug_report::{Level, LogLine, Report};
+use crate::bug_report::{Level, LogLine, LogSession, Report};
 use crate::i18n::{Message, Translator};
 
 /// The space above and under the preview, as in the settings.
@@ -26,14 +27,24 @@ const LOG_HEIGHT: f32 = 168.0;
 const ITEM_GAP: f32 = 12.0;
 const ACTIONS_GAP: f32 = 14.0;
 const ACCOUNT_GAP: f32 = 8.0;
+/// The space between the two pills of the actions.
+const PILLS_GAP: f32 = 8.0;
+/// The pill "✓ Copied", as in the mock-up: its check mark before the word.
+const COPIED_PADDING: Vec2 = vec2(10.0, 4.0);
+const CHECK_SIZE: f32 = 11.0;
+const CHECK_GAP: f32 = 5.0;
 
 /// What the player did in the bug report.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BugReportAction {
     /// Checked or unchecked the item shown.
     JoinItem(bool),
+    /// Chose the log of this session or of the previous one.
+    Choose(LogSession),
     /// Opened the report on GitHub.
     Open,
+    /// Copied the whole log of the session chosen.
+    CopyLog,
 }
 
 pub struct BugReportPanel<'a> {
@@ -97,7 +108,7 @@ impl<'a> BugReportPanel<'a> {
             );
         });
 
-        self.label(ui, Message::BugReportLog);
+        let mut action = self.log_label(ui);
         report_box(ui, |ui| {
             // Started again at each opening, scrolled to its end: egui keeps the place of a
             // scroll area by its id.
@@ -124,11 +135,21 @@ impl<'a> BugReportPanel<'a> {
         ui.add_space(BOX_GAP);
         self.note(ui, Message::BugReportLogNote);
 
-        let mut action = self.item(ui);
+        action = self.item(ui).or(action);
         ui.add_space(ACTIONS_GAP);
-        if widgets::pill(ui, &self.i18n.text(Message::BugReportOpen)).clicked() {
-            action = Some(BugReportAction::Open);
-        }
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = PILLS_GAP;
+            if widgets::pill(ui, &self.i18n.text(Message::BugReportOpen)).clicked() {
+                action = Some(BugReportAction::Open);
+            }
+            if self.report.copied() {
+                copied_pill(ui, &self.i18n.text(Message::BugReportCopied));
+            } else if self.report.has_log()
+                && widgets::control_pill(ui, &self.i18n.text(Message::BugReportCopy)).clicked()
+            {
+                action = Some(BugReportAction::CopyLog);
+            }
+        });
         ui.add_space(ACCOUNT_GAP);
         self.note(ui, Message::BugReportAccount);
         action
@@ -137,15 +158,55 @@ impl<'a> BugReportPanel<'a> {
     /// The uppercase label above a box, after the space above it.
     fn label(&self, ui: &mut Ui, message: Message) {
         ui.add_space(LABEL_GAP);
+        self.label_text(ui, message);
+        ui.add_space(BOX_GAP);
+    }
+
+    fn label_text(&self, ui: &mut Ui, message: Message) {
         let label = widgets::spaced_line(
             ui,
             self.i18n.text(message).to_uppercase(),
             text::label(),
             text::LABEL_LETTER_SPACING,
         );
-        let (rect, _) = ui.allocate_exact_size(label.size(), egui::Sense::hover());
+        let (rect, _) = ui.allocate_exact_size(label.size(), Sense::hover());
         ui.painter().galley(rect.min, label, color::WEAK);
+    }
+
+    /// The label "Log", with on its right the two pills joined that choose the log of this
+    /// session or of the previous one; no choice in the first session.
+    fn log_label(&self, ui: &mut Ui) -> Option<BugReportAction> {
+        ui.add_space(LABEL_GAP);
+        if !self.report.has_previous() {
+            self.label_text(ui, Message::BugReportLog);
+            ui.add_space(BOX_GAP);
+            return None;
+        }
+        let sessions = [LogSession::This, LogSession::Previous];
+        let chosen = usize::from(self.report.session() == LogSession::Previous);
+        let clicked = ui
+            .horizontal(|ui| {
+                self.label_text(ui, Message::BugReportLog);
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    let words = [
+                        self.i18n.text(Message::BugReportThisSession),
+                        self.i18n.text(Message::BugReportPreviousSession),
+                    ];
+                    widgets::segmented(
+                        ui,
+                        ui.make_persistent_id(("bug-report-session", self.report.opening())),
+                        [&words[0], &words[1]],
+                        &words
+                            .each_ref()
+                            .map(|word| self.i18n.bug_report_log_session(word)),
+                        chosen,
+                    )
+                })
+                .inner
+            })
+            .inner;
         ui.add_space(BOX_GAP);
+        clicked.map(|index| BugReportAction::Choose(sessions[index]))
     }
 
     fn note(&self, ui: &mut Ui, message: Message) {
@@ -211,6 +272,32 @@ fn one_line(mut job: LayoutJob, width: f32) -> LayoutJob {
         overflow_character: Some('…'),
     };
     job
+}
+
+/// "✓ Copied" in place of "Copy the log", on the dark of the controls, in the weak color: done,
+/// nothing to click.
+fn copied_pill(ui: &mut Ui, label: &str) {
+    let galley = widgets::text_line(ui, label, text::pill());
+    let size = galley.size() + 2.0 * COPIED_PADDING + vec2(CHECK_SIZE + CHECK_GAP, 0.0);
+    let (rect, response) = ui.allocate_exact_size(size, Sense::hover());
+    response.widget_info(|| WidgetInfo::labeled(Role::Label, true, label));
+    let painter = ui.painter();
+    painter.rect_filled(rect, CornerRadius::same(size::RADIUS), color::CONTROL);
+    let check_left = rect.left() + COPIED_PADDING.x;
+    widgets::check_mark(
+        painter,
+        pos2(check_left + CHECK_SIZE / 2.0, rect.center().y),
+        CHECK_SIZE,
+        color::WEAK,
+    );
+    painter.galley(
+        pos2(
+            check_left + CHECK_SIZE + CHECK_GAP,
+            rect.top() + COPIED_PADDING.y,
+        ),
+        galley,
+        color::WEAK,
+    );
 }
 
 /// A box on the dark of the controls, across the width, around `content`.
