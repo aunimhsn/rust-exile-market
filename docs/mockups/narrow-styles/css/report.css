@@ -1,0 +1,43 @@
+/* The bug report (step 16): the bug icon of the title bar that opens it, and the preview of the report, in place of
+   what the window shows, before it opens on GitHub. */
+/* The bug, like the gear: gray, white under the pointer and while the report is open; its tooltip under it. The
+   fainter look of later, once the application is stable. */
+.app-report-bug { position: relative; }
+.app-report-bug.is-hovered { color: var(--accent); }
+.app-report-bug.is-faint { color: var(--faint); }
+.app-report-bug .app-tip { top: calc(100% + 6px); right: -40px; left: auto; }
+.app-report-bug.is-hovered .app-tip { display: block; }
+.win:has(.app-report-bug.is-hovered) { overflow: visible; }
+/* The drawings compared, side by side, enlarged and at their size; Lucide chosen. */
+.app-report-glyphs { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; padding: 18px 10px; background: var(--bg-a); color: var(--weak); }
+.app-report-glyph-cell { display: grid; justify-items: center; gap: 12px; font-size: 11.5px; color: var(--faint); }
+.app-report-glyph-cell .ico { color: var(--weak); }
+/* The rejected row of the settings (B), and the faint notes of the preview. */
+.app-report-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.app-report-note { color: var(--faint); font-size: 11.5px; line-height: 1.4; }
+/* The main action white, like the pills of the bubbles; the other one on the dark of the controls. */
+.app-report-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 14px; }
+.pill.is-main { background: var(--accent); color: var(--on-accent, var(--bg-a)); }
+.pill.is-main:hover { background: var(--accent); color: var(--on-accent, var(--bg-a)); filter: brightness(.88); }
+.pill.is-copied { display: inline-flex; align-items: center; gap: 5px; color: var(--weak); }
+
+.app-report-intro { margin-top: 6px; color: var(--weak); font-size: 12.5px; line-height: 1.45; }
+
+/* What the report carries, as it will be sent: a box on the dark of the controls, in the monospace font, the log
+   scrolled inside it so that the window keeps its height. */
+.app-report-label { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 14px; }
+.app-report-label .label { color: var(--weak); font-size: 12px; font-weight: 600; }
+.app-report-box {
+  margin-top: 6px; padding: 8px 10px; border-radius: var(--radius); background: var(--control); color: var(--text);
+  font: 400 11px/1.5 "JetBrains Mono", ui-monospace, monospace; white-space: pre-wrap; overflow-wrap: anywhere;
+}
+.app-report-box.is-log { max-height: 168px; overflow-y: auto; color: var(--weak); scrollbar-width: thin; scrollbar-color: var(--control-line) transparent; }
+.app-report-box .is-hidden { color: var(--faint); font-style: italic; }
+.app-report-box .is-panic { color: var(--warn); }
+/* The choice of the log, small radios on the right of its label. */
+.app-report-sessions { display: flex; gap: 12px; font-size: 12px; color: var(--weak); }
+.app-report-sessions .radio i { width: 11px; height: 11px; }
+.app-report-sessions .radio.on { color: var(--text); }
+.app-report-item { margin-top: 12px; }
+.app-report-item .toggle { font-size: 12.5px; }
+.app-report-item .toggle b { font-weight: 600; }

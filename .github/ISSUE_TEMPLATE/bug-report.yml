@@ -1,0 +1,47 @@
+# The bug report of the application (step 16): its icon in the title bar opens this form in the browser, the
+# fields `report`, `item` and `log` filled through the address (`/issues/new?template=bug-report.yml&report=…`).
+# The ids of the fields are read by the application: rename one only with the code.
+name: Bug report
+description: Something doesn't work as it should in Exile Market.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for reporting a bug. Opened from the application, the version, the settings, the item and the log are already filled in below: write a title, then tell what happened.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you did, and what the application did. A screenshot helps, dropped here.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?
+    validations:
+      required: false
+  - type: textarea
+    id: report
+    attributes:
+      label: Version and settings
+      description: Filled in by the application. Opened from elsewhere, write the version (Settings, at the bottom) and your system.
+    validations:
+      required: true
+  - type: textarea
+    id: item
+    attributes:
+      label: Item
+      description: The item as copied in the game (Ctrl+C), when the bug is about one.
+      render: text
+    validations:
+      required: false
+  - type: textarea
+    id: log
+    attributes:
+      label: Log
+      description: The last lines of the log, filled in by the application; the whole log can be copied from the report in the application and pasted here.
+      render: text
+    validations:
+      required: false
