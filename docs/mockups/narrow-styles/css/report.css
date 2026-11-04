@@ -45,3 +45,16 @@
 .app-report-item-text { display: flex; gap: .3em; min-width: 0; white-space: nowrap; }
 .app-report-item-text span { flex: none; }
 .app-report-item .toggle b { font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+/* The choice of the log compared in 16b2. Tabs on the top of its box: the tab shown takes the dark of the box and
+   joins it, the other one stays faint on the band. */
+.app-report-tabs { display: flex; gap: 2px; margin-top: 6px; font-size: 12px; font-weight: 600; }
+.app-report-tabs span { padding: 5px 10px 4px; border-radius: var(--radius) var(--radius) 0 0; color: var(--faint); cursor: pointer; }
+.app-report-tabs span:hover { color: var(--weak); }
+.app-report-tabs span.on { background: var(--control); color: var(--text); }
+.app-report-tabs + .app-report-box { margin-top: 0; border-top-left-radius: 0; }
+/* Two pills joined on the right of the label, on the dark of the controls; the chosen one white, like the main
+   action. */
+.app-report-segmented { display: flex; padding: 2px; border-radius: var(--radius); background: var(--control); font-size: 11.5px; font-weight: 600; }
+.app-report-segmented span { padding: 3px 9px; border-radius: var(--radius); color: var(--weak); white-space: nowrap; cursor: pointer; }
+.app-report-segmented span:hover { color: var(--text); }
+.app-report-segmented span.on { background: var(--accent); color: var(--on-accent, var(--bg-a)); }

@@ -84,12 +84,18 @@ const rpTopBar = ({ place = "left", on = false, faint = false, hover = false, se
 // previous one (no choice in the first session, without a previous log), the item shown, the white "Open on GitHub" and "Copy the log". `previous` the log of the previous
 // session chosen (`panic` when it ended on a crash), `item` the name of the item shown (or none; `unreadable` an
 // item that couldn't be read, its text joined), `copied` after a click on "Copy the log", `fr` the French window
-// (the report stays in English, the language of the issues).
-const rpPreview = ({ first = false, previous = false, panic = false, item = "Headhunter", unreadable = false, itemOn = true, copied = false, fr = false } = {}) => {
+// (the report stays in English, the language of the issues). `choice` draws the choice of the log (16b2): "radios"
+// on the right of its label (16a), "tabs" on the top of its box, or "segmented", two pills joined on the right of
+// its label, the chosen one white.
+const rpPreview = ({ first = false, previous = false, panic = false, item = "Headhunter", unreadable = false, itemOn = true, copied = false, fr = false, choice = "radios" } = {}) => {
   const tx = (en, french) => (fr ? french : en);
-  const sessions = first ? "" : `<span class="app-report-sessions">
-      <span class="radio ${previous ? "" : "on"}"><i></i>${tx("This session", "Cette session")}</span>
-      <span class="radio ${previous ? "on" : ""}"><i></i>${tx("The previous one", "La précédente")}</span></span>`;
+  const names = [[!previous, tx("This session", "Cette session")], [previous, tx("The previous one", "La précédente")]];
+  const sessions = first || choice === "tabs" ? "" : choice === "segmented"
+    ? `<span class="app-report-segmented">${names.map(([on, name]) => `<span class="${on ? "on" : ""}">${name}</span>`).join("")}</span>`
+    : `<span class="app-report-sessions">${names.map(([on, name]) => `<span class="radio ${on ? "on" : ""}"><i></i>${name}</span>`).join("")}</span>`;
+  const tabs = !first && choice === "tabs"
+    ? `<div class="app-report-tabs">${names.map(([on, name]) => `<span class="${on ? "on" : ""}">${name}</span>`).join("")}</div>`
+    : "";
   const box = `<span class="check ${itemOn ? "on" : ""}">${itemOn ? ICON.check(11) : ""}</span>`;
   const what = unreadable
     ? tx("Join the item that couldn't be read", "Joindre l'objet qui n'a pas pu être lu")
@@ -110,8 +116,10 @@ const rpPreview = ({ first = false, previous = false, panic = false, item = "Hea
     <div class="app-report-label"><span class="label">${tx("Sent with the report", "Envoyé avec le rapport")}</span></div>
     ${rpBox(RP_SUMMARY)}
     <div class="app-report-label"><span class="label">${tx("Log", "Journal")}</span>${sessions}</div>
-    ${rpBox(log, true)}
-    <div class="app-report-note" style="margin-top: 6px">${tx(
+    ${tabs}${rpBox(log, true)}
+    <div class="app-report-note" style="margin-top: 6px">${tabs ? tx(
+      "Only the log of the tab shown is sent, its last lines. The other windows are written “another window”.",
+      "Seul le journal de l'onglet affiché est envoyé, ses dernières lignes. Les autres fenêtres sont écrites « another window ».") : tx(
       "Its last lines. The other windows are written “another window”.",
       "Ses dernières lignes. Les autres fenêtres sont écrites « another window ».")}</div>
     ${itemRow}
