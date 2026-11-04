@@ -239,7 +239,7 @@ impl ExileMarketApp {
                 log::info!(
                     "Bug report opened on GitHub: {} characters, the item {}",
                     report.address().len(),
-                    if report.joins_item() {
+                    if report.sends_item() {
                         "joined"
                     } else {
                         "left out"

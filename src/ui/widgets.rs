@@ -90,6 +90,9 @@ impl Mark {
     }
 }
 
+/// Where the text of a choice starts, after its mark.
+pub const CHOICE_TEXT_LEFT: f32 = choice::MARK_SIZE + choice::MARK_GAP;
+
 /// A choice that can be clicked: its mark, then its text.
 pub fn choice(ui: &mut Ui, mark: Mark, label: &str) -> Response {
     let galley = text_line(ui, label, text::body());

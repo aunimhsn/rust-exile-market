@@ -48,7 +48,11 @@ fn field(address: &str, field: &str) -> Option<String> {
             decoded.push(u8::from_str_radix(hex, 16).ok()?);
             index += 3;
         } else {
-            decoded.push(bytes[index]);
+            decoded.push(if bytes[index] == b'+' {
+                b' '
+            } else {
+                bytes[index]
+            });
             index += 1;
         }
     }
@@ -186,9 +190,55 @@ fn without_a_log_the_report_sends_the_summary_and_the_item() {
 }
 
 #[test]
-fn the_address_encodes_every_character_but_the_unreserved_ones() {
-    assert_eq!(encode("a-z_0.9~"), "a-z_0.9~");
-    assert_eq!(encode("a b&c=d\n"), "a%20b%26c%3Dd%0A");
+fn the_address_keeps_the_characters_a_query_may_hold() {
+    assert_eq!(encode("a-z_0.9~:/,()"), "a-z_0.9~:/,()");
+    assert_eq!(encode("a b&c=d+e#f%\n"), "a+b%26c%3Dd%2Be%23f%25%0A");
     assert_eq!(encode("é·"), "%C3%A9%C2%B7");
-    assert_eq!(encoded_len("é·a"), encode("é·a").len());
+    assert_eq!(encoded_len("é· a:"), encode("é· a:").len());
+}
+
+#[test]
+fn an_item_that_doesnt_fit_at_all_isnt_sent() {
+    let item = JoinedItem {
+        text: "x".repeat(ADDRESS_BUDGET),
+        name: Some("Headhunter".to_owned()),
+    };
+    let report = Report::new("Exile Market 0.1.0".to_owned(), Some(item), Some(log(3)));
+
+    assert!(report.joins_item(), "still checked");
+    assert!(!report.sends_item());
+    assert_eq!(field(report.address(), "item"), None);
+}
+
+#[test]
+fn each_opening_is_told_apart() {
+    let first = Report::new(String::new(), None, None);
+    let second = Report::new(String::new(), None, None);
+
+    assert_ne!(first.opening(), second.opening());
+}
+
+/// The sentences of the log that write the name of a window, as the bug report reads them
+/// (`short_log`): a sentence written otherwise would show the name of another window.
+#[test]
+fn the_log_writes_the_windows_as_the_bug_report_reads_them() {
+    let x11 = include_str!("../hotkey/x11.rs");
+    let windows = include_str!("../hotkey/windows.rs");
+    for (source, sentence) in [
+        (x11, "of class {class}, isn't the game"),
+        (x11, "of class {class}, is the game"),
+        (x11, "to the window of class {} (Ctrl {}"),
+        (windows, "of class {class}, isn't the game"),
+        (windows, "of class {class}, is the game"),
+        (windows, "from the window of class {class} (Ctrl {}"),
+    ] {
+        assert!(source.contains(sentence), "{sentence}");
+    }
+    for source in [x11, windows] {
+        assert_eq!(
+            source.matches("of class ").count(),
+            source.matches("of class {").count(),
+            "every class written is read"
+        );
+    }
 }

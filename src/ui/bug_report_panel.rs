@@ -2,7 +2,7 @@
 //! the report carries, as it will be sent (`specs.md`, Bug report), then the pill that opens it
 //! on GitHub.
 
-use egui::text::{LayoutJob, TextFormat};
+use egui::text::{LayoutJob, TextFormat, TextWrapping};
 use egui::{
     CentralPanel, CornerRadius, Frame, Label, Margin, RichText, ScrollArea, Ui, Vec2, vec2,
 };
@@ -20,7 +20,8 @@ const LABEL_GAP: f32 = 14.0;
 /// The space between a label and its box, and under the box of the log.
 const BOX_GAP: f32 = 6.0;
 const BOX_PADDING: Margin = Margin::symmetric(10, 8);
-/// The box of the log scrolls inside past this height, so that the window keeps its height.
+/// The box of the log, its padding with it, scrolls inside past this height, so that the window
+/// keeps its height.
 const LOG_HEIGHT: f32 = 168.0;
 const ITEM_GAP: f32 = 12.0;
 const ACTIONS_GAP: f32 = 14.0;
@@ -52,8 +53,9 @@ impl<'a> BugReportPanel<'a> {
         CentralPanel::no_frame()
             .frame(Frame::NONE.fill(color::BAND_B))
             .show(ui, |ui| {
+                // Started again at each opening, at the top.
                 ScrollArea::vertical()
-                    .id_salt("bug-report")
+                    .id_salt(("bug-report", self.report.opening()))
                     .auto_shrink(false)
                     .show(ui, |ui| {
                         Frame::NONE
@@ -97,9 +99,11 @@ impl<'a> BugReportPanel<'a> {
 
         self.label(ui, Message::BugReportLog);
         report_box(ui, |ui| {
+            // Started again at each opening, scrolled to its end: egui keeps the place of a
+            // scroll area by its id.
             ScrollArea::vertical()
-                .id_salt("bug-report-log")
-                .max_height(LOG_HEIGHT)
+                .id_salt(("bug-report-log", self.report.opening()))
+                .max_height(LOG_HEIGHT - BOX_PADDING.sum().y)
                 .auto_shrink([false, true])
                 .stick_to_bottom(true)
                 .show(ui, |ui| match self.report.log_sent() {
@@ -155,8 +159,9 @@ impl<'a> BugReportPanel<'a> {
         );
     }
 
-    /// The checkbox that joins the item shown, its name in bold, or the item that couldn't be
-    /// read; nothing before the first item.
+    /// The checkbox that joins the item shown, its name in bold after a colon, or the item that
+    /// couldn't be read; nothing before the first item. A name too long for the window is cut
+    /// with "…", the whole sentence in a tooltip.
     fn item(&self, ui: &mut Ui) -> Option<BugReportAction> {
         let item = self.report.item()?;
         ui.add_space(ITEM_GAP);
@@ -169,7 +174,7 @@ impl<'a> BugReportPanel<'a> {
                 job.append(
                     name,
                     0.0,
-                    TextFormat::simple(text::list_keys(), color::TEXT),
+                    TextFormat::simple(text::name_in_choice(), color::TEXT),
                 );
                 job.append(after, 0.0, regular);
             } else {
@@ -181,12 +186,31 @@ impl<'a> BugReportPanel<'a> {
             let job = LayoutJob::simple_singleline(label.clone(), text::bubble(), color::TEXT);
             (label, job)
         };
-        let galley = ui.painter().layout_job(job);
+        let galley = ui.painter().layout_job(one_line(job, ui.available_width()));
+        let cut = galley.elided;
         let joined = self.report.joins_item();
-        widgets::choice_galley(ui, Mark::Check { checked: joined }, galley, &label)
+        let response = widgets::choice_galley(ui, Mark::Check { checked: joined }, galley, &label);
+        let response = if cut {
+            response.on_hover_text(&label)
+        } else {
+            response
+        };
+        response
             .clicked()
             .then_some(BugReportAction::JoinItem(!joined))
     }
+}
+
+/// `job` on one line, cut with "…" past `width`, the mark of a choice before it: the name of
+/// the item, last, is cut, not the start of the sentence.
+fn one_line(mut job: LayoutJob, width: f32) -> LayoutJob {
+    job.wrap = TextWrapping {
+        max_width: (width - widgets::CHOICE_TEXT_LEFT).max(0.0),
+        max_rows: 1,
+        break_anywhere: true,
+        overflow_character: Some('…'),
+    };
+    job
 }
 
 /// A box on the dark of the controls, across the width, around `content`.
@@ -240,6 +264,38 @@ fn log_job(lines: &[LogLine]) -> LayoutJob {
 mod tests {
     use super::*;
     use crate::bug_report::ANOTHER_WINDOW;
+
+    /// `label` laid out on one line past `width`: its text drawn, and whether it is cut.
+    fn laid_out(label: &str, width: f32) -> (String, bool) {
+        let ctx = egui::Context::default();
+        crate::ui::install(&ctx);
+        let mut drawn = (String::new(), false);
+        let mut output = ctx.run_ui(egui::RawInput::default(), |ui| {
+            let job = LayoutJob::simple_singleline(label.to_owned(), text::bubble(), color::TEXT);
+            let galley = ui.painter().layout_job(one_line(job, width));
+            // The characters drawn, the "…" of a text cut with them.
+            let text = galley
+                .rows
+                .iter()
+                .flat_map(|row| row.glyphs.iter().map(|glyph| glyph.chr))
+                .collect();
+            drawn = (text, galley.elided);
+        });
+        // epaint panics when the texture changes of a frame are dropped unapplied.
+        output.textures_delta.clear();
+        drawn
+    }
+
+    #[test]
+    fn a_long_name_is_cut_with_an_ellipsis_after_the_start_of_the_sentence() {
+        let label = "Join the item shown: Concentrated Ultimate Life Flask of the Surgeon";
+        let (drawn, cut) = laid_out(label, 300.0);
+
+        assert!(cut);
+        assert!(drawn.starts_with("Join the item shown: Conc"), "{drawn}");
+        assert!(drawn.ends_with('…'), "{drawn}");
+        assert!(!laid_out("Join the item shown: Headhunter", 300.0).1);
+    }
 
     #[test]
     fn another_window_is_drawn_apart_and_an_error_in_the_color_of_the_warnings() {

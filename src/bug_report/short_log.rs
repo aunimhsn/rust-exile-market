@@ -69,29 +69,29 @@ pub struct LogLine {
 #[must_use]
 pub fn short_lines(log: &str, home: Option<&str>) -> Vec<LogLine> {
     let games = game_classes(log);
+    let mut lines = Vec::new();
+    // The level of the message under way, for its next lines.
     let mut level = None;
-    log.lines()
-        .map(|line| {
-            let line = without_home(line, home);
-            let (text, line_level) = match stamped(&line) {
-                Some((time, read, message)) => {
-                    level = read;
-                    let start = match read {
-                        Some(read) => format!("{time} {} ", read.word()),
-                        None => format!("{time} "),
-                    };
-                    (start + message, read)
+    for line in log.lines() {
+        let line = without_home(line, home);
+        let text = match stamped(&line) {
+            Some((time, read, message)) => {
+                level = read;
+                match read {
+                    Some(read) => format!("{time} {} {message}", read.word()),
+                    None => format!("{time} {message}"),
                 }
-                None => (line.clone(), level),
-            };
-            let (text, hidden) = without_other_window(text, &games);
-            LogLine {
-                text,
-                level: line_level,
-                hidden,
             }
-        })
-        .collect()
+            None => line,
+        };
+        let (text, hidden) = without_other_window(text, &games);
+        lines.push(LogLine {
+            text,
+            level,
+            hidden,
+        });
+    }
+    lines
 }
 
 /// The classes of the windows the log tells as the game: the one of Proton, and on Windows those
@@ -122,7 +122,7 @@ fn class_in(line: &str) -> Option<(Range<usize>, usize)> {
 
 /// `line` with "another window" in place of the name of a window that isn't the game, and where
 /// it stands.
-fn without_other_window(line: String, games: &HashSet<&str>) -> (String, Option<Range<usize>>) {
+fn without_other_window(mut line: String, games: &HashSet<&str>) -> (String, Option<Range<usize>>) {
     let Some((class, _)) = class_in(&line) else {
         return (line, None);
     };
@@ -130,19 +130,35 @@ fn without_other_window(line: String, games: &HashSet<&str>) -> (String, Option<
         return (line, None);
     }
     let hidden = class.start..class.start + ANOTHER_WINDOW.len();
-    let mut line = line;
     line.replace_range(class, ANOTHER_WINDOW);
     (line, Some(hidden))
 }
 
 /// `line` with `~` in place of the home folder, which names the account of the player; the log
-/// writes it so already, but an error of the system may write a path whole.
+/// writes it so already, but an error of the system may write a path whole. Only the folder
+/// itself, followed by a separator or by nothing: `/home/player2` isn't the folder of `player`.
 fn without_home(line: &str, home: Option<&str>) -> String {
-    match home {
-        // A home folder of a letter or two would replace words.
-        Some(home) if home.len() > 3 => line.replace(home, "~"),
-        _ => line.to_owned(),
+    let Some(home) = home.map(|home| home.trim_end_matches(['/', '\\'])) else {
+        return line.to_owned();
+    };
+    // A home folder of a letter or two would replace words.
+    if home.len() <= 3 {
+        return line.to_owned();
     }
+    let mut written = String::with_capacity(line.len());
+    let mut rest = line;
+    while let Some(start) = rest.find(home) {
+        let after = &rest[start + home.len()..];
+        written.push_str(&rest[..start]);
+        if after.is_empty() || after.starts_with(['/', '\\']) {
+            written.push('~');
+        } else {
+            written.push_str(home);
+        }
+        rest = after;
+    }
+    written.push_str(rest);
+    written
 }
 
 /// The time, the level and the message of a line that starts with a date and a time, as the log
@@ -290,6 +306,13 @@ mod tests {
             texts(log),
             ["18:48:03 WARN ~/.cache/exile-market/prices.json can't be read"]
         );
+    }
+
+    #[test]
+    fn another_home_folder_that_starts_alike_stays() {
+        let log = "2026-11-04T18:48:03.0+01:00 [WARN] /home/player2/x and /home/player/y";
+
+        assert_eq!(texts(log), ["18:48:03 WARN /home/player2/x and ~/y"]);
     }
 
     #[test]

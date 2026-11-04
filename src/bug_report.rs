@@ -6,17 +6,18 @@
 //! The report is written in English, the language of the issues, whatever the language of the
 //! interface.
 
-mod log;
+mod short_log;
 mod system;
 
 use std::fmt::Write as _;
 use std::fs;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use directories::BaseDirs;
 
 #[cfg(test)]
-pub use self::log::ANOTHER_WINDOW;
-pub use self::log::{Level, LogLine};
+pub use self::short_log::ANOTHER_WINDOW;
+pub use self::short_log::{Level, LogLine};
 use crate::language::Language;
 use crate::league::{League, LeagueMode};
 use crate::settings::HotkeySetting;
@@ -30,6 +31,8 @@ const FORM: &str = concat!(
 /// The longest address opened: GitHub answers an error from about 6,900 characters (measured
 /// signed out on 2026-11-04).
 const ADDRESS_BUDGET: usize = 6_000;
+/// The openings of the bug report so far, which tell each one apart.
+static OPENINGS: AtomicU64 = AtomicU64::new(0);
 /// A line break, encoded, between two lines of the log.
 const ENCODED_LINE_BREAK: usize = "%0A".len();
 
@@ -65,12 +68,18 @@ pub struct Report {
     log: Option<Vec<LogLine>>,
     join_item: bool,
     sent: Sent,
+    /// Which opening of the bug report it is, so that the preview starts again at each one:
+    /// its log scrolled to its end.
+    opening: u64,
 }
 
 /// What the address sends.
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct Sent {
     address: String,
+    /// Whether it holds the item, or its first lines: none fit when the summary takes the whole
+    /// budget.
+    item: bool,
     /// The first line of the log sent, the lines after it sent too.
     first_line: usize,
 }
@@ -81,15 +90,17 @@ impl Report {
     #[must_use]
     pub fn of_this_session(facts: &Facts<'_>, item: Option<JoinedItem>) -> Self {
         let home = BaseDirs::new().map(|directories| directories.home_dir().display().to_string());
+        // A character cut in the middle (a log written while the application stopped) stays
+        // readable.
         let log = crate::logging::path().and_then(|path| {
-            fs::read_to_string(path)
-                .inspect_err(|error| ::log::warn!("The log can't be read: {error}"))
+            fs::read(path)
+                .inspect_err(|error| log::warn!("The log can't be read: {error}"))
                 .ok()
         });
         Self::new(
             summary(facts, &system::describe()),
             item,
-            log.map(|log| self::log::short_lines(&log, home.as_deref())),
+            log.map(|log| short_log::short_lines(&String::from_utf8_lossy(&log), home.as_deref())),
         )
     }
 
@@ -106,6 +117,7 @@ impl Report {
             log,
             join_item: true,
             sent,
+            opening: OPENINGS.fetch_add(1, Ordering::Relaxed),
         }
     }
 
@@ -121,10 +133,22 @@ impl Report {
         self.item.as_ref()
     }
 
-    /// Whether the item shown goes with the report.
+    /// Whether the player joins the item shown to the report: its checkbox.
     #[must_use]
     pub fn joins_item(&self) -> bool {
         self.join_item && self.item.is_some()
+    }
+
+    /// Whether the address holds the item, or its first lines.
+    #[must_use]
+    pub fn sends_item(&self) -> bool {
+        self.sent.item
+    }
+
+    /// Which opening of the bug report it is.
+    #[must_use]
+    pub fn opening(&self) -> u64 {
+        self.opening
     }
 
     /// Joins the item shown to the report, or leaves it out; the lines of the log that fit
@@ -210,12 +234,14 @@ fn language_name(language: Language) -> &'static str {
 /// lines that fit.
 fn sent(summary: &str, item: Option<&str>, log: &[LogLine], budget: usize) -> Sent {
     let mut address = format!("{FORM}&report={}", encode(summary));
+    let mut item_sent = false;
     if let Some(item) = item {
         let room = budget.saturating_sub(address.len() + "&item=".len());
         let item = fitting_item(item, room);
         if !item.is_empty() {
             address.push_str("&item=");
             address.push_str(&encode(item));
+            item_sent = true;
         }
     }
     let mut room = budget.saturating_sub(address.len() + "&log=".len());
@@ -243,6 +269,7 @@ fn sent(summary: &str, item: Option<&str>, log: &[LogLine], budget: usize) -> Se
     }
     Sent {
         address,
+        item: item_sent,
         first_line,
     }
 }
@@ -252,30 +279,70 @@ fn fitting_item(item: &str, room: usize) -> &str {
     if encoded_len(item) <= room {
         return item;
     }
-    ::log::warn!("The item is too long for the address of the bug report: its first lines only");
+    log::warn!("The item is too long for the address of the bug report: its first lines only");
     let mut end = 0;
-    for (start, _) in item.match_indices('\n') {
-        if encoded_len(&item[..start]) > room {
+    let mut length = 0;
+    for line in item.split_inclusive('\n') {
+        // Without its line break, which goes only between two lines.
+        let text = line.strip_suffix('\n').unwrap_or(line);
+        let cost = if end == 0 {
+            encoded_len(text)
+        } else {
+            ENCODED_LINE_BREAK + encoded_len(text)
+        };
+        if length + cost > room {
             break;
         }
-        end = start;
+        length += cost;
+        end = if end == 0 {
+            text.len()
+        } else {
+            end + 1 + text.len()
+        };
     }
     &item[..end]
 }
 
-/// Whether `byte` stays as it is in an address: the unreserved characters of RFC 3986.
-fn unreserved(byte: u8) -> bool {
-    byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'.' | b'_' | b'~')
+/// How a byte is written in the query of an address.
+enum Written {
+    /// As it is: a letter, a digit, and the characters a query may hold that the fields of the
+    /// form don't read (RFC 3986), so that the log keeps more lines.
+    Kept,
+    /// A space, written `+`, which the form reads as a space.
+    Plus,
+    /// `%XX`: `&`, `=`, `+`, `#`, `%`, the line breaks and the bytes of the other characters.
+    Escaped,
 }
 
-/// `text` encoded for the query of an address: every byte but the unreserved ones as `%XX`.
+fn written(byte: u8) -> Written {
+    match byte {
+        b' ' => Written::Plus,
+        b'a'..=b'z'
+        | b'A'..=b'Z'
+        | b'0'..=b'9'
+        | b'-'
+        | b'.'
+        | b'_'
+        | b'~'
+        | b':'
+        | b'/'
+        | b','
+        | b'('
+        | b')' => Written::Kept,
+        _ => Written::Escaped,
+    }
+}
+
+/// `text` encoded for the query of an address.
 fn encode(text: &str) -> String {
     let mut encoded = String::with_capacity(encoded_len(text));
     for byte in text.bytes() {
-        if unreserved(byte) {
-            encoded.push(char::from(byte));
-        } else {
-            let _ = write!(encoded, "%{byte:02X}");
+        match written(byte) {
+            Written::Kept => encoded.push(char::from(byte)),
+            Written::Plus => encoded.push('+'),
+            Written::Escaped => {
+                let _ = write!(encoded, "%{byte:02X}");
+            }
         }
     }
     encoded
@@ -284,7 +351,10 @@ fn encode(text: &str) -> String {
 /// The length of `text` once encoded.
 fn encoded_len(text: &str) -> usize {
     text.bytes()
-        .map(|byte| if unreserved(byte) { 1 } else { 3 })
+        .map(|byte| match written(byte) {
+            Written::Kept | Written::Plus => 1,
+            Written::Escaped => 3,
+        })
         .sum()
 }
 

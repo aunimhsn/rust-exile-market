@@ -479,8 +479,8 @@ bug-report-log = Journal
 bug-report-log-note = Ses dernières lignes. Les autres fenêtres sont écrites « another window ».
 # À la place des lignes du journal, quand il ne peut pas être lu.
 bug-report-no-log = Le journal ne peut pas être lu.
-# Case qui joint l'objet affiché au rapport, $name son nom, en gras.
-bug-report-join-item = Joindre l'objet affiché, { $name }
+# Case qui joint l'objet affiché au rapport, $name son nom, en gras après les deux-points ; un nom long est coupé par « … ».
+bug-report-join-item = Joindre l'objet affiché : { $name }
 # Case qui joint le texte d'un objet qui n'a pas pu être lu.
 bug-report-join-unreadable = Joindre l'objet qui n'a pas pu être lu
 # L'action principale : le formulaire de GitHub ouvert dans le navigateur, ses champs remplis.

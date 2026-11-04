@@ -470,8 +470,8 @@ bug-report-log = Log
 bug-report-log-note = Its last lines. The other windows are written “another window”.
 # In place of the lines of the log, when it can't be read.
 bug-report-no-log = The log can't be read.
-# Checkbox that joins the item shown to the report, $name its name, in bold.
-bug-report-join-item = Join the item shown, { $name }
+# Checkbox that joins the item shown to the report, $name its name, in bold after the colon; a long name is cut with "…".
+bug-report-join-item = Join the item shown: { $name }
 # Checkbox that joins the text of an item that couldn't be read.
 bug-report-join-unreadable = Join the item that couldn't be read
 # The main action: the issue form of GitHub opened in the browser, its fields filled.
