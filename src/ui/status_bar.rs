@@ -1,6 +1,7 @@
 //! The status bar: the age of each data source, or, while the settings are open, the version
-//! and the author, with a link to the author's site (and to a newer version, when one is out). In the window over the game, the league on
-//! its right, and while a field of it has the keyboard, a line that says so in place of the ages.
+//! and the author, with a link to the author's site (and to a newer version, when one is out).
+//! In the window over the game, the league on its right, and while a field of it has the
+//! keyboard, a line that says so in place of the ages.
 
 use egui::{
     Align, CursorIcon, Frame, Label, Layout, OpenUrl, Panel, Rect, RichText, Role, Sense, Stroke,
@@ -9,6 +10,7 @@ use egui::{
 
 use std::time::Duration;
 
+use super::item_block::SEPARATOR;
 use super::theme::{LeagueModeColors, color, size, text};
 use super::widgets;
 use crate::i18n::{Message, Translator};
@@ -183,13 +185,16 @@ impl<'a> StatusBar<'a> {
             let label = self.i18n.status_update(&release.version.to_string());
             link(ui, &label, &release.page);
         }
-        ui.add(Label::new(faint(middle)));
+        // In a narrow window, the middle is cut with "…" so that the site stays whole.
+        let site_width = widgets::text_line(ui, site, text::small()).size().x;
+        let room = (ui.available_width() - site_width).max(0.0);
+        ui.scope(|ui| {
+            ui.set_max_width(room);
+            ui.add(Label::new(faint(middle)).truncate());
+        });
         link(ui, site, crate::AUTHOR_SITE);
     }
 }
-
-/// The separator of the parts of the line.
-const SEPARATOR: &str = " · ";
 
 /// `label` as a link to `url`: gray, lighter and underlined under the pointer.
 fn link(ui: &mut Ui, label: &str, url: &str) {
@@ -264,6 +269,41 @@ mod tests {
 
         assert!(block > 2.0 * LEAGUE_PADDING);
         assert!(block < bar / 2.0);
+    }
+
+    /// The width of the line of the settings with a newer version, in a bar of `width`.
+    fn author_line_width(width: f32) -> f32 {
+        let ctx = Context::default();
+        crate::ui::install(&ctx);
+        let i18n = Translator::new(crate::language::Language::French);
+        // A version of two digits, the longest of the next ones.
+        let release = Release {
+            version: crate::update::Version::parse("0.10.1").expect("a version"),
+            page: String::new(),
+        };
+        let mut line = 0.0;
+        let mut output = ctx.run_ui(RawInput::default(), |ui| {
+            ui.spacing_mut().item_spacing.x = 0.0;
+            ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
+                ui.set_max_width(width);
+                StatusBar::author(&i18n, Some(&release)).author_line(ui, Some(&release));
+                line = ui.min_rect().width();
+            });
+        });
+        output.textures_delta.clear();
+        line
+    }
+
+    #[test]
+    fn the_line_of_the_settings_with_an_update_fits_the_narrow_window() {
+        // The narrowest window, less the padding of the band on both sides.
+        let width = crate::MIN_WINDOW_SIZE[0] - 2.0 * size::BAND_PADDING;
+
+        let line = author_line_width(width);
+        assert!(line <= width + 0.5, "{line} of {width}");
+        // Narrower still, the middle is cut and the site stays.
+        let narrow = author_line_width(250.0);
+        assert!(narrow <= 250.5, "{narrow}");
     }
 
     #[test]

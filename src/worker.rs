@@ -102,9 +102,8 @@ pub struct Worker<E, C = Infallible> {
     events: Receiver<E>,
     /// Dropping it tells the thread to stop.
     orders: Option<Sender<C>>,
+    /// Taken once the thread is found gone, or when the worker is dropped.
     thread: Option<JoinHandle<()>>,
-    /// The thread ended without being asked to, which has been told once.
-    lost: bool,
 }
 
 impl<E: Send + 'static, C: Send + 'static> Worker<E, C> {
@@ -141,7 +140,6 @@ impl<E: Send + 'static, C: Send + 'static> Worker<E, C> {
             events,
             orders: Some(orders),
             thread: Some(thread),
-            lost: false,
         }
     }
 
@@ -154,23 +152,31 @@ impl<E: Send + 'static, C: Send + 'static> Worker<E, C> {
     }
 
     /// Gives each event received since the last call to `handle`, without waiting; `true` the
-    /// first time the thread is found gone without being asked to (a panic), after its last
-    /// events.
+    /// first time the thread is found gone by a panic, after its last events. A thread that
+    /// had nothing more to do (a check made once) ends without it.
     pub fn receive(&mut self, mut handle: impl FnMut(E)) -> bool {
         loop {
             match self.events.try_recv() {
                 Ok(event) => handle(event),
                 Err(TryRecvError::Empty) => return false,
-                Err(TryRecvError::Disconnected) => {
-                    if self.lost {
-                        return false;
-                    }
-                    self.lost = true;
-                    log::error!("The {} thread stopped", self.name);
-                    return true;
-                }
+                Err(TryRecvError::Disconnected) => return self.ended(),
             }
         }
+    }
+
+    /// The thread found gone: `true` the first time when it panicked; how it ended goes to the
+    /// log.
+    fn ended(&mut self) -> bool {
+        let Some(thread) = self.thread.take() else {
+            return false;
+        };
+        // Its events are closed as it ends, so the join only waits for its last wake-up.
+        if thread.join().is_ok() {
+            log::info!("The {} thread ended", self.name);
+            return false;
+        }
+        log::error!("The {} thread stopped", self.name);
+        true
     }
 }
 
@@ -206,25 +212,32 @@ impl<F: Fn()> Drop for WakeOnExit<F> {
 mod tests {
     use super::*;
 
-    /// A worker whose thread already sent `events` then ended, as after a panic.
-    fn ended<E: Send + 'static>(events: impl IntoIterator<Item = E>) -> Worker<E> {
-        let (events_sender, receiver) = mpsc::channel();
-        for event in events {
-            events_sender.send(event).expect("sent");
-        }
-        Worker {
-            name: "test",
-            on_drop: OnDrop::Join,
-            events: receiver,
-            orders: None,
-            thread: None,
-            lost: false,
-        }
+    /// A worker whose thread sends `events`, then ends, by a panic when `panics`, and is gone
+    /// once it returns.
+    fn ended<E: Send + 'static>(events: Vec<E>, panics: bool) -> Worker<E> {
+        let (woken, wakes) = mpsc::channel();
+        let worker = Worker::spawn(
+            "test",
+            OnDrop::Join,
+            move || {
+                let _ = woken.send(());
+            },
+            move |outbox, _| {
+                for event in events {
+                    assert!(outbox.send(event));
+                }
+                assert!(!panics, "the test thread panics");
+            },
+        );
+        wakes
+            .recv_timeout(Duration::from_secs(5))
+            .expect("woken up when the thread ends");
+        worker
     }
 
     #[test]
-    fn the_events_sent_before_the_thread_ended_are_received_first() {
-        let mut worker = ended([1, 2]);
+    fn the_events_sent_before_the_thread_panicked_are_received_first() {
+        let mut worker = ended(vec![1, 2], true);
 
         let mut received = Vec::new();
         let lost = worker.receive(|event| received.push(event));
@@ -299,21 +312,15 @@ mod tests {
     }
 
     #[test]
-    fn the_application_is_woken_up_when_the_thread_ends() {
-        let (woken, wakes) = mpsc::channel();
-        let mut worker = Worker::<()>::spawn(
-            "test",
-            OnDrop::Join,
-            move || {
-                let _ = woken.send(());
-            },
-            |_, _| {},
-        );
+    fn a_thread_that_ends_by_itself_after_its_events_isnt_taken_for_a_panic() {
+        // As the check of an update, made once; `ended` waits for the wake-up of its end.
+        let mut worker = ended(vec![1], false);
 
-        wakes
-            .recv_timeout(Duration::from_secs(5))
-            .expect("woken up");
-        // The thread ended by itself.
-        assert!(worker.receive(|()| {}));
+        let mut received = Vec::new();
+        assert!(!worker.receive(|event| received.push(event)));
+
+        assert_eq!(received, [1]);
+        assert!(!worker.receive(|event| received.push(event)));
+        assert!(worker.thread.is_none(), "joined");
     }
 }

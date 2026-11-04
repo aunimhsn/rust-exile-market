@@ -15,8 +15,13 @@ tail -f ~/.local/state/exile-market/exile-market.log
 ## Avant
 
 1. Ferme Exile Market.
-2. Dans `Cargo.toml` (celui de la racine), remplace la `version` par une version plus ancienne que la dernière publiée sur GitHub, par exemple `0.0.9`. **Ne commite pas ce changement**, remets la version à la fin.
-3. Dans le fichier des réglages, `~/.config/exile-market/settings.toml`, supprime la section `[closed_update]` si elle existe, et mets `league = "Standard"` (pour voir aussi la bulle d'une nouvelle ligue). Enregistre.
+2. Dans `Cargo.toml` (celui de la racine), remplace la `version` par une version plus ancienne que la dernière publiée sur GitHub, par exemple `0.0.9`. Le `cargo run` modifie aussi `Cargo.lock` : **ne commite ni `Cargo.toml` ni `Cargo.lock`**, remets-les à la fin (test 9).
+3. Dans le fichier des réglages, `~/.config/exile-market/settings.toml`, pour voir aussi la bulle d'une nouvelle ligue :
+   - remplace la valeur de `league` par `"Standard"`, à sa place, en haut du fichier, avant toute ligne entre crochets comme `[hotkey]` (ajoutée plus bas, elle tomberait dans cette section et serait ignorée) ;
+   - vide la liste des bulles de ligue fermées : `closed_new_leagues = []` ;
+   - supprime la section `[closed_update]` si elle existe.
+
+   Enregistre.
 4. Lance, dans Konsole :
 
    ```
@@ -26,19 +31,19 @@ tail -f ~/.local/state/exile-market/exile-market.log
 ## Les tests
 
 1. **La bulle** : regarde la fenêtre quelques secondes après le lancement.
-   ✅ Sous la bulle de la nouvelle ligue, alignée à gauche, une seconde bulle dit « Exile Market **0.1.0** is available. » (la dernière version publiée, en gras), avec **Download** et une croix. Le journal dit « Update check: 0.1.0 is available ».
+   ✅ Sous la bulle de la nouvelle ligue, alignée à gauche, une seconde bulle dit « Exile Market **0.1.0** is available. » (la dernière version publiée, en gras), avec **Download** et une croix. Le journal dit « Update check: 0.1.0 is available », puis « The update-check thread ended », sans aucune ligne `ERROR`.
 
 2. **Le lien des réglages** : ouvre les réglages, puis survole le lien de la barre d'état.
    ✅ La bulle disparaît pendant que les réglages sont ouverts. La barre d'état dit « Exile Market 0.0.9 · 0.1.0 available · Made by Sylent · sylent.art » ; « 0.1.0 available » est gris, s'éclaircit et se souligne sous le pointeur, comme `sylent.art`. Un clic ouvre la page de la version dans le navigateur. Ferme les réglages.
 
 3. **Download** : clique sur **Download**.
-   ✅ Le navigateur ouvre la page de la version sur GitHub (`…/releases/tag/v0.1.0`), et la bulle disparaît. La bulle de la nouvelle ligue reste, remontée à sa place.
+   ✅ Le navigateur ouvre la page de la version sur GitHub (`…/releases/tag/v0.1.0`), et la bulle disparaît. La bulle de la nouvelle ligue reste à sa place.
 
 4. **De retour au lancement suivant** : ferme Exile Market et relance-le.
    ✅ La bulle de la mise à jour revient : tu as ouvert la page, mais tu n'as pas installé la version.
 
 5. **Fermée pour la ligue** : clique sur la croix de la bulle de la mise à jour, puis ferme Exile Market, regarde le fichier des réglages, et relance-le.
-   ✅ Le fichier contient une section `[closed_update]` avec `version = "0.1.0"` et `league = "…"`, le nom de la ligue en cours. Au lancement, la bulle de la mise à jour ne revient pas ; le lien des réglages est toujours là.
+   ✅ Le fichier contient une section `[closed_update]` avec `version = "0.1.0"` et `league = "…"`, le nom de la ligue du moment : celui de la bulle de la nouvelle ligue, sans « HC », pas `Standard`. Au lancement, la bulle de la mise à jour ne revient pas ; le lien des réglages est toujours là.
 
 6. **Revenue avec une nouvelle ligue** : ferme Exile Market, et dans `[closed_update]` remplace le nom de la `league` par un autre, par exemple `Old League`. Relance.
    ✅ La bulle revient : pour Exile Market, une nouvelle ligue a commencé depuis sa fermeture.
@@ -54,7 +59,7 @@ tail -f ~/.local/state/exile-market/exile-market.log
 
    ✅ Aucune bulle de mise à jour ni lien dans les réglages ; le journal dit « Update check: the releases can't be read (…) ».
 
-9. **À jour** : ferme Exile Market, remets la `version` de `Cargo.toml` comme avant (`git checkout Cargo.toml`), et relance.
+9. **À jour** : ferme Exile Market, remets `Cargo.toml` et `Cargo.lock` comme avant (`git checkout Cargo.toml Cargo.lock`), et relance.
    ✅ Aucune bulle de mise à jour ni lien dans les réglages ; le journal dit « Update check: 0.1.0 is the latest version » (ou la version en cours).
 
 10. **Tes propres scénarios** : ce qui te vient à l'esprit.

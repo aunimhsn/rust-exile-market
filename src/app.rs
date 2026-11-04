@@ -19,7 +19,7 @@ use crate::filters::{Filters, Window};
 use crate::hotkey::PriceCheckHotkey;
 use crate::i18n::{DOWNLOAD_QUOTE_COUNT, Message, Translator};
 use crate::item::{CopiedItem, Item};
-use crate::league::{League, Leagues};
+use crate::league::League;
 use crate::market::MarketWatch;
 use crate::offers::{LONG_WAIT, Offers, OffersState};
 use crate::overlay::{self, ClickWatch, KeyboardFocus, Overlay, ScreenRect};
@@ -37,7 +37,7 @@ use crate::ui::{
     SettingsPanel, Stats, StatusBar, TitleBar, TitleBarAction, TradeStatus, UnreadableItem,
     WarningBand,
 };
-use crate::update::{Release, UpdateCheck};
+use crate::update::{LeagueOfTheMoment, Release, UpdateCheck};
 
 /// What the window shows under the title bar.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -228,15 +228,10 @@ impl ExileMarketApp {
         }
     }
 
-    /// The name of the league of the moment, once the leagues are known.
-    fn league_of_the_moment(&self) -> Option<&str> {
-        self.session.leagues().and_then(Leagues::of_the_moment)
-    }
-
     /// The newer release to offer in a bubble: not once its page was opened in this session,
     /// nor while the player closed its bubble during the league of the moment.
     fn offered_release(&self) -> Option<&Release> {
-        let league = self.league_of_the_moment();
+        let league = LeagueOfTheMoment::of(self.session.leagues());
         self.release.as_ref().filter(|release| {
             !self.release_opened
                 && !self
@@ -248,11 +243,20 @@ impl ExileMarketApp {
 
     /// Closes the bubble of the update for that version during the league of the moment.
     fn close_update(&mut self) {
-        let Some(release) = self.release.clone() else {
+        let Some(release) = &self.release else {
             return;
         };
-        let league = self.league_of_the_moment().map(str::to_owned);
-        if self.settings.close_update(&release, league.as_deref()) {
+        let league = LeagueOfTheMoment::of(self.session.leagues());
+        if self.settings.close_update(release, league) {
+            self.settings_file.save(&self.settings);
+        }
+    }
+
+    /// Gives an update closed before the leagues were known the league of the moment, once
+    /// known.
+    fn settle_closed_update(&mut self) {
+        let league = LeagueOfTheMoment::of(self.session.leagues());
+        if self.settings.settle_closed_update(league) {
             self.settings_file.save(&self.settings);
         }
     }
@@ -696,17 +700,7 @@ impl App for ExileMarketApp {
         self.market.price(self.session.league());
         self.update_check
             .receive(|release| self.release = Some(release));
-        // An update closed before the leagues were known takes the league of the moment.
-        if self
-            .settings
-            .closed_update()
-            .is_some_and(|closed| closed.league.is_none())
-        {
-            let league = self.league_of_the_moment().map(str::to_owned);
-            if self.settings.settle_closed_update(league.as_deref()) {
-                self.settings_file.save(&self.settings);
-            }
-        }
+        self.settle_closed_update();
         self.item_names.receive(|names| {
             if self.session.apply_item_names(names) {
                 self.filters.forget_stats();

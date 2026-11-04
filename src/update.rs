@@ -6,6 +6,7 @@ use std::fmt;
 use serde::{Deserialize, Serialize};
 
 use crate::http::{self, HttpError};
+use crate::league::Leagues;
 use crate::worker::{OnDrop, Worker};
 
 /// The repository of the application, e.g. `https://github.com/aunimhsn/rust-exile-market`.
@@ -57,12 +58,35 @@ pub struct Release {
     pub page: String,
 }
 
+/// The league of the moment as the application knows it, which brings back the bubble of an
+/// update the player closed once it changes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LeagueOfTheMoment<'a> {
+    /// The leagues aren't known yet.
+    Unknown,
+    /// Between two leagues: none has started.
+    Between,
+    /// The name of the first current league (softcore and hardcore alike).
+    League(&'a str),
+}
+
+impl<'a> LeagueOfTheMoment<'a> {
+    /// The league of the moment among `leagues`, once known.
+    #[must_use]
+    pub fn of(leagues: Option<&'a Leagues>) -> Self {
+        match leagues {
+            None => Self::Unknown,
+            Some(leagues) => leagues.of_the_moment().map_or(Self::Between, Self::League),
+        }
+    }
+}
+
 /// The bubble of an update the player closed: its version, and the league of the moment then.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ClosedUpdate {
     pub version: String,
-    /// The first current league of the price database when it was closed (its name, softcore
-    /// and hardcore alike); none when the leagues weren't known yet.
+    /// The league of the moment when it was closed: its name, empty between two leagues; none
+    /// when the leagues weren't known yet.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub league: Option<String>,
 }
@@ -70,10 +94,19 @@ pub struct ClosedUpdate {
 impl ClosedUpdate {
     /// Closed for `release` during `league`.
     #[must_use]
-    pub fn new(release: &Release, league: Option<&str>) -> Self {
+    pub fn new(release: &Release, league: LeagueOfTheMoment) -> Self {
         Self {
             version: release.version.to_string(),
-            league: league.map(str::to_owned),
+            league: Self::stored(league),
+        }
+    }
+
+    /// How `league` is saved: an empty name between two leagues, which no league has.
+    fn stored(league: LeagueOfTheMoment) -> Option<String> {
+        match league {
+            LeagueOfTheMoment::Unknown => None,
+            LeagueOfTheMoment::Between => Some(String::new()),
+            LeagueOfTheMoment::League(name) => Some(name.to_owned()),
         }
     }
 
@@ -81,24 +114,22 @@ impl ClosedUpdate {
     /// it comes back for a newer version, and once a new league has started. Closed before the
     /// leagues were known, it stays closed for any league until it takes one ([`Self::settle`]).
     #[must_use]
-    pub fn hides(&self, release: &Release, league: Option<&str>) -> bool {
+    pub fn hides(&self, release: &Release, league: LeagueOfTheMoment) -> bool {
         Version::parse(&self.version) == Some(release.version)
             && match (&self.league, league) {
-                (Some(closed), Some(league)) => closed == league,
+                (Some(closed), LeagueOfTheMoment::League(league)) => closed == league,
                 _ => true,
             }
     }
 
-    /// Takes `league` as its league, when it was closed before the leagues were known; whether
-    /// it changed.
-    pub fn settle(&mut self, league: Option<&str>) -> bool {
-        match (&self.league, league) {
-            (None, Some(league)) => {
-                self.league = Some(league.to_owned());
-                true
-            }
-            _ => false,
+    /// Takes `league` as its league, once known, when it was closed before the leagues were
+    /// known; whether it changed.
+    pub fn settle(&mut self, league: LeagueOfTheMoment) -> bool {
+        if self.league.is_some() || league == LeagueOfTheMoment::Unknown {
+            return false;
         }
+        self.league = Self::stored(league);
+        true
     }
 }
 
@@ -166,20 +197,16 @@ fn check(
         log::info!("Update check: {running} is the latest version");
         return None;
     }
-    let page = release_page(REPOSITORY, &tag)?;
+    let page = release_page(REPOSITORY, &tag);
     log::info!("Update check: {version} is available");
     Some(Release { version, page })
 }
 
 /// The tag of the latest release; none while there is no release (GitHub answers 404).
 fn latest_tag() -> Result<Option<String>, HttpError> {
-    let Some(url) = latest_release_api(REPOSITORY) else {
-        log::warn!("Update check: the repository {REPOSITORY} isn't on GitHub");
-        return Ok(None);
-    };
     let agent = http::agent();
     let answer = agent
-        .get(&url)
+        .get(latest_release_api(REPOSITORY))
         .header("Accept", "application/vnd.github+json")
         .call();
     let mut response = match answer {
@@ -192,22 +219,21 @@ fn latest_tag() -> Result<Option<String>, HttpError> {
     Ok(Some(latest.tag_name))
 }
 
-/// The address of the API of the latest release of `repository`, a repository on GitHub.
-fn latest_release_api(repository: &str) -> Option<String> {
-    let path = repository.strip_prefix(GITHUB)?.trim_end_matches('/');
-    Some(format!("{GITHUB_API}{path}/releases/latest"))
+/// The address of the API of the latest release of `repository`, a repository on GitHub (a
+/// test checks that the application's is).
+fn latest_release_api(repository: &str) -> String {
+    let path = repository.trim_start_matches(GITHUB).trim_end_matches('/');
+    format!("{GITHUB_API}{path}/releases/latest")
 }
 
 /// The page of the release `tag` of `repository`, built rather than read from the answer, so
-/// that the link can only open the repository of the application; none for a repository
-/// elsewhere than on GitHub.
-fn release_page(repository: &str, tag: &str) -> Option<String> {
-    repository.strip_prefix(GITHUB)?;
-    Some(format!(
+/// that the link can only open the repository of the application.
+fn release_page(repository: &str, tag: &str) -> String {
+    format!(
         "{}/releases/tag/{}",
         repository.trim_end_matches('/'),
         http::encode(tag)
-    ))
+    )
 }
 
 #[cfg(test)]
@@ -285,50 +311,91 @@ mod tests {
     #[test]
     fn the_api_and_the_page_come_from_the_repository() {
         assert_eq!(
-            latest_release_api("https://github.com/owner/app/").as_deref(),
-            Some("https://api.github.com/repos/owner/app/releases/latest")
+            latest_release_api("https://github.com/owner/app/"),
+            "https://api.github.com/repos/owner/app/releases/latest"
         );
-        assert_eq!(latest_release_api("https://gitlab.com/owner/app"), None);
         assert_eq!(
-            release_page("https://github.com/owner/app", "v1.0.0 rc").as_deref(),
-            Some("https://github.com/owner/app/releases/tag/v1.0.0%20rc")
+            release_page("https://github.com/owner/app", "v1.0.0 rc"),
+            "https://github.com/owner/app/releases/tag/v1.0.0%20rc"
         );
-        assert_eq!(release_page("https://example.com/app", "v1.0.0"), None);
+    }
+
+    #[test]
+    fn the_repository_of_the_application_is_on_github() {
+        // The API and the page of the releases are those of GitHub.
+        assert!(REPOSITORY.starts_with(GITHUB), "{REPOSITORY}");
+    }
+
+    const ABYSS: LeagueOfTheMoment = LeagueOfTheMoment::League("Rise of the Abyssal");
+    const ALDUR: LeagueOfTheMoment = LeagueOfTheMoment::League("Runes of Aldur");
+
+    #[test]
+    fn the_league_of_the_moment_tells_unknown_leagues_from_none_current() {
+        use crate::league::League;
+
+        assert_eq!(LeagueOfTheMoment::of(None), LeagueOfTheMoment::Unknown);
+        let permanent = Leagues::new(["Standard", "Hardcore"].map(League::new));
+        assert_eq!(
+            LeagueOfTheMoment::of(Some(&permanent)),
+            LeagueOfTheMoment::Between
+        );
+        let current = Leagues::new(["Rise of the Abyssal", "Standard"].map(League::new));
+        assert_eq!(LeagueOfTheMoment::of(Some(&current)), ABYSS);
     }
 
     #[test]
     fn a_closed_bubble_stays_closed_for_its_version_during_its_league() {
-        let closed = ClosedUpdate::new(&release("0.2.0"), Some("Rise of the Abyssal"));
+        let closed = ClosedUpdate::new(&release("0.2.0"), ABYSS);
 
-        assert!(closed.hides(&release("0.2.0"), Some("Rise of the Abyssal")));
-        // The leagues not known yet at this launch.
-        assert!(closed.hides(&release("0.2.0"), None));
+        assert!(closed.hides(&release("0.2.0"), ABYSS));
+        // The leagues not known yet at this launch, or the league over.
+        assert!(closed.hides(&release("0.2.0"), LeagueOfTheMoment::Unknown));
+        assert!(closed.hides(&release("0.2.0"), LeagueOfTheMoment::Between));
     }
 
     #[test]
     fn a_closed_bubble_comes_back_for_a_newer_version() {
-        let closed = ClosedUpdate::new(&release("0.2.0"), Some("Rise of the Abyssal"));
+        let closed = ClosedUpdate::new(&release("0.2.0"), ABYSS);
 
-        assert!(!closed.hides(&release("0.2.1"), Some("Rise of the Abyssal")));
+        assert!(!closed.hides(&release("0.2.1"), ABYSS));
     }
 
     #[test]
     fn a_closed_bubble_comes_back_when_a_new_league_starts() {
-        let closed = ClosedUpdate::new(&release("0.2.0"), Some("Rise of the Abyssal"));
+        let closed = ClosedUpdate::new(&release("0.2.0"), ABYSS);
 
-        assert!(!closed.hides(&release("0.2.0"), Some("Runes of Aldur")));
+        assert!(!closed.hides(&release("0.2.0"), ALDUR));
+    }
+
+    #[test]
+    fn a_bubble_closed_between_two_leagues_comes_back_when_the_next_one_starts() {
+        let mut closed = ClosedUpdate::new(&release("0.2.0"), LeagueOfTheMoment::Between);
+        assert!(closed.hides(&release("0.2.0"), LeagueOfTheMoment::Between));
+
+        assert!(!closed.settle(ALDUR));
+
+        assert!(!closed.hides(&release("0.2.0"), ALDUR));
     }
 
     #[test]
     fn a_bubble_closed_before_the_leagues_takes_the_first_league_that_arrives() {
-        let mut closed = ClosedUpdate::new(&release("0.2.0"), None);
-        assert!(closed.hides(&release("0.2.0"), Some("Rise of the Abyssal")));
+        let mut closed = ClosedUpdate::new(&release("0.2.0"), LeagueOfTheMoment::Unknown);
+        assert!(closed.hides(&release("0.2.0"), ABYSS));
 
-        assert!(!closed.settle(None));
-        assert!(closed.settle(Some("Rise of the Abyssal")));
-        assert!(!closed.settle(Some("Runes of Aldur")));
+        assert!(!closed.settle(LeagueOfTheMoment::Unknown));
+        assert!(closed.settle(ABYSS));
+        assert!(!closed.settle(ALDUR));
 
-        assert!(!closed.hides(&release("0.2.0"), Some("Runes of Aldur")));
+        assert!(!closed.hides(&release("0.2.0"), ALDUR));
+    }
+
+    #[test]
+    fn a_bubble_closed_before_the_leagues_known_between_two_comes_back_with_the_next() {
+        let mut closed = ClosedUpdate::new(&release("0.2.0"), LeagueOfTheMoment::Unknown);
+
+        assert!(closed.settle(LeagueOfTheMoment::Between));
+
+        assert!(!closed.hides(&release("0.2.0"), ALDUR));
     }
 
     #[test]
@@ -338,6 +405,6 @@ mod tests {
             league: None,
         };
 
-        assert!(!closed.hides(&release("0.2.0"), None));
+        assert!(!closed.hides(&release("0.2.0"), LeagueOfTheMoment::Unknown));
     }
 }
