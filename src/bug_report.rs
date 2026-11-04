@@ -77,7 +77,8 @@ pub struct Report {
     item: Option<JoinedItem>,
     /// The log of this session; none when it can't be read.
     log: Option<Vec<LogLine>>,
-    /// The log of the previous session; none in the first session, or when it can't be read.
+    /// The log of the previous session; none in the first session, when it couldn't be kept at
+    /// the start, when it is empty, or when it can't be read.
     previous_log: Option<Vec<LogLine>>,
     session: LogSession,
     join_item: bool,
@@ -120,8 +121,6 @@ impl Report {
                 .map(short),
         );
         let previous = crate::logging::previous_path().and_then(|path| match read_log(&path) {
-            // A session stopped before its first line has nothing to show.
-            Ok(log) if log.trim().is_empty() => None,
             Ok(log) => Some(log),
             // The first session.
             Err(error) if error.kind() == io::ErrorKind::NotFound => None,
@@ -161,8 +160,11 @@ impl Report {
     }
 
     /// The report with the log of the previous session, `lines`, chosen at once when that session
-    /// `crashed`.
+    /// `crashed`; a session stopped before its first line has nothing to show, nor to choose.
     fn with_previous(mut self, lines: Vec<LogLine>, crashed: bool) -> Self {
+        if lines.iter().all(|line| line.text.trim().is_empty()) {
+            return self;
+        }
         self.previous_log = Some(lines);
         if crashed {
             self.choose(LogSession::Previous);
@@ -200,7 +202,8 @@ impl Report {
         self.opening
     }
 
-    /// Whether the log of the previous session can be chosen: not in the first session.
+    /// Whether the log of the previous session can be chosen: not in the first session, nor when
+    /// that log couldn't be kept at the start, or is empty.
     #[must_use]
     pub fn has_previous(&self) -> bool {
         self.previous_log.is_some()

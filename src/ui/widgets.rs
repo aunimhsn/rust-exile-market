@@ -310,23 +310,55 @@ mod segmented {
 }
 
 /// The slide of the white pill of two pills joined, kept from one frame to the next.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 struct Slide {
     /// Where it started: 0 under the first pill, 1 under the second, or between.
     from: f32,
-    /// Where it goes.
-    to: f32,
-    /// When it started, in seconds of `egui::InputState::time`.
+    /// Whether it goes to the second pill.
+    to_second: bool,
+    /// When it started, in seconds of `egui::InputState::time`; minus infinity for a pill placed
+    /// at once.
     start: f64,
 }
 
 impl Slide {
+    /// The white pill placed at once under the second pill, or the first.
+    fn placed(second: bool) -> Self {
+        Self {
+            from: f32::from(u8::from(second)),
+            to_second: second,
+            start: f64::NEG_INFINITY,
+        }
+    }
+
+    /// The slide toward the second pill, or the first, at `now`: the same one when it already
+    /// goes there, else a new one from where the pill stands.
+    fn toward(self, to_second: bool, now: f64) -> Self {
+        if self.to_second == to_second {
+            self
+        } else {
+            Self {
+                from: self.at(now),
+                to_second,
+                start: now,
+            }
+        }
+    }
+
     /// Where the white pill stands at `now`.
     fn at(self, now: f64) -> f32 {
-        // A few tenths of a second: no precision lost that matters.
+        // Any duration, infinite for a pill placed at once: clamped after, so no precision
+        // lost that matters.
         #[expect(clippy::cast_possible_truncation)]
         let elapsed = (now - self.start) as f32;
-        slide_at(self.from, self.to, elapsed / super::theme::motion::SLIDE)
+        let to = f32::from(u8::from(self.to_second));
+        slide_at(self.from, to, elapsed / super::theme::motion::SLIDE)
+    }
+
+    /// Whether it is still on its way at `now`, told by the time: never for a pill placed at
+    /// once.
+    fn sliding(self, now: f64) -> bool {
+        now - self.start < f64::from(super::theme::motion::SLIDE)
     }
 }
 
@@ -339,13 +371,13 @@ fn slide_at(from: f32, to: f32, progress: f32) -> f32 {
 /// Two pills joined on the dark of the controls, `labels`, the one of `chosen` (0 or 1) white
 /// like the main action; at a click, the white pill slides to the other one (`motion::SLIDE`)
 /// from where it stands, even in the middle of a slide, and is placed at once the first time
-/// `id` is drawn. `group` names the choice for the screen readers ("Log"). The pill clicked, if
-/// another one.
+/// `id` is drawn. `spoken` is what a screen reader says of each pill ("Log: This session"). The
+/// pill clicked, if another one.
 pub fn segmented(
     ui: &mut Ui,
     id: egui::Id,
-    group: &str,
     labels: [&str; 2],
+    spoken: &[String; 2],
     chosen: usize,
 ) -> Option<usize> {
     use segmented::{INSET, PADDING};
@@ -368,37 +400,23 @@ pub fn segmented(
     let responses = [0, 1].map(|index| {
         let response = ui.interact(pills[index], id.with(index), Sense::click());
         response.widget_info(|| {
-            WidgetInfo::selected(
-                Role::RadioButton,
-                true,
-                index == chosen,
-                format!("{group}: {}", labels[index]),
-            )
+            WidgetInfo::selected(Role::RadioButton, true, index == chosen, &spoken[index])
         });
         response
     });
 
-    // 0 under the first pill, 1 under the second.
-    let target = if chosen == 1 { 1.0 } else { 0.0 };
+    let to_second = chosen == 1;
     let now = ui.input(|input| input.time);
-    let t = ui.data_mut(|data| {
-        let slide = data.get_temp_mut_or_insert_with(id, || Slide {
-            from: target,
-            to: target,
-            start: f64::NEG_INFINITY,
-        });
-        if (slide.to - target).abs() > f32::EPSILON {
-            *slide = Slide {
-                from: slide.at(now),
-                to: target,
-                start: now,
-            };
-        }
-        slide.at(now)
+    let slide = ui.data_mut(|data| {
+        let slide = data.get_temp_mut_or_insert_with(id, || Slide::placed(to_second));
+        *slide = slide.toward(to_second, now);
+        *slide
     });
-    if (t - target).abs() > f32::EPSILON {
+    if slide.sliding(now) {
         ui.ctx().request_repaint();
     }
+    // 0 under the first pill, 1 under the second.
+    let t = slide.at(now);
 
     let painter = ui.painter();
     let radius = CornerRadius::same(size::RADIUS);
@@ -409,7 +427,7 @@ pub fn segmented(
     );
     // Dimmed a little when the pill chosen has the focus of the keyboard.
     let fill = if responses[chosen.min(1)].has_focus() {
-        color::ACCENT.lerp_to_gamma(Color32::BLACK, 0.12)
+        color::ACCENT_DIMMED
     } else {
         color::ACCENT
     };
@@ -440,28 +458,26 @@ mod tests {
 
     #[test]
     fn the_white_pill_is_placed_at_once_the_first_time() {
-        let placed = Slide {
-            from: 1.0,
-            to: 1.0,
-            start: f64::NEG_INFINITY,
-        };
+        let placed = Slide::placed(true);
 
         assert!((placed.at(0.0) - 1.0).abs() < f32::EPSILON);
+        assert!(!placed.sliding(0.0));
+    }
+
+    #[test]
+    fn the_same_target_keeps_the_slide() {
+        let going = Slide::placed(false).toward(true, 10.0);
+
+        assert_eq!(going.toward(true, 10.1), going, "a frame drawn again");
+        assert!(going.sliding(10.1));
+        assert!(!going.sliding(10.3), "over after its time");
     }
 
     #[test]
     fn a_slide_turned_back_starts_from_where_the_pill_stands() {
-        let going = Slide {
-            from: 0.0,
-            to: 1.0,
-            start: 10.0,
-        };
+        let going = Slide::placed(false).toward(true, 10.0);
         let midway = going.at(10.066);
-        let back = Slide {
-            from: midway,
-            to: 0.0,
-            start: 10.066,
-        };
+        let back = going.toward(false, 10.066);
 
         assert!(midway > 0.5 && midway < 1.0, "{midway}");
         assert!((back.at(10.066) - midway).abs() < f32::EPSILON, "no jump");

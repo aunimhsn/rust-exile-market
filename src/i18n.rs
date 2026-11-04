@@ -543,6 +543,7 @@ const STATUS_UPDATE: &str = "status-update";
 const HOTKEY_TAKEN: &str = "hotkey-taken";
 const HOTKEY_TAKEN_SETTINGS: &str = "hotkey-taken-settings";
 const BUG_REPORT_JOIN_ITEM: &str = "bug-report-join-item";
+const BUG_REPORT_LOG_SESSION: &str = "bug-report-log-session";
 const STATUS_PRICES: &str = "status-prices";
 const STATUS_PRICES_OFFLINE: &str = "status-prices-offline";
 const PRICES_UNREACHABLE: &str = "prices-unreachable";
@@ -1114,6 +1115,14 @@ impl Translator {
         self.format(BUG_REPORT_JOIN_ITEM, Some(&args))
     }
 
+    /// What a screen reader says of a pill of the choice of the log, `session` its word.
+    #[must_use]
+    pub fn bug_report_log_session(&self, session: &str) -> String {
+        let mut args = FluentArgs::new();
+        args.set("session", session);
+        self.format(BUG_REPORT_LOG_SESSION, Some(&args))
+    }
+
     /// The key of the hotkey taken by another application, in the settings, on the line after
     /// [`Self::hotkey_taken`]: where to choose another, and the keys that still `copy`.
     #[must_use]
@@ -1299,6 +1308,7 @@ mod tests {
                 HOTKEY_TAKEN,
                 HOTKEY_TAKEN_SETTINGS,
                 BUG_REPORT_JOIN_ITEM,
+                BUG_REPORT_LOG_SESSION,
                 STATUS_PRICES,
                 STATUS_PRICES_OFFLINE,
                 PRICES_UNREACHABLE,
@@ -1425,6 +1435,12 @@ mod tests {
             }
             assert_ne!(translator.status_bar("A", "B"), "", "{language:?}");
             assert_ne!(translator.league_tooltip("A"), "", "{language:?}");
+            assert!(
+                translator
+                    .bug_report_log_session("Session")
+                    .contains("Session"),
+                "{language:?}"
+            );
             assert!(
                 translator.new_league("League").contains("League"),
                 "{language:?}"

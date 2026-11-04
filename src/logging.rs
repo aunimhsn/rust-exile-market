@@ -35,10 +35,17 @@ struct Files {
 struct LogFile {
     path: PathBuf,
     file: File,
-    /// Whether the log of the previous session was kept.
-    previous_kept: bool,
-    /// Why the log of the previous session couldn't be kept, if it couldn't.
-    rotation_error: Option<io::Error>,
+    rotation: Rotation,
+}
+
+/// What became of the log of the previous session at the start.
+enum Rotation {
+    /// Kept next to the log of this session.
+    Kept,
+    /// The first session: no previous log.
+    None,
+    /// It couldn't be renamed: the file next to it would be the log of an older session.
+    Failed(io::Error),
 }
 
 /// Starts the log, and logs the panics. Without a log file (a folder that can't be written),
@@ -66,24 +73,20 @@ pub fn init() {
             config,
             log_file.file,
         ))));
-        (
-            log_file.path,
-            log_file.previous_kept,
-            log_file.rotation_error,
-        )
+        (log_file.path, log_file.rotation)
     });
     if CombinedLogger::init(loggers).is_err() {
         // A logger is already installed: keep it.
         return;
     }
     match log_file {
-        Ok((path, previous_kept, rotation_error)) => {
+        Ok((path, rotation)) => {
             log::info!("Log file: {}", without_home(&path).display());
             let _ = FILES.set(Files {
                 path,
-                previous_kept,
+                previous_kept: matches!(rotation, Rotation::Kept),
             });
-            if let Some(error) = rotation_error {
+            if let Rotation::Failed(error) = rotation {
                 log::warn!("The log of the previous session couldn't be kept: {error}");
             }
         }
@@ -155,7 +158,8 @@ pub fn previous_path() -> Option<PathBuf> {
         .map(|files| files.path.with_file_name(PREVIOUS_FILE_NAME))
 }
 
-/// The last message of a session closed by the player; a log that ends otherwise tells a crash.
+/// The message written once at the end of a session closed by the player; a log without it
+/// tells a crash.
 #[must_use]
 pub fn closed_message() -> String {
     format!("{} closed", crate::APP_NAME)
@@ -172,19 +176,16 @@ fn open_file() -> io::Result<LogFile> {
     })?;
     fs::create_dir_all(&directory)?;
     let path = directory.join(FILE_NAME);
-    let (previous_kept, rotation_error) =
-        match fs::rename(&path, directory.join(PREVIOUS_FILE_NAME)) {
-            Ok(()) => (true, None),
-            // The first session: no previous log.
-            Err(error) if error.kind() == io::ErrorKind::NotFound => (false, None),
-            Err(error) => (false, Some(error)),
-        };
+    let rotation = match fs::rename(&path, directory.join(PREVIOUS_FILE_NAME)) {
+        Ok(()) => Rotation::Kept,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Rotation::None,
+        Err(error) => Rotation::Failed(error),
+    };
     let file = File::create(&path)?;
     Ok(LogFile {
         path,
         file,
-        previous_kept,
-        rotation_error,
+        rotation,
     })
 }
 

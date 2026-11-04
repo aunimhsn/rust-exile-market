@@ -25,6 +25,9 @@ pub mod color {
     pub const FAINT: Color32 = Color32::from_rgb(0x55, 0x60, 0x70);
     /// The main action: white, so that the colors keep their meaning.
     pub const ACCENT: Color32 = Color32::from_rgb(0xf2, 0xf5, 0xf9);
+    /// The accent 12 % darker: the white pill chosen with the focus of the keyboard, the
+    /// `brightness(.88)` of the main pill under the pointer in the mock-up.
+    pub const ACCENT_DIMMED: Color32 = Color32::from_rgb(0xd5, 0xd8, 0xdb);
     /// The icons and marks drawn on the accent.
     pub const ON_ACCENT: Color32 = BAND_A;
     /// The warning band under the title bar: dark yellow, apart from the league colors.
@@ -471,5 +474,17 @@ mod tests {
                 .windows(2)
                 .all(|pair| pair[0] <= pair[1] && pair[1] <= 1.0)
         );
+    }
+
+    #[test]
+    fn the_dimmed_accent_is_the_accent_twelve_percent_darker() {
+        let darker = color::ACCENT.lerp_to_gamma(egui::Color32::BLACK, 0.12);
+        for (dimmed, darker) in color::ACCENT_DIMMED
+            .to_array()
+            .iter()
+            .zip(darker.to_array())
+        {
+            assert!(dimmed.abs_diff(darker) <= 1, "{dimmed} {darker}");
+        }
     }
 }

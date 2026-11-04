@@ -270,6 +270,7 @@ fn copy_the_log_copies_the_whole_log_of_the_session_chosen() {
         .with_previous(previous_log(2), false);
     let whole = report.whole_log().expect("log");
 
+    assert!(report.has_log());
     assert_eq!(whole.lines().count(), 500, "beyond the lines sent");
     assert!(whole.starts_with("18:48:03 INFO Item copied: Item Class: Belts 0000\n"));
     assert!(whole.ends_with("Belts 0499"));
@@ -301,7 +302,18 @@ fn copied_while_the_log_copied_is_chosen() {
 fn without_a_log_nothing_is_copied() {
     let report = Report::new("Exile Market 0.1.0".to_owned(), None, None);
 
+    assert!(!report.has_log());
     assert_eq!(report.whole_log(), None);
+}
+
+#[test]
+fn an_empty_previous_log_offers_no_choice() {
+    let mut report = Report::new("Exile Market 0.1.0".to_owned(), None, Some(log(3)))
+        .with_previous(vec![line(""), line("  ")], true);
+    report.choose(LogSession::Previous);
+
+    assert!(!report.has_previous());
+    assert_eq!(report.session(), LogSession::This);
 }
 
 #[test]

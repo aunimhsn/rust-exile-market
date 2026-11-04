@@ -100,7 +100,7 @@ const rpPreview = ({ first = false, previous = false, panic = false, item = "Hea
   const tx = (en, french) => (fr ? french : en);
   const names = [[!previous, tx("This session", "Cette session")], [previous, tx("The previous one", "La précédente")]];
   const sessions = first || choice === "tabs" ? "" : choice === "segmented"
-    ? `<span class="app-report-segmented" style="--slide: ${RP_MOTIONS[motion]}"><i class="app-report-thumb"></i>${names.map(([on, name]) => `<span class="${on ? "on" : ""}">${name}</span>`).join("")}</span>`
+    ? `<span class="app-report-segmented" style="--slide: ${RP_MOTIONS[motion]}"><i class="app-report-thumb"></i>${names.map(([on, name]) => `<span class="${on ? "on" : ""}" tabindex="0" role="radio" aria-checked="${on}">${name}</span>`).join("")}</span>`
     : `<span class="app-report-sessions">${names.map(([on, name]) => `<span class="radio ${on ? "on" : ""}"><i></i>${name}</span>`).join("")}</span>`;
   const tabs = !first && choice === "tabs"
     ? `<div class="app-report-tabs">${names.map(([on, name]) => `<span class="${on ? "on" : ""}">${name}</span>`).join("")}</div>`

@@ -61,5 +61,10 @@
 /* The white pill under the word chosen: one block that slides to the other word at a click, its width following
    the word; placed at once when the preview opens (`is-still`), never slid then. */
 .app-report-thumb { position: absolute; top: 2px; bottom: 2px; left: 0; width: 0; border-radius: var(--radius); background: var(--accent); transition: transform var(--slide), width var(--slide); }
+/* The word chosen: nothing to click; with the focus of the keyboard, the white pill 12 % darker, like the main pill
+   under the pointer. */
+.app-report-segmented span.on { cursor: default; }
+.app-report-segmented:has(span.on:focus-visible) .app-report-thumb { filter: brightness(.88); }
+.app-report-segmented span:focus-visible { outline: none; }
 .app-report-segmented.is-still .app-report-thumb, .app-report-segmented.is-still span { transition: none; }
 @media (prefers-reduced-motion: reduce) { .app-report-thumb, .app-report-segmented span { transition: none; } }

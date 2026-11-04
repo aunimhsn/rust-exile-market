@@ -32,6 +32,13 @@ window.addEventListener("load", () => document.fonts.ready.then(() => {
     segmented.classList.remove("is-still");
   }
 }));
+// Enter or Space on a word with the focus of the keyboard chooses it, like a click.
+document.addEventListener("keydown", event => {
+  if ((event.key === "Enter" || event.key === " ") && event.target.closest?.(".app-report-segmented span")) {
+    event.preventDefault();
+    event.target.click();
+  }
+});
 document.addEventListener("click", event => {
   const word = event.target.closest(".app-report-segmented span");
   if (!word || word.classList.contains("on")) return;

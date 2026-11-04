@@ -472,6 +472,8 @@ bug-report-log-note = Its last lines. The other windows are written “another w
 # previous session, chosen at once after a crash.
 bug-report-this-session = This session
 bug-report-previous-session = The previous one
+# What a screen reader says of one of these pills, $session its word.
+bug-report-log-session = Log: { $session }
 # In place of the lines of the log, when it can't be read.
 bug-report-no-log = The log can't be read.
 # Checkbox that joins the item shown to the report, $name its name, in bold after the colon; a long name is cut with "…".

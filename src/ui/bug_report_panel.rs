@@ -188,14 +188,17 @@ impl<'a> BugReportPanel<'a> {
             .horizontal(|ui| {
                 self.label_text(ui, Message::BugReportLog);
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    let words = [
+                        self.i18n.text(Message::BugReportThisSession),
+                        self.i18n.text(Message::BugReportPreviousSession),
+                    ];
                     widgets::segmented(
                         ui,
                         ui.make_persistent_id(("bug-report-session", self.report.opening())),
-                        &self.i18n.text(Message::BugReportLog),
-                        [
-                            &self.i18n.text(Message::BugReportThisSession),
-                            &self.i18n.text(Message::BugReportPreviousSession),
-                        ],
+                        [&words[0], &words[1]],
+                        &words
+                            .each_ref()
+                            .map(|word| self.i18n.bug_report_log_session(word)),
                         chosen,
                     )
                 })

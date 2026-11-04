@@ -481,6 +481,8 @@ bug-report-log-note = Ses dernières lignes. Les autres fenêtres sont écrites 
 # de la session précédente, choisi d'office après un plantage.
 bug-report-this-session = Cette session
 bug-report-previous-session = La précédente
+# Ce qu'un lecteur d'écran dit de l'une de ces pastilles, $session son mot.
+bug-report-log-session = Journal : { $session }
 # À la place des lignes du journal, quand il ne peut pas être lu.
 bug-report-no-log = Le journal ne peut pas être lu.
 # Case qui joint l'objet affiché au rapport, $name son nom, en gras après les deux-points ; un nom long est coupé par « … ».
