@@ -38,7 +38,7 @@ tail -f ~/.local/state/exile-market/exile-market.log
 4. **Ctrl+G, choisi dans la liste** : dans les réglages, choisis `Ctrl+G`. Puis dans le jeu, **Ctrl+G** sur un objet de ton inventaire, puis **Ctrl+D** sur un autre.
    ✅ La liste se ferme et le bouton montre `Ctrl+G`. Le journal dit « Price-check hotkey changed from Ctrl+D to Ctrl+G », puis, le jeu au premier plan, « Price-check hotkey Ctrl+G listened to while the game is the active window ». Ctrl+G ouvre la fenêtre par-dessus le jeu avec le prix ; Ctrl+D ne copie plus rien (le jeu le reçoit).
 
-5. **Gardé au lancement suivant** : ferme Exile Market, regarde le fichier des réglages, relance-le.
+5. **Gardé au lancement suivant** : ferme Exile Market, regarde le fichier des réglages, copie un mot quelconque (dans un éditeur de texte, pas un objet du jeu), puis relance-le : sinon l'objet resté dans le presse-papiers s'affiche au lancement et la fenêtre n'est pas vide.
    ✅ Le fichier dit `keys = "Ctrl+G"` ; au lancement, le journal dit « Price-check hotkey: Ctrl+G », la fenêtre vide invite à copier avec `Ctrl` + `G`, et Ctrl+G copie dans le jeu.
 
 6. **Alt+G** : choisis `Alt+G`, puis dans le jeu **Alt+G** sur un objet, puis sur trois objets en tenant Alt. Alt lâché, survole un objet.

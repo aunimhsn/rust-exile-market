@@ -29,6 +29,7 @@ pub enum Message {
     LeagueModeHardcore,
     LeagueLoading,
     NewLeagueSwitch,
+    UpdateDownload,
     HomeTooltip,
     SettingsTooltip,
     MinimizeTooltip,
@@ -184,11 +185,12 @@ pub enum Message {
 impl Message {
     /// Every message, for the tests.
     #[cfg(test)]
-    const ALL: [Self; 138] = [
+    const ALL: [Self; 139] = [
         Self::LeagueModeSoftcore,
         Self::LeagueModeHardcore,
         Self::LeagueLoading,
         Self::NewLeagueSwitch,
+        Self::UpdateDownload,
         Self::HomeTooltip,
         Self::SettingsTooltip,
         Self::MinimizeTooltip,
@@ -333,6 +335,7 @@ impl Message {
             Self::LeagueModeHardcore => "league-mode-hardcore",
             Self::LeagueLoading => "league-loading",
             Self::NewLeagueSwitch => "new-league-switch",
+            Self::UpdateDownload => "update-download",
             Self::HomeTooltip => "home-tooltip",
             Self::SettingsTooltip => "settings-tooltip",
             Self::MinimizeTooltip => "minimize-tooltip",
@@ -493,6 +496,8 @@ const STATUS_BAR: &str = "status-bar";
 const LEAGUE_TOOLTIP: &str = "league-tooltip";
 const STATUS_AUTHOR: &str = "status-author";
 const NEW_LEAGUE: &str = "new-league";
+const UPDATE_AVAILABLE: &str = "update-available";
+const STATUS_UPDATE: &str = "status-update";
 const HOTKEY_TAKEN: &str = "hotkey-taken";
 const HOTKEY_TAKEN_SETTINGS: &str = "hotkey-taken-settings";
 const STATUS_PRICES: &str = "status-prices";
@@ -1025,6 +1030,23 @@ impl Translator {
         self.format(NEW_LEAGUE, Some(&args))
     }
 
+    /// The bubble of a newer version: "Exile Market 0.2.0 is available."
+    #[must_use]
+    pub fn update_available(&self, app: &str, version: &str) -> String {
+        let mut args = FluentArgs::new();
+        args.set("app", app);
+        args.set("version", version);
+        self.format(UPDATE_AVAILABLE, Some(&args))
+    }
+
+    /// A newer version in the status bar of the settings, a link: "0.2.0 available".
+    #[must_use]
+    pub fn status_update(&self, version: &str) -> String {
+        let mut args = FluentArgs::new();
+        args.set("version", version);
+        self.format(STATUS_UPDATE, Some(&args))
+    }
+
     /// The key of the hotkey taken by another application, under the invitation of the empty
     /// window: "Ctrl+D is taken by another application."
     #[must_use]
@@ -1214,6 +1236,8 @@ mod tests {
                 LEAGUE_TOOLTIP,
                 STATUS_AUTHOR,
                 NEW_LEAGUE,
+                UPDATE_AVAILABLE,
+                STATUS_UPDATE,
                 HOTKEY_TAKEN,
                 HOTKEY_TAKEN_SETTINGS,
                 STATUS_PRICES,

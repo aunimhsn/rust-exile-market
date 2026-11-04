@@ -66,7 +66,8 @@ impl ClickWatch {
             log::warn!("The clicks in the game can't be read: {error}");
             if outbox.send(Read::Unreadable) {
                 wake();
-                // Ends when the application stops it, so that the end isn't taken for a crash.
+                // Ends when the application stops it: a lasting thread that ends by itself is
+                // logged as lost, while the warning above already says why.
                 while outbox.wait_for_order(IDLE_WAIT) != Waited::Stop {}
             }
         });
@@ -86,8 +87,8 @@ impl ClickWatch {
     }
 
     /// Gives each click since the last call to `handle`, without waiting; `false` once the
-    /// clicks can no longer be read (the X server out of reach, or the thread gone), which the
-    /// thread or the worker wrote to the log.
+    /// clicks can no longer be read (the X server out of reach, or the thread gone without being
+    /// asked to stop), which the thread or the worker wrote to the log.
     pub fn receive(&mut self, mut handle: impl FnMut(Point)) -> bool {
         let mut unreadable = false;
         let lost = self.worker.receive(|read| match read {

@@ -10,9 +10,13 @@ league-mode-hardcore = Hardcore
 league-tooltip = { $mode } · Changer de ligue
 # À la place de la ligue, avant que les ligues arrivent au premier lancement.
 league-loading = Chargement…
-# Bulle sous le bloc de la ligue, quand une nouvelle ligue a commencé : son nom, puis un bouton.
+# Bulle sous le bloc de la ligue, quand une nouvelle ligue a commencé : son nom, puis une pastille.
 new-league = { $league } a commencé.
 new-league-switch = Y aller
+# Bulle sous le bloc de la ligue, quand une version plus récente de l'application est sortie : sa version,
+# puis une pastille qui ouvre la page de la version.
+update-available = { $app } { $version } disponible.
+update-download = Télécharger
 # Infobulle de l'emblème, qui ramène à l'objet.
 home-tooltip = Accueil
 settings-tooltip = Réglages
@@ -36,6 +40,8 @@ status-trade = GGG trade { $age }
 status-trade-wait = GGG trade : prochaine recherche dans { $wait }
 # Pendant que les réglages sont ouverts : la version et l'auteur ; le site, en dernier, est un lien.
 status-author = { $app } { $version } · Créé par { $author } · { $site }
+# Réglages ouverts et une version plus récente sortie, après la version en cours : un lien vers sa page.
+status-update = { $version } disponible
 # Dans la fenêtre par-dessus le jeu, pendant la saisie d'un champ min ou max : les touches n'atteignent plus le jeu.
 status-keyboard = Les touches vont dans cette fenêtre · Entrée ou Échap : retour au jeu
 

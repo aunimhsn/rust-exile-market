@@ -142,7 +142,8 @@ impl MarketWatch {
     }
 
     /// Gives each event received since the last call to `handle`, without waiting. If the
-    /// thread ended by itself (a panic), the database counts as unreachable for good.
+    /// thread is found gone without being asked to stop (a panic), the database counts as
+    /// unreachable for good.
     pub fn receive(&mut self, mut handle: impl FnMut(MarketEvent)) {
         if self.worker.receive(&mut handle) {
             handle(MarketEvent::Unreachable(Source::Leagues));

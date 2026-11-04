@@ -13,6 +13,10 @@ league-loading = Loading…
 # Bubble under the league block, when a new league has started: its name, then a pill.
 new-league = { $league } has started.
 new-league-switch = Switch
+# Bubble under the league block, when a newer version of the application is out: its version, then a pill
+# that opens the page of the release.
+update-available = { $app } { $version } is available.
+update-download = Download
 # Tooltip of the emblem, which goes back to the item.
 home-tooltip = Home
 settings-tooltip = Settings
@@ -36,6 +40,8 @@ status-trade = GGG trade { $age }
 status-trade-wait = GGG trade: next search in { $wait }
 # While the settings are open: the version and the author; the site, last, is a link.
 status-author = { $app } { $version } · Made by { $author } · { $site }
+# While the settings are open and a newer version is out, after the running version: a link to its page.
+status-update = { $version } available
 # In the window over the game, while a min or max field is edited: the keys no longer reach the game.
 status-keyboard = Keys go to this window · Enter or Esc: back to the game
 

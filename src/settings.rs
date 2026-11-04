@@ -17,6 +17,7 @@ use crate::hotkey::Shortcut;
 use crate::language::Language;
 use crate::league::League;
 use crate::logging;
+use crate::update::{ClosedUpdate, LeagueOfTheMoment, Release};
 
 const FILE_NAME: &str = "settings.toml";
 const WINDOW_FILE_NAME: &str = "window.ron";
@@ -130,6 +131,8 @@ pub struct Settings {
     league: Option<League>,
     /// The new leagues whose bubble the player closed, or answered by choosing a league.
     closed_new_leagues: Vec<League>,
+    /// The last update whose bubble the player closed, and the league of the moment then.
+    closed_update: Option<ClosedUpdate>,
 }
 
 impl Settings {
@@ -175,6 +178,31 @@ impl Settings {
         }
         self.closed_new_leagues.push(league.clone());
         true
+    }
+
+    /// The last update whose bubble the player closed.
+    #[must_use]
+    pub fn closed_update(&self) -> Option<&ClosedUpdate> {
+        self.closed_update.as_ref()
+    }
+
+    /// Closes the bubble of `release` during `league`, the league of the moment; whether it
+    /// changed.
+    pub fn close_update(&mut self, release: &Release, league: LeagueOfTheMoment) -> bool {
+        let closed = Some(ClosedUpdate::new(release, league));
+        if self.closed_update == closed {
+            return false;
+        }
+        self.closed_update = closed;
+        true
+    }
+
+    /// Gives the update closed before the leagues were known `league`, the league of the
+    /// moment, once known; whether it changed.
+    pub fn settle_closed_update(&mut self, league: LeagueOfTheMoment) -> bool {
+        self.closed_update
+            .as_mut()
+            .is_some_and(|closed| closed.settle(league))
     }
 
     /// The level of the window: above the other windows when it is always on top.
@@ -386,6 +414,66 @@ mod tests {
 
         file.save(&settings);
 
+        assert_eq!(file.load(), settings);
+    }
+
+    fn release(version: &str) -> Release {
+        Release {
+            version: crate::update::Version::parse(version).expect("a version"),
+            page: String::new(),
+        }
+    }
+
+    #[test]
+    fn the_closed_update_is_saved_with_its_league() {
+        let directory = TestDirectory::new("closed-update");
+        let file = directory.file();
+        let mut settings = Settings::default();
+
+        let league = LeagueOfTheMoment::League("Rise of the Abyssal");
+        assert!(settings.close_update(&release("0.2.0"), league));
+        assert!(!settings.close_update(&release("0.2.0"), league));
+        file.save(&settings);
+
+        let table: toml::Table = toml::from_str(&toml::to_string(&settings).unwrap()).unwrap();
+        assert_eq!(table["closed_update"]["version"].as_str(), Some("0.2.0"));
+        assert_eq!(
+            table["closed_update"]["league"].as_str(),
+            Some("Rise of the Abyssal")
+        );
+        assert_eq!(file.load(), settings);
+    }
+
+    #[test]
+    fn an_update_closed_before_the_leagues_takes_the_league_of_the_moment() {
+        let abyss = LeagueOfTheMoment::League("Rise of the Abyssal");
+        let mut settings = Settings::default();
+        assert!(!settings.settle_closed_update(abyss));
+
+        settings.close_update(&release("0.2.0"), LeagueOfTheMoment::Unknown);
+
+        assert!(!settings.settle_closed_update(LeagueOfTheMoment::Unknown));
+        assert!(settings.settle_closed_update(abyss));
+        assert!(!settings.settle_closed_update(LeagueOfTheMoment::League("Runes of Aldur")));
+        assert_eq!(
+            settings
+                .closed_update()
+                .and_then(|closed| closed.league.as_deref()),
+            Some("Rise of the Abyssal")
+        );
+    }
+
+    #[test]
+    fn an_update_closed_between_two_leagues_is_saved_with_an_empty_league() {
+        let directory = TestDirectory::new("closed-update-between");
+        let file = directory.file();
+        let mut settings = Settings::default();
+
+        settings.close_update(&release("0.2.0"), LeagueOfTheMoment::Between);
+        file.save(&settings);
+
+        let table: toml::Table = toml::from_str(&toml::to_string(&settings).unwrap()).unwrap();
+        assert_eq!(table["closed_update"]["league"].as_str(), Some(""));
         assert_eq!(file.load(), settings);
     }
 

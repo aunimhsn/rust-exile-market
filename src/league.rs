@@ -159,6 +159,14 @@ impl Leagues {
             .cloned()
     }
 
+    /// The name of the league of the moment, the first current league (softcore and hardcore
+    /// share it); none between two leagues. A new league changes it, which brings back the
+    /// bubble of an update the player closed.
+    #[must_use]
+    pub fn of_the_moment(&self) -> Option<&str> {
+        self.current.first().map(League::name)
+    }
+
     fn first_current(&self, mode: LeagueMode) -> Option<League> {
         self.current
             .iter()
@@ -331,6 +339,17 @@ mod tests {
         );
         assert_eq!(
             leagues().new_league(&League::new("Forbidden Rites"), &[]),
+            None
+        );
+    }
+
+    #[test]
+    fn the_league_of_the_moment_is_the_first_current_one_whatever_its_mode() {
+        assert_eq!(leagues().of_the_moment(), Some("Forbidden Rites"));
+        let hardcore_first = Leagues::new(["HC Event", "Standard"].map(League::new));
+        assert_eq!(hardcore_first.of_the_moment(), Some("Event"));
+        assert_eq!(
+            Leagues::new(["Standard", "Hardcore"].map(League::new)).of_the_moment(),
             None
         );
     }

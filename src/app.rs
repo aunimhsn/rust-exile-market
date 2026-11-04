@@ -32,11 +32,12 @@ use crate::trade::ItemNamesWatch;
 use crate::trade::query::{SearchFilters, SearchKind};
 use crate::trade::search::{OfferSearch, Search};
 use crate::ui::{
-    self, BubbleAction, EmptyState, ItemBlock, ItemBlockAction, LeagueList, LeagueListAction,
-    NewLeagueBubble, OffersAction, OffersBlock, PriceBlock, PriceDownload, ResizeEdges,
+    self, Bubble, BubbleAction, EmptyState, ItemBlock, ItemBlockAction, LeagueList,
+    LeagueListAction, OffersAction, OffersBlock, PriceBlock, PriceDownload, ResizeEdges,
     SettingsPanel, Stats, StatusBar, TitleBar, TitleBarAction, TradeStatus, UnreadableItem,
     WarningBand,
 };
+use crate::update::{LeagueOfTheMoment, Release, UpdateCheck};
 
 /// What the window shows under the title bar.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -104,6 +105,12 @@ pub struct ExileMarketApp {
     scroll_to_top: bool,
     /// The sentence shown during the download of the prices of a league, drawn at its start.
     download_quote: Option<(League, usize)>,
+    /// The latest release, asked once at launch.
+    update_check: UpdateCheck,
+    /// A release newer than the running version, once GitHub told it.
+    release: Option<Release>,
+    /// Its page was opened from the bubble: the bubble is hidden until the next launch.
+    release_opened: bool,
 }
 
 impl ExileMarketApp {
@@ -122,6 +129,7 @@ impl ExileMarketApp {
         let search_ctx = creation.egui_ctx.clone();
         let hotkey_ctx = creation.egui_ctx.clone();
         let clicks_ctx = creation.egui_ctx.clone();
+        let update_ctx = creation.egui_ctx.clone();
         let clipboard = ClipboardWatch::start(move || clipboard_ctx.request_repaint());
         let hotkey = PriceCheckHotkey::start(
             clipboard.copy_marker(),
@@ -158,6 +166,9 @@ impl ExileMarketApp {
             filters: Filters::default(),
             scroll_to_top: false,
             download_quote: None,
+            update_check: UpdateCheck::start(move || update_ctx.request_repaint()),
+            release: None,
+            release_opened: false,
         }
     }
 
@@ -217,7 +228,41 @@ impl ExileMarketApp {
         }
     }
 
-    /// Draws the list of the leagues and the bubble of a new league over the window.
+    /// The newer release to offer in a bubble: not once its page was opened in this session,
+    /// nor while the player closed its bubble during the league of the moment.
+    fn offered_release(&self) -> Option<&Release> {
+        let league = LeagueOfTheMoment::of(self.session.leagues());
+        self.release.as_ref().filter(|release| {
+            !self.release_opened
+                && !self
+                    .settings
+                    .closed_update()
+                    .is_some_and(|closed| closed.hides(release, league))
+        })
+    }
+
+    /// Closes the bubble of the update for that version during the league of the moment.
+    fn close_update(&mut self) {
+        let Some(release) = &self.release else {
+            return;
+        };
+        let league = LeagueOfTheMoment::of(self.session.leagues());
+        if self.settings.close_update(release, league) {
+            self.settings_file.save(&self.settings);
+        }
+    }
+
+    /// Gives an update closed before the leagues were known the league of the moment, once
+    /// known.
+    fn settle_closed_update(&mut self) {
+        let league = LeagueOfTheMoment::of(self.session.leagues());
+        if self.settings.settle_closed_update(league) {
+            self.settings_file.save(&self.settings);
+        }
+    }
+
+    /// Draws the list of the leagues, and the bubbles of a new league and of an update, over
+    /// the window.
     fn league_overlays(&mut self, ctx: &Context, title_bar_action: Option<TitleBarAction>) {
         if let Some(leagues) = self.session.leagues() {
             let list = LeagueList::new(leagues.rows(), self.session.league(), &self.i18n);
@@ -238,12 +283,30 @@ impl ExileMarketApp {
         {
             return;
         }
-        let Some(league) = self.session.new_league().cloned() else {
+        let mut bottom = None;
+        if let Some(league) = self.session.new_league().cloned() {
+            let shown = Bubble::new_league(&league, &self.i18n).show(ctx);
+            bottom = Some(shown.bottom);
+            match shown.action {
+                Some(BubbleAction::Pill) => self.choose_league(league),
+                Some(BubbleAction::Close) => self.close_new_league(),
+                None => {}
+            }
+        }
+        // Under the bubble of a new league, aligned on its left.
+        let Some(release) = self.offered_release().cloned() else {
             return;
         };
-        match NewLeagueBubble::new(&league, &self.i18n).show(ctx) {
-            Some(BubbleAction::Switch) => self.choose_league(league),
-            Some(BubbleAction::Close) => self.close_new_league(),
+        let mut bubble = Bubble::update(release.version, &self.i18n);
+        if let Some(bottom) = bottom {
+            bubble = bubble.below(bottom);
+        }
+        match bubble.show(ctx).action {
+            Some(BubbleAction::Pill) => {
+                ctx.open_url(OpenUrl::new_tab(&release.page));
+                self.release_opened = true;
+            }
+            Some(BubbleAction::Close) => self.close_update(),
             None => {}
         }
     }
@@ -635,6 +698,9 @@ impl App for ExileMarketApp {
         }
         // The league shown at the first launch, or after the end of a league.
         self.market.price(self.session.league());
+        self.update_check
+            .receive(|release| self.release = Some(release));
+        self.settle_closed_update();
         self.item_names.receive(|names| {
             if self.session.apply_item_names(names) {
                 self.filters.forget_stats();
@@ -696,7 +762,7 @@ impl App for ExileMarketApp {
         }
         match self.view {
             View::Item => StatusBar::sources(&self.i18n, prices, trade).show(ui),
-            View::Settings => StatusBar::author(&self.i18n).show(ui),
+            View::Settings => StatusBar::author(&self.i18n, self.release.as_ref()).show(ui),
         }
         // Taken once for both windows.
         let to_top = std::mem::take(&mut self.scroll_to_top);
