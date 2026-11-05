@@ -9,14 +9,16 @@
 // isn't there. In the language of the settings, or of the system before the first settings.
 //
 // Application icon (17a): the picture the system shows for the application (taskbar, window switcher, the .exe in
-// the File Explorer), made from the emblem (specifications, Icons and logo). Three ways, compared at the sizes of
-// the systems (16, 24, 32 and 48 px) on a dark and a light taskbar: A, the white emblem on the dark tile of the
-// title bar; B, the same tile with the emblem in bronze, the metal of the logo; C, the bronze emblem alone, with a
-// thin dark edge for the light taskbars.
+// the File Explorer), made from the emblem (specifications, Icons and logo). Compared at the sizes of the systems
+// (16, 24, 32 and 48 px) on a dark and a light taskbar: A, the white emblem on the dark tile of the title bar; C, the
+// bronze emblem alone, the metal of the logo, with a thin dark edge for the light taskbars; D, the white emblem
+// alone with the same edge. B, the bronze emblem on the dark tile, removed by the owner on 2026-11-05 (no tile).
+// The emblem of the title bar stays white, tinted like the other icons of the interface: the shape carries the
+// identity, the color of the application icon the brand.
 
 const SYS_SIZES = [16, 24, 32, 48];
 const sysIcon = (variant, size) => {
-  const look = { A: "is-tile is-white", B: "is-tile is-bronze", C: "is-bare is-bronze" }[variant];
+  const look = { A: "is-tile is-white", C: "is-bare is-bronze", D: "is-bare is-white" }[variant];
   return `<span class="sys-icon ${look}" style="width:${size}px;height:${size}px"><span class="sys-emblem"></span></span>`;
 };
 const sysBar = (variant, tone) => `<div class="sys-bar is-${tone}">${SYS_SIZES.map(size =>
@@ -70,6 +72,6 @@ SECTIONS.unshift(["Window can't open (17a): the dialog of the system, one messag
 
 SECTIONS.unshift(["Application icon (17a): the emblem for the taskbar, the window switcher and the .exe", [
   ["A · white emblem on the dark tile of the title bar", sysBoard("A")],
-  ["B · bronze emblem on the dark tile", sysBoard("B")],
   ["C · bronze emblem alone, a thin dark edge", sysBoard("C")],
+  ["D · white emblem alone, a thin dark edge", sysBoard("D")],
 ]]);
