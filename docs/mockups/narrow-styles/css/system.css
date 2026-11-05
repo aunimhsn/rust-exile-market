@@ -1,0 +1,41 @@
+/* Section Application icon (17a): the icon the system shows for the application (its taskbar, its window
+   switcher, the .exe in the File Explorer), and the message of the system when the window can't open. Neither is
+   drawn by the application: the icon is a picture handed to the system, the message a dialog of the system. */
+
+/* The emblem tinted with any color: the white SVG as a mask. */
+.sys-emblem {
+  display: block; background: var(--sys-emblem, #fff);
+  -webkit-mask: url("../../../../assets/logo/emblem.svg") center / contain no-repeat;
+  mask: url("../../../../assets/logo/emblem.svg") center / contain no-repeat;
+}
+/* The icon at one size: a tile (A) or the emblem alone (C, D). */
+.sys-icon { display: grid; place-items: center; flex: none; }
+.sys-icon.is-tile { background: #121214; border-radius: 22%; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .08); }
+.sys-icon.is-tile .sys-emblem { width: 72%; height: 72%; }
+.sys-icon.is-bare .sys-emblem { width: 100%; height: 100%; }
+.sys-icon.is-white { --sys-emblem: #fff; }
+.sys-icon.is-bronze { --sys-emblem: linear-gradient(160deg, #eadbb4 0%, #c9a25e 55%, #8a6a38 100%); }
+/* C and D on a light taskbar: a dark edge, so that the emblem doesn't melt into it. */
+.sys-icon.is-bare { filter: drop-shadow(0 0 .5px rgba(0, 0, 0, .9)); }
+
+/* A taskbar of the system, dark (Breeze dark, Windows dark) or light, the icon at each size of the system. */
+.sys-board { width: 420px; border-radius: 8px; overflow: hidden; font: 12px/1.4 var(--font-ui, sans-serif); }
+.sys-bar { display: flex; align-items: flex-end; gap: 18px; padding: 14px 16px 10px; }
+.sys-bar.is-dark { background: #202326; color: #c8cbce; }
+.sys-bar.is-light { background: #eff0f1; color: #3a3d40; }
+.sys-size { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.sys-size small { font-size: 10px; opacity: .7; }
+.sys-large { display: flex; gap: 24px; align-items: center; justify-content: center; padding: 18px; background: #0d0e10; }
+
+/* A dialog of the system: its title bar, the error sign, the text and OK. Drawn neutral: KDE (kdialog), GNOME
+   (zenity), Windows (MessageBox) and macOS (an alert) each draw it their own way. */
+.sys-dialog { width: 440px; background: #2a2e32; color: #e3e5e7; border-radius: 8px; overflow: hidden;
+  font: 13px/1.5 "Segoe UI", "Noto Sans", sans-serif; box-shadow: 0 8px 30px rgba(0, 0, 0, .5); }
+.sys-dialog-title { padding: 7px 12px; background: #1f2225; font-size: 12px; text-align: center; color: #c8cbce; }
+.sys-dialog-body { display: flex; gap: 14px; padding: 18px 18px 8px; }
+.sys-dialog-sign { flex: none; width: 32px; height: 32px; border-radius: 50%; background: #da4453; color: #fff;
+  display: grid; place-items: center; font: 700 20px/1 sans-serif; }
+.sys-dialog-text p { margin: 0 0 10px; }
+.sys-dialog-text .is-details { color: #a0a4a8; font-size: 12px; word-break: break-word; }
+.sys-dialog-buttons { display: flex; justify-content: flex-end; padding: 6px 18px 16px; }
+.sys-dialog-buttons span { padding: 5px 22px; border-radius: 4px; background: #3daee9; color: #fff; }

@@ -486,3 +486,21 @@ bug-report-open = Open on GitHub
 bug-report-copy = Copy the log
 bug-report-copied = Copied
 bug-report-account = A GitHub account is needed.
+
+## Window that can't open
+
+# A dialog of the system when the window of the application can't open, its paragraphs in this order: what failed,
+# what to do, the log (another cause only), then the error itself, in English. $app is the name of the application.
+# No X11 display (Linux): neither X11 nor XWayland.
+window-error-display = { $app } can't open its window: it needs X11, or XWayland on a Wayland desktop.
+window-error-display-fix = Install XWayland (the package xwayland on most distributions), then launch { $app } again.
+# No OpenGL 2.1, the least the application draws with.
+window-error-opengl = { $app } can't open its window: it needs OpenGL 2.1 or later, which the graphics driver doesn't provide.
+window-error-opengl-fix = Update the graphics driver, then launch { $app } again.
+# Any other cause, to report: $issues is the address of the issues of the project on GitHub.
+window-error-other = { $app } can't open its window.
+window-error-other-fix = Report it on GitHub with its log, so that it can be fixed: { $issues }
+# The path of the log file.
+window-error-log = Log: { $path }
+# The error, in English.
+window-error-details = Details: { $error }

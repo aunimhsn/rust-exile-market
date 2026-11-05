@@ -3,6 +3,9 @@
 //! bytes, sorted by id, which `src/currencies.rs` includes. The ids come from the index of the
 //! icons, `currencies.ndjson`, and the build stops when an icon is missing or left over, so
 //! that the index and the icons agree on every system that builds the application.
+//!
+//! On Windows, also gives the executable its icon (`assets/logo/icon.ico`) and the name the
+//! File Explorer and the Task Manager show.
 
 use std::collections::BTreeSet;
 use std::env;
@@ -15,6 +18,13 @@ const FOLDER: &str = "assets/exchange";
 const INDEX: &str = "currencies.ndjson";
 
 fn main() {
+    exchange_icons();
+    #[cfg(windows)]
+    windows_resource();
+}
+
+/// Writes the table of the icons of the currency exchange.
+fn exchange_icons() {
     println!("cargo::rerun-if-changed={FOLDER}");
     let manifest = env::var("CARGO_MANIFEST_DIR").expect("set by Cargo");
     let folder = Path::new(&manifest).join(FOLDER);
@@ -58,4 +68,23 @@ fn main() {
     let out = env::var("OUT_DIR").expect("set by Cargo");
     fs::write(Path::new(&out).join("exchange_icons.rs"), table)
         .expect("writing the table of the icons");
+}
+
+/// The icon and the name of the Windows executable, compiled by `rc.exe` of the Windows SDK
+/// and linked into it; only when built on Windows (`cfg(windows)` is the system that runs the
+/// build script), for Windows.
+#[cfg(windows)]
+fn windows_resource() {
+    const ICON: &str = "assets/logo/icon.ico";
+    println!("cargo::rerun-if-changed={ICON}");
+    if env::var("CARGO_CFG_TARGET_OS").as_deref() != Ok("windows") {
+        return;
+    }
+    winresource::WindowsResource::new()
+        .set_icon(ICON)
+        // The name Windows shows for the process (the Task Manager) and the file.
+        .set("FileDescription", "Exile Market")
+        .set("ProductName", "Exile Market")
+        .compile()
+        .expect("the resource of the Windows executable");
 }

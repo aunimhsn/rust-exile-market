@@ -44,7 +44,7 @@ Version mise à jour après trois revues de code : refais les tests 1 à 6 (le c
 9. **Fenêtre principale réduite** : réduis la fenêtre principale d'Exile Market (son bouton –), retourne dans le jeu, **Ctrl+D** sur un objet, puis un clic dans le jeu.
    ✅ La fenêtre par-dessus le jeu s'ouvre quand même (un peu plus lentement, c'est normal), puis se ferme au clic. L'application ne plante pas.
 
-10. **Processeur** : dans un terminal, lance `top -p $(pgrep -f target/release/rust-exile-market)`. Dans le jeu, ouvre la fenêtre (Ctrl+D) et laisse-la ouverte une dizaine de secondes sans cliquer, puis regarde la colonne `%CPU`.
+10. **Processeur** : dans un terminal, lance `top -p $(pgrep -f target/release/exile-market)`. Dans le jeu, ouvre la fenêtre (Ctrl+D) et laisse-la ouverte une dizaine de secondes sans cliquer, puis regarde la colonne `%CPU`.
    ✅ Elle reste basse (quelques %), qu'Exile Market soit réduit ou non.
 
 11. **Vingt Ctrl+D d'affilée** (facultatif) : enchaîne une vingtaine de Ctrl+D rapides sur des objets différents, puis sur le même.

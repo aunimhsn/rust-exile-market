@@ -19,6 +19,7 @@ They may be written in French, the language of the testers (an exception to the 
 - [Key of the hotkey chosen from a list](linux/hotkey-list.md) (14c3b2)
 - [Update notice](linux/update-notice.md) (15, once a first release is out)
 - [Bug report](linux/bug-report.md) (16b)
+- [Executable: its name, its icon, a window that can't open](linux/executable.md) (17a)
 
 ## Windows
 
@@ -30,3 +31,4 @@ They may be written in French, the language of the testers (an exception to the 
 - [Keys of the hotkey from the settings file](windows/hotkey-keys.md) (14c3b1)
 - [Key of the hotkey chosen from a list](windows/hotkey-list.md) (14c3b2)
 - [Bug report](windows/bug-report.md) (16b)
+- [Executable: its name and its icon](windows/executable.md) (17a)

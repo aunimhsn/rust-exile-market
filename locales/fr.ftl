@@ -495,3 +495,22 @@ bug-report-open = Ouvrir sur GitHub
 bug-report-copy = Copier le journal
 bug-report-copied = Copié
 bug-report-account = Un compte GitHub est nécessaire.
+
+## Window that can't open
+
+# Une boîte de dialogue du système quand la fenêtre de l'application ne peut pas s'ouvrir, ses paragraphes dans cet
+# ordre : ce qui a échoué, que faire, le journal (autre cause seulement), puis l'erreur elle-même, en anglais. $app est
+# le nom de l'application.
+# Pas d'écran X11 (Linux) : ni X11 ni XWayland.
+window-error-display = { $app } ne peut pas ouvrir sa fenêtre : il lui faut X11, ou XWayland sur un bureau Wayland.
+window-error-display-fix = Installez XWayland (le paquet xwayland sur la plupart des distributions), puis relancez { $app }.
+# Pas d'OpenGL 2.1, le minimum avec lequel l'application dessine.
+window-error-opengl = { $app } ne peut pas ouvrir sa fenêtre : il lui faut OpenGL 2.1 ou plus récent, que le pilote graphique ne fournit pas.
+window-error-opengl-fix = Mettez à jour le pilote graphique, puis relancez { $app }.
+# Toute autre cause, à signaler : $issues est l'adresse des issues du projet sur GitHub.
+window-error-other = { $app } ne peut pas ouvrir sa fenêtre.
+window-error-other-fix = Signalez-le sur GitHub avec son journal, pour qu'il soit corrigé : { $issues }
+# Le chemin du fichier journal.
+window-error-log = Journal : { $path }
+# L'erreur, en anglais.
+window-error-details = Détails : { $error }
