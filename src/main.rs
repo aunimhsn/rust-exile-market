@@ -33,6 +33,7 @@ mod tier_rolls;
 mod trade;
 mod ui;
 mod update;
+mod window_error;
 mod worker;
 #[cfg(target_os = "linux")]
 mod x11;
@@ -45,9 +46,15 @@ const AUTHOR: &str = "Sylent";
 const AUTHOR_SITE: &str = "https://sylent.art";
 /// The site as shown, without the scheme.
 const AUTHOR_SITE_LABEL: &str = "sylent.art";
+/// The name of the executable (`[[bin]]` in `Cargo.toml`), also the application id of the
+/// window, which the desktop groups its windows by.
+const APP_ID: &str = env!("CARGO_BIN_NAME");
 /// The name of the folders of the application in the user's directories (log, then settings
 /// and cache).
-const FOLDER_NAME: &str = "exile-market";
+const FOLDER_NAME: &str = APP_ID;
+/// The application icon (`assets/logo/icon.svg`, rendered by `scripts/app-icon.py`); the
+/// Windows executable has its own, linked by `build.rs`.
+const ICON: &[u8] = include_bytes!("../assets/logo/icon.png");
 
 /// The narrow layout of version 1.
 const WINDOW_SIZE: [f32; 2] = [420.0, 720.0];
@@ -59,6 +66,8 @@ fn main() -> eframe::Result {
     // Read before the window opens, which starts always on top when it is set.
     let settings_file = settings::SettingsFile::in_config_directory();
     let settings = settings_file.load();
+    // The language of the message of a window that can't open.
+    let settings_language = settings.language().language();
     let result = eframe::run_native(
         APP_NAME,
         native_options(&settings, &settings_file),
@@ -72,7 +81,17 @@ fn main() -> eframe::Result {
     );
     match &result {
         Ok(()) => log::info!("{}", logging::closed_message()),
-        Err(error) => log::error!("The window failed: {error}"),
+        Err(error) => {
+            let cause = window_error::Cause::of(error);
+            log::error!("The window failed ({cause:?}): {error}");
+            let translator = i18n::Translator::new(settings_language);
+            window_error::show(&window_error::message(
+                &translator,
+                cause,
+                &error.to_string(),
+                logging::path(),
+            ));
+        }
     }
     result
 }
@@ -84,7 +103,8 @@ fn native_options(
     on_x11(eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_title(APP_NAME)
-            .with_app_id("rust-exile-market")
+            .with_app_id(APP_ID)
+            .with_icon(icon())
             .with_inner_size(WINDOW_SIZE)
             .with_min_inner_size(MIN_WINDOW_SIZE)
             // The title bar of the application replaces the one of the system.
@@ -96,6 +116,14 @@ fn native_options(
         persistence_path: settings_file.window_file(),
         ..Default::default()
     })
+}
+
+/// The application icon, shown by the system in its taskbar and its window switcher.
+fn icon() -> std::sync::Arc<egui::IconData> {
+    std::sync::Arc::new(
+        eframe::icon_data::from_png_bytes(ICON)
+            .expect("the embedded icon is a PNG, checked by a test"),
+    )
 }
 
 /// On Linux, the window always goes through X11 (XWayland under Wayland), like the game run by
@@ -116,4 +144,21 @@ fn on_x11(options: eframe::NativeOptions) -> eframe::NativeOptions {
 #[cfg(not(target_os = "linux"))]
 fn on_x11(options: eframe::NativeOptions) -> eframe::NativeOptions {
     options
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_executable_is_named_without_the_prefix_of_the_repository() {
+        assert_eq!(APP_ID, "exile-market");
+        assert_eq!(FOLDER_NAME, APP_ID);
+    }
+
+    #[test]
+    fn the_icon_is_a_square_png_large_enough_for_every_screen() {
+        let icon = icon();
+        assert_eq!((icon.width, icon.height), (256, 256));
+    }
 }

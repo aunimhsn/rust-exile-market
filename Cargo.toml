@@ -10,6 +10,12 @@ repository = "https://github.com/aunimhsn/rust-exile-market"
 readme = "README.md"
 publish = false
 
+# The executable, named without the `rust-` prefix of the repository: its name is also the
+# application id of the window and the folder of the user's directories (`APP_ID` in main.rs).
+[[bin]]
+name = "exile-market"
+path = "src/main.rs"
+
 [dependencies]
 arboard = { version = "3.7", default-features = false }
 directories = "6.0.0"
@@ -59,6 +65,11 @@ fluent-syntax = "0.12.0"
 # build.rs reads the index of the icons of the currency exchange.
 [build-dependencies]
 serde_json.workspace = true
+
+# build.rs gives the Windows executable its icon and its name (rc.exe of the Windows SDK), only
+# when built on Windows: the Clippy for Windows run from Linux (scripts/clippy-windows.sh) skips it.
+[target.'cfg(windows)'.build-dependencies]
+winresource = { version = "0.1.34", default-features = false }
 
 [lints]
 workspace = true

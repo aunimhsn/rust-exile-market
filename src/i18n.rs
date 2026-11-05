@@ -13,6 +13,7 @@ use crate::item::{Affix, Catalyst, Lord, QualityKind, WaystoneProperty};
 use crate::language::Language;
 use crate::prices::Direction;
 use crate::trade::pseudo::Pseudo;
+use crate::window_error::Cause;
 
 /// The Fluent messages of a language, embedded in the executable.
 fn messages(language: Language) -> &'static str {
@@ -544,6 +545,14 @@ const HOTKEY_TAKEN: &str = "hotkey-taken";
 const HOTKEY_TAKEN_SETTINGS: &str = "hotkey-taken-settings";
 const BUG_REPORT_JOIN_ITEM: &str = "bug-report-join-item";
 const BUG_REPORT_LOG_SESSION: &str = "bug-report-log-session";
+const WINDOW_ERROR_DISPLAY: &str = "window-error-display";
+const WINDOW_ERROR_DISPLAY_FIX: &str = "window-error-display-fix";
+const WINDOW_ERROR_OPENGL: &str = "window-error-opengl";
+const WINDOW_ERROR_OPENGL_FIX: &str = "window-error-opengl-fix";
+const WINDOW_ERROR_OTHER: &str = "window-error-other";
+const WINDOW_ERROR_OTHER_FIX: &str = "window-error-other-fix";
+const WINDOW_ERROR_LOG: &str = "window-error-log";
+const WINDOW_ERROR_DETAILS: &str = "window-error-details";
 const STATUS_PRICES: &str = "status-prices";
 const STATUS_PRICES_OFFLINE: &str = "status-prices-offline";
 const PRICES_UNREACHABLE: &str = "prices-unreachable";
@@ -1123,6 +1132,39 @@ impl Translator {
         self.format(BUG_REPORT_LOG_SESSION, Some(&args))
     }
 
+    /// The message of a window that can't open for `cause`: what failed, then what to do.
+    #[must_use]
+    pub fn window_error(&self, cause: Cause) -> [String; 2] {
+        let (failed, fix) = match cause {
+            Cause::Display => (WINDOW_ERROR_DISPLAY, WINDOW_ERROR_DISPLAY_FIX),
+            Cause::OpenGl => (WINDOW_ERROR_OPENGL, WINDOW_ERROR_OPENGL_FIX),
+            Cause::Other => (WINDOW_ERROR_OTHER, WINDOW_ERROR_OTHER_FIX),
+        };
+        let mut args = FluentArgs::new();
+        args.set("app", crate::APP_NAME);
+        args.set("issues", concat!(env!("CARGO_PKG_REPOSITORY"), "/issues"));
+        [
+            self.format(failed, Some(&args)),
+            self.format(fix, Some(&args)),
+        ]
+    }
+
+    /// The log file under the message of a window that can't open for a cause to report.
+    #[must_use]
+    pub fn window_error_log(&self, path: &str) -> String {
+        let mut args = FluentArgs::new();
+        args.set("path", path);
+        self.format(WINDOW_ERROR_LOG, Some(&args))
+    }
+
+    /// The error itself, last in the message of a window that can't open.
+    #[must_use]
+    pub fn window_error_details(&self, error: &str) -> String {
+        let mut args = FluentArgs::new();
+        args.set("error", error);
+        self.format(WINDOW_ERROR_DETAILS, Some(&args))
+    }
+
     /// The key of the hotkey taken by another application, in the settings, on the line after
     /// [`Self::hotkey_taken`]: where to choose another, and the keys that still `copy`.
     #[must_use]
@@ -1294,6 +1336,7 @@ mod tests {
     }
 
     #[test]
+    #[expect(clippy::too_many_lines, reason = "one line per message")]
     fn the_code_and_every_file_have_the_same_messages() {
         let code_ids: BTreeSet<String> = Message::ALL
             .iter()
@@ -1389,6 +1432,7 @@ mod tests {
                 OFFERS_NEXT_SEARCH_TOOLTIP,
                 OFFERS_LIMIT,
             ])
+            .chain(WINDOW_ERROR_IDS)
             .chain(DOWNLOAD_QUOTES)
             .map(str::to_owned)
             .collect();
@@ -1423,6 +1467,36 @@ mod tests {
             french.lord_affix(Affix::Suffix, Lord::Amanamu),
             "Suffixe d'Amanamu"
         );
+    }
+
+    /// The messages of a window that can't open.
+    const WINDOW_ERROR_IDS: [&str; 8] = [
+        WINDOW_ERROR_DISPLAY,
+        WINDOW_ERROR_DISPLAY_FIX,
+        WINDOW_ERROR_OPENGL,
+        WINDOW_ERROR_OPENGL_FIX,
+        WINDOW_ERROR_OTHER,
+        WINDOW_ERROR_OTHER_FIX,
+        WINDOW_ERROR_LOG,
+        WINDOW_ERROR_DETAILS,
+    ];
+
+    #[test]
+    fn every_message_of_a_window_that_cant_open_formats_without_errors() {
+        // The errors fail the `debug_assert` of `format`.
+        for language in Language::ALL {
+            let translator = Translator::new(language);
+            for cause in [Cause::Display, Cause::OpenGl, Cause::Other] {
+                let [failed, fix] = translator.window_error(cause);
+                assert!(
+                    failed.contains(crate::APP_NAME),
+                    "{cause:?} in {language:?}"
+                );
+                assert!(!fix.is_empty(), "{cause:?} in {language:?}");
+            }
+            assert!(translator.window_error_log("/log").contains("/log"));
+            assert!(translator.window_error_details("failed").contains("failed"));
+        }
     }
 
     #[test]
