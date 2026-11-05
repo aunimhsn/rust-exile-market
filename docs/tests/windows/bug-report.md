@@ -7,8 +7,8 @@ Pour le testeur Windows. Un bug à gauche de l'engrenage ouvre l'aperçu du rapp
 ## Avant
 
 1. Ferme Exile Market et Exiled Exchange 2 s'il tourne.
-2. Télécharge la nouvelle archive Windows `rust-exile-market-test-x86_64-pc-windows-msvc.zip` (lien donné par le propriétaire ; il faut être connecté à un compte GitHub pour la télécharger) et décompresse-la.
-3. Lance `rust-exile-market.exe`. Si Windows SmartScreen bloque : « Informations complémentaires », puis « Exécuter quand même ».
+2. Télécharge la nouvelle archive Windows `exile-market-test-x86_64-pc-windows-msvc.zip` (lien donné par le propriétaire ; il faut être connecté à un compte GitHub pour la télécharger) et décompresse-la.
+3. Lance `exile-market.exe`. Si Windows SmartScreen bloque : « Informations complémentaires », puis « Exécuter quand même ».
 4. Connecte-toi à GitHub dans ton navigateur par défaut, pour voir le formulaire comme un joueur connecté.
 5. Le log est dans `%LOCALAPPDATA%\exile-market\data\exile-market.log` (colle ce chemin dans la barre d'adresse de l'Explorateur), celui de la session précédente à côté, `exile-market.previous.log`. Il est écrit au fur et à mesure : ouvre-le dans le Bloc-notes à la fin, ou rouvre-le pour voir les nouvelles lignes.
 
@@ -26,7 +26,7 @@ Pour le testeur Windows. Un bug à gauche de l'engrenage ouvre l'aperçu du rapp
 4. **Le choix du journal** : regarde à droite du libellé « Log ». S'il n'y a pas de pastilles (le premier lancement de l'application sur ce PC), ferme Exile Market par sa croix, relance-le et rouvre l'aperçu. Clique sur **The previous one**, puis sur **This session** ; puis vite sur l'une puis l'autre, avant la fin du glissement ; enfin, appuie sur Tab jusqu'à la pastille non choisie, puis sur Entrée.
    ✅ Deux pastilles jointes sur fond sombre, celle choisie en blanc. Au clic, la pastille blanche glisse vers l'autre, calmement (environ un quart de seconde, sans rebond), sa largeur suit le mot ; la boîte montre alors les lignes de la session précédente, puis de nouveau celles de cette session. Recliquée en plein glissement, la pastille repart de là où elle est, sans saut. Au clavier, Entrée fait glisser la pastille blanche, un peu plus sombre tant qu'elle a le focus.
 
-5. **Après un plantage** : ouvre PowerShell et tue Exile Market sans le laisser se fermer : `taskkill /F /IM rust-exile-market.exe`. Relance-le, puis ouvre l'aperçu.
+5. **Après un plantage** : ouvre PowerShell et tue Exile Market sans le laisser se fermer : `taskkill /F /IM exile-market.exe`. Relance-le, puis ouvre l'aperçu.
    ✅ « The previous one » est déjà en blanc à l'ouverture, sans glisser ; la boîte montre la session tuée, qui s'arrête sur sa dernière ligne, **sans** « Exile Market closed ». Puis ferme Exile Market normalement (la croix), relance-le et rouvre l'aperçu : ✅ « This session » est choisie.
 
 6. **La première session** : ferme Exile Market, supprime les deux fichiers du log (`exile-market.log` et `exile-market.previous.log`, dans `%LOCALAPPDATA%\exile-market\data\`), relance-le et ouvre l'aperçu.

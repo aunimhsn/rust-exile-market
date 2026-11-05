@@ -29,7 +29,7 @@ tail -f ~/.local/state/exile-market/exile-market.log
    ✅ La fenêtre par-dessus le jeu s'ouvre avec son prix, et le journal dit une fois **« Price-check hotkey Ctrl+D listened to while the game is the active window »**.
 
 2. **La fenêtre principale** : clique dans la fenêtre principale d'Exile Market, puis fais **Ctrl+D**.
-   ✅ Rien ne se passe ; le journal écrit une fois « The active window, of class rust-exile-market, isn't the game », mais **aucune** ligne « Copy sent by the price-check hotkey … ».
+   ✅ Rien ne se passe ; le journal écrit une fois « The active window, of class exile-market, isn't the game », mais **aucune** ligne « Copy sent by the price-check hotkey … ».
 
 3. **Le client Steam** : fais Alt+Tab vers le client Steam, puis **Ctrl+D**.
    ✅ Le journal écrit une fois la classe du client Steam (« … of class steam … isn't the game »), mais aucune ligne « Copy sent … ».

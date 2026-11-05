@@ -13,8 +13,10 @@
 // (16, 24, 32 and 48 px) on a dark and a light taskbar: A, the white emblem on the dark tile of the title bar; C, the
 // bronze emblem alone, the metal of the logo, with a thin dark edge for the light taskbars; D, the white emblem
 // alone with the same edge. B, the bronze emblem on the dark tile, removed by the owner on 2026-11-05 (no tile).
-// The emblem of the title bar stays white, tinted like the other icons of the interface: the shape carries the
-// identity, the color of the application icon the brand.
+// C chosen by the owner on 2026-11-05: it carries the logo and the world of the game, and holds on both taskbars,
+// where the white of D fades. The emblem of the title bar stays white, tinted like the other icons of the
+// interface: the shape carries the identity, the color of the application icon the brand. The icon itself is
+// assets/logo/icon.svg, rendered by scripts/app-icon.py.
 
 const SYS_SIZES = [16, 24, 32, 48];
 const sysIcon = (variant, size) => {
@@ -33,8 +35,8 @@ const SYS_TEXTS = {
     opengl: ["Exile Market can't open its window: it needs OpenGL 2.1 or later, which the graphics driver doesn't provide.",
       "Update the graphics driver, then launch Exile Market again."],
     other: ["Exile Market can't open its window.",
-      "Report it on GitHub with its log, so that it can be fixed: github.com/aunimhsn/rust-exile-market/issues",
-      "Log: ~/.local/state/exile-market/exile-market.log"],
+      "Report it on GitHub with its log, so that it can be fixed: https://github.com/aunimhsn/rust-exile-market/issues",
+      "Log: /home/player/.local/state/exile-market/exile-market.log"],
     details: "Details:",
   },
   fr: {
@@ -43,13 +45,13 @@ const SYS_TEXTS = {
     opengl: ["Exile Market ne peut pas ouvrir sa fenêtre : il lui faut OpenGL 2.1 ou plus récent, que le pilote graphique ne fournit pas.",
       "Mettez à jour le pilote graphique, puis relancez Exile Market."],
     other: ["Exile Market ne peut pas ouvrir sa fenêtre.",
-      "Signalez-le sur GitHub avec son journal, pour qu’il soit corrigé : github.com/aunimhsn/rust-exile-market/issues",
-      "Journal : ~/.local/state/exile-market/exile-market.log"],
+      "Signalez-le sur GitHub avec son journal, pour qu'il soit corrigé : https://github.com/aunimhsn/rust-exile-market/issues",
+      "Journal : /home/player/.local/state/exile-market/exile-market.log"],
     details: "Détails :",
   },
 };
 const SYS_ERRORS = {
-  display: "Failed to open X11 display: neither DISPLAY nor WAYLAND_DISPLAY is set",
+  display: "winit EventLoopError: os error: Failed to open connection to X server",
   opengl: "Found no OpenGL configs for the template ConfigTemplate { color_buffer_type: Rgb, … }",
   other: "Failed to create the main window: the operation couldn't be completed",
 };
@@ -70,8 +72,8 @@ SECTIONS.unshift(["Window can't open (17a): the dialog of the system, one messag
   ["En français : une autre cause", sysDialog("other", "fr")],
 ]]);
 
-SECTIONS.unshift(["Application icon (17a): the emblem for the taskbar, the window switcher and the .exe", [
-  ["A · white emblem on the dark tile of the title bar", sysBoard("A")],
-  ["C · bronze emblem alone, a thin dark edge", sysBoard("C")],
-  ["D · white emblem alone, a thin dark edge", sysBoard("D")],
+SECTIONS.unshift(["Application icon (17a): the bronze emblem for the taskbar, the window switcher and the .exe", [
+  ["Chosen · C · bronze emblem alone, a thin dark edge", sysBoard("C")],
+  ["Rejected · A · white emblem on the dark tile of the title bar", sysBoard("A")],
+  ["Rejected · D · white emblem alone, a thin dark edge", sysBoard("D")],
 ]]);

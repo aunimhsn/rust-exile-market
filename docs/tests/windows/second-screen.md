@@ -18,7 +18,7 @@ A Windows player of Path of Exile 2 with **two screens of different scales**: mo
 ## Before
 
 1. Close Exiled Exchange 2 if it runs: it takes Ctrl+D too.
-2. Download the Windows archive of the latest Release workflow (`rust-exile-market-test-x86_64-pc-windows-msvc.zip`; a GitHub account is needed to download it, or the owner sends it), or the release once it exists. Unzip it and start `rust-exile-market.exe`. If Windows SmartScreen blocks it: "More info", then "Run anyway".
+2. Download the Windows archive of the latest Release workflow (`exile-market-test-x86_64-pc-windows-msvc.zip`; a GitHub account is needed to download it, or the owner sends it), or the release once it exists. Unzip it and start `exile-market.exe`. If Windows SmartScreen blocks it: "More info", then "Run anyway".
 3. Write down the scale of each screen.
 4. Put the main window of Exile Market on **screen A**.
 5. Start Path of Exile 2 on **screen B**, in **windowed fullscreen**, not as administrator, and go to the hideout.

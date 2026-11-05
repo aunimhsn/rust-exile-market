@@ -5,9 +5,9 @@ Pour le testeur Windows. Les touches du raccourci se choisissent maintenant dans
 ## Avant
 
 1. Ferme Exile Market et Exiled Exchange 2 s'il tourne.
-2. Télécharge la nouvelle archive Windows `rust-exile-market-test-x86_64-pc-windows-msvc.zip` (lien donné par le propriétaire ; il faut être connecté à un compte GitHub pour la télécharger) et décompresse-la.
+2. Télécharge la nouvelle archive Windows `exile-market-test-x86_64-pc-windows-msvc.zip` (lien donné par le propriétaire ; il faut être connecté à un compte GitHub pour la télécharger) et décompresse-la.
 3. Si le fichier des réglages existe, `%APPDATA%\exile-market\config\settings.toml` (colle ce chemin dans la barre d'adresse de l'Explorateur), ouvre-le dans le Bloc-notes et supprime la ligne `keys = …` sous `[hotkey]`, pour repartir de Ctrl+D. Enregistre.
-4. Lance `rust-exile-market.exe`. Si Windows SmartScreen bloque : « Informations complémentaires », puis « Exécuter quand même ».
+4. Lance `exile-market.exe`. Si Windows SmartScreen bloque : « Informations complémentaires », puis « Exécuter quand même ».
 5. Lance Path of Exile 2 en **plein écran fenêtré** (pas en plein écran exclusif), **sans** le lancer en administrateur, et va dans ton repaire.
 6. Le log est dans `%LOCALAPPDATA%\exile-market\data\exile-market.log`. Il est écrit au fur et à mesure : ouvre-le dans le Bloc-notes à la fin, ou rouvre-le pour voir les nouvelles lignes.
 
