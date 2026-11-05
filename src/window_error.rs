@@ -4,8 +4,8 @@
 //! Wayland too, an alert on macOS), to the terminal and to the log.
 
 use std::path::Path;
-#[cfg(not(target_os = "windows"))]
-use std::process::Command;
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+use std::process::{Command, Stdio};
 
 use crate::i18n::Translator;
 
@@ -53,18 +53,22 @@ pub fn message(translator: &Translator, cause: Cause, error: &str, log: Option<&
 /// /home/…/.cargo/…/mod.rs:788: Failed to open connection to X server`), of no use to the player:
 /// the log keeps the whole error.
 fn without_source(error: &str) -> String {
-    let Some(at) = error.find(" at ") else {
-        return error.to_owned();
-    };
-    let place = &error[at + " at ".len()..];
-    let Some(rs) = place.find(".rs:") else {
-        return error.to_owned();
-    };
-    let after_line = place[rs + ".rs:".len()..].trim_start_matches(|c: char| c.is_ascii_digit());
-    match after_line.strip_prefix(": ") {
-        Some(rest) => format!("{}: {rest}", &error[..at]),
-        None => error.to_owned(),
+    for (at, _) in error.match_indices(" at ") {
+        let place = &error[at + " at ".len()..];
+        // The place is one path, without a space.
+        let Some(rs) = place.find(".rs:").filter(|&rs| !place[..rs].contains(' ')) else {
+            continue;
+        };
+        let line = &place[rs + ".rs:".len()..];
+        let after_line = line.trim_start_matches(|c: char| c.is_ascii_digit());
+        if after_line.len() == line.len() {
+            continue;
+        }
+        if let Some(rest) = after_line.strip_prefix(": ") {
+            return format!("{}: {rest}", &error[..at]);
+        }
     }
+    error.to_owned()
 }
 
 /// Shows `message` in the terminal, then in a dialog of the system, which waits for the player.
@@ -103,8 +107,16 @@ fn dialog(message: &str) -> bool {
             crate::APP_NAME,
             message,
         ])
+        // It writes the button clicked.
+        .stdout(Stdio::null())
         .status()
         .is_ok_and(|status| status.success())
+}
+
+/// No dialog on the other systems: the terminal and the log only.
+#[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
+fn dialog(_message: &str) -> bool {
+    false
 }
 
 /// The first dialog tool of the desktop that runs; true once one has shown it.
@@ -114,10 +126,18 @@ fn dialog(message: &str) -> bool {
     linux_tools(&desktop).into_iter().any(|tool| {
         Command::new(tool.program())
             .args(tool.arguments(message))
-            // Closed by the player with OK or the cross alike: any exit tells it was shown.
+            .stdout(Stdio::null())
             .status()
-            .is_ok()
+            .is_ok_and(|status| shown(status.code()))
     })
+}
+
+/// Whether a dialog tool that exited with `code` showed its dialog: 0 once closed with OK, 1 with
+/// the cross; any other code, or none (killed by a signal), is a failure, and the next tool is
+/// tried.
+#[cfg(target_os = "linux")]
+fn shown(code: Option<i32>) -> bool {
+    matches!(code, Some(0 | 1))
 }
 
 /// A dialog tool of Linux.
@@ -173,6 +193,22 @@ fn linux_tools(desktop: &str) -> [Tool; 2] {
 mod tests {
     use super::*;
     use crate::language::Language;
+
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn a_failed_event_loop_on_linux_is_a_missing_display() {
+        let error = eframe::Error::WinitEventLoop(winit::error::EventLoopError::RecreationAttempt);
+        assert_eq!(Cause::of(&error), Cause::Display);
+    }
+
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn a_dialog_tool_that_fails_lets_the_next_one_be_tried() {
+        assert!(shown(Some(0)));
+        assert!(shown(Some(1)));
+        assert!(!shown(Some(255)));
+        assert!(!shown(None));
+    }
 
     #[test]
     fn a_failed_creation_of_the_application_is_a_cause_to_report() {
@@ -244,6 +280,15 @@ mod tests {
             "winit EventLoopError: os error: Failed to open connection to X server"
         );
         assert_eq!(without_source("failed at the start"), "failed at the start");
+        // Only a place with a line number, after any number of other " at ".
+        assert_eq!(
+            without_source("lost at sea: os error at src/x11.rs:12: no display"),
+            "lost at sea: os error: no display"
+        );
+        assert_eq!(
+            without_source("read at file.rs:abc: kept"),
+            "read at file.rs:abc: kept"
+        );
     }
 
     #[test]

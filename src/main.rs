@@ -38,6 +38,9 @@ mod worker;
 #[cfg(target_os = "linux")]
 mod x11;
 
+use std::cell::Cell;
+use std::process::ExitCode;
+
 /// The name of the application, in every language.
 const APP_NAME: &str = "Exile Market";
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -60,7 +63,7 @@ const ICON: &[u8] = include_bytes!("../assets/logo/icon.png");
 const WINDOW_SIZE: [f32; 2] = [420.0, 720.0];
 const MIN_WINDOW_SIZE: [f32; 2] = [360.0, 420.0];
 
-fn main() -> eframe::Result {
+fn main() -> ExitCode {
     logging::init();
     log::info!("{APP_NAME} {VERSION} started");
     // Read before the window opens, which starts always on top when it is set.
@@ -68,10 +71,14 @@ fn main() -> eframe::Result {
     let settings = settings_file.load();
     // The language of the message of a window that can't open.
     let settings_language = settings.language().language();
+    // Set once the window is open, so that a later error isn't told as a window that can't open.
+    let opened = Cell::new(false);
+    let opened_flag = &opened;
     let result = eframe::run_native(
         APP_NAME,
         native_options(&settings, &settings_file),
         Box::new(move |creation| {
+            opened_flag.set(true);
             Ok(Box::new(app::ExileMarketApp::new(
                 creation,
                 settings,
@@ -79,11 +86,18 @@ fn main() -> eframe::Result {
             )))
         }),
     );
-    match &result {
-        Ok(()) => log::info!("{}", logging::closed_message()),
+    match result {
+        Ok(()) => {
+            log::info!("{}", logging::closed_message());
+            ExitCode::SUCCESS
+        }
+        Err(error) if opened.get() => {
+            log::error!("The window failed: {error}");
+            ExitCode::FAILURE
+        }
         Err(error) => {
-            let cause = window_error::Cause::of(error);
-            log::error!("The window failed ({cause:?}): {error}");
+            let cause = window_error::Cause::of(&error);
+            log::error!("The window failed to open ({cause:?}): {error}");
             let translator = i18n::Translator::new(settings_language);
             window_error::show(&window_error::message(
                 &translator,
@@ -91,9 +105,11 @@ fn main() -> eframe::Result {
                 &error.to_string(),
                 logging::path(),
             ));
+            // The message already told the error: no `Error: …` written after it, as returning
+            // the error would.
+            ExitCode::FAILURE
         }
     }
-    result
 }
 
 fn native_options(
