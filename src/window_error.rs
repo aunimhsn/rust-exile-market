@@ -92,7 +92,7 @@ fn dialog(message: &str) -> bool {
         .is_ok()
 }
 
-/// An alert of macOS, through AppleScript, its texts given as arguments so that nothing in them
+/// An alert of macOS, through `AppleScript`, its texts given as arguments so that nothing in them
 /// needs escaping; true once shown.
 #[cfg(target_os = "macos")]
 fn dialog(message: &str) -> bool {
