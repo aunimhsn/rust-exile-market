@@ -68,10 +68,16 @@ Pour le testeur Windows. Fais les tests d'affilée. Un ✅ suffit quand ça marc
 19. **Processeur** : ouvre le Gestionnaire des tâches (Ctrl+Maj+Échap). Dans le jeu, ouvre la fenêtre (Ctrl+D) et laisse-la ouverte une dizaine de secondes sans cliquer, puis regarde la colonne Processeur d'Exile Market.
     ✅ Elle reste basse (quelques %).
 
-20. **Copy whisper** : ouvre la fenêtre (Ctrl+D) sur un objet qui a des offres, clique sur la **loupe**, survole une offre d'un vendeur en ligne, puis clique sur **« Copy whisper »**. Clique dans le jeu, ouvre le chat (Entrée), colle (Ctrl+V), puis efface sans envoyer ; colle aussi dans le Bloc-notes.
-    ✅ La pastille devient « ✓ Copied » pendant 2 secondes, et le texte collé est le message au vendeur (`@vendeur …`), dans le chat comme dans le Bloc-notes : ni vide, ni l'ancien contenu du presse-papiers. L'objet affiché ne change pas.
+20. **Copy whisper** (« Copier le whisper ») : ouvre la fenêtre (Ctrl+D) sur un objet qui a des offres, clique sur la **loupe** si les offres ne sont pas déjà là, survole une offre d'un vendeur en ligne, puis clique sur la pastille. Regarde la fenêtre pendant 2 secondes. Clique ensuite dans le jeu, ouvre le chat (Entrée), colle (Ctrl+V), puis efface sans envoyer ; colle aussi dans le Bloc-notes.
+    ✅ La pastille devient « ✓ Copied » (« ✓ Copié ») pendant 2 secondes, et la fenêtre par-dessus le jeu reste ouverte sur le même objet. Le texte collé est le message au vendeur (`@vendeur …`), dans le chat comme dans le Bloc-notes : ni vide, ni l'ancien contenu du presse-papiers.
 
-21. **Test libre** : joue quelques minutes en faisant des Ctrl+D comme d'habitude (plusieurs objets d'affilée, l'inventaire puis le coffre).
+21. **Ctrl+D après un whisper** : après le test 20, **Ctrl+D** sur le même objet. Puis refais la copie du whisper, ferme la fenêtre (un clic dans le jeu), **Ctrl+D** sur une case vide, et colle dans le chat (efface sans envoyer).
+    ✅ Sur le même objet, la fenêtre se rouvre, ses filtres conservés. Sur la case vide, rien ne s'ouvre, et le collage donne toujours le whisper.
+
+22. **Le whisper d'une devise** : **Ctrl+D** sur une devise de l'échange (une Orbe, par exemple), cherche ses offres, copie le whisper d'une offre d'un vendeur en ligne, puis colle dans le chat (efface sans envoyer).
+    ✅ Le texte collé ne contient ni `{0}` ni `{1}`, et ses montants sont ceux de l'offre.
+
+23. **Test libre** : joue quelques minutes en faisant des Ctrl+D comme d'habitude (plusieurs objets d'affilée, l'inventaire puis le coffre).
     ✅ Rien d'étrange : la fenêtre suit chaque objet, le jeu garde le clavier.
 
 À savoir : dans cette version, taper un nombre dans un champ min ou max de la fenêtre l'envoie au jeu (ses flacons). C'est attendu, la prochaine version corrige ça : ne le compte pas comme un échec.
@@ -100,6 +106,8 @@ Pour le testeur Windows. Fais les tests d'affilée. Un ✅ suffit quand ça marc
 | 18. Gestionnaire de presse-papiers (facultatif) |  |  |
 | 19. Processeur |  |  |
 | 20. Copy whisper |  |  |
-| 21. Test libre |  |  |
+| 21. Ctrl+D après un whisper |  |  |
+| 22. Le whisper d'une devise |  |  |
+| 23. Test libre |  |  |
 
 Joins le fichier `exile-market.log` à ta réponse.

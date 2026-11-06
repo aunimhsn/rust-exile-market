@@ -7,7 +7,7 @@
 #   system-clipboard.sh
 set -eu
 
-targets=$(sed -n 's/^ *- target: //p' .github/workflows/release.yml)
+targets=$(sed -n 's/^ *\(- \)\{0,1\}target: //p' .github/workflows/release.yml)
 if [ -z "$targets" ]; then
   echo "No target found in the release workflow"
   exit 1
@@ -16,7 +16,8 @@ fi
 status=0
 for target in $targets; do
   # In a variable first, so that a failure of cargo stops the script with its own message.
-  tree=$(cargo tree --locked --target "$target" --edges features --invert egui-winit)
+  # Without the dev-dependencies, which the release build doesn't have.
+  tree=$(cargo tree --locked --target "$target" --edges no-dev,features --invert egui-winit)
   if printf '%s\n' "$tree" | grep -q 'egui-winit feature "clipboard"'; then
     echo "$target: writes to the clipboard of the system"
   else
