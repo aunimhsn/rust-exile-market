@@ -19,7 +19,9 @@ path = "src/main.rs"
 [dependencies]
 arboard = { version = "3.7", default-features = false }
 directories = "6.0.0"
-eframe = { version = "0.37", default-features = false, features = ["accesskit", "glow", "links", "persistence", "x11"] }
+# `clipboard` makes `Context::copy_text` write to the clipboard of the system: without it, egui-winit
+# keeps the text to itself, and nothing can paste it (.github/scripts/system-clipboard.sh checks it).
+eframe = { version = "0.37", default-features = false, features = ["accesskit", "clipboard", "glow", "links", "persistence", "x11"] }
 egui = { version = "0.37", default-features = false }
 egui_extras = { version = "0.37", default-features = false, features = ["svg", "image"] }
 fluent-bundle = "0.16"

@@ -1,4 +1,4 @@
-# Fenêtre par-dessus le jeu : les 10 tests indispensables
+# Fenêtre par-dessus le jeu : les tests
 
 Version mise à jour après trois revues de code : refais les tests 1 à 6 (le code a changé), puis les 7 à 10, nouveaux. Fais-les d'affilée, sans m'attendre. Un ✅ suffit quand ça marche ; détaille seulement ce qui cloche. Puis dis-moi « fait ».
 
@@ -53,6 +53,15 @@ Version mise à jour après trois revues de code : refais les tests 1 à 6 (le c
 12. **Ctrl+C ferme la fenêtre** : ouvre la fenêtre avec Ctrl+D sur un objet, puis fais **Ctrl+C** (pas D) sur un autre objet.
    ✅ La fenêtre par-dessus le jeu se ferme, et le nouvel objet s'affiche dans la fenêtre principale.
 
+13. **Copy whisper** (« Copier le whisper ») : ouvre la fenêtre (Ctrl+D) sur un objet qui a des offres, clique sur la **loupe** si les offres ne sont pas déjà là, survole une offre d'un vendeur en ligne, puis clique sur la pastille. Regarde la fenêtre pendant 2 secondes. Clique ensuite dans le jeu, ouvre le chat (Entrée), colle (Ctrl+V), puis efface sans envoyer ; colle aussi dans un éditeur de texte (Kate).
+   ✅ La pastille devient « ✓ Copied » (« ✓ Copié ») pendant 2 secondes, et la fenêtre par-dessus le jeu reste ouverte sur le même objet. Le texte collé est le message au vendeur (`@vendeur …`), dans le chat comme dans Kate : ni vide, ni l'ancien contenu du presse-papiers.
+
+14. **Ctrl+D après un whisper** : après le test 13, **Ctrl+D** sur le même objet. Puis refais la copie du whisper, ferme la fenêtre (un clic dans le jeu), **Ctrl+D** sur une case vide, et colle dans le chat (efface sans envoyer).
+   ✅ Sur le même objet, la fenêtre se rouvre, ses filtres conservés. Sur la case vide, rien ne s'ouvre, et le collage donne toujours le whisper.
+
+15. **Le whisper d'une devise** : **Ctrl+D** sur une devise de l'échange (une Orbe, par exemple), cherche ses offres, copie le whisper d'une offre d'un vendeur en ligne, puis colle dans le chat (efface sans envoyer).
+   ✅ Le texte collé ne contient ni `{0}` ni `{1}`, et ses montants sont ceux de l'offre.
+
 ## Tes résultats
 
 | Test | Résultat | Si ça cloche |
@@ -69,3 +78,6 @@ Version mise à jour après trois revues de code : refais les tests 1 à 6 (le c
 | 10. Processeur |  |  |
 | 11. Vingt Ctrl+D (facultatif) |  |  |
 | 12. Ctrl+C ferme la fenêtre |  |  |
+| 13. Copy whisper |  |  |
+| 14. Ctrl+D après un whisper |  |  |
+| 15. Le whisper d'une devise |  |  |
