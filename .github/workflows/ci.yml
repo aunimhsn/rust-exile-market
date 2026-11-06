@@ -45,6 +45,8 @@ jobs:
         run: cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
       - if: steps.changes.outputs.code == 'true'
         run: cargo test --locked --workspace --all-features
+      - if: steps.changes.outputs.code == 'true'
+        run: sh .github/scripts/system-clipboard.sh
 
   # The code written for Windows or macOS alone (the keys of the price-check hotkey) is
   # compiled and linted on its own system, which the job above never builds. Clippy only: the

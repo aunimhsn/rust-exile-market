@@ -53,6 +53,9 @@ Version mise à jour après trois revues de code : refais les tests 1 à 6 (le c
 12. **Ctrl+C ferme la fenêtre** : ouvre la fenêtre avec Ctrl+D sur un objet, puis fais **Ctrl+C** (pas D) sur un autre objet.
    ✅ La fenêtre par-dessus le jeu se ferme, et le nouvel objet s'affiche dans la fenêtre principale.
 
+13. **Copy whisper** : ouvre la fenêtre (Ctrl+D) sur un objet qui a des offres, clique sur la **loupe**, survole une offre d'un vendeur en ligne, puis clique sur **« Copy whisper »**. Clique dans le jeu, ouvre le chat (Entrée), colle (Ctrl+V), puis efface sans envoyer ; colle aussi dans un éditeur de texte (Kate).
+   ✅ La pastille devient « ✓ Copied » pendant 2 secondes, et le texte collé est le message au vendeur (`@vendeur …`), dans le chat comme dans Kate : ni vide, ni l'ancien contenu du presse-papiers. L'objet affiché ne change pas.
+
 ## Tes résultats
 
 | Test | Résultat | Si ça cloche |
@@ -69,3 +72,4 @@ Version mise à jour après trois revues de code : refais les tests 1 à 6 (le c
 | 10. Processeur |  |  |
 | 11. Vingt Ctrl+D (facultatif) |  |  |
 | 12. Ctrl+C ferme la fenêtre |  |  |
+| 13. Copy whisper |  |  |

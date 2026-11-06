@@ -68,7 +68,10 @@ Pour le testeur Windows. Fais les tests d'affilée. Un ✅ suffit quand ça marc
 19. **Processeur** : ouvre le Gestionnaire des tâches (Ctrl+Maj+Échap). Dans le jeu, ouvre la fenêtre (Ctrl+D) et laisse-la ouverte une dizaine de secondes sans cliquer, puis regarde la colonne Processeur d'Exile Market.
     ✅ Elle reste basse (quelques %).
 
-20. **Test libre** : joue quelques minutes en faisant des Ctrl+D comme d'habitude (plusieurs objets d'affilée, l'inventaire puis le coffre).
+20. **Copy whisper** : ouvre la fenêtre (Ctrl+D) sur un objet qui a des offres, clique sur la **loupe**, survole une offre d'un vendeur en ligne, puis clique sur **« Copy whisper »**. Clique dans le jeu, ouvre le chat (Entrée), colle (Ctrl+V), puis efface sans envoyer ; colle aussi dans le Bloc-notes.
+    ✅ La pastille devient « ✓ Copied » pendant 2 secondes, et le texte collé est le message au vendeur (`@vendeur …`), dans le chat comme dans le Bloc-notes : ni vide, ni l'ancien contenu du presse-papiers. L'objet affiché ne change pas.
+
+21. **Test libre** : joue quelques minutes en faisant des Ctrl+D comme d'habitude (plusieurs objets d'affilée, l'inventaire puis le coffre).
     ✅ Rien d'étrange : la fenêtre suit chaque objet, le jeu garde le clavier.
 
 À savoir : dans cette version, taper un nombre dans un champ min ou max de la fenêtre l'envoie au jeu (ses flacons). C'est attendu, la prochaine version corrige ça : ne le compte pas comme un échec.
@@ -96,6 +99,7 @@ Pour le testeur Windows. Fais les tests d'affilée. Un ✅ suffit quand ça marc
 | 17. Jeu en administrateur (facultatif) |  |  |
 | 18. Gestionnaire de presse-papiers (facultatif) |  |  |
 | 19. Processeur |  |  |
-| 20. Test libre |  |  |
+| 20. Copy whisper |  |  |
+| 21. Test libre |  |  |
 
 Joins le fichier `exile-market.log` à ta réponse.
