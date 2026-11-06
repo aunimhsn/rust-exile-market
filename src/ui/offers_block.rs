@@ -20,6 +20,7 @@ use super::item_block::{SEPARATOR, rarity_color};
 use super::offer_tooltip::{OfferTooltip, Pointer, TooltipState, reach};
 use super::theme::{color, size, text};
 use super::{images, widgets};
+use crate::clipboard;
 use crate::currencies::{self, ExchangeCurrency};
 use crate::estimate::Reference;
 use crate::format::{self, Currency};
@@ -764,12 +765,11 @@ impl<'a> OffersBlock<'a> {
                 lines: self.lines,
                 name_color: rarity_color(offer.item.rarity.unwrap_or(self.item.rarity())),
                 suspicious: row.suspicious,
-                copied: state.shows_copied(&offer.id, time),
+                pill: state.pill(&offer.id, time),
                 i18n: self.i18n,
             };
             if tooltip.show(ui, response.rect, ui.clip_rect().top()) {
-                ctx.copy_text(offer.whisper.clone());
-                state.copied(&offer.id, time);
+                state.copy_result(&offer.id, time, clipboard::write_text(&offer.whisper));
                 ctx.request_repaint();
             }
         }

@@ -14,7 +14,7 @@ use egui::{
 
 use self::open_lists::{OpenList, OpenLists};
 use crate::bug_report::{Facts, JoinedItem, LogSession, Report};
-use crate::clipboard::{ClipboardEvent, ClipboardWatch};
+use crate::clipboard::{self, ClipboardEvent, ClipboardWatch};
 use crate::estimate::{self, Estimate, Reference, Worth};
 use crate::filters::{Filters, Window};
 use crate::hotkey::PriceCheckHotkey;
@@ -254,8 +254,7 @@ impl ExileMarketApp {
             }
             BugReportAction::CopyLog => {
                 if let Some(log) = report.whole_log() {
-                    ctx.copy_text(log);
-                    report.mark_copied();
+                    report.copy_result(clipboard::write_text(&log));
                 }
             }
         }

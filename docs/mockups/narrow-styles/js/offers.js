@@ -27,8 +27,9 @@ function offerTooltip(t) {
     ${[[t.props, "prop"], [t.implicit, ""], [t.mods, ""]].filter(([list]) => list && list.length).map(([list, kind]) => `<div class="tt-mods">${compare(list, kind)}</div>`).join("")}
     <div class="tt-foot">
       <span class="status s-${t.status}"><i></i>${{ online: "Online", away: "Away", offline: "Offline" }[t.status]}</span>
-      ${t.status === "offline" ? "" : `<span class="pill ${t.copied ? "done" : ""}">${t.copied ? `Copied${ICON.check(11)}` : "Copy whisper"}</span>`}
+      ${t.status === "offline" ? "" : t.copyFailed && t.copyFailed.pill ? `<span class="pill is-copy-failed">${t.copyFailed.pill}</span>` : `<span class="pill ${t.copied ? "done" : ""}">${t.copied ? `Copied${ICON.check(11)}` : t.copyLabel || "Copy whisper"}</span>`}
     </div>
+    ${t.copyFailed && t.copyFailed.note ? `<div class="app-copy-failed-note">${t.copyFailed.note}</div>` : ""}
   </div>`;
 }
 

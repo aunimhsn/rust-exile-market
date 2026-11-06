@@ -1,8 +1,8 @@
 #!/bin/sh
 # Fails when a target of the release workflow builds egui-winit without its `clipboard` feature:
-# `Context::copy_text` (Copy whisper, Copy the log) would then keep the text inside the
-# application while the pill still reads "Copied". The code compiles and the tests pass all the
-# same: without this check, only pasting into another application shows it.
+# the copies and the pastes in the fields of egui would then stay inside the application, without
+# any error. The code compiles and the tests pass all the same: without this check, only pasting
+# from or into another application shows it.
 #
 #   system-clipboard.sh
 set -eu

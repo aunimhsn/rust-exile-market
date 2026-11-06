@@ -2,6 +2,8 @@
 # src/item/mod.rs). These methods panic on a byte index inside a character, and their message
 # quotes the text.
 disallowed-methods = [
+    # Its result stays inside egui-winit: "Copied" would show even when the write failed.
+    { path = "egui::Context::copy_text", reason = "its result is lost: use clipboard::write_text" },
     { path = "str::split_at", reason = "panics with the text in the message: use split_once or get" },
     { path = "str::split_at_mut", reason = "panics with the text in the message: use split_once or get" },
 ]
