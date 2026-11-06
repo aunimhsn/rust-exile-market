@@ -48,16 +48,12 @@ jobs:
       - if: steps.changes.outputs.code == 'true'
         run: sh .github/scripts/system-clipboard.sh
 
-  # The code written for Windows or macOS alone (the keys of the price-check hotkey) is
-  # compiled and linted on its own system, which the job above never builds. Clippy only: the
-  # tests run on Linux.
-  lint-other-systems:
-    name: Lint on ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [windows-latest, macos-latest]
-    runs-on: ${{ matrix.os }}
+  # The code written for Windows alone (the keys of the price-check hotkey) is compiled and
+  # linted on its own system, which the job above never builds. Clippy only: the tests run on
+  # Linux.
+  lint-windows:
+    name: Lint on windows-latest
+    runs-on: windows-latest
     defaults:
       run:
         shell: bash
@@ -75,6 +71,28 @@ jobs:
         uses: Swatinem/rust-cache@v2
       - if: steps.changes.outputs.code == 'true'
         run: cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
+
+  # The code written for macOS alone, linted from Linux: GitHub may find no machine with macOS for
+  # a quarter of an hour, then cancel the job and block the merge, and a check doesn't need one.
+  # It keeps the name required by the ruleset of `main`.
+  lint-macos:
+    name: Lint on macos-latest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - id: changes
+        run: sh .github/scripts/code-changed.sh "$BASE" "$HEAD"
+      - if: steps.changes.outputs.code == 'true'
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+          targets: aarch64-apple-darwin
+      - if: steps.changes.outputs.code == 'true'
+        uses: Swatinem/rust-cache@v2
+      - if: steps.changes.outputs.code == 'true'
+        run: sh scripts/clippy-macos.sh
 
   msrv:
     name: Minimum Rust version

@@ -10,8 +10,9 @@ set -eu
 cd "$(dirname "$0")/.."
 
 target=x86_64-pc-windows-msvc
-stub=$(mktemp -d)
-trap 'rm -rf "$stub"' EXIT
+# At a fixed path: a path that changes would make Cargo check ring and what uses it at every run.
+stub=$(pwd)/target/clippy-windows/stand-in
+mkdir -p "$stub"
 
 # Writes the empty object (-Fo) or archive (-out:) the build script asks for.
 cat > "$stub/cl" <<'EOF'
