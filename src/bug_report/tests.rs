@@ -303,6 +303,22 @@ fn a_refused_log_never_reads_copied_and_can_be_tried_again() {
 }
 
 #[test]
+fn a_log_refused_leaves_the_other_log_copied() {
+    let mut report = Report::new("Exile Market 0.1.0".to_owned(), None, Some(log(3)))
+        .with_previous(previous_log(2), false);
+    report.copy_result(true);
+
+    report.choose(LogSession::Previous);
+    report.copy_result(false);
+    assert!(report.copy_failed());
+    assert!(!report.copied());
+
+    report.choose(LogSession::This);
+    assert!(report.copied(), "still in the clipboard");
+    assert!(!report.copy_failed());
+}
+
+#[test]
 fn copied_while_the_log_copied_is_chosen() {
     let mut report = Report::new("Exile Market 0.1.0".to_owned(), None, Some(log(3)))
         .with_previous(previous_log(2), false);

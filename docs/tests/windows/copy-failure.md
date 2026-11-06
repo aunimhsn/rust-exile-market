@@ -6,33 +6,34 @@
 
 1. Télécharge l'archive Windows `exile-market-test-x86_64-pc-windows-msvc.zip` (lien donné par le propriétaire) et décompresse-la.
 2. Lance `exile-market.exe`, puis ouvre le Bloc-notes pour coller.
-3. Ouvre PowerShell et colle ces deux lignes : le presse-papiers reste gardé jusqu'à ce que PowerShell ait reçu Entrée à sa question.
+3. **Avant de garder le presse-papiers**, sinon l'objet ne sera plus lu : copie dans le jeu un objet qui a des offres, clique sur la **loupe** si elles ne sont pas déjà là, et vérifie qu'un vendeur en ligne apparaît.
+4. Ouvre PowerShell, et garde la même fenêtre pour tout le guide. Colle ces deux lignes, puis appuie sur Entrée : le presse-papiers reste gardé jusqu'à ce que tu répondes par Entrée à la question de PowerShell.
 
    ```powershell
    Add-Type -Name Clip -Namespace Test -MemberDefinition '[DllImport("user32.dll")] public static extern bool OpenClipboard(IntPtr h); [DllImport("user32.dll")] public static extern bool CloseClipboard();'
    [Test.Clip]::OpenClipboard([IntPtr]::Zero); Read-Host "Presse-papiers garde. Entree pour le liberer"; [Test.Clip]::CloseClipboard()
    ```
 
-   Si la commande affiche `False`, une autre application tient déjà le presse-papiers : ferme-la et relance la seconde ligne. Pendant ce temps, la bande « The clipboard can't be read » peut s'afficher dans Exile Market : c'est normal, et elle disparaît ensuite.
+   Si la commande affiche `False`, une autre application tient déjà le presse-papiers : appuie sur Entrée, ferme cette application, puis relance la seconde ligne.
 
-4. Le log est dans `%LOCALAPPDATA%\exile-market\data\exile-market.log`.
+5. Le log est dans `%LOCALAPPDATA%\exile-market\data\exile-market.log`.
 
 ## Les tests
 
 1. **Le journal refusé** : presse-papiers gardé, ouvre le rapport de bug (le bug, à gauche de l'engrenage), puis clique sur **Copy the log** (« Copier le journal »).
-   ✅ La pastille devient, en rouge, « Not copied, try again » (« Non copié, réessayer »), jamais « Copied » ; le log dit « The clipboard couldn't be written », sans le texte du journal.
+   ✅ La pastille devient, en rouge, « Not copied, try again » (« Non copié, réessayer »), jamais « Copied » ; le log dit « The clipboard couldn't be written », sans le texte du journal. Environ une seconde après le début de la garde, la bande « The clipboard can't be read » s'affiche : c'est normal.
 
 2. **Le journal, réessayé** : appuie sur Entrée dans PowerShell, reclique sur la pastille, puis colle dans le Bloc-notes.
-   ✅ La pastille devient « ✓ Copied » (« ✓ Copié ») et le Bloc-notes reçoit tout le journal.
+   ✅ La bande disparaît, la pastille devient « ✓ Copied » (« ✓ Copié ») et le Bloc-notes reçoit tout le journal.
 
-3. **Le whisper refusé** : relance la seconde ligne de PowerShell. Survole une offre d'un vendeur en ligne, puis clique sur **Copy whisper** (« Copier le whisper »).
+3. **Le whisper refusé** : ferme l'aperçu (Échap) et relance la seconde ligne de PowerShell. **Clique sur la ligne** d'une offre d'un vendeur en ligne pour épingler son infobulle, puis clique sur **Copy whisper** (« Copier le whisper »).
    ✅ La pastille devient, en rouge, « Not copied, try again » (« Non copié, réessayer »), et le reste tant que l'infobulle est ouverte, sans repasser seule à « Copy whisper ».
 
-4. **Le whisper, réessayé** : appuie sur Entrée dans PowerShell, reclique sur la pastille, puis colle dans le Bloc-notes.
+4. **Le whisper, réessayé** : appuie sur Entrée dans PowerShell (l'infobulle épinglée reste ouverte), reclique sur la pastille, puis colle dans le Bloc-notes.
    ✅ La pastille devient « Copied » (« Copié ») avec la coche pendant 2 secondes, et le Bloc-notes reçoit le message au vendeur (`@vendeur …`).
 
-5. **Une autre offre** : refais le test 3, puis passe sur une autre offre et reviens (presse-papiers encore gardé), puis libère-le.
-   ✅ L'autre offre et l'offre d'origine proposent de nouveau « Copy whisper » (« Copier le whisper »).
+5. **Une autre offre** : ferme l'infobulle (Échap) et relance la seconde ligne de PowerShell. **Sans cliquer sur la ligne**, survole seulement une offre, clique sur la pastille de son infobulle, passe sur une autre offre, puis reviens. Appuie enfin sur Entrée dans PowerShell.
+   ✅ Après l'échec, l'autre offre et l'offre d'origine proposent de nouveau « Copy whisper » (« Copier le whisper »).
 
 6. **Tes propres scénarios** : essaie ce qui te passe par la tête (un autre journal choisi après un échec, l'échec dans la fenêtre par-dessus le jeu…).
    ✅ Rien d'étrange ; sinon, décris ce que tu as fait et ce que tu as vu.

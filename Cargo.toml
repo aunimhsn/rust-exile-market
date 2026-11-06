@@ -19,8 +19,9 @@ path = "src/main.rs"
 [dependencies]
 arboard = { version = "3.7", default-features = false }
 directories = "6.0.0"
-# `clipboard` makes `Context::copy_text` write to the clipboard of the system: without it, egui-winit
-# keeps the text to itself, and nothing can paste it (.github/scripts/system-clipboard.sh checks it).
+# `clipboard` makes the copies and the pastes in the fields of egui reach the clipboard of the
+# system: without it, egui-winit keeps the text to itself (.github/scripts/system-clipboard.sh
+# checks it). The whisper and the log go through `clipboard::write_text`, for its result.
 eframe = { version = "0.37", default-features = false, features = ["accesskit", "clipboard", "glow", "links", "persistence", "x11"] }
 egui = { version = "0.37", default-features = false }
 egui_extras = { version = "0.37", default-features = false, features = ["svg", "image"] }

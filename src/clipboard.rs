@@ -186,6 +186,10 @@ impl<S: ClipboardSource> ClipboardWatcher<S> {
 pub struct ClipboardWatch {
     worker: Worker<ClipboardEvent>,
     copy_expected: CopyExpected,
+    /// Never read: under X11, it keeps alive what answers the other applications for the texts
+    /// of [`write_text`], as long as the application runs. Closed after the thread of the
+    /// watching (the order of the fields). None in the tests, or when it couldn't open.
+    _keeps_written_text: Option<arboard::Clipboard>,
 }
 
 impl ClipboardWatch {
@@ -197,7 +201,13 @@ impl ClipboardWatch {
     /// If the system can't start a thread.
     #[must_use]
     pub fn start(wake: impl Fn() + Send + 'static) -> Self {
-        Self::spawn(SystemClipboard::default, wake)
+        let keeps_written_text = arboard::Clipboard::new()
+            .inspect_err(|error| log::warn!("The clipboard couldn't be opened: {error}"))
+            .ok();
+        Self {
+            _keeps_written_text: keeps_written_text,
+            ..Self::spawn(SystemClipboard::default, wake)
+        }
     }
 
     /// Watches the clipboard that `open` gives, on the thread, where it is opened.
@@ -214,6 +224,7 @@ impl ClipboardWatch {
         Self {
             worker,
             copy_expected,
+            _keeps_written_text: None,
         }
     }
 
@@ -329,10 +340,14 @@ fn needs_marker(text: Result<String, arboard::Error>) -> Result<bool, arboard::E
 /// the system took it (the reason of a failure goes to the log, never the text). Rather than
 /// `egui::Context::copy_text`, which keeps its result to itself.
 ///
-/// Opened for each copy, which is cheap: under X11 every handle of the application shares one
-/// connection and one thread that answers the other applications, which egui-winit keeps
-/// alive with its handle as long as a window is open. A failure takes at most about 25 ms on
-/// Windows, where arboard tries again while another application holds the clipboard.
+/// Opened for each copy: under X11 every handle of the application shares one connection and
+/// one thread that answers the other applications, kept alive by [`ClipboardWatch`], so that
+/// this one closing doesn't end the ownership of the text. Were it the last (the handle of
+/// the watch couldn't open), closing it would wait up to 100 ms for the clipboard manager, and
+/// without one the text would be lost, though this returned true. Under X11 a success only
+/// means that the request was sent. On Windows, arboard tries for about 25 ms when another
+/// application holds the clipboard.
+#[must_use = "the pill tells the player whether the text was copied"]
 pub fn write_text(text: &str) -> bool {
     let written = arboard::Clipboard::new().and_then(|mut clipboard| clipboard.set_text(text));
     if let Err(error) = &written {
