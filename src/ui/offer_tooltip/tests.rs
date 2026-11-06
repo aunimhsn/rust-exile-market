@@ -621,13 +621,61 @@ fn the_tooltip_of_an_offer_gone_closes() {
 #[test]
 fn the_pill_reads_copied_for_two_seconds() {
     let mut state = TooltipState::default();
-    state.copied("a", 1.0);
+    state.copy_result("a", 1.0, true);
 
-    assert!(state.shows_copied("a", 2.9));
-    assert!(!state.shows_copied("b", 2.9));
-    assert!(!state.shows_copied("a", 3.0));
+    assert_eq!(state.pill("a", 2.9), WhisperPill::Copied);
+    assert_eq!(state.pill("b", 2.9), WhisperPill::Copy);
+    assert_eq!(state.pill("a", 3.0), WhisperPill::Copy);
     let redraw = state.update(&at(2.0), &OFFERS);
     assert_eq!(redraw, Some(Duration::from_secs_f64(1.0)));
+}
+
+#[test]
+fn a_refused_whisper_is_forgotten_once_its_tooltip_moves_or_closes() {
+    let mut state = TooltipState::default();
+    state.update(&hovering("a", 0.0), &OFFERS);
+    state.copy_result("a", 0.5, false);
+
+    state.update(&hovering("a", 1.0), &OFFERS);
+    assert_eq!(state.pill("a", 1.0), WhisperPill::Failed, "still open");
+
+    state.update(&hovering("b", 2.0), &OFFERS);
+    assert_eq!(
+        state.pill("a", 2.0),
+        WhisperPill::Copy,
+        "moved to another offer"
+    );
+
+    state.update(&hovering("a", 3.0), &OFFERS);
+    state.copy_result("a", 3.5, false);
+    let escape = Pointer {
+        escape: true,
+        ..at(4.0)
+    };
+    state.update(&escape, &OFFERS);
+    assert_eq!(state.pill("a", 4.0), WhisperPill::Copy, "closed");
+}
+
+#[test]
+fn a_refused_whisper_never_reads_copied_and_a_click_tries_again() {
+    let mut state = TooltipState::default();
+    state.copy_result("a", 1.0, true);
+    state.copy_result("a", 1.5, false);
+
+    assert_eq!(
+        state.pill("a", 1.5),
+        WhisperPill::Failed,
+        "not the copy before"
+    );
+    assert_eq!(state.pill("b", 1.5), WhisperPill::Copy);
+    assert_eq!(
+        state.pill("a", 100.0),
+        WhisperPill::Failed,
+        "until it is answered"
+    );
+
+    state.copy_result("a", 200.0, true);
+    assert_eq!(state.pill("a", 200.0), WhisperPill::Copied);
 }
 
 #[test]

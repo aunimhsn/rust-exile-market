@@ -84,6 +84,8 @@ pub struct Report {
     join_item: bool,
     /// The session whose log the player copied last.
     copied: Option<LogSession>,
+    /// The session whose log the system refused last.
+    copy_failed: Option<LogSession>,
     sent: Sent,
     /// Which opening of the bug report it is, so that the preview starts again at each one:
     /// its log scrolled to its end.
@@ -154,6 +156,7 @@ impl Report {
             session: LogSession::This,
             join_item: true,
             copied: None,
+            copy_failed: None,
             sent,
             opening: OPENINGS.fetch_add(1, Ordering::Relaxed),
         }
@@ -293,9 +296,23 @@ impl Report {
         self.copied == Some(self.session)
     }
 
-    /// Tells that the player copied the log of the session chosen.
-    pub fn mark_copied(&mut self) {
-        self.copied = Some(self.session);
+    /// Whether the system refused the log of the session chosen: the pill offers to try again.
+    #[must_use]
+    pub fn copy_failed(&self) -> bool {
+        self.copy_failed == Some(self.session)
+    }
+
+    /// Tells that the log of the session chosen was sent to the clipboard, which took it or not.
+    pub fn copy_result(&mut self, written: bool) {
+        if written {
+            self.copied = Some(self.session);
+            self.copy_failed = None;
+        } else {
+            self.copy_failed = Some(self.session);
+            if self.copied == Some(self.session) {
+                self.copied = None;
+            }
+        }
     }
 
     /// The address of the issue form, its fields filled.

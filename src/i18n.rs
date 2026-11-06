@@ -73,6 +73,7 @@ pub enum Message {
     BugReportOpen,
     BugReportCopy,
     BugReportCopied,
+    BugReportCopyFailed,
     BugReportAccount,
     CheckOnTrade,
     TagCorrupted,
@@ -195,12 +196,13 @@ pub enum Message {
     SellerOffline,
     CopyWhisper,
     WhisperCopied,
+    WhisperCopyFailed,
 }
 
 impl Message {
     /// Every message, for the tests.
     #[cfg(test)]
-    const ALL: [Self; 153] = [
+    const ALL: [Self; 155] = [
         Self::LeagueModeSoftcore,
         Self::LeagueModeHardcore,
         Self::LeagueLoading,
@@ -248,6 +250,7 @@ impl Message {
         Self::BugReportOpen,
         Self::BugReportCopy,
         Self::BugReportCopied,
+        Self::BugReportCopyFailed,
         Self::BugReportAccount,
         Self::CheckOnTrade,
         Self::TagCorrupted,
@@ -354,6 +357,7 @@ impl Message {
         Self::SellerOffline,
         Self::CopyWhisper,
         Self::WhisperCopied,
+        Self::WhisperCopyFailed,
     ];
 
     /// Its identifier in the `.ftl` files.
@@ -407,6 +411,7 @@ impl Message {
             Self::BugReportOpen => "bug-report-open",
             Self::BugReportCopy => "bug-report-copy",
             Self::BugReportCopied => "bug-report-copied",
+            Self::BugReportCopyFailed => "bug-report-copy-failed",
             Self::BugReportAccount => "bug-report-account",
             Self::CheckOnTrade => "check-on-trade",
             Self::TagCorrupted => "tag-corrupted",
@@ -513,6 +518,7 @@ impl Message {
             Self::SellerOffline => "seller-offline",
             Self::CopyWhisper => "copy-whisper",
             Self::WhisperCopied => "whisper-copied",
+            Self::WhisperCopyFailed => "whisper-copy-failed",
         }
     }
 }

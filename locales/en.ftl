@@ -428,6 +428,8 @@ seller-away = Away
 seller-offline = Offline
 copy-whisper = Copy whisper
 whisper-copied = Copied
+# The system refused the text: a click on the pill tries again.
+whisper-copy-failed = Not copied, try again
 
 ## Settings
 
@@ -485,6 +487,8 @@ bug-report-open = Open on GitHub
 # Copies the whole log of the session chosen, to paste into the issue; "Copied" after a click, until the preview closes or the other log, not copied yet, is chosen.
 bug-report-copy = Copy the log
 bug-report-copied = Copied
+# The system refused the log: a click on the pill tries again.
+bug-report-copy-failed = Not copied, try again
 bug-report-account = A GitHub account is needed.
 
 ## Window that can't open

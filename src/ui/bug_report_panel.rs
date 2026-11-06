@@ -144,10 +144,15 @@ impl<'a> BugReportPanel<'a> {
             }
             if self.report.copied() {
                 copied_pill(ui, &self.i18n.text(Message::BugReportCopied));
-            } else if self.report.has_log()
-                && widgets::control_pill(ui, &self.i18n.text(Message::BugReportCopy)).clicked()
-            {
-                action = Some(BugReportAction::CopyLog);
+            } else if self.report.has_log() {
+                let pill = if self.report.copy_failed() {
+                    widgets::failed_pill(ui, &self.i18n.text(Message::BugReportCopyFailed))
+                } else {
+                    widgets::control_pill(ui, &self.i18n.text(Message::BugReportCopy))
+                };
+                if pill.clicked() {
+                    action = Some(BugReportAction::CopyLog);
+                }
             }
         });
         ui.add_space(ACCOUNT_GAP);

@@ -437,6 +437,8 @@ seller-away = Absent
 seller-offline = Hors ligne
 copy-whisper = Copier le whisper
 whisper-copied = Copié
+# Le système a refusé le texte : un clic sur la pastille réessaie.
+whisper-copy-failed = Non copié, réessayer
 
 ## Réglages
 
@@ -494,6 +496,8 @@ bug-report-open = Ouvrir sur GitHub
 # Copie tout le journal de la session choisie, à coller dans l'issue ; « Copié » après un clic, jusqu'à la fermeture de l'aperçu ou le choix de l'autre journal, pas encore copié.
 bug-report-copy = Copier le journal
 bug-report-copied = Copié
+# Le système a refusé le journal : un clic sur la pastille réessaie.
+bug-report-copy-failed = Non copié, réessayer
 bug-report-account = Un compte GitHub est nécessaire.
 
 ## Window that can't open

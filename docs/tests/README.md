@@ -32,3 +32,4 @@ They may be written in French, the language of the testers (an exception to the 
 - [Key of the hotkey chosen from a list](windows/hotkey-list.md) (14c3b2)
 - [Bug report](windows/bug-report.md) (16b)
 - [Executable: its name and its icon](windows/executable.md) (17a)
+- [A copy refused by the system](windows/copy-failure.md)

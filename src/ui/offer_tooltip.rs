@@ -62,6 +62,17 @@ pub struct TooltipState {
     open: Option<Open>,
     /// The offer whose whisper was copied, and when, in seconds of egui.
     copied: Option<(String, f64)>,
+    /// The offer whose whisper the system refused, while its tooltip stays open.
+    copy_failed: Option<String>,
+}
+
+/// What the pill of the whisper reads.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WhisperPill {
+    Copy,
+    Copied,
+    /// The system refused the text: a click tries again.
+    Failed,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -138,6 +149,9 @@ impl TooltipState {
                 self.open = None;
             }
         }
+        if self.copy_failed.as_deref() != self.open() {
+            self.copy_failed = None;
+        }
         let lingering = self
             .open
             .as_ref()
@@ -155,17 +169,31 @@ impl TooltipState {
             .map(|left| Duration::from_secs_f64(left.max(0.0)))
     }
 
-    /// The whisper of the offer `id` was copied at `time`.
-    pub fn copied(&mut self, id: &str, time: f64) {
-        self.copied = Some((id.to_owned(), time));
+    /// The whisper of the offer `id` was sent to the clipboard at `time`, which took it or not.
+    pub fn copy_result(&mut self, id: &str, time: f64, written: bool) {
+        if written {
+            self.copied = Some((id.to_owned(), time));
+            self.copy_failed = None;
+        } else {
+            self.copied = None;
+            self.copy_failed = Some(id.to_owned());
+        }
     }
 
-    /// Whether the pill of the offer `id` reads "Copied" at `time`.
+    /// What the pill of the offer `id` reads at `time`.
     #[must_use]
-    pub fn shows_copied(&self, id: &str, time: f64) -> bool {
-        self.copied
+    pub fn pill(&self, id: &str, time: f64) -> WhisperPill {
+        if self.copy_failed.as_deref() == Some(id) {
+            WhisperPill::Failed
+        } else if self
+            .copied
             .as_ref()
             .is_some_and(|(copied, at)| copied == id && time - at < COPIED_TIME)
+        {
+            WhisperPill::Copied
+        } else {
+            WhisperPill::Copy
+        }
     }
 }
 
@@ -181,7 +209,7 @@ pub struct OfferTooltip<'a> {
     pub lines: &'a CopiedLines,
     pub name_color: Color32,
     pub suspicious: bool,
-    pub copied: bool,
+    pub pill: WhisperPill,
     pub i18n: &'a Translator,
 }
 
@@ -562,17 +590,17 @@ impl OfferTooltip<'_> {
         };
         let status = widgets::text_line(ui, i18n.text(status), text::note());
         let whisper = (self.offer.seller != SellerStatus::Offline).then(|| {
-            if self.copied {
-                i18n.text(Message::WhisperCopied)
-            } else {
-                i18n.text(Message::CopyWhisper)
-            }
+            i18n.text(match self.pill {
+                WhisperPill::Copy => Message::CopyWhisper,
+                WhisperPill::Copied => Message::WhisperCopied,
+                WhisperPill::Failed => Message::WhisperCopyFailed,
+            })
         });
         let pill = whisper
             .as_ref()
             .map(|label| widgets::text_line(ui, label.as_str(), text::pill()));
         let pill_size = pill.as_ref().map(|galley| {
-            let check = if self.copied {
+            let check = if self.pill == WhisperPill::Copied {
                 CHECK_GAP + CHECK_SIZE
             } else {
                 0.0
@@ -613,23 +641,23 @@ impl OfferTooltip<'_> {
     }
 
     /// Copy whisper on the color of the controls, lighter under the pointer; "Copied" and a
-    /// check mark on the accent.
+    /// check mark on the accent; a copy that failed in red on the color of the controls.
     fn paint_pill(&self, ui: &Ui, response: &Response, galley: std::sync::Arc<egui::Galley>) {
         let rect = response.rect;
         let lit = response.hovered() || response.has_focus();
-        let (fill, tint) = if self.copied {
-            (color::ACCENT, color::ON_ACCENT)
-        } else if lit {
-            (color::CONTROL_LINE, color::ACCENT)
-        } else {
-            (color::CONTROL, color::TEXT)
+        let (fill, tint) = match (self.pill, lit) {
+            (WhisperPill::Copied, _) => (color::ACCENT, color::ON_ACCENT),
+            (WhisperPill::Failed, true) => (color::CONTROL_LINE, color::FALL),
+            (WhisperPill::Failed, false) => (color::CONTROL, color::FALL),
+            (WhisperPill::Copy, true) => (color::CONTROL_LINE, color::ACCENT),
+            (WhisperPill::Copy, false) => (color::CONTROL, color::TEXT),
         };
         let painter = ui.painter();
         painter.rect_filled(rect, CornerRadius::same(size::RADIUS), fill);
         let text_left = rect.left() + PILL_PADDING.x;
         let text_width = galley.size().x;
         painter.galley(pos2(text_left, rect.top() + PILL_PADDING.y), galley, tint);
-        if self.copied {
+        if self.pill == WhisperPill::Copied {
             widgets::check_mark(
                 painter,
                 pos2(

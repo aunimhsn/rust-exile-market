@@ -96,7 +96,7 @@ const RP_MOTIONS = {
 // "segmented", two pills joined on the right of its label, the chosen one white (chosen on 2026-11-04); "tabs" on
 // the top of its box, or "radios" on the right of its label (16a), rejected. `motion` the slide of the white pill
 // at a click, a key of RP_MOTIONS.
-const rpPreview = ({ first = false, previous = false, panic = false, item = "Headhunter", unreadable = false, itemOn = true, copied = false, fr = false, choice = "segmented", motion = "smooth" } = {}) => {
+const rpPreview = ({ first = false, previous = false, panic = false, item = "Headhunter", unreadable = false, itemOn = true, copied = false, copyFailed = null, fr = false, choice = "segmented", motion = "smooth" } = {}) => {
   const tx = (en, french) => (fr ? french : en);
   const names = [[!previous, tx("This session", "Cette session")], [previous, tx("The previous one", "La précédente")]];
   const sessions = first || choice === "tabs" ? "" : choice === "segmented"
@@ -114,7 +114,9 @@ const rpPreview = ({ first = false, previous = false, panic = false, item = "Hea
   const whole = unreadable ? "" : ` title="${tx("Join the item shown:", "Joindre l'objet affiché\u00a0:")} ${item}"`;
   const itemRow = item || unreadable ? `<div class="app-report-item"><div class="toggle">${box}<span class="app-report-item-text"${whole}>${what}</span></div></div>` : "";
   const log = previous && panic ? RP_PANIC_LOG : RP_LOG;
-  const copy = copied
+  const copy = copyFailed && copyFailed.pill
+    ? `<span class="pill is-copy-failed">${copyFailed.pill}</span>`
+    : copied
     ? `<span class="pill is-copied">${ICON.check(11)}${tx("Copied", "Copié")}</span>`
     : `<span class="pill">${tx("Copy the log", "Copier le journal")}</span>`;
   return `<div class="band b settings">
@@ -133,6 +135,7 @@ const rpPreview = ({ first = false, previous = false, panic = false, item = "Hea
       "Ses dernières lignes. Les autres fenêtres sont écrites « another window ».")}</div>
     ${itemRow}
     <div class="app-report-actions"><span class="pill is-main">${tx("Open on GitHub", "Ouvrir sur GitHub")}</span>${copy}</div>
+    ${copyFailed && copyFailed.note ? `<div class="app-copy-failed-note">${copyFailed.note}</div>` : ""}
     <div class="app-report-note" style="margin-top: 8px">${tx("A GitHub account is needed.", "Un compte GitHub est nécessaire.")}</div>
   </div>`;
 };

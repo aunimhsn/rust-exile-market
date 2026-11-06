@@ -325,6 +325,22 @@ fn needs_marker(text: Result<String, arboard::Error>) -> Result<bool, arboard::E
     }
 }
 
+/// Writes `text` to the clipboard of the system, for the player to paste it elsewhere; whether
+/// the system took it (the reason of a failure goes to the log, never the text). Rather than
+/// `egui::Context::copy_text`, which keeps its result to itself.
+///
+/// Opened for each copy, which is cheap: under X11 every handle of the application shares one
+/// connection and one thread that answers the other applications, which egui-winit keeps
+/// alive with its handle as long as a window is open. A failure takes at most about 25 ms on
+/// Windows, where arboard tries again while another application holds the clipboard.
+pub fn write_text(text: &str) -> bool {
+    let written = arboard::Clipboard::new().and_then(|mut clipboard| clipboard.set_text(text));
+    if let Err(error) = &written {
+        log::warn!("The clipboard couldn't be written: {error}");
+    }
+    written.is_ok()
+}
+
 /// Writes the marker, out of the history of the clipboard manager (Klipper).
 #[cfg(target_os = "linux")]
 fn set_marker(clipboard: &mut arboard::Clipboard) -> Result<(), arboard::Error> {

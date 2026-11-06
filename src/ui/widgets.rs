@@ -280,15 +280,26 @@ pub fn pill(ui: &mut Ui, label: &str) -> Response {
 /// A pill on the color of the controls, for a secondary action: lighter, with the text of
 /// the accent, under the pointer.
 pub fn control_pill(ui: &mut Ui, label: &str) -> Response {
+    tinted_control_pill(ui, label, color::TEXT, color::ACCENT)
+}
+
+/// A pill on the color of the controls whose action failed, in red: a click tries again.
+pub fn failed_pill(ui: &mut Ui, label: &str) -> Response {
+    tinted_control_pill(ui, label, color::FALL, color::FALL)
+}
+
+/// A pill on the color of the controls, lighter under the pointer, with the text in `tint`, or
+/// in `lit_tint` under the pointer.
+fn tinted_control_pill(ui: &mut Ui, label: &str, tint: Color32, lit_tint: Color32) -> Response {
     let galley = text_line(ui, label, text::pill());
     let (rect, response) =
         ui.allocate_exact_size(galley.size() + 2.0 * PILL_PADDING, Sense::click());
     response.widget_info(|| WidgetInfo::labeled(Role::Button, true, label));
     let lit = response.hovered() || response.has_focus();
     let (fill, tint) = if lit {
-        (color::CONTROL_LINE, color::ACCENT)
+        (color::CONTROL_LINE, lit_tint)
     } else {
-        (color::CONTROL, color::TEXT)
+        (color::CONTROL, tint)
     };
     let painter = ui.painter();
     painter.rect_filled(rect, CornerRadius::same(size::RADIUS), fill);

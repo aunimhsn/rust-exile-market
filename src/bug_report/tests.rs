@@ -283,10 +283,30 @@ fn copy_the_log_copies_the_whole_log_of_the_session_chosen() {
 }
 
 #[test]
+fn a_refused_log_never_reads_copied_and_can_be_tried_again() {
+    let mut report = Report::new("Exile Market 0.1.0".to_owned(), None, Some(log(3)))
+        .with_previous(previous_log(2), false);
+    report.copy_result(false);
+
+    assert!(report.copy_failed());
+    assert!(!report.copied());
+
+    report.choose(LogSession::Previous);
+    assert!(!report.copy_failed(), "another log, not tried yet");
+
+    report.choose(LogSession::This);
+    assert!(report.copy_failed(), "back to the log refused");
+
+    report.copy_result(true);
+    assert!(report.copied());
+    assert!(!report.copy_failed());
+}
+
+#[test]
 fn copied_while_the_log_copied_is_chosen() {
     let mut report = Report::new("Exile Market 0.1.0".to_owned(), None, Some(log(3)))
         .with_previous(previous_log(2), false);
-    report.mark_copied();
+    report.copy_result(true);
     report.join_item(false);
 
     assert!(report.copied(), "the same log");
