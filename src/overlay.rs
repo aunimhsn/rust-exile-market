@@ -5,8 +5,11 @@
 //! the pointer and the game window come with the hotkey ([`crate::hotkey`]), the clicks from a
 //! thread that reads the pointer of each system ([`ClickWatch`]), and the application draws the
 //! window. The keyboard goes to the window while one of its fields is edited ([`KeyboardFocus`]);
-//! on Windows, the game gets it back after each other click in the window.
+//! on Windows, the game gets it back after each other click in the window. On Linux, while the
+//! game holds the pointer (a single screen), the window becomes the active window ([`Activation`]).
 
+#[cfg(target_os = "linux")]
+mod activation;
 #[cfg(any(target_os = "linux", target_os = "windows"))]
 mod clicks;
 // The rules of the focus given back on Windows, tested on Linux too.
@@ -25,6 +28,8 @@ use self::windows as system;
 #[cfg(target_os = "linux")]
 use self::x11 as system;
 
+#[cfg(target_os = "linux")]
+pub use self::activation::Activation;
 #[cfg(any(target_os = "linux", target_os = "windows"))]
 pub use self::clicks::ClickWatch;
 #[cfg(target_os = "windows")]
@@ -136,6 +141,8 @@ pub struct Overlay {
     /// The hotkey was pressed since the last frame of the window: it gave the keyboard back to
     /// the game, so that the field edited in the window is left.
     leave_field: bool,
+    /// How many times the window opened, or opened again on another item.
+    openings: u64,
 }
 
 impl Overlay {
@@ -168,6 +175,7 @@ impl Overlay {
                 // closes. A hotkey pressed just before the window was turned off opens nothing.
                 if !self.off {
                     self.shown = target;
+                    self.openings += 1;
                 }
                 true
             }
@@ -215,6 +223,49 @@ impl Overlay {
     #[must_use]
     pub fn shown(&self) -> Option<Target> {
         self.shown
+    }
+
+    /// While the window is open, a number that changes each time it opens, or opens again on the
+    /// item of another hotkey.
+    #[must_use]
+    pub fn opened(&self) -> Option<u64> {
+        self.shown.map(|_| self.openings)
+    }
+
+    /// Closes the window (Esc, while it is the active window on a single screen).
+    pub fn close(&mut self) {
+        self.shown = None;
+    }
+}
+
+/// The window over the game never becomes the active window on this system: only Wine holds
+/// the pointer of the game, on Linux.
+#[cfg(not(target_os = "linux"))]
+#[derive(Default)]
+pub struct Activation;
+
+#[cfg(not(target_os = "linux"))]
+#[expect(
+    clippy::unused_self,
+    reason = "the interface of the activation of Linux, without its state"
+)]
+impl Activation {
+    #[must_use]
+    pub fn new() -> Self {
+        Self
+    }
+
+    pub fn hotkey(&mut self) {}
+
+    /// Never the active window.
+    #[must_use]
+    pub fn holds(&self) -> bool {
+        false
+    }
+
+    /// Nothing to wait for.
+    pub fn follow(&mut self, _opened: Option<u64>, _now: std::time::Instant) -> bool {
+        false
     }
 }
 
@@ -600,5 +651,37 @@ mod tests {
 
         overlay.clicked(Point { x: 4000, y: 500 }, None);
         assert_eq!(overlay.shown(), None);
+    }
+
+    #[test]
+    fn each_opening_has_its_own_number() {
+        let mut overlay = Overlay::default();
+        let now = Instant::now();
+        assert_eq!(overlay.opened(), None);
+        overlay.hotkey(Some(target(4557, 966)), Some(now), now);
+        overlay.copied(Some(now));
+        let first = overlay.opened();
+
+        // Opened again on another item, without closing in between.
+        let later = now + Duration::from_millis(500);
+        overlay.hotkey(Some(target(3000, 400)), Some(later), later);
+        overlay.copied(Some(later));
+
+        assert!(first.is_some());
+        assert!(overlay.opened().is_some());
+        assert_ne!(overlay.opened(), first);
+    }
+
+    #[test]
+    fn esc_closes_it() {
+        let mut overlay = Overlay::default();
+        let now = Instant::now();
+        overlay.hotkey(Some(target(4557, 966)), Some(now), now);
+        overlay.copied(Some(now));
+
+        overlay.close();
+
+        assert_eq!(overlay.shown(), None);
+        assert_eq!(overlay.opened(), None);
     }
 }

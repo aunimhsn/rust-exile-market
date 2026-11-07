@@ -23,7 +23,7 @@ use crate::item::{CopiedItem, Item};
 use crate::league::League;
 use crate::market::MarketWatch;
 use crate::offers::{LONG_WAIT, Offers, OffersState};
-use crate::overlay::{self, ClickWatch, KeyboardFocus, Overlay, ScreenRect};
+use crate::overlay::{self, Activation, ClickWatch, KeyboardFocus, Overlay, ScreenRect};
 use crate::prices::Rates;
 use crate::pricing::{FixedPrice, NoFixedPrice};
 use crate::recent_items::RecentItems;
@@ -89,6 +89,9 @@ pub struct ExileMarketApp {
     overlay_height: Option<f32>,
     /// The keyboard, given to the window over the game while one of its fields is edited.
     keyboard: KeyboardFocus,
+    /// The window over the game made the active window while the game holds the pointer (a
+    /// single screen, on Linux).
+    activation: Activation,
     /// The item shown, the last one copied, and the items copied before it, with their filters
     /// and offers as the player left them.
     recent: RecentItems,
@@ -161,6 +164,7 @@ impl ExileMarketApp {
             overlay_window: None,
             overlay_height: None,
             keyboard: KeyboardFocus::new(),
+            activation: Activation::new(),
             recent: RecentItems::default(),
             market,
             item_names: ItemNamesWatch::start(move || names_ctx.request_repaint()),
@@ -605,12 +609,22 @@ impl ExileMarketApp {
                 self.keyboard.give_back(overlay::Frame::HIDDEN);
             }
             place?;
+            // On a single screen, where the window is the active one, Esc closes it, unless it
+            // leaves the field edited at the start of the frame.
+            if self.activation.holds()
+                && !ui.ctx().text_edit_focused()
+                && ui.input(|input| input.key_pressed(Key::Escape))
+            {
+                self.overlay.close();
+                ui.ctx().request_repaint();
+            }
             // Its own ids: the scroll and the panels of the main window are its own.
             let height = ui
                 .push_id("window-over-the-game", |ui| {
                     StatusBar::sources(&self.i18n, prices, trade)
                         .league(league.as_ref())
                         .keyboard(self.keyboard.held())
+                        .single_screen(self.activation.holds())
                         .show(ui);
                     self.item(ui, prices, kind, to_top)
                 })
@@ -630,7 +644,8 @@ impl ExileMarketApp {
         }
         // The status bar, drawn before the fields, says it at the next frame: on Windows, the
         // window took the keyboard during the frame already.
-        if self.keyboard.follow(editing) != held {
+        // On a single screen, the window already has the keyboard while it is the active window.
+        if self.keyboard.follow(editing && !self.activation.holds()) != held {
             ctx.request_repaint();
         }
         if height.is_some() && self.overlay_height != height {
@@ -718,8 +733,14 @@ impl App for ExileMarketApp {
         // close the window as it was, not the one these items open), and only then the items.
         let mut events = Vec::new();
         self.clipboard.receive(|event| events.push(event));
-        self.hotkey
-            .receive(|press| self.overlay.hotkey(press.target, press.copy, now));
+        let mut pressed = false;
+        self.hotkey.receive(|press| {
+            self.overlay.hotkey(press.target, press.copy, now);
+            pressed = true;
+        });
+        if pressed {
+            self.activation.hotkey();
+        }
         let window = self.overlay_window;
         let clicks_read = self
             .clicks
@@ -735,6 +756,10 @@ impl App for ExileMarketApp {
         }
         if let Some(left) = self.overlay.expire(now) {
             ctx.request_repaint_after(left);
+        }
+        // Asked again soon while it waits for the window to show, or the desktop to activate it.
+        if self.activation.follow(self.overlay.opened(), now) {
+            ctx.request_repaint_after(ACTIVATION_POLL);
         }
         self.clicks.watch(self.overlay.shown().is_some());
         let main_focused = ctx.input(|input| input.viewport().focused.unwrap_or(false));
@@ -931,6 +956,10 @@ fn copied_again(by_hotkey: bool, last: Option<&CopiedItem>, item: &CopiedItem) -
 
 /// The height of the window over the game for an item that can't be read, in points.
 const EMPTY_HEIGHT: f32 = 160.0;
+
+/// How soon the next frame comes while the window over the game waits to show, or the desktop to
+/// make it the active window (a single screen).
+const ACTIVATION_POLL: Duration = Duration::from_millis(30);
 
 /// `points` in the physical pixels of a screen of `scale` pixels per point.
 #[expect(

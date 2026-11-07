@@ -5,7 +5,9 @@
 use std::error::Error;
 
 use x11rb::connection::Connection;
-use x11rb::protocol::xproto::{Atom, AtomEnum, ConnectionExt as _, Window};
+use x11rb::protocol::xproto::{
+    Atom, AtomEnum, ClientMessageEvent, ConnectionExt as _, EventMask, Window,
+};
 use x11rb::rust_connection::RustConnection;
 
 pub type Result<T> = std::result::Result<T, Box<dyn Error>>;
@@ -17,6 +19,9 @@ pub struct Atoms {
     pub active_window: Atom,
     /// `_NET_WM_PID`, the process of a window, which winit writes on each of its windows.
     pub pid: Atom,
+    /// `_EXILE_MARKET_GAME`, the game the helper of the window over the game carries
+    /// ([`crate::overlay`]), while it is shown.
+    pub game_behind: Atom,
 }
 
 impl Atoms {
@@ -26,7 +31,15 @@ impl Atoms {
             .reply()?
             .atom;
         let pid = connection.intern_atom(false, b"_NET_WM_PID")?.reply()?.atom;
-        Ok(Self { active_window, pid })
+        let game_behind = connection
+            .intern_atom(false, b"_EXILE_MARKET_GAME")?
+            .reply()?
+            .atom;
+        Ok(Self {
+            active_window,
+            pid,
+            game_behind,
+        })
     }
 }
 
@@ -53,6 +66,49 @@ pub fn is_ours(connection: &RustConnection, atoms: Atoms, window: Window) -> Res
         .value32()
         .and_then(|mut values| values.next());
     Ok(owner == Some(std::process::id()))
+}
+
+/// The class of the helper of the window over the game (`WM_CLASS`: its instance, then its class).
+pub const HELPER_CLASS: &[u8] = b"exile-market-helper\0exile-market\0";
+
+/// The game `window` carries, when it is the helper of the window over the game, shown on a single
+/// screen ([`crate::overlay`]): a window of this application with the game in
+/// `_EXILE_MARKET_GAME`. The hotkey takes it for the game.
+pub fn game_behind(
+    connection: &RustConnection,
+    atoms: Atoms,
+    window: Window,
+) -> Result<Option<Window>> {
+    let game = connection
+        .get_property(false, window, atoms.game_behind, AtomEnum::WINDOW, 0, 1)?
+        .reply()?
+        .value32()
+        .and_then(|mut windows| windows.next())
+        .filter(|&game| game != x11rb::NONE);
+    if game.is_none() || !is_ours(connection, atoms, window)? {
+        return Ok(None);
+    }
+    Ok(game)
+}
+
+/// Asks the desktop to make `window` the active window (`_NET_ACTIVE_WINDOW`), as a pager does
+/// (source 2), which the focus stealing prevention of `KWin` lets through.
+pub fn activate(
+    connection: &RustConnection,
+    root: Window,
+    atoms: Atoms,
+    window: Window,
+) -> Result<()> {
+    let event = ClientMessageEvent::new(32, window, atoms.active_window, [2, 0, 0, 0, 0]);
+    connection
+        .send_event(
+            false,
+            root,
+            EventMask::SUBSTRUCTURE_REDIRECT | EventMask::SUBSTRUCTURE_NOTIFY,
+            event,
+        )?
+        .check()?;
+    Ok(())
 }
 
 /// Whether the keyboard, at `focused`, is in no window: the root window (which gets it when the
