@@ -283,7 +283,7 @@ impl Activation {
     pub fn follow(
         &mut self,
         _opened: Option<u64>,
-        _pending: bool,
+        _pending: impl Fn() -> bool,
         _now: std::time::Instant,
     ) -> Option<Duration> {
         None

@@ -88,10 +88,18 @@ pub struct PriceCheckHotkey {
     in_game: Option<InGame>,
     /// Each press of the hotkey.
     targets: Option<Receiver<Press>>,
+    /// The presses on their way: counted by the handler of the hotkey events before it touches
+    /// the active window (on a single screen, it makes the game active again), and until the
+    /// window receives them, so that the window over the game doesn't take the game made active
+    /// for a copy for a window the player went to.
+    on_their_way: OnTheirWay,
     /// Its keys, also read by the handler of the hotkey events, which only copies at a press of
     /// them: the keys replaced, a press of the previous ones still on its way is ignored.
     shortcut: SharedShortcut,
 }
+
+/// The presses on their way, shared with the handler of the hotkey events.
+type OnTheirWay = std::sync::Arc<std::sync::atomic::AtomicUsize>;
 
 /// The keys of the hotkey, shared with the handler of the hotkey events.
 type SharedShortcut = std::sync::Arc<std::sync::Mutex<Shortcut>>;
@@ -304,10 +312,12 @@ impl PriceCheckHotkey {
 
         let on = Arc::new(AtomicBool::new(on));
         let keys = Arc::new(Mutex::new(shortcut));
+        let on_their_way = OnTheirWay::default();
         let off = || Self {
             on: Arc::clone(&on),
             in_game: None,
             targets: None,
+            on_their_way: Arc::clone(&on_their_way),
             shortcut: Arc::clone(&keys),
         };
         let sender = match system::CopySender::connect() {
@@ -330,21 +340,30 @@ impl PriceCheckHotkey {
         let wake_in_game = Arc::clone(&wake);
         let on_at_press = Arc::clone(&on);
         let keys_at_press = Arc::clone(&keys);
+        let on_their_way_at_press = Arc::clone(&on_their_way);
         GlobalHotKeyEvent::set_event_handler(Some(move |event: GlobalHotKeyEvent| {
             let shortcut = *keys_at_press.lock().unwrap_or_else(PoisonError::into_inner);
             if copies_at(event, shortcut, on_at_press.load(Ordering::Relaxed)) {
                 let mut sender = sender.lock().unwrap_or_else(PoisonError::into_inner);
                 let (copy_sender, marker) = &mut *sender;
+                // Counted before the active window changes, uncounted by the window once it
+                // receives the press, or here when none is told.
+                on_their_way_at_press.fetch_add(1, Ordering::SeqCst);
+                let mut told = false;
                 copy_sender.send_copy(
                     shortcut,
                     || prepare_copy(marker),
                     |target, copy| {
+                        told = true;
                         // The application stopped listening: nothing left to tell.
                         if targets.send(Press { target, copy }).is_ok() {
                             wake();
                         }
                     },
                 );
+                if !told {
+                    on_their_way_at_press.fetch_sub(1, Ordering::SeqCst);
+                }
             }
         }));
         let in_game = InGame::start(manager, shortcut, on.load(Ordering::Relaxed), move || {
@@ -354,6 +373,7 @@ impl PriceCheckHotkey {
             on,
             in_game: Some(in_game),
             targets: Some(receiver),
+            on_their_way,
             shortcut: keys,
         }
     }
@@ -371,6 +391,7 @@ impl PriceCheckHotkey {
         Self {
             on: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(on)),
             targets: None,
+            on_their_way: OnTheirWay::default(),
             shortcut: std::sync::Arc::new(std::sync::Mutex::new(shortcut)),
         }
     }
@@ -640,9 +661,18 @@ impl PriceCheckHotkey {
     pub fn receive(&mut self, mut handle: impl FnMut(Press)) {
         if let Some(targets) = &self.targets {
             while let Ok(target) = targets.try_recv() {
+                self.on_their_way
+                    .fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
                 handle(target);
             }
         }
+    }
+
+    /// Whether a press is on its way: its copy is being sent, and the window hasn't received it
+    /// yet ([`Self::receive`]). Read after the active window, which the copy may have changed.
+    #[must_use]
+    pub fn on_its_way(&self) -> bool {
+        self.on_their_way.load(std::sync::atomic::Ordering::SeqCst) > 0
     }
 }
 

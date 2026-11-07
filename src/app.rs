@@ -588,19 +588,17 @@ impl ExileMarketApp {
         let height = ctx.show_viewport_immediate(id, builder, |ui, _| {
             // Closed, the hotkey gave the keyboard back to the game, or the window lost it
             // (Alt+Tab, which egui doesn't take for leaving the field; on Windows, whatever
-            // took the focus, even while no field had it): no field is edited, so that the
-            // status bar doesn't say the keys go to the window, and a window that opens again
-            // doesn't take the keyboard. The number typed is settled, as leaving its field
-            // does.
+            // took the focus, even while no field had it; only a window that had it loses it):
+            // no field is edited, so that the status bar doesn't say the keys go to the window,
+            // and a window that opens again doesn't take the keyboard. The number typed is
+            // settled, as leaving its field does.
             let left = self.overlay.take_leave_field();
-            let lost =
-                (self.keyboard.held() || self.activation.holds() || cfg!(target_os = "windows"))
-                    && ui.input(|input| {
-                        input
-                            .events
-                            .iter()
-                            .any(|event| matches!(event, egui::Event::WindowFocused(false)))
-                    });
+            let lost = ui.input(|input| {
+                input
+                    .events
+                    .iter()
+                    .any(|event| matches!(event, egui::Event::WindowFocused(false)))
+            });
             if (place.is_none() || left || lost) && ui.ctx().text_edit_focused() {
                 self.filters.settle_edited(Window::OverTheGame);
                 ui.ctx().memory_mut(egui::Memory::stop_text_input);
@@ -610,6 +608,13 @@ impl ExileMarketApp {
                 self.keyboard.give_back(overlay::Frame::HIDDEN);
             }
             place?;
+            // On a single screen, where the window is the active one, the keys are the game's
+            // (Tab its map, Space its dodge, 1 to 5 its flasks and charms) unless a field is
+            // edited: only Esc does something, below, so that they neither move the keyboard
+            // in the window nor press its buttons nor type in its fields.
+            if self.activation.escape_closes() {
+                keep_only_esc(ui);
+            }
             // Its own ids: the scroll and the panels of the main window are its own.
             let height = ui
                 .push_id("window-over-the-game", |ui| {
@@ -762,11 +767,15 @@ impl App for ExileMarketApp {
             ctx.request_repaint_after(left);
         }
         // Asked again soon while it waits for the window to show, the desktop to activate it, or
-        // the game to hold the pointer.
-        if let Some(after) =
-            self.activation
-                .follow(self.overlay.opened(), self.overlay.waiting(), now)
-        {
+        // the game to hold the pointer. A press on its way, not received yet, is pending too: its
+        // copy makes the game the active window before it is told.
+        let waiting = self.overlay.waiting();
+        let hotkey = &self.hotkey;
+        if let Some(after) = self.activation.follow(
+            self.overlay.opened(),
+            || waiting || hotkey.on_its_way(),
+            now,
+        ) {
             ctx.request_repaint_after(after);
         }
         self.clicks.watch(self.overlay.shown().is_some());
@@ -924,6 +933,23 @@ fn paint_while_hidden(overlay_shown: bool, main_visible: Option<bool>) -> bool {
     overlay_shown && main_visible == Some(false)
 }
 
+/// Leaves only Esc to the frame of the window over the game, before its content: the keys of the
+/// game neither move the keyboard in it (Tab, the arrows, which egui takes in before the frame),
+/// nor press what has it (Space, Enter), nor type.
+fn keep_only_esc(ui: &egui::Ui) {
+    ui.ctx()
+        .memory_mut(|memory| memory.move_focus(egui::FocusDirection::None));
+    ui.input_mut(|input| {
+        input.events.retain(|event| match event {
+            egui::Event::Key { key, .. } => *key == Key::Escape,
+            egui::Event::Text(_) | egui::Event::Paste(_) | egui::Event::Copy | egui::Event::Cut => {
+                false
+            }
+            _ => true,
+        });
+    });
+}
+
 /// What a frame of the window over the game saw once its content is drawn, for the focus given
 /// back to the game on Windows: the content may open a link with the click (Check on trade), the
 /// browser then coming to the front instead; `editing`, whether one of its fields is edited.
@@ -1051,6 +1077,97 @@ fn random_quote() -> usize {
 mod tests {
     use super::*;
     use crate::item::CopiedItem;
+
+    /// A frame of egui with `events`, `content` drawing it.
+    fn egui_frame(
+        ctx: &Context,
+        time: f64,
+        events: Vec<egui::Event>,
+        content: impl FnMut(&mut egui::Ui),
+    ) {
+        let input = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(
+                egui::Pos2::ZERO,
+                vec2(420.0, 300.0),
+            )),
+            time: Some(time),
+            events,
+            ..Default::default()
+        };
+        let mut output = ctx.run_ui(input, content);
+        // epaint panics when the texture changes of a frame are dropped unapplied.
+        output.textures_delta.clear();
+    }
+
+    fn key(key: Key) -> egui::Event {
+        egui::Event::Key {
+            key,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: Modifiers::NONE,
+        }
+    }
+
+    /// After Tab (the map of the game), Tab then Space (its dodge), then 1 (a flask): whether a
+    /// widget has the keyboard, whether the button was pressed, the text of the field; only Esc
+    /// left to the frames when `keep`.
+    fn after_game_keys(keep: bool) -> (bool, bool, String) {
+        let ctx = Context::default();
+        let mut text = String::new();
+        let mut clicked = false;
+        let frames = [
+            vec![],
+            vec![key(Key::Tab)],
+            vec![key(Key::Tab), key(Key::Space)],
+            vec![key(Key::Num1), egui::Event::Text("1".to_owned())],
+        ];
+        for (at, events) in (0_u32..).zip(frames) {
+            egui_frame(&ctx, f64::from(at) * 0.2, events, |ui| {
+                if keep {
+                    keep_only_esc(ui);
+                }
+                clicked |= ui.button("Search").clicked();
+                ui.text_edit_singleline(&mut text);
+            });
+        }
+        let focused = ctx.memory(egui::Memory::focused).is_some();
+        (focused, clicked, text)
+    }
+
+    #[test]
+    fn the_keys_of_the_game_neither_move_the_keyboard_nor_press_nor_type() {
+        assert_eq!(after_game_keys(true), (false, false, String::new()));
+        // What egui does with them otherwise.
+        assert_ne!(after_game_keys(false), (false, false, String::new()));
+    }
+
+    #[test]
+    fn esc_leaves_a_field_before_the_frame_reads_it() {
+        let ctx = Context::default();
+        let mut text = String::new();
+        let field = egui::Id::NULL.with("field");
+        let mut draw = |ui: &mut egui::Ui| {
+            ui.add(egui::TextEdit::singleline(&mut text).id(field));
+        };
+        egui_frame(&ctx, 0.0, vec![], &mut draw);
+        ctx.memory_mut(|memory| memory.request_focus(field));
+        egui_frame(&ctx, 0.2, vec![], &mut draw);
+        assert!(ctx.text_edit_focused());
+
+        // So the window reads whether a field was edited at the last frame
+        // (`Activation::escape_closes`): this one already left it, its Esc still there.
+        let mut seen = None;
+        egui_frame(&ctx, 0.4, vec![key(Key::Escape)], |ui| {
+            seen = Some((
+                ui.ctx().text_edit_focused(),
+                ui.input(|input| input.key_pressed(Key::Escape)),
+            ));
+            draw(ui);
+        });
+
+        assert_eq!(seen, Some((false, true)));
+    }
 
     #[test]
     fn a_lit_state_tag_reaches_the_search() {
