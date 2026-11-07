@@ -28,8 +28,8 @@ const pgWindow = ({ note, typing = false } = {}) => {
 
 const PG_A = "Keys go to this window · Click the game: back";
 const PG_A_FR = "Les touches vont ici · Clic dans le jeu\u00a0: retour";
-const PG_B = "Keys go to this window · Esc or click the game: back";
-const PG_B_FR = "Les touches vont ici · Échap ou clic dans le jeu\u00a0: retour";
+const PG_B = "Keys go here · Esc or click outside: back to the game";
+const PG_B_FR = "Les touches vont ici · Échap ou clic ailleurs\u00a0: retour au jeu";
 
 SECTIONS.unshift(["Window over the game on a single screen: B chosen, the keys go to the window, Esc closes it", [
   ["Chosen · B · Opened: the same line, Esc closes the window too", pgWindow({ note: PG_B })],

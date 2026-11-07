@@ -47,7 +47,7 @@ status-update = { $version } available
 # In the window over the game, while a min or max field is edited: the keys no longer reach the game.
 status-keyboard = Keys go to this window · Enter or Esc: back to the game
 # In the window over the game, the whole time it is open on a single screen, where it becomes the active window so that the game lets the mouse go: the keys no longer reach the game.
-status-keyboard-single-screen = Keys go to this window · Esc or click the game: back
+status-keyboard-single-screen = Keys go here · Esc or click outside: back to the game
 
 ## Window before the first item
 

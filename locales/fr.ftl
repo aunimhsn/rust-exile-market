@@ -47,7 +47,7 @@ status-update = { $version } disponible
 # Dans la fenêtre par-dessus le jeu, pendant la saisie d'un champ min ou max : les touches n'atteignent plus le jeu.
 status-keyboard = Les touches vont dans cette fenêtre · Entrée ou Échap : retour au jeu
 # Dans la fenêtre par-dessus le jeu, tout le temps où elle est ouverte sur un seul écran, où elle devient la fenêtre active pour que le jeu lâche la souris : les touches n'atteignent plus le jeu.
-status-keyboard-single-screen = Les touches vont ici · Échap ou clic dans le jeu : retour
+status-keyboard-single-screen = Les touches vont ici · Échap ou clic ailleurs : retour au jeu
 
 ## Fenêtre avant le premier objet
 

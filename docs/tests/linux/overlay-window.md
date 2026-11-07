@@ -67,7 +67,7 @@ Fais les tests 1 à 15 sur ton installation habituelle, puis les tests 16 à 22 
 Débranche ou désactive ton deuxième écran (ou fais ces tests sur une machine à un écran), jeu en **plein écran fenêtré**. Avant chaque test, bouge un peu la souris dans le jeu.
 
 16. **La souris dans la fenêtre** : **Ctrl+D** sur un objet, puis passe la souris sur la fenêtre et sur ses offres, et clique sur une case à cocher.
-   ✅ Le curseur au-dessus de la fenêtre est la flèche du bureau, pas celui du jeu ; les offres s'éclairent au survol ; la case se coche. La barre d'état dit « Les touches vont ici · Échap ou clic dans le jeu : retour ». La barre des tâches reste cachée.
+   ✅ Le curseur au-dessus de la fenêtre est la flèche du bureau, pas celui du jeu ; les offres s'éclairent au survol ; la case se coche. La barre d'état dit « Les touches vont ici · Échap ou clic ailleurs : retour au jeu ». La barre des tâches reste cachée.
 
 17. **Les touches du jeu** : la fenêtre ouverte, appuie sur `1`.
    ✅ La flasque ne part pas.
