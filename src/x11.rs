@@ -77,16 +77,23 @@ pub fn unless_gone<T>(reply: std::result::Result<T, ReplyError>) -> Result<Optio
 /// Whether `window` belongs to this application: its `_NET_WM_PID` is the id of this process. A
 /// window gone isn't.
 pub fn is_ours(connection: &RustConnection, atoms: Atoms, window: Window) -> Result<bool> {
-    let Some(reply) = unless_gone(
+    Ok(ours_unless_gone(connection, atoms, window)?.unwrap_or(false))
+}
+
+/// Whether `window` belongs to this application, none when it is gone meanwhile.
+pub fn ours_unless_gone(
+    connection: &RustConnection,
+    atoms: Atoms,
+    window: Window,
+) -> Result<Option<bool>> {
+    let reply = unless_gone(
         connection
             .get_property(false, window, atoms.pid, AtomEnum::CARDINAL, 0, 1)?
             .reply(),
-    )?
-    else {
-        return Ok(false);
-    };
-    let owner = reply.value32().and_then(|mut values| values.next());
-    Ok(owner == Some(std::process::id()))
+    )?;
+    Ok(reply.map(|reply| {
+        reply.value32().and_then(|mut values| values.next()) == Some(std::process::id())
+    }))
 }
 
 /// The class of the helper of the window over the game (`WM_CLASS`: its instance, then its class).

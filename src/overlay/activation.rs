@@ -167,7 +167,7 @@ pub struct Activation<S: Screen = XScreen> {
     connect: fn() -> Result<S>,
     link: Link<S>,
     state: State,
-    /// The state before the last frame.
+    /// The state at the start of the last [`Self::follow`], which [`Self::lost`] compares.
     before: State,
     /// The opening of the window followed ([`super::Overlay::opened`]).
     opened: Option<u64>,
@@ -535,7 +535,8 @@ fn show(
     // to meanwhile (Alt+Tab while a hotkey on an empty cell waited for its item), which the game,
     // brought to the front with its helper, would cover.
     let active = screen.active()?;
-    if active != Some(game) && (active.is_none() || active != shown) {
+    let from_ours = active.is_some_and(|active| active == game || shown == Some(active));
+    if !from_ours {
         log::info!("Another window became the active window: the window over the game lets it be");
         return Ok(State::watching(now, now + WATCH_POLL, Some(game)));
     }
@@ -548,6 +549,14 @@ fn show(
         });
     };
     let helper = screen.show_helper(overlay, game)?;
+    // A press since `pending` was read: its keys first.
+    if (moment.pending)() {
+        return Ok(State::Waiting {
+            game,
+            since: now,
+            shown: Some(helper),
+        });
+    }
     screen.activate(helper)?;
     Ok(State::Activating {
         overlay,
@@ -762,7 +771,10 @@ impl Screen for XScreen {
                 && geometry.y <= 0
                 && geometry.width >= self.size.0
                 && geometry.height >= self.size.1;
-            if covers && !shared::is_ours(&self.connection, self.atoms, window)? {
+            // Gone meanwhile, it isn't that window either.
+            if covers
+                && shared::ours_unless_gone(&self.connection, self.atoms, window)? == Some(false)
+            {
                 return Ok(true);
             }
         }

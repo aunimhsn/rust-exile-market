@@ -385,9 +385,10 @@ impl PriceCheckHotkey {
                     shortcut,
                     || prepare_copy(marker),
                     |target, copy| {
-                        on_its_way.told();
-                        // The application stopped listening: nothing left to tell.
+                        // The application stopped listening: nothing left to tell, nor to give
+                        // back.
                         if targets.send(Press { target, copy }).is_ok() {
+                            on_its_way.told();
                             wake();
                         }
                     },
@@ -696,7 +697,7 @@ impl PriceCheckHotkey {
         }
     }
 
-    /// Whether a press is on its way: its copy is being sent, and the window hasn't received it
+    /// Whether a press is on its way: its keys are being sent, or the window hasn't received it
     /// yet ([`Self::receive`]). Read after the active window, which the copy may have changed.
     #[must_use]
     pub fn on_its_way(&self) -> bool {
@@ -717,6 +718,7 @@ fn copies_at(event: global_hotkey::GlobalHotKeyEvent, keys: Shortcut, on: bool) 
 mod tests {
     use super::*;
     use global_hotkey::{GlobalHotKeyEvent, HotKeyState};
+    use std::sync::atomic::{AtomicUsize, Ordering};
 
     /// An event of the hotkey of `keys`, in `state`.
     fn event(keys: &str, state: HotKeyState) -> GlobalHotKeyEvent {
@@ -734,8 +736,6 @@ mod tests {
             HotKeyState::Released => HotKeyState::Pressed,
         }
     }
-
-    use std::sync::atomic::{AtomicUsize, Ordering};
 
     #[test]
     fn a_press_told_is_on_its_way_until_its_keys_are_sent_and_the_window_received_it() {

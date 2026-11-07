@@ -87,7 +87,7 @@ Débranche ou désactive ton deuxième écran (ou fais ces tests sur une machine
 22. **Case vide** : **Ctrl+D** sur un objet, puis, la fenêtre ouverte, **Ctrl+D** sur une case vide de l'inventaire. Attends 3 secondes, puis survole les offres.
    ✅ La fenêtre reste sur le premier objet, et la souris y marche toujours après un instant. La barre d'état dit de nouveau « Les touches vont ici… ».
    Puis, toujours la fenêtre ouverte, **Ctrl+D** sur une case vide et aussitôt **Alt+Tab** vers une autre fenêtre ; attends 3 secondes.
-   ✅ L'autre fenêtre reste devant : le jeu ne revient pas par-dessus.
+   ✅ L'autre fenêtre reste devant : le jeu ne revient pas par-dessus. Pendant au plus deux secondes, la barre d'état dit encore « Les touches vont ici… », puis elle montre de nouveau l'âge des sources.
 
 23. **Infobulle épinglée** : **Ctrl+D** sur un objet qui a des offres, clique sur une offre pour épingler son infobulle, puis appuie sur **Échap**, puis encore sur **Échap**.
    ✅ Le premier Échap ferme l'infobulle seulement ; le second ferme la fenêtre.

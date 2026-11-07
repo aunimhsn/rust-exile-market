@@ -445,9 +445,7 @@ impl Keyboard {
         // game, so that a failure doesn't stop the copy.
         // On a single screen, the helper of the window over the game may be active in place of
         // the game: the game is made active again, so that the copy and the window go to it.
-        let window = self
-            .active_window()
-            .map(|window| window.map(|window| self.game_in_front(window)));
+        let (window, refused) = self.active_game();
         let window_class = match &window {
             Ok(Some(window)) => self
                 .window_class(*window)
@@ -523,11 +521,9 @@ impl Keyboard {
             others: keycodes(&released),
             missed: keycodes(&missed),
         };
-        // The desktop may have activated the helper of the window over the game meanwhile (the
-        // window becoming the active one as the hotkey was pressed): the game is made active
-        // again, so that the keys reach it.
-        if let Ok(Some(active)) = self.active_window() {
-            self.game_in_front(active);
+        // Not twice when the desktop already refused.
+        if !refused {
+            self.game_in_front_again();
         }
         send_all(copy_keys(control, c, &held), |key| -> Result<()> {
             let (event, keycode) = match key {
@@ -553,19 +549,44 @@ impl Keyboard {
     }
 
     /// The game, when `window` is the helper of the window over the game, made the active window
-    /// again; `window` otherwise.
-    fn game_in_front(&self, window: Window) -> Window {
+    /// again; `window` otherwise. Whether the desktop refused to make the game active.
+    fn game_in_front(&self, window: Window) -> (Window, bool) {
         match shared::game_behind(&self.connection, self.atoms, window) {
             Ok(Some(game)) => {
-                if let Err(error) = self.bring_back(game) {
+                let refused = self.bring_back(game).map_err(|error| {
                     log::warn!("The game can't be made the active window again: {error}");
-                }
-                game
+                });
+                (game, refused.is_err())
             }
-            Ok(None) => window,
+            Ok(None) => (window, false),
             Err(error) => {
                 log::info!("The active window can't be read: {error}");
-                window
+                (window, false)
+            }
+        }
+    }
+
+    /// The active window, the game in place of the helper of the window over the game; whether
+    /// the desktop refused to make the game active again.
+    fn active_game(&self) -> (Result<Option<Window>>, bool) {
+        match self.active_window() {
+            Ok(Some(window)) => {
+                let (window, refused) = self.game_in_front(window);
+                (Ok(Some(window)), refused)
+            }
+            other => (other, false),
+        }
+    }
+
+    /// Just before the keys: the desktop may have activated the helper of the window over the
+    /// game meanwhile (the window becoming the active one as the hotkey was pressed), and the
+    /// window over the game taken the keyboard. The game is made active again and given the
+    /// keyboard back, so that the keys reach it.
+    fn game_in_front_again(&self) {
+        if let Ok(Some(active)) = self.active_window() {
+            let (game, _) = self.game_in_front(active);
+            if let Err(error) = self.give_back_keyboard(game) {
+                log::warn!("The keyboard can't be given back to the game: {error}");
             }
         }
     }

@@ -328,6 +328,77 @@ fn alt_tab_while_a_hotkey_on_an_empty_cell_waits_leaves_the_other_window() {
 }
 
 #[test]
+fn alt_tab_to_a_window_outside_x11_while_a_hotkey_on_an_empty_cell_waits_leaves_it() {
+    let (mut activation, desk, now) = opened_active();
+    copy_on_its_way(&mut activation, &desk, now);
+    // A window of Wayland: X11 tells no active window.
+    desk.borrow_mut().active = None;
+    activation.follow(Some(1), || true, later(now, 500));
+
+    for millis in [2000, 2030, 2060] {
+        activation.follow(Some(1), || false, later(now, millis));
+    }
+
+    assert!(!activation.holds());
+    let desk = desk.borrow();
+    assert_eq!(desk.activated, [HELPER]);
+    assert_eq!(desk.helper, None);
+}
+
+#[test]
+fn alt_tab_right_after_the_hotkey_leaves_the_other_window_when_the_item_comes() {
+    let (mut activation, desk, now) = opened_active();
+    copy_on_its_way(&mut activation, &desk, now);
+    desk.borrow_mut().active = Some(MAIN);
+
+    activation.follow(Some(2), || false, now);
+    activation.follow(Some(2), || false, now);
+
+    assert!(!activation.holds());
+    let desk = desk.borrow();
+    assert_eq!(desk.active, Some(MAIN));
+    assert_eq!(desk.activated, [HELPER]);
+}
+
+#[test]
+fn the_item_of_a_copy_that_couldnt_give_the_game_back_makes_the_window_active_again() {
+    let (mut activation, desk, now) = opened_active();
+    // The helper still the active window.
+    activation.follow(Some(1), || true, now);
+    activation.hotkey();
+
+    activation.follow(Some(2), || false, now);
+    activation.follow(Some(2), || false, now);
+
+    assert!(activation.holds());
+    let desk = desk.borrow();
+    assert_eq!(desk.active, Some(HELPER));
+    assert_eq!(desk.activated, [HELPER, HELPER]);
+}
+
+#[test]
+fn a_press_while_the_helper_shows_waits_for_its_keys_before_activating_it() {
+    let (mut activation, desk) = activation(true);
+    desk.borrow_mut().overlay = Some(OVERLAY);
+    let now = Instant::now();
+    // `pending` read twice by the frame: before the helper shows, then as it shows.
+    let reads = std::cell::Cell::new(0);
+    activation.follow(
+        Some(1),
+        || {
+            reads.set(reads.get() + 1);
+            reads.get() > 1
+        },
+        now,
+    );
+
+    assert!(!activation.holds());
+    let desk = desk.borrow();
+    assert_eq!(desk.helper, Some(HELPER));
+    assert_eq!(desk.activated, Vec::<Window>::new());
+}
+
+#[test]
 fn a_failure_after_the_hotkey_hides_the_helper_and_gives_the_game_back() {
     let (mut activation, desk, now) = opened_active();
     // The copy couldn't make the game active: the helper still is.
