@@ -8,8 +8,8 @@ use std::time::{Duration, Instant, SystemTime};
 
 use eframe::{App, CreationContext, Frame};
 use egui::{
-    Context, Key, OpenUrl, Ui, ViewportBuilder, ViewportCommand, ViewportId, WindowLevel,
-    X11WindowType, pos2, vec2,
+    Context, Key, Modifiers, OpenUrl, Ui, ViewportBuilder, ViewportCommand, ViewportId,
+    WindowLevel, X11WindowType, pos2, vec2,
 };
 
 use self::open_lists::{OpenList, OpenLists};
@@ -23,7 +23,7 @@ use crate::item::{CopiedItem, Item};
 use crate::league::League;
 use crate::market::MarketWatch;
 use crate::offers::{LONG_WAIT, Offers, OffersState};
-use crate::overlay::{self, ClickWatch, KeyboardFocus, Overlay, ScreenRect};
+use crate::overlay::{self, Activation, ClickWatch, KeyboardFocus, Overlay, ScreenRect};
 use crate::prices::Rates;
 use crate::pricing::{FixedPrice, NoFixedPrice};
 use crate::recent_items::RecentItems;
@@ -89,6 +89,9 @@ pub struct ExileMarketApp {
     overlay_height: Option<f32>,
     /// The keyboard, given to the window over the game while one of its fields is edited.
     keyboard: KeyboardFocus,
+    /// The window over the game made the active window while the game holds the pointer (a
+    /// single screen, on Linux).
+    activation: Activation,
     /// The item shown, the last one copied, and the items copied before it, with their filters
     /// and offers as the player left them.
     recent: RecentItems,
@@ -161,6 +164,7 @@ impl ExileMarketApp {
             overlay_window: None,
             overlay_height: None,
             keyboard: KeyboardFocus::new(),
+            activation: Activation::new(),
             recent: RecentItems::default(),
             market,
             item_names: ItemNamesWatch::start(move || names_ctx.request_repaint()),
@@ -584,13 +588,15 @@ impl ExileMarketApp {
         let height = ctx.show_viewport_immediate(id, builder, |ui, _| {
             // Closed, the hotkey gave the keyboard back to the game, or the window lost it
             // (Alt+Tab, which egui doesn't take for leaving the field; on Windows, whatever
-            // took the focus, even while no field had it): no field is edited, so that the
-            // status bar doesn't say the keys go to the window, and a window that opens again
-            // doesn't take the keyboard. The number typed is settled, as leaving its field
-            // does.
+            // took the focus, even while no field had it; only a window that had it loses it;
+            // on a single screen, as soon as it is no longer the active window, before winit
+            // tells it):
+            // no field is edited, so that the status bar doesn't say the keys go to the window,
+            // and a window that opens again doesn't take the keyboard. The number typed is
+            // settled, as leaving its field does.
             let left = self.overlay.take_leave_field();
-            let lost = (self.keyboard.held() || cfg!(target_os = "windows"))
-                && ui.input(|input| {
+            let lost = self.activation.lost()
+                || ui.input(|input| {
                     input
                         .events
                         .iter()
@@ -605,17 +611,36 @@ impl ExileMarketApp {
                 self.keyboard.give_back(overlay::Frame::HIDDEN);
             }
             place?;
+            // On a single screen, where the window is the active one, the keys are the game's
+            // (Tab its map, Space its dodge, 1 to 5 its flasks and charms) unless a field is
+            // edited: only Esc does something, below, so that they neither move the keyboard
+            // in the window nor press its buttons nor type in its fields.
+            if self.activation.escape_closes() {
+                keep_only_esc(ui);
+            }
             // Its own ids: the scroll and the panels of the main window are its own.
             let height = ui
                 .push_id("window-over-the-game", |ui| {
                     StatusBar::sources(&self.i18n, prices, trade)
                         .league(league.as_ref())
                         .keyboard(self.keyboard.held())
+                        .single_screen(self.activation.holds())
                         .show(ui);
                     self.item(ui, prices, kind, to_top)
                 })
                 .inner;
             let editing = ui.ctx().text_edit_focused();
+            // On a single screen, where the window is the active one, Esc closes it, after what
+            // is on top of it (the tooltip of an offer, which takes the key), and unless it
+            // leaves a field: edited at the last frame, since egui takes the keyboard away at
+            // Esc before this one.
+            if self.activation.escape_closes()
+                && ui.input_mut(|input| input.consume_key(Modifiers::NONE, Key::Escape))
+            {
+                self.activation.escape();
+                self.overlay.close();
+                ui.ctx().request_repaint();
+            }
             // A click in it took the focus of the game: given back once it is released,
             // after the content, which may open a link with this click; kept while a field is
             // edited.
@@ -624,13 +649,15 @@ impl ExileMarketApp {
             Some((height, editing))
         });
         let editing = height.is_some_and(|(_, editing)| editing);
+        self.activation.editing(editing);
         let height = height.map(|(height, _)| height);
         if !editing {
             self.filters.forget_edited(Window::OverTheGame);
         }
         // The status bar, drawn before the fields, says it at the next frame: on Windows, the
-        // window took the keyboard during the frame already.
-        if self.keyboard.follow(editing) != held {
+        // window took the keyboard during the frame already. On a single screen, the window
+        // already has the keyboard while it is the active window.
+        if self.keyboard.follow(editing && !self.activation.holds()) != held {
             ctx.request_repaint();
         }
         if height.is_some() && self.overlay_height != height {
@@ -718,8 +745,14 @@ impl App for ExileMarketApp {
         // close the window as it was, not the one these items open), and only then the items.
         let mut events = Vec::new();
         self.clipboard.receive(|event| events.push(event));
-        self.hotkey
-            .receive(|press| self.overlay.hotkey(press.target, press.copy, now));
+        let mut pressed = false;
+        self.hotkey.receive(|press| {
+            self.overlay.hotkey(press.target, press.copy, now);
+            pressed = true;
+        });
+        if pressed {
+            self.activation.hotkey();
+        }
         let window = self.overlay_window;
         let clicks_read = self
             .clicks
@@ -735,6 +768,18 @@ impl App for ExileMarketApp {
         }
         if let Some(left) = self.overlay.expire(now) {
             ctx.request_repaint_after(left);
+        }
+        // Asked again soon while it waits for the window to show, the desktop to activate it, or
+        // the game to hold the pointer. A press on its way, not received yet, is pending too: its
+        // copy makes the game the active window before it is told.
+        let waiting = self.overlay.waiting();
+        let hotkey = &self.hotkey;
+        if let Some(after) = self.activation.follow(
+            self.overlay.opened(),
+            || waiting || hotkey.on_its_way(),
+            now,
+        ) {
+            ctx.request_repaint_after(after);
         }
         self.clicks.watch(self.overlay.shown().is_some());
         let main_focused = ctx.input(|input| input.viewport().focused.unwrap_or(false));
@@ -891,6 +936,23 @@ fn paint_while_hidden(overlay_shown: bool, main_visible: Option<bool>) -> bool {
     overlay_shown && main_visible == Some(false)
 }
 
+/// Leaves only Esc to the frame of the window over the game, before its content: the keys of the
+/// game neither move the keyboard in it (Tab, the arrows, which egui takes in before the frame),
+/// nor press what has it (Space, Enter), nor type.
+fn keep_only_esc(ui: &egui::Ui) {
+    ui.ctx()
+        .memory_mut(|memory| memory.move_focus(egui::FocusDirection::None));
+    ui.input_mut(|input| {
+        input.events.retain(|event| match event {
+            egui::Event::Key { key, .. } => *key == Key::Escape,
+            egui::Event::Text(_) | egui::Event::Paste(_) | egui::Event::Copy | egui::Event::Cut => {
+                false
+            }
+            _ => true,
+        });
+    });
+}
+
 /// What a frame of the window over the game saw once its content is drawn, for the focus given
 /// back to the game on Windows: the content may open a link with the click (Check on trade), the
 /// browser then coming to the front instead; `editing`, whether one of its fields is edited.
@@ -1018,6 +1080,97 @@ fn random_quote() -> usize {
 mod tests {
     use super::*;
     use crate::item::CopiedItem;
+
+    /// A frame of egui with `events`, `content` drawing it.
+    fn egui_frame(
+        ctx: &Context,
+        time: f64,
+        events: Vec<egui::Event>,
+        content: impl FnMut(&mut egui::Ui),
+    ) {
+        let input = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(
+                egui::Pos2::ZERO,
+                vec2(420.0, 300.0),
+            )),
+            time: Some(time),
+            events,
+            ..Default::default()
+        };
+        let mut output = ctx.run_ui(input, content);
+        // epaint panics when the texture changes of a frame are dropped unapplied.
+        output.textures_delta.clear();
+    }
+
+    fn key(key: Key) -> egui::Event {
+        egui::Event::Key {
+            key,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: Modifiers::NONE,
+        }
+    }
+
+    /// After Tab (the map of the game), Tab then Space (its dodge), then 1 (a flask): whether a
+    /// widget has the keyboard, whether the button was pressed, the text of the field; only Esc
+    /// left to the frames when `keep`.
+    fn after_game_keys(keep: bool) -> (bool, bool, String) {
+        let ctx = Context::default();
+        let mut text = String::new();
+        let mut clicked = false;
+        let frames = [
+            vec![],
+            vec![key(Key::Tab)],
+            vec![key(Key::Tab), key(Key::Space)],
+            vec![key(Key::Num1), egui::Event::Text("1".to_owned())],
+        ];
+        for (at, events) in (0_u32..).zip(frames) {
+            egui_frame(&ctx, f64::from(at) * 0.2, events, |ui| {
+                if keep {
+                    keep_only_esc(ui);
+                }
+                clicked |= ui.button("Search").clicked();
+                ui.text_edit_singleline(&mut text);
+            });
+        }
+        let focused = ctx.memory(egui::Memory::focused).is_some();
+        (focused, clicked, text)
+    }
+
+    #[test]
+    fn the_keys_of_the_game_neither_move_the_keyboard_nor_press_nor_type() {
+        assert_eq!(after_game_keys(true), (false, false, String::new()));
+        // What egui does with them otherwise.
+        assert_ne!(after_game_keys(false), (false, false, String::new()));
+    }
+
+    #[test]
+    fn esc_leaves_a_field_before_the_frame_reads_it() {
+        let ctx = Context::default();
+        let mut text = String::new();
+        let field = egui::Id::NULL.with("field");
+        let mut draw = |ui: &mut egui::Ui| {
+            ui.add(egui::TextEdit::singleline(&mut text).id(field));
+        };
+        egui_frame(&ctx, 0.0, vec![], &mut draw);
+        ctx.memory_mut(|memory| memory.request_focus(field));
+        egui_frame(&ctx, 0.2, vec![], &mut draw);
+        assert!(ctx.text_edit_focused());
+
+        // So the window reads whether a field was edited at the last frame
+        // (`Activation::escape_closes`): this one already left it, its Esc still there.
+        let mut seen = None;
+        egui_frame(&ctx, 0.4, vec![key(Key::Escape)], |ui| {
+            seen = Some((
+                ui.ctx().text_edit_focused(),
+                ui.input(|input| input.key_pressed(Key::Escape)),
+            ));
+            draw(ui);
+        });
+
+        assert_eq!(seen, Some((false, true)));
+    }
 
     #[test]
     fn a_lit_state_tag_reaches_the_search() {

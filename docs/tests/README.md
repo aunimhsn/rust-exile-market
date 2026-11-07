@@ -9,7 +9,7 @@ They may be written in French, the language of the testers (an exception to the 
 
 ## Linux
 
-- [Window over the game](linux/overlay-window.md) (14b1)
+- [Window over the game](linux/overlay-window.md) (14b1; a single screen since the fix after 17a)
 - [Keyboard in the window over the game](linux/overlay-keyboard.md) (14b2)
 - [Filters of the last items remembered](linux/remembered-filters.md) (#155)
 - [Prices in other currencies](linux/prices-other-currencies.md) (#156)

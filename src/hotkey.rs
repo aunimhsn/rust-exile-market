@@ -88,9 +88,49 @@ pub struct PriceCheckHotkey {
     in_game: Option<InGame>,
     /// Each press of the hotkey.
     targets: Option<Receiver<Press>>,
+    /// The presses on their way: counted by the handler of the hotkey events before it touches
+    /// the active window (on a single screen, it makes the game active again), and until the
+    /// window receives them, so that the window over the game doesn't take the game made active
+    /// for a copy for a window the player went to.
+    on_their_way: OnTheirWay,
     /// Its keys, also read by the handler of the hotkey events, which only copies at a press of
     /// them: the keys replaced, a press of the previous ones still on its way is ignored.
     shortcut: SharedShortcut,
+}
+
+/// The presses on their way, shared with the handler of the hotkey events.
+type OnTheirWay = std::sync::Arc<std::sync::atomic::AtomicUsize>;
+
+/// A press on its way, counted twice while it lives: once for its keys, given back when it is
+/// dropped, once more for the window, given back when the window receives it
+/// ([`PriceCheckHotkey::receive`]), or when it is dropped without being told. Dropped also when
+/// the copy panics, so that the window over the game is never left waiting.
+#[cfg(any(target_os = "linux", target_os = "windows"))]
+struct OnItsWay<'a> {
+    count: &'a std::sync::atomic::AtomicUsize,
+    told: bool,
+}
+
+#[cfg(any(target_os = "linux", target_os = "windows"))]
+impl<'a> OnItsWay<'a> {
+    fn new(count: &'a std::sync::atomic::AtomicUsize) -> Self {
+        count.fetch_add(2, std::sync::atomic::Ordering::SeqCst);
+        Self { count, told: false }
+    }
+
+    /// The press is told to the window, which gives its count back once it receives it.
+    fn told(&mut self) {
+        self.told = true;
+    }
+}
+
+#[cfg(any(target_os = "linux", target_os = "windows"))]
+impl Drop for OnItsWay<'_> {
+    fn drop(&mut self) {
+        let back = if self.told { 1 } else { 2 };
+        self.count
+            .fetch_sub(back, std::sync::atomic::Ordering::SeqCst);
+    }
 }
 
 /// The keys of the hotkey, shared with the handler of the hotkey events.
@@ -304,10 +344,12 @@ impl PriceCheckHotkey {
 
         let on = Arc::new(AtomicBool::new(on));
         let keys = Arc::new(Mutex::new(shortcut));
+        let on_their_way = OnTheirWay::default();
         let off = || Self {
             on: Arc::clone(&on),
             in_game: None,
             targets: None,
+            on_their_way: Arc::clone(&on_their_way),
             shortcut: Arc::clone(&keys),
         };
         let sender = match system::CopySender::connect() {
@@ -330,17 +372,23 @@ impl PriceCheckHotkey {
         let wake_in_game = Arc::clone(&wake);
         let on_at_press = Arc::clone(&on);
         let keys_at_press = Arc::clone(&keys);
+        let on_their_way_at_press = Arc::clone(&on_their_way);
         GlobalHotKeyEvent::set_event_handler(Some(move |event: GlobalHotKeyEvent| {
             let shortcut = *keys_at_press.lock().unwrap_or_else(PoisonError::into_inner);
             if copies_at(event, shortcut, on_at_press.load(Ordering::Relaxed)) {
                 let mut sender = sender.lock().unwrap_or_else(PoisonError::into_inner);
                 let (copy_sender, marker) = &mut *sender;
+                // Counted before the active window changes, until its keys are sent and the
+                // window received it.
+                let mut on_its_way = OnItsWay::new(&on_their_way_at_press);
                 copy_sender.send_copy(
                     shortcut,
                     || prepare_copy(marker),
                     |target, copy| {
-                        // The application stopped listening: nothing left to tell.
+                        // The application stopped listening: nothing left to tell, and no
+                        // window to give the count of the press back (the guard gives both).
                         if targets.send(Press { target, copy }).is_ok() {
+                            on_its_way.told();
                             wake();
                         }
                     },
@@ -354,6 +402,7 @@ impl PriceCheckHotkey {
             on,
             in_game: Some(in_game),
             targets: Some(receiver),
+            on_their_way,
             shortcut: keys,
         }
     }
@@ -371,6 +420,7 @@ impl PriceCheckHotkey {
         Self {
             on: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(on)),
             targets: None,
+            on_their_way: OnTheirWay::default(),
             shortcut: std::sync::Arc::new(std::sync::Mutex::new(shortcut)),
         }
     }
@@ -640,9 +690,18 @@ impl PriceCheckHotkey {
     pub fn receive(&mut self, mut handle: impl FnMut(Press)) {
         if let Some(targets) = &self.targets {
             while let Ok(target) = targets.try_recv() {
+                self.on_their_way
+                    .fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
                 handle(target);
             }
         }
+    }
+
+    /// Whether a press is on its way: its keys are being sent, or the window hasn't received it
+    /// yet ([`Self::receive`]). Read after the active window, which the copy may have changed.
+    #[must_use]
+    pub fn on_its_way(&self) -> bool {
+        self.on_their_way.load(std::sync::atomic::Ordering::SeqCst) > 0
     }
 }
 
@@ -659,6 +718,7 @@ fn copies_at(event: global_hotkey::GlobalHotKeyEvent, keys: Shortcut, on: bool) 
 mod tests {
     use super::*;
     use global_hotkey::{GlobalHotKeyEvent, HotKeyState};
+    use std::sync::atomic::{AtomicUsize, Ordering};
 
     /// An event of the hotkey of `keys`, in `state`.
     fn event(keys: &str, state: HotKeyState) -> GlobalHotKeyEvent {
@@ -675,6 +735,42 @@ mod tests {
             HotKeyState::Pressed => HotKeyState::Released,
             HotKeyState::Released => HotKeyState::Pressed,
         }
+    }
+
+    #[test]
+    fn a_press_told_is_on_its_way_until_its_keys_are_sent_and_the_window_received_it() {
+        let count = AtomicUsize::new(0);
+        let mut on_its_way = OnItsWay::new(&count);
+        on_its_way.told();
+        // The window received it (`PriceCheckHotkey::receive`), the keys not sent yet.
+        count.fetch_sub(1, Ordering::SeqCst);
+        assert_eq!(count.load(Ordering::SeqCst), 1);
+
+        drop(on_its_way);
+
+        assert_eq!(count.load(Ordering::SeqCst), 0);
+    }
+
+    #[test]
+    fn a_press_never_told_is_no_longer_on_its_way_once_given_up() {
+        let count = AtomicUsize::new(0);
+
+        drop(OnItsWay::new(&count));
+
+        assert_eq!(count.load(Ordering::SeqCst), 0);
+    }
+
+    #[test]
+    fn a_copy_that_panics_leaves_no_press_on_its_way() {
+        let count = AtomicUsize::new(0);
+
+        let panicked = std::panic::catch_unwind(|| {
+            let _on_its_way = OnItsWay::new(&count);
+            panic!("the copy failed");
+        });
+
+        assert!(panicked.is_err());
+        assert_eq!(count.load(Ordering::SeqCst), 0);
     }
 
     #[test]

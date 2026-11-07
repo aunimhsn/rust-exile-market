@@ -37,6 +37,8 @@ enum Line<'a> {
     Author(Option<&'a Release>),
     /// The keys go to the window over the game, not to the game.
     Keyboard,
+    /// The window over the game is the active window on a single screen: the keys go to it.
+    KeyboardSingleScreen,
 }
 
 /// The space on each side of the league name.
@@ -77,6 +79,17 @@ impl<'a> StatusBar<'a> {
         self
     }
 
+    /// In place of the ages of the sources while `active`: the window over the game is the active
+    /// window on a single screen, so that the game gets no keys, and Esc or a click outside gives
+    /// them back. Takes the place of the line of [`Self::keyboard`], which says less.
+    #[must_use]
+    pub fn single_screen(mut self, active: bool) -> Self {
+        if active {
+            self.line = Line::KeyboardSingleScreen;
+        }
+        self
+    }
+
     /// The version and the author, while the settings are open, and `update`, a newer version
     /// out, as a link after the running one.
     #[must_use]
@@ -109,14 +122,19 @@ impl<'a> StatusBar<'a> {
                     match self.line {
                         Line::Sources(prices, trade) => self.sources_line(ui, prices, trade),
                         Line::Author(update) => self.author_line(ui, update),
-                        // In the text color: the game no longer gets the keys the player types.
-                        Line::Keyboard => {
-                            let line = self.i18n.text(Message::StatusKeyboard);
-                            ui.add(Label::new(small(line).color(color::TEXT)).truncate());
+                        Line::Keyboard => self.keyboard_line(ui, Message::StatusKeyboard),
+                        Line::KeyboardSingleScreen => {
+                            self.keyboard_line(ui, Message::StatusKeyboardSingleScreen);
                         }
                     }
                 });
             });
+    }
+
+    /// Where the keys go, in the text color: the game no longer gets the keys the player types.
+    fn keyboard_line(&self, ui: &mut Ui, message: Message) {
+        let line = self.i18n.text(message);
+        ui.add(Label::new(small(line).color(color::TEXT)).truncate());
     }
 
     /// The league name in the text color on the color of its trade, at the right of the bar and
@@ -261,6 +279,20 @@ mod tests {
             bar(false),
             Line::Sources(PricesState::Unavailable, TradeStatus::Idle)
         );
+    }
+
+    #[test]
+    fn on_a_single_screen_the_line_says_esc_closes_even_while_a_field_is_edited() {
+        let i18n = Translator::new(crate::language::Language::English);
+        let bar = |held, active| {
+            StatusBar::sources(&i18n, PricesState::Unavailable, TradeStatus::Idle)
+                .keyboard(held)
+                .single_screen(active)
+                .line
+        };
+        assert_eq!(bar(false, true), Line::KeyboardSingleScreen);
+        assert_eq!(bar(true, true), Line::KeyboardSingleScreen);
+        assert_eq!(bar(true, false), Line::Keyboard);
     }
 
     #[test]

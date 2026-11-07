@@ -12,8 +12,8 @@ use std::time::{Duration, Instant, SystemTime};
 
 use egui::text::{LayoutJob, TextFormat};
 use egui::{
-    Color32, CursorIcon, Galley, Id, Key, Painter, Pos2, Rect, Response, Role, Sense, Stroke, Ui,
-    Vec2, WidgetInfo, pos2, vec2,
+    Color32, CursorIcon, Galley, Id, Key, Modifiers, Painter, Pos2, Rect, Response, Role, Sense,
+    Stroke, Ui, Vec2, WidgetInfo, pos2, vec2,
 };
 
 use super::item_block::{SEPARATOR, rarity_color};
@@ -748,6 +748,11 @@ impl<'a> OffersBlock<'a> {
             escape,
             time,
         };
+        // Esc closes the tooltip, and nothing under it (the window over the game on a single
+        // screen, which Esc closes too).
+        if escape && state.open().is_some() {
+            ui.input_mut(|input| input.consume_key(Modifiers::NONE, Key::Escape));
+        }
         if let Some(redraw) = state.update(&pointer, &ids) {
             ctx.request_repaint_after(redraw);
         }

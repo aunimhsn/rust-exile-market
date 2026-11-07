@@ -1,6 +1,6 @@
 # Fenêtre par-dessus le jeu : les tests
 
-Version mise à jour après trois revues de code : refais les tests 1 à 6 (le code a changé), puis les 7 à 10, nouveaux. Fais-les d'affilée, sans m'attendre. Un ✅ suffit quand ça marche ; détaille seulement ce qui cloche. Puis dis-moi « fait ».
+Fais les tests 1 à 15 sur ton installation habituelle, puis les tests 16 à 29 sur un seul écran. Fais-les d'affilée, sans m'attendre. Un ✅ suffit quand ça marche ; détaille seulement ce qui cloche. Puis dis-moi « fait ».
 
 ## Avant
 
@@ -62,6 +62,54 @@ Version mise à jour après trois revues de code : refais les tests 1 à 6 (le c
 15. **Le whisper d'une devise** : **Ctrl+D** sur une devise de l'échange (une Orbe, par exemple), cherche ses offres, copie le whisper d'une offre d'un vendeur en ligne, puis colle dans le chat (efface sans envoyer).
    ✅ Le texte collé ne contient ni `{0}` ni `{1}`, et ses montants sont ceux de l'offre.
 
+## Sur un seul écran
+
+Débranche ou désactive ton deuxième écran (ou fais ces tests sur une machine à un écran), jeu en **plein écran fenêtré**. Avant chaque test, bouge un peu la souris dans le jeu.
+
+16. **La souris dans la fenêtre** : **Ctrl+D** sur un objet, puis passe la souris sur la fenêtre et sur ses offres, et clique sur une case à cocher.
+   ✅ Le curseur au-dessus de la fenêtre est la flèche du bureau, pas celui du jeu ; les offres s'éclairent au survol ; la case se coche. La barre d'état dit « Les touches vont ici · Échap ou clic ailleurs : retour au jeu ». La barre des tâches reste cachée.
+
+17. **Les touches du jeu** : la fenêtre ouverte, appuie sur `1`, puis sur **Tab**, puis sur **Espace**, puis sur **Entrée**.
+   ✅ La flasque ne part pas, et rien ne bouge dans la fenêtre : aucun bouton ni case n'est encadré, aucune case ne se coche, aucune recherche ne part, aucun chiffre ne s'écrit dans un champ.
+
+18. **Ctrl+D sur un autre objet** : la fenêtre ouverte, **Ctrl+D** sur un autre objet, survole ses offres, puis reste 5 secondes sans bouger la souris, et survole-les de nouveau. Recommence deux fois.
+   ✅ La fenêtre passe sur le nouvel objet, et la souris y marche toujours, même après les 5 secondes. Dans le journal, aucune ligne « Another window became the active window » juste avant « Copy sent by the price-check hotkey ».
+
+19. **Échap** : appuie sur **Échap**, puis sur `1`. Rouvre la fenêtre (Ctrl+D), clique dans un champ min, tape un nombre, puis appuie deux fois sur **Échap**.
+   ✅ Le premier Échap ferme la fenêtre, et la flasque part ensuite. Dans le champ, le premier Échap quitte le champ (la fenêtre reste ouverte), le second la ferme.
+
+20. **Clic dans le jeu** : **Ctrl+D** sur un objet, puis clique dans le jeu, hors de la fenêtre, puis appuie sur `1`.
+   ✅ La fenêtre se ferme, et la flasque part.
+
+21. **Clic dans la fenêtre principale** : **Ctrl+D** sur un objet, puis clique dans la fenêtre principale d'Exile Market (à côté du jeu, ou après Alt+Tab).
+   ✅ La fenêtre par-dessus le jeu se ferme, et la fenêtre principale reste au premier plan : le jeu ne revient pas devant elle.
+
+22. **Case vide** : **Ctrl+D** sur un objet, puis, la fenêtre ouverte, **Ctrl+D** sur une case vide de l'inventaire. Attends 3 secondes, puis survole les offres.
+   ✅ La fenêtre reste sur le premier objet, et la souris y marche toujours après un instant. La barre d'état dit de nouveau « Les touches vont ici… ».
+   Puis, toujours la fenêtre ouverte, **Ctrl+D** sur une case vide et aussitôt **Alt+Tab** vers une autre fenêtre ; attends 3 secondes.
+   ✅ L'autre fenêtre reste devant : le jeu ne revient pas par-dessus. Pendant au plus deux secondes, la barre d'état dit encore « Les touches vont ici… », puis elle montre de nouveau l'âge des sources.
+
+23. **Infobulle épinglée** : **Ctrl+D** sur un objet qui a des offres, clique sur une offre pour épingler son infobulle, puis appuie sur **Échap**, puis encore sur **Échap**.
+   ✅ Le premier Échap ferme l'infobulle seulement ; le second ferme la fenêtre.
+
+24. **Alt+Tab** : **Ctrl+D** sur un objet, puis **Alt+Tab** vers une autre fenêtre, puis reviens tout de suite au jeu (Alt+Tab) et survole la fenêtre.
+   ✅ Pendant l'Alt+Tab, la barre d'état montre de nouveau l'âge des sources. Revenu dans le jeu, après un instant, la souris marche dans la fenêtre, et la barre d'état dit « Les touches vont ici… ».
+
+25. **Ctrl+D aussitôt revenu** : **Alt+Tab** vers une autre fenêtre, reviens au jeu, et fais aussitôt (moins d'une seconde) **Ctrl+D** sur un objet ; attends 2 secondes, puis survole la fenêtre.
+   ✅ La souris marche dans la fenêtre, et la barre d'état dit « Les touches vont ici… ».
+
+26. **Fenêtre principale réduite** : réduis la fenêtre principale d'Exile Market, puis **Ctrl+D** sur un objet, survole ses offres, et appuie sur **Échap**.
+   ✅ La fenêtre s'ouvre, la souris y marche, Échap la ferme. L'application ne plante pas.
+
+27. **Alt+F4** : **Ctrl+D** sur un objet, puis, la fenêtre ouverte, appuie une seule fois sur **Alt+F4**. Puis appuie sur **Échap**, et regarde si la fenêtre principale d'Exile Market est toujours là (Alt+Tab).
+   ✅ Alt+F4 ne ferme rien : ni le jeu, ni Exile Market. Échap ferme la fenêtre, et un nouveau Ctrl+D la rouvre. (Un second Alt+F4, une fois la fenêtre fermée, quitterait le jeu.)
+
+28. **L'application tuée la fenêtre ouverte** : dans un second onglet de Konsole, lance `sleep 8; pkill -x exile-market`, retourne aussitôt dans le jeu, fais **Ctrl+D** sur un objet, attends que l'application s'arrête (8 secondes), puis appuie sur `1`. Ce test regarde ce que fait le bureau quand l'application disparaît sans se fermer : son résultat dépend de KWin, pas d'Exile Market.
+   ✅ Le jeu reste au premier plan (pas de barre des tâches), et la flasque part, au besoin après un clic dans le jeu.
+
+29. **Test libre** : utilise la fenêtre comme en jeu pendant quelques minutes, sur un seul écran.
+   ✅ Rien d'étrange : pas de point noir à l'écran, pas de touche perdue, pas de clic qui traverse.
+
 ## Tes résultats
 
 | Test | Résultat | Si ça cloche |
@@ -81,3 +129,17 @@ Version mise à jour après trois revues de code : refais les tests 1 à 6 (le c
 | 13. Copy whisper |  |  |
 | 14. Ctrl+D après un whisper |  |  |
 | 15. Le whisper d'une devise |  |  |
+| 16. La souris dans la fenêtre |  |  |
+| 17. Les touches du jeu |  |  |
+| 18. Ctrl+D sur un autre objet |  |  |
+| 19. Échap |  |  |
+| 20. Clic dans le jeu |  |  |
+| 21. Clic dans la fenêtre principale |  |  |
+| 22. Case vide |  |  |
+| 23. Infobulle épinglée |  |  |
+| 24. Alt+Tab |  |  |
+| 25. Ctrl+D aussitôt revenu |  |  |
+| 26. Fenêtre principale réduite |  |  |
+| 27. Alt+F4 |  |  |
+| 28. L'application tuée la fenêtre ouverte |  |  |
+| 29. Test libre |  |  |

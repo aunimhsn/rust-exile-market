@@ -3,6 +3,7 @@
 //! that the hotkey is grabbed only while it is the game.
 
 use std::collections::HashSet;
+use std::time::{Duration, Instant};
 
 use global_hotkey::HotKeyState;
 use x11rb::connection::{Connection, RequestConnection as _};
@@ -18,6 +19,10 @@ use super::grab::{Active, GAME_TITLE};
 use super::{Held, Key, Shortcut, copy_keys, modifiers_for_log, send_all};
 use crate::overlay::{Point, ScreenRect, Target};
 use crate::x11::{self as shared, Atoms, Result};
+
+/// How long the copy of the hotkey waits for the desktop to make the game the active window again,
+/// in place of the helper of the window over the game.
+const ACTIVATION_WAIT: Duration = Duration::from_millis(500);
 
 /// The keysyms of the keys pressed or released, from `X11/keysymdef.h`.
 const XK_C: u32 = 0x0063;
@@ -303,6 +308,11 @@ impl ActiveWindow {
     /// title (the page of a browser), so that the class of a client of the game not known yet can
     /// be found there.
     fn is_game(&self, window: Window, classes_told: &mut HashSet<String>) -> Result<bool> {
+        // The helper of the window over the game, active in its place on a single screen
+        // (`crate::overlay`): the hotkey stays grabbed, and its copy gives the game back first.
+        if shared::game_behind(&self.connection, self.shared, window)?.is_some() {
+            return Ok(true);
+        }
         let property = |name: Atom, kind: Atom| -> Result<Vec<u8>> {
             Ok(self
                 .connection
@@ -433,7 +443,9 @@ impl Keyboard {
     ) -> Result<Sent> {
         // The window the keys go to, read before them; for the log and the window over the
         // game, so that a failure doesn't stop the copy.
-        let window = self.active_window();
+        // On a single screen, the helper of the window over the game may be active in place of
+        // the game: the game is made active again, so that the copy and the window go to it.
+        let (window, refused) = self.active_game();
         let window_class = match &window {
             Ok(Some(window)) => self
                 .window_class(*window)
@@ -509,6 +521,10 @@ impl Keyboard {
             others: keycodes(&released),
             missed: keycodes(&missed),
         };
+        // Not twice when the desktop already refused.
+        if !refused {
+            self.game_in_front_again();
+        }
         send_all(copy_keys(control, c, &held), |key| -> Result<()> {
             let (event, keycode) = match key {
                 Key::Down(keycode) => (xproto::KEY_PRESS_EVENT, keycode),
@@ -530,6 +546,64 @@ impl Keyboard {
             released: names(&released),
             missed: names(&missed),
         })
+    }
+
+    /// The game, when `window` is the helper of the window over the game, made the active window
+    /// again; `window` otherwise. Whether the desktop refused to make the game active.
+    fn game_in_front(&self, window: Window) -> (Window, bool) {
+        match shared::game_behind(&self.connection, self.atoms, window) {
+            Ok(Some(game)) => {
+                let refused = self.bring_back(game).map_err(|error| {
+                    log::warn!("The game can't be made the active window again: {error}");
+                });
+                (game, refused.is_err())
+            }
+            Ok(None) => (window, false),
+            Err(error) => {
+                log::info!("The active window can't be read: {error}");
+                (window, false)
+            }
+        }
+    }
+
+    /// The active window, the game in place of the helper of the window over the game; whether
+    /// the desktop refused to make the game active again.
+    fn active_game(&self) -> (Result<Option<Window>>, bool) {
+        match self.active_window() {
+            Ok(Some(window)) => {
+                let (window, refused) = self.game_in_front(window);
+                (Ok(Some(window)), refused)
+            }
+            other => (other, false),
+        }
+    }
+
+    /// Just before the keys: the desktop may have activated the helper of the window over the
+    /// game meanwhile (the window becoming the active one as the hotkey was pressed), and the
+    /// window over the game taken the keyboard. The game is made active again and given the
+    /// keyboard back, so that the keys reach it.
+    fn game_in_front_again(&self) {
+        if let Ok(Some(active)) = self.active_window() {
+            let (game, _) = self.game_in_front(active);
+            if let Err(error) = self.give_back_keyboard(game) {
+                log::warn!("The keyboard can't be given back to the game: {error}");
+            }
+        }
+    }
+
+    /// Asks the desktop to make `game` the active window, and waits until it is, up to
+    /// [`ACTIVATION_WAIT`].
+    fn bring_back(&self, game: Window) -> Result<()> {
+        shared::activate(&self.connection, self.root, self.atoms, game)?;
+        let start = Instant::now();
+        while start.elapsed() < ACTIVATION_WAIT {
+            if self.active_window()? == Some(game) {
+                log::info!("The price-check hotkey made the game the active window again");
+                return Ok(());
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        Err("the desktop didn't make it active in time".into())
     }
 
     /// Gives the keyboard back to `game`, the active window, when the window over the game has
