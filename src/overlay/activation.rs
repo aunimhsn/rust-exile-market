@@ -11,7 +11,8 @@
 //! the desktop manages, 1 × 1 under it and out of the taskbar (the helper), is activated instead,
 //! and the window over the game takes the keyboard from it (`SetInputFocus`). The helper carries
 //! the game (`_EXILE_MARKET_GAME`), so that the hotkey takes it for the game
-//! ([`crate::hotkey`]) and gives it back before its copy.
+//! ([`crate::hotkey`]) and gives it back before its copy, and is a window of the game for the
+//! desktop (`WM_TRANSIENT_FOR`), so that the game stays above the taskbar.
 
 use std::time::{Duration, Instant};
 
@@ -453,6 +454,16 @@ impl Screen for XScreen {
             PropMode::REPLACE,
             helper,
             self.atoms.game_behind,
+            AtomEnum::WINDOW,
+            &[game],
+        )?;
+        // A window of the game for the desktop, like its dialogs: `KWin` keeps a fullscreen
+        // window above the taskbar while the active window is one of its own, which a fullscreen
+        // game no longer active would fall behind.
+        self.connection.change_property32(
+            PropMode::REPLACE,
+            helper,
+            AtomEnum::WM_TRANSIENT_FOR,
             AtomEnum::WINDOW,
             &[game],
         )?;
