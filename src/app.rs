@@ -588,17 +588,20 @@ impl ExileMarketApp {
         let height = ctx.show_viewport_immediate(id, builder, |ui, _| {
             // Closed, the hotkey gave the keyboard back to the game, or the window lost it
             // (Alt+Tab, which egui doesn't take for leaving the field; on Windows, whatever
-            // took the focus, even while no field had it; only a window that had it loses it):
+            // took the focus, even while no field had it; only a window that had it loses it;
+            // on a single screen, as soon as it is no longer the active window, before winit
+            // tells it):
             // no field is edited, so that the status bar doesn't say the keys go to the window,
             // and a window that opens again doesn't take the keyboard. The number typed is
             // settled, as leaving its field does.
             let left = self.overlay.take_leave_field();
-            let lost = ui.input(|input| {
-                input
-                    .events
-                    .iter()
-                    .any(|event| matches!(event, egui::Event::WindowFocused(false)))
-            });
+            let lost = self.activation.lost()
+                || ui.input(|input| {
+                    input
+                        .events
+                        .iter()
+                        .any(|event| matches!(event, egui::Event::WindowFocused(false)))
+                });
             if (place.is_none() || left || lost) && ui.ctx().text_edit_focused() {
                 self.filters.settle_edited(Window::OverTheGame);
                 ui.ctx().memory_mut(egui::Memory::stop_text_input);

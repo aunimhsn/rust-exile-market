@@ -309,6 +309,25 @@ fn the_hotkey_on_an_empty_cell_makes_the_window_active_again() {
 }
 
 #[test]
+fn alt_tab_while_a_hotkey_on_an_empty_cell_waits_leaves_the_other_window() {
+    let (mut activation, desk, now) = opened_active();
+    copy_on_its_way(&mut activation, &desk, now);
+    desk.borrow_mut().active = Some(MAIN);
+    activation.follow(Some(1), || true, later(now, 500));
+
+    // The hotkey forgotten.
+    for millis in [2000, 2030, 2060] {
+        activation.follow(Some(1), || false, later(now, millis));
+    }
+
+    assert!(!activation.holds());
+    let desk = desk.borrow();
+    assert_eq!(desk.active, Some(MAIN));
+    assert_eq!(desk.activated, [HELPER]);
+    assert_eq!(desk.helper, None);
+}
+
+#[test]
 fn a_failure_after_the_hotkey_hides_the_helper_and_gives_the_game_back() {
     let (mut activation, desk, now) = opened_active();
     // The copy couldn't make the game active: the helper still is.
@@ -444,6 +463,10 @@ fn another_window_made_active_lets_the_keys_go_there() {
     assert_eq!(activation.follow(Some(1), || false, now), Some(WATCH_POLL));
 
     assert!(!activation.holds());
+    // A field edited is left at once, before winit tells the window lost the keyboard.
+    assert!(activation.lost());
+    activation.follow(Some(1), || false, later(now, 30));
+    assert!(!activation.lost());
     let desk = desk.borrow();
     assert_eq!(desk.helper, None);
     assert_eq!(desk.active, Some(MAIN));

@@ -279,6 +279,12 @@ impl Activation {
         false
     }
 
+    /// Never the active window, never lost.
+    #[must_use]
+    pub fn lost(&self) -> bool {
+        false
+    }
+
     /// Nothing to wait for.
     pub fn follow(
         &mut self,

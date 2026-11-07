@@ -523,6 +523,12 @@ impl Keyboard {
             others: keycodes(&released),
             missed: keycodes(&missed),
         };
+        // The desktop may have activated the helper of the window over the game meanwhile (the
+        // window becoming the active one as the hotkey was pressed): the game is made active
+        // again, so that the keys reach it.
+        if let Ok(Some(active)) = self.active_window() {
+            self.game_in_front(active);
+        }
         send_all(copy_keys(control, c, &held), |key| -> Result<()> {
             let (event, keycode) = match key {
                 Key::Down(keycode) => (xproto::KEY_PRESS_EVENT, keycode),

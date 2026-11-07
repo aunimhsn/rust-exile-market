@@ -28,9 +28,7 @@
 use std::time::{Duration, Instant};
 
 use x11rb::connection::Connection as _;
-use x11rb::errors::ReplyError;
 use x11rb::properties::{WmSizeHints, WmSizeHintsSpecification};
-use x11rb::protocol::ErrorKind;
 use x11rb::protocol::xproto::{
     AtomEnum, ConfigureWindowAux, ConnectionExt as _, CreateWindowAux, EventMask,
     GetWindowAttributesReply, GrabMode, GrabStatus, InputFocus, KeyButMask, MapState, PropMode,
@@ -39,7 +37,7 @@ use x11rb::protocol::xproto::{
 use x11rb::rust_connection::RustConnection;
 use x11rb::wrapper::ConnectionExt as _;
 
-use crate::x11::{self as shared, Atoms, Result};
+use crate::x11::{self as shared, Atoms, Result, unless_gone};
 
 /// How long the window over the game may take to be shown, then the desktop to activate the
 /// helper, before it is given up: the window then behaves as on two screens.
@@ -169,6 +167,8 @@ pub struct Activation<S: Screen = XScreen> {
     connect: fn() -> Result<S>,
     link: Link<S>,
     state: State,
+    /// The state before the last frame.
+    before: State,
     /// The opening of the window followed ([`super::Overlay::opened`]).
     opened: Option<u64>,
     /// The hotkey was pressed while the window was, or was becoming, the active one: the window
@@ -203,6 +203,7 @@ impl<S: Screen> Activation<S> {
             connect,
             link: Link::Waiting,
             state: State::Idle,
+            before: State::Idle,
             opened: None,
             carry: false,
             escaped: false,
@@ -240,6 +241,13 @@ impl<S: Screen> Activation<S> {
         self.state.helper().is_some()
     }
 
+    /// The window over the game stopped being the active window at this frame: it lost the
+    /// keyboard, which winit may only tell at a later frame.
+    #[must_use]
+    pub fn lost(&self) -> bool {
+        self.before.helper().is_some() && !self.holds()
+    }
+
     /// Follows the window over the game at each frame: `opened` while it is open (a new number
     /// each time it opens), `pending` while a press of the hotkey is on its way or waits for its
     /// item, read after the active window. When the next frame should come, while the window
@@ -250,6 +258,7 @@ impl<S: Screen> Activation<S> {
         pending: impl Fn() -> bool,
         now: Instant,
     ) -> Option<Duration> {
+        self.before = self.state;
         if opened != std::mem::replace(&mut self.opened, opened) {
             let carry = std::mem::take(&mut self.carry);
             if opened.is_some() {
@@ -378,8 +387,9 @@ impl<S: Screen> Drop for Activation<S> {
 struct Moment<'a> {
     /// See [`Activation::carry`].
     carry: bool,
-    /// A press of the hotkey is on its way or waits for its item, read after the active window:
-    /// the press is counted before its copy makes the game active.
+    /// A press of the hotkey is on its way or waits for its item. Read after the active window
+    /// where a change of it is taken for the player's (`Active`): the press is counted before
+    /// its copy makes the game active.
     pending: &'a dyn Fn() -> bool,
     now: Instant,
 }
@@ -446,32 +456,7 @@ fn advance(screen: &mut impl Screen, state: State, moment: Moment<'_>) -> Result
             }
             Ok(watching)
         }
-        State::Waiting { game, since, shown } => {
-            // The keys of the copy of a press would go to the window: once it is sent.
-            if (moment.pending)() {
-                return Ok(State::Waiting {
-                    game,
-                    since: now,
-                    shown,
-                });
-            }
-            let Some(overlay) = screen.overlay()? else {
-                return Ok(if now.saturating_duration_since(since) > TIMEOUT {
-                    log::warn!("The window over the game didn't show: it stays as on two screens");
-                    State::Idle
-                } else {
-                    state
-                });
-            };
-            let helper = screen.show_helper(overlay, game)?;
-            screen.activate(helper)?;
-            Ok(State::Activating {
-                overlay,
-                game,
-                helper,
-                since: now,
-            })
-        }
+        State::Waiting { game, since, shown } => show(screen, game, since, shown, moment),
         State::Activating {
             game,
             helper,
@@ -527,6 +512,51 @@ fn advance(screen: &mut impl Screen, state: State, moment: Moment<'_>) -> Result
     }
 }
 
+/// The state after waiting for the window over the game since `since`, the helper still `shown`
+/// or not: the helper shown and activated once the window shows.
+fn show(
+    screen: &mut impl Screen,
+    game: Window,
+    since: Instant,
+    shown: Option<Window>,
+    moment: Moment<'_>,
+) -> Result<State> {
+    let now = moment.now;
+    let state = State::Waiting { game, since, shown };
+    // The keys of the copy of a press would go to the window: once it is sent.
+    if (moment.pending)() {
+        return Ok(State::Waiting {
+            game,
+            since: now,
+            shown,
+        });
+    }
+    // Only from the game, or from its helper still active: never over a window the player went
+    // to meanwhile (Alt+Tab while a hotkey on an empty cell waited for its item), which the game,
+    // brought to the front with its helper, would cover.
+    let active = screen.active()?;
+    if active != Some(game) && (active.is_none() || active != shown) {
+        log::info!("Another window became the active window: the window over the game lets it be");
+        return Ok(State::watching(now, now + WATCH_POLL, Some(game)));
+    }
+    let Some(overlay) = screen.overlay()? else {
+        return Ok(if now.saturating_duration_since(since) > TIMEOUT {
+            log::warn!("The window over the game didn't show: it stays as on two screens");
+            State::Idle
+        } else {
+            state
+        });
+    };
+    let helper = screen.show_helper(overlay, game)?;
+    screen.activate(helper)?;
+    Ok(State::Activating {
+        overlay,
+        game,
+        helper,
+        since: now,
+    })
+}
+
 /// Makes the `game` the active window again, while the `helper` still is: not when the player
 /// went to another window.
 fn give_back(screen: &mut impl Screen, game: Window, helper: Window) -> Result<()> {
@@ -534,20 +564,6 @@ fn give_back(screen: &mut impl Screen, game: Window, helper: Window) -> Result<(
         screen.activate(game)?;
     }
     Ok(())
-}
-
-/// The reply of a request on a window, none when the window is gone meanwhile; a lost connection
-/// stays an error.
-fn unless_gone<T>(reply: std::result::Result<T, ReplyError>) -> Result<Option<T>> {
-    match reply {
-        Ok(reply) => Ok(Some(reply)),
-        Err(ReplyError::X11Error(error))
-            if matches!(error.error_kind, ErrorKind::Window | ErrorKind::Drawable) =>
-        {
-            Ok(None)
-        }
-        Err(error) => Err(error.into()),
-    }
 }
 
 /// The desktop on the X server.

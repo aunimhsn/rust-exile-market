@@ -5,6 +5,8 @@
 use std::error::Error;
 
 use x11rb::connection::Connection;
+use x11rb::errors::ReplyError;
+use x11rb::protocol::ErrorKind;
 use x11rb::protocol::xproto::{
     Atom, AtomEnum, ClientMessageEvent, ConnectionExt as _, EventMask, Window,
 };
@@ -58,13 +60,32 @@ pub fn active_window(
     Ok((window != x11rb::NONE).then_some(window))
 }
 
-/// Whether `window` belongs to this application: its `_NET_WM_PID` is the id of this process.
+/// The reply of a request on a window, none when the window is gone meanwhile (the tree of the
+/// windows changes between two requests); a lost connection stays an error.
+pub fn unless_gone<T>(reply: std::result::Result<T, ReplyError>) -> Result<Option<T>> {
+    match reply {
+        Ok(reply) => Ok(Some(reply)),
+        Err(ReplyError::X11Error(error))
+            if matches!(error.error_kind, ErrorKind::Window | ErrorKind::Drawable) =>
+        {
+            Ok(None)
+        }
+        Err(error) => Err(error.into()),
+    }
+}
+
+/// Whether `window` belongs to this application: its `_NET_WM_PID` is the id of this process. A
+/// window gone isn't.
 pub fn is_ours(connection: &RustConnection, atoms: Atoms, window: Window) -> Result<bool> {
-    let owner = connection
-        .get_property(false, window, atoms.pid, AtomEnum::CARDINAL, 0, 1)?
-        .reply()?
-        .value32()
-        .and_then(|mut values| values.next());
+    let Some(reply) = unless_gone(
+        connection
+            .get_property(false, window, atoms.pid, AtomEnum::CARDINAL, 0, 1)?
+            .reply(),
+    )?
+    else {
+        return Ok(false);
+    };
+    let owner = reply.value32().and_then(|mut values| values.next());
     Ok(owner == Some(std::process::id()))
 }
 
@@ -79,9 +100,15 @@ pub fn game_behind(
     atoms: Atoms,
     window: Window,
 ) -> Result<Option<Window>> {
-    let game = connection
-        .get_property(false, window, atoms.game_behind, AtomEnum::WINDOW, 0, 1)?
-        .reply()?
+    let Some(reply) = unless_gone(
+        connection
+            .get_property(false, window, atoms.game_behind, AtomEnum::WINDOW, 0, 1)?
+            .reply(),
+    )?
+    else {
+        return Ok(None);
+    };
+    let game = reply
         .value32()
         .and_then(|mut windows| windows.next())
         .filter(|&game| game != x11rb::NONE);

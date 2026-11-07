@@ -101,6 +101,38 @@ pub struct PriceCheckHotkey {
 /// The presses on their way, shared with the handler of the hotkey events.
 type OnTheirWay = std::sync::Arc<std::sync::atomic::AtomicUsize>;
 
+/// A press on its way, counted twice while it lives: once for its keys, given back when it is
+/// dropped, once more for the window, given back when the window receives it
+/// ([`PriceCheckHotkey::receive`]), or when it is dropped without being told. Dropped also when
+/// the copy panics, so that the window over the game is never left waiting.
+#[cfg(any(target_os = "linux", target_os = "windows"))]
+struct OnItsWay<'a> {
+    count: &'a std::sync::atomic::AtomicUsize,
+    told: bool,
+}
+
+#[cfg(any(target_os = "linux", target_os = "windows"))]
+impl<'a> OnItsWay<'a> {
+    fn new(count: &'a std::sync::atomic::AtomicUsize) -> Self {
+        count.fetch_add(2, std::sync::atomic::Ordering::SeqCst);
+        Self { count, told: false }
+    }
+
+    /// The press is told to the window, which gives its count back once it receives it.
+    fn told(&mut self) {
+        self.told = true;
+    }
+}
+
+#[cfg(any(target_os = "linux", target_os = "windows"))]
+impl Drop for OnItsWay<'_> {
+    fn drop(&mut self) {
+        let back = if self.told { 1 } else { 2 };
+        self.count
+            .fetch_sub(back, std::sync::atomic::Ordering::SeqCst);
+    }
+}
+
 /// The keys of the hotkey, shared with the handler of the hotkey events.
 type SharedShortcut = std::sync::Arc<std::sync::Mutex<Shortcut>>;
 
@@ -346,24 +378,20 @@ impl PriceCheckHotkey {
             if copies_at(event, shortcut, on_at_press.load(Ordering::Relaxed)) {
                 let mut sender = sender.lock().unwrap_or_else(PoisonError::into_inner);
                 let (copy_sender, marker) = &mut *sender;
-                // Counted before the active window changes, uncounted by the window once it
-                // receives the press, or here when none is told.
-                on_their_way_at_press.fetch_add(1, Ordering::SeqCst);
-                let mut told = false;
+                // Counted before the active window changes, until its keys are sent and the
+                // window received it.
+                let mut on_its_way = OnItsWay::new(&on_their_way_at_press);
                 copy_sender.send_copy(
                     shortcut,
                     || prepare_copy(marker),
                     |target, copy| {
-                        told = true;
+                        on_its_way.told();
                         // The application stopped listening: nothing left to tell.
                         if targets.send(Press { target, copy }).is_ok() {
                             wake();
                         }
                     },
                 );
-                if !told {
-                    on_their_way_at_press.fetch_sub(1, Ordering::SeqCst);
-                }
             }
         }));
         let in_game = InGame::start(manager, shortcut, on.load(Ordering::Relaxed), move || {
@@ -705,6 +733,44 @@ mod tests {
             HotKeyState::Pressed => HotKeyState::Released,
             HotKeyState::Released => HotKeyState::Pressed,
         }
+    }
+
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    #[test]
+    fn a_press_told_is_on_its_way_until_its_keys_are_sent_and_the_window_received_it() {
+        let count = AtomicUsize::new(0);
+        let mut on_its_way = OnItsWay::new(&count);
+        on_its_way.told();
+        // The window received it (`PriceCheckHotkey::receive`), the keys not sent yet.
+        count.fetch_sub(1, Ordering::SeqCst);
+        assert_eq!(count.load(Ordering::SeqCst), 1);
+
+        drop(on_its_way);
+
+        assert_eq!(count.load(Ordering::SeqCst), 0);
+    }
+
+    #[test]
+    fn a_press_never_told_is_no_longer_on_its_way_once_given_up() {
+        let count = AtomicUsize::new(0);
+
+        drop(OnItsWay::new(&count));
+
+        assert_eq!(count.load(Ordering::SeqCst), 0);
+    }
+
+    #[test]
+    fn a_copy_that_panics_leaves_no_press_on_its_way() {
+        let count = AtomicUsize::new(0);
+
+        let panicked = std::panic::catch_unwind(|| {
+            let _on_its_way = OnItsWay::new(&count);
+            panic!("the copy failed");
+        });
+
+        assert!(panicked.is_err());
+        assert_eq!(count.load(Ordering::SeqCst), 0);
     }
 
     #[test]
