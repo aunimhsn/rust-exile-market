@@ -80,8 +80,8 @@ impl<'a> StatusBar<'a> {
     }
 
     /// In place of the ages of the sources while `active`: the window over the game is the active
-    /// window on a single screen, so that the game gets no keys, and Esc or a click in the game
-    /// gives them back. Before [`Self::keyboard`], which says less.
+    /// window on a single screen, so that the game gets no keys, and Esc or a click outside gives
+    /// them back. Takes the place of the line of [`Self::keyboard`], which says less.
     #[must_use]
     pub fn single_screen(mut self, active: bool) -> Self {
         if active {
@@ -122,19 +122,19 @@ impl<'a> StatusBar<'a> {
                     match self.line {
                         Line::Sources(prices, trade) => self.sources_line(ui, prices, trade),
                         Line::Author(update) => self.author_line(ui, update),
-                        // In the text color: the game no longer gets the keys the player types.
-                        Line::Keyboard | Line::KeyboardSingleScreen => {
-                            let message = if self.line == Line::Keyboard {
-                                Message::StatusKeyboard
-                            } else {
-                                Message::StatusKeyboardSingleScreen
-                            };
-                            let line = self.i18n.text(message);
-                            ui.add(Label::new(small(line).color(color::TEXT)).truncate());
+                        Line::Keyboard => self.keyboard_line(ui, Message::StatusKeyboard),
+                        Line::KeyboardSingleScreen => {
+                            self.keyboard_line(ui, Message::StatusKeyboardSingleScreen);
                         }
                     }
                 });
             });
+    }
+
+    /// Where the keys go, in the text color: the game no longer gets the keys the player types.
+    fn keyboard_line(&self, ui: &mut Ui, message: Message) {
+        let line = self.i18n.text(message);
+        ui.add(Label::new(small(line).color(color::TEXT)).truncate());
     }
 
     /// The league name in the text color on the color of its trade, at the right of the bar and

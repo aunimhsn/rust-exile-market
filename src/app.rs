@@ -8,8 +8,8 @@ use std::time::{Duration, Instant, SystemTime};
 
 use eframe::{App, CreationContext, Frame};
 use egui::{
-    Context, Key, OpenUrl, Ui, ViewportBuilder, ViewportCommand, ViewportId, WindowLevel,
-    X11WindowType, pos2, vec2,
+    Context, Key, Modifiers, OpenUrl, Ui, ViewportBuilder, ViewportCommand, ViewportId,
+    WindowLevel, X11WindowType, pos2, vec2,
 };
 
 use self::open_lists::{OpenList, OpenLists};
@@ -593,13 +593,14 @@ impl ExileMarketApp {
             // doesn't take the keyboard. The number typed is settled, as leaving its field
             // does.
             let left = self.overlay.take_leave_field();
-            let lost = (self.keyboard.held() || cfg!(target_os = "windows"))
-                && ui.input(|input| {
-                    input
-                        .events
-                        .iter()
-                        .any(|event| matches!(event, egui::Event::WindowFocused(false)))
-                });
+            let lost =
+                (self.keyboard.held() || self.activation.holds() || cfg!(target_os = "windows"))
+                    && ui.input(|input| {
+                        input
+                            .events
+                            .iter()
+                            .any(|event| matches!(event, egui::Event::WindowFocused(false)))
+                    });
             if (place.is_none() || left || lost) && ui.ctx().text_edit_focused() {
                 self.filters.settle_edited(Window::OverTheGame);
                 ui.ctx().memory_mut(egui::Memory::stop_text_input);
@@ -609,15 +610,6 @@ impl ExileMarketApp {
                 self.keyboard.give_back(overlay::Frame::HIDDEN);
             }
             place?;
-            // On a single screen, where the window is the active one, Esc closes it, unless it
-            // leaves the field edited at the start of the frame.
-            if self.activation.holds()
-                && !ui.ctx().text_edit_focused()
-                && ui.input(|input| input.key_pressed(Key::Escape))
-            {
-                self.overlay.close();
-                ui.ctx().request_repaint();
-            }
             // Its own ids: the scroll and the panels of the main window are its own.
             let height = ui
                 .push_id("window-over-the-game", |ui| {
@@ -630,6 +622,17 @@ impl ExileMarketApp {
                 })
                 .inner;
             let editing = ui.ctx().text_edit_focused();
+            // On a single screen, where the window is the active one, Esc closes it, after what
+            // is on top of it (the tooltip of an offer, which takes the key), and unless it
+            // leaves a field: edited at the last frame, since egui takes the keyboard away at
+            // Esc before this one.
+            if self.activation.escape_closes()
+                && ui.input_mut(|input| input.consume_key(Modifiers::NONE, Key::Escape))
+            {
+                self.activation.escape();
+                self.overlay.close();
+                ui.ctx().request_repaint();
+            }
             // A click in it took the focus of the game: given back once it is released,
             // after the content, which may open a link with this click; kept while a field is
             // edited.
@@ -638,13 +641,14 @@ impl ExileMarketApp {
             Some((height, editing))
         });
         let editing = height.is_some_and(|(_, editing)| editing);
+        self.activation.editing(editing);
         let height = height.map(|(height, _)| height);
         if !editing {
             self.filters.forget_edited(Window::OverTheGame);
         }
         // The status bar, drawn before the fields, says it at the next frame: on Windows, the
-        // window took the keyboard during the frame already.
-        // On a single screen, the window already has the keyboard while it is the active window.
+        // window took the keyboard during the frame already. On a single screen, the window
+        // already has the keyboard while it is the active window.
         if self.keyboard.follow(editing && !self.activation.holds()) != held {
             ctx.request_repaint();
         }
@@ -757,9 +761,13 @@ impl App for ExileMarketApp {
         if let Some(left) = self.overlay.expire(now) {
             ctx.request_repaint_after(left);
         }
-        // Asked again soon while it waits for the window to show, or the desktop to activate it.
-        if self.activation.follow(self.overlay.opened(), now) {
-            ctx.request_repaint_after(ACTIVATION_POLL);
+        // Asked again soon while it waits for the window to show, the desktop to activate it, or
+        // the game to hold the pointer.
+        if let Some(after) =
+            self.activation
+                .follow(self.overlay.opened(), self.overlay.waiting(), now)
+        {
+            ctx.request_repaint_after(after);
         }
         self.clicks.watch(self.overlay.shown().is_some());
         let main_focused = ctx.input(|input| input.viewport().focused.unwrap_or(false));
@@ -956,10 +964,6 @@ fn copied_again(by_hotkey: bool, last: Option<&CopiedItem>, item: &CopiedItem) -
 
 /// The height of the window over the game for an item that can't be read, in points.
 const EMPTY_HEIGHT: f32 = 160.0;
-
-/// How soon the next frame comes while the window over the game waits to show, or the desktop to
-/// make it the active window (a single screen).
-const ACTIVATION_POLL: Duration = Duration::from_millis(30);
 
 /// `points` in the physical pixels of a screen of `scale` pixels per point.
 #[expect(

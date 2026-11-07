@@ -219,6 +219,12 @@ impl Overlay {
         }
     }
 
+    /// A hotkey waits for its item.
+    #[must_use]
+    pub fn waiting(&self) -> bool {
+        self.pending.is_some()
+    }
+
     /// Where the window shows, while it is open.
     #[must_use]
     pub fn shown(&self) -> Option<Target> {
@@ -263,9 +269,24 @@ impl Activation {
         false
     }
 
-    /// Nothing to wait for.
-    pub fn follow(&mut self, _opened: Option<u64>, _now: std::time::Instant) -> bool {
+    pub fn escape(&mut self) {}
+
+    pub fn editing(&mut self, _editing: bool) {}
+
+    /// Esc is left to the game.
+    #[must_use]
+    pub fn escape_closes(&self) -> bool {
         false
+    }
+
+    /// Nothing to wait for.
+    pub fn follow(
+        &mut self,
+        _opened: Option<u64>,
+        _pending: bool,
+        _now: std::time::Instant,
+    ) -> Option<Duration> {
+        None
     }
 }
 
