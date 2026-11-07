@@ -393,9 +393,15 @@ fn a_press_while_the_helper_shows_waits_for_its_keys_before_activating_it() {
     );
 
     assert!(!activation.holds());
-    let desk = desk.borrow();
-    assert_eq!(desk.helper, Some(HELPER));
-    assert_eq!(desk.activated, Vec::<Window>::new());
+    assert_eq!(desk.borrow().helper, Some(HELPER));
+    assert_eq!(desk.borrow().activated, Vec::<Window>::new());
+
+    // Its keys sent: activated.
+    activation.follow(Some(1), || false, later(now, 30));
+    activation.follow(Some(1), || false, later(now, 60));
+
+    assert!(activation.holds());
+    assert_eq!(desk.borrow().activated, [HELPER]);
 }
 
 #[test]

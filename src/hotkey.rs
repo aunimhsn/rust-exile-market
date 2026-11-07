@@ -385,8 +385,8 @@ impl PriceCheckHotkey {
                     shortcut,
                     || prepare_copy(marker),
                     |target, copy| {
-                        // The application stopped listening: nothing left to tell, nor to give
-                        // back.
+                        // The application stopped listening: nothing left to tell, and no
+                        // window to give the count of the press back (the guard gives both).
                         if targets.send(Press { target, copy }).is_ok() {
                             on_its_way.told();
                             wake();
