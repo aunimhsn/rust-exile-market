@@ -10,17 +10,16 @@
 //
 // Application icon (17a): the picture the system shows for the application (taskbar, window switcher, the .exe in
 // the File Explorer), made from the emblem (specifications, Icons and logo). Compared at the sizes of the systems
-// (16, 24, 32 and 48 px) on a dark and a light taskbar: A, the white emblem on the dark tile of the title bar; C, the
-// bronze emblem alone, the metal of the logo, with a thin dark edge for the light taskbars; D, the white emblem
-// alone with the same edge. B, the bronze emblem on the dark tile, removed by the owner on 2026-11-05 (no tile).
-// C chosen by the owner on 2026-11-05: it carries the logo and the world of the game, and holds on both taskbars,
-// where the white of D fades. The emblem of the title bar stays white, tinted like the other icons of the
-// interface: the shape carries the identity, the color of the application icon the brand. The icon itself is
-// assets/logo/icon.svg, rendered by scripts/app-icon.py.
+// (16, 24, 32 and 48 px) on a dark and a light taskbar: the emblem alone in the flat red of the download page; A,
+// the white emblem on the dark tile of the title bar; D, the white emblem alone with a thin dark edge for the light
+// taskbars. The red chosen by the owner on 2026-11-09 (17a2), the color of exile-market.sylent.tools, which holds on
+// both taskbars without an edge, where the white of D fades. The emblem of the title bar stays white, tinted like
+// the other icons of the interface: the shape carries the identity, the color of the application icon the brand.
+// The icon itself is assets/logo/icon.svg, rendered by scripts/app-icon.py.
 
 const SYS_SIZES = [16, 24, 32, 48];
 const sysIcon = (variant, size) => {
-  const look = { A: "is-tile is-white", C: "is-bare is-bronze", D: "is-bare is-white" }[variant];
+  const look = { A: "is-tile is-white", red: "is-bare is-red", D: "is-bare is-white" }[variant];
   return `<span class="sys-icon ${look}" style="width:${size}px;height:${size}px"><span class="sys-emblem"></span></span>`;
 };
 const sysBar = (variant, tone) => `<div class="sys-bar is-${tone}">${SYS_SIZES.map(size =>
@@ -72,8 +71,8 @@ SECTIONS.unshift(["Window can't open (17a): the dialog of the system, one messag
   ["En français : une autre cause", sysDialog("other", "fr")],
 ]]);
 
-SECTIONS.unshift(["Application icon (17a): the bronze emblem for the taskbar, the window switcher and the .exe", [
-  ["Chosen · C · bronze emblem alone, a thin dark edge", sysBoard("C")],
+SECTIONS.unshift(["Application icon (17a): the red emblem for the taskbar, the window switcher and the .exe", [
+  ["Chosen · red emblem alone, the flat red of the download page", sysBoard("red")],
   ["Rejected · A · white emblem on the dark tile of the title bar", sysBoard("A")],
   ["Rejected · D · white emblem alone, a thin dark edge", sysBoard("D")],
 ]]);
