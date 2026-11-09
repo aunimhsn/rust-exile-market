@@ -1,6 +1,6 @@
 //! The public API of poe2scout, the price database of the Path of Exile 2 economy.
 //!
-//! The rules of its use (pace, identification) are in `roadmap.md` (poe2scout usage).
+//! The rules of its use (pace, identification) are in `docs/poe2scout-usage.md`.
 
 use std::fmt;
 use std::time::{Duration, SystemTime};
