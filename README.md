@@ -82,7 +82,7 @@ Some of what the executable holds isn't under this license, and stays under its 
 - the fonts Manrope and JetBrains Mono are under the SIL Open Font License 1.1;
 - the Lucide icons are under the ISC license;
 - the libraries are under their licenses, gathered in `THIRD-PARTY-LICENSES` in each release archive;
-- the name "Exile Market" and its logo aren't under the GPL either: a modified version must change both.
+- the logo isn't under the GPL, and a modified version distributed to others must carry another name and another logo; a fork made only to contribute to this project isn't concerned.
 
 ## Disclaimer
 
