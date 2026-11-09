@@ -1,7 +1,12 @@
 Third-party licenses of Exile Market
 
-The libraries built into the executable, each under its license below. The fonts, the
-icons and the game data are listed apart in assets/NOTICE.md.
+The libraries built into the executable, each under its license below. The source code of
+each one is on https://crates.io, at the version listed. The fonts, the icons and the game
+data are listed apart in assets/NOTICE.md.
+
+The Rust standard library (std, core, alloc and the crates they use) is built into the
+executable too, under the MIT license or the Apache License 2.0, whose texts follow:
+https://github.com/rust-lang/rust/blob/master/COPYRIGHT
 {{#each licenses}}
 
 ================================================================================
@@ -11,6 +16,14 @@ Used by:
 {{#each used_by}}
 - {{{crate.name}}} {{{crate.version}}}
 {{/each}}
+{{#unless source_path}}
+
+These crates publish no text of this license: its standard text follows, and the copyright
+is held by their authors:
+{{#each used_by}}
+- {{{crate.name}}} {{{crate.version}}}: {{#if crate.authors}}{{#each crate.authors}}{{#unless @first}}, {{/unless}}{{{this}}}{{/each}}{{else}}the authors of {{{crate.repository}}}{{/if}}
+{{/each}}
+{{/unless}}
 
 {{{text}}}
 {{/each}}

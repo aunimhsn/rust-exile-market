@@ -31,7 +31,7 @@ Put the game in **windowed fullscreen** or in a **window**. Exclusive fullscreen
 
 Exile Market reads the clipboard while it runs, and keeps only what looks like a Path of Exile 2 item. It doesn't need the focus.
 
-- **Ctrl+D**, with the pointer over an item in the game (Windows and Linux): the item is copied and its price shows in a small window beside the panel of the game. A click outside it closes it. If another application already uses Ctrl+D, the window says so: choose another key in the settings.
+- **Ctrl+D**, with the pointer over an item in the game (Windows and Linux): the item is copied and its price shows in a small window beside the panel of the game. A click outside it closes it, and so does Esc when the game fills your only screen. If another application already uses Ctrl+D, the window says so: choose another key in the settings.
 - **Ctrl+C**, the copy of the game: the price shows in the main window of Exile Market.
 
 A search on the trade site only runs when you click it.
@@ -53,7 +53,7 @@ If it stays, report it with the bug icon of the title bar.
 
 ## What it connects to
 
-- **[poe2scout](https://poe2scout.com)**: the prices of the selected league, at launch and every hour.
+- **[poe2scout](https://poe2scout.com)**: the prices of the selected league, at launch, when you change the league, and every hour.
 - **The official trade site** (pathofexile.com): the names of the items and of the stats, once a day; the offers, only when you click a search. Never with an account or a cookie.
 - **GitHub**: at launch, to see whether a new version is out. The bug report opens in your browser, once you have seen what it holds; nothing is sent without you.
 
@@ -72,7 +72,9 @@ The log is `exile-market.log`, and `exile-market.previous.log` for the previous 
 
 ## License
 
-Exile Market is free software, under the GNU General Public License, version 3 or (at your option) any later version: see [LICENSE](LICENSE). It comes with no warranty. Its source code is in [this repository](https://github.com/aunimhsn/rust-exile-market).
+Copyright (C) 2026 Aunim HASSAN.
+
+Exile Market is free software, under the GNU General Public License, version 3 or (at your option) any later version, with the additional terms of its section 7 given in [assets/NOTICE.md](assets/NOTICE.md): see [LICENSE](LICENSE). It comes with no warranty. Its source code is in [this repository](https://github.com/aunimhsn/rust-exile-market).
 
 Some of what the executable holds isn't under this license, and stays under its own terms ([assets/NOTICE.md](assets/NOTICE.md), [assets/game-data/NOTICE.md](assets/game-data/NOTICE.md)):
 
@@ -88,7 +90,7 @@ This product isn't affiliated with or endorsed by Grinding Gear Games in any way
 
 ## Build from source
 
-With Rust 1.95 or later (see `rust-toolchain.toml`):
+With Rust 1.95 or later (`rust-version` in `Cargo.toml`):
 
 ```sh
 cargo build --release

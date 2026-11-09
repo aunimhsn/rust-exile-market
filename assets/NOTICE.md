@@ -1,6 +1,6 @@
 # Assets notice
 
-The files listed here are embedded in the executable; a release archive holds only this notice and the texts of the licenses.
+The files listed here are embedded in the executable, or are the sources of those that are; a release archive holds only this notice and the texts of the licenses.
 
 The images in `currencies/` and `exchange/` are Path of Exile 2 icons, © Grinding Gear Games, and so are the names of the items in `exchange/currencies.ndjson`. They are **not** covered by the license of this project (GPL-3.0-or-later), and are used here only to show prices in a free, non-commercial tool.
 
@@ -34,6 +34,6 @@ The files in `game-data/` are generated from the data of Exiled Exchange 2 (MIT 
 
 ## Additional permission
 
-The executable combines the program with the images, names, data, fonts and icons listed above, which the GNU General Public License can't cover. As an additional permission under its section 7, the author of Exile Market allows you to convey the program, modified or not, combined with them, each staying under its own terms. The name and the logo stay under the rule above.
+The executable combines the program with the images, names, data, fonts and icons listed above, which stay under their own terms. As an additional permission under its section 7, the author of Exile Market allows you to convey the program, modified or not, combined with them, each staying under its own terms. The name and the logo stay under the rule above.
 
 This product isn't affiliated with or endorsed by Grinding Gear Games in any way.

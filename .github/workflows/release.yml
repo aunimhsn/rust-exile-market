@@ -9,7 +9,19 @@ on:
   push:
     tags: ["v*"]
   pull_request:
-    paths: [.github/workflows/release.yml, Cargo.toml, Cargo.lock, about.hbs, about.toml, deny.toml]
+    paths:
+      - .github/workflows/release.yml
+      - Cargo.toml
+      - Cargo.lock
+      - about.hbs
+      - about.toml
+      - deny.toml
+      # The files the Package step copies, so that a rename fails here rather than at the tag.
+      - LICENSE
+      - assets/NOTICE.md
+      - assets/game-data/NOTICE.md
+      - assets/fonts/ofl-*.txt
+      - assets/icons/isc-lucide.txt
   workflow_dispatch:
 
 permissions:
@@ -34,6 +46,13 @@ jobs:
           tool: cargo-deny@0.20.2,cargo-about@0.9.3
       - run: cargo deny --locked check licenses
       - run: cargo about generate --locked --fail --output-file THIRD-PARTY-LICENSES about.hbs
+      # A license file of a crate that keeps the template of its copyright line: point
+      # about.toml to the right file. Only a crate without any license file may show it,
+      # with its authors written above the text by about.hbs.
+      - name: Check that every license file read has its copyright line
+        run: |
+          cargo about generate --locked --format json \
+            | jq -e '[.licenses[] | select(.source_path != null and (.text | test("<copyright holders>|<year>")))] | length == 0'
       - uses: actions/upload-artifact@v7
         with:
           name: third-party-licenses
