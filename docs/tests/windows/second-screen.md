@@ -1,6 +1,6 @@
 # Windows test: the window over the game on a second screen
 
-A hand test left to step 21 (Polish) of [roadmap.md](../roadmap.md), from the second code review of step 14b3a (2026-11-02). It needs a Windows player that the owner has to find: neither the owner nor Claude Code has Windows.
+A hand test left to step 21 (Polish), an entry of [backlog.md](../../../backlog.md) (Waiting on others), from the second code review of step 14b3a (2026-11-02). It needs a Windows player that the owner has to find: neither the owner nor Claude Code has Windows.
 
 ## Why
 
@@ -47,6 +47,6 @@ A screen recording of the opening helps most (Windows+Alt+R records with the Xbo
 
 ## Then
 
-- **Right at once, everywhere**: nothing to fix; write it in `docs/technical-choices.md` (Window over the game, Windows) and close the point of step 21.
+- **Right at once, everywhere**: nothing to fix; write it in `docs/technical-choices.md` (Window over the game, Windows) and remove its entry from `backlog.md`.
 - **A jump or an overlap for a moment at the first opening only**: the delay of one frame; keep the window hidden one more frame when the scale it reads changes, or use the scale of the game if the report shows the window takes the scale of its screen at once while hidden.
 - **Wrong for good**: the conversion of the position is wrong in another way; compare the places in the log and the recording with `Target::place` (`src/overlay.rs`), then fix and ask the player to test again.
