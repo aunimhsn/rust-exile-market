@@ -2,8 +2,9 @@
 
 ## Publish a version
 
-1. Update `version` in `Cargo.toml` (then run `cargo build` to update `Cargo.lock`) and merge it into `main`.
-2. Tag the merged commit with the same version and push the tag:
+1. Run the `security-auditor` subagent on `main` and fix the findings the owner approves (a critical or high one blocks the release), and run the guides of `docs/tests/` again ([the list](tests/README.md)).
+2. Update `version` in `Cargo.toml` (then run `cargo build` to update `Cargo.lock`) and merge it into `main`.
+3. Tag the merged commit with the same version and push the tag:
 
    ```sh
    git switch main && git pull

@@ -124,4 +124,6 @@ Follow [Conventional Commits 1.0.0](https://www.conventionalcommits.org/en/v1.0.
 ## Releases
 
 - Pushing a version tag (e.g. `v0.1.0`) that matches the version of `Cargo.toml` publishes a GitHub release with the executables for Windows, macOS and Linux (`.github/workflows/release.yml`).
+- Before every release, run the `security-auditor` subagent (`.claude/agents/security-auditor.md`) on the whole repository at `main`: it writes its findings, in French, to `outputs/<YYYY-MM-DD>-security-audit.md`. Summarize them to the owner, and fix the ones they approve in a pull request before the tag; a critical or high finding blocks the tag.
+- Between releases, the `dependency-reviewer` subagent (`.claude/agents/dependency-reviewer.md`) sorts the pull requests of Dependabot when the owner asks, and names the hand tests an update needs before the next release.
 - This workflow suits a command-line or terminal application. For a desktop application (installers) or a web application (deployment), adapt or replace it, and record the choice in `roadmap.md`.
