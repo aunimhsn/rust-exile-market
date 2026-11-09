@@ -1,24 +1,15 @@
 <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="12 12 76 76" width="256" height="256">
-  <!-- Exile Market application icon: the emblem (emblem.svg) in bronze, the metal of the logo, with a thin dark
-       edge so that it doesn't melt into a light taskbar (mock-up section "Application icon (17a)", option C).
-       scripts/app-icon.py renders it at each size of the systems, the edge kept half a pixel wide at each:
-       assets/logo/icon.png for the window, assets/logo/icon.ico for the Windows executable. -->
+  <!-- Exile Market application icon: the emblem (emblem.svg) in the flat red of the download page, copied from
+       src/assets/brand/icon.svg of exile-market.sylent.tools, without its style rule for the light mode of the
+       browsers (mock-up section "Application icon (17a)"). scripts/app-icon.py renders it at each size of the
+       systems: assets/logo/icon.png for the window, assets/logo/icon.ico for the Windows executable. -->
   <defs>
-    <linearGradient id="bronze" gradientUnits="userSpaceOnUse" x1="37" y1="12" x2="63" y2="88">
-      <stop offset="0" stop-color="#eadbb4"/>
-      <stop offset=".55" stop-color="#c9a25e"/>
-      <stop offset="1" stop-color="#8a6a38"/>
-    </linearGradient>
-    <!-- The dark edge, its blur in units of the view box (0.25 px at 256 px, written again per size). -->
-    <filter id="edge" x="-10%" y="-10%" width="120%" height="120%">
-      <feDropShadow dx="0" dy="0" stdDeviation="0.0742" flood-color="#000000" flood-opacity=".9"/>
-    </filter>
     <path id="blade" d="M50 13 L54.6 21 L50 31 L45.4 21 Z"/>
     <path id="small-blade" d="M50 14 L53 22 L50 28 L47 22 Z"/>
   </defs>
-  <g fill="url(#bronze)" filter="url(#edge)">
-    <circle cx="50" cy="50" r="28" fill="none" stroke="url(#bronze)" stroke-width="5"/>
-    <circle cx="50" cy="50" r="21.5" fill="none" stroke="url(#bronze)" stroke-width="1.5" opacity=".55"/>
+  <circle cx="50" cy="50" r="28" fill="none" stroke="#e5383b" stroke-width="5"/>
+  <circle cx="50" cy="50" r="21.5" fill="none" stroke="#e5383b" stroke-width="1.5" opacity=".55"/>
+  <g fill="#e5383b">
     <use xlink:href="#blade"/>
     <use xlink:href="#blade" transform="rotate(90 50 50)"/>
     <use xlink:href="#blade" transform="rotate(180 50 50)"/>

@@ -8,15 +8,15 @@
   -webkit-mask: url("../../../../assets/logo/emblem.svg") center / contain no-repeat;
   mask: url("../../../../assets/logo/emblem.svg") center / contain no-repeat;
 }
-/* The icon at one size: a tile (A) or the emblem alone (C, D). */
+/* The icon at one size: a tile (A) or the emblem alone (the chosen red, D). */
 .sys-icon { display: grid; place-items: center; flex: none; }
 .sys-icon.is-tile { background: #121214; border-radius: 22%; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .08); }
 .sys-icon.is-tile .sys-emblem { width: 72%; height: 72%; }
 .sys-icon.is-bare .sys-emblem { width: 100%; height: 100%; }
 .sys-icon.is-white { --sys-emblem: #fff; }
-.sys-icon.is-bronze { --sys-emblem: linear-gradient(160deg, #eadbb4 0%, #c9a25e 55%, #8a6a38 100%); }
-/* C and D on a light taskbar: a dark edge, so that the emblem doesn't melt into it. */
-.sys-icon.is-bare { filter: drop-shadow(0 0 .5px rgba(0, 0, 0, .9)); }
+.sys-icon.is-red { --sys-emblem: #e5383b; }
+/* D on a light taskbar: a dark edge, so that the white emblem doesn't melt into it. */
+.sys-icon.is-bare.is-white { filter: drop-shadow(0 0 .5px rgba(0, 0, 0, .9)); }
 
 /* A taskbar of the system, dark (Breeze dark, Windows dark) or light, the icon at each size of the system. */
 .sys-board { width: 420px; border-radius: 8px; overflow: hidden; font: 12px/1.4 var(--font-ui, sans-serif); }
