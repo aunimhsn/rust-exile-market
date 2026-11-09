@@ -1,6 +1,8 @@
 # Assets notice
 
-The images in `currencies/` and `exchange/` are Path of Exile 2 icons, © Grinding Gear Games, and so are the names of the items in `exchange/currencies.ndjson`. They are **not** covered by the license of this project (MIT OR Apache-2.0), and are used here only to show prices in a free, non-commercial tool.
+The files listed here are embedded in the executable, or are the sources of those that are; a release archive holds only this notice and the texts of the licenses.
+
+The images in `currencies/` and `exchange/` are Path of Exile 2 icons, © Grinding Gear Games, and so are the names of the items in `exchange/currencies.ndjson`. They are **not** covered by the license of this project (GPL-3.0-or-later), and are used here only to show prices in a free, non-commercial tool.
 
 | File | Item | Source |
 |---|---|---|
@@ -26,8 +28,14 @@ The icons in `icons/` come from [Lucide](https://lucide.dev), © Lucide Icons an
 | `icons/bug.svg` | `bug` |
 | `icons/settings.svg` | `settings` |
 
-The files in `logo/` belong to this project and are covered by its license: `emblem.svg` (the emblem without the text, white so that the application can tint it), and the application icon, `icon.svg` (the emblem in the red of the download page) and the `icon.png` and `icon.ico` rendered from it by `scripts/app-icon.py`.
+The files in `logo/` are © Aunim HASSAN, all rights reserved, and are not covered by the license of this project: `emblem.svg` (the emblem without the text, white so that the application can tint it), and the application icon, `icon.svg` (the emblem in the red of the download page) and the `icon.png` and `icon.ico` rendered from it by `scripts/app-icon.py`. They may be conveyed with an unmodified copy of Exile Market.
+
+As additional terms under section 7 (points c and e) of the GNU General Public License, the name "Exile Market" is not licensed for use by modified versions: a modified version distributed to others must carry another name, and must not use the files in `logo/`. A fork or a branch made only to contribute to this project is not concerned.
 
 The files in `game-data/` are generated from the data of Exiled Exchange 2 (MIT license), which comes from the files of the game and belongs to Grinding Gear Games: see `game-data/NOTICE.md`.
+
+## Additional permission
+
+The executable combines the program with the images, names, data, fonts and icons listed above, which stay under their own terms. As an additional permission under its section 7, the author of Exile Market allows you to convey the program, modified or not, combined with them, each staying under its own terms. The name and the logo stay under the rule above.
 
 This product isn't affiliated with or endorsed by Grinding Gear Games in any way.

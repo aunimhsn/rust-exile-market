@@ -1,7 +1,7 @@
 //! The official trade site of Path of Exile 2, in each language of the game client: for now,
 //! the names of its items and the templates of its stats.
 //!
-//! The rules of its use are in `roadmap.md` (trade site usage).
+//! The rules of its use are in `docs/trade-site-usage.md`.
 
 use std::collections::{HashMap, HashSet};
 use std::fmt;

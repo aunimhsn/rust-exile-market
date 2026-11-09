@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Aunim HASSAN. GPL-3.0-or-later, with the additional terms of its
+// section 7 in assets/NOTICE.md.
+
 //! Exile Market: the price of a Path of Exile 2 item as soon as it is copied in the game.
 
 // No console window next to the application on Windows, except in debug builds.
@@ -143,7 +146,7 @@ fn icon() -> std::sync::Arc<egui::IconData> {
 }
 
 /// On Linux, the window always goes through X11 (XWayland under Wayland), like the game run by
-/// Proton, so that the clipboard can be read without the focus: see roadmap.md (Linux display).
+/// Proton, so that the clipboard can be read without the focus: see docs/technical-choices.md (Linux display).
 /// Without it, winit would pick Wayland, which the OpenGL renderer isn't built for.
 #[cfg(target_os = "linux")]
 fn on_x11(options: eframe::NativeOptions) -> eframe::NativeOptions {

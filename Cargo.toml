@@ -85,7 +85,7 @@ members = ["tools/exchange-icons", "tools/game-data"]
 [workspace.package]
 edition = "2024"
 rust-version = "1.95"
-license = "MIT OR Apache-2.0"
+license = "GPL-3.0-or-later"
 
 [workspace.dependencies]
 # The version egui_extras decodes the PNG files with: the application and the tool of the
