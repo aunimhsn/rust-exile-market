@@ -1,0 +1,16 @@
+Third-party licenses of Exile Market
+
+The libraries built into the executable, each under its license below. The fonts, the
+icons and the game data are listed apart in assets/NOTICE.md.
+{{#each licenses}}
+
+================================================================================
+{{{name}}} ({{{id}}})
+
+Used by:
+{{#each used_by}}
+- {{{crate.name}}} {{{crate.version}}}
+{{/each}}
+
+{{{text}}}
+{{/each}}

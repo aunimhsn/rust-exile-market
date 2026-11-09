@@ -1,0 +1,32 @@
+# The licenses of the dependencies of the application, on every system it is released for:
+# `cargo deny check licenses`, run by the Release workflow. Each license listed here is
+# compatible with GPL-3.0-or-later; keep `accepted` of about.toml the same.
+
+[graph]
+targets = [
+    "x86_64-unknown-linux-gnu",
+    "x86_64-apple-darwin",
+    "aarch64-apple-darwin",
+    "x86_64-pc-windows-msvc",
+]
+exclude-dev = true
+
+[licenses]
+confidence-threshold = 0.93
+allow = [
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "BSL-1.0",
+    "CDLA-Permissive-2.0",
+    "ISC",
+    "MIT",
+    "MPL-2.0",
+    "Unicode-3.0",
+    "Zlib",
+]
+
+# The crates of this workspace, never published: their license is the one of the project.
+[licenses.private]
+ignore = true

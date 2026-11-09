@@ -9,7 +9,7 @@ on:
   push:
     tags: ["v*"]
   pull_request:
-    paths: [.github/workflows/release.yml, Cargo.toml, Cargo.lock]
+    paths: [.github/workflows/release.yml, Cargo.toml, Cargo.lock, about.hbs, about.toml, deny.toml]
   workflow_dispatch:
 
 permissions:
@@ -22,8 +22,27 @@ env:
   VERSION: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'test' }}
 
 jobs:
+  # One file for the four archives: about.toml lists the targets of the matrix below.
+  notices:
+    name: Check the licenses and write the notices
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-deny@0.20.2,cargo-about@0.9.3
+      - run: cargo deny --locked check licenses
+      - run: cargo about generate --locked --fail --output-file THIRD-PARTY-LICENSES about.hbs
+      - uses: actions/upload-artifact@v7
+        with:
+          name: third-party-licenses
+          path: THIRD-PARTY-LICENSES
+          if-no-files-found: error
+
   build:
     name: Build ${{ matrix.target }}
+    needs: notices
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -45,6 +64,9 @@ jobs:
         shell: bash
     steps:
       - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: third-party-licenses
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
@@ -75,7 +97,12 @@ jobs:
         run: |
           directory="$NAME-$VERSION-${{ matrix.target }}"
           mkdir "$directory"
-          cp README.md LICENSE-APACHE LICENSE-MIT "$directory/"
+          cp README.md LICENSE THIRD-PARTY-LICENSES "$directory/"
+          # The notices of what the executable embeds, at the paths the README links to.
+          for file in assets/NOTICE.md assets/game-data/NOTICE.md assets/fonts/ofl-*.txt assets/icons/isc-lucide.txt; do
+            mkdir -p "$directory/$(dirname "$file")"
+            cp "$file" "$directory/$file"
+          done
           if [ "${{ runner.os }}" = "Windows" ]; then
             cp "target/${{ matrix.target }}/release/$NAME.exe" "$directory/"
             7z a "$directory.zip" "$directory"
@@ -87,7 +114,7 @@ jobs:
           fi
       - uses: actions/upload-artifact@v7
         with:
-          name: ${{ matrix.target }}
+          name: archive-${{ matrix.target }}
           path: ${{ env.ARCHIVE }}
           if-no-files-found: error
 
@@ -103,6 +130,7 @@ jobs:
       - uses: actions/download-artifact@v8
         with:
           path: dist
+          pattern: archive-*
           merge-multiple: true
       - name: Create the release
         working-directory: dist
