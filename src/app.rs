@@ -453,54 +453,18 @@ impl ExileMarketApp {
             UnreadableItem::new(&self.i18n).show(ui);
             return EMPTY_HEIGHT;
         };
-        // The pill shows only when its link can be opened: the league and the search known.
-        let tradable = self.session.tradable(item);
-        let must_identify = self.session.must_identify(item);
-        let fixed_price = self.session.fixed_price(item);
-        let worth = self.session.worth();
-        let estimate = shown_estimate(&self.offers, item, &fixed_price, worth);
-        // Without a fixed price, the estimate tells the suspicious offers.
-        let reference =
-            reference(&fixed_price, worth).or(estimate.map(|estimate| estimate.reference));
-        let mut offers_action = None;
-        let (action, height) = ui::content(ui, to_top, |ui| {
-            let action = ItemBlock::new(
-                item,
-                shown.lines(),
-                shown.stats(),
-                shown.tiers(),
-                &mut self.filters,
-                &self.i18n,
-            )
-            .tradable(tradable)
-            .stats(self.stats_open, self.session.filtered_base_type(item))
-            .show(ui);
-            if action == Some(ItemBlockAction::CheckOnTrade) {
-                // With the filters as the player just left them.
-                let filters = search_filters(&self.session, shown, item, &self.filters);
-                if let Some(url) = self.session.trade_url(item, filters) {
-                    ui.ctx().open_url(OpenUrl::new_tab(url));
-                }
-            }
-            let league = self.session.league().map(League::name);
-            PriceBlock::new(item, fixed_price, prices, league, &self.i18n)
-                .estimate(estimate)
-                .show(ui);
-            if let Some(kind) = kind {
-                offers_action = OffersBlock::new(
-                    &self.offers,
-                    kind,
-                    reference,
-                    item,
-                    shown.lines(),
-                    &self.i18n,
-                )
-                .show(ui);
-            } else if must_identify {
-                OffersBlock::identify(ui, &self.i18n);
-            }
-            action
-        });
+        let view = ItemView {
+            session: &self.session,
+            shown,
+            item,
+            offers: &self.offers,
+            filters: &mut self.filters,
+            stats_open: self.stats_open,
+            prices,
+            kind,
+            i18n: &self.i18n,
+        };
+        let ((action, offers_action), height) = ui::content(ui, to_top, |ui| view.show(ui));
         if action == Some(ItemBlockAction::ToggleStats) {
             self.stats_open = !self.stats_open;
         }
@@ -735,6 +699,76 @@ fn search_filters(
     SearchFilters {
         states: filters.lit_states_of(item).collect(),
         ..shown.stats().search_filters(&stats.filters(filters))
+    }
+}
+
+/// The blocks of the item shown, one under the other: the item with its filters, its price,
+/// and its offers when it can be searched (`kind`).
+struct ItemView<'a> {
+    session: &'a Session,
+    shown: &'a ShownItem,
+    item: &'a Item,
+    offers: &'a Offers,
+    filters: &'a mut Filters,
+    stats_open: bool,
+    prices: PricesState,
+    kind: Option<SearchKind>,
+    i18n: &'a Translator,
+}
+
+impl ItemView<'_> {
+    /// Draws the blocks; what the player did in the item block and in the offers block. The
+    /// Check on trade pill opens its link here.
+    fn show(self, ui: &mut Ui) -> (Option<ItemBlockAction>, Option<OffersAction>) {
+        let Self {
+            session,
+            shown,
+            item,
+            offers,
+            filters,
+            stats_open,
+            prices,
+            kind,
+            i18n,
+        } = self;
+        let fixed_price = session.fixed_price(item);
+        let worth = session.worth();
+        let estimate = shown_estimate(offers, item, &fixed_price, worth);
+        // Without a fixed price, the estimate tells the suspicious offers.
+        let reference =
+            reference(&fixed_price, worth).or(estimate.map(|estimate| estimate.reference));
+        let action = ItemBlock::new(
+            item,
+            shown.lines(),
+            shown.stats(),
+            shown.tiers(),
+            filters,
+            i18n,
+        )
+        // The pill shows only when its link can be opened: the league and the search known.
+        .tradable(session.tradable(item))
+        .stats(stats_open, session.filtered_base_type(item))
+        .show(ui);
+        if action == Some(ItemBlockAction::CheckOnTrade) {
+            // With the filters as the player just left them.
+            let filters = search_filters(session, shown, item, filters);
+            if let Some(url) = session.trade_url(item, filters) {
+                ui.ctx().open_url(OpenUrl::new_tab(url));
+            }
+        }
+        let league = session.league().map(League::name);
+        PriceBlock::new(item, fixed_price, prices, league, i18n)
+            .estimate(estimate)
+            .show(ui);
+        let offers_action = if let Some(kind) = kind {
+            OffersBlock::new(offers, kind, reference, item, shown.lines(), i18n).show(ui)
+        } else {
+            if session.must_identify(item) {
+                OffersBlock::identify(ui, i18n);
+            }
+            None
+        };
+        (action, offers_action)
     }
 }
 
@@ -1084,6 +1118,9 @@ fn random_quote() -> usize {
     let [byte, ..] = RandomState::new().hash_one(()).to_le_bytes();
     usize::from(byte) % DOWNLOAD_QUOTE_COUNT
 }
+
+#[cfg(test)]
+mod smoke_tests;
 
 #[cfg(test)]
 mod tests {

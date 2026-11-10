@@ -795,4 +795,4 @@ fn days_from_civil(year: i64, month: i64, day: i64) -> i64 {
 }
 
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;

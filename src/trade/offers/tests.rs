@@ -695,3 +695,29 @@ fn an_offer_gone_doesnt_make_a_page_that_cant_be_read_a_page_without_offers() {
     let gone: ApiFetch = serde_json::from_str(r#"{"result": [null, null]}"#).expect("read");
     assert_eq!(gone.offers(Language::English), Vec::new());
 }
+
+/// The offers of items of every answer above, as read on the trade site of `language`: rings,
+/// qualities, waystones, gems and armours, for the tests that draw offers.
+pub(crate) fn every_item_offer(language: Language) -> Vec<ItemOffer> {
+    [
+        FETCH,
+        QUALITIES,
+        FRENCH_QUALITY,
+        WAYSTONES,
+        GEMS_AND_ARMOURS,
+    ]
+    .into_iter()
+    .flat_map(|answer| {
+        serde_json::from_str::<ApiFetch>(answer)
+            .expect("read")
+            .offers(language)
+    })
+    .collect()
+}
+
+/// The offers of the currency exchange of the answer above.
+pub(crate) fn every_exchange_offer() -> Vec<ExchangeOffer> {
+    serde_json::from_str::<ApiExchange>(EXCHANGE)
+        .expect("read")
+        .offers()
+}
