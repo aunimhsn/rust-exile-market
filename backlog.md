@@ -24,6 +24,8 @@ One entry per item: what it is, its kind (the section it sits in), what it depen
 
 - The bug icon of the title bar made more discreet once the application is stable and the issues fewer (step 16, the owner's idea on 2026-11-04): fainter (mock-up window "Later" of the section "Bug report (16)"), a row in the settings, or a link in their status bar; decide with the owner from the issues received.
 
+- A refusal of the trade site that isn't a limit (HTTP 403, a refusal since the security audit of 2026-11-10) reads "Trade site limit" in the waiting block, as a 429 (`src/ui/offers_block.rs`; `TradeError::Refused` carries no status, written to the log only): a text of its own, e.g. "The trade site refused the search", mock-up first. Depends on nothing; never seen in play so far. Noted on 2026-11-10.
+
 ## Edge cases
 
 - The French enchantment `Attribue Parangon` (the `Allocates Paragon` of the owner's tiara, `inputs/13k2c-items.txt`) finds no stat, the French data of Exiled Exchange 2 writing the notable with its English name (`Attribue Paragon`, `mod_granted_passive_hash`): check the other French notables of `Allocates #` against the French trade site and the game, and take their French names from it (found in step 13k2e2; `UNKNOWN_LINES` in `src/game_data/lines.rs`).

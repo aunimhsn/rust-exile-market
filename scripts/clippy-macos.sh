@@ -3,7 +3,6 @@
 # machine with macOS may not be free for a quarter of an hour, and a check needs none. Nothing is
 # linked, so the C code of the dependencies (ring) needs no compiler: `true` stands in for it, in
 # a target directory of its own. The release workflow still builds the real executables on macOS.
-#
 set -eu
 # From the root of the project, wherever the script is run from.
 cd "$(dirname "$0")/.."

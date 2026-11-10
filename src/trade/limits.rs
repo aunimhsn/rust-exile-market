@@ -301,7 +301,7 @@ impl Limits {
         self.policies[policy.index()].answered(headers, now);
     }
 
-    /// The trade site refused a request of `policy` (HTTP 429) `now`: no request of it is
+    /// The trade site refused a request of `policy` (HTTP 429 or 403) `now`: no request of it is
     /// sent before the delay of `Retry-After`, nor before the restriction it tells. Returns
     /// the end of the wait.
     pub fn refused(&mut self, policy: Policy, headers: &LimitHeaders, now: Instant) -> Instant {

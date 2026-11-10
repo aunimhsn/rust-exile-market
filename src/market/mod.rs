@@ -279,7 +279,11 @@ impl<D: PriceDatabase> Watch<'_, D> {
         match self.database.leagues() {
             Ok(leagues) => {
                 self.succeeded();
-                log::info!("Leagues: {}", logging::plain(&format!("{leagues:?}")));
+                let ids: Vec<String> = leagues
+                    .iter()
+                    .map(|league| logging::plain(league.id()))
+                    .collect();
+                log::info!("Leagues: {}", ids.join(", "));
                 self.leagues_due = Instant::now() + self.intervals.refresh;
                 MarketEvent::Leagues(Leagues::new(leagues))
             }

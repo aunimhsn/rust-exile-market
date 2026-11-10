@@ -103,7 +103,14 @@ jobs:
         run: sh .github/scripts/code-changed.sh "$BASE" "$HEAD"
       - name: Read rust-version from Cargo.toml
         if: steps.changes.outputs.code == 'true'
-        run: echo "RUSTUP_TOOLCHAIN=$(sed -n 's/^rust-version = "\(.*\)"/\1/p' Cargo.toml)" >> "$GITHUB_ENV"
+        run: |
+          version=$(sed -n 's/^rust-version = "\(.*\)"/\1/p' Cargo.toml)
+          # Only a version number goes to the environment of the next steps.
+          if ! printf '%s' "$version" | grep -qE '^[0-9]+\.[0-9]+(\.[0-9]+)?$'; then
+            echo "Unexpected rust-version in Cargo.toml: $version"
+            exit 1
+          fi
+          echo "RUSTUP_TOOLCHAIN=$version" >> "$GITHUB_ENV"
       # `RUSTUP_TOOLCHAIN` overrides the version of rust-toolchain.toml in the next steps, so
       # that only the minimum version is installed. Through the environment: a text read from a
       # file of the pull request is never written into a script.

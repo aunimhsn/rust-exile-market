@@ -3,7 +3,6 @@
 # the code written for Windows alone is checked before a push. Nothing is linked: the C code of
 # the dependencies (ring) goes to a stand-in compiler that writes empty files, enough for a
 # check, in a target directory of its own so that they never reach a real build.
-#
 set -eu
 # From the root of the project, wherever the script is run from.
 cd "$(dirname "$0")/.."

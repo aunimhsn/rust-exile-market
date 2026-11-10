@@ -211,12 +211,16 @@ const REDIRECTIONS: u32 = 3;
 
 /// The tag of the latest release; none while there is no release (GitHub answers 404).
 fn latest_tag() -> Result<Option<String>, HttpError> {
-    let agent = http::agent();
+    latest_tag_at(&http::agent(), &latest_release_api(REPOSITORY))
+}
+
+/// The tag of the latest release read at `url` with `agent`.
+fn latest_tag_at(agent: &ureq::Agent, url: &str) -> Result<Option<String>, HttpError> {
     // GitHub redirects the API of a repository renamed or moved (301): followed here, over
     // HTTPS only as every request of the agent, so that the versions already released still
     // see the new ones after a rename.
     let answer = agent
-        .get(latest_release_api(REPOSITORY))
+        .get(url)
         .config()
         .max_redirects(REDIRECTIONS)
         .build()
@@ -252,6 +256,38 @@ fn release_page(repository: &str, tag: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::http::tests::{local_agent, server};
+    use std::sync::atomic::Ordering;
+
+    const LATEST: &[u8] = br#"{"tag_name": "v0.2.0"}"#;
+
+    #[test]
+    fn the_tag_of_the_latest_release_is_read_and_none_before_the_first_release() {
+        let (url, _) = server("200 OK", LATEST.to_vec());
+        let (missing, _) = server("404 Not Found", b"{}".to_vec());
+        let agent = local_agent();
+
+        let tag = latest_tag_at(&agent, &url).expect("an answer");
+        let none = latest_tag_at(&agent, &missing).expect("an answer");
+
+        assert_eq!(tag.as_deref(), Some("v0.2.0"));
+        assert_eq!(none, None);
+    }
+
+    /// The code review of the fixes of the audit: GitHub redirects a renamed repository.
+    #[test]
+    fn the_releases_of_a_renamed_repository_are_followed() {
+        let (renamed, asked) = server("200 OK", LATEST.to_vec());
+        let (url, _) = server(
+            format!("301 Moved Permanently\r\nLocation: {renamed}"),
+            Vec::new(),
+        );
+
+        let tag = latest_tag_at(&local_agent(), &url).expect("an answer");
+
+        assert_eq!(tag.as_deref(), Some("v0.2.0"));
+        assert_eq!(asked.load(Ordering::SeqCst), 1);
+    }
 
     fn version(text: &str) -> Version {
         Version::parse(text).expect("a version")

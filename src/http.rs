@@ -157,7 +157,7 @@ impl Pace {
 }
 
 #[cfg(test)]
-mod tests {
+pub mod tests {
     use std::io::{BufRead, BufReader, Write as _};
     use std::net::TcpListener;
     use std::sync::Arc;
@@ -170,7 +170,8 @@ mod tests {
 
     /// The address of a local server that answers each request with the status line and the
     /// headers `head` and with `body`, and the number of requests it got.
-    fn server(head: &'static str, body: Vec<u8>) -> (String, Arc<AtomicUsize>) {
+    pub fn server(head: impl Into<String>, body: Vec<u8>) -> (String, Arc<AtomicUsize>) {
+        let head = head.into();
         let listener = TcpListener::bind("127.0.0.1:0").expect("a local port");
         let address = listener.local_addr().expect("its address");
         let requests = Arc::new(AtomicUsize::new(0));
@@ -205,8 +206,11 @@ mod tests {
     }
 
     /// The agent of the application, but for a local server, which doesn't speak HTTPS.
-    fn local_agent() -> ureq::Agent {
-        let config = ureq::Agent::config_builder().max_redirects(0).build();
+    pub fn local_agent() -> ureq::Agent {
+        let config = ureq::Agent::config_builder()
+            .max_redirects(0)
+            .timeout_global(Some(Duration::from_secs(10)))
+            .build();
         ureq::Agent::new_with_config(config)
     }
 
@@ -215,8 +219,7 @@ mod tests {
     #[test]
     fn a_redirection_is_an_error_status_and_isnt_followed() {
         let (elsewhere, followed) = server("200 OK", b"[1]".to_vec());
-        let head: &'static str = format!("302 Found\r\nLocation: {elsewhere}").leak();
-        let (url, requests) = server(head, Vec::new());
+        let (url, requests) = server(format!("302 Found\r\nLocation: {elsewhere}"), Vec::new());
 
         let answer = get_json::<Vec<u8>>(&local_agent(), &url, &[]);
 

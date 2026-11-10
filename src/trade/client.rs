@@ -348,6 +348,10 @@ impl<T: Transport> TradeClient<T> {
         let answer = result.map_err(|error| TradeError::Http(HttpError::Request(error)))?;
         // A 403 too: the trade site turns the address away, as it does the item names.
         if matches!(answer.status, 403 | 429) {
+            log::warn!(
+                "Trade site: request refused with the status {}",
+                answer.status
+            );
             let until = self.limits.refused(policy, &answer.limits, now);
             self.refusal
                 .extend(now + limits::refusal_wait(&answer.limits));
