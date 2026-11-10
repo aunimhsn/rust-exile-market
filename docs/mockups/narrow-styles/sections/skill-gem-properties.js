@@ -83,7 +83,7 @@ const filterWord = (count, fr) => `${count} ${fr ? "filtre" : "filter"}${count >
 // The price block of decision 3.
 const GEM_PRICE_TODAY = { lines: ["No price found for this item in Forbidden Rites."] };
 const GEM_PRICE = { lines: ["No market price for skill gems.", "Search similar offers to estimate it."] };
-const GEM_PRICE_FR = { lines: ["Pas de prix de marché pour les gemmes d'aptitude.", "Recherchez des offres similaires pour l'estimer."] };
+const GEM_PRICE_FR = { lines: ["Pas de prix de marché pour les gemmes d'aptitude.", "Cherchez des offres similaires pour l'estimer."] };
 
 // A gem window, folded, its level in `style`, its tags in `colors`.
 const gemFolded = (it, style = "color", colors = "both") => win(topBar(), item(gem(it, style, colors)), price(GEM_PRICE), foot());

@@ -16,6 +16,8 @@ function price(p, lang = "en") {
     // Currency exchange items always have plenty of offers: the stack size replaces their count.
     caption = `Stack of ${p.stackSize}`;
     if (p.trend) body += `<div class="line ${p.rising === false ? "fall" : "rise"}">${p.trend}</div>`;
+    // An item of the currency exchange priced on fewer than 10 trades (17e3c).
+    if (p.warning) body += `<div class="line warn">${p.warning}</div>`;
   } else if (p.values) {
     body = row(p.values);
     if (p.trend) body += `<div class="line ${p.stable ? "muted" : p.rising === false ? "fall" : "rise"}">${p.trend}</div>`;
