@@ -150,4 +150,29 @@ mod tests {
         fs::write(&path, "{").unwrap();
         assert!(read_versioned_json::<Vec<i32>>(&path, 2).is_err());
     }
+
+    /// The core review of 2026-11-10: a failure was never tested. The new file can't be
+    /// made here, whatever the rights of the user: a folder has its name.
+    #[test]
+    fn a_failed_write_leaves_the_file_as_it_was() {
+        let directory = TestDirectory::new("write-failed");
+        write_atomically(&directory.0, "a.txt", b"first").expect("written");
+        fs::create_dir(directory.0.join(new_file_name("a.txt"))).unwrap();
+
+        let written = write_atomically(&directory.0, "a.txt", b"second");
+
+        assert!(written.is_err());
+        assert_eq!(fs::read(directory.0.join("a.txt")).expect("read"), b"first");
+    }
+
+    #[test]
+    fn a_folder_that_cant_be_made_is_an_error() {
+        let directory = TestDirectory::new("write-blocked");
+        fs::create_dir_all(&directory.0).unwrap();
+        fs::write(directory.0.join("blocked"), "").unwrap();
+
+        let written = write_atomically(&directory.0.join("blocked").join("sub"), "a.txt", b"a");
+
+        assert!(written.is_err());
+    }
 }
