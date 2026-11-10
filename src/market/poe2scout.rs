@@ -11,11 +11,14 @@ use serde::de::DeserializeOwned;
 use super::{DownloadObserver, PriceDatabase};
 use crate::http::{self, HttpError, Pace};
 use crate::league::League;
+use crate::logging;
 use crate::prices::{CurrencyPrice, Price, PriceList, Rates, UniqueModifiers, UniquePrice};
 
 const BASE_URL: &str = "https://api.poe2scout.com/poe2";
 /// The time between two requests, at least.
-const PACE: Duration = Duration::from_secs(1);
+/// A little more than the second of the rule: a download of several leagues in a row must
+/// not fit 61 requests in a minute.
+const PACE: Duration = Duration::from_millis(1100);
 /// The most items per page the API gives: most categories fit in one page.
 const PER_PAGE: &str = "250";
 /// The most pages read in a category, in case the API gave a wrong count.
@@ -34,8 +37,8 @@ const CURRENCY_CATEGORY: &str = "currency";
 #[derive(Debug)]
 pub enum FetchError {
     /// No answer, an error status (e.g. 429 when its limits are reached), or an answer that
-    /// isn't the expected JSON.
-    Http(HttpError),
+    /// isn't the expected JSON, to the request of this path.
+    Http { path: String, error: HttpError },
     /// No current league in the answer: the database is wrong for a moment, and the league of
     /// the player must not be changed for that.
     NoCurrentLeague,
@@ -45,10 +48,25 @@ pub enum FetchError {
     TooManyCategories(usize),
 }
 
+impl FetchError {
+    /// The database answered: see [`HttpError::answered`]. An answer that lacks what the
+    /// application needs is one too.
+    #[must_use]
+    pub fn answered(&self) -> bool {
+        match self {
+            Self::Http { error, .. } => error.answered(),
+            Self::NoCurrentLeague | Self::MissingRate(_) | Self::TooManyCategories(_) => true,
+        }
+    }
+}
+
 impl fmt::Display for FetchError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Http(error) => error.fmt(formatter),
+            // The path holds the name of a league, read from the database.
+            Self::Http { path, error } => {
+                write!(formatter, "{error} ({})", logging::plain(path))
+            }
             Self::NoCurrentLeague => formatter.write_str("no current league in the answer"),
             Self::MissingRate(currency) => write!(formatter, "no rate for the {currency} orb"),
             Self::TooManyCategories(count) => {
@@ -61,15 +79,9 @@ impl fmt::Display for FetchError {
 impl std::error::Error for FetchError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
-            Self::Http(error) => Some(error),
+            Self::Http { error, .. } => Some(error),
             Self::NoCurrentLeague | Self::MissingRate(_) | Self::TooManyCategories(_) => None,
         }
-    }
-}
-
-impl From<HttpError> for FetchError {
-    fn from(error: HttpError) -> Self {
-        Self::Http(error)
     }
 }
 
@@ -85,7 +97,9 @@ struct ApiLeague {
 #[derive(Deserialize)]
 #[serde(rename_all = "PascalCase")]
 struct ApiCategories {
+    #[serde(deserialize_with = "http::each")]
     unique_categories: Vec<ApiCategory>,
+    #[serde(deserialize_with = "http::each")]
     currency_categories: Vec<ApiCategory>,
 }
 
@@ -115,11 +129,12 @@ struct ApiReferenceCurrency {
     relative_price: f64,
 }
 
-/// A page of the items of a category.
+/// A page of the items of a category; an item the application can't read is left out.
 #[derive(Deserialize)]
-#[serde(rename_all = "PascalCase")]
+#[serde(rename_all = "PascalCase", bound(deserialize = "T: DeserializeOwned"))]
 struct ApiPage<T> {
     pages: u32,
+    #[serde(deserialize_with = "http::each")]
     items: Vec<T>,
 }
 
@@ -182,7 +197,9 @@ struct ApiCurrency {
 struct ApiPrice {
     current_price: Option<f64>,
     current_quantity: Option<u32>,
-    /// The daily prices, the most recent first; `null` for a day without price.
+    /// The daily prices, the most recent first; `null` for a day without price. Only drawn:
+    /// a price without them is still a price.
+    #[serde(default)]
     price_logs: Vec<Option<ApiPriceLog>>,
 }
 
@@ -255,11 +272,18 @@ impl Poe2Scout {
         path: &str,
         query: &[(&str, &str)],
     ) -> Result<T, FetchError> {
-        Ok(http::get_json(
-            &self.agent,
-            &format!("{BASE_URL}{path}"),
-            query,
-        )?)
+        http::get_json(&self.agent, &format!("{BASE_URL}{path}"), query).map_err(|error| {
+            FetchError::Http {
+                path: path.to_owned(),
+                error,
+            }
+        })
+    }
+
+    /// The list `path` answers, at the pace of the API, each element read on its own.
+    fn list<T: DeserializeOwned>(&mut self, path: &str) -> Result<Vec<T>, FetchError> {
+        let values = self.get(path, &[])?;
+        each_of(path, values)
     }
 
     /// The items of every page of a category; `None` when `download` is interrupted before a
@@ -297,7 +321,7 @@ impl Poe2Scout {
 
 impl PriceDatabase for Poe2Scout {
     fn leagues(&mut self) -> Result<Vec<League>, FetchError> {
-        let leagues = current_leagues(self.get("/Leagues", &[])?);
+        let leagues = current_leagues(self.list("/Leagues")?);
         if leagues.is_empty() {
             return Err(FetchError::NoCurrentLeague);
         }
@@ -320,14 +344,12 @@ impl PriceDatabase for Poe2Scout {
         else {
             return Ok(None);
         };
-        let Some(currencies) = self.get_unless_interrupted::<Vec<ApiReferenceCurrency>>(
-            &format!("/Leagues/{path}/ReferenceCurrencies"),
-            &[],
-            download,
-        )?
-        else {
+        let currencies_path = format!("/Leagues/{path}/ReferenceCurrencies");
+        let Some(currencies) = self.get_unless_interrupted(&currencies_path, &[], download)? else {
             return Ok(None);
         };
+        // A currency without its worth is left out: three of them are read.
+        let currencies: Vec<ApiReferenceCurrency> = each_of(&currencies_path, currencies)?;
         let conversion = Conversion::new(&currencies)?;
         let categories = categories.checked()?;
         let currency_categories = download_order(categories.currency_categories);
@@ -422,6 +444,17 @@ impl Conversion {
                 .collect(),
         })
     }
+}
+
+/// The elements of the list `path` answered, each read on its own ([`http::read_each`]).
+fn each_of<T: DeserializeOwned>(
+    path: &str,
+    values: Vec<serde_json::Value>,
+) -> Result<Vec<T>, FetchError> {
+    http::read_each(values).map_err(|error| FetchError::Http {
+        path: path.to_owned(),
+        error: HttpError::Json(error),
+    })
 }
 
 /// The currency categories in their download order: the currency first, the most copied
@@ -710,5 +743,75 @@ mod tests {
         let parsed: Result<Vec<ApiLeague>, _> = serde_json::from_str(r#"[{"Name": "x"}]"#);
 
         assert!(parsed.is_err());
+    }
+
+    /// The network review of 2026-11-10: one odd item lost the 250 prices of its page, and
+    /// the whole download with it.
+    #[test]
+    fn an_item_that_cant_be_read_is_left_out_of_its_page() {
+        // A unique whose base type is `null`, before the two of the answer.
+        let page = UNIQUES.replacen(
+            r#""Items": ["#,
+            r#""Items": [{"Name": "Odd", "Type": null, "PriceLogs": []},"#,
+            1,
+        );
+
+        let page: ApiPage<ApiUnique> = serde_json::from_str(&page).expect("the answer parses");
+
+        let names: Vec<&str> = page.items.iter().map(|item| item.name.as_str()).collect();
+        assert_eq!(names, ["Bursting Decay", "Unlisted"]);
+    }
+
+    /// Not a category without prices: the database changed its answer.
+    #[test]
+    fn a_page_none_of_whose_items_can_be_read_is_an_error() {
+        let page = CURRENCIES.replace("ApiId", "Id");
+
+        assert!(serde_json::from_str::<ApiPage<ApiCurrency>>(&page).is_err());
+    }
+
+    #[test]
+    fn a_price_is_read_without_its_history() {
+        let page = CURRENCIES.replace("PriceLogs", "History");
+        let page: ApiPage<ApiCurrency> = serde_json::from_str(&page).expect("the answer parses");
+
+        let price = page.items.into_iter().next().map(|item| item.price);
+
+        let price = conversion()
+            .price(price.expect("an item"))
+            .expect("a price");
+        assert!((price.exalted - 4_259_889.0).abs() < 1e-6);
+        assert!(price.history.is_empty());
+    }
+
+    #[test]
+    fn a_reference_currency_without_its_worth_is_left_out() {
+        let values: Vec<serde_json::Value> = serde_json::from_str(&REFERENCE_CURRENCIES.replacen(
+            "]",
+            r#", {"ApiId": "mirror", "Text": "Mirror"}]"#,
+            1,
+        ))
+        .expect("a list");
+
+        let currencies: Vec<ApiReferenceCurrency> = each_of("/path", values).expect("three");
+
+        assert_eq!(currencies.len(), 3);
+        assert!(Conversion::new(&currencies).is_ok());
+    }
+
+    #[test]
+    fn a_failure_names_the_request_and_tells_whether_the_database_answered() {
+        let Err(failure) = each_of::<ApiLeague>("/Leagues", vec![serde_json::Value::from(1)])
+        else {
+            panic!("not a league");
+        };
+
+        assert!(failure.answered());
+        assert!(failure.to_string().ends_with("(/Leagues)"), "{failure}");
+        let offline = FetchError::Http {
+            path: "/Leagues".to_owned(),
+            error: HttpError::Request(ureq::Error::ConnectionFailed),
+        };
+        assert!(!offline.answered());
     }
 }

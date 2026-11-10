@@ -6,7 +6,9 @@
 //! The thread gives the names of the cache at once, then downloads them when they are older
 //! than a day, and every day after. When the trade site can't be reached, the names of the
 //! cache stay, and it tries again every hour; every minute while no name is known, unless
-//! the trade site refused the request.
+//! the trade site refused the request. While no name is known and the trade site answers
+//! with an error, or with something the application can't read, the next attempt waits longer
+//! and longer, an hour at most: the six requests of a download fail the same way each time.
 
 mod client;
 mod limits;
@@ -23,6 +25,7 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, SystemTime};
 
 use crate::files;
+use crate::http::Backoff;
 use crate::item_names::ItemNames;
 use crate::language::Language;
 use crate::logging;
@@ -44,7 +47,8 @@ const CACHE_FILE: &str = "item-names.json";
 const CACHE_VERSION: u32 = 2;
 
 /// When the thread downloads the names: every `refresh`, and after a failure, `retry` while
-/// names are known, `retry_without_names` before.
+/// names are known, `retry_without_names` before, doubled up to `retry` at each failure the
+/// trade site answered.
 #[derive(Debug, Clone, Copy)]
 struct Intervals {
     refresh: Duration,
@@ -57,6 +61,23 @@ const INTERVALS: Intervals = Intervals {
     retry: Duration::from_hours(1),
     retry_without_names: Duration::from_mins(1),
 };
+
+impl Intervals {
+    fn backoff(self) -> Backoff {
+        Backoff::new(self.retry_without_names, self.retry)
+    }
+
+    /// The wait before the next attempt after `error`, with names `known` or not.
+    fn retry_after(self, error: &NamesError, known: bool, backoff: &mut Backoff) -> Duration {
+        if known {
+            self.retry
+        } else if error.answered() {
+            backoff.failed()
+        } else {
+            self.retry_without_names
+        }
+    }
+}
 
 /// Where the thread reads the names: the trade site, or a fake one in the tests.
 trait NameSource {
@@ -130,6 +151,7 @@ fn watch(
         wake();
     }
     let mut failing = false;
+    let mut backoff = intervals.backoff();
     loop {
         if Instant::now() >= due {
             match source.item_names() {
@@ -144,6 +166,7 @@ fn watch(
                         counts.stats
                     );
                     failing = false;
+                    backoff.succeeded();
                     known = true;
                     if let Some(directory) = cache {
                         save(directory, &names);
@@ -175,8 +198,7 @@ fn watch(
                     let now = Instant::now();
                     due = match error.refused_until() {
                         Some(until) => until.max(now + intervals.retry),
-                        None if known => now + intervals.retry,
-                        None => now + intervals.retry_without_names,
+                        None => now + intervals.retry_after(&error, known, &mut backoff),
                     };
                 }
             }
@@ -227,11 +249,12 @@ mod tests {
         retry_without_names: Duration::from_millis(20),
     };
 
-    /// A trade site that gives empty names, fails with an error status, or refuses with a
-    /// 429 and the wait it asks for; it counts its requests.
+    /// A trade site that gives empty names, fails with an error status, doesn't answer, or
+    /// refuses with a 429 and the wait it asks for; it counts its requests.
     #[derive(Default)]
     struct FakeSite {
         failure: Option<u16>,
+        unreachable: bool,
         refused_for: Option<Duration>,
         requests: Arc<AtomicUsize>,
     }
@@ -243,10 +266,26 @@ mod tests {
                 return Err(NamesError::Refused(429, Instant::now() + wait));
             }
             if let Some(status) = self.failure {
-                let error = HttpError::Request(ureq::Error::StatusCode(status));
-                return Err(NamesError::Http(error));
+                return Err(status_error(status));
+            }
+            if self.unreachable {
+                return Err(no_answer());
             }
             Ok(names(SystemTime::now()))
+        }
+    }
+
+    fn status_error(status: u16) -> NamesError {
+        NamesError::Http {
+            path: "/data/items".to_owned(),
+            error: HttpError::Request(ureq::Error::StatusCode(status)),
+        }
+    }
+
+    fn no_answer() -> NamesError {
+        NamesError::Http {
+            path: "/data/items".to_owned(),
+            error: HttpError::Request(ureq::Error::ConnectionFailed),
         }
     }
 
@@ -331,11 +370,34 @@ mod tests {
         assert!(load(&directory.0).is_some(), "the cache is kept");
     }
 
+    /// The network review of 2026-11-10: without names, a download that fails at its sixth
+    /// request sent six requests a minute to the trade site.
+    #[test]
+    fn without_names_a_failure_the_trade_site_answered_waits_longer_and_longer() {
+        let mut backoff = INTERVALS.backoff();
+        let mut minutes = |error: &NamesError, known: bool| {
+            INTERVALS.retry_after(error, known, &mut backoff).as_secs() / 60
+        };
+        let missing = NamesError::Missing("base types", crate::language::Language::French);
+
+        assert_eq!(minutes(&status_error(500), false), 1);
+        assert_eq!(minutes(&missing, false), 2);
+        assert_eq!(minutes(&NamesError::NoUniquePairs, false), 4);
+        // Nothing reached the trade site: a minute.
+        assert_eq!(minutes(&no_answer(), false), 1);
+        assert_eq!(minutes(&status_error(500), false), 8);
+        // With names, an hour whatever the failure.
+        assert_eq!(minutes(&status_error(500), true), 60);
+        assert_eq!(minutes(&no_answer(), true), 60);
+        let waits: Vec<u64> = (0..4).map(|_| minutes(&status_error(500), false)).collect();
+        assert_eq!(waits, [16, 32, 60, 60]);
+    }
+
     #[test]
     fn without_names_a_failed_download_is_tried_again_sooner() {
         let directory = TestDirectory::new("item-names-none");
         let site = FakeSite {
-            failure: Some(503),
+            unreachable: true,
             ..FakeSite::default()
         };
         let requests = Arc::clone(&site.requests);

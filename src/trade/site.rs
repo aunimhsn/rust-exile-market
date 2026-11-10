@@ -14,7 +14,7 @@ use super::client::{Network, Request, Transport};
 use super::limits;
 use super::refusal::Refusal;
 use crate::game_data::TradeGroup;
-use crate::http::{HttpError, Pace};
+use crate::http::{self, HttpError, Pace};
 use crate::item_names::{ItemNames, Names, StatTemplate, UniqueName, UniqueNames};
 use crate::language::Language;
 use crate::logging;
@@ -28,7 +28,9 @@ const NOT_EQUIPMENT: [&str; 2] = ["currency", "gem"];
 /// Why the names of the trade site couldn't be read.
 #[derive(Debug)]
 pub enum NamesError {
-    Http(HttpError),
+    /// No answer, an error status or an answer that isn't the expected JSON, to the request
+    /// of this path.
+    Http { path: String, error: HttpError },
     /// The trade site refused the request (403, 429): nothing is sent to it before this
     /// time.
     Refused(u16, Instant),
@@ -49,7 +51,17 @@ impl NamesError {
     pub fn refused_until(&self) -> Option<Instant> {
         match self {
             Self::Refused(_, until) => Some(*until),
-            Self::Http(_) | Self::Wait(_) | Self::Missing(..) | Self::NoUniquePairs => None,
+            Self::Http { .. } | Self::Wait(_) | Self::Missing(..) | Self::NoUniquePairs => None,
+        }
+    }
+
+    /// The trade site answered: see [`HttpError::answered`]. An answer that lacks what the
+    /// application needs is one too.
+    #[must_use]
+    pub fn answered(&self) -> bool {
+        match self {
+            Self::Http { error, .. } => error.answered(),
+            Self::Refused(..) | Self::Wait(_) | Self::Missing(..) | Self::NoUniquePairs => true,
         }
     }
 }
@@ -57,7 +69,7 @@ impl NamesError {
 impl fmt::Display for NamesError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Http(error) => error.fmt(formatter),
+            Self::Http { path, error } => write!(formatter, "{error} ({path})"),
             Self::Refused(status, until) => write!(
                 formatter,
                 "refused with the status {status}, {} s to wait",
@@ -77,21 +89,18 @@ impl fmt::Display for NamesError {
 impl std::error::Error for NamesError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
-            Self::Http(error) => Some(error),
+            Self::Http { error, .. } => Some(error),
             Self::Refused(..) | Self::Wait(_) | Self::Missing(..) | Self::NoUniquePairs => None,
         }
     }
 }
 
-impl From<HttpError> for NamesError {
-    fn from(error: HttpError) -> Self {
-        Self::Http(error)
-    }
-}
-
-/// A list of the data endpoints.
+/// A list of the data endpoints. In it and in its groups, an element the application can't
+/// read is left out ([`http::each`]): the other names are still worth having.
 #[derive(Deserialize)]
+#[serde(bound(deserialize = "T: DeserializeOwned"))]
 struct ApiResult<T> {
+    #[serde(deserialize_with = "http::each")]
     result: Vec<T>,
 }
 
@@ -99,6 +108,7 @@ struct ApiResult<T> {
 #[derive(Deserialize)]
 struct ApiItemCategory {
     id: String,
+    #[serde(deserialize_with = "http::each")]
     entries: Vec<ApiItem>,
 }
 
@@ -115,6 +125,7 @@ struct ApiItem {
 /// A group of `/data/static`: the items of the currency exchange.
 #[derive(Deserialize)]
 struct ApiStaticGroup {
+    #[serde(deserialize_with = "http::each")]
     entries: Vec<ApiStatic>,
 }
 
@@ -129,6 +140,7 @@ struct ApiStatic {
 #[derive(Deserialize)]
 struct ApiStatGroup {
     id: String,
+    #[serde(deserialize_with = "http::each")]
     entries: Vec<ApiStat>,
 }
 
@@ -200,21 +212,35 @@ impl<T: Transport> TradeSite<T> {
         if let Some(until) = self.refusal.until(Instant::now()) {
             return Err(NamesError::Wait(until));
         }
+        let path = format!("/api/trade2/data/{name}");
         let request = Request {
-            url: format!("{}/api/trade2/data/{name}", super::host(language)),
+            url: format!("{}{path}", super::host(language)),
             body: None,
         };
-        let answer = self.transport.send(&request).map_err(HttpError::Request)?;
+        // Which of the six requests failed, and in which language.
+        let failed = |error: HttpError| NamesError::Http {
+            path: format!("{path}, {language:?}"),
+            error,
+        };
+        let answer = self
+            .transport
+            .send(&request)
+            .map_err(|error| failed(HttpError::Request(error)))?;
         if matches!(answer.status, 403 | 429) {
             let until = Instant::now() + limits::refusal_wait(&answer.limits);
             self.refusal.extend(until);
             return Err(NamesError::Refused(answer.status, until));
         }
         if !(200..300).contains(&answer.status) {
-            return Err(HttpError::Request(ureq::Error::StatusCode(answer.status)).into());
+            answer.log_error_message();
+            let status = ureq::Error::StatusCode(answer.status);
+            return Err(failed(HttpError::Request(status)));
         }
-        let body = answer.body.map_err(HttpError::Request)?;
-        let result: ApiResult<A> = serde_json::from_str(&body).map_err(HttpError::Json)?;
+        let body = answer
+            .body
+            .map_err(|error| failed(HttpError::Request(error)))?;
+        let result: ApiResult<A> =
+            serde_json::from_str(&body).map_err(|error| failed(HttpError::Json(error)))?;
         Ok(result.result)
     }
 }
@@ -695,7 +721,7 @@ mod tests {
 
             assert!(matches!(
                 error,
-                NamesError::Http(HttpError::Request(ureq::Error::StatusCode(code))) if code == status
+                NamesError::Http { error: HttpError::Request(ureq::Error::StatusCode(code)), .. } if code == status
             ));
             assert_eq!(refusal.until(Instant::now()), None);
             assert_eq!(site.requests().len(), 1, "{status}");

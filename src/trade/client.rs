@@ -17,6 +17,7 @@ use super::refusal::Refusal;
 use crate::http::{self, HttpError};
 use crate::language::Language;
 use crate::league::League;
+use crate::logging;
 
 /// The time between two searches, at least.
 pub const SEARCH_INTERVAL: Duration = Duration::from_secs(10);
@@ -90,8 +91,27 @@ pub(super) struct Request {
 pub(super) struct Answer {
     pub status: u16,
     pub limits: LimitHeaders,
-    /// Read for a success only.
+    /// Of an error status too: the trade site says there why it turned a search down.
     pub body: Result<String, ureq::Error>,
+}
+
+impl Answer {
+    /// Writes to the log why the trade site answered with an error status, when it says so:
+    /// after a change of the game, the filter it no longer knows is named there.
+    pub fn log_error_message(&self) {
+        let message = self.body.as_deref().ok().and_then(error_message);
+        if let Some(message) = message {
+            log::warn!("Trade site: status {}, \"{message}\"", self.status);
+        }
+    }
+}
+
+/// The message of the body of an error, `{"error": {"code": 2, "message": "Unknown item base
+/// type"}}`, as the log writes a text of a web service: one short line.
+fn error_message(body: &str) -> Option<String> {
+    let body: serde_json::Value = serde_json::from_str(body).ok()?;
+    let message = body.get("error")?.get("message")?.as_str()?;
+    Some(logging::plain(message))
 }
 
 /// How the requests are sent: over the network, or to a fake trade site in the tests.
@@ -159,11 +179,8 @@ impl Transport for Network {
             retry_after: header("retry-after"),
         };
         let status = response.status().as_u16();
-        let body = if (200..300).contains(&status) {
-            http::read_text(response.body_mut())
-        } else {
-            Ok(String::new())
-        };
+        // Of an error too, within the same limit of size: see `Answer::log_error_message`.
+        let body = http::read_text(response.body_mut());
         Ok(Answer {
             status,
             limits,
@@ -359,6 +376,7 @@ impl<T: Transport> TradeClient<T> {
         }
         self.limits.answered(policy, &answer.limits, now);
         if !(200..300).contains(&answer.status) {
+            answer.log_error_message();
             return Err(HttpError::Request(ureq::Error::StatusCode(answer.status)).into());
         }
         let body = answer.body.map_err(HttpError::Request)?;
@@ -670,5 +688,22 @@ pub(super) mod tests {
             client.fetch(Language::English, "Q1", &ids),
             Err(TradeError::Http(HttpError::Json(_)))
         ));
+    }
+
+    /// The network review of 2026-11-10: after a change of the game, the log only said "http
+    /// status: 400".
+    #[test]
+    fn the_message_of_a_refused_search_is_read_as_one_short_line() {
+        let body = r#"{"error": {"code": 2, "message": "Unknown item\nbase type"}}"#;
+
+        assert_eq!(
+            error_message(body).as_deref(),
+            Some("Unknown item base type")
+        );
+        assert_eq!(error_message("<html>Bad Gateway</html>"), None);
+        assert_eq!(error_message(r#"{"error": "no"}"#), None);
+        let long = format!(r#"{{"error": {{"message": "{}"}}}}"#, "a".repeat(5_000));
+        let length = error_message(&long).map(|message| message.chars().count());
+        assert!(length.is_some_and(|length| length < 250), "{length:?}");
     }
 }
