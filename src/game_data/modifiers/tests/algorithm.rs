@@ -508,8 +508,32 @@ fn the_readings_looked_at_are_bounded() {
     search.walk(0, &mut Vec::new());
 
     assert_eq!(search.readings, MAX_READINGS);
+    assert!(search.cut);
     // The lines alone, looked at first.
     assert_eq!(search.best.map(|(key, _)| key.modifiers), Some(count));
+}
+
+#[test]
+fn as_many_readings_as_the_bound_all_looked_at_arent_cut() {
+    use Affix::Prefix;
+    // Twelve pairs of lines, each read alone or as one modifier: 2 to the 12th readings.
+    let candidates: Vec<_> = (0..24)
+        .flat_map(|start| {
+            let pair = (start % 2 == 0).then(|| candidate(start..start + 2, &[Prefix], false));
+            [Some(candidate(start..start + 1, &[Prefix], false)), pair]
+        })
+        .flatten()
+        .collect();
+    let room = Room {
+        prefixes: 0,
+        suffixes: 0,
+    };
+    let mut search = Search::new(&candidates, 24, room, 0);
+
+    search.walk(0, &mut Vec::new());
+
+    assert_eq!(search.readings, MAX_READINGS);
+    assert!(!search.cut);
 }
 
 /// What [`read_in`] gives: for each modifier read, how many lines it has and the tier number
@@ -758,12 +782,13 @@ fn two_fractured_lines_are_one_hybrid_whatever_the_room() {
     // An item has one fractured modifier: not two pure ones, even with room for them.
     let ((read, _), _) = read_modifiers(&tables, 60, &lines, (3, 3), false);
     assert_eq!(read, [(2, vec![(Prefix, 1)])]);
-    // A fractured line and another aren't the lines of one modifier.
+    // A fractured line and another aren't the lines of one modifier, even when the item has
+    // room for one prefix only: no reading fits, and both stay pure.
     let lines = [
         fractured("25% increased Energy Shield"),
         modifier(None, &["+25 to maximum Life"]),
     ];
-    let ((read, _), _) = read_modifiers(&tables, 60, &lines, (3, 3), false);
+    let ((read, _), _) = read_modifiers(&tables, 60, &lines, (1, 3), false);
     assert_eq!(read, [(1, vec![(Prefix, 1)]), (1, vec![(Prefix, 1)])]);
 }
 
@@ -779,7 +804,7 @@ fn no_line_of_a_sanctified_item_adds_up_two_modifiers() {
     // The life adds up the hybrid and the pure modifier.
     let ((read, split), _) = read_modifiers(&tables, 60, &lines, (2, 0), false);
     assert_eq!(read, [(2, vec![(Prefix, 1)])]);
-    assert_eq!(split.len(), 1);
+    assert_eq!(split, [("+45 to maximum Life".to_owned(), Prefix, 1)]);
     // Sanctified, its values can leave their tiers: the life is read by no tier rather than
     // split, the energy shield alone.
     let ((read, split), _) = read_modifiers(&tables, 60, &lines, (2, 0), true);
@@ -844,9 +869,9 @@ fn the_search_tells_when_the_readings_stop_at_their_bound() {
 
     let (_, effort) = read_modifiers(&tables, 60, &lines(2), (3, 3), false);
     assert_eq!(effort.readings, 2);
-    assert!(!effort.readings_cut());
+    assert!(!effort.readings_cut);
     // Each line a hybrid with the one before or after: more readings than the bound.
     let (_, effort) = read_modifiers(&tables, 60, &lines(24), (3, 3), false);
     assert_eq!(effort.readings, MAX_READINGS);
-    assert!(effort.readings_cut());
+    assert!(effort.readings_cut);
 }

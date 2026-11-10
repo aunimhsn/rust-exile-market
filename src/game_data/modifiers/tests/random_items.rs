@@ -59,25 +59,41 @@ struct Way {
 }
 
 const WAYS: [Way; 6] = [
-    Way::new(Desecrated::None, false, false, 82),
-    Way::new(Desecrated::None, false, true, 82),
-    Way::new(Desecrated::Third, false, false, 82),
-    Way::new(Desecrated::All, false, false, 82),
-    // The most tangled: every line may be an ordinary modifier or a lord's.
-    Way::new(Desecrated::All, true, false, 82),
+    Way::PLAIN,
+    Way {
+        shuffled: true,
+        ..Way::PLAIN
+    },
+    Way {
+        desecrated: Desecrated::Third,
+        ..Way::PLAIN
+    },
+    Way {
+        desecrated: Desecrated::All,
+        ..Way::PLAIN
+    },
+    // On these bases, few lines can be an ordinary modifier or a lord's (four templates on
+    // three bases): the jewels and the cannons, where many can, aren't drawn.
+    Way {
+        desecrated: Desecrated::All,
+        revealed: true,
+        ..Way::PLAIN
+    },
     // The best tiers above the level of the item.
-    Way::new(Desecrated::None, false, false, 45),
+    Way {
+        item_level: 45,
+        ..Way::PLAIN
+    },
 ];
 
 impl Way {
-    const fn new(desecrated: Desecrated, revealed: bool, shuffled: bool, item_level: u32) -> Self {
-        Self {
-            desecrated,
-            revealed,
-            shuffled,
-            item_level,
-        }
-    }
+    /// No modifier desecrated, the lines in the order of their modifiers, every tier rolling.
+    const PLAIN: Self = Self {
+        desecrated: Desecrated::None,
+        revealed: false,
+        shuffled: false,
+        item_level: 82,
+    };
 }
 
 /// The seed of the draw of the items, and of the draw that shuffles their lines.
@@ -675,7 +691,8 @@ fn measure(way: Way) -> (Counts, Vec<&'static str>) {
             }
             let Some(modifiers) = item.copied() else {
                 counts.discarded += 1;
-                assert!(counts.discarded < ITEMS_PER_BASE, "{base_type}: {counts:?}");
+                // Over the bases of the way: a draw that keeps failing would never end.
+                assert!(counts.discarded < ITEMS_PER_BASE, "{way:?}: {counts:?}");
                 continue;
             };
             read += 1;

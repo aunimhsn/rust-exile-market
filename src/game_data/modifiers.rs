@@ -625,7 +625,7 @@ pub fn trade_tiers(
         effort.readings,
         effort.steps
     );
-    if effort.readings_cut() {
+    if effort.readings_cut {
         log::warn!(
             "Game data, {base_type} copied from the in-game trade: the readings of its lines couldn't all be looked at, the best of the first {MAX_READINGS} kept"
         );
@@ -641,14 +641,9 @@ struct Effort {
     readings: usize,
     /// The steps of the search of the other readings ([`summed_readings::doubts`]).
     steps: usize,
-}
-
-impl Effort {
     /// Whether the readings stopped at their bound, some not looked at: the best of those
     /// looked at is kept, the lines alone first.
-    fn readings_cut(self) -> bool {
-        self.readings >= MAX_READINGS
-    }
+    readings_cut: bool,
 }
 
 /// The item whose lines are read from the in-game trade: the language of its lines, its base
@@ -717,6 +712,7 @@ fn trade_tiers_in(
     let mut effort = Effort {
         readings: search.readings,
         steps: 0,
+        readings_cut: search.cut,
     };
     let Some((key, reading)) = search.best else {
         return (Vec::new(), effort);
@@ -1498,6 +1494,8 @@ struct Search<'a> {
     /// How many modifiers of the item are fractured.
     fractured: usize,
     readings: usize,
+    /// Whether the search stopped at [`MAX_READINGS`], some readings not looked at.
+    cut: bool,
     /// The best reading, the first one on a tie.
     best: Option<(ReadingKey, Vec<usize>)>,
     /// The lines of the splits that readings as good as the best one don't share, with the
@@ -1519,6 +1517,7 @@ impl<'a> Search<'a> {
             room,
             fractured,
             readings: 0,
+            cut: false,
             best: None,
             ambiguous: Vec::new(),
         }
@@ -1529,6 +1528,7 @@ impl<'a> Search<'a> {
     /// without tier.
     fn walk(&mut self, position: usize, chosen: &mut Vec<usize>) {
         if self.readings >= MAX_READINGS {
+            self.cut = true;
             return;
         }
         let Some(starting) = self.starting.get(position) else {
