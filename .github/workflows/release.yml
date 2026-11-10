@@ -1,7 +1,7 @@
 name: Release
 
 # A version tag (for example v0.1.0) builds the archives and publishes them as
-# a GitHub release. A pull request that changes this workflow or the
+# a GitHub release, when its commit is on main. A pull request that changes this workflow or the
 # dependencies only builds them, to check every system before the next tag;
 # run by hand on a branch (Actions, Release, Run workflow), it builds them too,
 # for a tester of a system the owner doesn't have.
@@ -34,17 +34,37 @@ env:
   VERSION: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'test' }}
 
 jobs:
-  # One file for the four archives: about.toml lists the targets of the matrix below.
-  notices:
-    name: Check the licenses and write the notices
+  # A release only from a commit of main, which went through a pull request and its checks, with
+  # the toolchain of rust-toolchain.toml: a tag put on another commit builds nothing. The ruleset
+  # of the tags (`v*`) keeps them from moving afterwards.
+  tag:
+    name: Check that the tag is on main
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: taiki-e/install-action@v2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          git fetch origin '+refs/heads/main:refs/remotes/origin/main'
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "The commit of $GITHUB_REF_NAME is not on main: nothing is released"
+            exit 1
+          fi
+
+  # One file for the four archives: about.toml lists the targets of the matrix below.
+  notices:
+    name: Check the advisories and the licenses, and write the notices
+    needs: tag
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: rustup toolchain install
+      - uses: taiki-e/install-action@cfdb7ed4ccc7c7dce37759eae89dc5674b469b39 # v2.90.3
         with:
           tool: cargo-deny@0.20.2,cargo-about@0.9.3
-      - run: cargo deny --locked check licenses
+      # A security advisory on a dependency, not sorted in deny.toml yet, stops the release.
+      - run: cargo deny --locked check advisories licenses
       - run: cargo about generate --locked --fail --output-file THIRD-PARTY-LICENSES about.hbs
       # A license file of a crate that keeps the template of its copyright line: point
       # about.toml to the right file. Only a crate without any license file may show it,
@@ -53,7 +73,7 @@ jobs:
         run: |
           cargo about generate --locked --format json \
             | jq -e '[.licenses[] | select(.source_path != null and (.text | test("<copyright holders>|<year>")))] | length == 0'
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: third-party-licenses
           path: THIRD-PARTY-LICENSES
@@ -82,13 +102,12 @@ jobs:
       run:
         shell: bash
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/download-artifact@v8
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: third-party-licenses
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.target }}
+      # The version of rust-toolchain.toml, the one the checks of main ran with.
+      - run: rustup toolchain install && rustup target add ${{ matrix.target }}
       - name: Read the executable name and the version of Cargo.toml
         run: |
           # The package of the application, the default member of the workspace (the
@@ -131,7 +150,7 @@ jobs:
             tar -czf "$directory.tar.gz" "$directory"
             echo "ARCHIVE=$directory.tar.gz" >> "$GITHUB_ENV"
           fi
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: archive-${{ matrix.target }}
           path: ${{ env.ARCHIVE }}
@@ -146,7 +165,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           path: dist
           pattern: archive-*

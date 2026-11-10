@@ -42,6 +42,10 @@ One entry per item: what it is, its kind (the section it sits in), what it depen
 
 - Two Exile Market launched at once (code review of 16b2, 2026-11-04): the second renames the log of the first, still written, as the previous one, which then reads as a crash in its bug report, and the first one's "This session" reads the log of the second; a single-instance lock to decide with the owner (the second launch shows the first window, or quits with a message), then the code.
 
+- The copy of the price-check hotkey sent only when the window that gets it is the game (security audit of 2026-11-10, finding 8, low): today "only in the game" rests on the grab of the key, and the active window is read for the log only (`send_copy` in `src/hotkey/x11.rs` and `src/hotkey/windows.rs`). In the fallback that listens in every window (a desktop without `_NET_ACTIVE_WINDOW`, the follow-up thread stopped; `Active::NotFollowed` in `src/hotkey/grab.rs`), or in the 50 ms after an Alt+Tab on Windows, Ctrl+D in a terminal sends it Ctrl+C. Send nothing when the window read isn't the game, read the window that has the keyboard when the active one can't be, and tell the fallback in the state of the hotkey (mock-up first for that line). Depends on nothing; the Windows part needs the Windows tester. Noted on 2026-11-10.
+
+- The wait of a refusal of the trade site kept from one launch to the next (security audit of 2026-11-10, finding 9, low): the end of the wait lives in memory (`Refusal` in `src/trade/refusal.rs`, `blocked_until` in `src/trade/limits.rs`), so that a player who restarts the application during a `Retry-After` can send one search during the penalty. Write its end as a wall-clock time in the cache directory (`files::write_versioned_json`), read it at the launch for the searches and the item names; a time in the past, or more than a day ahead, is ignored. Depends on nothing. Noted on 2026-11-10.
+
 ## Waiting on others
 
 - The note of a priced item in French (`labels.note` is `None` in French; a French copy of a priced item needed to learn its label; since 13k2e2, a note after the lines of a unique without header is no longer read as them, `a_french_unique_without_header_is_read_before_a_note_with_a_number`).
@@ -61,6 +65,10 @@ One entry per item: what it is, its kind (the section it sits in), what it depen
 - The window over the game opened on a screen of another scale than the main window, on Windows (second code review of 14b3a, 2026-11-02; owner's choice: to step 21): it may be placed wrong for a frame at its first opening there (over the inventory, or a jump); find a Windows player with two screens of different scales (a laptop and a screen, 100 % and 150 %), have them follow [the test of the second screen](docs/tests/windows/second-screen.md), then fix it from what they saw (the scale of the game read at the hotkey, or the window kept hidden one more frame), or nothing if it opens at its place.
 
 - When a Discord server exists, "Copy the log" of the bug report may become "Copy the report", the whole report ready to paste into a channel (GitHub stays the form opened).
+
+- The archives of a release checked on their own (security audit of 2026-11-10, finding 11, low): `SHA256SUMS.txt` comes from the same job as the archives, so it tells a damaged download, not a replaced archive. Turn on the immutable releases of the repository, add `actions/attest-build-provenance` to the `build` job of `.github/workflows/release.yml` (`id-token: write` and `attestations: write` on that job only) and write `gh attestation verify` in the README; later, sign the Windows executable (a certificate, a cost: with step 20, Automatic updates, which checks a signature anyway). Also an environment `release` with the owner's approval on the job that publishes. Depends on the first release (to try on a real one). Noted on 2026-11-10.
+
+- The certificates of the system rather than those built into the executable (security audit of 2026-11-10, finding 16, info): `ureq` trusts the list of `webpki-roots` of the day of the build, so an old version keeps authorities since withdrawn and lacks the new ones; its `platform-verifier` feature reads the store of the system, with more dependencies. To weigh with step 20 (Automatic updates). Noted on 2026-11-10.
 
 ## Features
 

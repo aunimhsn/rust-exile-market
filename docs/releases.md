@@ -12,7 +12,11 @@
    git push origin v0.1.0
    ```
 
-The [Release workflow](../.github/workflows/release.yml) builds the archives for Windows, macOS and Linux and publishes them as a GitHub release, with their checksums (`SHA256SUMS.txt`). It fails if the tag does not match the version of `Cargo.toml`.
+The [Release workflow](../.github/workflows/release.yml) builds the archives for Windows, macOS and Linux and publishes them as a GitHub release, with their checksums (`SHA256SUMS.txt`). It fails if the tag does not match the version of `Cargo.toml`, if its commit isn't on `main` (a commit that went through a pull request and its checks), or if a security advisory on a dependency isn't sorted yet (`cargo deny check advisories`: update the dependency, or list the advisory in `deny.toml` with its reason). A ruleset of the repository keeps the tags `v*` from being moved or deleted: a wrong tag is replaced by the next version, never pushed again.
+
+The version of Rust is pinned in `rust-toolchain.toml`: the release is built by the compiler the checks of `main` ran with. Dependabot proposes the new versions; each action of the workflows is pinned to a commit the same way (`.github/scripts/pinned-actions.sh`, run by the CI).
+
+Between two releases, the [Advisories workflow](../.github/workflows/advisories.yml) checks the advisories every day and fails, with an email to the owner, on a new one: a flaw that reaches the players calls for an urgent fix and a patch release.
 
 ## What an archive holds
 

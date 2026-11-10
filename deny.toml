@@ -1,5 +1,6 @@
-# The licenses of the dependencies of the application, on every system it is released for:
-# `cargo deny check licenses`, run by the Release workflow. Each license listed here is
+# The security advisories and the licenses of the dependencies of the application, on every
+# system it is released for: `cargo deny check advisories licenses`, run by the Release workflow,
+# and the advisories every day by the Advisories workflow. Each license listed here is
 # compatible with GPL-3.0-or-later; keep `accepted` of about.toml the same.
 
 [graph]
@@ -10,6 +11,21 @@ targets = [
     "x86_64-pc-windows-msvc",
 ]
 exclude-dev = true
+
+[advisories]
+# A version withdrawn by its authors is updated.
+yanked = "deny"
+# The advisories that don't concern the application, each with its reason; remove an entry once
+# its crate is gone from Cargo.lock.
+ignore = [
+    # Not flaws: the three crates were merged into zbus 6, and stay here, on Linux only, through
+    # the screen reader support of eframe (accesskit_unix, still on zbus 5). They talk to the
+    # D-Bus session of the player, never to the network. To remove with the update of eframe
+    # that brings zbus 6.
+    { id = "RUSTSEC-2026-0370", reason = "zvariant merged into zbus 6; waits for accesskit_unix" },
+    { id = "RUSTSEC-2026-0371", reason = "zbus_names merged into zbus 6; waits for accesskit_unix" },
+    { id = "RUSTSEC-2026-0372", reason = "zvariant_derive merged into zbus 6; waits for accesskit_unix" },
+]
 
 [licenses]
 confidence-threshold = 0.93

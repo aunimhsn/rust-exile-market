@@ -1,0 +1,25 @@
+name: Advisories
+
+# The security advisories (RustSec) on the dependencies, every day: a version already released
+# may need a fix between two audits. A failure sends an email to the owner; an advisory that
+# doesn't concern the application is listed in deny.toml with its reason. The Release workflow
+# runs the same check on the pull requests that change the dependencies, and before a release.
+on:
+  schedule:
+    - cron: "17 5 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  advisories:
+    name: Check the advisories
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: rustup toolchain install
+      - uses: taiki-e/install-action@cfdb7ed4ccc7c7dce37759eae89dc5674b469b39 # v2.90.3
+        with:
+          tool: cargo-deny@0.20.2
+      - run: cargo deny --locked check advisories

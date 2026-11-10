@@ -4,7 +4,7 @@
 # linked, so the C code of the dependencies (ring) needs no compiler: `true` stands in for it, in
 # a target directory of its own. The release workflow still builds the real executables on macOS.
 #
-# Needs the standard library of the target once: rustup target add aarch64-apple-darwin
+# The standard library of the target comes with the toolchain (rust-toolchain.toml).
 set -eu
 # From the root of the project, wherever the script is run from.
 cd "$(dirname "$0")/.."

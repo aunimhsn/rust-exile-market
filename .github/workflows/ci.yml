@@ -15,6 +15,8 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
+  # The toolchain is the one of rust-toolchain.toml, installed by rustup: a pinned version, the
+  # same here, in the Release workflow and on the owner's machine.
   # The commits compared to tell a documentation change: the base of a pull request, or the
   # previous commit of a push.
   BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
@@ -28,17 +30,17 @@ jobs:
     name: Format, lint and test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
       - id: changes
         run: sh .github/scripts/code-changed.sh "$BASE" "$HEAD"
       - if: steps.changes.outputs.code == 'true'
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt, clippy
+        run: sh .github/scripts/pinned-actions.sh
       - if: steps.changes.outputs.code == 'true'
-        uses: Swatinem/rust-cache@v2
+        run: rustup toolchain install
+      - if: steps.changes.outputs.code == 'true'
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       - if: steps.changes.outputs.code == 'true'
         run: cargo fmt --all --check
       - if: steps.changes.outputs.code == 'true'
@@ -58,17 +60,15 @@ jobs:
       run:
         shell: bash
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
       - id: changes
         run: sh .github/scripts/code-changed.sh "$BASE" "$HEAD"
       - if: steps.changes.outputs.code == 'true'
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          components: clippy
+        run: rustup toolchain install
       - if: steps.changes.outputs.code == 'true'
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       - if: steps.changes.outputs.code == 'true'
         run: cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
 
@@ -79,18 +79,15 @@ jobs:
     name: Lint on macos-latest
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
       - id: changes
         run: sh .github/scripts/code-changed.sh "$BASE" "$HEAD"
       - if: steps.changes.outputs.code == 'true'
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          components: clippy
-          targets: aarch64-apple-darwin
+        run: rustup toolchain install
       - if: steps.changes.outputs.code == 'true'
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       - if: steps.changes.outputs.code == 'true'
         run: sh scripts/clippy-macos.sh
 
@@ -98,7 +95,7 @@ jobs:
     name: Minimum Rust version
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
       - id: changes
@@ -107,12 +104,16 @@ jobs:
         if: steps.changes.outputs.code == 'true'
         id: msrv
         run: echo "version=$(sed -n 's/^rust-version = "\(.*\)"/\1/p' Cargo.toml)" >> "$GITHUB_OUTPUT"
+      # Through the environment: a text read from a file of the pull request is never written
+      # into a script.
       - if: steps.changes.outputs.code == 'true'
-        uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: ${{ steps.msrv.outputs.version }}
+        env:
+          MSRV: ${{ steps.msrv.outputs.version }}
+        run: rustup toolchain install "$MSRV" --profile minimal
       - if: steps.changes.outputs.code == 'true'
-        uses: Swatinem/rust-cache@v2
-      # `+version` overrides the stable channel of rust-toolchain.toml.
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      # `+version` overrides the version of rust-toolchain.toml.
       - if: steps.changes.outputs.code == 'true'
-        run: cargo +${{ steps.msrv.outputs.version }} check --locked --workspace --all-targets --all-features
+        env:
+          MSRV: ${{ steps.msrv.outputs.version }}
+        run: cargo "+$MSRV" check --locked --workspace --all-targets --all-features

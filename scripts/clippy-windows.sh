@@ -4,7 +4,7 @@
 # the dependencies (ring) goes to a stand-in compiler that writes empty files, enough for a
 # check, in a target directory of its own so that they never reach a real build.
 #
-# Needs the standard library of the target once: rustup target add x86_64-pc-windows-msvc
+# The standard library of the target comes with the toolchain (rust-toolchain.toml).
 set -eu
 # From the root of the project, wherever the script is run from.
 cd "$(dirname "$0")/.."
