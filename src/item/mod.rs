@@ -73,6 +73,14 @@ impl Rarity {
     pub fn has_item_filters(self) -> bool {
         matches!(self, Self::Normal | Self::Magic | Self::Rare)
     }
+
+    /// Whether the price of the item lies in its modifiers, so that the offers of a search
+    /// that compares none of its stats, any items of its base, give no estimate: a rare or
+    /// magic item, or a jewel.
+    #[must_use]
+    pub fn priced_by_stats(self) -> bool {
+        matches!(self, Self::Magic | Self::Rare)
+    }
 }
 
 /// A state written at the end of the item.

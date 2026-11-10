@@ -244,13 +244,13 @@ fn an_item_copied_from_the_in_game_trade_shows_its_tiers_found_and_a_note() {
         [
             "Prefixes 3/3",
             // The fractured hybrid, its lines read together.
-            "■ 41% increased Energy Shield ≥37 [0.97]",
+            "□ 41% increased Energy Shield ≥37 [0.97]",
             "□ +34 to maximum Mana ≥31 [0.85 T1 39–42 · 33–39 Fractured]",
-            "■ 98% increased Energy Shield ≥88 [0.98 T1 92–100]",
-            "■ +69 to maximum Energy Shield ≥62 [0.94 T1 61–73 Desecrated]",
+            "□ 98% increased Energy Shield ≥88 [0.98 T1 92–100]",
+            "□ +69 to maximum Energy Shield ≥62 [0.94 T1 61–73 Desecrated]",
             "Suffixes 3/3",
             // A prefix too, but the prefixes are full.
-            "■ 18% increased Rarity of Items found ≥16 [1.00 T1 15–18]",
+            "□ 18% increased Rarity of Items found ≥16 [1.00 T1 15–18]",
             "□ +43% to Fire Resistance ≥39 [0.95 T1 41–45]",
             "□ +40% to Cold Resistance ≥36 [0.87 T2 36–40]",
             "Trade copy note",
@@ -278,7 +278,7 @@ fn a_modifier_of_one_tier_only_shows_its_ranges_without_tier() {
     );
     assert_eq!(
         jewel,
-        ["■ Minions have 12% increased maximum Life ≥11 [0.70 5–15]"]
+        ["□ Minions have 12% increased maximum Life ≥11 [0.70 5–15]"]
     );
 
     // The Genesis tree, written without tier, next to a modifier of several tiers.
@@ -293,7 +293,7 @@ fn a_modifier_of_one_tier_only_shows_its_ranges_without_tier() {
     assert_eq!(
         ring,
         [
-            "■ Minions have 21% increased maximum Life ≥19 [0.67 19–22]",
+            "□ Minions have 21% increased maximum Life ≥19 [0.67 19–22]",
             "□ +76 to maximum Mana ≥68 [0.39 T7 65–79]",
         ]
     );
@@ -307,7 +307,7 @@ fn a_modifier_of_one_tier_only_shows_its_ranges_without_tier() {
     ));
     assert_eq!(
         quiver.last().map(String::as_str),
-        Some("■ +1 to Level of all Projectile Skills")
+        Some("□ +1 to Level of all Projectile Skills")
     );
 
     // A hybrid of one tier only, a line without number and a fixed value, `50(50)%`: nothing
@@ -345,7 +345,7 @@ fn a_modifier_of_one_tier_only_shows_its_ranges_without_tier() {
          Item Level: 43\n--------\nMinions have 12% increased maximum Life",
     )));
     assert!(
-        jewel.contains(&"■ Minions have 12% increased maximum Life ≥11 [0.70 5–15]".to_owned()),
+        jewel.contains(&"□ Minions have 12% increased maximum Life ≥11 [0.70 5–15]".to_owned()),
         "{jewel:?}"
     );
 
@@ -355,13 +355,13 @@ fn a_modifier_of_one_tier_only_shows_its_ranges_without_tier() {
     )));
     assert!(
         bow.iter().any(|text| text
-            .starts_with("■ 20% chance to gain Onslaught on Killing Hits with this Weapon ≥")
+            .starts_with("□ 20% chance to gain Onslaught on Killing Hits with this Weapon ≥")
             && text.ends_with(" [0.00 20–25 Essence]")),
         "{bow:?}"
     );
     // The `+3` of an older patch, which no table holds today (the bows take `+2`): nothing.
     assert!(
-        bow.contains(&"■ +3 to Level of all Attack Skills ≥3".to_owned()),
+        bow.contains(&"□ +3 to Level of all Attack Skills ≥3".to_owned()),
         "{bow:?}"
     );
 }
@@ -375,7 +375,7 @@ fn a_modifier_of_an_essence_or_an_alloy_names_its_currency() {
     let alloy = "11% d'Augmentation de Vitesse d'Attaque tant qu'il vous manque de la \
                  Sauvegarde runique";
     assert!(
-        gloves.contains(&format!("■ {alloy} ≥10 [0.20 10–15 Alloy]")),
+        gloves.contains(&format!("□ {alloy} ≥10 [0.20 10–15 Alloy]")),
         "{gloves:?}"
     );
 
@@ -388,14 +388,14 @@ fn a_modifier_of_an_essence_or_an_alloy_names_its_currency() {
     )));
     assert!(
         trade.contains(
-            &"■ 13% increased Quantity of Gold Dropped by Slain Enemies ≥12 [0.60 10–15 Essence]"
+            &"□ 13% increased Quantity of Gold Dropped by Slain Enemies ≥12 [0.60 10–15 Essence]"
                 .to_owned()
         ),
         "{trade:?}"
     );
     assert!(
         trade.iter().any(|text| text
-            .starts_with("■ 11% increased Attack Speed while missing Runic Ward ≥")
+            .starts_with("□ 11% increased Attack Speed while missing Runic Ward ≥")
             && text.ends_with(" [0.20 10–15 Alloy]")),
         "{trade:?}"
     );
@@ -443,7 +443,7 @@ fn a_line_of_the_in_game_trade_that_can_be_a_prefix_or_a_suffix_shows_the_tier_o
         [
             "Explicit",
             // Without bar, the tier and range of each affix one under the other.
-            "■ 18% increased Rarity of Items found ≥16 [T1 16–19 AffixPrefix / T1 15–18 AffixSuffix]",
+            "□ 18% increased Rarity of Items found ≥16 [T1 16–19 AffixPrefix / T1 15–18 AffixSuffix]",
             "Trade copy note",
         ]
     );
@@ -461,7 +461,7 @@ fn a_line_that_can_be_a_modifier_of_one_tier_only_writes_no_tier_number_on_its_r
     let texts = texts(&read_again(cannon));
     assert!(
         texts.contains(
-            &"■ Grenade Skills have +1 Cooldown Use ≥1 [{Amanamu AffixPrefix} / {T2 AffixSuffix} / Desecrated]"
+            &"□ Grenade Skills have +1 Cooldown Use ≥1 [{Amanamu AffixPrefix} / {T2 AffixSuffix} / Desecrated]"
                 .to_owned()
         ),
         "{texts:?}"
@@ -484,7 +484,7 @@ fn the_origin_of_a_line_in_doubt_comes_after_its_tiers() {
     // The origin after the rows of the tiers: `roll_line` draws it on a row of its own,
     // since the line has it whichever affix it is (checked on a screenshot).
     assert!(texts(&open).contains(
-        &"■ 18% increased Rarity of Items found ≥16 [T1 16–19 AffixPrefix / T1 15–18 AffixSuffix / Desecrated]"
+        &"□ 18% increased Rarity of Items found ≥16 [T1 16–19 AffixPrefix / T1 15–18 AffixSuffix / Desecrated]"
             .to_owned()
     ));
 }
@@ -524,7 +524,7 @@ fn the_note_shows_also_when_the_only_tiers_found_are_those_of_a_line_in_doubt() 
         texts[texts.len() - 3..],
         [
             "Explicit",
-            "■ 18% increased Rarity of Items found ≥16 [T1 16–19 AffixPrefix / T1 15–18 AffixSuffix]",
+            "□ 18% increased Rarity of Items found ≥16 [T1 16–19 AffixPrefix / T1 15–18 AffixSuffix]",
             "Trade copy note",
         ]
     );
@@ -544,7 +544,7 @@ fn a_minion_modifier_of_the_genesis_tree_found_from_its_value_shows_no_tier_and_
         texts[texts.len() - 3..],
         [
             "Prefixes 1/3",
-            "■ Minions have 21% increased maximum Life ≥19 [0.67 19–22]",
+            "□ Minions have 21% increased maximum Life ≥19 [0.67 19–22]",
             "Trade copy note",
         ]
     );
@@ -566,16 +566,20 @@ fn a_fixed_value_shows_the_same_in_both_copies() {
         let lines: Vec<&str> = text.lines().filter(|line| !line.starts_with('{')).collect();
         read_again(parse(&lines.join("\n")))
     };
-    let last = |item: &Item| texts(item).into_iter().rfind(|text| text.starts_with('■'));
+    let last = |item: &Item| {
+        texts(item)
+            .into_iter()
+            .rfind(|text| text.starts_with('■') || text.starts_with('□'))
+    };
 
     // A tier without range: the bar over the three tiers, "T2", the field from 2.
     let amulet = advanced("Amulets", "Gold Amulet", " (Tier: 2)");
-    let t2 = Some("■ +2 to Level of all Minion Skills ≥2 [0.50 T2]".to_owned());
+    let t2 = Some("□ +2 to Level of all Minion Skills ≥2 [0.50 T2]".to_owned());
     assert_eq!(last(&parse(&amulet)), t2);
     assert_eq!(last(&in_game_trade(&amulet)), t2);
     // Fixed in its tier, which the game doesn't write: no field, nothing under it.
     let belt = advanced("Belts", "Heavy Belt", "");
-    let fixed = Some("■ +2 to Level of all Minion Skills".to_owned());
+    let fixed = Some("□ +2 to Level of all Minion Skills".to_owned());
     assert_eq!(last(&parse(&belt)), fixed);
     assert_eq!(last(&in_game_trade(&belt)), fixed);
 }
@@ -591,11 +595,11 @@ fn a_time_lost_jewel_shows_its_lines_over_their_ranges_in_both_copies() {
     let in_game_trade = read_again(parse(&lines.join("\n")));
     let modifiers = [
         "Prefixes 2/2",
-        "■ 2% increased Elemental Damage ≥2 [1.00 1–2] <Small>",
-        "■ 7% faster start of Energy Shield Recharge ≥6 [1.00 5–7] <Notable>",
+        "□ 2% increased Elemental Damage ≥2 [1.00 1–2] <Small>",
+        "□ 7% faster start of Energy Shield Recharge ≥6 [1.00 5–7] <Notable>",
         "Suffixes 2/2",
-        "■ 1% increased Mana Regeneration Rate ≥1 [0.00 1–2] <Small>",
-        "■ 1% of Damage taken Recouped as Life <Notable>",
+        "□ 1% increased Mana Regeneration Rate ≥1 [0.00 1–2] <Small>",
+        "□ 1% of Damage taken Recouped as Life <Notable>",
     ];
     let explicit = |texts: Vec<String>| -> Vec<String> {
         texts
@@ -624,22 +628,22 @@ fn a_french_time_lost_jewel_shows_its_lines_without_the_words_of_its_radius() {
         texts_from(&jewel, "Prefixes"),
         [
             "Prefixes 2/2",
-            "■ 2% d'Augmentation des Dégâts élémentaires ≥2 [1.00 1–2] <Small>",
-            "■ Le Démarrage de la Recharge du Bouclier d'énergie est 7% plus rapide ≥6 [1.00 5–7] <Notable>",
+            "□ 2% d'Augmentation des Dégâts élémentaires ≥2 [1.00 1–2] <Small>",
+            "□ Le Démarrage de la Recharge du Bouclier d'énergie est 7% plus rapide ≥6 [1.00 5–7] <Notable>",
             "Suffixes 2/2",
-            "■ 1% d'Augmentation du Taux de Régénération de Mana ≥1 [0.00 1–2] <Small>",
-            "■ 1% des Dégâts subis sont Recouvrés sous forme de Vie <Notable>",
+            "□ 1% d'Augmentation du Taux de Régénération de Mana ≥1 [0.00 1–2] <Small>",
+            "□ 1% des Dégâts subis sont Recouvrés sous forme de Vie <Notable>",
         ]
     );
     assert_eq!(
         texts_from(&large, "Prefixes"),
         [
             "Prefixes 2/2",
-            "■ 2% d'Augmentation des Dégâts des Sorts ≥2 [1.00 1–2] <Small>",
-            "■ Améliore le Rayon en Grand [T1]",
+            "□ 2% d'Augmentation des Dégâts des Sorts ≥2 [1.00 1–2] <Small>",
+            "□ Améliore le Rayon en Grand [T1]",
             "Suffixes 2/2",
-            "■ Vous gagnez du Seuil d'Étourdissement équivalent à 2% de votre Bouclier d'énergie maximal ≥2 [1.00 1–2] <Small>",
-            "■ 2% d'Augmentation de l'Amplitude de l'Inflammabilité ≥2 [0.00 2–3] <Small>",
+            "□ Vous gagnez du Seuil d'Étourdissement équivalent à 2% de votre Bouclier d'énergie maximal ≥2 [1.00 1–2] <Small>",
+            "□ 2% d'Augmentation de l'Amplitude de l'Inflammabilité ≥2 [0.00 2–3] <Small>",
         ]
     );
 }
@@ -1080,7 +1084,7 @@ fn a_rare_shows_its_enchantment_runes_implicit_prefixes_and_suffixes() {
             "□ Gain 30 Mana per enemy killed ≥30",
             "Implicit",
             // A line without number: no minimum.
-            "■ Loads an additional bolt",
+            "□ Loads an additional bolt",
             "Prefixes 3/3",
             // 90 % of the copied value, of the average of two numbers; the damage and
             // the attack speed of the weapon unchecked, since its DPS counts them. The bar
@@ -1089,11 +1093,11 @@ fn a_rare_shows_its_enchantment_runes_implicit_prefixes_and_suffixes() {
             "□ Adds 10 to 273 Lightning Damage ≥127 [0.63 T2 1–16 · 239–300 Fractured]",
             "□ Adds 24 to 51 Physical Damage ≥34 [0.47 T3 23–35 · 39–59]",
             // Not a damage of the weapon: its attacks get it from any item.
-            "■ 109% increased Elemental Damage with Attacks ≥98 [0.71 T2 100–119]",
+            "□ 109% increased Elemental Damage with Attacks ≥98 [0.71 T2 100–119]",
             "Suffixes 3/3",
             // Copied before a tier was added above it: tier 1 then, 7.59 in 5–8.9 now.
-            "■ Leeches 7.59% of Physical Damage as Mana ≥6.83 [0.66 T1 7–7.9]",
-            "■ Gain 21 Mana per enemy killed ≥19 [0.44 T3 21–27 Desecrated]",
+            "□ Leeches 7.59% of Physical Damage as Mana ≥6.83 [0.66 T1 7–7.9]",
+            "□ Gain 21 Mana per enemy killed ≥19 [0.44 T3 21–27 Desecrated]",
             "□ 18% increased Attack Speed ≥16 [0.93 T1 17–19]",
         ]
     );
@@ -1156,7 +1160,7 @@ fn a_modifier_whose_header_is_unknown_is_explicit_without_tier() {
             // Neither a prefix nor a suffix: no tier, like a modifier the tables don't
             // know.
             "Explicit",
-            "■ +143 to Evasion Rating ≥129",
+            "□ +143 to Evasion Rating ≥129",
         ]
     );
 }
@@ -1212,15 +1216,15 @@ fn a_fixed_implicit_of_a_rare_is_a_filter_without_bar_after_those_that_vary() {
             // 90 % of 12, within the range of the implicit.
             "□ +12 to Dexterity ≥11 [10–15 0.40]",
             // A fixed line keeps its checkbox, without a minimum.
-            "■ 5% increased Movement Speed",
+            "□ 5% increased Movement Speed",
             "Prefixes 2/3",
             // Its bar over every tier of the life of boots, from 10 (T9) to 149 (T1).
             "□ +86 to maximum Life ≥77 [0.55 T3 85–99]",
             // A hybrid modifier: its tier and the ranges of its lines under the last one,
             // each line with its checkbox and its minimum; without bar, since no modifier
             // of the tables rolls these ranges.
-            "■ +20 to Evasion Rating ≥18",
-            "■ +10% increased Evasion Rating ≥9 [T5 15–25 · 8–12]",
+            "□ +20 to Evasion Rating ≥18",
+            "□ +10% increased Evasion Rating ≥9 [T5 15–25 · 8–12]",
         ]
     );
 }
@@ -1250,8 +1254,8 @@ fn a_prefix_or_suffix_rolls_over_every_tier_of_its_modifier_on_the_base() {
             // 76 of the 204 between 10 (T13) and 214 (T1); a pseudo total adds it up.
             "□ +86 to maximum Life ≥77 [0.37 T7 85–99]",
             // Each line of a hybrid with its bar over its own tiers.
-            "■ +98 to Armour ≥88 [0.55]",
-            "■ +88 to Evasion Rating ≥79 [0.53 T4 86–102 · 79–94]",
+            "□ +98 to Armour ≥88 [0.55]",
+            "□ +88 to Evasion Rating ≥79 [0.53 T4 86–102 · 79–94]",
             "Suffixes 1/3",
             "□ +41% to Cold Resistance ≥37 [0.90 T1 41–45]",
         ]
@@ -1302,7 +1306,7 @@ fn a_line_fixed_in_its_tier_varies_over_the_tiers() {
     // A bar and a range field: the other tiers roll 1, 2 and 4.
     assert_eq!(
         texts(&bow).last().map(String::as_str),
-        Some("■ +3 to Level of all Projectile Skills ≥3 [0.67 T2]")
+        Some("□ +3 to Level of all Projectile Skills ≥3 [0.67 T2]")
     );
 }
 
@@ -1335,12 +1339,49 @@ fn the_pseudo_totals_are_checked_and_the_lines_they_add_up_unchecked() {
             "□ +22% to Cold Resistance ≥20 [20–30 0.20]",
             "Prefixes 2/3",
             "□ +65 to maximum Life ≥59 [0.50 T4 60–69]",
-            // Not added up by a total.
-            "■ +60 to Evasion Rating ≥54 [0.23 T6 52–79]",
+            // Not added up by a total, unchecked as every modifier of a rare.
+            "□ +60 to Evasion Rating ≥54 [0.23 T6 52–79]",
             "Suffixes 3/3",
             "□ +38% to Fire Resistance ≥34 [0.82 T2 36–40]",
             "□ +23% to Lightning Resistance ≥21 [0.44 T5 21–25]",
             "□ +12 to Dexterity ≥11 [0.25 T7 9–12]",
+        ]
+    );
+}
+
+#[test]
+fn every_modifier_of_a_rare_starts_unchecked_and_those_of_a_magic_item_checked() {
+    // The value of a rare lies in the few modifiers its buyer needs, which the application
+    // can't tell: several checked at once left few offers (owner, 2026-11-10). A magic item
+    // has two at most.
+    let ring = |rarity: &str, name: &str| {
+        texts(&parse(&format!(
+            "Item Class: Rings\nRarity: {rarity}\n{name}Sapphire Ring\n--------\n\
+             Item Level: 77\n--------\n\
+             {{ Prefix Modifier \"Agile\" (Tier: 6) — Defences }}\n+60(52-79) to Evasion Rating\n\
+             {{ Suffix Modifier \"of Archaeology\" (Tier: 1) }}\n\
+             16(15-18)% increased Rarity of Items found"
+        )))
+    };
+    let modifiers = |texts: Vec<String>| -> Vec<String> {
+        texts
+            .into_iter()
+            .filter(|text| text.contains("Evasion") || text.contains("Rarity"))
+            .collect()
+    };
+
+    assert_eq!(
+        modifiers(ring("Rare", "Storm Spiral\n")),
+        [
+            "□ +60 to Evasion Rating ≥54 [0.23 T6 52–79]",
+            "□ 16% increased Rarity of Items found ≥14 [0.83 T1 15–18]",
+        ]
+    );
+    assert_eq!(
+        modifiers(ring("Magic", "")),
+        [
+            "■ +60 to Evasion Rating ≥54 [0.23 T6 52–79]",
+            "■ 16% increased Rarity of Items found ≥14 [0.83 T1 15–18]",
         ]
     );
 }
@@ -1384,7 +1425,7 @@ fn a_jewel_has_two_prefixes_and_two_suffixes_at_most() {
             "Item",
             "■ Base: Ruby",
             "Prefixes 1/2",
-            "■ Minions have 12% increased maximum Life ≥11 [0.70 5–15]"
+            "□ Minions have 12% increased maximum Life ≥11 [0.70 5–15]"
         ]
     );
     assert_eq!(
@@ -1393,7 +1434,7 @@ fn a_jewel_has_two_prefixes_and_two_suffixes_at_most() {
             "Item",
             "■ Base: Rubis",
             "Prefixes 1/2",
-            "■ Les Créatures ont 12% d'Augmentation de Vie maximale ≥11 [0.70 5–15]"
+            "□ Les Créatures ont 12% d'Augmentation de Vie maximale ≥11 [0.70 5–15]"
         ]
     );
 }
@@ -2101,9 +2142,9 @@ fn a_line_better_lower_is_searched_with_a_maximum() {
             "Item",
             "■ Base: Ruby Ring",
             "Implicit",
-            "■ 12% increased Charm Charges used ≤13 [10–15 0.40]",
+            "□ 12% increased Charm Charges used ≤13 [10–15 0.40]",
             "Suffixes 1/3",
-            "■ 18% reduced Movement Speed ≤20 [T2 15–25]",
+            "□ 18% reduced Movement Speed ≤20 [T2 15–25]",
         ]
     );
     let lower = limit(&rows(&unique)[2]);
@@ -2639,19 +2680,18 @@ fn the_active_filters_count_the_choices_of_the_player() {
         bounds: None,
     };
 
-    // The base type, the sockets, the physical DPS, the implicit and three modifiers; the
-    // item level, the elemental DPS, the enchantment, the two runes, the damage and the
-    // attack speed unchecked.
-    assert_eq!(stats.active_filters(&filters), 7);
+    // The base type, the sockets and the physical DPS; the item level, the elemental DPS,
+    // the enchantment, the two runes, the implicit and the modifiers of a rare unchecked.
+    assert_eq!(stats.active_filters(&filters), 3);
     // A rune checked by the player.
     filters.set(keys[6], choice(true));
-    assert_eq!(stats.active_filters(&filters), 8);
-    // The implicit unchecked.
-    filters.set(keys[8], choice(false));
-    assert_eq!(stats.active_filters(&filters), 7);
+    assert_eq!(stats.active_filters(&filters), 4);
+    // The implicit checked too.
+    filters.set(keys[8], choice(true));
+    assert_eq!(stats.active_filters(&filters), 5);
     // Another item copied: its own filters.
     filters = Filters::default();
-    assert_eq!(stats.active_filters(&filters), 7);
+    assert_eq!(stats.active_filters(&filters), 3);
 }
 
 #[test]
@@ -2741,7 +2781,7 @@ fn a_line_that_adds_up_two_modifiers_shows_the_tier_of_each_and_counts_both() {
             "□ 258% increased Physical Damage ≥232 [T1 170–179 / T1 75–79 Hybrid (with +195 to Accuracy Rating)]",
             // The other line of the hybrid: its bar over the tiers of the hybrid, its tier and
             // its range, its tooltip naming the part of the summed line.
-            "■ +195 to Accuracy Rating ≥176 [0.97 T1 175–200 Hybrid (with 75–79 of 258% increased Physical Damage)]",
+            "□ +195 to Accuracy Rating ≥176 [0.97 T1 175–200 Hybrid (with 75–79 of 258% increased Physical Damage)]",
             "□ Adds 36 to 56 Physical Damage ≥41 [0.88 T1 26–39 · 44–66 Desecrated]",
         ]
     );
@@ -2769,7 +2809,7 @@ fn the_other_line_of_a_hybrid_whose_table_isnt_found_keeps_its_tier_without_bar(
         texts_from(&bow, "Prefixes")[1..3],
         [
             "□ 258% increased Physical Damage ≥232 [T1 170–179 / T1 76–79 Hybrid (with +195 to Accuracy Rating)]",
-            "■ +195 to Accuracy Rating ≥176 [T1 175–200 Hybrid (with 76–79 of 258% increased Physical Damage)]",
+            "□ +195 to Accuracy Rating ≥176 [T1 175–200 Hybrid (with 76–79 of 258% increased Physical Damage)]",
         ]
     );
 }
@@ -2844,7 +2884,7 @@ fn a_line_that_adds_up_a_prefix_and_a_suffix_is_explicit_and_counts_in_both() {
             "Explicit",
             // The prefix first; the tooltip of "Suffix" says they are added up; the origin on
             // a row of its own.
-            "■ 37% increased Rarity of Items found ≥33 [T1 16–19 AffixPrefix / T1 15–18 AffixSuffix AddedUpWithPrefix / Desecrated]",
+            "□ 37% increased Rarity of Items found ≥33 [T1 16–19 AffixPrefix / T1 15–18 AffixSuffix AddedUpWithPrefix / Desecrated]",
             "Trade copy note",
         ]
     );
@@ -2871,9 +2911,9 @@ fn a_hybrid_prefix_added_up_with_a_pure_suffix_says_hybrid_prefix_on_both_its_li
             "Explicit",
             // The other line: its bar over the tiers of the hybrid, its tier and range, its
             // tooltip naming the part of the summed line.
-            "■ 35% increased Armour and Evasion ≥32 [0.81 T2 33–38 HybridPrefix (with 64–94 of +310 to Stun Threshold)]",
+            "□ 35% increased Armour and Evasion ≥32 [0.81 T2 33–38 HybridPrefix (with 64–94 of +310 to Stun Threshold)]",
             // The prefix first, "Hybrid prefix" naming the other line; the suffix added up.
-            "■ +310 to Stun Threshold ≥279 [T2 64–94 HybridPrefix (with 35% increased Armour and Evasion) / T2 207–253 AffixSuffix AddedUpWithPrefix]",
+            "□ +310 to Stun Threshold ≥279 [T2 64–94 HybridPrefix (with 35% increased Armour and Evasion) / T2 207–253 AffixSuffix AddedUpWithPrefix]",
             "Trade copy note",
         ]
     );
@@ -2896,10 +2936,10 @@ fn a_hybrid_of_three_lines_has_its_tier_under_the_last_other_line() {
             "Prefixes 3/3",
             "□ +180 to maximum Life ≥162 [0.83 T3 175–189]",
             // Each other line with its bar, their tier and ranges under the last.
-            "■ +50 to Armour ≥45 [0.96]",
-            "■ +41 to Evasion Rating ≥37 [0.81 T1 42–52 · 40–50 Hybrid (with 39–42 of 115% increased Armour and Evasion)]",
+            "□ +50 to Armour ≥45 [0.96]",
+            "□ +41 to Evasion Rating ≥37 [0.81 T1 42–52 · 40–50 Hybrid (with 39–42 of 115% increased Armour and Evasion)]",
             // Both other lines named.
-            "■ 115% increased Armour and Evasion ≥104 [T4 68–79 / T1 39–42 Hybrid (with +50 to Armour and +41 to Evasion Rating)]",
+            "□ 115% increased Armour and Evasion ≥104 [T4 68–79 / T1 39–42 Hybrid (with +50 to Armour and +41 to Evasion Rating)]",
         ]
     );
 }
@@ -2918,9 +2958,9 @@ fn a_pure_prefix_added_up_with_a_hybrid_suffix_says_hybrid_suffix_on_both_its_li
             ),
     ));
 
-    let accuracy = "■ +600 to Accuracy Rating ≥540 [T1/T2 451–650 AffixPrefix / T1 41–60 HybridSuffix (with 15% increased Light Radius)]";
+    let accuracy = "□ +600 to Accuracy Rating ≥540 [T1/T2 451–650 AffixPrefix / T1 41–60 HybridSuffix (with 15% increased Light Radius)]";
     // A fixed value, without range under it.
-    let radius = "■ 15% increased Light Radius ≥14 [1.00 T1 HybridSuffix (with 41–60 of +600 to Accuracy Rating)]";
+    let radius = "□ 15% increased Light Radius ≥14 [1.00 T1 HybridSuffix (with 41–60 of +600 to Accuracy Rating)]";
     assert_eq!(
         texts_from(&bow, "Explicit"),
         [
@@ -2961,9 +3001,9 @@ fn a_line_that_adds_up_the_middle_line_of_a_hybrid_has_its_tier_under_the_last_o
     assert_eq!(
         texts_from(&armour, "Prefixes")[2..5],
         [
-            "■ +50 to Armour ≥45 [0.96]",
-            "■ 115% increased Armour and Evasion ≥104 [T4 68–79 / T1 39–42 Hybrid (with +50 to Armour and +41 to Evasion Rating)]",
-            "■ +41 to Evasion Rating ≥37 [0.81 T1 42–52 · 40–50 Hybrid (with 39–42 of 115% increased Armour and Evasion)]",
+            "□ +50 to Armour ≥45 [0.96]",
+            "□ 115% increased Armour and Evasion ≥104 [T4 68–79 / T1 39–42 Hybrid (with +50 to Armour and +41 to Evasion Rating)]",
+            "□ +41 to Evasion Rating ≥37 [0.81 T1 42–52 · 40–50 Hybrid (with 39–42 of 115% increased Armour and Evasion)]",
         ]
     );
 }
@@ -3108,7 +3148,7 @@ fn the_part_of_an_alloy_in_a_summed_line_names_its_currency() {
     let texts = texts(&bow);
     // "Alloy" after the part of the alloy, in place of "Crafted" under the line.
     assert!(
-        texts.contains(&"■ +800 to Accuracy Rating ≥720 [T2/T3 347–550 / 327–427 Hybrid (with 6% increased Attack Speed) Alloy]".to_owned()),
+        texts.contains(&"□ +800 to Accuracy Rating ≥720 [T2/T3 347–550 / 327–427 Hybrid (with 6% increased Attack Speed) Alloy]".to_owned()),
         "{texts:?}"
     );
     assert!(
@@ -3409,11 +3449,11 @@ fn a_tablet_shows_its_modifiers_over_their_ranges() {
         explicit_rows(rare),
         [
             "Prefixes 2/2",
-            "■ 9% increased Rarity of Items found in Map ≥8 [0.25 8–12]",
-            "■ 15% increased Experience gain in Map ≥14 [0.50 12–18]",
+            "□ 9% increased Rarity of Items found in Map ≥8 [0.25 8–12]",
+            "□ 15% increased Experience gain in Map ≥14 [0.50 12–18]",
             "Suffixes 2/2",
-            "■ 34% increased Quantity of Waystones found in Map ≥31 [0.40 30–40]",
-            "■ Map has 85% increased chance to contain Shrines ≥77 [0.50 70–100]",
+            "□ 34% increased Quantity of Waystones found in Map ≥31 [0.40 30–40]",
+            "□ Map has 85% increased chance to contain Shrines ≥77 [0.50 70–100]",
             "Trade copy note",
         ]
     );
@@ -3438,7 +3478,7 @@ fn a_french_line_finds_the_table_of_its_english_stat() {
         explicit_rows(tablet),
         [
             "Prefixes 1/2",
-            "■ 9% d'Augmentation de la Rareté des Objets trouvés dans la Carte ≥8 [0.25 8–12]",
+            "□ 9% d'Augmentation de la Rareté des Objets trouvés dans la Carte ≥8 [0.25 8–12]",
             "Trade copy note",
         ]
     );
@@ -3453,7 +3493,7 @@ fn a_french_line_finds_the_table_of_its_english_stat() {
         explicit_rows(belt),
         [
             "Prefixes 1/3",
-            "■ 25% d'Augmentation de la Récupération de Mana des Flacons ≥23 [0.57 T3 23–28]",
+            "□ 25% d'Augmentation de la Récupération de Mana des Flacons ≥23 [0.57 T3 23–28]",
             "Trade copy note",
         ]
     );
@@ -3466,7 +3506,7 @@ fn a_french_line_finds_the_table_of_its_english_stat() {
         explicit_rows(jewel),
         [
             "Suffixes 1/2",
-            "■ 10% d'Augmentation de la Récupération de Mana des Flacons ≥9 [0.50 5–15]",
+            "□ 10% d'Augmentation de la Récupération de Mana des Flacons ≥9 [0.50 5–15]",
             "Trade copy note",
         ]
     );
@@ -3542,9 +3582,9 @@ fn the_owners_rare_items_show_the_same_rows_from_the_in_game_trade() {
         "□ Adds 2 to 6 Cold Damage ≥4 [0.01 T10 2–3 · 4–6]",
         "□ 68% increased Physical Damage ≥61 [0.20 T6 65–84]",
         "Suffixes 3/3",
-        "■ Gain 3 Mana per enemy killed ≥3 [0.02 T8 2–3 Fractured]",
-        "■ +12% to Critical Damage Bonus ≥11 [0.13 T5 12–13]",
-        "■ +3 to Level of all Melee Skills ≥3 [0.33 T3]",
+        "□ Gain 3 Mana per enemy killed ≥3 [0.02 T8 2–3 Fractured]",
+        "□ +12% to Critical Damage Bonus ≥11 [0.13 T5 12–13]",
+        "□ +3 to Level of all Melee Skills ≥3 [0.33 T3]",
     ];
     let (advanced, in_game_trade) = both(include_str!(
         "../../item/test-items/en-owner-rare-two-hand-mace-fractured.txt"
@@ -3560,30 +3600,30 @@ fn the_owners_rare_items_show_the_same_rows_from_the_in_game_trade() {
     for (text, desecrated) in [
         (
             include_str!("../../item/test-items/en-owner-rare-helmet-ulaman.txt"),
-            "■ 16% increased Critical Damage Bonus ≥14 [0.43 13–20 Desecrated]",
+            "□ 16% increased Critical Damage Bonus ≥14 [0.43 13–20 Desecrated]",
         ),
         (
             include_str!("../../item/test-items/fr-rare-helmet-ulaman.txt"),
-            "■ 16% d'Augmentation du Bonus de Dégâts Critiques ≥14 [0.43 13–20 Desecrated]",
+            "□ 16% d'Augmentation du Bonus de Dégâts Critiques ≥14 [0.43 13–20 Desecrated]",
         ),
         (
             include_str!("../../item/test-items/en-owner-rare-focus-kurgal.txt"),
-            "■ 23% chance when collecting an Elemental Infusion to gain an / additional \
+            "□ 23% chance when collecting an Elemental Infusion to gain an / additional \
              Elemental Infusion of the same type ≥21 [0.80 15–25 Desecrated]",
         ),
         (
             include_str!("../../item/test-items/fr-rare-focus-kurgal.txt"),
-            "■ Lorsque vous collectez une Infusion élémentaire, vous avez 23% de chances de \
+            "□ Lorsque vous collectez une Infusion élémentaire, vous avez 23% de chances de \
              gagner une / Infusion élémentaire supplémentaire du même type ≥21 [0.80 15–25 \
              Desecrated]",
         ),
         (
             include_str!("../../item/test-items/en-owner-rare-helmet-amanamu.txt"),
-            "■ 35% increased Presence Area of Effect ≥32 [1.00 25–35 Desecrated]",
+            "□ 35% increased Presence Area of Effect ≥32 [1.00 25–35 Desecrated]",
         ),
         (
             include_str!("../../item/test-items/fr-rare-helmet-amanamu.txt"),
-            "■ Votre Présence a 35% d'Augmentation de Zone d'effet ≥32 [1.00 25–35 Desecrated]",
+            "□ Votre Présence a 35% d'Augmentation de Zone d'effet ≥32 [1.00 25–35 Desecrated]",
         ),
     ] {
         let (advanced, in_game_trade) = both(text);
@@ -3603,13 +3643,13 @@ fn the_owners_unset_ring_and_helmet_of_amanamu_show_their_rows_from_the_in_game_
     ));
     let ring = [
         "Implicit",
-        "■ Octroie 1 Emplacement d'Aptitude supplémentaire",
+        "□ Octroie 1 Emplacement d'Aptitude supplémentaire",
         "Prefixes 2/3",
-        "■ +210 au Score de Précision ≥189 [0.45 T3 168–236]",
+        "□ +210 au Score de Précision ≥189 [0.45 T3 168–236]",
         "□ +79 de Mana maximal ≥71 [0.41 T7 65–79]",
         "Suffixes 3/3",
         "□ +13% à toutes les Résistances Élémentaires ≥12 [0.77 T2 12–14]",
-        "■ 49% d'Augmentation du Taux de Régénération de Mana ≥44 [0.66 T3 40–49]",
+        "□ 49% d'Augmentation du Taux de Régénération de Mana ≥44 [0.66 T3 40–49]",
         "□ +32% à la Résistance au froid ≥29 [0.67 T3 31–35]",
     ];
     let from_implicit = |texts: Vec<String>| -> Vec<String> {
@@ -3634,12 +3674,12 @@ fn the_owners_unset_ring_and_helmet_of_amanamu_show_their_rows_from_the_in_game_
         [
             "Prefixes 2/3",
             "□ +94 to maximum Mana ≥85 [0.60 T3 90–104]",
-            "■ 69% increased Armour and Energy Shield ≥62 [0.64 T3 68–79]",
+            "□ 69% increased Armour and Energy Shield ≥62 [0.64 T3 68–79]",
             "Suffixes 2/3",
             "□ +28% to Cold Resistance ≥25 [0.56 T4 26–30]",
-            "■ 35% increased Presence Area of Effect ≥32 [1.00 25–35 Desecrated]",
+            "□ 35% increased Presence Area of Effect ≥32 [1.00 25–35 Desecrated]",
             "Explicit",
-            "■ 15% increased Rarity of Items found ≥14 [T2 12–15 AffixPrefix / T1 15–18 \
+            "□ 15% increased Rarity of Items found ≥14 [T2 12–15 AffixPrefix / T1 15–18 \
              AffixSuffix]",
             "Trade copy note",
         ]
@@ -3850,6 +3890,6 @@ fn the_minimum_of_a_decimal_stat_of_a_rare_fits_in_its_field() {
         "../../item/test-items/fr-rare-body-armour-two-hybrids.txt"
     )));
     assert!(
-        armour.contains(&"■ 12.2 de Vie Régénérée par seconde ≥11 [0.32 T6 9.1–13]".to_owned())
+        armour.contains(&"□ 12.2 de Vie Régénérée par seconde ≥11 [0.32 T6 9.1–13]".to_owned())
     );
 }

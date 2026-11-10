@@ -775,8 +775,10 @@ impl ItemView<'_> {
             }
         }
         let league = session.league().map(League::name);
+        let stats_checked = search_filters(session, shown, item, filters).compares_stats();
         PriceBlock::new(item, fixed_price, prices, league, i18n)
             .estimate(estimate)
+            .stats_checked(stats_checked)
             .show(ui);
         let offers_action = if let Some(kind) = kind {
             OffersBlock::new(offers, kind, reference, item, shown.lines(), i18n)
@@ -1091,7 +1093,9 @@ fn reference<'a>(
 }
 
 /// The estimated price of `item`, the item shown, without a fixed price, from the `offers` of
-/// its search and the `worth` of the currencies with the prices of the league.
+/// its search and the `worth` of the currencies with the prices of the league; none for a rare
+/// or magic item whose search compared none of its stats, whose offers are any items of its
+/// base: their price says nothing of its own.
 fn shown_estimate<'a>(
     offers: &Offers,
     item: &Item,
@@ -1101,6 +1105,9 @@ fn shown_estimate<'a>(
     let Err(NoFixedPrice::NotFixedName) = fixed_price else {
         return None;
     };
+    if item.rarity().priced_by_stats() && !offers.compared_stats() {
+        return None;
+    }
     let searched_catalyst = offers.searched_catalyst(item);
     let OffersState::Items {
         offers,
@@ -1442,7 +1449,7 @@ mod tests {
 
     /// A search of items with the filters of `properties`.
     fn searched(properties: Vec<crate::trade::query::PropertyFilter>) -> Search {
-        use crate::trade::query::{ItemQuery, Query, StateFilters};
+        use crate::trade::query::{ItemQuery, Query, StatFilter, StateFilters};
 
         Search {
             language: crate::language::Language::English,
@@ -1457,7 +1464,12 @@ mod tests {
                     corrupted: Some(false),
                     ..StateFilters::default()
                 },
-                stats: Vec::new(),
+                // A stat compared: without, a rare has no estimate.
+                stats: vec![StatFilter {
+                    ids: vec!["explicit.stat_3917489142".to_owned()],
+                    minimum: Some(10.0),
+                    maximum: None,
+                }],
             }),
         }
     }
@@ -1613,6 +1625,36 @@ mod tests {
         );
         let traded = reference(&Ok((FixedPrice::Currency(&traded), RATES)), Some(WORTH)).unwrap();
         assert!((traded.exalted - 40_156.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn a_rare_or_magic_item_searched_without_its_stats_has_no_estimate() {
+        use crate::trade::query::Query;
+
+        let amulet = amulet();
+        let now = Instant::now();
+        let estimated = |stats: bool| {
+            let mut search = searched(Vec::new());
+            if let (false, Query::Items(query)) = (stats, &mut search.query) {
+                query.stats.clear();
+            }
+            let mut offers = Offers::default();
+            let _ = offers.search(search, now);
+            offers.apply(
+                answer(divines(&[1.0, 1.1, 1.2]), 3, false, now),
+                SystemTime::now(),
+            );
+            shown_estimate(
+                &offers,
+                &amulet,
+                &Err(NoFixedPrice::NotFixedName),
+                Some(WORTH),
+            )
+        };
+
+        // The offers of any item of its base say nothing of its price.
+        assert!(estimated(true).is_some());
+        assert_eq!(estimated(false), None);
     }
 
     #[test]

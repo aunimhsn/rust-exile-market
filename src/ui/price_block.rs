@@ -146,6 +146,8 @@ pub struct PriceBlock<'a> {
     item: &'a Item,
     price: Result<(FixedPrice<'a>, Rates), NoFixedPrice>,
     estimate: Option<Estimate<'a>>,
+    /// The filters of the item compare its stats, not only its base.
+    stats_checked: bool,
     prices: PricesState,
     league: Option<&'a str>,
     i18n: &'a Translator,
@@ -166,6 +168,7 @@ impl<'a> PriceBlock<'a> {
             item,
             price,
             estimate: None,
+            stats_checked: true,
             prices,
             league,
             i18n,
@@ -176,6 +179,14 @@ impl<'a> PriceBlock<'a> {
     #[must_use]
     pub fn estimate(mut self, estimate: Option<Estimate<'a>>) -> Self {
         self.estimate = estimate;
+        self
+    }
+
+    /// Whether the filters of the item, as the player left them, compare its stats: without, a
+    /// rare or magic item without estimate asks for a modifier to be checked.
+    #[must_use]
+    pub fn stats_checked(mut self, checked: bool) -> Self {
+        self.stats_checked = checked;
         self
     }
 
@@ -388,9 +399,16 @@ impl<'a> PriceBlock<'a> {
             Notice::NoPriceFound(league) => i18n.no_price_found(league),
         };
         message(ui, &first, color::TEXT);
-        if let Notice::NoMarketPrice(_) = notice {
+        if let Notice::NoMarketPrice(rarity) = notice {
+            // The offers of any item of its base would say nothing of its price.
+            let unfiltered = !self.stats_checked && rarity.priced_by_stats();
+            let second = if unfiltered {
+                Message::CheckToEstimate
+            } else {
+                Message::SearchToEstimate
+            };
             ui.add_space(MESSAGE_GAP);
-            message(ui, &i18n.text(Message::SearchToEstimate), color::WEAK);
+            message(ui, &i18n.text(second), color::WEAK);
         }
     }
 }

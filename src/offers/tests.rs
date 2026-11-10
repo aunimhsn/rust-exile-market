@@ -153,6 +153,40 @@ fn a_quality_without_limits_isnt_searched() {
 }
 
 #[test]
+fn the_offers_tell_whether_their_search_compared_the_stats_of_the_item() {
+    let now = Instant::now();
+    let at = SystemTime::UNIX_EPOCH;
+    let mut offers = Offers::default();
+    let mut with_stat = item_search();
+    if let Query::Items(query) = &mut with_stat.query {
+        query.stats.push(crate::trade::query::StatFilter {
+            ids: vec!["explicit.stat_3917489142".to_owned()],
+            minimum: Some(10.0),
+            maximum: None,
+        });
+    }
+
+    assert!(!offers.compared_stats(), "no search yet");
+    let _ = offers.search(with_stat, now);
+    assert!(!offers.compared_stats(), "while searching");
+    offers.apply(answer(items(&["a"], true), after(now, 0)), at);
+    assert!(offers.compared_stats());
+    // The next offers keep what their search compared.
+    let _ = offers.more();
+    let next = Outcome::More {
+        offers: vec![offer("b")],
+        rest: rest(false),
+    };
+    offers.apply(answer(next, after(now, 0)), at);
+    assert!(offers.compared_stats(), "the next offers");
+
+    // The base alone, its quality too: any items of the base.
+    let _ = offers.search(quality_search(), now);
+    offers.apply(answer(items(&["c"], false), after(now, 0)), at);
+    assert!(!offers.compared_stats());
+}
+
+#[test]
 fn the_quality_searched_lasts_with_its_offers_until_the_next_search() {
     let mana = amulet("Mana Modifiers");
     let now = Instant::now();

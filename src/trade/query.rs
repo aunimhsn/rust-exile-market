@@ -37,6 +37,16 @@ impl Query {
             Self::Exchange(_) => false,
         }
     }
+
+    /// Whether the query compares the stats of the item, more than its base: see
+    /// [`SearchFilters::compares_stats`].
+    #[must_use]
+    pub fn compares_stats(&self) -> bool {
+        match self {
+            Self::Items(query) => compares_stats(&query.stats, &query.properties),
+            Self::Exchange(_) => false,
+        }
+    }
 }
 
 /// The kinds of searches, whose limits differ.
@@ -92,6 +102,23 @@ impl SearchFilters {
     pub fn narrows(&self) -> bool {
         !self.stats.is_empty() || self.properties.iter().any(PropertyFilter::limits_anything)
     }
+
+    /// Something compares the stats of the item with the offers: a line, a pseudo total, or a
+    /// property that is a stat (its DPS, a property of a waystone or of a gem) with a limit.
+    /// Without, the offers are any items of its base, whose price says nothing of its own.
+    #[must_use]
+    pub fn compares_stats(&self) -> bool {
+        compares_stats(&self.stats, &self.properties)
+    }
+}
+
+/// Whether `stats` and `properties` compare the stats of the item: see
+/// [`SearchFilters::compares_stats`].
+fn compares_stats(stats: &[StatFilter], properties: &[PropertyFilter]) -> bool {
+    !stats.is_empty()
+        || properties
+            .iter()
+            .any(|filter| filter.property.is_stat() && filter.limits_anything())
 }
 
 /// A property of the offers, with its minimum and its maximum.
@@ -678,5 +705,69 @@ mod tests {
             })
         );
         assert_eq!(exchange("exalted")["have"], json!(["divine"]));
+    }
+
+    #[test]
+    fn a_search_compares_the_stats_of_the_item_by_a_stat_a_dps_or_a_property_of_its_kind() {
+        let property = |property, minimum| PropertyFilter {
+            property,
+            minimum,
+            maximum: None,
+        };
+        let filters = |properties, stats| SearchFilters {
+            any_base: false,
+            states: Vec::new(),
+            properties,
+            stats,
+        };
+        let line = StatFilter {
+            ids: vec!["explicit.stat_3917489142".to_owned()],
+            minimum: None,
+            maximum: None,
+        };
+
+        // The base alone, or narrowed by its item level, its sockets, its quality or its
+        // required level: the offers are any items of the base.
+        assert!(!filters(Vec::new(), Vec::new()).compares_stats());
+        let base = vec![
+            property(Property::ItemLevel, Some(82.0)),
+            property(Property::Sockets, Some(2.0)),
+            property(Property::Quality, Some(20.0)),
+            property(Property::RequiredLevel, Some(60.0)),
+        ];
+        assert!(!filters(base.clone(), Vec::new()).compares_stats());
+        // A DPS without limit isn't sent.
+        let unlimited = vec![property(Property::PhysicalDps, None)];
+        assert!(!filters(unlimited, Vec::new()).compares_stats());
+        // A line, a pseudo total, a DPS or a property of a waystone or a gem.
+        assert!(filters(base, vec![line.clone()]).compares_stats());
+        for stat in [
+            Property::PhysicalDps,
+            Property::ElementalDps,
+            Property::Waystone(WaystoneProperty::DropChance),
+            Property::GemLevel,
+            Property::GemSockets,
+        ] {
+            assert!(
+                filters(vec![property(stat, Some(1.0))], Vec::new()).compares_stats(),
+                "{stat:?}"
+            );
+        }
+
+        // The query sent says the same; a search of the currency exchange compares nothing.
+        let query = |stats| {
+            Query::Items(ItemQuery {
+                name: None,
+                base_type: Some("Ruby".to_owned()),
+                category: None,
+                rarity: None,
+                states: StateFilters::default(),
+                properties: Vec::new(),
+                stats,
+            })
+        };
+        assert!(!query(Vec::new()).compares_stats());
+        assert!(query(vec![line]).compares_stats());
+        assert!(!Query::Exchange("divine".to_owned()).compares_stats());
     }
 }

@@ -18,7 +18,9 @@
 //! maximum, any other with a minimum. The damage and attack speed modifiers of a weapon start
 //! unchecked: its DPS counts them, the physical one checked, the elemental one when it is at
 //! least the physical one. The pseudo totals start checked, and the lines they add up
-//! unchecked. A desecrated modifier not revealed yet is a line of its group without filter, on a
+//! unchecked. Every modifier of a rare starts unchecked, like Exiled Exchange 2: its value lies
+//! in the few modifiers the buyer needs, which the application can't tell, and several checked
+//! at once leave few offers; its pseudo totals and its DPS stay checked. A desecrated modifier not revealed yet is a line of its group without filter, on a
 //! band of the desecrated green; its item gets a filter of its number of unrevealed modifiers,
 //! and its other stats start unchecked, with a note under them. A line of a Time-Lost jewel is
 //! written without the words of its radius, a tag of the passive skills they name after its
@@ -877,7 +879,7 @@ fn rows<'a>(
         tiers,
         dps_filters: !dps.is_empty(),
         pseudo_filters: !pseudo.is_empty(),
-        unchecked: unrevealed || item.is_waystone(),
+        unchecked: unrevealed || item.rarity() == Rarity::Rare || item.is_waystone(),
     };
     push_group(&mut rows, Group::Weapon, dps);
     push_group(&mut rows, Group::Pseudo, pseudo);
@@ -1387,7 +1389,8 @@ struct Reading<'r> {
     /// The item has the filters of its pseudo totals.
     pseudo_filters: bool,
     /// Every line starts unchecked: the item has an unrevealed modifier, which can change it,
-    /// or is a waystone, whose buyer pays for its properties, not for its monsters (like Exiled
+    /// or is a rare, whose value lies in the few modifiers its buyer needs, or a waystone of any
+    /// rarity, whose buyer pays for its properties, not for its monsters (both like Exiled
     /// Exchange 2).
     unchecked: bool,
 }
@@ -1395,7 +1398,7 @@ struct Reading<'r> {
 impl Reading<'_> {
     /// The line `key` starts checked: unchecked when the DPS of the weapon counts it, its
     /// damage or its attack speed, when a pseudo total adds it up, or on an item whose lines
-    /// all start unchecked (an unrevealed modifier, a waystone).
+    /// all start unchecked (an unrevealed modifier, a rare, a waystone).
     fn checked(&self, key: StatKey) -> bool {
         let weapon_damage = self.dps_filters && self.stats.weapon_damage(key);
         let added_up = self.pseudo_filters && self.stats.added_up(key);
