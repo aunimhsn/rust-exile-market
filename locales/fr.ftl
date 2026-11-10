@@ -324,6 +324,12 @@ uncertain = { $count ->
     [one] Une seule offre : le prix est incertain
    *[other] Seulement { $count } offres : le prix est incertain
 }
+# Sous le prix d'un objet du marché des changes fondé sur moins de 10 échanges.
+thin-trades = { $count ->
+    [0] Aucun échange récent : le prix est incertain
+    [one] Un seul échange : le prix est incertain
+   *[other] Seulement { $count } échanges : le prix est incertain
+}
 # À droite du titre d'un prix estimé : les offres similaires trouvées.
 similar = { $count ->
     [one] { $count } similaire
@@ -374,7 +380,7 @@ no-market-price-rare = Pas de prix de marché pour les objets rares.
 no-market-price-skill-gem = Pas de prix de marché pour les gemmes d'aptitude.
 no-market-price-magic = Pas de prix de marché pour les objets magiques.
 no-market-price-normal = Pas de prix de marché pour les objets normaux.
-search-to-estimate = Recherchez des offres similaires pour l'estimer.
+search-to-estimate = Cherchez des offres similaires pour l'estimer.
 # Un objet à nom fixe dont le prix n'est pas encore connu, ou manquant.
 prices-downloading = Les prix de { $league } sont en cours de téléchargement…
 # Avant que la ligue soit connue, au premier lancement.
@@ -405,10 +411,19 @@ offers-busy-tooltip = En attente de la réponse du site d'échange
 # L'infobulle du compte à rebours avant la prochaine recherche, par exemple « 8s ».
 offers-next-search-tooltip = Prochaine recherche dans { $wait }
 # Sous le titre, pendant une longue attente, par exemple « 4min ».
-offers-limit = Limite du site d'échange : recherche dans { $wait }.
+offers-limit = Limite du site d'échange : prochaine recherche dans { $wait }.
 offers-none = Aucune offre en ligne avec ces filtres.
 offers-none-hint = Décochez une stat ou baissez un minimum, puis cherchez à nouveau.
 offers-unreachable = Le site d'échange est injoignable.
+# Une recherche que le site d'échange a refusée avec une erreur (une stat renommée par un patch, le plus souvent),
+# puis quoi faire en dessous ; $report est offers-report, un lien qui ouvre le signalement de bug.
+offers-refused = Le site d'échange a refusé cette recherche.
+offers-refused-hint = Décochez un filtre et cherchez à nouveau. Si cela se répète, { $report }.
+offers-report = signalez-le
+# Une réponse du site d'échange que l'application ne sait pas lire, puis quoi faire en dessous ; $report est offers-report-start.
+offers-unreadable = La réponse du site d'échange est illisible.
+offers-unreadable-hint = Le jeu a peut-être changé. { $report }, pour qu'Exile Market soit corrigé.
+offers-report-start = Signalez-le
 offers-identify = Identifiez l'objet pour chercher ses offres.
 # Le double chevron sous la liste.
 offers-more-tooltip = Afficher plus d'offres

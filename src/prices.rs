@@ -122,6 +122,12 @@ impl CurrencyPrice {
     pub fn trusted_exalted(&self) -> Option<f64> {
         (self.price.quantity >= MIN_TRADES).then_some(self.price.exalted)
     }
+
+    /// Its price stands on fewer than [`MIN_TRADES`]: uncertain, and told so to the player.
+    #[must_use]
+    pub fn is_thin(&self) -> bool {
+        self.trusted_exalted().is_none()
+    }
 }
 
 /// The prices of a league, as the price database gave them at one time.
@@ -244,5 +250,22 @@ mod tests {
         let trend = price(110.0, &history).trend().expect("a trend");
 
         assert_eq!(trend.days, 4);
+    }
+
+    #[test]
+    fn a_price_on_fewer_than_ten_trades_is_thin() {
+        let currency = |quantity| CurrencyPrice {
+            name: "Lesser Charging Rune".to_owned(),
+            exchange_id: "lesser-charging-rune".to_owned(),
+            price: Price {
+                quantity,
+                ..price(40_156.0, &[])
+            },
+        };
+
+        assert!(currency(0).is_thin());
+        assert!(currency(1).is_thin());
+        assert!(currency(MIN_TRADES - 1).is_thin());
+        assert!(!currency(MIN_TRADES).is_thin());
     }
 }

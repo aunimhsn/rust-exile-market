@@ -57,7 +57,7 @@ enum PriceView<'a> {
     Priced {
         price: &'a Price,
         rates: Rates,
-        unique: bool,
+        of: Fixed,
     },
     /// The price of a rare, magic or normal item, from its similar offers.
     Estimated(Estimate<'a>),
@@ -68,6 +68,16 @@ enum PriceView<'a> {
     },
     /// Why there is no price.
     Notice(Notice<'a>),
+}
+
+/// What a fixed price is the price of, and whether it stands on too little to be sure.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Fixed {
+    /// A unique, on fewer than [`ENOUGH_OFFERS`] offers when `uncertain`.
+    Unique { uncertain: bool },
+    /// An item of the currency exchange, on fewer than [`crate::prices::MIN_TRADES`] trades
+    /// when `thin`.
+    Exchange { thin: bool },
 }
 
 /// Why the price block shows no price.
@@ -102,12 +112,16 @@ fn view<'a>(
         Ok((FixedPrice::Currency(currency), rates)) => PriceView::Priced {
             price: &currency.price,
             rates: *rates,
-            unique: false,
+            of: Fixed::Exchange {
+                thin: currency.is_thin(),
+            },
         },
         Ok((FixedPrice::Unique(unique), rates)) => PriceView::Priced {
             price: &unique.price,
             rates: *rates,
-            unique: true,
+            of: Fixed::Unique {
+                uncertain: unique.price.quantity < ENOUGH_OFFERS,
+            },
         },
         Ok((FixedPrice::Uniques(candidates), rates)) => PriceView::Candidates {
             candidates,
@@ -183,11 +197,7 @@ impl<'a> PriceBlock<'a> {
                 self.title_row(ui, &view);
                 ui.add_space(TITLE_GAP);
                 match view {
-                    PriceView::Priced {
-                        price,
-                        rates,
-                        unique,
-                    } => self.priced(ui, price, rates, unique),
+                    PriceView::Priced { price, rates, of } => self.priced(ui, price, rates, of),
                     PriceView::Estimated(estimate) => self.estimated(ui, estimate),
                     PriceView::Candidates { candidates, rates } => {
                         self.candidates(ui, candidates, rates);
@@ -213,12 +223,13 @@ impl<'a> PriceBlock<'a> {
         let caption = match *view {
             PriceView::Priced {
                 price,
-                unique: true,
+                of: Fixed::Unique { .. },
                 ..
             } => Some(self.i18n.offers(price.quantity)),
-            PriceView::Priced { unique: false, .. } => {
-                self.stack_size().map(|size| self.i18n.stack_of(size))
-            }
+            PriceView::Priced {
+                of: Fixed::Exchange { .. },
+                ..
+            } => self.stack_size().map(|size| self.i18n.stack_of(size)),
             PriceView::Estimated(estimate) => Some(self.i18n.similar(estimate.total)),
             PriceView::Candidates { .. } | PriceView::Notice(_) => None,
         };
@@ -242,8 +253,9 @@ impl<'a> PriceBlock<'a> {
     }
 
     /// The price in the three currencies, the value of the whole stack when there is one,
-    /// then the unit price, the trend and the warning of a unique with few offers.
-    fn priced(&self, ui: &mut Ui, price: &Price, rates: Rates, unique: bool) {
+    /// then the unit price, the trend and the warning of a unique with few offers, or of an
+    /// item of the currency exchange with few trades.
+    fn priced(&self, ui: &mut Ui, price: &Price, rates: Rates, of: Fixed) {
         let stack = self.stack_size();
         amounts(ui, price.exalted * f64::from(stack.unwrap_or(1)), rates);
         if stack.is_some() {
@@ -267,9 +279,14 @@ impl<'a> PriceBlock<'a> {
             ui.add_space(LINE_GAP);
             line(ui, &text, tint);
         }
-        if unique && price.quantity < ENOUGH_OFFERS {
+        let warning = match of {
+            Fixed::Unique { uncertain: true } => Some(self.i18n.uncertain(price.quantity)),
+            Fixed::Exchange { thin: true } => Some(self.i18n.thin_trades(price.quantity)),
+            Fixed::Unique { uncertain: false } | Fixed::Exchange { thin: false } => None,
+        };
+        if let Some(warning) = warning {
             ui.add_space(LINE_GAP);
-            line(ui, &self.i18n.uncertain(price.quantity), color::WARNING);
+            line(ui, &warning, color::WARNING);
         }
     }
 
@@ -492,6 +509,7 @@ fn message(ui: &mut Ui, text: &str, tint: egui::Color32) {
 mod tests {
     use super::*;
     use crate::estimate::{Reference, Worth};
+    use crate::prices::{CurrencyPrice, UniqueModifiers, UniquePrice};
     use std::time::Duration;
 
     const RATES: Rates = Rates {
@@ -650,5 +668,52 @@ mod tests {
     fn a_change_is_rounded_to_a_whole_percent() {
         assert_eq!(rounded_percent(0.044), 4);
         assert_eq!(rounded_percent(0.106), 11);
+    }
+
+    #[test]
+    fn a_fixed_price_on_too_little_is_told_uncertain() {
+        let price = |quantity| Price {
+            exalted: 120.0,
+            quantity,
+            history: Vec::new(),
+        };
+        let currency = |quantity| CurrencyPrice {
+            name: "Lesser Charging Rune".to_owned(),
+            exchange_id: "lesser-charging-rune".to_owned(),
+            price: price(quantity),
+        };
+        let unique = |quantity| UniquePrice {
+            name: "Headhunter".to_owned(),
+            base_type: "Heavy Belt".to_owned(),
+            price: price(quantity),
+            modifiers: UniqueModifiers::default(),
+        };
+        let of = |fixed: FixedPrice| match view(
+            &Ok((fixed, RATES)),
+            None,
+            Rarity::Unique,
+            KNOWN,
+            None,
+        ) {
+            PriceView::Priced { of, .. } => of,
+            other => panic!("{other:?}"),
+        };
+
+        assert_eq!(
+            of(FixedPrice::Currency(&currency(9))),
+            Fixed::Exchange { thin: true }
+        );
+        assert_eq!(
+            of(FixedPrice::Currency(&currency(10))),
+            Fixed::Exchange { thin: false }
+        );
+        assert_eq!(
+            of(FixedPrice::Unique(&unique(4))),
+            Fixed::Unique { uncertain: true }
+        );
+        assert_eq!(
+            of(FixedPrice::Unique(&unique(5))),
+            Fixed::Unique { uncertain: false }
+        );
     }
 }

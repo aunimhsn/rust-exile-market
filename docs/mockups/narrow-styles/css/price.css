@@ -14,3 +14,6 @@
 .candidates div:nth-child(odd) { background: rgba(255, 255, 255, .03); }
 .candidates span:last-child { display: flex; align-items: center; gap: 6px; font-family: var(--font-number); }
 .candidates img { width: 18px; height: 18px; }
+/* B of the thin prices (17e3c): the amounts of a price on fewer than 10 trades, faint. */
+.app-thin .price { color: var(--weak); }
+.app-thin .price img, .app-thin .price .orb { opacity: .5; }

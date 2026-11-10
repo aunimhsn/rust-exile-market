@@ -174,7 +174,7 @@ fn the_quality_searched_lasts_with_its_offers_until_the_next_search() {
             offers: vec![offer("b")],
             rest: rest(true),
         },
-        Outcome::Unreachable,
+        Outcome::Failed(Failure::Unreachable),
         Outcome::Limited {
             until: now,
             refused: true,
@@ -322,7 +322,7 @@ fn more_offers_that_cant_come_keep_the_list_to_ask_them_again() {
     let _ = offers.more();
 
     offers.apply(
-        answer(Outcome::Unreachable, after(now, 10)),
+        answer(Outcome::Failed(Failure::Unreadable), after(now, 10)),
         SystemTime::now(),
     );
 
@@ -330,7 +330,7 @@ fn more_offers_that_cant_come_keep_the_list_to_ask_them_again() {
     assert!(matches!(
         offers.state(),
         OffersState::Items {
-            more_failed: true,
+            more_failed: Some(Failure::Unreadable),
             ..
         }
     ));
@@ -339,7 +339,7 @@ fn more_offers_that_cant_come_keep_the_list_to_ask_them_again() {
         matches!(
             offers.state(),
             OffersState::Items {
-                more_failed: false,
+                more_failed: None,
                 loading_more: true,
                 ..
             }
@@ -399,18 +399,20 @@ fn a_refusal_waits_for_its_delay_and_shows_no_offer() {
 }
 
 #[test]
-fn an_unreachable_trade_site_is_shown() {
-    let now = Instant::now();
-    let mut offers = Offers::default();
-    let _ = offers.search(item_search(), now);
+fn a_failed_search_is_shown_with_its_reason() {
+    for failure in [Failure::Unreachable, Failure::Refused, Failure::Unreadable] {
+        let now = Instant::now();
+        let mut offers = Offers::default();
+        let _ = offers.search(item_search(), now);
 
-    offers.apply(
-        answer(Outcome::Unreachable, after(now, 10)),
-        SystemTime::UNIX_EPOCH,
-    );
+        offers.apply(
+            answer(Outcome::Failed(failure), after(now, 10)),
+            SystemTime::UNIX_EPOCH,
+        );
 
-    assert_eq!(offers.state(), &OffersState::Unreachable);
-    assert_eq!(offers.last_search(), None);
+        assert_eq!(offers.state(), &OffersState::Failed(failure));
+        assert_eq!(offers.last_search(), None);
+    }
 }
 
 #[test]
@@ -478,7 +480,7 @@ fn refused_more_offers_wait_as_the_limits_of_the_fetch_tell() {
         matches!(
             offers.state(),
             OffersState::Items {
-                more_failed: false,
+                more_failed: None,
                 ..
             }
         ),
@@ -540,7 +542,7 @@ fn a_lost_thread_of_the_searches_shows_the_trade_site_unreachable_for_good() {
 
     offers.thread_lost();
 
-    assert_eq!(offers.state(), &OffersState::Unreachable);
+    assert_eq!(offers.state(), &OffersState::Failed(Failure::Unreachable));
     assert!(offers.busy());
     let later = now + Duration::from_mins(10);
     assert_eq!(offers.search(item_search(), later), None);
@@ -573,7 +575,7 @@ fn the_offers_of_an_item_left_keep_its_list_but_not_a_failure_nor_a_search_under
     );
     let _ = offers.more();
     offers.apply(
-        answer(Outcome::Unreachable, after(now, 0)),
+        answer(Outcome::Failed(Failure::Unreachable), after(now, 0)),
         SystemTime::now(),
     );
     let _ = offers.more();
@@ -584,7 +586,7 @@ fn the_offers_of_an_item_left_keep_its_list_but_not_a_failure_nor_a_search_under
         &left,
         OffersState::Items {
             loading_more: false,
-            more_failed: false,
+            more_failed: None,
             rest,
             ..
         } if !rest.is_empty()
@@ -604,7 +606,7 @@ fn the_offers_of_an_item_left_keep_its_list_but_not_a_failure_nor_a_search_under
     // A failure, or a search under way, comes back as before the first search.
     for state in [
         OffersState::Searching,
-        OffersState::Unreachable,
+        OffersState::Failed(Failure::Refused),
         OffersState::Limited,
     ] {
         let mut offers = Offers::default();

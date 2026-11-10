@@ -24,13 +24,14 @@ use crate::clipboard;
 use crate::currencies::{self, ExchangeCurrency};
 use crate::estimate::Reference;
 use crate::format::{self, Currency};
-use crate::i18n::{Message, Translator};
+use crate::i18n::{Linked, Message, Translator};
 use crate::item::{Catalyst, Item};
 use crate::language::Language;
 use crate::offers::{LONG_WAIT, Offers, OffersState};
 use crate::roll_difference::CopiedLines;
 use crate::trade::offers::{ExchangeOffer, ItemOffer, Price, SellerStatus, currency};
 use crate::trade::query::SearchKind;
+use crate::trade::search::Failure;
 
 /// The space above and under the content of the band, and between the label and a message.
 const PADDING_Y: f32 = 12.0;
@@ -91,6 +92,8 @@ const MORE_FAILED_GAP: f32 = 8.0;
 pub enum OffersAction {
     Search,
     More,
+    /// The words of the hint of a failed search that open the bug report.
+    ReportBug,
 }
 
 /// The price of a row, in its currency.
@@ -245,6 +248,9 @@ pub struct OffersBlock<'a> {
     item: &'a Item,
     lines: &'a CopiedLines,
     i18n: &'a Translator,
+    /// The hint of a failed search opens the bug report: in the main window only, which has
+    /// it.
+    bug_report: bool,
 }
 
 impl<'a> OffersBlock<'a> {
@@ -266,7 +272,15 @@ impl<'a> OffersBlock<'a> {
             item,
             lines,
             i18n,
+            bug_report: false,
         }
+    }
+
+    /// The words of the hint of a failed search open the bug report.
+    #[must_use]
+    pub fn bug_report(mut self, bug_report: bool) -> Self {
+        self.bug_report = bug_report;
+        self
     }
 
     /// The block of an unidentified unique, which can't be searched.
@@ -307,24 +321,25 @@ impl<'a> OffersBlock<'a> {
                 ui,
                 (i18n.text(Message::OffersSearchHint), color::FAINT),
                 block(Block::Search, wait, busy),
+                None,
             ),
-            OffersState::Unreachable => self.title_row(
-                ui,
-                (i18n.text(Message::OffersUnreachable), color::WEAK),
-                block(Block::Search, wait, busy),
-            ),
+            &OffersState::Failed(failure) => {
+                let (line, hint) = failure_lines(i18n, failure);
+                self.title_row(ui, line, block(Block::Search, wait, busy), hint.as_ref())
+            }
             OffersState::Limited => {
                 let line = if wait.is_zero() {
                     (i18n.text(Message::OffersSearchHint), color::FAINT)
                 } else {
                     (i18n.offers_limit(wait), color::WARNING)
                 };
-                self.title_row(ui, line, block(Block::Search, wait, busy))
+                self.title_row(ui, line, block(Block::Search, wait, busy), None)
             }
             OffersState::Searching => self.title_row(
                 ui,
                 (i18n.text(Message::OffersSearching), color::FAINT),
                 Block::Searching,
+                None,
             ),
             OffersState::Items {
                 offers,
@@ -373,7 +388,7 @@ impl<'a> OffersBlock<'a> {
                     } else {
                         More::None
                     },
-                    more_failed: false,
+                    more_failed: None,
                 };
                 self.results(ui, &list, *searched, wait)
             }
@@ -381,15 +396,17 @@ impl<'a> OffersBlock<'a> {
     }
 
     /// Until the offers show, the band is only the title row: the label, `line` under it, and
-    /// the action `block` in the corner.
+    /// the action `block` in the corner; after a search that failed, what to do under the row
+    /// (`hint`).
     fn title_row(
         &self,
         ui: &mut Ui,
         (line, line_color): (String, Color32),
         block: Block,
+        hint: Option<&Linked>,
     ) -> Option<OffersAction> {
         let mut action = None;
-        band(ui, |ui, _| {
+        band(ui, |ui, width| {
             let head = Head {
                 line,
                 line_color,
@@ -398,6 +415,14 @@ impl<'a> OffersBlock<'a> {
             };
             if self.head(ui, &head) {
                 action = Some(OffersAction::Search);
+            }
+            if let Some(hint) = hint {
+                ui.add_space(HEAD_GAP);
+                let tooltip = self.i18n.text(Message::BugReportTooltip);
+                if linked_hint(ui, hint, width, self.bug_report, &tooltip) {
+                    action = Some(OffersAction::ReportBug);
+                }
+                ui.add_space(PADDING_Y);
             }
         });
         action
@@ -465,14 +490,10 @@ impl<'a> OffersBlock<'a> {
             if !list.rows.is_empty() {
                 self.list(ui, list);
             }
-            if list.more_failed {
+            if let Some(failure) = list.more_failed {
                 ui.add_space(MORE_FAILED_GAP);
-                let galley = wrapped_with(
-                    ui,
-                    &i18n.text(Message::OffersUnreachable),
-                    text::note(),
-                    width,
-                );
+                let message = i18n.text(failure_message(failure));
+                let galley = wrapped_with(ui, &message, text::note(), width);
                 let (rect, _) = ui.allocate_exact_size(
                     vec2(ui.available_width(), galley.size().y),
                     Sense::hover(),
@@ -912,8 +933,8 @@ struct List<'a> {
     /// The offers of the currency exchange, with their stock.
     exchange: bool,
     more: More,
-    /// The next offers couldn't come.
-    more_failed: bool,
+    /// Why the next offers couldn't come.
+    more_failed: Option<Failure>,
 }
 
 /// Whether the block says that no offer was found: none shown, and none left to fetch. A page
@@ -998,6 +1019,136 @@ fn wrapped(ui: &Ui, message: &str, width: f32) -> Arc<Galley> {
 fn wrapped_with(ui: &Ui, line: &str, font: egui::FontId, width: f32) -> Arc<Galley> {
     ui.painter()
         .layout(line.to_owned(), font, Color32::PLACEHOLDER, width)
+}
+
+/// The line of the title row after a search that failed for `failure`, and what to do under
+/// the row: nothing when trying again is enough.
+fn failure_lines(i18n: &Translator, failure: Failure) -> ((String, Color32), Option<Linked>) {
+    let line = i18n.text(failure_message(failure));
+    match failure {
+        Failure::Unreachable => ((line, color::WEAK), None),
+        Failure::Refused => ((line, color::WARNING), Some(i18n.offers_refused_hint())),
+        Failure::Unreadable => ((line, color::WARNING), Some(i18n.offers_unreadable_hint())),
+    }
+}
+
+/// What a search, or the fetch of its next offers, that failed for `failure` says.
+fn failure_message(failure: Failure) -> Message {
+    match failure {
+        Failure::Unreachable => Message::OffersUnreachable,
+        Failure::Refused => Message::OffersRefused,
+        Failure::Unreadable => Message::OffersUnreadable,
+    }
+}
+
+/// What to do after a failed search, wrapped at `width`. When they are a `link` (the main
+/// window), its words that open the bug report are in the color of the text, underlined under
+/// the pointer and with the tooltip `tooltip`; elsewhere, they are plain. Whether they were
+/// clicked.
+fn linked_hint(ui: &mut Ui, hint: &Linked, width: f32, link: bool, tooltip: &str) -> bool {
+    let galley = linked_galley(ui, hint, width, link);
+    let (rect, _) =
+        ui.allocate_exact_size(vec2(ui.available_width(), galley.size().y), Sense::hover());
+    let origin = pos2(rect.left() + size::BAND_PADDING, rect.top());
+    let words = hint.text.get(hint.link.clone()).unwrap_or_default();
+    let mut clicked = false;
+    let mut lit = false;
+    let rects = if link {
+        link_rects(&galley, hint)
+    } else {
+        Vec::new()
+    };
+    let id = ui.make_persistent_id("report-link");
+    let rects: Vec<Rect> = rects
+        .into_iter()
+        .map(|part| part.translate(origin.to_vec2()))
+        .collect();
+    for (index, part) in rects.iter().enumerate() {
+        // One stop of the keyboard for the whole link, on its first part.
+        let sense = if index == 0 {
+            Sense::click()
+        } else {
+            Sense::CLICK
+        };
+        let response = ui.interact(*part, id.with(index), sense);
+        if index == 0 {
+            response.widget_info(|| WidgetInfo::labeled(Role::Link, true, words));
+        }
+        let response = response.on_hover_text(tooltip);
+        lit |= response.hovered() || response.has_focus();
+        clicked |= response.clicked();
+        if response.hovered() {
+            ui.ctx().set_cursor_icon(CursorIcon::PointingHand);
+        }
+    }
+    let painter = ui.painter();
+    painter.galley(origin, galley, color::WEAK);
+    if lit {
+        for part in &rects {
+            painter.hline(part.x_range(), part.bottom(), Stroke::new(1.0, color::TEXT));
+        }
+    }
+    clicked
+}
+
+/// The hint laid out at `width`: in the weak color, its words of a `link` in the color of the
+/// text.
+fn linked_galley(ui: &Ui, hint: &Linked, width: f32, link: bool) -> Arc<Galley> {
+    let font = text::item_line();
+    let mut job = LayoutJob::default();
+    let text = hint.text.as_str();
+    let (start, end) = (hint.link.start, hint.link.end);
+    for (part, tint) in [
+        (text.get(..start), color::WEAK),
+        (
+            text.get(start..end),
+            if link { color::TEXT } else { color::WEAK },
+        ),
+        (text.get(end..), color::WEAK),
+    ] {
+        if let Some(part) = part.filter(|part| !part.is_empty()) {
+            job.append(part, 0.0, TextFormat::simple(font.clone(), tint));
+        }
+    }
+    job.wrap.max_width = width;
+    ui.painter().layout_job(job)
+}
+
+/// Where the words of the link of `hint` are in its `galley`, one rectangle per row they
+/// are on (the words wrap like the rest of the sentence). The glyphs are counted as the
+/// characters of the text, as `Galley::layout_from_cursor` of epaint counts them: a row keeps
+/// the space it breaks at, and a newline has no glyph. To check again when egui changes.
+fn link_rects(galley: &Galley, hint: &Linked) -> Vec<Rect> {
+    let first = hint
+        .text
+        .get(..hint.link.start)
+        .unwrap_or_default()
+        .chars()
+        .count();
+    let last = first
+        + hint
+            .text
+            .get(hint.link.clone())
+            .unwrap_or_default()
+            .chars()
+            .count();
+    let mut rects = Vec::new();
+    let mut index = 0;
+    for row in &galley.rows {
+        let mut part: Option<Rect> = None;
+        for glyph in &row.row.glyphs {
+            if (first..last).contains(&index) && !glyph.chr.is_whitespace() {
+                let glyph_rect = glyph.logical_rect().translate(row.pos.to_vec2());
+                part = Some(part.map_or(glyph_rect, |part| part.union(glyph_rect)));
+            }
+            index += 1;
+        }
+        if row.ends_with_newline {
+            index += 1;
+        }
+        rects.extend(part);
+    }
+    rects
 }
 
 /// The double chevron under the list, the whole width of the band clickable.
@@ -1362,5 +1513,133 @@ mod tests {
             block(Block::Search, Duration::ZERO, true),
             Block::Waiting(None)
         );
+    }
+
+    /// The characters of `galley` inside each of `rects`, its spaces left out.
+    fn found_in(galley: &Galley, rects: &[Rect]) -> Vec<String> {
+        rects
+            .iter()
+            .map(|rect| {
+                galley
+                    .rows
+                    .iter()
+                    .flat_map(|row| {
+                        row.row.glyphs.iter().filter_map(move |glyph| {
+                            let at = glyph.logical_rect().translate(row.pos.to_vec2());
+                            (rect.contains(at.center()) && !glyph.chr.is_whitespace())
+                                .then_some(glyph.chr)
+                        })
+                    })
+                    .collect()
+            })
+            .collect()
+    }
+
+    #[test]
+    fn the_link_of_a_hint_is_found_on_each_row_it_wraps_on() {
+        let ctx = egui::Context::default();
+        crate::ui::install(&ctx);
+        let mut checked = 0;
+        let mut output = ctx.run_ui(egui::RawInput::default(), |ui| {
+            for language in Language::ALL {
+                let i18n = Translator::new(language);
+                // The link inside the sentence, after accented letters in French, and first
+                // in a sentence of its own.
+                for hint in [i18n.offers_refused_hint(), i18n.offers_unreadable_hint()] {
+                    let words: String = hint.text[hint.link.clone()]
+                        .chars()
+                        .filter(|chr| !chr.is_whitespace())
+                        .collect();
+                    // Wide, the link on one row; narrow, its words on several rows (cut at
+                    // the hyphen of "signalez-le").
+                    for (width, rows) in [(1000.0, 1..=1), (40.0, 2..=3)] {
+                        let galley = linked_galley(ui, &hint, width, true);
+                        let found = found_in(&galley, &link_rects(&galley, &hint));
+                        assert_eq!(found.concat(), words, "{hint:?} at {width}");
+                        assert!(rows.contains(&found.len()), "{found:?} at {width}");
+                        checked += 1;
+                    }
+                }
+            }
+        });
+        // epaint panics when the texture changes of a frame are dropped unapplied.
+        output.textures_delta.clear();
+        assert_eq!(checked, 8);
+    }
+
+    /// Draws the hint of a refused search, one frame per call.
+    struct HintWindow {
+        ctx: egui::Context,
+        hint: Linked,
+        link: bool,
+    }
+
+    impl HintWindow {
+        const WIDTH: f32 = 300.0;
+
+        fn new(link: bool) -> Self {
+            let ctx = egui::Context::default();
+            crate::ui::install(&ctx);
+            let window = Self {
+                ctx,
+                hint: Translator::new(Language::English).offers_refused_hint(),
+                link,
+            };
+            window.frame(vec![]);
+            window
+        }
+
+        /// One frame with `events`: whether the link was clicked, where the sentence starts
+        /// and where its link is.
+        fn frame(&self, events: Vec<egui::Event>) -> (bool, Pos2, Vec<Rect>) {
+            let input = egui::RawInput {
+                events,
+                ..Default::default()
+            };
+            let mut drawn = (false, Pos2::ZERO, Vec::new());
+            let mut output = self.ctx.run_ui(input, |ui| {
+                let origin = ui.cursor().min + vec2(size::BAND_PADDING, 0.0);
+                let galley = linked_galley(ui, &self.hint, Self::WIDTH, true);
+                let rects = link_rects(&galley, &self.hint)
+                    .into_iter()
+                    .map(|rect| rect.translate(origin.to_vec2()))
+                    .collect();
+                let clicked = linked_hint(ui, &self.hint, Self::WIDTH, self.link, "Report a bug");
+                drawn = (clicked, origin, rects);
+            });
+            output.textures_delta.clear();
+            drawn
+        }
+
+        /// Whether a click at `at` clicked the link.
+        fn click(&self, at: Pos2) -> bool {
+            let button = |pressed| egui::Event::PointerButton {
+                pos: at,
+                button: egui::PointerButton::Primary,
+                pressed,
+                modifiers: Modifiers::NONE,
+            };
+            self.frame(vec![egui::Event::PointerMoved(at)]);
+            self.frame(vec![button(true)]);
+            self.frame(vec![button(false)]).0
+        }
+    }
+
+    #[test]
+    fn a_click_on_the_words_of_the_link_opens_the_bug_report() {
+        let window = HintWindow::new(true);
+        let (_, origin, rects) = window.frame(vec![]);
+
+        assert!(window.click(rects[0].center()));
+        // The start of the sentence isn't the link.
+        assert!(!window.click(origin + vec2(4.0, 6.0)));
+    }
+
+    #[test]
+    fn in_the_window_over_the_game_the_words_are_no_link() {
+        let window = HintWindow::new(false);
+        let (_, _, rects) = window.frame(vec![]);
+
+        assert!(!window.click(rects[0].center()));
     }
 }

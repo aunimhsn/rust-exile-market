@@ -12,7 +12,7 @@ use crate::market::MarketEvent;
 use crate::prices::{CurrencyPrice, Price, PriceList, UniqueModifiers, UniquePrice};
 use crate::trade::offers::tests::{every_exchange_offer, every_item_offer};
 use crate::trade::query::Query;
-use crate::trade::search::{Answer, NextSearch, Outcome, Rest};
+use crate::trade::search::{Answer, Failure, NextSearch, Outcome, Rest};
 
 /// The default width of the window, and the narrowest the player can give it (`main.rs`).
 const WIDTHS: [f32; 2] = [420.0, 360.0];
@@ -190,6 +190,7 @@ impl Scene {
                 stats_open,
                 prices,
                 kind,
+                bug_report: true,
                 i18n: &self.i18n,
             };
             (_, height) = ui::content(ui, false, |ui| view.show(ui));
@@ -280,7 +281,7 @@ fn draw_the_offers(scene: &mut Scene, ctx: &Context, drawn: &mut Drawn, kind: Se
     if scene.offers.busy() {
         scene.offers.apply(
             Answer {
-                outcome: Outcome::Unreachable,
+                outcome: Outcome::Failed(Failure::Unreadable),
                 ..answer(kind, interface)
             },
             SystemTime::now(),
@@ -304,12 +305,15 @@ fn draw_the_offers(scene: &mut Scene, ctx: &Context, drawn: &mut Drawn, kind: Se
         ..answer(kind, interface)
     });
     scene.draw_each_way(ctx, drawn);
-    // The trade site can't be reached, then refuses, with a long wait.
-    scene.search_answered(Answer {
-        outcome: Outcome::Unreachable,
-        ..answer(kind, interface)
-    });
-    scene.draw_each_way(ctx, drawn);
+    // The trade site can't be reached, turns the search down, can't be read, then refuses,
+    // with a long wait.
+    for failure in [Failure::Unreachable, Failure::Refused, Failure::Unreadable] {
+        scene.search_answered(Answer {
+            outcome: Outcome::Failed(failure),
+            ..answer(kind, interface)
+        });
+        scene.draw_each_way(ctx, drawn);
+    }
     scene.search_answered(failure(Outcome::Limited {
         until: Instant::now() + Duration::from_mins(5),
         refused: true,
