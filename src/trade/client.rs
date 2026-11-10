@@ -133,51 +133,12 @@ impl Network {
 impl Transport for Network {
     fn send(&mut self, request: &Request) -> Result<Answer, ureq::Error> {
         let mut response = match &request.body {
-            Some(body) => self
-                .0
-                .post(&request.url)
-                .config()
-                .http_status_as_error(false)
-                .max_redirects(0)
-                .build()
+            Some(body) => any_status(self.0.post(&request.url))
                 .content_type("application/json")
                 .send(body)?,
-            None => self
-                .0
-                .get(&request.url)
-                .config()
-                .http_status_as_error(false)
-                .max_redirects(0)
-                .build()
-                .call()?,
+            None => any_status(self.0.get(&request.url)).call()?,
         };
-        let headers = response.headers();
-        let header = |name: &str| {
-            headers
-                .get(name)
-                .and_then(|value| value.to_str().ok())
-                .map(str::to_owned)
-        };
-        let rules = header("x-rate-limit-rules")
-            .unwrap_or_default()
-            .split(',')
-            .map(str::trim)
-            .filter(|rule| !rule.is_empty())
-            .map(|rule| {
-                // Missing, its headers are empty: unreadable, they keep the limits known.
-                let name = format!("x-rate-limit-{}", rule.to_ascii_lowercase());
-                RuleHeaders {
-                    name: rule.to_owned(),
-                    limits: header(&name).unwrap_or_default(),
-                    state: header(&format!("{name}-state")).unwrap_or_default(),
-                }
-            })
-            .collect();
-        let limits = LimitHeaders {
-            policy: header("x-rate-limit-policy"),
-            rules,
-            retry_after: header("retry-after"),
-        };
+        let limits = limit_headers(response.headers());
         let status = response.status().as_u16();
         // Of an error too, a short one: see `Answer::log_error_message`.
         let body = if (200..300).contains(&status) {
@@ -193,6 +154,43 @@ impl Transport for Network {
     }
 }
 
+/// An error status is an answer too, whose limits and message are read. The agent follows
+/// no redirection (`http::agent`).
+fn any_status<B>(request: ureq::RequestBuilder<B>) -> ureq::RequestBuilder<B> {
+    request.config().http_status_as_error(false).build()
+}
+
+/// The headers of an answer the limits read: `X-Rate-Limit-Rules` names the rules, each with
+/// its limits in `X-Rate-Limit-<rule>` and its counts in `X-Rate-Limit-<rule>-State`.
+fn limit_headers(headers: &ureq::http::HeaderMap) -> LimitHeaders {
+    let header = |name: &str| {
+        headers
+            .get(name)
+            .and_then(|value| value.to_str().ok())
+            .map(str::to_owned)
+    };
+    let rules = header("x-rate-limit-rules")
+        .unwrap_or_default()
+        .split(',')
+        .map(str::trim)
+        .filter(|rule| !rule.is_empty())
+        .map(|rule| {
+            // Missing, its headers are empty: unreadable, they keep the limits known.
+            let name = format!("x-rate-limit-{}", rule.to_ascii_lowercase());
+            RuleHeaders {
+                name: rule.to_owned(),
+                limits: header(&name).unwrap_or_default(),
+                state: header(&format!("{name}-state")).unwrap_or_default(),
+            }
+        })
+        .collect();
+    LimitHeaders {
+        policy: header("x-rate-limit-policy"),
+        rules,
+        retry_after: header("retry-after"),
+    }
+}
+
 /// The client of the trade site.
 pub struct TradeClient<T = Network> {
     transport: T,
@@ -200,6 +198,8 @@ pub struct TradeClient<T = Network> {
     /// The wait asked by a refusal, shared with the download of the item names.
     refusal: Refusal,
     last_search: Option<Instant>,
+    /// The log already says that an answer told no limits.
+    told_no_limits: bool,
 }
 
 impl TradeClient {
@@ -216,6 +216,7 @@ impl<T: Transport> TradeClient<T> {
             limits: Limits::default(),
             refusal,
             last_search: None,
+            told_no_limits: false,
         }
     }
 
@@ -369,6 +370,12 @@ impl<T: Transport> TradeClient<T> {
             },
         );
         let answer = result.map_err(|error| TradeError::Http(HttpError::Request(error)))?;
+        if (200..300).contains(&answer.status) && !counted && !self.told_no_limits {
+            // Its headers renamed, maybe: only the 10 seconds between two searches and the
+            // wait of a refusal hold then. Once: every answer would say the same.
+            log::warn!("Trade site: an answer told no limits, the known ones are kept");
+            self.told_no_limits = true;
+        }
         // A 403 too: the trade site turns the address away, as it does the item names.
         if matches!(answer.status, 403 | 429) {
             log::warn!(
@@ -711,5 +718,197 @@ pub(super) mod tests {
         let long = format!(r#"{{"error": {{"message": "{}"}}}}"#, "a".repeat(5_000));
         let length = error_message(&long).map(|message| message.chars().count());
         assert!(length.is_some_and(|length| length < 250), "{length:?}");
+    }
+
+    fn header_map(headers: &[(&'static str, &'static str)]) -> ureq::http::HeaderMap {
+        headers
+            .iter()
+            .map(|&(name, value)| {
+                (
+                    ureq::http::HeaderName::from_static(name),
+                    ureq::http::HeaderValue::from_static(value),
+                )
+            })
+            .collect()
+    }
+
+    /// The headers of a search, as measured on 2026-10-23 (`docs/trade-site-usage.md`).
+    const SEARCH_HEADERS: [(&str, &str); 4] = [
+        ("x-rate-limit-policy", "trade-search-request-limit"),
+        ("x-rate-limit-rules", "Ip"),
+        (
+            "x-rate-limit-ip",
+            "5:10:60,15:60:300,30:300:1800,600:21600:3600",
+        ),
+        ("x-rate-limit-ip-state", "1:10:0,1:60:0,1:300:0,1:21600:0"),
+    ];
+
+    /// The network review of 2026-11-10: every test gave the client headers already read, so
+    /// that a header renamed left the application without limits, and without a test failing.
+    #[test]
+    fn the_limits_are_read_from_the_headers_of_an_answer() {
+        let read = limit_headers(&header_map(&SEARCH_HEADERS));
+
+        assert_eq!(
+            read,
+            limits(
+                "trade-search-request-limit",
+                "5:10:60,15:60:300,30:300:1800,600:21600:3600",
+                "1:10:0,1:60:0,1:300:0,1:21600:0"
+            )
+        );
+        // The limits themselves read them: four windows, a search allowed at once.
+        let mut known = Limits::default();
+        let now = Instant::now();
+        known.answered(Policy::Search, &read, now);
+        assert_eq!(known.ready_at(Policy::Search, now), now);
+    }
+
+    /// The rule `Account` is the one of a signed-in session, which the application never has:
+    /// here for a second rule, and one that lacks its counts.
+    #[test]
+    fn each_rule_is_read_with_its_own_headers() {
+        let read = limit_headers(&header_map(&[
+            ("x-rate-limit-rules", "Ip, Account,"),
+            ("x-rate-limit-ip", "5:10:60"),
+            ("x-rate-limit-ip-state", "5:10:60"),
+            ("x-rate-limit-account", "3:5:60"),
+            ("retry-after", "60"),
+        ]));
+
+        assert_eq!(
+            read,
+            LimitHeaders {
+                policy: None,
+                rules: vec![
+                    RuleHeaders {
+                        name: "Ip".to_owned(),
+                        limits: "5:10:60".to_owned(),
+                        state: "5:10:60".to_owned(),
+                    },
+                    RuleHeaders {
+                        name: "Account".to_owned(),
+                        limits: "3:5:60".to_owned(),
+                        state: String::new(),
+                    },
+                ],
+                retry_after: Some("60".to_owned()),
+            }
+        );
+    }
+
+    /// Told once: every answer would say the same.
+    #[test]
+    fn a_success_without_limits_is_noticed_and_one_with_limits_isnt() {
+        let site = FakeSite::default();
+        site.answer(
+            200,
+            limits("trade-fetch-request-limit", "12:4:10", "1:4:0"),
+            r#"{"result": []}"#,
+        );
+        site.answer(400, LimitHeaders::default(), "{}");
+        site.answer(200, LimitHeaders::default(), r#"{"result": []}"#);
+        let mut client = TradeClient::with_transport(site, Refusal::default());
+        let ids = ["a".to_owned()];
+
+        client.fetch(Language::English, "Q1", &ids).expect("offers");
+        assert!(!client.told_no_limits, "its limits were told");
+        let _ = client.fetch(Language::English, "Q1", &ids);
+        assert!(!client.told_no_limits, "an error status isn't a success");
+        client.fetch(Language::English, "Q1", &ids).expect("offers");
+        assert!(client.told_no_limits);
+    }
+
+    #[test]
+    fn an_answer_without_the_headers_tells_no_rule() {
+        let read = limit_headers(&header_map(&[("content-type", "application/json")]));
+
+        assert_eq!(read, LimitHeaders::default());
+    }
+
+    /// The head of an answer of a local server with the headers of a search, written as the
+    /// trade site writes them, and a session cookie as it sets one in each answer.
+    fn search_head(status: &str) -> String {
+        format!(
+            "{status}\r\nSet-Cookie: POESESSID=abc; Path=/\r\n\
+             X-Rate-Limit-Policy: trade-search-request-limit\r\nX-Rate-Limit-Rules: Ip\r\n\
+             X-Rate-Limit-Ip: 5:10:60,15:60:300,30:300:1800,600:21600:3600\r\n\
+             X-Rate-Limit-Ip-State: 1:10:0,1:60:0,1:300:0,1:21600:0"
+        )
+    }
+
+    /// What stays on the network side of [`Transport`], through a real answer.
+    #[test]
+    fn a_request_over_the_network_reads_the_limits_and_sends_no_cookie_back() {
+        use crate::http::tests::{header, local_agent, recording_server};
+
+        let (url, _, heads) = recording_server(search_head("200 OK"), SEARCH.into());
+        let mut network = Network(local_agent());
+        let post = Request {
+            url: url.clone(),
+            body: Some(r#"{"query": {}}"#.to_owned()),
+        };
+
+        let answer = network.send(&post).expect("an answer");
+        network
+            .send(&Request { url, body: None })
+            .expect("an answer");
+
+        assert_eq!(answer.status, 200);
+        assert_eq!(answer.limits, limit_headers(&header_map(&SEARCH_HEADERS)));
+        assert_eq!(answer.body.expect("a body"), SEARCH);
+        let heads = heads.lock().unwrap();
+        assert!(heads[0][0].starts_with("POST "), "{:?}", heads[0]);
+        assert_eq!(header(&heads[0], "content-type"), Some("application/json"));
+        assert!(heads[1][0].starts_with("GET "), "{:?}", heads[1]);
+        for request in heads.iter() {
+            assert_eq!(header(request, "cookie"), None, "{request:?}");
+            assert_eq!(
+                header(request, "user-agent"),
+                Some(http::user_agent().as_str())
+            );
+        }
+    }
+
+    #[test]
+    fn a_refusal_over_the_network_is_an_answer_with_its_delay_and_its_message() {
+        use crate::http::tests::{local_agent, recording_server};
+
+        let body = r#"{"error": {"code": 3, "message": "Rate limit exceeded"}}"#;
+        let head = format!(
+            "{}\r\nRetry-After: 60",
+            search_head("429 Too Many Requests")
+        );
+        let (url, _, _) = recording_server(head, body.into());
+
+        let answer = Network(local_agent())
+            .send(&Request { url, body: None })
+            .expect("an answer, not an error");
+
+        assert_eq!(answer.status, 429);
+        assert_eq!(answer.limits.retry_after.as_deref(), Some("60"));
+        assert_eq!(answer.limits.rules.len(), 1);
+        assert_eq!(answer.body.expect("a body"), body);
+    }
+
+    #[test]
+    fn a_redirection_over_the_network_is_an_answer_and_isnt_followed() {
+        use crate::http::tests::{local_agent, server};
+        use std::sync::atomic::Ordering;
+
+        let (elsewhere, followed) = server("200 OK", SEARCH.into());
+        let (url, requests) = server(format!("302 Found\r\nLocation: {elsewhere}"), Vec::new());
+        let mut network = Network(local_agent());
+
+        let post = network.send(&Request {
+            url: url.clone(),
+            body: Some("{}".to_owned()),
+        });
+        let get = network.send(&Request { url, body: None });
+
+        assert_eq!(post.expect("an answer").status, 302);
+        assert_eq!(get.expect("an answer").status, 302);
+        assert_eq!(requests.load(Ordering::SeqCst), 2);
+        assert_eq!(followed.load(Ordering::SeqCst), 0);
     }
 }

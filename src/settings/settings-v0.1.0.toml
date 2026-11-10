@@ -1,0 +1,12 @@
+language = "french"
+always_on_top = true
+league = "HC Forbidden Rites"
+closed_new_leagues = ["Runes of Aldur", "HC Runes of Aldur"]
+
+[hotkey]
+on = false
+keys = "Alt+G"
+
+[closed_update]
+version = "0.2.0"
+league = "Forbidden Rites"

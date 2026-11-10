@@ -50,6 +50,8 @@ jobs:
         run: cargo test --locked --workspace --all-features
       - if: steps.changes.outputs.code == 'true'
         run: sh .github/scripts/system-clipboard.sh
+      - if: steps.changes.outputs.code == 'true'
+        run: sh .github/scripts/no-session-cookie.sh
 
   # The code written for Windows alone (the keys of the price-check hotkey) is compiled and
   # linted on its own system, which the job above never builds. Clippy only: the tests run on

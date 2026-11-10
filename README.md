@@ -40,7 +40,7 @@ A search on the trade site only runs when you click it.
 
 ### Wayland
 
-Exile Market is an X11 application: on a Wayland desktop it runs through XWayland, like the game under Proton, so that it can read what the game copies without having the focus. Most desktops start XWayland on their own, and it was tried on KDE Plasma (Bazzite). If the window can't open, a message says what is missing: install XWayland (the package `xwayland` on most distributions), then start the application again.
+Exile Market is an X11 application: on a Wayland desktop it runs through XWayland, like the game under Proton, so that it can read what the game copies without having the focus. Most desktops start XWayland on their own, and it was tried on KDE Plasma (Bazzite). The price-check hotkey and the window over the game were tried on that desktop only: on another one (GNOME…), they may not behave the same, and a report through the bug icon of the title bar helps. If the window can't open, a message says what is missing: install XWayland (the package `xwayland` on most distributions), then start the application again.
 
 ### "The clipboard can't be read."
 

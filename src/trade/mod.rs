@@ -325,6 +325,16 @@ mod tests {
         requests.load(Ordering::SeqCst)
     }
 
+    /// Waits for the first request of the thread, however busy the machine: "no other
+    /// request for a while" is then checked from there, not from the start of the thread.
+    fn wait_for_a_request(requests: &AtomicUsize) {
+        let start = Instant::now();
+        while requests.load(Ordering::SeqCst) == 0 {
+            assert!(start.elapsed() < Duration::from_secs(5), "a first request");
+            thread::sleep(Duration::from_millis(5));
+        }
+    }
+
     #[test]
     fn downloads_the_names_once_and_keeps_them_in_the_cache() {
         let directory = TestDirectory::new("item-names-download");
@@ -430,6 +440,7 @@ mod tests {
         let requests = Arc::clone(&site.requests);
         let _watch = start_watch(site, &directory);
 
+        wait_for_a_request(&requests);
         assert_eq!(requests_after(&requests, Duration::from_millis(100)), 1);
     }
 
@@ -449,20 +460,25 @@ mod tests {
         let requests = Arc::clone(&site.requests);
         let _watch = ItemNamesWatch::spawn(move || site, Some(directory.0.clone()), hasty, || {});
 
+        wait_for_a_request(&requests);
         assert_eq!(requests_after(&requests, Duration::from_millis(200)), 1);
     }
 
-    /// A trade site that waits for the end of a refusal, as during a refused search.
+    /// A trade site that waits for the end of a refusal, as during a refused search: `wait`
+    /// from its first request, whenever the thread starts.
     struct WaitingSite {
-        until: Instant,
+        wait: Duration,
+        until: Option<Instant>,
         requests: Arc<AtomicUsize>,
     }
 
     impl NameSource for WaitingSite {
         fn item_names(&mut self) -> Result<ItemNames, NamesError> {
             self.requests.fetch_add(1, Ordering::SeqCst);
-            if Instant::now() < self.until {
-                return Err(NamesError::Wait(self.until));
+            let now = Instant::now();
+            let until = *self.until.get_or_insert(now + self.wait);
+            if now < until {
+                return Err(NamesError::Wait(until));
             }
             Ok(names(SystemTime::now()))
         }
@@ -473,7 +489,8 @@ mod tests {
         let directory = TestDirectory::new("item-names-wait");
         let requests = Arc::new(AtomicUsize::new(0));
         let site = WaitingSite {
-            until: Instant::now() + Duration::from_millis(600),
+            wait: Duration::from_millis(600),
+            until: None,
             requests: Arc::clone(&requests),
         };
         let (woken, wakes) = mpsc::channel();
@@ -487,6 +504,7 @@ mod tests {
         );
 
         // Asked once during the wait, not every 20 ms as after a failure without names.
+        wait_for_a_request(&requests);
         assert_eq!(requests_after(&requests, Duration::from_millis(200)), 1);
         assert_eq!(received(&mut watch, &wakes).len(), 1);
         assert_eq!(requests.load(Ordering::SeqCst), 2);

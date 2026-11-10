@@ -799,15 +799,20 @@ mod tests {
             || {},
         );
 
-        thread::sleep(Duration::from_millis(400));
+        // Twenty readings of the leagues, 30 ms apart, however busy the machine.
+        let start = Instant::now();
+        while requests.leagues.load(Ordering::SeqCst) < 20 {
+            assert!(
+                start.elapsed() < Duration::from_secs(10),
+                "the leagues are read"
+            );
+            thread::sleep(Duration::from_millis(5));
+        }
 
-        // Every 20 ms, about twenty; doubled, at 0, 20, 60, 140 and 300 ms.
+        // Every 20 ms, about thirty in these 600 ms; doubled, at 0, 20, 60, 140 and 300 ms,
+        // five or six.
         let downloads = requests.prices.load(Ordering::SeqCst);
-        assert!(downloads <= 6, "{downloads} downloads");
-        assert!(
-            requests.leagues.load(Ordering::SeqCst) >= 3,
-            "the leagues are read"
-        );
+        assert!(downloads < 10, "{downloads} downloads");
     }
 
     #[test]

@@ -1,0 +1,3 @@
+# The settings files of the released versions are compared byte for byte with what the
+# application writes (src/settings.rs): never converted to the line endings of Windows.
+src/settings/*.toml text eol=lf

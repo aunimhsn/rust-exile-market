@@ -109,6 +109,9 @@ unsafe_code = "forbid"
 
 [workspace.lints.clippy]
 pedantic = { level = "warn", priority = -1 }
+# Outside the tests (clippy.toml): a missing value is handled, or its `expect` says why it is
+# there.
+unwrap_used = "warn"
 
 # The dependencies (image decoding, fonts, rendering) stay fast in debug builds;
 # only the code of the project is built without optimizations.

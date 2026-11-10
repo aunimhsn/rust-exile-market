@@ -632,7 +632,7 @@ mod tests {
     }
 
     #[test]
-    fn a_missing_value_takes_its_default_and_an_unknown_one_is_ignored() {
+    fn a_missing_value_takes_its_default() {
         let directory = TestDirectory::new("partial");
         directory.write("always_on_top = true\nleague = \"Forbidden Rites\"\n");
 
@@ -706,5 +706,93 @@ mod tests {
         file.save(&changed());
 
         assert_eq!(file.load(), Settings::default());
+    }
+
+    /// Every setting of the version 0.1.0, away from its default.
+    fn every_setting() -> Settings {
+        let mut settings = changed();
+        settings.apply(SettingChange::HotkeyKeys(Shortcut::CHOICES[2]));
+        settings.set_league(&League::new("HC Forbidden Rites"));
+        settings.close_new_league(&League::new("Runes of Aldur"));
+        settings.close_new_league(&League::new("HC Runes of Aldur"));
+        settings.close_update(
+            &release("0.2.0"),
+            LeagueOfTheMoment::League("Forbidden Rites"),
+        );
+        settings
+    }
+
+    /// The file the version 0.1.0 writes, every setting changed. Once that version is out,
+    /// this file no longer changes: the players have it. A version that changes the format
+    /// then adds its own file and test, and still reads this one.
+    const VERSION_0_1_0: &str = include_str!("settings/settings-v0.1.0.toml");
+
+    /// The core review of 2026-11-10: nothing fixed the file of a released version.
+    #[test]
+    fn the_file_of_the_version_0_1_0_is_read_with_every_setting() {
+        let directory = TestDirectory::new("version-0-1-0");
+        directory.write(VERSION_0_1_0);
+
+        let settings = directory.file().load();
+
+        assert_eq!(settings, every_setting());
+        assert_eq!(settings.language(), LanguageSetting::French);
+        assert!(settings.always_on_top());
+        assert!(!settings.hotkey().on);
+        assert_eq!(settings.hotkey().keys.to_string(), "Alt+G");
+        assert_eq!(settings.league(), Some(League::new("HC Forbidden Rites")));
+        assert_eq!(
+            settings.closed_new_leagues(),
+            ["Runes of Aldur", "HC Runes of Aldur"].map(League::new)
+        );
+        let closed = settings.closed_update().expect("a closed update");
+        assert_eq!(closed.league.as_deref(), Some("Forbidden Rites"));
+        assert!(directory.0.join(FILE_NAME).exists(), "not set aside");
+    }
+
+    /// Until a version changes the format on purpose, with its own file next to this one.
+    #[test]
+    fn this_version_writes_the_file_of_the_version_0_1_0() {
+        let directory = TestDirectory::new("version-0-1-0-written");
+
+        directory.file().save(&every_setting());
+
+        let written = fs::read_to_string(directory.0.join(FILE_NAME)).unwrap();
+        assert_eq!(written, VERSION_0_1_0);
+    }
+
+    /// The file of a later version, read by this one after a downgrade: what it doesn't
+    /// know is left out, at the root and in a table, and the rest is read. A
+    /// `deny_unknown_fields` added by mistake would lose every setting instead.
+    #[test]
+    fn the_settings_of_a_later_version_are_ignored_and_the_others_are_read() {
+        let directory = TestDirectory::new("later-version");
+        let later = VERSION_0_1_0
+            .replacen("language", "future_setting = 1\nlanguage", 1)
+            .replacen("[hotkey]", "[hotkey]\nsound = true", 1)
+            .replacen("[closed_update]", "[closed_update]\nnotes = [1, 2]", 1);
+        directory.write(&format!("{later}\n[overlay]\nopacity = 0.8\n"));
+
+        let settings = directory.file().load();
+
+        assert_eq!(settings, every_setting());
+        assert!(directory.0.join(FILE_NAME).exists(), "not set aside");
+    }
+
+    /// A settings folder that can't be made, whatever the rights of the user running the
+    /// tests: its path goes through an ordinary file.
+    #[test]
+    fn a_failed_write_keeps_the_settings_of_the_session_without_a_panic() {
+        let directory = TestDirectory::new("blocked");
+        fs::create_dir_all(&directory.0).unwrap();
+        fs::write(directory.0.join("blocked"), "").unwrap();
+        let file = SettingsFile {
+            directory: Some(directory.0.join("blocked").join("settings")),
+        };
+
+        file.save(&changed());
+
+        assert_eq!(file.load(), Settings::default());
+        assert_eq!(fs::read(directory.0.join("blocked")).unwrap(), b"");
     }
 }

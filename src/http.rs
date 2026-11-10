@@ -82,38 +82,57 @@ impl From<serde_json::Error> for HttpError {
 /// repository with each request, as the services ask. It only speaks HTTPS and follows no
 /// redirection: every address is written in the code, so that a request never leaves for
 /// another host, nor in clear text. A redirection is then an answer of its status (ureq
-/// gives it as a success): [`get_json`] makes it an error.
+/// gives it as a success): [`get_text`] makes it an error.
 #[must_use]
 pub fn agent() -> ureq::Agent {
+    agent_over(Scheme::HttpsOnly)
+}
+
+/// Whether an agent refuses the addresses in clear text: always, but for the local server of
+/// the tests.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Scheme {
+    HttpsOnly,
+    #[cfg(test)]
+    AlsoHttp,
+}
+
+fn agent_over(scheme: Scheme) -> ureq::Agent {
     let config = ureq::Agent::config_builder()
-        .https_only(true)
+        .https_only(scheme == Scheme::HttpsOnly)
         .max_redirects(0)
         .timeout_global(Some(TIMEOUT))
         .timeout_connect(Some(CONNECT_TIMEOUT))
-        .user_agent(format!(
-            "{}/{} (+{})",
-            crate::FOLDER_NAME,
-            crate::VERSION,
-            env!("CARGO_PKG_REPOSITORY")
-        ))
+        .user_agent(user_agent())
         .build();
     ureq::Agent::new_with_config(config)
 }
 
-/// The JSON answer of `url` with the parameters `query`.
-pub fn get_json<T: DeserializeOwned>(
+/// What the application says it is in each request: its name, its version and the address
+/// of its repository.
+#[must_use]
+pub fn user_agent() -> String {
+    format!(
+        "{}/{} (+{})",
+        crate::FOLDER_NAME,
+        crate::VERSION,
+        env!("CARGO_PKG_REPOSITORY")
+    )
+}
+
+/// The text of the answer of `url` with the parameters `query`.
+pub fn get_text(
     agent: &ureq::Agent,
     url: &str,
     query: &[(&str, &str)],
-) -> Result<T, HttpError> {
+) -> Result<String, HttpError> {
     let mut response = agent.get(url).query_pairs(query.iter().copied()).call()?;
     let status = response.status().as_u16();
-    // Not followed (see `agent`), and not the JSON asked for.
+    // Not followed (see `agent`), and not the answer asked for.
     if (300..400).contains(&status) {
         return Err(ureq::Error::StatusCode(status).into());
     }
-    let text = read_text(response.body_mut())?;
-    Ok(serde_json::from_str(&text)?)
+    Ok(read_text(response.body_mut())?)
 }
 
 /// The longest body read of an error status: a line of JSON that says why.
@@ -275,8 +294,8 @@ impl Backoff {
 pub mod tests {
     use std::io::{BufRead, BufReader, Write as _};
     use std::net::TcpListener;
-    use std::sync::Arc;
     use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::{Arc, Mutex};
 
     use flate2::Compression;
     use flate2::write::GzEncoder;
@@ -286,20 +305,50 @@ pub mod tests {
     /// The address of a local server that answers each request with the status line and the
     /// headers `head` and with `body`, and the number of requests it got.
     pub fn server(head: impl Into<String>, body: Vec<u8>) -> (String, Arc<AtomicUsize>) {
+        let (address, requests, _) = recording_server(head, body);
+        (address, requests)
+    }
+
+    /// The lines of the requests a local server got, a request each: the request line, then
+    /// its headers, their names in lowercase.
+    pub type Heads = Arc<Mutex<Vec<Vec<String>>>>;
+
+    /// [`server`], which also keeps the lines of each request.
+    pub fn recording_server(
+        head: impl Into<String>,
+        body: Vec<u8>,
+    ) -> (String, Arc<AtomicUsize>, Heads) {
         let head = head.into();
         let listener = TcpListener::bind("127.0.0.1:0").expect("a local port");
         let address = listener.local_addr().expect("its address");
         let requests = Arc::new(AtomicUsize::new(0));
         let counted = Arc::clone(&requests);
+        let heads = Heads::default();
+        let kept = Arc::clone(&heads);
         thread::spawn(move || {
             for stream in listener.incoming() {
                 let Ok(mut stream) = stream else { return };
-                counted.fetch_add(1, Ordering::SeqCst);
                 let mut request = BufReader::new(stream.try_clone().expect("the same stream"));
+                let mut lines = Vec::new();
                 let mut line = String::new();
                 while request.read_line(&mut line).is_ok_and(|read| read > 2) {
+                    // The name of a header in lowercase, its value as it was sent.
+                    let sent = line.trim_end();
+                    lines.push(match sent.split_once(':') {
+                        Some((name, value)) => format!("{}:{value}", name.to_ascii_lowercase()),
+                        None => sent.to_owned(),
+                    });
                     line.clear();
                 }
+                // The body of a `POST`, read whole before the answer.
+                let length = header(&lines, "content-length").and_then(|text| text.parse().ok());
+                let mut body_sent = vec![0; length.unwrap_or(0)];
+                if request.read_exact(&mut body_sent).is_err() {
+                    continue;
+                }
+                // Before the count, which the tests wait for.
+                kept.lock().expect("the lines").push(lines);
+                counted.fetch_add(1, Ordering::SeqCst);
                 let head = format!(
                     "HTTP/1.1 {head}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
                     body.len()
@@ -309,7 +358,7 @@ pub mod tests {
                 let _ = stream.write_all(&body);
             }
         });
-        (format!("http://{address}/"), requests)
+        (format!("http://{address}/"), requests, heads)
     }
 
     /// The address of a local server that answers with `text`, compressed.
@@ -322,11 +371,15 @@ pub mod tests {
 
     /// The agent of the application, but for a local server, which doesn't speak HTTPS.
     pub fn local_agent() -> ureq::Agent {
-        let config = ureq::Agent::config_builder()
-            .max_redirects(0)
-            .timeout_global(Some(Duration::from_secs(10)))
-            .build();
-        ureq::Agent::new_with_config(config)
+        agent_over(Scheme::AlsoHttp)
+    }
+
+    /// The header `name` (in lowercase) of a request kept by [`recording_server`].
+    pub fn header<'a>(request: &'a [String], name: &str) -> Option<&'a str> {
+        request.iter().find_map(|line| {
+            let (key, value) = line.split_once(':')?;
+            (key == name).then_some(value.trim())
+        })
     }
 
     /// The code review of the fixes of the audit: ureq gives a redirection it doesn't follow
@@ -336,7 +389,7 @@ pub mod tests {
         let (elsewhere, followed) = server("200 OK", b"[1]".to_vec());
         let (url, requests) = server(format!("302 Found\r\nLocation: {elsewhere}"), Vec::new());
 
-        let answer = get_json::<Vec<u8>>(&local_agent(), &url, &[]);
+        let answer = get_text(&local_agent(), &url, &[]);
 
         assert!(
             matches!(
@@ -353,9 +406,9 @@ pub mod tests {
     fn an_answer_that_isnt_utf8_is_read_with_the_replacement_character() {
         let (url, _) = server("200 OK", b"[\"\xff\"]".to_vec());
 
-        let answer = get_json::<Vec<String>>(&local_agent(), &url, &[]);
+        let answer = get_text(&local_agent(), &url, &[]);
 
-        assert_eq!(answer.expect("a text"), ["\u{fffd}"]);
+        assert_eq!(answer.expect("a text"), "[\"\u{fffd}\"]");
     }
 
     /// The security audit of 2026-11-10: the limit of ureq counts the compressed bytes.
@@ -395,7 +448,7 @@ pub mod tests {
         let agent = agent();
 
         assert_eq!(agent.config().max_redirects(), 0);
-        let answer = get_json::<Vec<u8>>(&agent, "http://127.0.0.1:9/", &[]);
+        let answer = get_text(&agent, "http://127.0.0.1:9/", &[]);
         assert!(
             matches!(
                 answer,
@@ -403,6 +456,64 @@ pub mod tests {
             ),
             "{answer:?}"
         );
+    }
+
+    /// The network review of 2026-11-10: both usage documents ask for it, and nothing checked
+    /// what is really sent.
+    #[test]
+    fn each_request_names_the_application_its_version_and_its_repository() {
+        let (url, _, heads) = recording_server("200 OK", b"[1]".to_vec());
+
+        get_text(&local_agent(), &url, &[]).expect("an answer");
+
+        let heads = heads.lock().unwrap();
+        let sent = header(&heads[0], "user-agent").expect("a User-Agent");
+        assert_eq!(sent, user_agent());
+        assert_eq!(
+            user_agent(),
+            format!(
+                "exile-market/{} (+https://github.com/aunimhsn/rust-exile-market)",
+                env!("CARGO_PKG_VERSION")
+            )
+        );
+    }
+
+    /// The trade site sets a `POESESSID` cookie in each answer, which must never be sent
+    /// back (`docs/trade-site-usage.md`). Only the `cookies` feature of ureq being off
+    /// keeps it so, and the features of a crate are those every crate of the build asks
+    /// for: a dependency turning it on would send the cookie without a line changed here.
+    #[test]
+    fn a_cookie_set_by_an_answer_is_never_sent_back() {
+        let (url, requests, heads) = recording_server(
+            "200 OK\r\nSet-Cookie: POESESSID=abc; Path=/",
+            b"[1]".to_vec(),
+        );
+        let agent = local_agent();
+
+        for _ in 0..2 {
+            get_text(&agent, &url, &[]).expect("an answer");
+        }
+
+        assert_eq!(requests.load(Ordering::SeqCst), 2);
+        for request in heads.lock().unwrap().iter() {
+            assert_eq!(header(request, "cookie"), None, "{request:?}");
+        }
+    }
+
+    /// Only "not sooner" is checked: "at once" would depend on how busy the machine is. The
+    /// time is counted from before the first request, which the pace counts from: an instant
+    /// taken after each wait could come late, and the gap to the next one look too short.
+    #[test]
+    fn the_requests_are_spaced_by_the_interval_at_least() {
+        const INTERVAL: Duration = Duration::from_millis(20);
+        let mut pace = Pace::new(INTERVAL);
+        let start = Instant::now();
+
+        pace.wait();
+        pace.wait();
+        assert!(start.elapsed() >= INTERVAL);
+        pace.wait();
+        assert!(start.elapsed() >= INTERVAL * 2);
     }
 
     #[test]
