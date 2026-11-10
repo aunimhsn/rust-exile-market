@@ -766,3 +766,45 @@ fn the_window_of_wine_covers_the_screen_as_it_is_now() {
     assert!(!covers_screen(window.0, window.1, (3840, 1080)));
     assert!(!covers_screen((1, 0), window.1, (1920, 1080)));
 }
+
+/// The desktop review of 2026-11-10, assumption 6: nothing tested which windows are taken
+/// for the one Wine holds the pointer in. A window under the game isn't over it.
+#[test]
+fn only_the_windows_above_the_game_are_looked_at() {
+    let children = [(MAIN, 'a'), (GAME, 'b'), (HELPER, 'c'), (OVERLAY, 'd')];
+
+    assert_eq!(above(&children, GAME), [(HELPER, 'c'), (OVERLAY, 'd')]);
+    assert_eq!(above(&children, OVERLAY), []);
+    assert_eq!(above(&children, MAIN).len(), 3);
+    // The game gone meanwhile, or framed by a window that isn't a child of the root.
+    assert_eq!(above(&children, 99), []);
+    assert_eq!(above::<char>(&[], GAME), []);
+}
+
+/// As a probe found it in the owner's game on 2026-11-07: `InputOnly`, override-redirect,
+/// viewable. A window that is drawn, that the window manager manages or
+/// that is hidden isn't it: the window over the game itself is above the game.
+#[test]
+fn the_window_of_wine_is_never_drawn_unmanaged_and_shown() {
+    let input_only = WindowClass::INPUT_ONLY;
+    let shown = MapState::VIEWABLE;
+
+    assert!(may_hold_the_pointer(input_only, true, shown));
+    assert!(!may_hold_the_pointer(
+        WindowClass::INPUT_OUTPUT,
+        true,
+        shown
+    ));
+    assert!(!may_hold_the_pointer(
+        WindowClass::COPY_FROM_PARENT,
+        true,
+        shown
+    ));
+    assert!(!may_hold_the_pointer(input_only, false, shown));
+    assert!(!may_hold_the_pointer(input_only, true, MapState::UNMAPPED));
+    assert!(!may_hold_the_pointer(
+        input_only,
+        true,
+        MapState::UNVIEWABLE
+    ));
+}
