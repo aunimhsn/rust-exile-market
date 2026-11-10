@@ -7,7 +7,7 @@
 
 use super::{
     Affix, AffixSet, BaseSpawn, Candidate, Copied, CopiedLine, CopiedTier, ROUNDING, Range, Room,
-    TABLES, Table, first_of_its_modifier, holds, tiers_on_base,
+    Table, first_of_its_modifier, holds, tiers_on_base,
 };
 use crate::item::{Modifier, ModifierOrigin};
 
@@ -124,19 +124,21 @@ struct Placement<'a> {
 /// them can't hold its line alone. A reading that differs from the best one only by the tier of
 /// a modifier of a split line, the neighbouring tier the best one gives it too, is the best one.
 pub(super) fn doubts(
+    tables: &[Table],
     base: &BaseSpawn,
     item_level: Option<u32>,
     modifiers: &[Modifier],
     copied: &[Option<Copied<'_>>],
     best: &Best<'_>,
 ) -> Doubts {
-    doubts_within(base, item_level, modifiers, copied, best, MAX_STEPS)
+    let item = (base, item_level);
+    doubts_within(tables, item, modifiers, copied, best, MAX_STEPS)
 }
 
 /// [`doubts`], in at most `max_steps` steps.
 fn doubts_within(
-    base: &BaseSpawn,
-    item_level: Option<u32>,
+    tables: &[Table],
+    (base, item_level): (&BaseSpawn, Option<u32>),
     modifiers: &[Modifier],
     copied: &[Option<Copied<'_>>],
     best: &Best<'_>,
@@ -170,7 +172,7 @@ fn doubts_within(
             });
         }
     }
-    let placements = placements(&TABLES, base, item_level, &lines, &values);
+    let placements = placements(tables, base, item_level, &lines, &values);
     let ground = Ground::new(
         &lines,
         &values,

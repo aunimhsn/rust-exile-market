@@ -613,6 +613,39 @@ pub fn trade_tiers(
     let Some(base) = bases::spawn(language, base_type) else {
         return Vec::new();
     };
+    let item = TradeItem {
+        language,
+        base_type,
+        base,
+        item_level,
+    };
+    trade_tiers_in(&TABLES, &item, modifiers, limits, sanctified)
+}
+
+/// The item whose lines are read from the in-game trade: the language of its lines, its base
+/// (its name, for the log) and its level.
+struct TradeItem<'a> {
+    language: Language,
+    base_type: &'a str,
+    base: &'a BaseSpawn,
+    item_level: Option<u32>,
+}
+
+/// [`trade_tiers`] among `tables`: those of the game, or those of a test, so that the search
+/// is tested on tables a patch of the game doesn't change.
+fn trade_tiers_in(
+    tables: &[Table],
+    item: &TradeItem<'_>,
+    modifiers: &[Modifier],
+    limits: AffixLimits,
+    sanctified: bool,
+) -> Vec<FoundTiers> {
+    let &TradeItem {
+        language,
+        base_type,
+        base,
+        item_level,
+    } = item;
     let copied: Vec<Option<Copied<'_>>> = modifiers
         .iter()
         .map(|modifier| {
@@ -624,7 +657,7 @@ pub fn trade_tiers(
                 .flatten()
         })
         .collect();
-    let candidates = candidates(modifiers, &copied, base, item_level, !sanctified);
+    let candidates = candidates(tables, modifiers, &copied, base, item_level, !sanctified);
     let known = |affix| {
         modifiers
             .iter()
@@ -659,7 +692,7 @@ pub fn trade_tiers(
             room,
             fits_room: key.room,
         };
-        let doubts = summed_readings::doubts(base, item_level, modifiers, &copied, &best);
+        let doubts = summed_readings::doubts(tables, base, item_level, modifiers, &copied, &best);
         doubts.outcome.log(base_type);
         room_in_doubt = doubts.other_room;
         for line in doubts.lines {
@@ -1039,22 +1072,23 @@ enum AffixSet {
     Both,
 }
 
-/// The most lines a modifier of the tables has: a hybrid of three lines.
-static MOST_LINES: LazyLock<usize> = LazyLock::new(|| {
-    TABLES
+/// The most lines a modifier of `tables` has: a hybrid of three lines in those of the game.
+fn most_lines(tables: &[Table]) -> usize {
+    tables
         .iter()
         .map(|table| table.lines.len())
         .max()
         .unwrap_or(1)
-});
+}
 
-/// Every modifier or run of modifiers among `modifiers` whose values the tables of `base`
+/// Every modifier or run of modifiers among `modifiers` whose values those of `tables` on `base`
 /// hold, the tier the worst among those `item_level` allows, `copied` giving the lines
 /// of each modifier to read (none for a modifier that isn't, or whose lines have no stat of the
 /// game data): one modifier, or up to as many as the lines of a hybrid, of the same origin;
 /// then, when they `may_split`, each way one of their lines adds up two modifiers
 /// ([`splits`]). The shorter first at each start.
 fn candidates(
+    tables: &[Table],
     modifiers: &[Modifier],
     copied: &[Option<Copied<'_>>],
     base: &BaseSpawn,
@@ -1062,12 +1096,13 @@ fn candidates(
     may_split: bool,
 ) -> Vec<Candidate> {
     let tie = Tie::Worst { item_level };
+    let most_lines = most_lines(tables);
     let mut candidates = Vec::new();
     for (start, first) in modifiers.iter().enumerate() {
         let mut lines = Vec::new();
         // The index among `modifiers` of the modifier of each line.
         let mut owners = Vec::new();
-        let run = modifiers.iter().zip(copied).skip(start).take(*MOST_LINES);
+        let run = modifiers.iter().zip(copied).skip(start).take(most_lines);
         for (end, (modifier, part)) in (start + 1..).zip(run) {
             let Some(part) = part.as_ref().filter(|_| modifier.origin == first.origin) else {
                 break;
@@ -1086,7 +1121,7 @@ fn candidates(
             ]
             .into_iter()
             .filter_map(|(affix, table_affix)| {
-                Some((affix, find(&TABLES, table_affix, base, &joined, tie)?))
+                Some((affix, find(tables, table_affix, base, &joined, tie)?))
             })
             .collect();
             let fractured = first.origin == Some(ModifierOrigin::Fractured);
@@ -1103,7 +1138,7 @@ fn candidates(
                 if !may_split || owners.iter().filter(|&&other| other == owner).count() != 1 {
                     continue;
                 }
-                for split in splits(&TABLES, base, &joined, (summed, owner), item_level) {
+                for split in splits(tables, base, &joined, (summed, owner), item_level) {
                     candidates.push(Candidate {
                         modifiers: start..end,
                         fractured,
