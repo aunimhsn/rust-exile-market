@@ -3893,3 +3893,48 @@ fn the_minimum_of_a_decimal_stat_of_a_rare_fits_in_its_field() {
         armour.contains(&"□ 12.2 de Vie Régénérée par seconde ≥11 [0.32 T6 9.1–13]".to_owned())
     );
 }
+
+#[test]
+fn the_filters_of_an_item_by_default_compare_its_stats_or_ask_for_one() {
+    use crate::ui::StatChecks::{self, Checked, NoneToCheck, Unchecked};
+
+    // As the item view decides them, from the filters by default.
+    let checks = |file: &str| -> StatChecks {
+        let (_, text) = crate::item::test_items::ALL
+            .iter()
+            .find(|(name, _)| *name == file)
+            .expect("a test item");
+        let item = parse(text);
+        let base = base_type(&item);
+        let lines = CopiedLines::new(
+            item.language(),
+            item.modifiers(),
+            &LineStats::default(),
+            None,
+        );
+        let line_stats = LineStats::new(item.language(), item.modifiers(), None);
+        let tiers = TierRolls::new(item.language(), item.modifiers(), base, item.item_level());
+        let stats = Stats::new(&item, &lines, &line_stats, &tiers, base);
+        let all = stats.filters(&Filters::default());
+        StatChecks::of(&line_stats.search_filters(&all), &all)
+    };
+
+    for (file, expected) in [
+        // Its pseudo totals.
+        ("en-owner-rare-ring-breach.txt", Checked),
+        // Its DPS.
+        ("en-owner-rare-two-hand-mace-fractured.txt", Checked),
+        // Its item rarity and its drop chance.
+        ("en-owner-rare-waystone.txt", Checked),
+        // A magic item keeps its modifiers checked.
+        ("en-magic-mace.txt", Checked),
+        // No pseudo total: every modifier unchecked.
+        ("en-owner-rare-jewel-time-lost.txt", Unchecked),
+        // Only the count of its unrevealed modifiers checked, which compares nothing.
+        ("en-owner-rare-focus-unrevealed.txt", Unchecked),
+        // Unidentified: no line to check.
+        ("en-plain-magic-jewel-unidentified.txt", NoneToCheck),
+    ] {
+        assert_eq!(checks(file), expected, "{file}");
+    }
+}

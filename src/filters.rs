@@ -34,6 +34,20 @@ pub enum FilterKey {
     Pseudo(Pseudo),
 }
 
+impl FilterKey {
+    /// It can compare a stat of the item: a line, a pseudo total (not the count of its
+    /// unrevealed modifiers) or a property that is a stat; not its base type.
+    #[must_use]
+    pub fn compares_stats(self) -> bool {
+        match self {
+            Self::Stat(_) => true,
+            Self::BaseType => false,
+            Self::Property(property) => property.is_stat(),
+            Self::Pseudo(pseudo) => pseudo.compares_stats(),
+        }
+    }
+}
+
 /// A property of the item the trade site searches with a minimum and a maximum.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Property {

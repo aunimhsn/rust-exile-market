@@ -20,9 +20,10 @@
 //! least the physical one. The pseudo totals start checked, and the lines they add up
 //! unchecked. Every modifier of a rare starts unchecked, like Exiled Exchange 2: its value lies
 //! in the few modifiers the buyer needs, which the application can't tell, and several checked
-//! at once leave few offers; its pseudo totals and its DPS stay checked. A desecrated modifier not revealed yet is a line of its group without filter, on a
-//! band of the desecrated green; its item gets a filter of its number of unrevealed modifiers,
-//! and its other stats start unchecked, with a note under them. A line of a Time-Lost jewel is
+//! at once leave few offers; its pseudo totals and its DPS stay checked. A desecrated
+//! modifier not revealed yet is a line of its group without filter, on a band of the
+//! desecrated green; its item gets a filter of its number of unrevealed modifiers, and its
+//! other stats start unchecked, with a note under them. A line of a Time-Lost jewel is
 //! written without the words of its radius, a tag of the passive skills they name after its
 //! range.
 //!

@@ -349,6 +349,7 @@ fn a_unique_is_searched_with_its_stats_and_the_other_items_with_all_their_filter
         ids: vec!["explicit.stat_3299347043".to_owned()],
         minimum: Some(45.0),
         maximum: None,
+        compares: true,
     }];
     let properties = vec![PropertyFilter {
         property: Property::ItemLevel,

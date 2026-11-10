@@ -163,6 +163,7 @@ fn the_offers_tell_whether_their_search_compared_the_stats_of_the_item() {
             ids: vec!["explicit.stat_3917489142".to_owned()],
             minimum: Some(10.0),
             maximum: None,
+            compares: true,
         });
     }
 

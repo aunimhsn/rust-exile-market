@@ -121,6 +121,7 @@ impl TradeStat {
             ids: self.ids.clone(),
             minimum,
             maximum,
+            compares: true,
         }
     }
 }
@@ -409,6 +410,7 @@ impl LineStats {
                     ids: vec![pseudo.trade_id().to_owned()],
                     minimum: minimum.map(written),
                     maximum: maximum.map(written),
+                    compares: pseudo.compares_stats(),
                 })
             }
             FilterKey::Stat(_) | FilterKey::BaseType | FilterKey::Property(_) => None,

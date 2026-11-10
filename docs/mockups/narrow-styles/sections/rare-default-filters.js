@@ -6,7 +6,7 @@
 // keep every modifier checked. When no stat is checked (no pseudo total, no DPS, no modifier: a jewel, or a
 // player who unchecked them), the search still runs, but its offers give no estimate: the price block asks for a
 // modifier, before the search and after it, so that the price of the worst items of the base never reads as the
-// price of the item.
+// price of the item; when none can be checked (an unidentified item), it says nothing more.
 // Turned down on 2026-11-10: the modifiers of tier 1 or 2 checked, two at most by their roll over their tiers,
 // then in a group "at least 2 of them" (a `count` group of the trade site): a tier is the game's measure of a
 // roll, not what the market pays for, nor what the player needs (owner).
@@ -148,6 +148,9 @@ const ruleJewelRows = [
   { mod: "8% increased Attack Speed", check: true, min: 7, single: true, range: "7–8", share: 1 },
 ];
 
+// An unidentified magic jewel: no line, nothing to check; the price block says nothing more (code review of
+// 17e3f, owner's choice on 2026-11-10), rather than ask for a modifier the player can't check.
+const UNIDENTIFIED_JEWEL = { rarity: "magic", name: "Emerald", cls: "Jewels", tags: ["Unidentified", "ilvl 75"], statsLabel: "Stats (0)" };
 // The jewel in French.
 const JEWEL_FR = { ...JEWEL, fr: true, name: "Braise de la couvée", base: "Rubis", cls: "Joyaux", tags: ["niv. 81"], statsLabel: "Statistiques (4)",
   tradeLabel: "Voir sur l'échange", tradeTitle: "Ouvrir la recherche sur le site d'échange" };
@@ -177,6 +180,9 @@ SECTIONS.unshift(["Filters checked on a rare (17e3f): option 1, every modifier u
   ["A jewel · Rule · searched anyway: its offers, no estimate", ruleWin(JEWEL, ruleJewelRows, true, offers(JEWEL_OFFERS))],
   ["A jewel · Rule · the player checks a modifier: back to the usual text", ruleWin(JEWEL, jewelOneChecked(ruleJewelRows), false, offers({ state: "idle" }))],
   ["A jewel · Rule · en français", ruleWin(JEWEL_FR, ruleJewelRowsFr, true, offers({ state: "idle" }, "fr"))],
+  ["An unidentified jewel · Rule · nothing to check: no second line", win(topBar(),
+    item({ ...UNIDENTIFIED_JEWEL, filters: "1 filter", stats: [{ group: "Item", min: true }, { mod: "Base: Emerald", check: true }, { mod: "Item level: 75", check: false, min: 75 }] }, true),
+    price({ lines: ["No market price for magic items."] }), offers({ state: "idle" }), foot())],
   ["Your Breach ring · Today", ruleWin(RULE_BREACH, ruleBreachRows, false)],
   ["Your Breach ring · Rule · its three pseudo totals", ruleWin(RULE_BREACH, ruleBreachRows, true)],
   ["Your amulet · Today", ruleWin(AMULET_DESECRATED, ruleAmuletRows, false)],

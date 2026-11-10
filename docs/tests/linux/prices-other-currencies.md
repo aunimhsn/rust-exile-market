@@ -26,7 +26,7 @@ Jeu en plein écran fenêtré, Ctrl+D sur l'objet (ou Ctrl+C, l'application ouve
 ## 3. Bijou avec une qualité de catalyseur
 
 1. Ctrl+D sur une amulette ou une bague avec une qualité de catalyseur (« Q 40% »).
-2. Déplier les stats, laisser la qualité cochée avec son minimum, lancer la recherche.
+2. Déplier les stats, cocher la qualité (décochée au départ) avec son minimum, cocher aussi un modificateur (sans stat cochée, un rare n'a pas d'estimation, donc pas d'offre suspecte), lancer la recherche.
 3. Attendu : une offre d'un autre type de qualité est pâle, avec « · Caster quality » (ou « Attack », « Minion »…) en gris après le nom de la monnaie ; une offre suspecte a son montant barré et « ? » après le nom, un peu détaché.
 
 ## 4. En français

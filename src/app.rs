@@ -35,8 +35,8 @@ use crate::trade::{ItemNamesWatch, Refusal};
 use crate::ui::{
     self, Bubble, BubbleAction, BugReportAction, BugReportPanel, EmptyState, ItemBlock,
     ItemBlockAction, LeagueList, LeagueListAction, OffersAction, OffersBlock, PriceBlock,
-    PriceDownload, ResizeEdges, SettingsPanel, Stats, StatusBar, TitleBar, TitleBarAction,
-    TradeStatus, UnreadableItem, WarningBand,
+    PriceDownload, ResizeEdges, SettingsPanel, StatChecks, Stats, StatusBar, TitleBar,
+    TitleBarAction, TradeStatus, UnreadableItem, WarningBand,
 };
 use crate::update::{LeagueOfTheMoment, Release, UpdateCheck};
 
@@ -704,6 +704,17 @@ fn search_filters(
     item: &Item,
     filters: &Filters,
 ) -> SearchFilters {
+    search_filters_and_checks(session, shown, item, filters).0
+}
+
+/// The filters of the search of `item`, as [`search_filters`], and whether they compare its
+/// stats, or could.
+fn search_filters_and_checks(
+    session: &Session,
+    shown: &ShownItem,
+    item: &Item,
+    filters: &Filters,
+) -> (SearchFilters, StatChecks) {
     let stats = Stats::new(
         item,
         shown.lines(),
@@ -711,10 +722,13 @@ fn search_filters(
         shown.tiers(),
         session.filtered_base_type(item),
     );
-    SearchFilters {
+    let all = stats.filters(filters);
+    let search = SearchFilters {
         states: filters.lit_states_of(item).collect(),
-        ..shown.stats().search_filters(&stats.filters(filters))
-    }
+        ..shown.stats().search_filters(&all)
+    };
+    let checks = StatChecks::of(&search, &all);
+    (search, checks)
 }
 
 /// The blocks of the item shown, one under the other: the item with its filters, its price,
@@ -767,18 +781,17 @@ impl ItemView<'_> {
         .tradable(session.tradable(item))
         .stats(stats_open, session.filtered_base_type(item))
         .show(ui);
-        if action == Some(ItemBlockAction::CheckOnTrade) {
-            // With the filters as the player just left them.
-            let filters = search_filters(session, shown, item, filters);
-            if let Some(url) = session.trade_url(item, filters) {
-                ui.ctx().open_url(OpenUrl::new_tab(url));
-            }
+        // With the filters as the player just left them.
+        let (searched, checks) = search_filters_and_checks(session, shown, item, filters);
+        if action == Some(ItemBlockAction::CheckOnTrade)
+            && let Some(url) = session.trade_url(item, searched)
+        {
+            ui.ctx().open_url(OpenUrl::new_tab(url));
         }
         let league = session.league().map(League::name);
-        let stats_checked = search_filters(session, shown, item, filters).compares_stats();
         PriceBlock::new(item, fixed_price, prices, league, i18n)
             .estimate(estimate)
-            .stats_checked(stats_checked)
+            .stat_checks(checks)
             .show(ui);
         let offers_action = if let Some(kind) = kind {
             OffersBlock::new(offers, kind, reference, item, shown.lines(), i18n)
@@ -1469,6 +1482,7 @@ mod tests {
                     ids: vec!["explicit.stat_3917489142".to_owned()],
                     minimum: Some(10.0),
                     maximum: None,
+                    compares: true,
                 }],
             }),
         }
@@ -1633,7 +1647,7 @@ mod tests {
 
         let amulet = amulet();
         let now = Instant::now();
-        let estimated = |stats: bool| {
+        let estimated = |item: &Item, stats: bool| {
             let mut search = searched(Vec::new());
             if let (false, Query::Items(query)) = (stats, &mut search.query) {
                 query.stats.clear();
@@ -1644,17 +1658,21 @@ mod tests {
                 answer(divines(&[1.0, 1.1, 1.2]), 3, false, now),
                 SystemTime::now(),
             );
-            shown_estimate(
-                &offers,
-                &amulet,
-                &Err(NoFixedPrice::NotFixedName),
-                Some(WORTH),
-            )
+            shown_estimate(&offers, item, &Err(NoFixedPrice::NotFixedName), Some(WORTH))
         };
 
         // The offers of any item of its base say nothing of its price.
-        assert!(estimated(true).is_some());
-        assert_eq!(estimated(false), None);
+        assert!(estimated(&amulet, true).is_some());
+        assert_eq!(estimated(&amulet, false), None);
+        // A normal item, an exceptional base searched by its sockets or its quality, and a
+        // skill gem by its level: priced by them, not by modifiers.
+        for text in [
+            include_str!("item/test-items/en-owner-normal-quarterstaff-exceptional.txt"),
+            include_str!("item/test-items/en-owner-skill-gem.txt"),
+        ] {
+            let item = Item::parse(&CopiedItem::from_text(text).unwrap()).unwrap();
+            assert!(estimated(&item, false).is_some(), "{:?}", item.rarity());
+        }
     }
 
     #[test]

@@ -13,12 +13,14 @@ use super::images;
 use super::theme::{color, size, text};
 use super::widgets;
 use crate::estimate::{COUNTED, Estimate};
+use crate::filters::{Filter, FilterKey};
 use crate::format::{self, Currency};
 use crate::i18n::{Message, Translator};
 use crate::item::{Item, Rarity};
 use crate::prices::{Direction, Price, Rates};
 use crate::pricing::{Candidate, FixedPrice, NoFixedPrice};
 use crate::session::PricesState;
+use crate::trade::query::SearchFilters;
 
 /// The space above and under the block.
 const PADDING_Y: f32 = 12.0;
@@ -78,6 +80,47 @@ enum Fixed {
     /// An item of the currency exchange, on fewer than [`crate::prices::MIN_TRADES`] trades
     /// when `thin`.
     Exchange { thin: bool },
+}
+
+/// Whether the filters of the item, as the player left them, compare its stats.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StatChecks {
+    /// A line, a pseudo total, a DPS or a property that is a stat is checked.
+    Checked,
+    /// Some can be checked, none is.
+    Unchecked,
+    /// None can be: an unidentified item, or lines the trade site can't search.
+    NoneToCheck,
+}
+
+impl StatChecks {
+    /// The checks of `search`, the filters of a search, made of `all` the filters of the item,
+    /// checked or not.
+    #[must_use]
+    pub fn of(search: &SearchFilters, all: &[(FilterKey, Filter)]) -> Self {
+        if search.compares_stats() {
+            Self::Checked
+        } else if all.iter().any(|(key, _)| key.compares_stats()) {
+            Self::Unchecked
+        } else {
+            Self::NoneToCheck
+        }
+    }
+}
+
+/// The line under "No market price…" of an item of `rarity` without estimate, given the
+/// `checks` of its filters: a rare or magic item, priced by its stats, is estimated only from
+/// a search that compares some, so that it asks for one to be checked, and says nothing when
+/// none can be (the offers of any item of its base would say nothing of its price).
+fn estimate_hint(rarity: Rarity, checks: StatChecks) -> Option<Message> {
+    if !rarity.priced_by_stats() {
+        return Some(Message::SearchToEstimate);
+    }
+    match checks {
+        StatChecks::Checked => Some(Message::SearchToEstimate),
+        StatChecks::Unchecked => Some(Message::CheckToEstimate),
+        StatChecks::NoneToCheck => None,
+    }
 }
 
 /// Why the price block shows no price.
@@ -146,8 +189,8 @@ pub struct PriceBlock<'a> {
     item: &'a Item,
     price: Result<(FixedPrice<'a>, Rates), NoFixedPrice>,
     estimate: Option<Estimate<'a>>,
-    /// The filters of the item compare its stats, not only its base.
-    stats_checked: bool,
+    /// Whether the filters of the item compare its stats.
+    checks: StatChecks,
     prices: PricesState,
     league: Option<&'a str>,
     i18n: &'a Translator,
@@ -168,7 +211,7 @@ impl<'a> PriceBlock<'a> {
             item,
             price,
             estimate: None,
-            stats_checked: true,
+            checks: StatChecks::Checked,
             prices,
             league,
             i18n,
@@ -185,8 +228,8 @@ impl<'a> PriceBlock<'a> {
     /// Whether the filters of the item, as the player left them, compare its stats: without, a
     /// rare or magic item without estimate asks for a modifier to be checked.
     #[must_use]
-    pub fn stats_checked(mut self, checked: bool) -> Self {
-        self.stats_checked = checked;
+    pub fn stat_checks(mut self, checks: StatChecks) -> Self {
+        self.checks = checks;
         self
     }
 
@@ -399,14 +442,9 @@ impl<'a> PriceBlock<'a> {
             Notice::NoPriceFound(league) => i18n.no_price_found(league),
         };
         message(ui, &first, color::TEXT);
-        if let Notice::NoMarketPrice(rarity) = notice {
-            // The offers of any item of its base would say nothing of its price.
-            let unfiltered = !self.stats_checked && rarity.priced_by_stats();
-            let second = if unfiltered {
-                Message::CheckToEstimate
-            } else {
-                Message::SearchToEstimate
-            };
+        if let Notice::NoMarketPrice(rarity) = notice
+            && let Some(second) = estimate_hint(rarity, self.checks)
+        {
             ui.add_space(MESSAGE_GAP);
             message(ui, &i18n.text(second), color::WEAK);
         }
@@ -560,6 +598,33 @@ mod tests {
             view(&price, None, Rarity::Magic, KNOWN, Some("Standard")),
             PriceView::Notice(Notice::NoMarketPrice(Rarity::Magic))
         );
+    }
+
+    #[test]
+    fn a_rare_or_magic_item_asks_for_a_stat_to_estimate_it_and_says_nothing_when_none_can_be() {
+        use StatChecks::{Checked, NoneToCheck, Unchecked};
+
+        for rarity in [Rarity::Rare, Rarity::Magic] {
+            assert_eq!(
+                estimate_hint(rarity, Checked),
+                Some(Message::SearchToEstimate)
+            );
+            assert_eq!(
+                estimate_hint(rarity, Unchecked),
+                Some(Message::CheckToEstimate)
+            );
+            assert_eq!(estimate_hint(rarity, NoneToCheck), None, "{rarity:?}");
+        }
+        // Priced by their base, their quality or their level, not by modifiers.
+        for rarity in [Rarity::Normal, Rarity::Gem] {
+            for checks in [Checked, Unchecked, NoneToCheck] {
+                assert_eq!(
+                    estimate_hint(rarity, checks),
+                    Some(Message::SearchToEstimate),
+                    "{rarity:?} {checks:?}"
+                );
+            }
+        }
     }
 
     #[test]

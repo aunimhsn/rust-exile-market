@@ -19,8 +19,8 @@ Tu avais trouvé le souci au test libre de 14b2 : Ctrl+D sur A, un min tapé, Ct
 
 ## Les tests
 
-1. **Le cas trouvé** : **Ctrl+D** sur A, **« Show N stats »**, tape `12` dans le **min** d'une stat et décoche une autre stat. Puis **Ctrl+D** sur B, puis de nouveau sur A.
-   ✅ B arrive avec ses filtres par défaut ; A revient avec son `12` et sa stat décochée.
+1. **Le cas trouvé** : **Ctrl+D** sur A, **« Show N stats »**, coche une stat et tape `12` dans son **min**, puis décoche un total pseudo (ou coche une autre stat, si A n'en a pas). Puis **Ctrl+D** sur B, puis de nouveau sur A.
+   ✅ B arrive avec ses filtres par défaut ; A revient avec son `12` et ton autre choix.
 
 2. **Les offres** : sur A, clique sur la **loupe**, et attends les offres. **Ctrl+D** sur B, puis sur A.
    ✅ A revient avec ses offres et leur âge (« searched …s ago »), sans nouvelle recherche.

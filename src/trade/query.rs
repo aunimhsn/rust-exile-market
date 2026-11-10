@@ -103,8 +103,9 @@ impl SearchFilters {
         !self.stats.is_empty() || self.properties.iter().any(PropertyFilter::limits_anything)
     }
 
-    /// Something compares the stats of the item with the offers: a line, a pseudo total, or a
-    /// property that is a stat (its DPS, a property of a waystone or of a gem) with a limit.
+    /// Something compares the stats of the item with the offers: a line, a pseudo total (not
+    /// the count of its unrevealed modifiers), or a property that is a stat (its DPS, a
+    /// property of a waystone or of a gem) with a limit.
     /// Without, the offers are any items of its base, whose price says nothing of its own.
     #[must_use]
     pub fn compares_stats(&self) -> bool {
@@ -115,7 +116,7 @@ impl SearchFilters {
 /// Whether `stats` and `properties` compare the stats of the item: see
 /// [`SearchFilters::compares_stats`].
 fn compares_stats(stats: &[StatFilter], properties: &[PropertyFilter]) -> bool {
-    !stats.is_empty()
+    stats.iter().any(|stat| stat.compares)
         || properties
             .iter()
             .any(|filter| filter.property.is_stat() && filter.limits_anything())
@@ -179,6 +180,9 @@ pub struct StatFilter {
     pub ids: Vec<String>,
     pub minimum: Option<f64>,
     pub maximum: Option<f64>,
+    /// It compares a stat of the item: a line or a pseudo total, not the count of its
+    /// unrevealed modifiers, which only narrows the items of its base. Not sent.
+    pub compares: bool,
 }
 
 impl StatFilter {
@@ -441,11 +445,13 @@ mod tests {
                     ids: vec!["explicit.stat_3917489142".to_owned()],
                     minimum: Some(55.0),
                     maximum: None,
+                    compares: true,
                 },
                 StatFilter {
                     ids: vec!["explicit.stat_3261801346".to_owned()],
                     minimum: None,
                     maximum: None,
+                    compares: true,
                 },
             ],
         };
@@ -488,11 +494,13 @@ mod tests {
                     ],
                     minimum: Some(150.0),
                     maximum: Some(200.0),
+                    compares: true,
                 },
                 StatFilter {
                     ids: vec!["explicit.stat_2250533757".to_owned()],
                     minimum: None,
                     maximum: Some(-15.0),
+                    compares: true,
                 },
             ],
         };
@@ -527,6 +535,7 @@ mod tests {
                 ],
                 minimum: None,
                 maximum: None,
+                compares: true,
             }],
         };
 
@@ -724,6 +733,7 @@ mod tests {
             ids: vec!["explicit.stat_3917489142".to_owned()],
             minimum: None,
             maximum: None,
+            compares: true,
         };
 
         // The base alone, or narrowed by its item level, its sockets, its quality or its
@@ -739,7 +749,16 @@ mod tests {
         // A DPS without limit isn't sent.
         let unlimited = vec![property(Property::PhysicalDps, None)];
         assert!(!filters(unlimited, Vec::new()).compares_stats());
+        // The count of the unrevealed modifiers narrows the items of the base only.
+        let unrevealed = StatFilter {
+            ids: vec!["pseudo.pseudo_number_of_unrevealed_mods".to_owned()],
+            minimum: Some(1.0),
+            maximum: None,
+            compares: false,
+        };
+        assert!(!filters(base.clone(), vec![unrevealed.clone()]).compares_stats());
         // A line, a pseudo total, a DPS or a property of a waystone or a gem.
+        assert!(filters(Vec::new(), vec![unrevealed, line.clone()]).compares_stats());
         assert!(filters(base, vec![line.clone()]).compares_stats());
         for stat in [
             Property::PhysicalDps,

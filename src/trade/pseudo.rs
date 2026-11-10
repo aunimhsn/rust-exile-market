@@ -29,6 +29,23 @@ pub enum Pseudo {
 }
 
 impl Pseudo {
+    /// It compares a stat of the item: a total, not the count of its unrevealed modifiers,
+    /// which only narrows the items of its base (any of them with a modifier unrevealed).
+    #[must_use]
+    pub fn compares_stats(self) -> bool {
+        match self {
+            Self::ElementalResistance
+            | Self::ChaosResistance
+            | Self::Life
+            | Self::Mana
+            | Self::Strength
+            | Self::Dexterity
+            | Self::Intelligence
+            | Self::AllAttributes => true,
+            Self::UnrevealedModifiers => false,
+        }
+    }
+
     /// Its id on the trade site.
     #[must_use]
     pub fn trade_id(self) -> &'static str {
