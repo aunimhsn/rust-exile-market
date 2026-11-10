@@ -424,13 +424,15 @@ impl ExileMarketApp {
 
     /// The item shown, with the `kind` of the search of its offers when it can be searched.
     /// Draws the item shown, or the empty state; the height of its blocks, which sizes the
-    /// window over the game.
+    /// window over the game. In the main window (`main`), the hint of a failed search opens the
+    /// bug report.
     fn item(
         &mut self,
         ui: &mut Ui,
         prices: PricesState,
         kind: Option<SearchKind>,
         to_top: bool,
+        main: bool,
     ) -> f32 {
         let Some(shown) = self.session.item() else {
             let empty = EmptyState::new(&self.i18n, self.hotkey.state(), self.hotkey.shortcut());
@@ -462,6 +464,7 @@ impl ExileMarketApp {
             stats_open: self.stats_open,
             prices,
             kind,
+            bug_report: main,
             i18n: &self.i18n,
         };
         let ((action, offers_action), height) = ui::content(ui, to_top, |ui| view.show(ui));
@@ -474,6 +477,12 @@ impl ExileMarketApp {
                 .shown_search()
                 .and_then(|search| self.offers.search(search, Instant::now())),
             Some(OffersAction::More) => self.offers.more(),
+            Some(OffersAction::ReportBug) => {
+                self.view = View::BugReport;
+                self.lists.close_all();
+                self.bug_report = Some(self.new_bug_report());
+                None
+            }
             None => None,
         };
         if let Some(order) = order {
@@ -594,7 +603,7 @@ impl ExileMarketApp {
                         .keyboard(self.keyboard.held())
                         .single_screen(self.activation.holds())
                         .show(ui);
-                    self.item(ui, prices, kind, to_top)
+                    self.item(ui, prices, kind, to_top, false)
                 })
                 .inner;
             let editing = ui.ctx().text_edit_focused();
@@ -713,6 +722,8 @@ struct ItemView<'a> {
     stats_open: bool,
     prices: PricesState,
     kind: Option<SearchKind>,
+    /// The hint of a failed search opens the bug report.
+    bug_report: bool,
     i18n: &'a Translator,
 }
 
@@ -729,6 +740,7 @@ impl ItemView<'_> {
             stats_open,
             prices,
             kind,
+            bug_report,
             i18n,
         } = self;
         let fixed_price = session.fixed_price(item);
@@ -761,7 +773,9 @@ impl ItemView<'_> {
             .estimate(estimate)
             .show(ui);
         let offers_action = if let Some(kind) = kind {
-            OffersBlock::new(offers, kind, reference, item, shown.lines(), i18n).show(ui)
+            OffersBlock::new(offers, kind, reference, item, shown.lines(), i18n)
+                .bug_report(bug_report)
+                .show(ui)
         } else {
             if session.must_identify(item) {
                 OffersBlock::identify(ui, i18n);
@@ -925,7 +939,7 @@ impl App for ExileMarketApp {
         }
         match self.view {
             View::Item => {
-                self.item(ui, prices, search_kind, to_top);
+                self.item(ui, prices, search_kind, to_top, true);
             }
             View::Settings => {
                 let action = SettingsPanel::new(&self.settings, &self.i18n, self.hotkey.state())

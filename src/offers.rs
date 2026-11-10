@@ -13,7 +13,7 @@ use crate::filters::Property;
 use crate::item::{Catalyst, Item};
 use crate::trade::offers::{ExchangeOffer, ItemOffer};
 use crate::trade::query::SearchKind;
-use crate::trade::search::{Answer, NextSearch, Order, Outcome, Rest, Search};
+use crate::trade::search::{Answer, Failure, NextSearch, Order, Outcome, Rest, Search};
 
 /// The offers shown at once, and added by each click on the double chevron.
 pub const PAGE: usize = 10;
@@ -40,9 +40,9 @@ pub enum OffersState {
         rest: Rest,
         /// The next offers are asked.
         loading_more: bool,
-        /// The next offers couldn't come: the trade site can't be reached. Refused by its
-        /// limits, the waiting block tells it already.
-        more_failed: bool,
+        /// Why the next offers couldn't come. Refused by its limits, the waiting block tells
+        /// it already: `None`.
+        more_failed: Option<Failure>,
         /// The search filtered the quality, which the trade site searches of any kind: the
         /// offers of a catalyst of another kind than the item's aren't counted.
         quality_searched: bool,
@@ -55,8 +55,8 @@ pub enum OffersState {
         shown: usize,
         searched: SystemTime,
     },
-    /// The trade site can't be reached, or answered something unexpected.
-    Unreachable,
+    /// The search failed, for this reason.
+    Failed(Failure),
     /// The trade site refused the search, or its limits didn't allow it.
     Limited,
 }
@@ -149,7 +149,7 @@ impl Offers {
                 first_page,
                 rest,
                 loading_more: false,
-                more_failed: false,
+                more_failed: None,
                 quality_searched,
                 searched,
             },
@@ -157,7 +157,7 @@ impl Offers {
             // A failure belongs to the moment it was told.
             OffersState::Idle
             | OffersState::Searching
-            | OffersState::Unreachable
+            | OffersState::Failed(_)
             | OffersState::Limited => OffersState::Idle,
         }
     }
@@ -213,7 +213,7 @@ impl Offers {
                 ..
             } if !busy && !rest.is_empty() => {
                 *loading_more = true;
-                *more_failed = false;
+                *more_failed = None;
                 self.pending = Some(Pending {
                     order: PendingOrder::More,
                     shown: true,
@@ -229,7 +229,7 @@ impl Offers {
     pub fn thread_lost(&mut self) {
         self.lost = true;
         if self.pending.take().is_some_and(|pending| pending.shown) {
-            self.state = OffersState::Unreachable;
+            self.state = OffersState::Failed(Failure::Unreachable);
         }
     }
 
@@ -303,7 +303,7 @@ impl Offers {
                 total,
                 rest,
                 loading_more: false,
-                more_failed: false,
+                more_failed: None,
                 quality_searched: matches!(
                     pending.order,
                     PendingOrder::Search {
@@ -337,14 +337,14 @@ impl Offers {
                     first_page,
                     rest,
                     loading_more: false,
-                    more_failed: false,
+                    more_failed: None,
                     quality_searched,
                     searched,
                 }
             }
             // More offers that couldn't come: the offers shown stay, to ask them again.
             (
-                failure @ (Outcome::Unreachable | Outcome::Limited { .. }),
+                failure @ (Outcome::Failed(_) | Outcome::Limited { .. }),
                 OffersState::Items {
                     offers,
                     total,
@@ -360,11 +360,14 @@ impl Offers {
                 first_page,
                 rest,
                 loading_more: false,
-                more_failed: matches!(failure, Outcome::Unreachable),
+                more_failed: match failure {
+                    Outcome::Failed(failure) => Some(failure),
+                    _ => None,
+                },
                 quality_searched,
                 searched,
             },
-            (Outcome::Unreachable, _) => OffersState::Unreachable,
+            (Outcome::Failed(failure), _) => OffersState::Failed(failure),
             (Outcome::Limited { .. }, _) => OffersState::Limited,
             (Outcome::More { .. }, state) => state,
         };

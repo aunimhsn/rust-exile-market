@@ -58,6 +58,8 @@ enum PriceView<'a> {
         price: &'a Price,
         rates: Rates,
         unique: bool,
+        /// An item of the currency exchange priced on few trades.
+        thin: bool,
     },
     /// The price of a rare, magic or normal item, from its similar offers.
     Estimated(Estimate<'a>),
@@ -103,11 +105,13 @@ fn view<'a>(
             price: &currency.price,
             rates: *rates,
             unique: false,
+            thin: currency.is_thin(),
         },
         Ok((FixedPrice::Unique(unique), rates)) => PriceView::Priced {
             price: &unique.price,
             rates: *rates,
             unique: true,
+            thin: false,
         },
         Ok((FixedPrice::Uniques(candidates), rates)) => PriceView::Candidates {
             candidates,
@@ -187,7 +191,8 @@ impl<'a> PriceBlock<'a> {
                         price,
                         rates,
                         unique,
-                    } => self.priced(ui, price, rates, unique),
+                        thin,
+                    } => self.priced(ui, price, rates, unique, thin),
                     PriceView::Estimated(estimate) => self.estimated(ui, estimate),
                     PriceView::Candidates { candidates, rates } => {
                         self.candidates(ui, candidates, rates);
@@ -242,8 +247,9 @@ impl<'a> PriceBlock<'a> {
     }
 
     /// The price in the three currencies, the value of the whole stack when there is one,
-    /// then the unit price, the trend and the warning of a unique with few offers.
-    fn priced(&self, ui: &mut Ui, price: &Price, rates: Rates, unique: bool) {
+    /// then the unit price, the trend and the warning of a unique with few offers, or of an
+    /// item of the currency exchange with few trades (`thin`).
+    fn priced(&self, ui: &mut Ui, price: &Price, rates: Rates, unique: bool, thin: bool) {
         let stack = self.stack_size();
         amounts(ui, price.exalted * f64::from(stack.unwrap_or(1)), rates);
         if stack.is_some() {
@@ -267,9 +273,14 @@ impl<'a> PriceBlock<'a> {
             ui.add_space(LINE_GAP);
             line(ui, &text, tint);
         }
-        if unique && price.quantity < ENOUGH_OFFERS {
+        let warning = if unique {
+            (price.quantity < ENOUGH_OFFERS).then(|| self.i18n.uncertain(price.quantity))
+        } else {
+            thin.then(|| self.i18n.thin_trades(price.quantity))
+        };
+        if let Some(warning) = warning {
             ui.add_space(LINE_GAP);
-            line(ui, &self.i18n.uncertain(price.quantity), color::WARNING);
+            line(ui, &warning, color::WARNING);
         }
     }
 

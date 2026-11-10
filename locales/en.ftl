@@ -315,6 +315,12 @@ uncertain = { $count ->
     [one] Only { $count } offer: the price is uncertain
    *[other] Only { $count } offers: the price is uncertain
 }
+# Under the price of an item of the currency exchange whose price stands on fewer than 10 trades.
+thin-trades = { $count ->
+    [0] No trade lately: the price is uncertain
+    [one] Only { $count } trade: the price is uncertain
+   *[other] Only { $count } trades: the price is uncertain
+}
 # On the right of the title of an estimated price: the similar offers found.
 similar = { $count ->
     [one] { $count } similar
@@ -400,6 +406,15 @@ offers-limit = Trade site limit: next search in { $wait }.
 offers-none = No offer online with these filters.
 offers-none-hint = Uncheck a stat or lower a minimum, then search again.
 offers-unreachable = The trade site can't be reached.
+# A search the trade site turned down with an error (a stat renamed by a patch, most often), then what to do under it;
+# $report is offers-report, a link that opens the bug report.
+offers-refused = The trade site refused this search.
+offers-refused-hint = Uncheck a filter and search again. If it happens again, { $report }.
+offers-report = report it
+# An answer of the trade site the application can't read, then what to do under it; $report is offers-report-start.
+offers-unreadable = The answer of the trade site can't be read.
+offers-unreadable-hint = The game may have changed. { $report }, so that Exile Market can be fixed.
+offers-report-start = Report it
 offers-identify = Identify the item to search its offers.
 # The double chevron under the list.
 offers-more-tooltip = Show more offers

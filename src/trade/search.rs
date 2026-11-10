@@ -11,6 +11,7 @@ use super::client::{FETCH_SIZE, TradeClient, TradeError, Transport};
 use super::offers::{ExchangeOffer, ItemOffer};
 use super::query::{Query, SearchKind};
 use super::refusal::Refusal;
+use crate::http::HttpError;
 use crate::language::Language;
 use crate::league::League;
 use crate::logging;
@@ -81,11 +82,40 @@ pub enum Outcome {
     },
     /// The next offers of a search of items, and those left after them.
     More { offers: Vec<ItemOffer>, rest: Rest },
-    /// The trade site can't be reached, or answered something unexpected.
-    Unreachable,
+    /// The search or the fetch failed, for this reason.
+    Failed(Failure),
     /// The trade site refused the request (`refused`), or its limits didn't allow it: nothing
     /// is sent before `until`.
     Limited { until: Instant, refused: bool },
+}
+
+/// Why a search, or the fetch of its next offers, failed: told apart for the player, since
+/// trying again helps only when the trade site couldn't be reached.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Failure {
+    /// No answer, or a trouble of the trade site (a status from 500), which may pass.
+    Unreachable,
+    /// The trade site turned the request down (a status from 400 to 499, but 403 and 429,
+    /// which ask to wait): the likely one after a patch renames a stat id.
+    Refused,
+    /// An answer of another form than expected: a redirection, a body too large, a JSON the
+    /// application can't read, or more than half of the offers of a page unreadable.
+    Unreadable,
+}
+
+impl Failure {
+    /// Why the request that failed with `error` failed.
+    #[must_use]
+    pub fn of(error: &HttpError) -> Self {
+        match error {
+            HttpError::Request(ureq::Error::StatusCode(400..=499)) => Self::Refused,
+            HttpError::Request(
+                ureq::Error::StatusCode(300..=399) | ureq::Error::BodyExceedsLimit(_),
+            )
+            | HttpError::Json(_) => Self::Unreadable,
+            HttpError::Request(_) => Self::Unreachable,
+        }
+    }
 }
 
 /// When the next search may be sent, for each kind of search: their limits differ.
@@ -202,7 +232,7 @@ impl<T: Transport> Searches<T> {
                     until,
                     refused: true,
                 },
-                TradeError::Http(_) => Outcome::Unreachable,
+                TradeError::Http(error) => Outcome::Failed(Failure::of(&error)),
             }
         });
         let now = Instant::now();
@@ -379,7 +409,10 @@ mod tests {
 
         search.order(search_ring());
 
-        assert_eq!(answer(&mut search, &wakes).outcome, Outcome::Unreachable);
+        assert_eq!(
+            answer(&mut search, &wakes).outcome,
+            Outcome::Failed(Failure::Unreachable)
+        );
     }
 
     #[test]
@@ -500,7 +533,63 @@ mod tests {
 
         search.order(search_ring());
 
-        assert_eq!(answer(&mut search, &wakes).outcome, Outcome::Unreachable);
+        assert_eq!(
+            answer(&mut search, &wakes).outcome,
+            Outcome::Failed(Failure::Unreachable)
+        );
         assert_eq!(site.requests().len(), 2, "a search and its fetch");
+    }
+
+    #[test]
+    fn a_failure_is_told_by_what_the_trade_site_answered() {
+        let status = |code| HttpError::Request(ureq::Error::StatusCode(code));
+        let json = serde_json::from_str::<u8>("{").unwrap_err();
+
+        assert_eq!(Failure::of(&status(400)), Failure::Refused);
+        assert_eq!(Failure::of(&status(404)), Failure::Refused);
+        assert_eq!(Failure::of(&status(302)), Failure::Unreadable);
+        assert_eq!(Failure::of(&HttpError::Json(json)), Failure::Unreadable);
+        assert_eq!(
+            Failure::of(&HttpError::Request(ureq::Error::BodyExceedsLimit(16))),
+            Failure::Unreadable
+        );
+        assert_eq!(Failure::of(&status(500)), Failure::Unreachable);
+        assert_eq!(Failure::of(&status(503)), Failure::Unreachable);
+        assert_eq!(
+            Failure::of(&HttpError::Request(ureq::Error::ConnectionFailed)),
+            Failure::Unreachable
+        );
+    }
+
+    #[test]
+    fn a_search_turned_down_is_told_refused() {
+        let site = FakeSite::default();
+        site.answer(
+            400,
+            LimitHeaders::default(),
+            r#"{"error": {"code": 2, "message": "Unknown stat"}}"#,
+        );
+        let (mut search, wakes) = start(&site);
+
+        search.order(search_ring());
+
+        assert_eq!(
+            answer(&mut search, &wakes).outcome,
+            Outcome::Failed(Failure::Refused)
+        );
+    }
+
+    #[test]
+    fn a_search_answered_in_another_form_is_told_unreadable() {
+        let site = FakeSite::default();
+        site.answer(200, LimitHeaders::default(), r#"{"id": 7}"#);
+        let (mut search, wakes) = start(&site);
+
+        search.order(search_ring());
+
+        assert_eq!(
+            answer(&mut search, &wakes).outcome,
+            Outcome::Failed(Failure::Unreadable)
+        );
     }
 }

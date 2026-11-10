@@ -4,6 +4,7 @@
 //! variants of [`Message`], and each message with arguments has its own method of
 //! [`Translator`], the only place that knows the names of its arguments.
 
+use std::ops::Range;
 use std::time::Duration;
 
 use fluent_bundle::{FluentArgs, FluentBundle, FluentResource, FluentValue};
@@ -187,6 +188,10 @@ pub enum Message {
     OffersNone,
     OffersNoneHint,
     OffersUnreachable,
+    /// The trade site turned the search down with an error.
+    OffersRefused,
+    /// The answer of the trade site can't be read.
+    OffersUnreadable,
     OffersIdentify,
     OffersMoreTooltip,
     OffersSuspicious,
@@ -203,7 +208,7 @@ pub enum Message {
 impl Message {
     /// Every message, for the tests.
     #[cfg(test)]
-    const ALL: [Self; 156] = [
+    const ALL: [Self; 158] = [
         Self::LeagueModeSoftcore,
         Self::LeagueModeHardcore,
         Self::LeagueLoading,
@@ -350,6 +355,8 @@ impl Message {
         Self::OffersNone,
         Self::OffersNoneHint,
         Self::OffersUnreachable,
+        Self::OffersRefused,
+        Self::OffersUnreadable,
         Self::OffersIdentify,
         Self::OffersMoreTooltip,
         Self::OffersSuspicious,
@@ -512,6 +519,8 @@ impl Message {
             Self::OffersNone => "offers-none",
             Self::OffersNoneHint => "offers-none-hint",
             Self::OffersUnreachable => "offers-unreachable",
+            Self::OffersRefused => "offers-refused",
+            Self::OffersUnreadable => "offers-unreadable",
             Self::OffersIdentify => "offers-identify",
             Self::OffersMoreTooltip => "offers-more-tooltip",
             Self::OffersSuspicious => "offers-suspicious",
@@ -524,6 +533,14 @@ impl Message {
             Self::WhisperCopyFailed => "whisper-copy-failed",
         }
     }
+}
+
+/// A sentence with a link in it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Linked {
+    pub text: String,
+    /// The bytes of the words of the link in `text`; empty when it has none.
+    pub link: Range<usize>,
 }
 
 /// The tags of the item block with a number.
@@ -590,6 +607,7 @@ const TREND_RISE: &str = "trend-rise";
 const TREND_FALL: &str = "trend-fall";
 const TREND_STABLE: &str = "trend-stable";
 const UNCERTAIN: &str = "uncertain";
+const THIN_TRADES: &str = "thin-trades";
 const SIMILAR: &str = "similar";
 const ESTIMATE_UNCERTAIN: &str = "estimate-uncertain";
 const ESTIMATE_MEDIAN: &str = "estimate-median";
@@ -641,6 +659,11 @@ const OFFERS_SEARCHED: &str = "offers-searched";
 const OFFERS_COUNT: &str = "offers-count";
 const OFFERS_NEXT_SEARCH_TOOLTIP: &str = "offers-next-search-tooltip";
 const OFFERS_LIMIT: &str = "offers-limit";
+const OFFERS_REFUSED_HINT: &str = "offers-refused-hint";
+const OFFERS_UNREADABLE_HINT: &str = "offers-unreadable-hint";
+/// The words of the two hints above that open the bug report, inside a sentence and first.
+const OFFERS_REPORT: &str = "offers-report";
+const OFFERS_REPORT_START: &str = "offers-report-start";
 /// The sentences under the bar of the download of the prices, one drawn at random per
 /// download.
 const DOWNLOAD_QUOTES: [&str; 10] = [
@@ -962,6 +985,12 @@ impl Translator {
         self.format_number(UNCERTAIN, "count", count)
     }
 
+    /// The warning of an item of the currency exchange priced on few trades.
+    #[must_use]
+    pub fn thin_trades(&self, count: u32) -> String {
+        self.format_number(THIN_TRADES, "count", count)
+    }
+
     /// The similar offers found, on the right of the title of an estimated price: "18 similar".
     #[must_use]
     pub fn similar(&self, total: u64) -> String {
@@ -1235,6 +1264,34 @@ impl Translator {
         self.format_wait(OFFERS_LIMIT, wait)
     }
 
+    /// What to do after a search the trade site turned down, its words that open the bug
+    /// report told.
+    #[must_use]
+    pub fn offers_refused_hint(&self) -> Linked {
+        self.linked(OFFERS_REFUSED_HINT, OFFERS_REPORT)
+    }
+
+    /// What to do after an answer of the trade site that can't be read, its words that open
+    /// the bug report told.
+    #[must_use]
+    pub fn offers_unreadable_hint(&self) -> Linked {
+        self.linked(OFFERS_UNREADABLE_HINT, OFFERS_REPORT_START)
+    }
+
+    /// The message `id`, its argument `report` the message `link`, and where that one is in it.
+    fn linked(&self, id: &str, link: &str) -> Linked {
+        let words = self.format(link, None);
+        let mut args = FluentArgs::new();
+        args.set("report", words.clone());
+        let text = self.format(id, Some(&args));
+        // The words are found in the sentence they were put in; a translation without them
+        // has no link.
+        let link = text
+            .find(&words)
+            .map_or(0..0, |start| start..start + words.len());
+        Linked { text, link }
+    }
+
     fn format_wait(&self, id: &str, wait: Duration) -> String {
         let mut args = FluentArgs::new();
         args.set("wait", self.wait(wait));
@@ -1440,6 +1497,11 @@ mod tests {
                 OFFERS_COUNT,
                 OFFERS_NEXT_SEARCH_TOOLTIP,
                 OFFERS_LIMIT,
+                OFFERS_REFUSED_HINT,
+                OFFERS_UNREADABLE_HINT,
+                OFFERS_REPORT,
+                OFFERS_REPORT_START,
+                THIN_TRADES,
             ])
             .chain(WINDOW_ERROR_IDS)
             .chain(DOWNLOAD_QUOTES)
@@ -1765,7 +1827,7 @@ mod tests {
         let french = Translator::new(Language::French);
         assert_eq!(
             french.offers_limit(Duration::from_secs(240)),
-            "Limite du site d'échange\u{a0}: recherche dans 4min."
+            "Limite du site d'échange\u{a0}: prochaine recherche dans 4min."
         );
     }
 
@@ -1882,5 +1944,25 @@ mod tests {
         );
         assert_eq!(english.gem_level(21), "Level\u{a0}21");
         assert_eq!(french.gem_level(21), "Niveau\u{a0}21");
+    }
+
+    #[test]
+    fn the_hint_of_a_failed_search_holds_its_link_in_each_language() {
+        for language in Language::ALL {
+            let translator = Translator::new(language);
+            for (hint, words) in [
+                (translator.offers_refused_hint(), OFFERS_REPORT),
+                (translator.offers_unreadable_hint(), OFFERS_REPORT_START),
+            ] {
+                let words = translator.format(words, None);
+                assert_eq!(
+                    hint.text.get(hint.link.clone()),
+                    Some(words.as_str()),
+                    "{hint:?} in {language:?}"
+                );
+            }
+        }
+        let english = Translator::new(Language::English).offers_unreadable_hint();
+        assert_eq!(english.text.get(english.link), Some("Report it"));
     }
 }
