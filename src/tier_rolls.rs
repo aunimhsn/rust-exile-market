@@ -210,23 +210,30 @@ fn warn_of_a_missing_table(language: Language, base_type: &str, modifier: &Modif
     if !game_data::lacks_table(language, base_type, modifier, &matches) {
         return;
     }
-    let told = format!(
-        "tier {:?} on {}: {}",
+    // Its name, not its line: the same modifier rolled otherwise is the same missing table.
+    let key = format!(
+        "\"{}\" as tier {:?} on {}",
+        logging::plain(modifier.name.as_deref().unwrap_or_default()),
         modifier.tier,
         logging::plain(base_type),
-        modifier
-            .lines
-            .first()
-            .map_or_else(String::new, |line| logging::plain(&line.text))
     );
-    let mut all = TOLD.lock().unwrap_or_else(PoisonError::into_inner);
-    // A few hundred at most: a session doesn't see that many odd modifiers.
-    if all.len() < MOST_TOLD && all.insert(told.clone()) {
+    let mut told = TOLD.lock().unwrap_or_else(PoisonError::into_inner);
+    if first_told(&mut told, &key) {
         log::warn!(
-            "Game data, no table for a modifier copied as {told} (data behind the game, or \
-             an item of an older patch)"
+            "Game data, no table for the modifier {key} (data behind the game, or an item of \
+             an older patch): {}",
+            modifier
+                .lines
+                .first()
+                .map_or_else(String::new, |line| logging::plain(&line.text))
         );
     }
+}
+
+/// Whether `key` is told for the first time, kept in `told` then; never past [`MOST_TOLD`]
+/// keys, so that the log and the memory stay small whatever is copied.
+fn first_told(told: &mut BTreeSet<String>, key: &str) -> bool {
+    told.len() < MOST_TOLD && told.insert(key.to_owned())
 }
 
 /// The most missing tables told in a session.
@@ -857,5 +864,29 @@ mod tests {
         assert!(!lacks(
             "{ Implicit Modifier — Damage }\nAdds 2(1-5) to 60(54-79) Lightning Damage"
         ));
+    }
+
+    /// An item is read again at each copy: its missing table is told once.
+    #[test]
+    fn a_missing_table_is_told_once_and_not_past_a_few_hundred() {
+        let mut told = BTreeSet::new();
+
+        assert!(first_told(
+            &mut told,
+            "\"Crackling\" as tier Some(7) on Temple Maul"
+        ));
+        assert!(!first_told(
+            &mut told,
+            "\"Crackling\" as tier Some(7) on Temple Maul"
+        ));
+        assert!(first_told(
+            &mut told,
+            "\"Crackling\" as tier Some(6) on Temple Maul"
+        ));
+        for index in told.len()..MOST_TOLD {
+            assert!(first_told(&mut told, &index.to_string()));
+        }
+        assert!(!first_told(&mut told, "one more"));
+        assert_eq!(told.len(), MOST_TOLD);
     }
 }

@@ -878,4 +878,32 @@ mod tests {
 
         assert!(parsed.is_err());
     }
+
+    /// The second code review of the quality fixes: the flag was only tested on an error built
+    /// by hand.
+    #[test]
+    fn a_request_without_answer_after_the_first_ones_counts_as_answered_in_each_download() {
+        let site = FakeSite::default();
+        let mut names = TradeSite::with_transport(site.clone(), Refusal::default());
+
+        // Nothing answers the first request: the trade site can't be reached.
+        let first = names.item_names().expect_err("no answer");
+        assert!(!first.answered(), "{first}");
+
+        // One answer, then nothing: it can be reached, and the next attempt waits longer.
+        site.answer(200, LimitHeaders::default(), r#"{"result": []}"#);
+        let second = names.item_names().expect_err("no second answer");
+        assert!(second.answered(), "{second}");
+        assert!(matches!(
+            second,
+            NamesError::Http {
+                after_answers: true,
+                ..
+            }
+        ));
+
+        // A new download starts over.
+        let third = names.item_names().expect_err("no answer");
+        assert!(!third.answered(), "{third}");
+    }
 }

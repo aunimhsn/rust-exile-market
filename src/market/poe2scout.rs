@@ -361,9 +361,7 @@ impl PriceDatabase for Poe2Scout {
         let Some(currencies) = self.get_unless_interrupted(&currencies_path, &[], download)? else {
             return Ok(None);
         };
-        // A currency without its worth is left out: three of them are read.
-        let currencies: Vec<ApiReferenceCurrency> = each_of(&currencies_path, currencies)?;
-        let conversion = Conversion::new(&currencies)?;
+        let conversion = Conversion::new(&reference_currencies(currencies))?;
         let categories = categories.checked()?;
         let currency_categories = download_order(categories.currency_categories);
         let mut prices = PriceList {
@@ -459,16 +457,14 @@ impl Conversion {
     }
 }
 
-/// The elements of the list `path` answered, each read on its own ([`http::read_each`]).
-fn each_of<T: DeserializeOwned>(
-    path: &str,
-    values: Vec<serde_json::Value>,
-) -> Result<Vec<T>, FetchError> {
-    http::read_each(values).map_err(|error| FetchError::Http {
-        path: path.to_owned(),
-        error: HttpError::Json(error),
-        after_answers: true,
-    })
+/// The reference currencies of the answer that can be read. Three of them are needed, which
+/// [`Conversion::new`] asks for by name: the others, however many, are left out without failing
+/// the answer.
+fn reference_currencies(values: Vec<serde_json::Value>) -> Vec<ApiReferenceCurrency> {
+    values
+        .into_iter()
+        .filter_map(|value| serde_json::from_value(value).ok())
+        .collect()
 }
 
 /// The currency categories in their download order: the currency first, the most copied
@@ -798,44 +794,45 @@ mod tests {
         assert_eq!(price.history, [None; 0]);
     }
 
+    /// Whatever the other currencies of the answer: only the three rates are needed.
     #[test]
-    fn a_reference_currency_without_its_worth_is_left_out() {
-        let values: Vec<serde_json::Value> = serde_json::from_str(&REFERENCE_CURRENCIES.replacen(
-            ']',
-            r#", {"ApiId": "mirror", "Text": "Mirror"}]"#,
-            1,
-        ))
-        .expect("a list");
+    fn the_reference_currencies_that_cant_be_read_are_left_out_however_many() {
+        let odd = r#", {"ApiId": "mirror"}, {"ApiId": "vaal"}, {"ApiId": "regal"}, 5]"#;
+        let values: Vec<serde_json::Value> =
+            serde_json::from_str(&REFERENCE_CURRENCIES.replacen(']', odd, 1)).expect("a list");
 
-        let currencies: Vec<ApiReferenceCurrency> = each_of("/path", values).expect("three");
+        let currencies = reference_currencies(values);
 
         assert_eq!(currencies.len(), 3);
         assert!(Conversion::new(&currencies).is_ok());
+        assert!(matches!(
+            Conversion::new(&reference_currencies(vec![serde_json::Value::from(5)])),
+            Err(FetchError::MissingRate(_))
+        ));
     }
 
     #[test]
     fn a_failure_names_the_request_and_tells_whether_the_database_answered() {
-        let Err(failure) = each_of::<ApiLeague>("/Leagues", vec![serde_json::Value::from(1)])
-        else {
-            panic!("not a league");
-        };
-
-        assert!(failure.answered());
-        assert!(failure.to_string().ends_with("(/Leagues)"), "{failure}");
-        let hung = |after_answers| FetchError::Http {
+        let failure = |error, after_answers| FetchError::Http {
             path: "/Leagues".to_owned(),
-            error: HttpError::Request(ureq::Error::Timeout(ureq::Timeout::Global)),
+            error: HttpError::Request(error),
             after_answers,
         };
-        assert!(!hung(false).answered());
+        let hung = || ureq::Error::Timeout(ureq::Timeout::Global);
+
+        let refused = failure(ureq::Error::StatusCode(500), false);
+        assert!(refused.answered());
+        assert!(refused.to_string().ends_with("(/Leagues)"), "{refused}");
+        assert!(!failure(hung(), false).answered());
         // The twentieth request of a download hangs: the database was there for the others.
-        assert!(hung(true).answered());
+        assert!(failure(hung(), true).answered());
     }
 
     /// The code review of the quality fixes: left out, a league that can't be read was taken
-    /// for a league that ended, and the player moved to Standard.
+    /// for a league that ended, and the player moved to Standard. `leagues` reads a plain
+    /// `Vec`, which this pins; the request itself is tested with the seam of step 17e3b.
     #[test]
-    fn a_league_that_cant_be_read_fails_the_whole_answer() {
+    fn the_list_of_the_leagues_has_no_lenient_reading() {
         let leagues = r#"[{"Value": "Standard", "IsCurrent": true}, {"Value": "Forbidden Rites"}]"#;
 
         assert!(serde_json::from_str::<Vec<ApiLeague>>(leagues).is_err());
