@@ -45,9 +45,9 @@ const TIMEOUT: Duration = Duration::from_secs(1);
 /// How often the next step is looked for while the window waits to show, or the desktop to
 /// activate the helper.
 const STEP_POLL: Duration = Duration::from_millis(30);
-/// How long, after the window opens without the pointer held, or after another window became the
-/// active one, the window looks for Wine holding the pointer: Wine takes it a second or two after
-/// the game is the active window again.
+/// How long, after the window opens without the pointer held, or after the game became the
+/// active window again, the window looks for Wine holding the pointer: Wine takes it a second or
+/// two after the game is the active window again.
 const WATCH: Duration = Duration::from_secs(3);
 /// How often the window looks for Wine holding the pointer meanwhile, whatever the frames.
 const WATCH_POLL: Duration = Duration::from_millis(250);
@@ -444,7 +444,10 @@ fn advance(screen: &mut impl Screen, state: State, moment: Moment<'_>) -> Result
                 return Ok(watching);
             };
             if game.is_some_and(|game| game != active) {
-                return Ok(watching);
+                // Away from the game: the wait counts from the return to it, where Wine
+                // takes the pointer again. Counted from the leave, the window was left
+                // without hover nor click after more than `WATCH` elsewhere.
+                return Ok(State::watching(now, now + WATCH_POLL, game));
             }
             // Confirmed by a try of the grab, once the window is seen.
             if screen.pointer_window_above(active)? && screen.pointer_grabbed()? {
@@ -575,12 +578,16 @@ fn give_back(screen: &mut impl Screen, game: Window, helper: Window) -> Result<(
     Ok(())
 }
 
+/// Whether a window at `position`, of `size`, covers the whole screen of X11, of the size
+/// `screen`: the window Wine holds the pointer in does.
+fn covers_screen(position: (i16, i16), size: (u16, u16), screen: (u16, u16)) -> bool {
+    position.0 <= 0 && position.1 <= 0 && size.0 >= screen.0 && size.1 >= screen.1
+}
+
 /// The desktop on the X server.
 pub struct XScreen {
     connection: RustConnection,
     root: Window,
-    /// The size of the screen of X11, which the window Wine holds the pointer in covers.
-    size: (u16, u16),
     atoms: Atoms,
     /// The helper, created when it is first shown.
     helper: Option<Window>,
@@ -589,13 +596,11 @@ pub struct XScreen {
 impl XScreen {
     fn connect() -> Result<Self> {
         let (connection, screen) = x11rb::connect(None)?;
-        let setup = &connection.setup().roots[screen];
-        let (root, size) = (setup.root, (setup.width_in_pixels, setup.height_in_pixels));
+        let root = connection.setup().roots[screen].root;
         let atoms = Atoms::intern(&connection)?;
         Ok(Self {
             connection,
             root,
-            size,
             atoms,
             helper: None,
         })
@@ -757,6 +762,12 @@ impl Screen for XScreen {
         let Some(at) = children.iter().position(|&(window, _)| window == game) else {
             return Ok(false);
         };
+        // The size of the screen of X11, which the window Wine holds the pointer in covers: read
+        // each time, since the size kept from the connection was wrong after a change of
+        // resolution or a screen unplugged, and the pointer held never seen again on a
+        // smaller screen.
+        let screen = self.connection.get_geometry(self.root)?.reply()?;
+        let screen = (screen.width, screen.height);
         for &(window, ref attributes) in &children[at + 1..] {
             if attributes.class != WindowClass::INPUT_ONLY
                 || !attributes.override_redirect
@@ -767,10 +778,11 @@ impl Screen for XScreen {
             let Some(geometry) = unless_gone(self.connection.get_geometry(window)?.reply())? else {
                 continue;
             };
-            let covers = geometry.x <= 0
-                && geometry.y <= 0
-                && geometry.width >= self.size.0
-                && geometry.height >= self.size.1;
+            let covers = covers_screen(
+                (geometry.x, geometry.y),
+                (geometry.width, geometry.height),
+                screen,
+            );
             // Gone meanwhile, it isn't that window either.
             if covers
                 && shared::ours_unless_gone(&self.connection, self.atoms, window)? == Some(false)

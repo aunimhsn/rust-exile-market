@@ -781,13 +781,13 @@ mod tests {
             .price(price.expect("an item"))
             .expect("a price");
         assert!((price.exalted - 4_259_889.0).abs() < 1e-6);
-        assert!(price.history.is_empty());
+        assert_eq!(price.history, [None; 0]);
     }
 
     #[test]
     fn a_reference_currency_without_its_worth_is_left_out() {
         let values: Vec<serde_json::Value> = serde_json::from_str(&REFERENCE_CURRENCIES.replacen(
-            "]",
+            ']',
             r#", {"ApiId": "mirror", "Text": "Mirror"}]"#,
             1,
         ))

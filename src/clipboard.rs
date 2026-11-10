@@ -1,6 +1,7 @@
-//! Clipboard watching: the items copied in the game, read while the game has the focus.
+//! Clipboard watching: the items copied in the game.
 //!
-//! A thread reads the clipboard every [`POLL_INTERVAL`] and sends what changed to the
+//! A thread reads the clipboard every [`POLL_INTERVAL`], whatever the active window (of a text
+//! that isn't an item, only a hash is kept, see below), and sends what changed to the
 //! application through a channel, so that the interface never waits for a slow reading
 //! (under X11, the application that owns the clipboard has to answer) and only redraws
 //! when something happened.

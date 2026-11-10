@@ -383,7 +383,9 @@ impl PriceCheckHotkey {
                 let mut on_its_way = OnItsWay::new(&on_their_way_at_press);
                 copy_sender.send_copy(
                     shortcut,
-                    || prepare_copy(marker),
+                    // Once the keys are sure to leave: a copy that doesn't leave would leave
+                    // the marker in place of the item of the player.
+                    || marker.before_copy(),
                     |target, copy| {
                         // The application stopped listening: nothing left to tell, and no
                         // window to give the count of the press back (the guard gives both).
@@ -531,14 +533,6 @@ fn grab_in_game(
     if let Err(error) = followed {
         log::warn!("The price-check hotkey can't follow the game window: {error}");
     }
-}
-
-/// Prepares the clipboard for the copy, just before the keys, once they are sure to leave: a
-/// copy that doesn't leave would leave the marker in place of the item of the player; when,
-/// which the item copied carries back.
-#[cfg(any(target_os = "linux", target_os = "windows"))]
-fn prepare_copy(marker: &mut CopyMarker) -> Option<Instant> {
-    marker.before_copy()
 }
 
 /// A key pressed or released.

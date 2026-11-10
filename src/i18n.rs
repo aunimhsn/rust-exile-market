@@ -1645,18 +1645,69 @@ mod tests {
         assert_eq!(english.affix_fill(2, 3), "2 of 3 · 1 open");
     }
 
+    /// The marks of `line`, a line of a translation file, that don't follow a non-breaking
+    /// space (ordinary or narrow): the code between braces and the address of a link aside.
+    fn marks_without_their_space(line: &str) -> Vec<String> {
+        let mut found = Vec::new();
+        let mut depth = 0_u32;
+        let mut previous = None;
+        for (index, character) in line.char_indices() {
+            match character {
+                '{' => depth += 1,
+                '}' => depth = depth.saturating_sub(1),
+                ':' | ';' | '?' | '!' if depth == 0 => {
+                    let address = line[index..].starts_with("://");
+                    if !address && !matches!(previous, Some('\u{a0}' | '\u{202f}')) {
+                        found.push(format!("{character} in \"{line}\""));
+                    }
+                }
+                _ => {}
+            }
+            previous = Some(character);
+        }
+        found
+    }
+
     #[test]
     fn a_french_punctuation_mark_follows_a_non_breaking_space() {
         // egui breaks a line at an ordinary space only: a wrapped text never starts a line with
-        // ":".
+        // ":". The interface review of 2026-11-10: a mark right after its word passed too.
+        // A quote in English keeps the typography of English.
+        const ENGLISH_QUOTES: [&str; 1] = ["still available?"];
+        let mut found = Vec::new();
         for line in messages(Language::French)
             .lines()
             .filter(|line| !line.trim_start().starts_with('#'))
+            .filter(|line| !ENGLISH_QUOTES.iter().any(|quote| line.contains(quote)))
         {
-            for mark in [':', ';', '?', '!'] {
-                assert!(!line.contains(&format!(" {mark}")), "{line}");
-            }
+            found.extend(marks_without_their_space(line));
         }
+
+        assert!(found.is_empty(), "{found:#?}");
+    }
+
+    #[test]
+    fn a_mark_right_after_its_word_or_after_an_ordinary_space_is_found() {
+        let none = Vec::<String>::new();
+        assert_eq!(marks_without_their_space("base = Base: { $base }").len(), 1);
+        assert_eq!(
+            marks_without_their_space("base = Base : { $base }").len(),
+            1
+        );
+        assert_eq!(
+            marks_without_their_space("base = Base\u{a0}: { $base }"),
+            none
+        );
+        assert_eq!(marks_without_their_space("base = Prêt\u{202f}?"), none);
+        // The code of Fluent and the address of a link.
+        assert_eq!(
+            marks_without_their_space("a = { $count -> [one] b; *[other] c! }"),
+            none
+        );
+        assert_eq!(
+            marks_without_their_space("site = https://example.org"),
+            none
+        );
     }
 
     #[test]

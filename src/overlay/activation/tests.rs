@@ -569,6 +569,61 @@ fn back_in_the_game_the_window_becomes_the_active_one_again() {
     assert!(activation.holds());
 }
 
+/// The desktop review of 2026-11-10: the wait counted from the leave, and the window stayed
+/// without hover nor click after more than three seconds in another window.
+#[test]
+fn back_in_the_game_after_a_long_while_the_window_becomes_the_active_one_again() {
+    let (mut activation, desk, now) = opened_active();
+    desk.borrow_mut().active = Some(MAIN);
+    // Ten seconds in another window, woken up as often as the window asks.
+    let mut elapsed = 0;
+    while elapsed < 10_000 {
+        let wait = activation.follow(Some(1), || false, later(now, elapsed));
+        let wait = wait.expect("still looking for the return to the game");
+        elapsed += u64::try_from(wait.as_millis()).expect("a short wait");
+    }
+    assert!(!activation.holds());
+    // Back in the game, which holds the pointer again.
+    {
+        let mut desk = desk.borrow_mut();
+        desk.active = Some(GAME);
+        desk.pointer_window = true;
+    }
+
+    activation.follow(Some(1), || false, later(now, elapsed + 1000));
+    activation.follow(Some(1), || false, later(now, elapsed + 1030));
+    activation.follow(Some(1), || false, later(now, elapsed + 1060));
+
+    assert!(activation.holds());
+}
+
+/// Back in the game without the pointer held (the game in a window), the look ends after its
+/// three seconds, as before.
+#[test]
+fn back_in_a_game_that_doesnt_hold_the_pointer_the_look_ends() {
+    let (mut activation, desk, now) = opened_active();
+    desk.borrow_mut().active = Some(MAIN);
+    activation.follow(Some(1), || false, now);
+    // Still away a second later, then back.
+    activation.follow(Some(1), || false, later(now, 1000));
+    {
+        let mut desk = desk.borrow_mut();
+        desk.active = Some(GAME);
+        desk.pointer_window = false;
+    }
+
+    let mut elapsed = 0;
+    let mut wait = activation.follow(Some(1), || false, later(now, 1000));
+    while let Some(next) = wait {
+        elapsed += u64::try_from(next.as_millis()).expect("a short wait");
+        assert!(elapsed < 10_000, "the look never ends");
+        wait = activation.follow(Some(1), || false, later(now, 1000 + elapsed));
+    }
+
+    assert!(!activation.holds());
+    assert!(elapsed >= 3_000, "{elapsed} ms");
+}
+
 #[test]
 fn a_desktop_that_refuses_leaves_the_window_as_on_two_screens() {
     let (mut activation, desk) = activation(true);
@@ -695,4 +750,19 @@ fn on_two_screens_esc_is_left_to_the_game() {
     activation.follow(Some(1), || false, Instant::now());
 
     assert!(!activation.escape_closes());
+}
+
+/// The desktop review of 2026-11-10: the size of the screen is read at each look, not kept
+/// from the connection.
+#[test]
+fn the_window_of_wine_covers_the_screen_as_it_is_now() {
+    let window = ((0, 0), (1920, 1080));
+
+    assert!(covers_screen(window.0, window.1, (1920, 1080)));
+    // The screen got smaller meanwhile: still covered.
+    assert!(covers_screen(window.0, window.1, (1280, 720)));
+    assert!(covers_screen((-10, -10), (1940, 1100), (1920, 1080)));
+    // A window of one screen of two, or one that starts further.
+    assert!(!covers_screen(window.0, window.1, (3840, 1080)));
+    assert!(!covers_screen((1, 0), window.1, (1920, 1080)));
 }

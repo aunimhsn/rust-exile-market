@@ -502,7 +502,7 @@ bug-report-copied = Copié
 bug-report-copy-failed = Non copié, réessayer
 bug-report-account = Un compte GitHub est nécessaire.
 
-## Window that can't open
+## Fenêtre qui ne peut pas s'ouvrir
 
 # Une boîte de dialogue du système quand la fenêtre de l'application ne peut pas s'ouvrir, ses paragraphes dans cet
 # ordre : ce qui a échoué, que faire, le journal (autre cause seulement), puis l'erreur elle-même, en anglais. $app est

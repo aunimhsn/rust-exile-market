@@ -285,11 +285,39 @@ fn main() -> Result<()> {
         report_differences(english, french, &mut report);
     }
 
-    let license = get(&agent, &raw_url(REPOSITORY, &commit.sha, "LICENSE"))?;
-    let repoe_code_commit = latest_commit(&agent, REPOE_CODE, &repoe_code_reference)?;
+    write_notice(
+        &agent,
+        &output,
+        (&commit, &repoe_commit),
+        repoe_version.trim(),
+        &repoe_code_reference,
+    )?;
+    fs::write(
+        output.join("report.md"),
+        report.to_markdown(&format!(
+            "the commit {} of Exiled Exchange 2 and the commit {} of the data of RePoE",
+            commit.sha, repoe_commit.sha
+        )),
+    )?;
+    println!("Written to {}", output.canonicalize()?.display());
+    Ok(())
+}
+
+/// Writes `NOTICE.md`: where the data come from (the commits of Exiled Exchange 2 and of the
+/// data of RePoE), and their licenses, that of RePoE read in its code at
+/// `repoe_code_reference`.
+fn write_notice(
+    agent: &ureq::Agent,
+    output: &Path,
+    (commit, repoe_commit): (&Commit, &Commit),
+    repoe_version: &str,
+    repoe_code_reference: &str,
+) -> Result<()> {
+    let license = get(agent, &raw_url(REPOSITORY, &commit.sha, "LICENSE"))?;
+    let repoe_code_commit = latest_commit(agent, REPOE_CODE, repoe_code_reference)?;
     println!("RePoE code, commit {}", repoe_code_commit.sha);
     let repoe_license = get(
-        &agent,
+        agent,
         &raw_url(REPOE_CODE, &repoe_code_commit.sha, "LICENSE.md"),
     )?;
     fs::write(
@@ -305,18 +333,10 @@ fn main() -> Result<()> {
                 date: &repoe_commit.commit.committer.date,
                 license: &repoe_license,
             },
-            repoe_version.trim(),
+            repoe_version,
             &repoe_code_commit.sha,
         ),
     )?;
-    fs::write(
-        output.join("report.md"),
-        report.to_markdown(&format!(
-            "the commit {} of Exiled Exchange 2 and the commit {} of the data of RePoE",
-            commit.sha, repoe_commit.sha
-        )),
-    )?;
-    println!("Written to {}", output.canonicalize()?.display());
     Ok(())
 }
 
