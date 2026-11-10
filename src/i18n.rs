@@ -1280,16 +1280,25 @@ impl Translator {
 
     /// The message `id`, its argument `report` the message `link`, and where that one is in it.
     fn linked(&self, id: &str, link: &str) -> Linked {
+        // A mark no translation holds stands for the words, so that their place is exact
+        // whatever the sentence says; a translation without them has no link.
+        const MARK: char = '\u{E000}';
         let words = self.format(link, None);
         let mut args = FluentArgs::new();
-        args.set("report", words.clone());
-        let text = self.format(id, Some(&args));
-        // The words are found in the sentence they were put in; a translation without them
-        // has no link.
-        let link = text
-            .find(&words)
-            .map_or(0..0, |start| start..start + words.len());
-        Linked { text, link }
+        args.set("report", MARK.to_string());
+        let marked = self.format(id, Some(&args));
+        let Some(start) = marked.find(MARK) else {
+            debug_assert!(false, "{id} without its link");
+            return Linked {
+                text: marked,
+                link: 0..0,
+            };
+        };
+        let text = marked.replacen(MARK, &words, 1);
+        Linked {
+            text,
+            link: start..start + words.len(),
+        }
     }
 
     fn format_wait(&self, id: &str, wait: Duration) -> String {
@@ -1615,6 +1624,11 @@ mod tests {
             for count in [0, 1, 4, 23] {
                 assert!(translator.offers(count).contains(&count.to_string()));
                 assert_ne!(translator.uncertain(count), "");
+                let thin = translator.thin_trades(count);
+                assert!(
+                    count < 2 || thin.contains(&count.to_string()),
+                    "{thin} in {language:?}"
+                );
             }
             assert!(translator.stack_of(7).contains('7'));
             for count in [1, 3, 5, 18] {
@@ -1778,11 +1792,11 @@ mod tests {
         let french = Translator::new(Language::French);
         assert!(french.uncertain(0).starts_with("Aucune offre"));
         assert!(french.uncertain(1).starts_with("Une seule offre"));
-        assert!(
-            Translator::new(Language::English)
-                .uncertain(0)
-                .starts_with("No offer")
-        );
+        assert!(french.thin_trades(0).starts_with("Aucun échange"));
+        assert!(french.thin_trades(1).starts_with("Un seul échange"));
+        let english = Translator::new(Language::English);
+        assert!(english.uncertain(0).starts_with("No offer"));
+        assert!(english.thin_trades(0).starts_with("No trade"));
     }
 
     #[test]
