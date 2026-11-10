@@ -54,8 +54,10 @@ impl<'a> Worth<'a> {
             Some(Currency::Chaos) => self.rates.chaos,
             None => prices::currency(self.currencies, id)?.trusted_exalted()?,
         };
-        // A price of nothing, or none, would count an offer as free.
-        (worth.is_finite() && worth > 0.0).then_some(amount * worth)
+        // A price of nothing, or none, would count an offer as free; so would an amount of
+        // nothing, and an amount beyond every price is no price either.
+        let exalted = amount * worth;
+        (worth > 0.0 && amount > 0.0 && exalted.is_finite()).then_some(exalted)
     }
 }
 
@@ -482,5 +484,22 @@ mod tests {
             assert_eq!(estimate(&[offer(5.0, id)], 1, worth, None), None, "{id}");
             assert!(!reference.suspicious(5.0, id), "{id}");
         }
+    }
+
+    /// The core review of 2026-11-10: only the rate was looked at, not the amount.
+    #[test]
+    fn an_amount_of_nothing_or_beyond_every_price_isnt_counted() {
+        let worth = Worth {
+            rates: Rates {
+                chaos: 75.0,
+                divine: 700.0,
+            },
+            currencies: &[],
+        };
+
+        for amount in [0.0, -1.0, f64::NAN, f64::INFINITY, f64::MAX] {
+            assert_eq!(worth.in_exalted(amount, "divine"), None, "{amount}");
+        }
+        assert_eq!(worth.in_exalted(2.0, "divine"), Some(1400.0));
     }
 }

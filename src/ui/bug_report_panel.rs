@@ -333,18 +333,27 @@ fn log_job(lines: &[LogLine]) -> LayoutJob {
         } else {
             line.text.clone()
         };
-        match &line.hidden {
-            Some(hidden) => {
-                job.append(&text[..hidden.start], 0.0, format.clone());
+        // The range comes from another module: off the text or inside a character, the line
+        // is drawn whole rather than closing the panel of the bug report with a panic.
+        let parts = line.hidden.as_ref().and_then(|hidden| {
+            Some((
+                text.get(..hidden.start)?,
+                text.get(hidden.clone())?,
+                text.get(hidden.end..)?,
+            ))
+        });
+        match parts {
+            Some((before, hidden, after)) => {
+                job.append(before, 0.0, format.clone());
                 job.append(
-                    &text[hidden.clone()],
+                    hidden,
                     0.0,
                     TextFormat {
                         italics: true,
                         ..TextFormat::simple(text::report(), color::FAINT)
                     },
                 );
-                job.append(&text[hidden.end..], 0.0, format);
+                job.append(after, 0.0, format);
             }
             None => job.append(&text, 0.0, format),
         }
@@ -420,5 +429,25 @@ mod tests {
         assert!(hidden.format.italics);
         assert_eq!(hidden.format.color, color::FAINT);
         assert_eq!(job.sections[3].format.color, color::WARNING);
+    }
+
+    /// The interface review of 2026-11-10: the range is computed in another module, and
+    /// slicing with it could close the panel of the bug report with a panic.
+    #[test]
+    fn a_hidden_range_that_doesnt_fit_its_line_draws_the_line_whole() {
+        let text = "18:51:09 INFO Fenêtre active";
+        let accent = text.find('ê').expect("an accent");
+        for hidden in [accent + 1..accent + 3, 5..500, 500..600] {
+            let lines = [LogLine {
+                text: text.to_owned(),
+                level: Some(Level::Info),
+                hidden: Some(hidden),
+            }];
+
+            let job = log_job(&lines);
+
+            assert_eq!(job.text, text);
+            assert_eq!(job.sections.len(), 1);
+        }
     }
 }

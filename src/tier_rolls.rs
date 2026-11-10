@@ -18,6 +18,7 @@ use crate::filters::StatKey;
 use crate::game_data::{self, LineMatch, ModifierTiers, Tier};
 use crate::item::{Currency, Modifier, ModifierKind, Range, TierDoubt};
 use crate::language::Language;
+use crate::logging;
 use crate::trade::stat_filters::counted_numbers;
 
 /// The tiers of the lowest and of the highest roll of a line over every tier: "T13–T1".
@@ -86,6 +87,9 @@ impl TierRolls {
                 continue;
             }
             let Some((matches, tiers)) = found else {
+                if let Some(base_type) = base_type {
+                    warn_of_a_missing_table(language, base_type, modifier);
+                }
                 continue;
             };
             // A fixed value without tier: only of a modifier whose tier the game doesn't write
@@ -189,6 +193,24 @@ fn tables_of(
     let matches = game_data::modifier_stats(language, modifier, None);
     let tiers = game_data::modifier_tiers(language, base_type, item_level, modifier, &matches)?;
     Some((matches, tiers))
+}
+
+/// Writes to the log that no table holds `modifier`, when one should
+/// ([`game_data::lacks_table`]): the first sign that the game changed its modifiers, and the
+/// list of those to generate again, in the log a bug report carries.
+fn warn_of_a_missing_table(language: Language, base_type: &str, modifier: &Modifier) {
+    let matches = game_data::modifier_stats(language, modifier, None);
+    if game_data::lacks_table(language, base_type, modifier, &matches) {
+        log::warn!(
+            "Game data, no table for a modifier copied as tier {:?} on {}: {}",
+            modifier.tier,
+            logging::plain(base_type),
+            modifier
+                .lines
+                .first()
+                .map_or_else(String::new, |line| logging::plain(&line.text))
+        );
+    }
 }
 
 /// Whether the advanced copy writes `modifier`, a prefix or suffix, with its ranges but without
@@ -781,5 +803,40 @@ mod tests {
                 }),
             })
         );
+    }
+
+    /// The parser review of 2026-11-10: the best sign that the data are behind the game was
+    /// skipped without a line in the log.
+    #[test]
+    fn a_tier_the_copy_writes_and_no_table_holds_is_told_apart() {
+        let lacks = |lines: &str| {
+            let maul = format!(
+                "Item Class: Two Hand Maces\nRarity: Magic\nCrackling Temple Maul of the Brute\n\
+                 --------\nItem Level: 40\n--------\n{lines}"
+            );
+            let item = Item::parse(&CopiedItem::from_text(&maul).expect("an item")).expect("read");
+            let modifier = &item.modifiers()[0];
+            let matches = game_data::modifier_stats(item.language(), modifier, None);
+            game_data::lacks_table(item.language(), "Temple Maul", modifier, &matches)
+        };
+
+        // The tier of the data.
+        assert!(!lacks(
+            "{ Prefix Modifier \"Crackling\" (Tier: 7) — Damage, Elemental, Lightning, Attack }\n\
+             Adds 2(1-4) to 60(53-76) Lightning Damage"
+        ));
+        // Ranges no tier has: the game changed them.
+        assert!(lacks(
+            "{ Prefix Modifier \"Crackling\" (Tier: 7) — Damage, Elemental, Lightning, Attack }\n\
+             Adds 2(1-5) to 60(54-79) Lightning Damage"
+        ));
+        // Without a tier written, nothing says a table should hold it; nor for an implicit.
+        assert!(!lacks(
+            "{ Prefix Modifier \"Crackling\" — Damage, Elemental, Lightning, Attack }\n\
+             Adds 2(1-5) to 60(54-79) Lightning Damage"
+        ));
+        assert!(!lacks(
+            "{ Implicit Modifier — Damage }\nAdds 2(1-5) to 60(54-79) Lightning Damage"
+        ));
     }
 }

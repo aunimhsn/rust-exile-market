@@ -322,6 +322,32 @@ pub fn modifier_tiers(
     find(&TABLES, affix, base, &copied, Tie::Best)
 }
 
+/// Whether the tables should hold `modifier` and don't: a prefix or suffix the advanced copy
+/// writes with its tier, on a base the data know, each of its lines with its stat, and no
+/// table with these ranges. The advanced copy tells the truth: the data are then behind the
+/// game, after a patch, which is worth a line in the log ([`modifier_tiers`] gives nothing).
+#[must_use]
+pub fn lacks_table(
+    language: Language,
+    base_type: &str,
+    modifier: &Modifier,
+    matches: &[LineMatch<'_>],
+) -> bool {
+    let affix = match modifier.kind {
+        ModifierKind::Explicit(Some(Affix::Prefix)) => TableAffix::Prefix,
+        ModifierKind::Explicit(Some(Affix::Suffix)) => TableAffix::Suffix,
+        _ => return false,
+    };
+    if modifier.tier.is_none() || modifier.doubt.is_some() {
+        return false;
+    }
+    let Some(base) = bases::spawn(language, base_type) else {
+        return false;
+    };
+    Copied::of(modifier, matches)
+        .is_some_and(|copied| find(&TABLES, affix, base, &copied, Tie::Best).is_none())
+}
+
 /// The tiers of the modifier of every line of `modifier`, whose line `line` adds up its part
 /// `whole` and a pure modifier, among those `item_level` allows ([`hybrid_tiers`]).
 fn split_tiers(

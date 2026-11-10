@@ -21,6 +21,8 @@ use crate::update::{ClosedUpdate, LeagueOfTheMoment, Release};
 
 const FILE_NAME: &str = "settings.toml";
 const WINDOW_FILE_NAME: &str = "window.ron";
+/// Where a settings file that isn't TOML is moved before the default settings replace it.
+const INVALID_FILE_NAME: &str = "settings.invalid.toml";
 
 /// The language chosen for the interface.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -54,6 +56,7 @@ impl LanguageSetting {
 pub struct HotkeySetting {
     /// Whether the hotkey copies in the game; off, its key is left to the game and to the other
     /// applications.
+    #[serde(deserialize_with = "or_on")]
     pub on: bool,
     /// Its keys, written joined (`keys = "Alt+D"`): Ctrl+D by default, and for keys that can't be
     /// read or can't be the hotkey, written to the log, so that the other settings still read.
@@ -108,6 +111,37 @@ fn deserialize_shortcut<'de, D: serde::Deserializer<'de>>(
     })
 }
 
+/// The value of the file, or its default when this version can't read it (`language =
+/// "german"`, written by a later version or by hand), so that the other settings still read:
+/// a file read as a whole lost them all for one value.
+fn or_default<'de, D, T>(deserializer: D) -> Result<T, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: serde::de::DeserializeOwned + Default,
+{
+    or_else(deserializer, T::default)
+}
+
+/// Whether the hotkey is on, as [`or_default`]: on when the file doesn't say it readably.
+fn or_on<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<bool, D::Error> {
+    or_else(deserializer, || HotkeySetting::default().on)
+}
+
+fn or_else<'de, D, T>(deserializer: D, default: impl FnOnce() -> T) -> Result<T, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: serde::de::DeserializeOwned,
+{
+    let value = toml::Value::deserialize(deserializer)?;
+    Ok(value.try_into().unwrap_or_else(|error: toml::de::Error| {
+        log::warn!(
+            "A setting can't be read ({}): its default instead",
+            logging::plain(error.message())
+        );
+        default()
+    }))
+}
+
 /// A change the player makes in the settings panel.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SettingChange {
@@ -120,18 +154,26 @@ pub enum SettingChange {
 }
 
 /// The settings of the player. A missing value takes its default, so that a file written by
-/// an older version still reads.
+/// an older version still reads; so does a value this version can't read ([`or_default`]),
+/// and a value it doesn't know is ignored, so that a file written by a later version reads
+/// too.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {
+    #[serde(deserialize_with = "or_default")]
     language: LanguageSetting,
+    #[serde(deserialize_with = "or_default")]
     always_on_top: bool,
+    #[serde(deserialize_with = "or_default")]
     hotkey: HotkeySetting,
     /// The chosen league; none until the player or the default chooses one.
+    #[serde(deserialize_with = "or_default")]
     league: Option<League>,
     /// The new leagues whose bubble the player closed, or answered by choosing a league.
+    #[serde(deserialize_with = "or_default")]
     closed_new_leagues: Vec<League>,
     /// The last update whose bubble the player closed, and the league of the moment then.
+    #[serde(deserialize_with = "or_default")]
     closed_update: Option<ClosedUpdate>,
 }
 
@@ -255,7 +297,9 @@ impl SettingsFile {
     }
 
     /// The settings of the file, or the default ones when it is missing or can't be read:
-    /// the next change then writes it again.
+    /// the next change then writes it again. A file that isn't TOML is first moved aside
+    /// (`settings.invalid.toml`): the default league is saved a few seconds after the launch,
+    /// which replaced it before the player could see what was wrong in it.
     #[must_use]
     pub fn load(&self) -> Settings {
         let Some(directory) = &self.directory else {
@@ -278,6 +322,9 @@ impl SettingsFile {
                     "{} can't be read, the default settings are used: {error}",
                     logging::without_home(&path).display()
                 );
+                if error.kind() == io::ErrorKind::InvalidData {
+                    set_aside(directory, &path);
+                }
                 Settings::default()
             }
         }
@@ -313,6 +360,16 @@ fn read(path: &Path) -> io::Result<Option<Settings>> {
     toml::from_str(&text)
         .map(Some)
         .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))
+}
+
+/// Moves the file at `path`, which isn't TOML, next to itself, in place of the one moved
+/// there before; a failure is logged, and the file is then replaced at the next change.
+fn set_aside(directory: &Path, path: &Path) {
+    let aside = directory.join(INVALID_FILE_NAME);
+    match fs::rename(path, &aside) {
+        Ok(()) => log::warn!("It is kept as {}", logging::without_home(&aside).display()),
+        Err(error) => log::warn!("It couldn't be kept aside: {error}"),
+    }
 }
 
 fn write(directory: &Path, settings: &Settings) -> io::Result<()> {
@@ -569,18 +626,59 @@ mod tests {
         assert_eq!(settings.hotkey(), HotkeySetting::default());
     }
 
+    /// The core review of 2026-11-10: one value this version didn't know lost every
+    /// setting, the file being replaced by the default ones a few seconds later.
     #[test]
-    fn an_unreadable_file_gives_the_default_settings() {
-        for text in [
+    fn a_value_that_cant_be_read_takes_its_default_and_the_others_are_kept() {
+        let kept = "always_on_top = true\nleague = \"Forbidden Rites\"\n";
+        for odd in [
             "language = \"german\"",
-            "always_on_top = \"yes\"",
-            "not toml",
+            "language = 5",
+            "closed_new_leagues = \"none\"",
+            "closed_update = { league = \"Forbidden Rites\" }",
+            "hotkey = 5",
+            "[hotkey]\non = \"yes\"\nkeys = \"Alt+G\"",
         ] {
-            let directory = TestDirectory::new("unreadable");
-            directory.write(text);
+            let directory = TestDirectory::new("odd-value");
+            directory.write(&format!("{kept}{odd}\n"));
 
-            assert_eq!(directory.file().load(), Settings::default(), "{text}");
+            let settings = directory.file().load();
+
+            assert!(settings.always_on_top(), "{odd}");
+            assert_eq!(
+                settings.league(),
+                Some(League::new("Forbidden Rites")),
+                "{odd}"
+            );
+            assert_eq!(settings.language(), LanguageSetting::System, "{odd}");
+            assert!(settings.hotkey().on, "{odd}");
+            assert!(directory.0.join(FILE_NAME).exists(), "{odd}");
         }
+        let directory = TestDirectory::new("odd-value-of-the-hotkey");
+        directory.write("[hotkey]\non = \"yes\"\nkeys = \"Alt+G\"\n");
+        assert_eq!(directory.file().load().hotkey().keys.to_string(), "Alt+G");
+        directory.write("always_on_top = \"yes\"\nlanguage = \"french\"\n");
+        assert_eq!(directory.file().load().language(), LanguageSetting::French);
+    }
+
+    #[test]
+    fn a_file_that_isnt_toml_gives_the_default_settings_and_is_kept_aside() {
+        let directory = TestDirectory::new("unreadable");
+        directory.write("not toml");
+        let file = directory.file();
+
+        assert_eq!(file.load(), Settings::default());
+
+        assert!(!directory.0.join(FILE_NAME).exists());
+        let aside = fs::read_to_string(directory.0.join(INVALID_FILE_NAME)).unwrap();
+        assert_eq!(aside, "not toml");
+        // The default settings saved after it don't touch the file kept aside, and a second
+        // unreadable file replaces the first one there.
+        file.save(&changed());
+        directory.write("still = not toml");
+        assert_eq!(file.load(), Settings::default());
+        let aside = fs::read_to_string(directory.0.join(INVALID_FILE_NAME)).unwrap();
+        assert_eq!(aside, "still = not toml");
     }
 
     #[test]

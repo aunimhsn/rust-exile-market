@@ -1058,7 +1058,12 @@ fn shown_estimate<'a>(
         return None;
     };
     // The next offers loaded don't move it.
-    estimate::estimate(&offers[..*first_page], *total, worth?, searched_catalyst)
+    estimate::estimate(
+        offers.get(..*first_page)?,
+        *total,
+        worth?,
+        searched_catalyst,
+    )
 }
 
 /// The state of the trade site in the status bar, at `now`: the long wait before the next
