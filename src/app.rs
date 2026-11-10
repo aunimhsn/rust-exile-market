@@ -29,9 +29,9 @@ use crate::pricing::{FixedPrice, NoFixedPrice};
 use crate::recent_items::RecentItems;
 use crate::session::{LeagueChange, PricesState, Session, ShownItem};
 use crate::settings::{SettingChange, Settings, SettingsFile};
-use crate::trade::ItemNamesWatch;
 use crate::trade::query::{SearchFilters, SearchKind};
 use crate::trade::search::{OfferSearch, Search};
+use crate::trade::{ItemNamesWatch, Refusal};
 use crate::ui::{
     self, Bubble, BubbleAction, BugReportAction, BugReportPanel, EmptyState, ItemBlock,
     ItemBlockAction, LeagueList, LeagueListAction, OffersAction, OffersBlock, PriceBlock,
@@ -147,6 +147,8 @@ impl ExileMarketApp {
         // The prices of the league of the last session, until the leagues arrive.
         let market = MarketWatch::start(settings.league(), move || market_ctx.request_repaint());
 
+        // A refusal of the trade site makes its two threads wait.
+        let refusal = Refusal::default();
         Self {
             // The language of the copied items never changes the interface: it only chooses
             // the item names and the trade site.
@@ -167,8 +169,10 @@ impl ExileMarketApp {
             activation: Activation::new(),
             recent: RecentItems::default(),
             market,
-            item_names: ItemNamesWatch::start(move || names_ctx.request_repaint()),
-            search: OfferSearch::start(move || search_ctx.request_repaint()),
+            item_names: ItemNamesWatch::start(refusal.clone(), move || {
+                names_ctx.request_repaint();
+            }),
+            search: OfferSearch::start(refusal, move || search_ctx.request_repaint()),
             offers: Offers::default(),
             stats_open: false,
             filters: Filters::default(),

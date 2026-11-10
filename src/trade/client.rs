@@ -10,9 +10,10 @@ use std::time::{Duration, Instant};
 
 use serde::de::DeserializeOwned;
 
-use super::limits::{Hit, LimitHeaders, Limits, Policy, RuleHeaders};
+use super::limits::{self, Hit, LimitHeaders, Limits, Policy, RuleHeaders};
 use super::offers::{ApiExchange, ApiFetch, ApiSearch, ExchangeOffer, ItemOffer};
 use super::query::{self, ItemQuery, SearchKind};
+use super::refusal::Refusal;
 use crate::http::{self, HttpError};
 use crate::language::Language;
 use crate::league::League;
@@ -102,6 +103,12 @@ pub(super) trait Transport {
 /// limits, and a redirection is an error status.
 pub(super) struct Network(ureq::Agent);
 
+impl Network {
+    pub fn new() -> Self {
+        Self(http::agent())
+    }
+}
+
 impl Transport for Network {
     fn send(&mut self, request: &Request) -> Result<Answer, ureq::Error> {
         let mut response = match &request.body {
@@ -152,7 +159,7 @@ impl Transport for Network {
         };
         let status = response.status().as_u16();
         let body = if (200..300).contains(&status) {
-            response.body_mut().read_to_string()
+            http::read_text(response.body_mut())
         } else {
             Ok(String::new())
         };
@@ -168,13 +175,18 @@ impl Transport for Network {
 pub struct TradeClient<T = Network> {
     transport: T,
     limits: Limits,
+    /// The wait asked by a refusal, shared with the download of the item names.
+    refusal: Refusal,
     last_search: Option<Instant>,
 }
 
 impl TradeClient {
     #[must_use]
-    pub fn new() -> Self {
-        Self::with_transport(Network(http::agent()))
+    pub fn new(refusal: Refusal) -> Self {
+        Self {
+            refusal,
+            ..Self::with_transport(Network::new())
+        }
     }
 }
 
@@ -183,6 +195,7 @@ impl<T: Transport> TradeClient<T> {
         Self {
             transport,
             limits: Limits::default(),
+            refusal: Refusal::default(),
             last_search: None,
         }
     }
@@ -201,14 +214,23 @@ impl<T: Transport> TradeClient<T> {
         };
         policies
             .iter()
-            .map(|&policy| self.limits.ready_at(policy, now))
+            .map(|&policy| self.ready_at(policy, now))
             .fold(interval, Instant::max)
+    }
+
+    /// When a request of `policy` may be sent: once its limits allow it, and after the wait
+    /// of a refusal, whichever request of the application the trade site refused.
+    fn ready_at(&self, policy: Policy, now: Instant) -> Instant {
+        let ready = self.limits.ready_at(policy, now);
+        self.refusal
+            .until(now)
+            .map_or(ready, |until| ready.max(until))
     }
 
     /// When the next offers of a search may be fetched.
     #[must_use]
     pub fn next_fetch(&self, now: Instant) -> Instant {
-        self.limits.ready_at(Policy::Fetch, now)
+        self.ready_at(Policy::Fetch, now)
     }
 
     /// Searches `query` in `league`, on the trade site of `language`.
@@ -305,7 +327,7 @@ impl<T: Transport> TradeClient<T> {
         request: &Request,
     ) -> Result<A, TradeError> {
         let sent = Instant::now();
-        let ready = self.limits.ready_at(policy, sent);
+        let ready = self.ready_at(policy, sent);
         if ready > sent {
             return Err(TradeError::Wait(ready));
         }
@@ -327,11 +349,10 @@ impl<T: Transport> TradeClient<T> {
         );
         let answer = result.map_err(|error| TradeError::Http(HttpError::Request(error)))?;
         if answer.status == 429 {
-            return Err(TradeError::Refused(self.limits.refused(
-                policy,
-                &answer.limits,
-                now,
-            )));
+            let until = self.limits.refused(policy, &answer.limits, now);
+            self.refusal
+                .extend(now + limits::refusal_wait(&answer.limits));
+            return Err(TradeError::Refused(until));
         }
         self.limits.answered(policy, &answer.limits, now);
         if !(200..300).contains(&answer.status) {
@@ -523,6 +544,52 @@ pub(super) mod tests {
         assert!(until > Instant::now() + Duration::from_secs(55));
         assert_eq!(site.requests().len(), 1);
         assert!(client.next_search(SearchKind::Items, Instant::now()) >= until);
+    }
+
+    /// The security audit of 2026-11-10: the download of the item names shares this wait.
+    #[test]
+    fn a_refusal_makes_every_request_to_the_trade_site_wait() {
+        let site = FakeSite::default();
+        let mut headers = limits("trade-search-request-limit", "5:10:60", "6:10:60");
+        headers.retry_after = Some("1800".to_owned());
+        site.answer(429, headers, "");
+        let refusal = Refusal::default();
+        let mut client = TradeClient {
+            refusal: refusal.clone(),
+            ..TradeClient::with_transport(site.clone())
+        };
+        let start = Instant::now();
+
+        let search = client.search_items(Language::English, &League::new("Standard"), &ring());
+
+        assert!(matches!(search, Err(TradeError::Refused(_))), "{search:?}");
+        let until = refusal.until(start).expect("a shared wait");
+        assert!(until >= start + Duration::from_mins(30));
+        // The other policies wait too: the same site refused the same address.
+        assert!(client.next_search(SearchKind::Exchange, start) >= until);
+        assert!(client.next_fetch(start) >= until);
+    }
+
+    #[test]
+    fn nothing_is_sent_during_the_wait_of_refused_item_names() {
+        let site = FakeSite::default();
+        let refusal = Refusal::default();
+        let until = Instant::now() + Duration::from_hours(2);
+        refusal.extend(until);
+        let mut client = TradeClient {
+            refusal,
+            ..TradeClient::with_transport(site.clone())
+        };
+        let league = League::new("Standard");
+
+        let items = client.search_items(Language::English, &league, &ring());
+        let exchange = client.search_exchange(Language::English, &league, "divine");
+        let fetch = client.fetch(Language::English, "Q1", &["a".to_owned()]);
+
+        assert!(matches!(items, Err(TradeError::Wait(wait)) if wait == until));
+        assert!(matches!(exchange, Err(TradeError::Wait(wait)) if wait == until));
+        assert!(matches!(fetch, Err(TradeError::Wait(wait)) if wait == until));
+        assert_eq!(site.requests(), []);
     }
 
     #[test]

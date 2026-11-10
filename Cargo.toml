@@ -64,6 +64,9 @@ global-hotkey = "0.9"
 # The version used by fluent-bundle, whose resources the tests read as syntax trees: update
 # them together.
 fluent-syntax = "0.12.0"
+# The tests of the size of an answer compress one, as a web service does. Already a dependency
+# of ureq (its `gzip` feature).
+flate2 = "1.1.10"
 
 # build.rs reads the index of the icons of the currency exchange.
 [build-dependencies]

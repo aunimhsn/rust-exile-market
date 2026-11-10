@@ -98,6 +98,13 @@ impl<'a> Lookup<'a> {
     }
 }
 
+/// The most lines a stat of the game data is written on in `language`: no run of lines longer
+/// than this makes one stat.
+#[must_use]
+pub fn max_stat_lines(language: Language) -> usize {
+    Stats::of(language).max_lines
+}
+
 /// The stats of the lines of `modifier`, in their order; a stat written on several lines is
 /// preferred to the stats of these lines one by one. `trade` holds the templates of the trade
 /// site, once it gave them.

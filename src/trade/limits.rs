@@ -12,6 +12,8 @@
 
 use std::time::{Duration, Instant};
 
+use crate::logging;
+
 /// Added to the end of a window: the clock of the trade site isn't ours.
 const MARGIN: Duration = Duration::from_secs(1);
 /// How long the requests are kept before the windows are known: the longest window measured
@@ -180,9 +182,9 @@ impl PolicyLimits {
             let Some(read) = read_rule(rule) else {
                 log::warn!(
                     "Unexpected limits of the trade site, the known ones are kept: {} {} / {}",
-                    rule.name,
-                    rule.limits,
-                    rule.state
+                    logging::plain(&rule.name),
+                    logging::plain(&rule.limits),
+                    logging::plain(&rule.state)
                 );
                 unreadable = true;
                 // Its restrictions apply all the same, those that can be read.
@@ -292,7 +294,7 @@ impl Limits {
         let policy = match headers.policy.as_deref() {
             None => expected,
             Some(name) => Policy::named(name).unwrap_or_else(|| {
-                log::warn!("Unknown policy of the trade site: {name}");
+                log::warn!("Unknown policy of the trade site: {}", logging::plain(name));
                 expected
             }),
         };
@@ -304,15 +306,21 @@ impl Limits {
     /// the end of the wait.
     pub fn refused(&mut self, policy: Policy, headers: &LimitHeaders, now: Instant) -> Instant {
         self.answered(policy, headers, now);
-        let delay = headers
-            .retry_after
-            .as_deref()
-            .and_then(|seconds| seconds.trim().parse().ok())
-            .map_or(DEFAULT_RETRY_AFTER, seconds);
         let limits = &mut self.policies[policy.index()];
-        limits.block(now + delay + MARGIN);
+        limits.block(now + refusal_wait(headers));
         limits.ready_at(now)
     }
+}
+
+/// How long a refusal asks to wait: the delay of `Retry-After`, a day at most, or a minute
+/// when it gives none, and the margin.
+pub fn refusal_wait(headers: &LimitHeaders) -> Duration {
+    let delay = headers
+        .retry_after
+        .as_deref()
+        .and_then(|seconds| seconds.trim().parse().ok())
+        .map_or(DEFAULT_RETRY_AFTER, seconds);
+    delay + MARGIN
 }
 
 /// A time read in a header, at most a day.

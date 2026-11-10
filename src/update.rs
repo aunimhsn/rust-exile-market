@@ -214,7 +214,7 @@ fn latest_tag() -> Result<Option<String>, HttpError> {
         Err(ureq::Error::StatusCode(404)) => return Ok(None),
         Err(error) => return Err(error.into()),
     };
-    let text = response.body_mut().read_to_string()?;
+    let text = http::read_text(response.body_mut())?;
     let latest: LatestRelease = serde_json::from_str(&text)?;
     Ok(Some(latest.tag_name))
 }

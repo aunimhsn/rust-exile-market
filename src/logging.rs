@@ -203,6 +203,32 @@ fn log_directory() -> Option<PathBuf> {
     )
 }
 
+/// The longest text of another program or of a web service written in a line of the log.
+const PLAIN_LENGTH: usize = 200;
+
+/// A text that the application didn't write (the class of a window, an identifier in an answer
+/// of a web service, the first line of a copied text) as the log writes it: on one line, without
+/// control characters, and cut when long, so that it can neither write lines of its own in the
+/// log nor fill it.
+#[must_use]
+pub fn plain(text: &str) -> String {
+    let mut plain: String = text
+        .chars()
+        .take(PLAIN_LENGTH)
+        .map(|character| {
+            if character.is_control() {
+                ' '
+            } else {
+                character
+            }
+        })
+        .collect();
+    if text.chars().nth(PLAIN_LENGTH).is_some() {
+        plain.push('…');
+    }
+    plain
+}
+
 /// The path with `~` for the home directory, so that the log doesn't show the account name.
 pub fn without_home(path: &Path) -> PathBuf {
     BaseDirs::new()
@@ -217,6 +243,20 @@ pub fn without_home(path: &Path) -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_text_of_another_program_is_logged_on_one_short_line() {
+        assert_eq!(plain("steam_app_2694490"), "steam_app_2694490");
+        assert_eq!(
+            plain("a\n12:00:00 [INFO] fake\r\u{1b}[2J\0b"),
+            "a 12:00:00 [INFO] fake  [2J b"
+        );
+        assert_eq!(plain(&"é".repeat(PLAIN_LENGTH)), "é".repeat(PLAIN_LENGTH));
+        assert_eq!(
+            plain(&"é".repeat(PLAIN_LENGTH + 1)),
+            format!("{}…", "é".repeat(PLAIN_LENGTH))
+        );
+    }
 
     #[test]
     fn the_clipboard_logs_only_its_warnings_and_errors() {

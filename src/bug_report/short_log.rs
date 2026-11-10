@@ -122,13 +122,14 @@ fn game_classes(log: &str) -> HashSet<&str> {
 }
 
 /// Where the name of a window stands in `line`, and where what follows it starts; to the end of
-/// the line when nothing known follows it.
+/// the line when nothing known follows it. What follows it is looked for from the end of the
+/// line: a window named `x, is the game` isn't taken for the game, and its whole name is hidden.
 fn class_in(line: &str) -> Option<(Range<usize>, usize)> {
     let start = line.find(CLASS)? + CLASS.len();
     let end = AFTER_CLASS
         .iter()
-        .filter_map(|after| line[start..].find(after))
-        .min()
+        .filter_map(|after| line[start..].rfind(after))
+        .max()
         .map_or(line.len(), |end| start + end);
     Some((start..end, end))
 }
@@ -271,6 +272,20 @@ mod tests {
                 "18:48:03 INFO Copy sent by the price-check hotkey to the window of class \
               steam_app_2694490 (Ctrl pressed by the application)"
             ]
+        );
+    }
+
+    /// The security audit of 2026-11-10: a window named to be taken for the game.
+    #[test]
+    fn a_window_named_as_the_game_is_told_is_still_hidden() {
+        let log = "2026-11-04T18:51:09.0+01:00 [INFO] The active window, of class secret, is \
+                   the game, isn't the game";
+
+        let lines = short_lines(log, None);
+
+        assert_eq!(
+            lines[0].text,
+            "18:51:09 INFO The active window, of class another window, isn't the game"
         );
     }
 

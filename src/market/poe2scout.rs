@@ -20,6 +20,9 @@ const PACE: Duration = Duration::from_secs(1);
 const PER_PAGE: &str = "250";
 /// The most pages read in a category, in case the API gave a wrong count.
 const MAX_PAGES: u32 = 10;
+/// The categories read at most, each being a request at least: about 25 are known, and an
+/// answer with far more is wrong.
+const MAX_CATEGORIES: usize = 100;
 /// The ids of the three currencies of the prices in `/ReferenceCurrencies`.
 const EXALTED: &str = "exalted";
 const CHAOS: &str = "chaos";
@@ -38,6 +41,8 @@ pub enum FetchError {
     NoCurrentLeague,
     /// No rate for this currency in the answer, so no price can be shown in it.
     MissingRate(&'static str),
+    /// This many categories in the answer: reading them all would send as many requests.
+    TooManyCategories(usize),
 }
 
 impl fmt::Display for FetchError {
@@ -46,6 +51,9 @@ impl fmt::Display for FetchError {
             Self::Http(error) => error.fmt(formatter),
             Self::NoCurrentLeague => formatter.write_str("no current league in the answer"),
             Self::MissingRate(currency) => write!(formatter, "no rate for the {currency} orb"),
+            Self::TooManyCategories(count) => {
+                write!(formatter, "{count} categories in the answer")
+            }
         }
     }
 }
@@ -54,7 +62,7 @@ impl std::error::Error for FetchError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             Self::Http(error) => Some(error),
-            Self::NoCurrentLeague | Self::MissingRate(_) => None,
+            Self::NoCurrentLeague | Self::MissingRate(_) | Self::TooManyCategories(_) => None,
         }
     }
 }
@@ -85,6 +93,17 @@ struct ApiCategories {
 #[serde(rename_all = "PascalCase")]
 struct ApiCategory {
     api_id: String,
+}
+
+impl ApiCategories {
+    /// An error when the answer has more categories than the database can have.
+    fn checked(self) -> Result<Self, FetchError> {
+        let count = self.unique_categories.len() + self.currency_categories.len();
+        if count > MAX_CATEGORIES {
+            return Err(FetchError::TooManyCategories(count));
+        }
+        Ok(self)
+    }
 }
 
 /// A currency of the answer of `/ReferenceCurrencies`, worth `relative_price` of the currency
@@ -310,6 +329,7 @@ impl PriceDatabase for Poe2Scout {
             return Ok(None);
         };
         let conversion = Conversion::new(&currencies)?;
+        let categories = categories.checked()?;
         let currency_categories = download_order(categories.currency_categories);
         let mut prices = PriceList {
             league: league.clone(),
@@ -424,6 +444,30 @@ fn current_leagues(leagues: Vec<ApiLeague>) -> Vec<League> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The security audit of 2026-11-10: each category is a request, a second apart.
+    #[test]
+    fn an_answer_with_too_many_categories_is_refused() {
+        let categories = |uniques: usize, currencies: usize| {
+            let list = |count: usize| {
+                (0..count)
+                    .map(|index| ApiCategory {
+                        api_id: index.to_string(),
+                    })
+                    .collect()
+            };
+            ApiCategories {
+                unique_categories: list(uniques),
+                currency_categories: list(currencies),
+            }
+        };
+
+        assert!(categories(40, MAX_CATEGORIES - 40).checked().is_ok());
+        assert!(matches!(
+            categories(40, MAX_CATEGORIES - 39).checked(),
+            Err(FetchError::TooManyCategories(count)) if count == MAX_CATEGORIES + 1
+        ));
+    }
 
     /// The shape of the answer of `/Leagues` on 2026-10-25, without the fields not read.
     const LEAGUES: &str = r#"[

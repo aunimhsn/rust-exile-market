@@ -11,6 +11,7 @@ use std::time::{Duration, Instant};
 
 use crate::hotkey::COPY_WAIT;
 use crate::item::CopiedItem;
+use crate::logging;
 use crate::worker::{OnDrop, Outbox, Worker};
 
 /// Fast enough to react before the player looks at the window.
@@ -133,7 +134,7 @@ impl<S: ClipboardSource> ClipboardWatcher<S> {
                 if self.last_text_hash != Some(text_hash) || (hotkey.is_some() && item.is_some()) {
                     self.last_text_hash = Some(text_hash);
                     if let Some(item) = item {
-                        log::info!("Item copied: {}", item.first_line());
+                        log::info!("Item copied: {}", logging::plain(item.first_line()));
                         emit(ClipboardEvent::Copied { item, hotkey });
                     }
                 }

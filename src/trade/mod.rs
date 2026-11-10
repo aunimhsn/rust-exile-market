@@ -14,6 +14,7 @@ pub mod link;
 pub mod offers;
 pub mod pseudo;
 pub mod query;
+mod refusal;
 pub mod search;
 mod site;
 pub mod stat_filters;
@@ -26,6 +27,7 @@ use crate::item_names::ItemNames;
 use crate::language::Language;
 use crate::logging;
 use crate::worker::{OnDrop, Outbox, Worker};
+pub use refusal::Refusal;
 use site::{NamesError, TradeSite};
 
 /// The trade site of `language`.
@@ -73,18 +75,19 @@ pub struct ItemNamesWatch {
 }
 
 impl ItemNamesWatch {
-    /// Starts reading the names; `wake` is called from the thread after each event.
+    /// Starts reading the names; `wake` is called from the thread after each event. No
+    /// request is sent during the wait of `refusal`, shared with the searches of offers.
     ///
     /// # Panics
     ///
     /// If the system can't start a thread.
     #[must_use]
-    pub fn start(wake: impl Fn() + Send + 'static) -> Self {
+    pub fn start(refusal: Refusal, wake: impl Fn() + Send + 'static) -> Self {
         let cache = files::cache_directory();
         if cache.is_none() {
             log::warn!("No cache directory: the item names will be downloaded at each launch");
         }
-        Self::spawn(TradeSite::new, cache, INTERVALS, wake)
+        Self::spawn(move || TradeSite::new(refusal), cache, INTERVALS, wake)
     }
 
     fn spawn<S: NameSource>(
@@ -151,6 +154,8 @@ fn watch(
                     wake();
                     due = Instant::now() + intervals.refresh;
                 }
+                // Not sent: the trade site refused a search, or the names, a moment ago.
+                Err(NamesError::Wait(until)) => due = until,
                 Err(error) => {
                     // Once, then quietly.
                     if failing {
@@ -159,14 +164,14 @@ fn watch(
                         log::warn!("The item names can't be downloaded: {error}");
                     }
                     failing = true;
-                    // A refusal waits as long as a failure with names: the trade site must
-                    // not be asked again soon.
-                    let retry = if known || error.is_refusal() {
-                        intervals.retry
-                    } else {
-                        intervals.retry_without_names
+                    // A refusal waits as long as a failure with names, and for the delay it
+                    // gives when longer: the trade site must not be asked again soon.
+                    let now = Instant::now();
+                    due = match error.refused_until() {
+                        Some(until) => until.max(now + intervals.retry),
+                        None if known => now + intervals.retry,
+                        None => now + intervals.retry_without_names,
                     };
-                    due = Instant::now() + retry;
                 }
             }
         }
@@ -216,17 +221,21 @@ mod tests {
         retry_without_names: Duration::from_millis(20),
     };
 
-    /// A trade site that gives empty names, or fails with an error status; it counts its
-    /// requests.
+    /// A trade site that gives empty names, fails with an error status, or refuses with a
+    /// 429 and the wait it asks for; it counts its requests.
     #[derive(Default)]
     struct FakeSite {
         failure: Option<u16>,
+        refused_for: Option<Duration>,
         requests: Arc<AtomicUsize>,
     }
 
     impl NameSource for FakeSite {
         fn item_names(&mut self) -> Result<ItemNames, NamesError> {
             self.requests.fetch_add(1, Ordering::SeqCst);
+            if let Some(wait) = self.refused_for {
+                return Err(NamesError::Refused(429, Instant::now() + wait));
+            }
             if let Some(status) = self.failure {
                 let error = HttpError::Request(ureq::Error::StatusCode(status));
                 return Err(NamesError::Http(error));
@@ -336,13 +345,54 @@ mod tests {
     #[test]
     fn a_refusal_of_the_trade_site_isnt_tried_again_soon() {
         let directory = TestDirectory::new("item-names-refused");
+        // Its wait is over at once: the hour of a failure with names still holds.
         let site = FakeSite {
-            failure: Some(429),
+            refused_for: Some(Duration::ZERO),
             ..FakeSite::default()
         };
         let requests = Arc::clone(&site.requests);
         let _watch = start_watch(site, &directory);
 
         assert_eq!(requests_after(&requests, Duration::from_millis(100)), 1);
+    }
+
+    /// A trade site that waits for the end of a refusal, as during a refused search.
+    struct WaitingSite {
+        until: Instant,
+        requests: Arc<AtomicUsize>,
+    }
+
+    impl NameSource for WaitingSite {
+        fn item_names(&mut self) -> Result<ItemNames, NamesError> {
+            self.requests.fetch_add(1, Ordering::SeqCst);
+            if Instant::now() < self.until {
+                return Err(NamesError::Wait(self.until));
+            }
+            Ok(names(SystemTime::now()))
+        }
+    }
+
+    #[test]
+    fn the_names_are_asked_again_at_the_end_of_the_wait_of_a_refused_search() {
+        let directory = TestDirectory::new("item-names-wait");
+        let requests = Arc::new(AtomicUsize::new(0));
+        let site = WaitingSite {
+            until: Instant::now() + Duration::from_millis(150),
+            requests: Arc::clone(&requests),
+        };
+        let (woken, wakes) = mpsc::channel();
+        let mut watch = ItemNamesWatch::spawn(
+            move || site,
+            Some(directory.0.clone()),
+            FAST,
+            move || {
+                let _ = woken.send(());
+            },
+        );
+
+        // Asked once during the wait, not every 20 ms as after a failure without names.
+        assert_eq!(requests_after(&requests, Duration::from_millis(100)), 1);
+        assert_eq!(received(&mut watch, &wakes).len(), 1);
+        assert_eq!(requests.load(Ordering::SeqCst), 2);
     }
 }

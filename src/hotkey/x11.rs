@@ -17,6 +17,7 @@ use x11rb::rust_connection::RustConnection;
 
 use super::grab::{Active, GAME_TITLE};
 use super::{Held, Key, Shortcut, copy_keys, modifiers_for_log, send_all};
+use crate::logging;
 use crate::overlay::{Point, ScreenRect, Target};
 use crate::x11::{self as shared, Atoms, Result};
 
@@ -740,18 +741,20 @@ fn missed_modifiers(
 }
 
 /// The class of a window from its `WM_CLASS`, an instance name then a class name, each ended
-/// by a null byte.
+/// by a null byte. Any program names its windows: the class is written to the log on one short
+/// line.
 fn window_class(property: &[u8]) -> String {
     let names: Vec<_> = property
         .split(|&byte| byte == 0)
         .filter(|name| !name.is_empty())
         .map(String::from_utf8_lossy)
         .collect();
-    match names.as_slice() {
+    let class = match names.as_slice() {
         [] => "unknown".to_owned(),
         [instance, class, ..] if instance != class => format!("{class} ({instance})"),
         [name, ..] => name.to_string(),
-    }
+    };
+    logging::plain(&class)
 }
 
 #[cfg(test)]
@@ -1048,6 +1051,11 @@ mod tests {
             "PathOfExile2 (pathofexile2.exe)"
         );
         assert_eq!(window_class(b""), "unknown");
+        // A window named to write a line of its own in the log.
+        assert_eq!(
+            window_class(b"a\n12:00:00 [INFO] fake\0b\0"),
+            "b (a 12:00:00 [INFO] fake)"
+        );
     }
 
     #[test]

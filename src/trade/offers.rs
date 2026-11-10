@@ -15,6 +15,7 @@ use crate::item::{
     read_quality, waystone_property, whole_percent, without_tier,
 };
 use crate::language::Language;
+use crate::logging;
 
 /// The highest quality of a catalyst on a ring, an amulet or a jewel, without a modifier
 /// `+#% to Maximum Quality`.
@@ -462,7 +463,10 @@ impl ApiFetch {
             .filter(|id| !currencies::known(id))
             .collect();
         for id in unknown_currencies {
-            log::warn!("Trade site: offers left out, priced in an unknown currency, {id}");
+            log::warn!(
+                "Trade site: offers left out, priced in an unknown currency, {}",
+                logging::plain(id)
+            );
         }
         let unknown: BTreeSet<&str> = offers
             .iter()
@@ -471,7 +475,10 @@ impl ApiFetch {
             .map(|kind| kind.words.as_str())
             .collect();
         for words in unknown {
-            log::warn!("Trade site: an unknown kind of quality, {words}");
+            log::warn!(
+                "Trade site: an unknown kind of quality, {}",
+                logging::plain(words)
+            );
         }
         offers
     }
