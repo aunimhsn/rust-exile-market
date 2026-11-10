@@ -11,6 +11,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use serde::{Deserialize, Serialize};
 
 use crate::Result;
+use crate::report::Report;
 
 /// The domain of the modifiers of the equipment, which the application takes when none is
 /// written.
@@ -494,6 +495,7 @@ pub type Templates = BTreeMap<String, String>;
 /// ([`CURRENCIES`]), the lines of their stats written as the English templates of Exiled
 /// Exchange 2 (by `tablet_translations` first for the tablets), and the tags of the bases that
 /// the tables read, by English name of the base.
+#[cfg(test)]
 pub fn reduce(
     modifiers: &BTreeMap<String, SourceModifier>,
     bases: &BTreeMap<String, SourceBase>,
@@ -501,6 +503,27 @@ pub fn reduce(
     tablet_translations: &[Translation],
     templates: &Templates,
     currencies: &[(Source, &[CurrencyModifier])],
+) -> Result<(Vec<Modifier>, BaseTags)> {
+    reduce_with_report(
+        modifiers,
+        bases,
+        translations,
+        tablet_translations,
+        templates,
+        currencies,
+        &mut Report::default(),
+    )
+}
+
+/// [`reduce`], with what is left out or odd noted in `report`.
+pub fn reduce_with_report(
+    modifiers: &BTreeMap<String, SourceModifier>,
+    bases: &BTreeMap<String, SourceBase>,
+    translations: &[Translation],
+    tablet_translations: &[Translation],
+    templates: &Templates,
+    currencies: &[(Source, &[CurrencyModifier])],
+    report: &mut Report,
 ) -> Result<(Vec<Modifier>, BaseTags)> {
     let released: Vec<&SourceBase> = bases
         .values()
@@ -513,6 +536,7 @@ pub fn reduce(
         &by_stat(&[tablet_translations, translations]),
         templates,
         &currencies,
+        report,
     )?;
 
     let mut tables = Vec::new();
@@ -570,10 +594,16 @@ pub fn reduce(
         });
     }
     for line in unknown_lines {
-        println!("Modifier line without template, its modifier left out: {line}");
+        report.note(
+            "Modifier lines without template, their modifier left out",
+            line,
+        );
     }
     for (string, template) in unsigned_lines {
-        println!("Modifier line known without the + of its number: {string} as {template}");
+        report.note(
+            "Modifier lines known without the + of their number",
+            format!("{string} as {template}"),
+        );
     }
     // The ordinary tables first, then those of the Genesis tree, of the essences and of the
     // alloys, then the desecrated ones: of two tables that hold a copied modifier as well, the
@@ -584,6 +614,37 @@ pub fn reduce(
     tables.sort_by_key(|table| (table.domain == DESECRATED, table.source));
     let base_tags = base_tags(&released, &tables);
     Ok((tables, base_tags))
+}
+
+/// The ids of the modifiers only a currency adds start with these words in `mods.json`.
+const CURRENCY_IDS: [&str; 2] = ["Essence", "Alloy"];
+
+/// Notes in `report` a prefix or suffix the tables leave out without an error, which a patch
+/// may have brought: one only a currency adds (`is_essence_only`, or named like those of
+/// [`ESSENCES`] and [`ALLOYS`]) that these lists don't have, `listed` telling whether they do;
+/// and, counted in `other_domains`, one of a domain the application doesn't read.
+fn note_left_out<'a>(
+    id: &str,
+    modifier: &'a SourceModifier,
+    listed: bool,
+    other_domains: &mut BTreeMap<&'a str, usize>,
+    report: &mut Report,
+) {
+    if !["prefix", "suffix"].contains(&modifier.generation_type.as_str()) {
+        return;
+    }
+    if !(is_kept(&modifier.domain) || modifier.domain == DESECRATED) {
+        *other_domains.entry(&modifier.domain).or_default() += 1;
+        return;
+    }
+    let of_a_currency =
+        modifier.is_essence_only || CURRENCY_IDS.iter().any(|start| id.starts_with(start));
+    if of_a_currency && !listed {
+        report.note(
+            "Modifiers of a currency that ESSENCES and ALLOYS don't list, left out",
+            id,
+        );
+    }
 }
 
 /// The translation of each stat, the first of `files` that writes it, the first of its file.
@@ -607,10 +668,13 @@ fn group_tiers(
     tablet_by_stat: &HashMap<&str, &Translation>,
     templates: &Templates,
     currencies: &HashMap<&str, (Source, Vec<SpawnWeight>)>,
+    report: &mut Report,
 ) -> Result<BTreeMap<Key, Vec<Tier>>> {
     let mut grouped: BTreeMap<Key, Vec<Tier>> = BTreeMap::new();
+    let mut other_domains: BTreeMap<&str, usize> = BTreeMap::new();
     for (id, modifier) in modifiers {
         let currency = currencies.get(id.as_str());
+        note_left_out(id, modifier, currency.is_some(), &mut other_domains, report);
         let spawn_weights = currency.map_or(&modifier.spawn_weights, |(_, spawn)| spawn);
         let rolls = (is_kept(&modifier.domain) || modifier.domain == DESECRATED)
             && ["prefix", "suffix"].contains(&modifier.generation_type.as_str())
@@ -684,6 +748,12 @@ fn group_tiers(
                 },
                 ranges,
             });
+    }
+    for (domain, count) in other_domains {
+        report.note(
+            "Prefixes and suffixes of a domain the application doesn't read, left out",
+            format!("{domain}: {count}"),
+        );
     }
     Ok(grouped)
 }
@@ -2818,5 +2888,41 @@ mod tests {
                 [{"level": 0, "ranges": [[[1, 2]]]}]
             ])
         );
+    }
+
+    /// The parser review of 2026-11-10: the new modifiers of the essences and of the alloys
+    /// were found by comparing lists by hand.
+    #[test]
+    fn a_modifier_of_a_currency_not_listed_and_the_other_domains_are_noted() {
+        let source = |domain: &str, kind: &str, essence_only: bool| -> SourceModifier {
+            serde_json::from_str(&format!(
+                r#"{{"domain": "{domain}", "generation_type": "{kind}", "is_essence_only": {essence_only},
+                    "type": "Life", "required_level": 1, "spawn_weights": [], "stats": []}}"#
+            ))
+            .expect("a modifier")
+        };
+        let modifiers = [
+            ("EssenceNewOne1", source("item", "prefix", true), false),
+            ("EssenceListed1", source("item", "prefix", true), true),
+            ("AlloyNewOne1", source("item", "suffix", false), false),
+            ("OddlyNamed1", source("delve", "suffix", true), false),
+            ("Ordinary1", source("item", "suffix", false), false),
+            ("Heist1", source("heist", "suffix", false), false),
+            ("Heist2", source("heist", "prefix", false), false),
+            ("Unique1", source("heist", "unique", true), false),
+        ];
+        let mut report = Report::default();
+        let mut other_domains = BTreeMap::new();
+
+        for (id, modifier, listed) in &modifiers {
+            note_left_out(id, modifier, *listed, &mut other_domains, &mut report);
+        }
+
+        let text = report.to_markdown("a commit");
+        assert!(
+            text.ends_with("left out\n\n- `AlloyNewOne1`\n- `EssenceNewOne1`\n"),
+            "{text}"
+        );
+        assert_eq!(other_domains, BTreeMap::from([("delve", 1), ("heist", 2)]));
     }
 }

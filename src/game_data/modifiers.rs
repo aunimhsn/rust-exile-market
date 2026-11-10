@@ -27,7 +27,12 @@ const ROUNDING: f64 = 0.051;
 const MAX_READINGS: usize = 4096;
 
 /// The tiers of a type of modifier that roll on the same bases, as the generator writes them.
+/// A field the application doesn't know makes the line unreadable, here and in the lines and
+/// tiers: the generator and the application describe the file each on their side, and a field
+/// renamed on one side only would otherwise read as its default (a desecrated table as an
+/// ordinary one), without a failing test.
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 struct Table {
     /// The modifiers of one type can't be on the same item: its tiers.
     #[serde(rename = "type")]
@@ -94,6 +99,7 @@ enum TableAffix {
 }
 
 #[derive(Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
 struct TableLine {
     /// The English template of the line, as Exiled Exchange 2 writes it.
     template: String,
@@ -110,6 +116,7 @@ fn one() -> f64 {
 }
 
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 struct TableTier {
     level: u32,
     /// For each line, the range of each of its values, with the sign of the stat.

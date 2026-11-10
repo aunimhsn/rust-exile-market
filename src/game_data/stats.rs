@@ -91,6 +91,8 @@ impl TryFrom<i8> for Better {
 
 /// A stat of the game.
 #[derive(Debug, PartialEq, Deserialize)]
+// As the modifier tables: a field the application doesn't know makes the line unreadable.
+#[serde(deny_unknown_fields)]
 pub struct Stat {
     /// Its English template, e.g. `# to maximum Life`, the same in every language.
     #[serde(rename = "ref")]
@@ -135,6 +137,7 @@ impl Stat {
 /// A string of a language that matches a line of the stat, with `#` for its values, e.g.
 /// `#% reduced Charm Charges used`.
 #[derive(Debug, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub(super) struct Matcher {
     pub string: String,
     /// The value the string gives: the option of an option stat, or the value of a string
