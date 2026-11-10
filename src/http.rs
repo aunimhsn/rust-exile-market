@@ -309,7 +309,8 @@ pub mod tests {
         (address, requests)
     }
 
-    /// The header lines of the requests a local server got, in lowercase, a request each.
+    /// The lines of the requests a local server got, a request each: the request line, then
+    /// its headers, their names in lowercase.
     pub type Heads = Arc<Mutex<Vec<Vec<String>>>>;
 
     /// [`server`], which also keeps the lines of each request.
@@ -331,7 +332,12 @@ pub mod tests {
                 let mut lines = Vec::new();
                 let mut line = String::new();
                 while request.read_line(&mut line).is_ok_and(|read| read > 2) {
-                    lines.push(line.trim_end().to_ascii_lowercase());
+                    // The name of a header in lowercase, its value as it was sent.
+                    let sent = line.trim_end();
+                    lines.push(match sent.split_once(':') {
+                        Some((name, value)) => format!("{}:{value}", name.to_ascii_lowercase()),
+                        None => sent.to_owned(),
+                    });
                     line.clear();
                 }
                 // The body of a `POST`, read whole before the answer.
@@ -462,7 +468,7 @@ pub mod tests {
 
         let heads = heads.lock().unwrap();
         let sent = header(&heads[0], "user-agent").expect("a User-Agent");
-        assert_eq!(sent, user_agent().to_ascii_lowercase());
+        assert_eq!(sent, user_agent());
         assert_eq!(
             user_agent(),
             format!(
@@ -494,20 +500,20 @@ pub mod tests {
         }
     }
 
-    /// Only "not sooner" is checked: "at once" would depend on how busy the machine is.
+    /// Only "not sooner" is checked: "at once" would depend on how busy the machine is. The
+    /// time is counted from before the first request, which the pace counts from: an instant
+    /// taken after each wait could come late, and the gap to the next one look too short.
     #[test]
-    fn two_requests_are_spaced_by_the_interval_at_least() {
+    fn the_requests_are_spaced_by_the_interval_at_least() {
         const INTERVAL: Duration = Duration::from_millis(20);
         let mut pace = Pace::new(INTERVAL);
+        let start = Instant::now();
 
         pace.wait();
-        let first = Instant::now();
         pace.wait();
-        let second = Instant::now();
+        assert!(start.elapsed() >= INTERVAL);
         pace.wait();
-
-        assert!(second.duration_since(first) >= INTERVAL);
-        assert!(second.elapsed() >= INTERVAL);
+        assert!(start.elapsed() >= INTERVAL * 2);
     }
 
     #[test]

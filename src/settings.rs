@@ -722,9 +722,9 @@ mod tests {
         settings
     }
 
-    /// The file the version 0.1.0 writes, every setting changed. This file never changes:
-    /// the players have it. A version that changes the format adds its own file and test,
-    /// and still reads this one.
+    /// The file the version 0.1.0 writes, every setting changed. Once that version is out,
+    /// this file no longer changes: the players have it. A version that changes the format
+    /// then adds its own file and test, and still reads this one.
     const VERSION_0_1_0: &str = include_str!("settings/settings-v0.1.0.toml");
 
     /// The core review of 2026-11-10: nothing fixed the file of a released version.

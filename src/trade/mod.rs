@@ -464,17 +464,21 @@ mod tests {
         assert_eq!(requests_after(&requests, Duration::from_millis(200)), 1);
     }
 
-    /// A trade site that waits for the end of a refusal, as during a refused search.
+    /// A trade site that waits for the end of a refusal, as during a refused search: `wait`
+    /// from its first request, whenever the thread starts.
     struct WaitingSite {
-        until: Instant,
+        wait: Duration,
+        until: Option<Instant>,
         requests: Arc<AtomicUsize>,
     }
 
     impl NameSource for WaitingSite {
         fn item_names(&mut self) -> Result<ItemNames, NamesError> {
             self.requests.fetch_add(1, Ordering::SeqCst);
-            if Instant::now() < self.until {
-                return Err(NamesError::Wait(self.until));
+            let now = Instant::now();
+            let until = *self.until.get_or_insert(now + self.wait);
+            if now < until {
+                return Err(NamesError::Wait(until));
             }
             Ok(names(SystemTime::now()))
         }
@@ -485,7 +489,8 @@ mod tests {
         let directory = TestDirectory::new("item-names-wait");
         let requests = Arc::new(AtomicUsize::new(0));
         let site = WaitingSite {
-            until: Instant::now() + Duration::from_millis(600),
+            wait: Duration::from_millis(600),
+            until: None,
             requests: Arc::clone(&requests),
         };
         let (woken, wakes) = mpsc::channel();

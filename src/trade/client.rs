@@ -797,6 +797,28 @@ pub(super) mod tests {
         );
     }
 
+    /// Told once: every answer would say the same.
+    #[test]
+    fn a_success_without_limits_is_noticed_and_one_with_limits_isnt() {
+        let site = FakeSite::default();
+        site.answer(
+            200,
+            limits("trade-fetch-request-limit", "12:4:10", "1:4:0"),
+            r#"{"result": []}"#,
+        );
+        site.answer(400, LimitHeaders::default(), "{}");
+        site.answer(200, LimitHeaders::default(), r#"{"result": []}"#);
+        let mut client = TradeClient::with_transport(site, Refusal::default());
+        let ids = ["a".to_owned()];
+
+        client.fetch(Language::English, "Q1", &ids).expect("offers");
+        assert!(!client.told_no_limits, "its limits were told");
+        let _ = client.fetch(Language::English, "Q1", &ids);
+        assert!(!client.told_no_limits, "an error status isn't a success");
+        client.fetch(Language::English, "Q1", &ids).expect("offers");
+        assert!(client.told_no_limits);
+    }
+
     #[test]
     fn an_answer_without_the_headers_tells_no_rule() {
         let read = limit_headers(&header_map(&[("content-type", "application/json")]));
@@ -836,14 +858,14 @@ pub(super) mod tests {
         assert_eq!(answer.limits, limit_headers(&header_map(&SEARCH_HEADERS)));
         assert_eq!(answer.body.expect("a body"), SEARCH);
         let heads = heads.lock().unwrap();
-        assert!(heads[0][0].starts_with("post "), "{:?}", heads[0]);
+        assert!(heads[0][0].starts_with("POST "), "{:?}", heads[0]);
         assert_eq!(header(&heads[0], "content-type"), Some("application/json"));
-        assert!(heads[1][0].starts_with("get "), "{:?}", heads[1]);
+        assert!(heads[1][0].starts_with("GET "), "{:?}", heads[1]);
         for request in heads.iter() {
             assert_eq!(header(request, "cookie"), None, "{request:?}");
             assert_eq!(
                 header(request, "user-agent"),
-                Some(http::user_agent().to_ascii_lowercase().as_str())
+                Some(http::user_agent().as_str())
             );
         }
     }

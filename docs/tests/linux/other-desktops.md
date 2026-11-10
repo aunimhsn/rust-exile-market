@@ -22,7 +22,7 @@ Le raccourci et la fenêtre par-dessus le jeu n'ont été essayés que sur KDE (
    ✅ Une ligne **« Window manager: … »** nomme le bureau (par exemple `Mutter` ou `GNOME Shell`), pas `unknown`.
 
 2. **Le jeu reste la fenêtre active pendant la saisie** (hypothèse 1) : **Ctrl+D** sur un objet rare, **« Show N stats »**, clique dans un champ **min**, tape `12`, puis **Ctrl+D sur un autre objet**.
-   ✅ La fenêtre montre l'autre objet. Le journal dit **« Copy sent by the price-check hotkey to the window of class … »**, puis **« The price-check hotkey gave the keyboard back to the game »**. ❌ Si rien ne s'ouvre, ou si le journal dit « The keyboard can't be given back to the game: the hotkey copies nothing ».
+   ✅ La fenêtre montre l'autre objet. Le journal dit **« The price-check hotkey gave the keyboard back to the game »**, puis **« Copy sent by the price-check hotkey to the window of class … »**. ❌ Si rien ne s'ouvre, ou si le journal dit « The copy can't be sent: … ».
 
 3. **Le clavier reste dans la fenêtre** (hypothèse 2) : clique dans un champ **min**, tape `1`, attends cinq secondes, tape `2`.
    ✅ Le champ montre `12` et aucun flacon n'est bu : le bureau n'a pas repris le clavier.
@@ -45,8 +45,8 @@ Le raccourci et la fenêtre par-dessus le jeu n'ont été essayés que sur KDE (
 9. **Lancé avant le bureau** (hypothèse 7) : mets Exile Market au démarrage automatique de la session, ferme la session, rouvre-la, puis appuie sur **Ctrl+D** dans un terminal.
    ✅ Rien n'est copié dans le terminal, et le journal ne dit pas « the desktop doesn't tell its active window (_NET_SUPPORTED) ». Si c'est le cas, note-le : le raccourci écoute alors dans toutes les fenêtres pour la session, ce que `specs.md` prévoit.
 
-10. **Le jeu reconnu** (hypothèse 8) : dans le jeu, regarde le journal quand tu passes du jeu à une autre fenêtre et retour. Si tu peux, recommence dans **gamescope** et dans le bureau virtuel de Wine.
-    ✅ Le journal dit **« The active window, of class steam_app_2694490, is the game »** au retour dans le jeu. ❌ S'il dit « … isn't the game » avec la classe du jeu (par exemple `gamescope`) : note la classe et le titre.
+10. **Le jeu reconnu** (hypothèse 8) : relance Exile Market, puis passe dans le jeu et regarde le journal. Si tu peux, recommence dans **gamescope** et dans le bureau virtuel de Wine, en relançant Exile Market à chaque fois.
+    ✅ Le journal dit **« The active window, of class steam_app_2694490, is the game »**, une seule fois par lancement d'Exile Market : la première fois que le jeu est la fenêtre active. ❌ S'il dit « … isn't the game » avec la classe du jeu (par exemple `gamescope`) : note la classe et le titre.
 
 11. **L'historique du presse-papiers** (hypothèse 9) : **Ctrl+D** sur une case vide, puis ouvre l'historique du presse-papiers du bureau (une extension sous GNOME).
     ✅ Aucun texte « Exile Market … » n'y apparaît.

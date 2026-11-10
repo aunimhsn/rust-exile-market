@@ -320,31 +320,40 @@ fn draw_the_offers(scene: &mut Scene, ctx: &Context, drawn: &mut Drawn, kind: Se
 /// The interface review of 2026-11-10: the five `show` of the item view were never run by a
 /// test.
 #[test]
-fn every_test_item_is_drawn_in_both_languages_without_a_panic() {
+fn every_test_item_is_drawn_in_english_without_a_panic() {
+    draw_every_test_item(Language::English);
+}
+
+/// A test for each language of the interface, so that they run side by side.
+#[test]
+fn every_test_item_is_drawn_in_french_without_a_panic() {
+    draw_every_test_item(Language::French);
+}
+
+/// Draws every test item, of both languages of the game, with the interface in `interface`.
+fn draw_every_test_item(interface: Language) {
     let ctx = context();
     let mut drawn = Drawn::default();
     for (file, text) in test_items::ALL {
-        for interface in Language::ALL {
-            let mut scene = Scene::new(text, interface);
-            // Without the prices of the league, nor a search.
+        let mut scene = Scene::new(text, interface);
+        // Without the prices of the league, nor a search.
+        scene.draw_each_way(&ctx, &mut drawn);
+        scene.draw_under_the_pointer(&ctx, &mut drawn);
+        // With prices, on few trades then on many.
+        for quantity in [1, 5000] {
+            let prices = prices_of(scene.item(), quantity);
+            scene.session.apply_market(MarketEvent::Prices(prices), &[]);
             scene.draw_each_way(&ctx, &mut drawn);
-            scene.draw_under_the_pointer(&ctx, &mut drawn);
-            // With prices, on few trades then on many.
-            for quantity in [1, 5000] {
-                let prices = prices_of(scene.item(), quantity);
-                scene.session.apply_market(MarketEvent::Prices(prices), &[]);
-                scene.draw_each_way(&ctx, &mut drawn);
-            }
-            if let Some(kind) = scene.kind() {
-                assert!(scene.search().is_some(), "{file}: a search of {kind:?}");
-                draw_the_offers(&mut scene, &ctx, &mut drawn, kind);
-            }
+        }
+        if let Some(kind) = scene.kind() {
+            assert!(scene.search().is_some(), "{file}: a search of {kind:?}");
+            draw_the_offers(&mut scene, &ctx, &mut drawn, kind);
         }
     }
 
     // Not vacuous: each part of the view was drawn many times.
     let items = test_items::ALL.len();
-    assert!(drawn.frames > items * 100, "{} frames", drawn.frames);
+    assert!(drawn.frames > items * 50, "{} frames", drawn.frames);
     assert!(
         drawn.with_a_fixed_price > items,
         "{}",

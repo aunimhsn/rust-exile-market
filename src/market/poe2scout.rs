@@ -1235,6 +1235,9 @@ mod tests {
     fn the_requests_of_a_download_are_spaced() {
         const INTERVAL: Duration = Duration::from_millis(15);
         let mut scout = Poe2Scout::with_source(api().with("/Leagues", LEAGUES), INTERVAL);
+        // From before the first request, which the pace counts from: the gap between two
+        // instants taken after each wait could look shorter than the interval.
+        let start = Instant::now();
 
         scout.leagues().expect("the leagues");
         scout
@@ -1243,8 +1246,9 @@ mod tests {
 
         let times = &scout.source.times;
         assert_eq!(times.len(), 6);
-        for pair in times.windows(2) {
-            assert!(pair[1].duration_since(pair[0]) >= INTERVAL, "{times:?}");
+        for (after, time) in (0_u32..).zip(times) {
+            let least = INTERVAL * after;
+            assert!(time.duration_since(start) >= least, "{start:?} {times:?}");
         }
     }
 

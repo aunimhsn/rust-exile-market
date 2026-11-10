@@ -284,7 +284,7 @@ mod tests {
     /// The limit written at the top of this file, pinned so that a change of the rule shows:
     /// the median of the page tells the bait only while fewer than half its offers are bait.
     #[test]
-    fn with_half_the_page_of_bait_the_estimate_is_the_one_of_the_bait() {
+    fn past_half_the_page_of_bait_the_estimate_is_the_one_of_the_bait() {
         let real = [2.0, 2.2, 2.4, 2.5, 3.0, 3.1];
         let page = |bait: usize| {
             let mut offers: Vec<ItemOffer> = (0..bait).map(|_| offer(1.0, "exalted")).collect();
