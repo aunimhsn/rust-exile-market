@@ -16,6 +16,7 @@ use winsafe::{HWND, co};
 
 use super::grab::{Foreground, is_game_window};
 use super::{Held, Key, Shortcut, copy_keys_after_focus, modifiers_for_log, send_all};
+use crate::logging;
 use crate::overlay::{KeyboardBack, Point, ScreenRect, Target};
 
 /// How often the foreground window is read. Windows tells its changes only to a hook
@@ -96,9 +97,11 @@ impl CopySender {
         let class = window.as_ref().map_or_else(
             || "none".to_owned(),
             |window| {
-                window
-                    .GetClassName()
-                    .unwrap_or_else(|error| format!("unknown ({error})"))
+                logging::plain(
+                    &window
+                        .GetClassName()
+                        .unwrap_or_else(|error| format!("unknown ({error})")),
+                )
             },
         );
         let game = window.as_ref().and_then(|window| {
@@ -219,9 +222,12 @@ fn foreground(classes_told: &mut ClassesTold) -> Foreground {
     if crate::overlay::is_ours(&window) {
         return Foreground::Ours;
     }
-    let class = window
-        .GetClassName()
-        .unwrap_or_else(|error| format!("unknown ({error})"));
+    // Any program names its windows: written to the log on one short line.
+    let class = logging::plain(
+        &window
+            .GetClassName()
+            .unwrap_or_else(|error| format!("unknown ({error})")),
+    );
     let title = window.GetWindowText().unwrap_or_default();
     if is_game_window(&title, &class) {
         if !classes_told.games.contains(&class) {

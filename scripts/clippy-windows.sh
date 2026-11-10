@@ -3,11 +3,13 @@
 # the code written for Windows alone is checked before a push. Nothing is linked: the C code of
 # the dependencies (ring) goes to a stand-in compiler that writes empty files, enough for a
 # check, in a target directory of its own so that they never reach a real build.
-#
-# Needs the standard library of the target once: rustup target add x86_64-pc-windows-msvc
 set -eu
 # From the root of the project, wherever the script is run from.
 cd "$(dirname "$0")/.."
+
+# The standard library of the target, for the version of Rust of rust-toolchain.toml: added
+# again after each new version, at once when it is there.
+rustup target add x86_64-pc-windows-msvc
 
 target=x86_64-pc-windows-msvc
 # At a fixed path: a path that changes would make Cargo check ring and what uses it at every run.

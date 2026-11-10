@@ -17,6 +17,7 @@ pub use poe2scout::FetchError;
 use poe2scout::Poe2Scout;
 
 use crate::league::{League, Leagues};
+use crate::logging;
 use crate::prices::PriceList;
 use crate::worker::{OnDrop, Outbox, Waited, Worker};
 use cache::PriceCache;
@@ -251,7 +252,7 @@ impl<D: PriceDatabase> Watch<'_, D> {
                 let age = prices.age(SystemTime::now());
                 log::info!(
                     "Prices of {} from the cache, {} min old: {} items",
-                    league.id(),
+                    logging::plain(league.id()),
                     age.as_secs() / 60,
                     prices.item_count()
                 );
@@ -278,7 +279,11 @@ impl<D: PriceDatabase> Watch<'_, D> {
         match self.database.leagues() {
             Ok(leagues) => {
                 self.succeeded();
-                log::info!("Leagues: {leagues:?}");
+                let ids: Vec<String> = leagues
+                    .iter()
+                    .map(|league| logging::plain(league.id()))
+                    .collect();
+                log::info!("Leagues: {}", ids.join(", "));
                 self.leagues_due = Instant::now() + self.intervals.refresh;
                 MarketEvent::Leagues(Leagues::new(leagues))
             }
@@ -304,7 +309,11 @@ impl<D: PriceDatabase> Watch<'_, D> {
         let (event, next) = match result {
             Ok(Some(prices)) => {
                 self.succeeded();
-                log::info!("Prices of {}: {} items", league.id(), prices.item_count());
+                log::info!(
+                    "Prices of {}: {} items",
+                    logging::plain(league.id()),
+                    prices.item_count()
+                );
                 self.cache.save(&prices);
                 (MarketEvent::Prices(prices), self.intervals.refresh)
             }

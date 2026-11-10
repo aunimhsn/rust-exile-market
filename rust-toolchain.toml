@@ -1,3 +1,7 @@
+# The version of Rust that builds and checks the application, here, in the CI and in the
+# releases: pinned, so that a release is built by the compiler its tests ran with, and raised
+# by a pull request (Dependabot proposes it), like a dependency. `rust-version` in Cargo.toml
+# is the oldest version that still builds it.
 [toolchain]
-channel = "stable"
+channel = "1.99.1"
 components = ["rustfmt", "clippy"]

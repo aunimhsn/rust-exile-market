@@ -1893,3 +1893,18 @@ fn an_unreadable_gem_level_warns_and_a_level_of_another_item_isnt_one() {
     let flask = "Item Class: Life Flasks\nRarity: Normal\nLife Flask\n--------\nLevel: 3";
     assert_eq!(item(flask).skill_gem_level(), None);
 }
+
+/// A text written to look like an item, far longer than `CopiedItem` lets in: each run length
+/// tried at each line would take minutes here (security audit of 2026-11-10).
+#[test]
+fn a_long_run_of_lines_that_make_no_stat_is_read_at_once() {
+    let mut modifiers: Vec<Modifier> = (0..3000)
+        .map(|_| Modifier::marked("x (rune)", ModifierKind::Rune))
+        .collect();
+    let start = std::time::Instant::now();
+
+    join_written_stats(&mut modifiers, Language::English, true);
+
+    assert_eq!(modifiers.len(), 3000);
+    assert!(start.elapsed() < std::time::Duration::from_secs(10));
+}

@@ -470,7 +470,10 @@ fn join_written_stats(modifiers: &mut Vec<Modifier>, language: Language, with_he
             .skip(first)
             .take_while(|modifier| without_header(modifier) && modifier.kind == start.kind)
             .count();
-        let joined = (2..=run).rev().find_map(|count| {
+        // No longer than a stat of the game data: a long run of lines that make no stat (a
+        // text written to look like an item) is then read once, not once per length.
+        let most = run.min(game_data::max_stat_lines(language));
+        let joined = (2..=most).rev().find_map(|count| {
             let window = || modifiers.iter().skip(first).take(count);
             let origin = modifiers.get(first + count - 1)?.origin;
             // The lines before the last: without marker, or with its own.

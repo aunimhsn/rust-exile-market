@@ -10,8 +10,10 @@ use std::time::{Duration, Instant};
 use super::client::{FETCH_SIZE, TradeClient, TradeError, Transport};
 use super::offers::{ExchangeOffer, ItemOffer};
 use super::query::{Query, SearchKind};
+use super::refusal::Refusal;
 use crate::language::Language;
 use crate::league::League;
+use crate::logging;
 use crate::worker::{OnDrop, Outbox, Waited, Worker};
 
 /// The longest wait for the limits of a fetch asked by the player: a fetch that must wait
@@ -117,14 +119,15 @@ pub struct OfferSearch {
 }
 
 impl OfferSearch {
-    /// Starts the thread; `wake` is called from it after each answer.
+    /// Starts the thread; `wake` is called from it after each answer. No request is sent
+    /// during the wait of `refusal`, shared with the download of the item names.
     ///
     /// # Panics
     ///
     /// If the system can't start a thread.
     #[must_use]
-    pub fn start(wake: impl Fn() + Send + 'static) -> Self {
-        Self::spawn(TradeClient::new, wake)
+    pub fn start(refusal: Refusal, wake: impl Fn() + Send + 'static) -> Self {
+        Self::spawn(move || TradeClient::new(refusal), wake)
     }
 
     fn spawn<T: Transport + 'static>(
@@ -240,7 +243,11 @@ impl<T: Transport> Searches<T> {
                 query: Query::Exchange(want),
             }) => {
                 let search = self.client.search_exchange(language, &league, &want)?;
-                log::info!("Trade site: {} exchange offers of {want}", search.total);
+                log::info!(
+                    "Trade site: {} exchange offers of {}",
+                    search.total,
+                    logging::plain(&want)
+                );
                 Ok(Outcome::Exchange {
                     offers: search.offers,
                     total: search.total,
@@ -299,7 +306,7 @@ mod tests {
         let (woken, wakes) = mpsc::channel();
         let site = site.clone();
         let search = OfferSearch::spawn(
-            move || TradeClient::with_transport(site),
+            move || TradeClient::with_transport(site, Refusal::default()),
             move || {
                 let _ = woken.send(());
             },
@@ -395,8 +402,9 @@ mod tests {
         };
         assert!(until > Instant::now() + Duration::from_secs(55));
         assert!(refused.next_search.items >= until);
-        // The exchange has its own limits: only the 10 s between two searches.
-        assert!(refused.next_search.exchange < Instant::now() + Duration::from_secs(11));
+        // The exchange has its own limits, but the same site refused the same address: it
+        // waits for the delay of the refusal too.
+        assert!(refused.next_search.exchange > Instant::now() + Duration::from_secs(55));
     }
 
     #[test]

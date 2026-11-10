@@ -5,15 +5,19 @@
 
 use std::collections::{HashMap, HashSet};
 use std::fmt;
-use std::time::{Duration, SystemTime};
+use std::time::{Duration, Instant, SystemTime};
 
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
 
+use super::client::{Network, Request, Transport};
+use super::limits;
+use super::refusal::Refusal;
 use crate::game_data::TradeGroup;
-use crate::http::{self, HttpError, Pace};
+use crate::http::{HttpError, Pace};
 use crate::item_names::{ItemNames, Names, StatTemplate, UniqueName, UniqueNames};
 use crate::language::Language;
+use crate::logging;
 
 /// The time between two requests, at least: the data endpoints announce no limit.
 const PACE: Duration = Duration::from_secs(1);
@@ -25,6 +29,12 @@ const NOT_EQUIPMENT: [&str; 2] = ["currency", "gem"];
 #[derive(Debug)]
 pub enum NamesError {
     Http(HttpError),
+    /// The trade site refused the request (403, 429): nothing is sent to it before this
+    /// time.
+    Refused(u16, Instant),
+    /// The trade site refused a request a moment ago: this one wasn't sent, and none is
+    /// before this time.
+    Wait(Instant),
     /// An answer without the names of a kind, in a language: the trade site is wrong for a
     /// moment, and the names of the cache must not be replaced for that.
     Missing(&'static str, Language),
@@ -33,13 +43,14 @@ pub enum NamesError {
 }
 
 impl NamesError {
-    /// The trade site refused the request (403, 429): it must not be asked again soon.
+    /// The end of the wait, when the trade site refused the request: it must not be asked
+    /// again soon.
     #[must_use]
-    pub fn is_refusal(&self) -> bool {
-        matches!(
-            self,
-            Self::Http(HttpError::Request(ureq::Error::StatusCode(403 | 429)))
-        )
+    pub fn refused_until(&self) -> Option<Instant> {
+        match self {
+            Self::Refused(_, until) => Some(*until),
+            Self::Http(_) | Self::Wait(_) | Self::Missing(..) | Self::NoUniquePairs => None,
+        }
     }
 }
 
@@ -47,6 +58,16 @@ impl fmt::Display for NamesError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Http(error) => error.fmt(formatter),
+            Self::Refused(status, until) => write!(
+                formatter,
+                "refused with the status {status}, {} s to wait",
+                until.saturating_duration_since(Instant::now()).as_secs()
+            ),
+            Self::Wait(until) => write!(
+                formatter,
+                "not sent, {} s to wait",
+                until.saturating_duration_since(Instant::now()).as_secs()
+            ),
             Self::Missing(kind, language) => write!(formatter, "no {kind} in {language:?}"),
             Self::NoUniquePairs => formatter.write_str("no unique lines up in both languages"),
         }
@@ -57,7 +78,7 @@ impl std::error::Error for NamesError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             Self::Http(error) => Some(error),
-            Self::Missing(..) | Self::NoUniquePairs => None,
+            Self::Refused(..) | Self::Wait(_) | Self::Missing(..) | Self::NoUniquePairs => None,
         }
     }
 }
@@ -125,18 +146,28 @@ struct LanguageData {
     stats: Vec<ApiStatGroup>,
 }
 
-/// The client of the trade site, which identifies the application and spaces its requests.
-pub struct TradeSite {
-    agent: ureq::Agent,
+/// The client of the data of the trade site, which identifies the application, spaces its
+/// requests, follows no redirection and sends nothing during the wait of a refusal.
+pub struct TradeSite<T = Network> {
+    transport: T,
     pace: Pace,
+    /// The wait asked by a refusal, shared with the searches of offers.
+    refusal: Refusal,
 }
 
 impl TradeSite {
     #[must_use]
-    pub fn new() -> Self {
+    pub fn new(refusal: Refusal) -> Self {
+        Self::with_transport(Network::new(), refusal)
+    }
+}
+
+impl<T: Transport> TradeSite<T> {
+    fn with_transport(transport: T, refusal: Refusal) -> Self {
         Self {
-            agent: http::agent(),
+            transport,
             pace: Pace::new(PACE),
+            refusal,
         }
     }
 
@@ -148,7 +179,7 @@ impl TradeSite {
         item_names(SystemTime::now(), &english, &french)
     }
 
-    fn language_data(&mut self, language: Language) -> Result<LanguageData, HttpError> {
+    fn language_data(&mut self, language: Language) -> Result<LanguageData, NamesError> {
         Ok(LanguageData {
             language,
             items: self.data(language, "items")?,
@@ -157,16 +188,34 @@ impl TradeSite {
         })
     }
 
-    /// The result of the data endpoint `name` on the trade site of `language`.
-    fn data<T: DeserializeOwned>(
+    /// The result of the data endpoint `name` on the trade site of `language`. Not asked
+    /// during the wait of a refusal; a refusal (403, 429) starts one, of the delay of its
+    /// `Retry-After`, for the searches of offers too.
+    fn data<A: DeserializeOwned>(
         &mut self,
         language: Language,
         name: &str,
-    ) -> Result<Vec<T>, HttpError> {
+    ) -> Result<Vec<A>, NamesError> {
         self.pace.wait();
-        let url = format!("{}/api/trade2/data/{name}", super::host(language));
-        let answer: ApiResult<T> = http::get_json(&self.agent, &url, &[])?;
-        Ok(answer.result)
+        if let Some(until) = self.refusal.until(Instant::now()) {
+            return Err(NamesError::Wait(until));
+        }
+        let request = Request {
+            url: format!("{}/api/trade2/data/{name}", super::host(language)),
+            body: None,
+        };
+        let answer = self.transport.send(&request).map_err(HttpError::Request)?;
+        if matches!(answer.status, 403 | 429) {
+            let until = Instant::now() + limits::refusal_wait(&answer.limits);
+            self.refusal.extend(until);
+            return Err(NamesError::Refused(answer.status, until));
+        }
+        if !(200..300).contains(&answer.status) {
+            return Err(HttpError::Request(ureq::Error::StatusCode(answer.status)).into());
+        }
+        let body = answer.body.map_err(HttpError::Request)?;
+        let result: ApiResult<A> = serde_json::from_str(&body).map_err(HttpError::Json)?;
+        Ok(result.result)
     }
 }
 
@@ -257,7 +306,7 @@ fn unique_pairs(english: &[ApiItemCategory], french: &[ApiItemCategory]) -> Vec<
         let Some(translated) = french.iter().find(|other| other.id == category.id) else {
             log::warn!(
                 "No category {} in French: its uniques are left out",
-                category.id
+                logging::plain(&category.id)
             );
             continue;
         };
@@ -265,7 +314,7 @@ fn unique_pairs(english: &[ApiItemCategory], french: &[ApiItemCategory]) -> Vec<
         if let Some(reason) = misalignment(&english_uniques, &french_uniques) {
             log::warn!(
                 "The uniques of {} don't line up in English and French ({reason}): left out",
-                category.id
+                logging::plain(&category.id)
             );
             continue;
         }
@@ -327,6 +376,9 @@ fn unique_name(item: &ApiItem) -> Option<UniqueName> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::trade::client::Answer;
+    use crate::trade::client::tests::FakeSite;
+    use crate::trade::limits::LimitHeaders;
 
     /// The shape of `/data/items` on www.pathofexile.com on 2026-10-25, a few items of it.
     const ENGLISH_ITEMS: &str = r#"{"result": [
@@ -551,14 +603,134 @@ mod tests {
         assert_eq!(names, ["Andvarius"]);
     }
 
-    #[test]
-    fn a_refusal_of_the_trade_site_is_told_apart() {
-        let status = |code| NamesError::Http(HttpError::Request(ureq::Error::StatusCode(code)));
+    /// The headers of a refusal that asks to wait `seconds`.
+    fn retry_after(seconds: &str) -> LimitHeaders {
+        LimitHeaders {
+            retry_after: Some(seconds.to_owned()),
+            ..LimitHeaders::default()
+        }
+    }
 
-        assert!(status(429).is_refusal());
-        assert!(status(403).is_refusal());
-        assert!(!status(503).is_refusal());
-        assert!(!NamesError::NoUniquePairs.is_refusal());
+    #[test]
+    fn a_refusal_waits_for_its_delay_and_makes_the_searches_wait() {
+        for status in [429, 403] {
+            let site = FakeSite::default();
+            site.answer(status, retry_after("7200"), "");
+            let refusal = Refusal::default();
+            let mut names = TradeSite::with_transport(site.clone(), refusal.clone());
+            let start = Instant::now();
+
+            let error = names.item_names().expect_err("a refusal");
+
+            let until = error.refused_until().expect("a wait");
+            assert!(until >= start + Duration::from_hours(2), "{status}");
+            assert!(until < start + Duration::from_hours(2) + Duration::from_mins(1));
+            assert_eq!(refusal.until(start), Some(until), "{status}");
+            // The five other requests didn't leave.
+            assert_eq!(site.requests().len(), 1, "{status}");
+        }
+    }
+
+    #[test]
+    fn nothing_is_sent_during_the_wait_of_a_refused_search() {
+        let site = FakeSite::default();
+        let refusal = Refusal::default();
+        let until = Instant::now() + Duration::from_mins(30);
+        refusal.extend(until);
+        let mut names = TradeSite::with_transport(site.clone(), refusal);
+
+        let error = names.item_names().expect_err("a wait");
+
+        assert!(matches!(error, NamesError::Wait(wait) if wait == until));
+        assert_eq!(error.refused_until(), None);
+        assert_eq!(site.requests(), []);
+    }
+
+    /// A trade site that refuses a search of the other thread while it answers the names.
+    struct RefusedMeanwhile {
+        site: FakeSite,
+        refusal: Refusal,
+        until: Instant,
+    }
+
+    impl Transport for RefusedMeanwhile {
+        fn send(&mut self, request: &Request) -> Result<Answer, ureq::Error> {
+            let answer = self.site.send(request);
+            self.refusal.extend(self.until);
+            answer
+        }
+    }
+
+    #[test]
+    fn a_search_refused_between_two_requests_stops_the_next_ones() {
+        let site = FakeSite::default();
+        for _ in 0..6 {
+            site.answer(200, LimitHeaders::default(), r#"{"result": []}"#);
+        }
+        let refusal = Refusal::default();
+        let until = Instant::now() + Duration::from_mins(30);
+        let transport = RefusedMeanwhile {
+            site: site.clone(),
+            refusal: refusal.clone(),
+            until,
+        };
+        let mut names = TradeSite::with_transport(transport, refusal);
+        names.pace = Pace::new(Duration::ZERO);
+
+        let error = names.item_names().expect_err("a wait");
+
+        assert!(matches!(error, NamesError::Wait(wait) if wait == until));
+        assert_eq!(site.requests().len(), 1);
+    }
+
+    #[test]
+    fn an_error_status_isnt_a_refusal_and_a_redirection_is_one_request() {
+        for status in [302, 503] {
+            let site = FakeSite::default();
+            site.answer(status, LimitHeaders::default(), "");
+            let refusal = Refusal::default();
+            let mut names = TradeSite::with_transport(site.clone(), refusal.clone());
+
+            let error = names.item_names().expect_err("an error status");
+
+            assert!(matches!(
+                error,
+                NamesError::Http(HttpError::Request(ureq::Error::StatusCode(code))) if code == status
+            ));
+            assert_eq!(refusal.until(Instant::now()), None);
+            assert_eq!(site.requests().len(), 1, "{status}");
+        }
+    }
+
+    #[test]
+    fn the_names_are_asked_on_the_trade_site_of_each_language() {
+        let site = FakeSite::default();
+        for _ in 0..6 {
+            site.answer(200, LimitHeaders::default(), r#"{"result": []}"#);
+        }
+        let mut names = TradeSite::with_transport(site.clone(), Refusal::default());
+        names.pace = Pace::new(Duration::ZERO);
+
+        // Empty answers: read, then refused as names.
+        let error = names.item_names().expect_err("no name");
+
+        assert!(matches!(error, NamesError::Missing(..)));
+        let urls: Vec<String> = site
+            .requests()
+            .into_iter()
+            .map(|request| request.url)
+            .collect();
+        assert_eq!(
+            urls,
+            [
+                "https://www.pathofexile.com/api/trade2/data/items",
+                "https://www.pathofexile.com/api/trade2/data/static",
+                "https://www.pathofexile.com/api/trade2/data/stats",
+                "https://fr.pathofexile.com/api/trade2/data/items",
+                "https://fr.pathofexile.com/api/trade2/data/static",
+                "https://fr.pathofexile.com/api/trade2/data/stats",
+            ]
+        );
     }
 
     #[test]
