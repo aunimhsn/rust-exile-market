@@ -235,10 +235,25 @@ impl Kind {
     }
 }
 
-/// The client of poe2scout, which identifies the application in each request and spaces its
-/// requests.
-pub struct Poe2Scout {
-    agent: ureq::Agent,
+/// Where the answers come from: the API over the network, or a fake one in the tests.
+pub(super) trait Source {
+    /// The text of the answer of `path` with the parameters `query`.
+    fn get(&mut self, path: &str, query: &[(&str, &str)]) -> Result<String, HttpError>;
+}
+
+/// The API of poe2scout, asked by an agent that identifies the application in each request.
+pub struct Network(ureq::Agent);
+
+impl Source for Network {
+    fn get(&mut self, path: &str, query: &[(&str, &str)]) -> Result<String, HttpError> {
+        http::get_text(&self.0, &format!("{BASE_URL}{path}"), query)
+    }
+}
+
+/// The client of poe2scout, which spaces its requests, in the order that prices the most
+/// copied items first, and stops a download at its first failure.
+pub struct Poe2Scout<S = Network> {
+    source: S,
     pace: Pace,
     /// A request of the download under way was answered ([`FetchError::Http`]).
     answered: bool,
@@ -247,9 +262,16 @@ pub struct Poe2Scout {
 impl Poe2Scout {
     #[must_use]
     pub fn new() -> Self {
+        Self::with_source(Network(http::agent()), PACE)
+    }
+}
+
+impl<S: Source> Poe2Scout<S> {
+    /// A client that asks `source`, `interval` between two requests at least.
+    fn with_source(source: S, interval: Duration) -> Self {
         Self {
-            agent: http::agent(),
-            pace: Pace::new(PACE),
+            source,
+            pace: Pace::new(interval),
             answered: false,
         }
     }
@@ -285,7 +307,10 @@ impl Poe2Scout {
         path: &str,
         query: &[(&str, &str)],
     ) -> Result<T, FetchError> {
-        let answer = http::get_json(&self.agent, &format!("{BASE_URL}{path}"), query);
+        let answer = self
+            .source
+            .get(path, query)
+            .and_then(|text| Ok(serde_json::from_str(&text)?));
         let after_answers = self.answered;
         self.answered |= answer.is_ok();
         answer.map_err(|error| FetchError::Http {
@@ -328,7 +353,7 @@ impl Poe2Scout {
     }
 }
 
-impl PriceDatabase for Poe2Scout {
+impl<S: Source> PriceDatabase for Poe2Scout<S> {
     fn leagues(&mut self) -> Result<Vec<League>, FetchError> {
         self.answered = false;
         // Read strictly: a league left out because it can't be read would be taken for a
@@ -486,6 +511,8 @@ fn current_leagues(leagues: Vec<ApiLeague>) -> Vec<League> {
 
 #[cfg(test)]
 mod tests {
+    use std::time::Instant;
+
     use super::*;
 
     /// The security audit of 2026-11-10: each category is a request, a second apart.
@@ -830,11 +857,399 @@ mod tests {
 
     /// The code review of the quality fixes: left out, a league that can't be read was taken
     /// for a league that ended, and the player moved to Standard. `leagues` reads a plain
-    /// `Vec`, which this pins; the request itself is tested with the seam of step 17e3b.
+    /// `Vec`, which this pins; `the_leagues_are_read_whole_or_not_at_all` asks for them.
     #[test]
     fn the_list_of_the_leagues_has_no_lenient_reading() {
         let leagues = r#"[{"Value": "Standard", "IsCurrent": true}, {"Value": "Forbidden Rites"}]"#;
 
         assert!(serde_json::from_str::<Vec<ApiLeague>>(leagues).is_err());
+    }
+
+    /// An API that answers each request it knows with its text, any other with the status
+    /// 404, and keeps the requests it got, written `path?name=value&…`, with their times.
+    #[derive(Default)]
+    struct FakeApi {
+        answers: Vec<(String, String)>,
+        /// The request that gets no answer.
+        hangs_at: Option<String>,
+        requests: Vec<String>,
+        times: Vec<Instant>,
+    }
+
+    impl FakeApi {
+        fn with(mut self, request: impl Into<String>, answer: &str) -> Self {
+            self.answers.push((request.into(), answer.to_owned()));
+            self
+        }
+
+        fn hanging_at(mut self, request: &str) -> Self {
+            self.hangs_at = Some(request.to_owned());
+            self
+        }
+    }
+
+    impl Source for FakeApi {
+        fn get(&mut self, path: &str, query: &[(&str, &str)]) -> Result<String, HttpError> {
+            let pairs: Vec<String> = query
+                .iter()
+                .map(|(name, value)| format!("{name}={value}"))
+                .collect();
+            let request = if pairs.is_empty() {
+                path.to_owned()
+            } else {
+                format!("{path}?{}", pairs.join("&"))
+            };
+            self.times.push(Instant::now());
+            self.requests.push(request.clone());
+            if self.hangs_at.as_deref() == Some(request.as_str()) {
+                return Err(ureq::Error::Timeout(ureq::Timeout::Global).into());
+            }
+            self.answers
+                .iter()
+                .find(|(known, _)| *known == request)
+                .map(|(_, answer)| answer.clone())
+                .ok_or_else(|| ureq::Error::StatusCode(404).into())
+        }
+    }
+
+    /// What a download told, interrupted at its check number `stop_at` (from 0).
+    #[derive(Default)]
+    struct Download {
+        stop_at: Option<usize>,
+        checks: usize,
+        /// The currencies and the uniques priced so far, and the share done.
+        progress: Vec<(usize, usize, f32)>,
+    }
+
+    impl DownloadObserver for Download {
+        fn interrupted(&mut self) -> bool {
+            self.checks += 1;
+            self.stop_at.is_some_and(|stop| self.checks > stop)
+        }
+
+        fn progress(&mut self, prices: &PriceList, progress: f32) {
+            self.progress
+                .push((prices.currencies.len(), prices.uniques.len(), progress));
+        }
+    }
+
+    const CATEGORIES: &str = r#"{"UniqueCategories": [{"ApiId": "accessory"}],
+        "CurrencyCategories": [{"ApiId": "fragments"}, {"ApiId": "currency"}]}"#;
+    const EMPTY_PAGE: &str = r#"{"CurrentPage": 1, "Pages": 1, "Total": 0, "Items": []}"#;
+
+    const CATEGORIES_PATH: &str = "/Leagues/HC%20Forbidden%20Rites/Items/Categories";
+    const RATES_PATH: &str = "/Leagues/HC%20Forbidden%20Rites/ReferenceCurrencies";
+
+    /// The request of the page `page` of a category of `kind` (`Currencies` or `Uniques`).
+    fn page_request(kind: &str, category: &str, page: u32) -> String {
+        format!(
+            "/Leagues/HC%20Forbidden%20Rites/{kind}/ByCategory?category={category}&perPage=250&page={page}"
+        )
+    }
+
+    /// An API with the five answers of a whole download of the league of [`league`].
+    fn api() -> FakeApi {
+        FakeApi::default()
+            .with(CATEGORIES_PATH, CATEGORIES)
+            .with(RATES_PATH, REFERENCE_CURRENCIES)
+            .with(page_request("Currencies", "currency", 1), CURRENCIES)
+            .with(page_request("Currencies", "fragments", 1), EMPTY_PAGE)
+            .with(page_request("Uniques", "accessory", 1), UNIQUES)
+    }
+
+    fn league() -> League {
+        League::new("HC Forbidden Rites")
+    }
+
+    /// A client of `api` that doesn't wait between two requests.
+    fn scout(api: FakeApi) -> Poe2Scout<FakeApi> {
+        Poe2Scout::with_source(api, Duration::ZERO)
+    }
+
+    /// The network review of 2026-11-10: nothing ran the download itself, only its parts.
+    #[test]
+    fn a_download_asks_for_the_rates_then_the_currency_then_the_uniques() {
+        let mut scout = scout(api());
+        let mut download = Download::default();
+
+        let prices = scout
+            .prices(&league(), &mut download)
+            .expect("every request answered")
+            .expect("not interrupted");
+
+        assert_eq!(
+            scout.source.requests,
+            [
+                CATEGORIES_PATH.to_owned(),
+                RATES_PATH.to_owned(),
+                page_request("Currencies", "currency", 1),
+                page_request("Currencies", "fragments", 1),
+                page_request("Uniques", "accessory", 1),
+            ]
+        );
+        assert_eq!(prices.league, league());
+        assert_eq!(prices.rates, conversion().rates);
+        let currencies: Vec<&str> = prices
+            .currencies
+            .iter()
+            .map(|currency| currency.exchange_id.as_str())
+            .collect();
+        assert_eq!(currencies, ["mirror"]);
+        let uniques: Vec<&str> = prices
+            .uniques
+            .iter()
+            .map(|unique| unique.name.as_str())
+            .collect();
+        assert_eq!(uniques, ["Bursting Decay"], "the one with a price");
+    }
+
+    /// The prices of the currency reach the application before the uniques are asked for.
+    #[test]
+    fn a_download_tells_its_prices_after_each_category() {
+        let mut download = Download::default();
+
+        scout(api())
+            .prices(&league(), &mut download)
+            .expect("every request answered");
+
+        assert_eq!(
+            download.progress,
+            [(0, 0, 0.4), (1, 0, 0.6), (1, 0, 0.8), (1, 1, 1.0)]
+        );
+    }
+
+    #[test]
+    fn every_page_of_a_category_is_read() {
+        let page = |number: u32| {
+            UNIQUES
+                .replace(r#""Pages": 1"#, r#""Pages": 3"#)
+                .replace("Bursting Decay", &format!("Bursting Decay {number}"))
+        };
+        let api = (2..=3).fold(
+            api().with(page_request("Uniques", "accessory", 1), &page(1)),
+            |api, number| api.with(page_request("Uniques", "accessory", number), &page(number)),
+        );
+        // The first answer known for a request is the one given: the pages of three first.
+        let api = FakeApi {
+            answers: api.answers.into_iter().rev().collect(),
+            ..FakeApi::default()
+        };
+        let mut scout = scout(api);
+
+        let prices = scout
+            .prices(&league(), &mut Download::default())
+            .expect("every request answered")
+            .expect("not interrupted");
+
+        assert_eq!(scout.source.requests.len(), 7);
+        assert_eq!(
+            scout.source.requests[4..],
+            [1, 2, 3].map(|number| page_request("Uniques", "accessory", number))
+        );
+        let names: Vec<&str> = prices
+            .uniques
+            .iter()
+            .map(|unique| unique.name.as_str())
+            .collect();
+        assert_eq!(
+            names,
+            ["Bursting Decay 1", "Bursting Decay 2", "Bursting Decay 3"]
+        );
+    }
+
+    /// A wrong count of pages must not send requests without end.
+    #[test]
+    fn a_category_stops_at_its_tenth_page() {
+        let endless = CURRENCIES.replace(r#""Pages": 1"#, r#""Pages": 4000"#);
+        let api = (1..=MAX_PAGES + 5).fold(FakeApi::default(), |api, page| {
+            api.with(page_request("Currencies", "currency", page), &endless)
+        });
+        let mut scout = scout(api);
+
+        let items = scout
+            .category::<ApiCurrency>(
+                "HC%20Forbidden%20Rites",
+                Kind::Currencies,
+                "currency",
+                &mut Download::default(),
+            )
+            .expect("every page answered")
+            .expect("not interrupted");
+
+        assert_eq!(scout.source.requests.len(), MAX_PAGES as usize);
+        assert_eq!(items.len(), MAX_PAGES as usize);
+    }
+
+    /// `docs/poe2scout-usage.md`: after a refusal, wait without insisting. The requests left
+    /// of the download aren't sent.
+    #[test]
+    fn a_download_stops_at_its_first_failed_request() {
+        let fragments = page_request("Currencies", "fragments", 1);
+        let mut api = api();
+        api.answers.retain(|(request, _)| *request != fragments);
+        let mut scout = scout(api);
+        let mut download = Download::default();
+
+        let error = scout
+            .prices(&league(), &mut download)
+            .expect_err("a request failed");
+
+        assert_eq!(scout.source.requests.len(), 4, "no unique asked for");
+        assert_eq!(scout.source.requests.last(), Some(&fragments));
+        assert!(
+            matches!(
+                &error,
+                FetchError::Http {
+                    path,
+                    error: HttpError::Request(ureq::Error::StatusCode(404)),
+                    after_answers: true,
+                } if path == "/Leagues/HC%20Forbidden%20Rites/Currencies/ByCategory"
+            ),
+            "{error:?}"
+        );
+        // The prices of the currency were told before the failure.
+        assert_eq!(download.progress.last(), Some(&(1, 0, 0.6)));
+    }
+
+    /// The code review of the quality fixes: a request that hangs after the first answers of
+    /// its download is a failure the database answered, and waits longer and longer.
+    #[test]
+    fn a_request_that_hangs_counts_as_answered_after_the_first_answers_of_its_download() {
+        let hangs = |request: &str| {
+            let mut scout = scout(api().hanging_at(request));
+            let error = scout
+                .prices(&league(), &mut Download::default())
+                .expect_err("a request hung");
+            (error.answered(), scout.source.requests.len())
+        };
+
+        assert_eq!(hangs(CATEGORIES_PATH), (false, 1));
+        assert_eq!(hangs(RATES_PATH), (true, 2));
+        assert_eq!(hangs(&page_request("Uniques", "accessory", 1)), (true, 5));
+    }
+
+    #[test]
+    fn the_answers_of_an_earlier_download_dont_count_for_the_next_one() {
+        let mut after_leagues = scout(api().with("/Leagues", LEAGUES).hanging_at(CATEGORIES_PATH));
+        after_leagues.leagues().expect("the leagues");
+
+        let error = after_leagues
+            .prices(&league(), &mut Download::default())
+            .expect_err("a request hung");
+
+        assert!(!error.answered(), "{error:?}");
+        // The same for the leagues, after a download that was answered.
+        let mut after_prices = scout(api().hanging_at("/Leagues"));
+        after_prices
+            .prices(&league(), &mut Download::default())
+            .expect("every request answered");
+        let error = after_prices.leagues().expect_err("a request hung");
+        assert!(!error.answered(), "{error:?}");
+    }
+
+    #[test]
+    fn the_leagues_are_read_whole_or_not_at_all() {
+        let leagues = |answer: &str| {
+            let mut scout = scout(FakeApi::default().with("/Leagues", answer));
+            let leagues = scout.leagues();
+            assert_eq!(scout.source.requests, ["/Leagues"]);
+            leagues
+        };
+
+        assert_eq!(
+            leagues(LEAGUES).expect("the leagues"),
+            ["Forbidden Rites", "HC Forbidden Rites", "Runes of Aldur"].map(League::new)
+        );
+        // One league that can't be read: none is, rather than the others without it.
+        let odd = LEAGUES.replacen(r#""IsCurrent": true, "DivinePrice": 718.4"#, "", 1);
+        let error = leagues(&odd).expect_err("a league without its fields");
+        assert!(
+            matches!(
+                &error,
+                FetchError::Http {
+                    error: HttpError::Json(_),
+                    ..
+                }
+            ),
+            "{error:?}"
+        );
+        assert!(error.answered());
+        assert!(matches!(
+            leagues(&LEAGUES.replace("true", "false")),
+            Err(FetchError::NoCurrentLeague)
+        ));
+    }
+
+    /// The pace waits first, then the interruption is checked, right before each request.
+    #[test]
+    fn an_interrupted_download_sends_no_other_request() {
+        for stop_at in 0..5 {
+            let mut scout = scout(api());
+            let mut download = Download {
+                stop_at: Some(stop_at),
+                ..Download::default()
+            };
+
+            let prices = scout.prices(&league(), &mut download);
+
+            assert!(matches!(prices, Ok(None)), "interrupted at {stop_at}");
+            assert_eq!(scout.source.requests.len(), stop_at);
+        }
+    }
+
+    #[test]
+    fn rates_or_categories_that_cant_be_used_stop_the_download_before_any_price() {
+        let many: Vec<String> = (0..=MAX_CATEGORIES)
+            .map(|index| format!(r#"{{"ApiId": "{index}"}}"#))
+            .collect();
+        let many = format!(
+            r#"{{"UniqueCategories": [{}], "CurrencyCategories": []}}"#,
+            many.join(",")
+        );
+        let failure = |request: &str, answer: &str| {
+            // Before the answer of `api` for the same request, so that it is the one given.
+            let mut api = api();
+            api.answers
+                .insert(0, (request.to_owned(), answer.to_owned()));
+            let mut scout = scout(api);
+            let error = scout
+                .prices(&league(), &mut Download::default())
+                .expect_err("an answer that can't be used");
+            assert_eq!(scout.source.requests.len(), 2, "{error}");
+            error
+        };
+
+        assert!(matches!(
+            failure(CATEGORIES_PATH, &many),
+            FetchError::TooManyCategories(_)
+        ));
+        assert!(matches!(
+            failure(RATES_PATH, r#"[{"ApiId": "exalted", "RelativePrice": 1}]"#),
+            FetchError::MissingRate(CHAOS)
+        ));
+    }
+
+    /// `docs/poe2scout-usage.md`: one request a second at most. Each request of a download
+    /// waits for the interval since the one before, whatever the request.
+    #[test]
+    fn the_requests_of_a_download_are_spaced() {
+        const INTERVAL: Duration = Duration::from_millis(15);
+        let mut scout = Poe2Scout::with_source(api().with("/Leagues", LEAGUES), INTERVAL);
+
+        scout.leagues().expect("the leagues");
+        scout
+            .prices(&league(), &mut Download::default())
+            .expect("every request answered");
+
+        let times = &scout.source.times;
+        assert_eq!(times.len(), 6);
+        for pair in times.windows(2) {
+            assert!(pair[1].duration_since(pair[0]) >= INTERVAL, "{times:?}");
+        }
+    }
+
+    #[test]
+    fn the_pace_of_the_application_is_slower_than_one_request_a_second() {
+        assert!(PACE > Duration::from_secs(1));
     }
 }

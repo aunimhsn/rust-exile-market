@@ -325,6 +325,16 @@ mod tests {
         requests.load(Ordering::SeqCst)
     }
 
+    /// Waits for the first request of the thread, however busy the machine: "no other
+    /// request for a while" is then checked from there, not from the start of the thread.
+    fn wait_for_a_request(requests: &AtomicUsize) {
+        let start = Instant::now();
+        while requests.load(Ordering::SeqCst) == 0 {
+            assert!(start.elapsed() < Duration::from_secs(5), "a first request");
+            thread::sleep(Duration::from_millis(5));
+        }
+    }
+
     #[test]
     fn downloads_the_names_once_and_keeps_them_in_the_cache() {
         let directory = TestDirectory::new("item-names-download");
@@ -430,6 +440,7 @@ mod tests {
         let requests = Arc::clone(&site.requests);
         let _watch = start_watch(site, &directory);
 
+        wait_for_a_request(&requests);
         assert_eq!(requests_after(&requests, Duration::from_millis(100)), 1);
     }
 
@@ -449,6 +460,7 @@ mod tests {
         let requests = Arc::clone(&site.requests);
         let _watch = ItemNamesWatch::spawn(move || site, Some(directory.0.clone()), hasty, || {});
 
+        wait_for_a_request(&requests);
         assert_eq!(requests_after(&requests, Duration::from_millis(200)), 1);
     }
 
@@ -487,6 +499,7 @@ mod tests {
         );
 
         // Asked once during the wait, not every 20 ms as after a failure without names.
+        wait_for_a_request(&requests);
         assert_eq!(requests_after(&requests, Duration::from_millis(200)), 1);
         assert_eq!(received(&mut watch, &wakes).len(), 1);
         assert_eq!(requests.load(Ordering::SeqCst), 2);
