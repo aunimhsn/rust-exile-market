@@ -151,6 +151,38 @@ const ruleJewelRows = [
 // An unidentified magic jewel: no line, nothing to check; the price block says nothing more (code review of
 // 17e3f, owner's choice on 2026-11-10), rather than ask for a modifier the player can't check.
 const UNIDENTIFIED_JEWEL = { rarity: "magic", name: "Emerald", cls: "Jewels", tags: ["Unidentified", "ilvl 75"], statsLabel: "Stats (0)" };
+// A Prismatic Ring whose elemental resistance comes from its implicit only (second code review of 17e3f, owner's
+// choice on 2026-11-11): every Prismatic Ring passes that total, so it starts unchecked and compares nothing;
+// its modifiers can be checked, so the price block asks for one.
+const IMPLICIT_RING = { rarity: "rare", name: "Gale Coil", base: "Prismatic Ring", cls: "Rings", tags: ["ilvl 80"], req: "Requires Level 60", statsLabel: "Stats (3)" };
+const implicitRingRows = [
+  { group: "Item", min: true },
+  { mod: "Base: Prismatic Ring", check: true },
+  { mod: "Item level: 80", check: false, min: 80 },
+  { group: "Pseudo" },
+  { mod: "+24% total Elemental Resistance", check: false, min: 21 },
+  { group: "Implicit" },
+  { mod: "+8% to all Elemental Resistances", check: false, min: 7, range: "7–10", share: .33 },
+  { group: "Prefixes", fill: "1 of 3 · 2 open" },
+  { mod: "+125 to Evasion Rating", check: false, min: 112, tier: 4, range: "108–141", over: { share: .52 } },
+  { group: "Suffixes", fill: "1 of 3 · 2 open" },
+  { mod: "16% increased Rarity of Items found", check: false, min: 14, tier: 1, range: "15–18", over: { share: .83 } },
+];
+// A bow without a line of damage nor of attack speed: its DPS is that of its base, so it starts unchecked.
+const PLAIN_BOW = { rarity: "rare", name: "Death Song", base: "Gemini Bow", cls: "Bows", tags: ["ilvl 81"], props: [["Physical DPS", "152"]], req: "Requires Level 65 · 145 Dex", statsLabel: "Stats (3)" };
+const plainBowRows = [
+  { group: "Item", min: true },
+  { mod: "Base: Gemini Bow", check: true },
+  { mod: "Item level: 81", check: false, min: 81 },
+  { group: "Weapon" },
+  { mod: "Physical DPS: 152", check: false, min: 136 },
+  { group: "Pseudo" },
+  { mod: "+28 total to Dexterity", check: true, min: 25 },
+  { group: "Suffixes", fill: "3 of 3" },
+  { mod: "+3 to Level of all Projectile Skills", check: false, min: 3, tier: 1, tierOnly: true, over: { share: 1 } },
+  { mod: "+28% to Critical Damage Bonus", check: false, min: 25, tier: 2, range: "25–29", over: { share: .8 } },
+  { mod: "+28 to Dexterity", check: false, min: 25, tier: 2, range: "28–30", over: { share: .82 } },
+];
 // The jewel in French.
 const JEWEL_FR = { ...JEWEL, fr: true, name: "Braise de la couvée", base: "Rubis", cls: "Joyaux", tags: ["niv. 81"], statsLabel: "Statistiques (4)",
   tradeLabel: "Voir sur l'échange", tradeTitle: "Ouvrir la recherche sur le site d'échange" };
@@ -180,6 +212,8 @@ SECTIONS.unshift(["Filters checked on a rare (17e3f): option 1, every modifier u
   ["A jewel · Rule · searched anyway: its offers, no estimate", ruleWin(JEWEL, ruleJewelRows, true, offers(JEWEL_OFFERS))],
   ["A jewel · Rule · the player checks a modifier: back to the usual text", ruleWin(JEWEL, jewelOneChecked(ruleJewelRows), false, offers({ state: "idle" }))],
   ["A jewel · Rule · en français", ruleWin(JEWEL_FR, ruleJewelRowsFr, true, offers({ state: "idle" }, "fr"))],
+  ["A ring whose resistance is its implicit only · Rule · that total unchecked: it compares nothing", ruleWin(IMPLICIT_RING, implicitRingRows, false, offers({ state: "idle" }))],
+  ["A bow without a line of damage · Rule · its DPS, the base's, unchecked", ruleWin(PLAIN_BOW, plainBowRows, false, offers({ state: "idle" }))],
   ["An unidentified jewel · Rule · nothing to check: no second line", win(topBar(),
     item({ ...UNIDENTIFIED_JEWEL, filters: "1 filter", stats: [{ group: "Item", min: true }, { mod: "Base: Emerald", check: true }, { mod: "Item level: 75", check: false, min: 75 }] }, true),
     price({ lines: ["No market price for magic items."] }), offers({ state: "idle" }), foot())],

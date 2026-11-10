@@ -550,6 +550,8 @@ fn the_filters_of_a_search_are_those_checked_and_any_base_when_it_is_unchecked()
             property: Property::PhysicalDps,
             minimum: Some(220.0),
             maximum: None,
+            // No line of damage nor of attack speed: the DPS of its base.
+            compares: false,
         }]
     );
     assert_eq!(

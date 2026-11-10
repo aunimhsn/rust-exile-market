@@ -1151,7 +1151,8 @@ fn a_modifier_whose_header_is_unknown_is_explicit_without_tier() {
             // The totals in place of the lines they add up: each element of the
             // resistances counts.
             "Pseudo",
-            "■ ElementalResistance: 24 ≥22",
+            // Of its implicit only, which every Prismatic Ring has.
+            "□ ElementalResistance: 24 ≥22",
             "■ Strength: 12 ≥11",
             "Implicit",
             "□ +8% to all Elemental Resistances ≥7 [7–10 0.33]",
@@ -1211,7 +1212,8 @@ fn a_fixed_implicit_of_a_rare_is_a_filter_without_bar_after_those_that_vary() {
             "■ Base: Lattice Sandals",
             "Pseudo",
             "■ Life: 86 ≥77",
-            "■ Dexterity: 12 ≥11",
+            // Of its implicit only, which comes with the base.
+            "□ Dexterity: 12 ≥11",
             "Implicit",
             // 90 % of 12, within the range of the implicit.
             "□ +12 to Dexterity ≥11 [10–15 0.40]",
@@ -1441,24 +1443,41 @@ fn a_jewel_has_two_prefixes_and_two_suffixes_at_most() {
 
 #[test]
 fn a_weapon_mostly_elemental_is_searched_by_its_elemental_dps_too() {
-    let weapon = |physical: &str, lightning: &str| {
+    // With `lines`, its modifiers.
+    let weapon = |physical: &str, lightning: &str, lines: &str| {
         parse(&format!(
             "Item Class: Two Hand Maces\nRarity: Rare\nStorm Fall\nTemple Maul\n--------\n\
-             Physical Damage: {physical}\nLightning Damage: {lightning} (lightning)\n\
-             Attacks per Second: 1.00\n--------\nItem Level: 80"
+             Physical Damage: {physical} (augmented)\nLightning Damage: {lightning} (lightning)\n\
+             Attacks per Second: 1.00\n--------\nItem Level: 80\n--------\n{lines}"
         ))
     };
     let dps = |item: &Item| texts(item)[4..6].to_vec();
+    let both = "20% increased Physical Damage\nAdds 1 to 59 Lightning Damage";
 
     assert_eq!(
-        dps(&weapon("10-20", "1-59")),
+        dps(&weapon("10-20", "1-59", both)),
         ["■ PhysicalDps: 15 ≥13", "■ ElementalDps: 30 ≥27"]
     );
     // 90 % of a small DPS, of 2.5 and not of the 3 shown, rounded down: the weapon
     // passes its own filter.
     assert_eq!(
-        dps(&weapon("10-20", "1-4")),
+        dps(&weapon(
+            "10-20",
+            "1-4",
+            "20% increased Physical Damage\nAdds 1 to 4 Lightning Damage"
+        )),
         ["■ PhysicalDps: 15 ≥13", "□ ElementalDps: 3 ≥2"]
+    );
+    // The physical DPS of its base, which every weapon of it passes: the elemental one,
+    // smaller, is checked in its place.
+    assert_eq!(
+        dps(&weapon("10-20", "1-4", "Adds 1 to 4 Lightning Damage")),
+        ["□ PhysicalDps: 15 ≥13", "■ ElementalDps: 3 ≥2"]
+    );
+    // Without a line of damage nor of attack speed: the DPS of its base, unchecked.
+    assert_eq!(
+        dps(&weapon("10-20", "1-59", "+20 to Strength")),
+        ["□ PhysicalDps: 15 ≥13", "□ ElementalDps: 30 ≥27"]
     );
 }
 
@@ -2045,8 +2064,9 @@ fn a_magic_item_has_one_prefix_and_one_suffix_at_most() {
             "■ Base: Crackling Temple Maul of the Brute",
             "□ ItemLevel: 32 ≥32",
             "Weapon",
-            "■ PhysicalDps: 64 ≥57",
-            "□ ElementalDps: 31 ≥27",
+            // The physical DPS of its base, which every maul passes.
+            "□ PhysicalDps: 64 ≥57",
+            "■ ElementalDps: 31 ≥27",
             "Pseudo",
             "■ Strength: 8 ≥7",
             "Prefixes 1/1",
@@ -3899,13 +3919,8 @@ fn the_filters_of_an_item_by_default_compare_its_stats_or_ask_for_one() {
     use crate::ui::StatChecks::{self, Checked, NoneToCheck, Unchecked};
 
     // As the item view decides them, from the filters by default.
-    let checks = |file: &str| -> StatChecks {
-        let (_, text) = crate::item::test_items::ALL
-            .iter()
-            .find(|(name, _)| *name == file)
-            .expect("a test item");
-        let item = parse(text);
-        let base = base_type(&item);
+    let checks = |item: &Item| -> StatChecks {
+        let base = base_type(item);
         let lines = CopiedLines::new(
             item.language(),
             item.modifiers(),
@@ -3914,15 +3929,22 @@ fn the_filters_of_an_item_by_default_compare_its_stats_or_ask_for_one() {
         );
         let line_stats = LineStats::new(item.language(), item.modifiers(), None);
         let tiers = TierRolls::new(item.language(), item.modifiers(), base, item.item_level());
-        let stats = Stats::new(&item, &lines, &line_stats, &tiers, base);
+        let stats = Stats::new(item, &lines, &line_stats, &tiers, base);
         let all = stats.filters(&Filters::default());
-        StatChecks::of(&line_stats.search_filters(&all), &all)
+        StatChecks::of(&line_stats, &all)
+    };
+    let file = |name: &str| {
+        let (_, text) = crate::item::test_items::ALL
+            .iter()
+            .find(|(file, _)| *file == name)
+            .expect("a test item");
+        parse(text)
     };
 
-    for (file, expected) in [
+    for (name, expected) in [
         // Its pseudo totals.
         ("en-owner-rare-ring-breach.txt", Checked),
-        // Its DPS.
+        // Its DPS, which its damage lines count.
         ("en-owner-rare-two-hand-mace-fractured.txt", Checked),
         // Its item rarity and its drop chance.
         ("en-owner-rare-waystone.txt", Checked),
@@ -3934,7 +3956,37 @@ fn the_filters_of_an_item_by_default_compare_its_stats_or_ask_for_one() {
         ("en-owner-rare-focus-unrevealed.txt", Unchecked),
         // Unidentified: no line to check.
         ("en-plain-magic-jewel-unidentified.txt", NoneToCheck),
+        // Unidentified, its implicit only, which comes with the base, and its total.
+        ("en-plain-rare-ring-unidentified.txt", NoneToCheck),
     ] {
-        assert_eq!(checks(file), expected, "{file}");
+        assert_eq!(checks(&file(name)), expected, "{name}");
     }
+
+    let rare = |base: &str, class: &str, top: &str, lines: &str| {
+        parse(&format!(
+            "Item Class: {class}\nRarity: Rare\nGale Coil\n{base}\n--------\n{top}\
+             Item Level: 80\n--------\n{lines}"
+        ))
+    };
+    // Its resistance from its implicit only, which every Prismatic Ring has: its explicit
+    // lines can be checked.
+    let ring = rare(
+        "Prismatic Ring",
+        "Rings",
+        "",
+        "+8(7-10)% to all Elemental Resistances (implicit)\n--------\n\
+         +125 to Evasion Rating\n16% increased Rarity of Items found",
+    );
+    assert_eq!(checks(&ring), Unchecked);
+    // A bow without a line of damage nor of attack speed: the DPS of its base.
+    let bow = rare(
+        "Gemini Bow",
+        "Bows",
+        "Physical Damage: 40-90\nAttacks per Second: 1.20\n--------\n",
+        "+3 to Level of all Projectile Skills",
+    );
+    assert_eq!(checks(&bow), Unchecked);
+    // Lines the trade site can't search: nothing to check.
+    let unknown = rare("Ruby", "Jewels", "", "Strange words of a later patch");
+    assert_eq!(checks(&unknown), NoneToCheck);
 }

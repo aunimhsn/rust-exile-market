@@ -96,17 +96,19 @@ pub struct SearchFilters {
 }
 
 impl SearchFilters {
-    /// Something other than the base type narrows the search: a stat, or a property with a
-    /// limit.
+    /// Something other than the base type narrows the search: a stat that compares the item
+    /// (not the count of its unrevealed modifiers, which any item of the league may have), or
+    /// a property with a limit.
     #[must_use]
     pub fn narrows(&self) -> bool {
-        !self.stats.is_empty() || self.properties.iter().any(PropertyFilter::limits_anything)
+        self.stats.iter().any(|stat| stat.compares)
+            || self.properties.iter().any(PropertyFilter::limits_anything)
     }
 
-    /// Something compares the stats of the item with the offers: a line, a pseudo total (not
-    /// the count of its unrevealed modifiers), or a property that is a stat (its DPS, a
-    /// property of a waystone or of a gem) with a limit.
-    /// Without, the offers are any items of its base, whose price says nothing of its own.
+    /// Something compares the stats of the item with the offers, more than its base: a filter
+    /// that compares (`StatFilter::compares`, `PropertyFilter::compares`, decided by
+    /// `LineStats::compares`), a property with a limit. Without, the offers are any items of
+    /// its base, whose price says nothing of its own.
     #[must_use]
     pub fn compares_stats(&self) -> bool {
         compares_stats(&self.stats, &self.properties)
@@ -119,7 +121,7 @@ fn compares_stats(stats: &[StatFilter], properties: &[PropertyFilter]) -> bool {
     stats.iter().any(|stat| stat.compares)
         || properties
             .iter()
-            .any(|filter| filter.property.is_stat() && filter.limits_anything())
+            .any(|filter| filter.compares && filter.limits_anything())
 }
 
 /// A property of the offers, with its minimum and its maximum.
@@ -128,6 +130,9 @@ pub struct PropertyFilter {
     pub property: Property,
     pub minimum: Option<f64>,
     pub maximum: Option<f64>,
+    /// It compares a stat of the item, not only of its base: a DPS that a line of the weapon
+    /// counts, a property of a waystone or of a gem. Not sent.
+    pub compares: bool,
 }
 
 impl PropertyFilter {
@@ -180,8 +185,8 @@ pub struct StatFilter {
     pub ids: Vec<String>,
     pub minimum: Option<f64>,
     pub maximum: Option<f64>,
-    /// It compares a stat of the item: a line or a pseudo total, not the count of its
-    /// unrevealed modifiers, which only narrows the items of its base. Not sent.
+    /// It compares a stat of the item, not only of its base: a line but an implicit, a pseudo
+    /// total of such lines, not the count of its unrevealed modifiers. Not sent.
     pub compares: bool,
 }
 
@@ -564,31 +569,37 @@ mod tests {
                     property: Property::ItemLevel,
                     minimum: Some(81.0),
                     maximum: None,
+                    compares: false,
                 },
                 PropertyFilter {
                     property: Property::Sockets,
                     minimum: Some(3.0),
                     maximum: None,
+                    compares: false,
                 },
                 PropertyFilter {
                     property: Property::Quality,
                     minimum: Some(24.0),
                     maximum: None,
+                    compares: false,
                 },
                 PropertyFilter {
                     property: Property::RequiredLevel,
                     minimum: None,
                     maximum: Some(40.0),
+                    compares: false,
                 },
                 PropertyFilter {
                     property: Property::PhysicalDps,
                     minimum: Some(220.0),
                     maximum: Some(300.0),
+                    compares: true,
                 },
                 PropertyFilter {
                     property: Property::ElementalDps,
                     minimum: None,
                     maximum: None,
+                    compares: true,
                 },
             ],
             stats: Vec::new(),
@@ -624,6 +635,7 @@ mod tests {
             property: Property::Waystone(property),
             minimum: Some(minimum),
             maximum: None,
+            compares: true,
         };
         let query = ItemQuery {
             name: None,
@@ -662,6 +674,7 @@ mod tests {
             property,
             minimum: Some(minimum),
             maximum: None,
+            compares: property.is_stat(),
         };
         let query = ItemQuery {
             name: None,
@@ -722,6 +735,7 @@ mod tests {
             property,
             minimum,
             maximum: None,
+            compares: property.is_stat(),
         };
         let filters = |properties, stats| SearchFilters {
             any_base: false,

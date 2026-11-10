@@ -10,7 +10,7 @@
 
 use super::pseudo::{self, CountedLine, PseudoTotal};
 use super::query::{PropertyFilter, SearchFilters, StatFilter};
-use crate::filters::{Filter, FilterKey, StatKey};
+use crate::filters::{Filter, FilterKey, Property, StatKey};
 use crate::game_data::{self, AffixLimits, TradeGroup, TradeStats};
 use crate::item::{Affix, Item, Modifier, Rarity, StatLine};
 use crate::language::Language;
@@ -19,6 +19,22 @@ use crate::language::Language;
 const WEAPON_DAMAGE: [&str; 6] = [
     "local_physical_damage_+%",
     "local_minimum_added_physical_damage",
+    "local_minimum_added_fire_damage",
+    "local_minimum_added_cold_damage",
+    "local_minimum_added_lightning_damage",
+    "local_attack_speed_+%",
+];
+
+/// The stats of the game of the lines its physical DPS counts: a weapon without any of them
+/// has the physical DPS of its base, which compares nothing.
+const PHYSICAL_DPS: [&str; 3] = [
+    "local_physical_damage_+%",
+    "local_minimum_added_physical_damage",
+    "local_attack_speed_+%",
+];
+
+/// The stats of the game of the lines its elemental DPS counts.
+const ELEMENTAL_DPS: [&str; 4] = [
     "local_minimum_added_fire_damage",
     "local_minimum_added_cold_damage",
     "local_minimum_added_lightning_damage",
@@ -212,6 +228,8 @@ struct Line {
     numbers: Option<Vec<usize>>,
     /// The id of its stat in the files of the game (`base_maximum_life`), when known.
     game_id: Option<String>,
+    /// A line of an implicit modifier, which comes with the base.
+    implicit: bool,
 }
 
 /// The stats of the modifier lines of the copied item, and its pseudo totals.
@@ -281,6 +299,7 @@ impl LineStats {
                         stat: line_stat,
                         numbers: known.then_some(numbers),
                         game_id: game_id.clone(),
+                        implicit: group == TradeGroup::Implicit,
                     });
                 }
             }
@@ -393,6 +412,37 @@ impl LineStats {
         self.lines.iter().find(|line| line.key == key)
     }
 
+    /// The filter `key` compares a stat of the item with the offers, not only its base, whose
+    /// every item would pass it: a line of a modifier but an implicit, which comes with the
+    /// base; a pseudo total that adds up such a line (not the count of the unrevealed
+    /// modifiers); a DPS that a line of the weapon counts (its damage, its attack speed), not
+    /// that of its base; a property of a waystone or of a gem. The rule of the estimate of a
+    /// rare or magic item, which needs one, and of the filters checked by default.
+    #[must_use]
+    pub fn compares(&self, key: FilterKey) -> bool {
+        let explicit = |key: &StatKey| self.line(*key).is_some_and(|line| !line.implicit);
+        let counted = |ids: &[&str]| {
+            self.lines
+                .iter()
+                .any(|line| line.game_id.as_deref().is_some_and(|id| ids.contains(&id)))
+        };
+        match key {
+            FilterKey::Stat(key) => explicit(&key),
+            FilterKey::BaseType => false,
+            FilterKey::Pseudo(pseudo) => {
+                pseudo.compares_stats()
+                    && self
+                        .pseudo
+                        .iter()
+                        .filter(|total| total.pseudo == pseudo)
+                        .any(|total| total.lines.iter().any(explicit))
+            }
+            FilterKey::Property(Property::PhysicalDps) => counted(&PHYSICAL_DPS),
+            FilterKey::Property(Property::ElementalDps) => counted(&ELEMENTAL_DPS),
+            FilterKey::Property(property) => property.is_stat(),
+        }
+    }
+
     /// The filters of the search, from every filter of the item as the player set it: those
     /// checked, and any base type when the filter of the base type is unchecked.
     #[must_use]
@@ -410,7 +460,7 @@ impl LineStats {
                     ids: vec![pseudo.trade_id().to_owned()],
                     minimum: minimum.map(written),
                     maximum: maximum.map(written),
-                    compares: pseudo.compares_stats(),
+                    compares: self.compares(*key),
                 })
             }
             FilterKey::Stat(_) | FilterKey::BaseType | FilterKey::Property(_) => None,
@@ -427,6 +477,7 @@ impl LineStats {
                             property: *property,
                             minimum,
                             maximum,
+                            compares: self.compares(*key),
                         })
                     }
                     FilterKey::Stat(_) | FilterKey::BaseType | FilterKey::Pseudo(_) => None,
@@ -447,7 +498,10 @@ impl LineStats {
         checked
             .into_iter()
             .filter_map(|(key, filter)| match self.get(key)? {
-                LineStat::Searched(stat) => Some(stat.filter(filter)),
+                LineStat::Searched(stat) => Some(StatFilter {
+                    compares: self.compares(FilterKey::Stat(key)),
+                    ..stat.filter(filter)
+                }),
                 LineStat::Continued | LineStat::Unsearchable => None,
             })
             .collect()

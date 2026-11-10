@@ -119,6 +119,7 @@ fn quality_between(minimum: Option<f64>, maximum: Option<f64>) -> Search {
             property: Property::Quality,
             minimum,
             maximum,
+            compares: false,
         });
     }
     search

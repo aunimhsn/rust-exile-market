@@ -20,7 +20,7 @@ use crate::item::{Item, Rarity};
 use crate::prices::{Direction, Price, Rates};
 use crate::pricing::{Candidate, FixedPrice, NoFixedPrice};
 use crate::session::PricesState;
-use crate::trade::query::SearchFilters;
+use crate::trade::stat_filters::LineStats;
 
 /// The space above and under the block.
 const PADDING_Y: f32 = 12.0;
@@ -94,13 +94,24 @@ pub enum StatChecks {
 }
 
 impl StatChecks {
-    /// The checks of `search`, the filters of a search, made of `all` the filters of the item,
-    /// checked or not.
+    /// The checks of `all` the filters of the item, checked or not, whose lines have the
+    /// `stats`: by the one rule of the estimate ([`SearchFilters::compares_stats`]), on the
+    /// filters as they are, then on all of them checked.
     #[must_use]
-    pub fn of(search: &SearchFilters, all: &[(FilterKey, Filter)]) -> Self {
-        if search.compares_stats() {
+    pub fn of(stats: &LineStats, all: &[(FilterKey, Filter)]) -> Self {
+        let everything: Vec<(FilterKey, Filter)> = all
+            .iter()
+            .map(|(key, filter)| {
+                let filter = Filter {
+                    checked: true,
+                    ..filter.clone()
+                };
+                (*key, filter)
+            })
+            .collect();
+        if stats.search_filters(all).compares_stats() {
             Self::Checked
-        } else if all.iter().any(|(key, _)| key.compares_stats()) {
+        } else if stats.search_filters(&everything).compares_stats() {
             Self::Unchecked
         } else {
             Self::NoneToCheck
@@ -108,12 +119,12 @@ impl StatChecks {
     }
 }
 
-/// The line under "No market price…" of an item of `rarity` without estimate, given the
-/// `checks` of its filters: a rare or magic item, priced by its stats, is estimated only from
-/// a search that compares some, so that it asks for one to be checked, and says nothing when
+/// The line under "No market price…" of an item without estimate, given the `checks` of its
+/// filters: an item `priced_by_stats` ([`Item::priced_by_stats`]) is estimated only from a
+/// search that compares some, so that it asks for one to be checked, and says nothing when
 /// none can be (the offers of any item of its base would say nothing of its price).
-fn estimate_hint(rarity: Rarity, checks: StatChecks) -> Option<Message> {
-    if !rarity.priced_by_stats() {
+fn estimate_hint(priced_by_stats: bool, checks: StatChecks) -> Option<Message> {
+    if !priced_by_stats {
         return Some(Message::SearchToEstimate);
     }
     match checks {
@@ -442,8 +453,8 @@ impl<'a> PriceBlock<'a> {
             Notice::NoPriceFound(league) => i18n.no_price_found(league),
         };
         message(ui, &first, color::TEXT);
-        if let Notice::NoMarketPrice(rarity) = notice
-            && let Some(second) = estimate_hint(rarity, self.checks)
+        if let Notice::NoMarketPrice(_) = notice
+            && let Some(second) = estimate_hint(self.item.priced_by_stats(), self.checks)
         {
             ui.add_space(MESSAGE_GAP);
             message(ui, &i18n.text(second), color::WEAK);
@@ -604,26 +615,24 @@ mod tests {
     fn a_rare_or_magic_item_asks_for_a_stat_to_estimate_it_and_says_nothing_when_none_can_be() {
         use StatChecks::{Checked, NoneToCheck, Unchecked};
 
-        for rarity in [Rarity::Rare, Rarity::Magic] {
+        // A rare or magic item.
+        assert_eq!(
+            estimate_hint(true, Checked),
+            Some(Message::SearchToEstimate)
+        );
+        assert_eq!(
+            estimate_hint(true, Unchecked),
+            Some(Message::CheckToEstimate)
+        );
+        assert_eq!(estimate_hint(true, NoneToCheck), None);
+        // A normal item, a gem or a waystone: priced by its base, its quality, its level or
+        // its tier, not by modifiers.
+        for checks in [Checked, Unchecked, NoneToCheck] {
             assert_eq!(
-                estimate_hint(rarity, Checked),
-                Some(Message::SearchToEstimate)
+                estimate_hint(false, checks),
+                Some(Message::SearchToEstimate),
+                "{checks:?}"
             );
-            assert_eq!(
-                estimate_hint(rarity, Unchecked),
-                Some(Message::CheckToEstimate)
-            );
-            assert_eq!(estimate_hint(rarity, NoneToCheck), None, "{rarity:?}");
-        }
-        // Priced by their base, their quality or their level, not by modifiers.
-        for rarity in [Rarity::Normal, Rarity::Gem] {
-            for checks in [Checked, Unchecked, NoneToCheck] {
-                assert_eq!(
-                    estimate_hint(rarity, checks),
-                    Some(Message::SearchToEstimate),
-                    "{rarity:?} {checks:?}"
-                );
-            }
         }
     }
 

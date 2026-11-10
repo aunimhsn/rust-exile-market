@@ -727,8 +727,7 @@ fn search_filters_and_checks(
         states: filters.lit_states_of(item).collect(),
         ..shown.stats().search_filters(&all)
     };
-    let checks = StatChecks::of(&search, &all);
-    (search, checks)
+    (search, StatChecks::of(shown.stats(), &all))
 }
 
 /// The blocks of the item shown, one under the other: the item with its filters, its price,
@@ -1118,7 +1117,7 @@ fn shown_estimate<'a>(
     let Err(NoFixedPrice::NotFixedName) = fixed_price else {
         return None;
     };
-    if item.rarity().priced_by_stats() && !offers.compared_stats() {
+    if item.priced_by_stats() && !offers.compared_stats() {
         return None;
     }
     let searched_catalyst = offers.searched_catalyst(item);
@@ -1664,11 +1663,19 @@ mod tests {
         // The offers of any item of its base say nothing of its price.
         assert!(estimated(&amulet, true).is_some());
         assert_eq!(estimated(&amulet, false), None);
-        // A normal item, an exceptional base searched by its sockets or its quality, and a
-        // skill gem by its level: priced by them, not by modifiers.
+        let magic = Item::parse(
+            &CopiedItem::from_text(include_str!("item/test-items/en-magic-mace.txt")).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(estimated(&magic, false), None);
+        // A normal item, an exceptional base searched by its sockets or its quality, a skill
+        // gem by its level and a waystone by its tier: priced by them, not by modifiers. A
+        // magic item is estimated as a rare.
         for text in [
             include_str!("item/test-items/en-owner-normal-quarterstaff-exceptional.txt"),
             include_str!("item/test-items/en-owner-skill-gem.txt"),
+            // A waystone, priced first by its tier, which its base type holds.
+            include_str!("item/test-items/en-owner-rare-waystone.txt"),
         ] {
             let item = Item::parse(&CopiedItem::from_text(text).unwrap()).unwrap();
             assert!(estimated(&item, false).is_some(), "{:?}", item.rarity());
@@ -1696,6 +1703,7 @@ mod tests {
             property: Property::Quality,
             minimum: Some(40.0),
             maximum: None,
+            compares: false,
         };
 
         for (properties, counted) in [(vec![quality], 2), (Vec::new(), 3)] {

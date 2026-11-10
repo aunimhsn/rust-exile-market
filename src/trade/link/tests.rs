@@ -355,6 +355,7 @@ fn a_unique_is_searched_with_its_stats_and_the_other_items_with_all_their_filter
         property: Property::ItemLevel,
         minimum: Some(81.0),
         maximum: None,
+        compares: false,
     }];
     let filters = |any_base| SearchFilters {
         any_base,
@@ -395,6 +396,7 @@ fn searched_base(item: &Item, any_base: bool, narrowed: bool) -> (Option<String>
             property: Property::ItemLevel,
             minimum: narrowed.then_some(81.0),
             maximum: None,
+            compares: false,
         }],
         stats: Vec::new(),
         states: Vec::new(),

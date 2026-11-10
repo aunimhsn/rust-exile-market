@@ -73,14 +73,6 @@ impl Rarity {
     pub fn has_item_filters(self) -> bool {
         matches!(self, Self::Normal | Self::Magic | Self::Rare)
     }
-
-    /// Whether the price of the item lies in its modifiers, so that the offers of a search
-    /// that compares none of its stats, any items of its base, give no estimate: a rare or
-    /// magic item, a jewel too.
-    #[must_use]
-    pub fn priced_by_stats(self) -> bool {
-        matches!(self, Self::Magic | Self::Rare)
-    }
 }
 
 /// A state written at the end of the item.
@@ -311,6 +303,15 @@ impl Item {
     #[must_use]
     pub fn rarity(&self) -> Rarity {
         self.rarity
+    }
+
+    /// Whether the price of the item lies in its modifiers, so that the offers of a search
+    /// that compares none of its stats, any items of its base, give no estimate: a rare or
+    /// magic item, a jewel too; not a waystone, whose price lies first in its tier, which its
+    /// base type holds.
+    #[must_use]
+    pub fn priced_by_stats(&self) -> bool {
+        matches!(self.rarity, Rarity::Magic | Rarity::Rare) && !self.is_waystone()
     }
 
     /// The name of a rare or unique item; `None` for the other items, named by their base.

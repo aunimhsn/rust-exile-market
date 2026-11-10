@@ -34,20 +34,6 @@ pub enum FilterKey {
     Pseudo(Pseudo),
 }
 
-impl FilterKey {
-    /// It can compare a stat of the item: a line, a pseudo total (not the count of its
-    /// unrevealed modifiers) or a property that is a stat; not its base type.
-    #[must_use]
-    pub fn compares_stats(self) -> bool {
-        match self {
-            Self::Stat(_) => true,
-            Self::BaseType => false,
-            Self::Property(property) => property.is_stat(),
-            Self::Pseudo(pseudo) => pseudo.compares_stats(),
-        }
-    }
-}
-
 /// A property of the item the trade site searches with a minimum and a maximum.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Property {
@@ -69,9 +55,10 @@ pub enum Property {
 }
 
 impl Property {
-    /// A stat of the item, which compares it with the offers: its DPS, a property of a
-    /// waystone or of a gem; not its item level, its sockets, its quality nor its required
-    /// level, which only narrow the items of its base.
+    /// A stat of the item by its kind: its DPS (which compares it only when a line of the
+    /// weapon counts in it, `LineStats::compares`), a property of a waystone or of a gem; not
+    /// its item level, its sockets, its quality nor its required level, which only narrow the
+    /// items of its base.
     #[must_use]
     pub fn is_stat(self) -> bool {
         match self {

@@ -860,7 +860,7 @@ fn rows<'a>(
     let dps = if item.rarity().has_item_filters() {
         push_group(&mut rows, Group::Item, item_filters(item, base_type));
         push_group(&mut rows, Group::Waystone, waystone_filters(item));
-        dps_filters(item, !unrevealed)
+        dps_filters(item, stats, !unrevealed)
     } else {
         push_group(&mut rows, Group::Gem, gem_filters(item));
         Vec::new()
@@ -869,7 +869,10 @@ fn rows<'a>(
         stats
             .pseudo_totals()
             .iter()
-            .map(|total| pseudo_filter(total, !unrevealed))
+            .map(|total| {
+                let compares = stats.compares(FilterKey::Pseudo(total.pseudo));
+                pseudo_filter(total, !unrevealed && compares)
+            })
             .collect()
     } else {
         Vec::new()
@@ -1314,18 +1317,25 @@ fn required_level_filter(item: &Item) -> Option<Stat<'static>> {
 /// The filters of the DPS of a weapon, each kind it deals, with a minimum at 90 % of its
 /// DPS, rounded down so that the weapon passes it: when `checkable`, the physical one checked,
 /// the elemental one when it is at least the physical one, so that a weapon mostly elemental is
-/// compared with elemental ones.
-fn dps_filters(item: &Item, checkable: bool) -> Vec<Stat<'static>> {
+/// compared with elemental ones, or when the physical one is that of its base. On a rare or
+/// magic item, a DPS that no line of the weapon counts, that of its base, which every weapon of
+/// it passes, compares nothing ([`LineStats::compares`]): unchecked.
+fn dps_filters(item: &Item, stats: &LineStats, checkable: bool) -> Vec<Stat<'static>> {
     let Some(weapon) = item.weapon() else {
         return Vec::new();
     };
     let dps = weapon.dps();
+    // A normal item is priced by its base: its DPS is.
+    let compares =
+        |property| !item.priced_by_stats() || stats.compares(FilterKey::Property(property));
+    let physical = compares(Property::PhysicalDps);
+    let elemental = compares(Property::ElementalDps);
     [
-        (Property::PhysicalDps, dps.physical, true),
+        (Property::PhysicalDps, dps.physical, physical),
         (
             Property::ElementalDps,
             dps.elemental,
-            dps.elemental >= dps.physical,
+            elemental && (dps.elemental >= dps.physical || !physical),
         ),
     ]
     .into_iter()
@@ -1359,7 +1369,9 @@ fn property_filter(property: Property, value: f64, limit: Limit, checked: bool) 
     }
 }
 
-/// The filter of a pseudo total, with a minimum at 90 % of its value.
+/// The filter of a pseudo total, with a minimum at 90 % of its value; checked when
+/// `checked`: on a rare or magic item without an unrevealed modifier, when it adds up a line
+/// but an implicit (a total of implicits only, which come with the base, compares nothing).
 fn pseudo_filter(total: &PseudoTotal, checked: bool) -> Stat<'static> {
     Stat {
         key: FilterKey::Pseudo(total.pseudo),
