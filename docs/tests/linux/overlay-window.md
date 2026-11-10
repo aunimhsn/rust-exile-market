@@ -1,6 +1,6 @@
 # Fenêtre par-dessus le jeu : les tests
 
-Fais les tests 1 à 15 sur ton installation habituelle, puis les tests 16 à 29 sur un seul écran. Fais-les d'affilée, sans m'attendre. Un ✅ suffit quand ça marche ; détaille seulement ce qui cloche. Puis dis-moi « fait ».
+Fais les tests 1 à 15 sur ton installation habituelle, puis les tests 16 à 31 sur un seul écran. Fais-les d'affilée, sans m'attendre. Un ✅ suffit quand ça marche ; détaille seulement ce qui cloche. Puis dis-moi « fait ».
 
 ## Avant
 
