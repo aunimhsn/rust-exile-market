@@ -1,5 +1,9 @@
 # Un autre bureau que KDE (GNOME, gamescope…) : les tests
 
+## Pour qui
+
+Pas pour le propriétaire, qui est sur KDE : pour un testeur ou un joueur sur un autre bureau, quand il y en a un. La première version sort sans ces tests, et le dit.
+
 ## Pourquoi
 
 Le raccourci et la fenêtre par-dessus le jeu n'ont été essayés que sur KDE (KWin). Leur code repose sur des comportements que chaque bureau applique à sa façon (revue du bureau du 2026-11-10, hypothèses 1 à 9). Ce guide essaie les quatre qui comptent le plus (le clavier, puis la souris sur un seul écran) sur un autre bureau, GNOME (Mutter) d'abord, en session **X11 ou XWayland** ; les autres sont dans `backlog.md`, à essayer si un joueur signale un souci. Un ✅ suffit quand ça marche ; quand ça cloche, copie les lignes du journal autour du test : c'est lui qui dit dans quel cas on est.
