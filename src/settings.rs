@@ -111,23 +111,14 @@ fn deserialize_shortcut<'de, D: serde::Deserializer<'de>>(
     })
 }
 
-/// The value of the file, or its default when this version can't read it (`language =
-/// "german"`, written by a later version or by hand), so that the other settings still read:
-/// a file read as a whole lost them all for one value.
-fn or_default<'de, D, T>(deserializer: D) -> Result<T, D::Error>
-where
-    D: serde::Deserializer<'de>,
-    T: serde::de::DeserializeOwned + Default,
-{
-    or_else(deserializer, T::default)
-}
-
-/// Whether the hotkey is on, as [`or_default`]: on when the file doesn't say it readably.
-fn or_on<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<bool, D::Error> {
-    or_else(deserializer, || HotkeySetting::default().on)
-}
-
-fn or_else<'de, D, T>(deserializer: D, default: impl FnOnce() -> T) -> Result<T, D::Error>
+/// The value of the key `key` of the file, or its default when this version can't read it
+/// (`language = "german"`, written by a later version or by hand), so that the other settings
+/// still read: a file read as a whole lost them all for one value.
+fn or_else<'de, D, T>(
+    deserializer: D,
+    key: &str,
+    default: impl FnOnce() -> T,
+) -> Result<T, D::Error>
 where
     D: serde::Deserializer<'de>,
     T: serde::de::DeserializeOwned,
@@ -135,11 +126,38 @@ where
     let value = toml::Value::deserialize(deserializer)?;
     Ok(value.try_into().unwrap_or_else(|error: toml::de::Error| {
         log::warn!(
-            "A setting can't be read ({}): its default instead",
+            "The setting `{key}` can't be read ({}): its default instead",
             logging::plain(error.message())
         );
         default()
     }))
+}
+
+/// A function for `deserialize_with` that reads the key `$key` with [`or_else`] and its
+/// default: serde gives such a function no argument, so each key has its own, to be named in
+/// the log.
+macro_rules! or_default {
+    ($name:ident, $key:literal) => {
+        fn $name<'de, D, T>(deserializer: D) -> Result<T, D::Error>
+        where
+            D: serde::Deserializer<'de>,
+            T: serde::de::DeserializeOwned + Default,
+        {
+            or_else(deserializer, $key, T::default)
+        }
+    };
+}
+
+or_default!(language_or_default, "language");
+or_default!(always_on_top_or_default, "always_on_top");
+or_default!(hotkey_or_default, "hotkey");
+or_default!(league_or_default, "league");
+or_default!(closed_new_leagues_or_default, "closed_new_leagues");
+or_default!(closed_update_or_default, "closed_update");
+
+/// Whether the hotkey is on: on when the file doesn't say it readably.
+fn or_on<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<bool, D::Error> {
+    or_else(deserializer, "hotkey.on", || HotkeySetting::default().on)
 }
 
 /// A change the player makes in the settings panel.
@@ -154,26 +172,26 @@ pub enum SettingChange {
 }
 
 /// The settings of the player. A missing value takes its default, so that a file written by
-/// an older version still reads; so does a value this version can't read ([`or_default`]),
+/// an older version still reads; so does a value this version can't read ([`or_else`]),
 /// and a value it doesn't know is ignored, so that a file written by a later version reads
 /// too.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {
-    #[serde(deserialize_with = "or_default")]
+    #[serde(deserialize_with = "language_or_default")]
     language: LanguageSetting,
-    #[serde(deserialize_with = "or_default")]
+    #[serde(deserialize_with = "always_on_top_or_default")]
     always_on_top: bool,
-    #[serde(deserialize_with = "or_default")]
+    #[serde(deserialize_with = "hotkey_or_default")]
     hotkey: HotkeySetting,
     /// The chosen league; none until the player or the default chooses one.
-    #[serde(deserialize_with = "or_default")]
+    #[serde(deserialize_with = "league_or_default")]
     league: Option<League>,
     /// The new leagues whose bubble the player closed, or answered by choosing a league.
-    #[serde(deserialize_with = "or_default")]
+    #[serde(deserialize_with = "closed_new_leagues_or_default")]
     closed_new_leagues: Vec<League>,
     /// The last update whose bubble the player closed, and the league of the moment then.
-    #[serde(deserialize_with = "or_default")]
+    #[serde(deserialize_with = "closed_update_or_default")]
     closed_update: Option<ClosedUpdate>,
 }
 

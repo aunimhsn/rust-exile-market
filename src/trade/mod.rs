@@ -279,6 +279,7 @@ mod tests {
         NamesError::Http {
             path: "/data/items".to_owned(),
             error: HttpError::Request(ureq::Error::StatusCode(status)),
+            after_answers: false,
         }
     }
 
@@ -286,6 +287,7 @@ mod tests {
         NamesError::Http {
             path: "/data/items".to_owned(),
             error: HttpError::Request(ureq::Error::ConnectionFailed),
+            after_answers: false,
         }
     }
 
@@ -388,6 +390,13 @@ mod tests {
         assert_eq!(minutes(&status_error(500), false), 8);
         // With names, an hour whatever the failure.
         assert_eq!(minutes(&status_error(500), true), 60);
+        // A request that hangs after the first ones were answered: the trade site is there.
+        let hung = NamesError::Http {
+            path: "/data/stats".to_owned(),
+            error: HttpError::Request(ureq::Error::Timeout(ureq::Timeout::Global)),
+            after_answers: true,
+        };
+        assert!(hung.answered());
         assert_eq!(minutes(&no_answer(), true), 60);
         let waits: Vec<u64> = (0..4).map(|_| minutes(&status_error(500), false)).collect();
         assert_eq!(waits, [16, 32, 60, 60]);

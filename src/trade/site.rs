@@ -29,8 +29,13 @@ const NOT_EQUIPMENT: [&str; 2] = ["currency", "gem"];
 #[derive(Debug)]
 pub enum NamesError {
     /// No answer, an error status or an answer that isn't the expected JSON, to the request
-    /// of this path.
-    Http { path: String, error: HttpError },
+    /// of this path; `after_answers` when earlier requests of the same download were answered:
+    /// the trade site can be reached then, even if this request hung.
+    Http {
+        path: String,
+        error: HttpError,
+        after_answers: bool,
+    },
     /// The trade site refused the request (403, 429): nothing is sent to it before this
     /// time.
     Refused(u16, Instant),
@@ -60,7 +65,11 @@ impl NamesError {
     #[must_use]
     pub fn answered(&self) -> bool {
         match self {
-            Self::Http { error, .. } => error.answered(),
+            Self::Http {
+                error,
+                after_answers,
+                ..
+            } => error.answered() || *after_answers,
             Self::Refused(..) | Self::Wait(_) | Self::Missing(..) | Self::NoUniquePairs => true,
         }
     }
@@ -69,7 +78,7 @@ impl NamesError {
 impl fmt::Display for NamesError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Http { path, error } => write!(formatter, "{error} ({path})"),
+            Self::Http { path, error, .. } => write!(formatter, "{error} ({path})"),
             Self::Refused(status, until) => write!(
                 formatter,
                 "refused with the status {status}, {} s to wait",
@@ -165,6 +174,8 @@ pub struct TradeSite<T = Network> {
     pace: Pace,
     /// The wait asked by a refusal, shared with the searches of offers.
     refusal: Refusal,
+    /// A request of the download under way was answered ([`NamesError::Http`]).
+    answered: bool,
 }
 
 impl TradeSite {
@@ -180,12 +191,14 @@ impl<T: Transport> TradeSite<T> {
             transport,
             pace: Pace::new(PACE),
             refusal,
+            answered: false,
         }
     }
 
     /// The names of the items and the templates of the stats in English and in French: six
     /// requests.
     pub fn item_names(&mut self) -> Result<ItemNames, NamesError> {
+        self.answered = false;
         let english = self.language_data(Language::English)?;
         let french = self.language_data(Language::French)?;
         item_names(SystemTime::now(), &english, &french)
@@ -218,9 +231,11 @@ impl<T: Transport> TradeSite<T> {
             body: None,
         };
         // Which of the six requests failed, and in which language.
+        let after_answers = self.answered;
         let failed = |error: HttpError| NamesError::Http {
             path: format!("{path}, {language:?}"),
             error,
+            after_answers,
         };
         let answer = self
             .transport
@@ -241,6 +256,7 @@ impl<T: Transport> TradeSite<T> {
             .map_err(|error| failed(HttpError::Request(error)))?;
         let result: ApiResult<A> =
             serde_json::from_str(&body).map_err(|error| failed(HttpError::Json(error)))?;
+        self.answered = true;
         Ok(result.result)
     }
 }

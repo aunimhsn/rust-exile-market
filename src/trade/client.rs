@@ -179,8 +179,12 @@ impl Transport for Network {
             retry_after: header("retry-after"),
         };
         let status = response.status().as_u16();
-        // Of an error too, within the same limit of size: see `Answer::log_error_message`.
-        let body = http::read_text(response.body_mut());
+        // Of an error too, a short one: see `Answer::log_error_message`.
+        let body = if (200..300).contains(&status) {
+            http::read_text(response.body_mut())
+        } else {
+            http::read_error_text(response.body_mut())
+        };
         Ok(Answer {
             status,
             limits,
@@ -266,9 +270,9 @@ impl<T: Transport> TradeClient<T> {
         };
         let answer: ApiSearch = self.send(Policy::Search, &request)?;
         Ok(ItemSearch {
+            total: answer.total(),
             id: answer.id,
             offers: answer.result,
-            total: answer.total,
         })
     }
 
@@ -318,9 +322,11 @@ impl<T: Transport> TradeClient<T> {
         };
         let answer: ApiExchange = self.send(Policy::Exchange, &request)?;
         let total = answer.total;
+        let offers = answer.offers();
         Ok(ExchangeSearch {
-            offers: answer.offers(),
-            total,
+            // Without the count of the trade site, at least the offers it gave.
+            total: total.unwrap_or(offers.len() as u64),
+            offers,
         })
     }
 

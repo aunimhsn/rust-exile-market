@@ -1251,6 +1251,8 @@ mod tests {
         keysyms: Vec<u32>,
         pointers: std::cell::RefCell<std::collections::VecDeque<Pointer>>,
         keys_held: std::cell::RefCell<std::collections::VecDeque<Vec<u8>>>,
+        /// The delay asked before each key.
+        delays: std::cell::RefCell<Vec<u32>>,
     }
 
     /// The pointer on the item, Ctrl held or not.
@@ -1281,6 +1283,7 @@ mod tests {
                 keysyms: vec![XK_CONTROL_L, XK_C, XK_SHIFT_L],
                 pointers: std::cell::RefCell::new(control.map(pointer).into()),
                 keys_held: std::cell::RefCell::new(shift.map(keys).into()),
+                delays: std::cell::RefCell::default(),
             }
         }
 
@@ -1325,7 +1328,9 @@ mod tests {
             }))
         }
 
-        fn drop_events(&self) {}
+        fn drop_events(&self) {
+            self.call("drop events");
+        }
 
         fn layout(&self) -> Result<Layout> {
             self.call("layout");
@@ -1352,8 +1357,9 @@ mod tests {
             self.call("game in front again");
         }
 
-        fn fake_key(&self, key: Key<Keycode>, _: u32) -> Result<()> {
+        fn fake_key(&self, key: Key<Keycode>, delay_ms: u32) -> Result<()> {
             self.call(format!("{key:?}"));
+            self.delays.borrow_mut().push(delay_ms);
             Ok(())
         }
     }
@@ -1380,6 +1386,7 @@ mod tests {
             [
                 "active game",
                 "keyboard back",
+                "drop events",
                 "layout",
                 "pointer",
                 "keys held",
@@ -1394,6 +1401,8 @@ mod tests {
             ]
         );
         assert!(sent.expect("sent").control_held);
+        // The first key at once, the next ones a moment apart, as a hand would press them.
+        assert_eq!(*server.delays.borrow(), [0, KEY_DELAY_MS]);
     }
 
     /// Read before the wait for the game to be active again, a Ctrl released during it sent C

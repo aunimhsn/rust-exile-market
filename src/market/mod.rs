@@ -56,6 +56,49 @@ impl Intervals {
     }
 }
 
+/// The waits after the failures the database answered, for the leagues and for the prices of
+/// the league shown, each on its own: the leagues read every hour must not start over the
+/// wait of a download of prices that keeps failing.
+#[derive(Debug, Clone, Copy)]
+struct Retries {
+    intervals: Intervals,
+    leagues: Backoff,
+    prices: Backoff,
+}
+
+impl Retries {
+    fn new(intervals: Intervals) -> Self {
+        Self {
+            intervals,
+            leagues: intervals.backoff(),
+            prices: intervals.backoff(),
+        }
+    }
+
+    fn leagues_read(&mut self) {
+        self.leagues.succeeded();
+    }
+
+    /// The wait before the leagues are asked again.
+    fn leagues_failed(&mut self, error: &FetchError) -> Duration {
+        self.intervals.retry_after(error, &mut self.leagues)
+    }
+
+    fn prices_read(&mut self) {
+        self.prices.succeeded();
+    }
+
+    /// Another league may not fail as the previous one did, and the player asked for it.
+    fn league_changed(&mut self) {
+        self.prices.succeeded();
+    }
+
+    /// The wait before the prices are downloaded again.
+    fn prices_failed(&mut self, error: &FetchError) -> Duration {
+        self.intervals.retry_after(error, &mut self.prices)
+    }
+}
+
 /// What the price database tells the application.
 #[derive(Debug, Clone)]
 pub enum MarketEvent {
@@ -148,8 +191,7 @@ impl MarketWatch {
                 leagues_due: Instant::now(),
                 pricing: None,
                 failing: false,
-                leagues_backoff: intervals.backoff(),
-                prices_backoff: intervals.backoff(),
+                retries: Retries::new(intervals),
             };
             watch.run(first);
         });
@@ -206,10 +248,7 @@ struct Watch<'a, D> {
     pricing: Option<Pricing>,
     /// The last request failed, which has been logged.
     failing: bool,
-    /// The waits after the failures the database answered, for the leagues and for the
-    /// prices of the league shown.
-    leagues_backoff: Backoff,
-    prices_backoff: Backoff,
+    retries: Retries,
 }
 
 impl<D: PriceDatabase> Watch<'_, D> {
@@ -299,8 +338,7 @@ impl<D: PriceDatabase> Watch<'_, D> {
                 known: false,
             },
         };
-        // Another league may not fail as this one did, and the player asked for it.
-        self.prices_backoff.succeeded();
+        self.retries.league_changed();
         self.pricing = Some(pricing);
         true
     }
@@ -309,7 +347,7 @@ impl<D: PriceDatabase> Watch<'_, D> {
         match self.database.leagues() {
             Ok(leagues) => {
                 self.succeeded();
-                self.leagues_backoff.succeeded();
+                self.retries.leagues_read();
                 let ids: Vec<String> = leagues
                     .iter()
                     .map(|league| logging::plain(league.id()))
@@ -320,9 +358,7 @@ impl<D: PriceDatabase> Watch<'_, D> {
             }
             Err(error) => {
                 self.failed(&error);
-                let retry = self
-                    .intervals
-                    .retry_after(&error, &mut self.leagues_backoff);
+                let retry = self.retries.leagues_failed(&error);
                 self.leagues_due = Instant::now() + retry;
                 MarketEvent::Unreachable(Source::Leagues)
             }
@@ -343,7 +379,7 @@ impl<D: PriceDatabase> Watch<'_, D> {
         let (event, next) = match result {
             Ok(Some(prices)) => {
                 self.succeeded();
-                self.prices_backoff.succeeded();
+                self.retries.prices_read();
                 log::info!(
                     "Prices of {}: {} items",
                     logging::plain(league.id()),
@@ -363,7 +399,7 @@ impl<D: PriceDatabase> Watch<'_, D> {
             }
             Err(error) => {
                 self.failed(&error);
-                let retry = self.intervals.retry_after(&error, &mut self.prices_backoff);
+                let retry = self.retries.prices_failed(&error);
                 let failure = MarketEvent::Unreachable(Source::Prices(league.clone()));
                 (failure, retry)
             }
@@ -548,6 +584,7 @@ mod tests {
         FetchError::Http {
             path: path.to_owned(),
             error: HttpError::Request(ureq::Error::ConnectionFailed),
+            after_answers: false,
         }
     }
 
@@ -556,6 +593,7 @@ mod tests {
         FetchError::Http {
             path: "/Items".to_owned(),
             error: HttpError::Request(ureq::Error::StatusCode(500)),
+            after_answers: false,
         }
     }
 
@@ -701,6 +739,75 @@ mod tests {
         assert_eq!(minutes(&answered_error()), 8);
         let waits: Vec<u64> = (0..4).map(|_| minutes(&answered_error())).collect();
         assert_eq!(waits, [16, 32, 60, 60]);
+    }
+
+    /// The code review of the quality fixes: nothing pinned when each wait starts over, and
+    /// the leagues, read with success every hour, would have made the doubling useless.
+    #[test]
+    fn the_leagues_read_dont_start_over_the_wait_of_the_prices() {
+        let mut retries = Retries::new(INTERVALS);
+        let minutes = |wait: Duration| wait.as_secs() / 60;
+        let refused = answered_error();
+
+        assert_eq!(minutes(retries.prices_failed(&refused)), 1);
+        assert_eq!(minutes(retries.prices_failed(&refused)), 2);
+        retries.leagues_read();
+        assert_eq!(minutes(retries.prices_failed(&refused)), 4);
+        // Nor do the leagues that fail lengthen it, or the prices that of the leagues.
+        assert_eq!(minutes(retries.leagues_failed(&refused)), 1);
+        assert_eq!(minutes(retries.leagues_failed(&refused)), 2);
+        assert_eq!(minutes(retries.prices_failed(&refused)), 8);
+        retries.prices_read();
+        assert_eq!(minutes(retries.leagues_failed(&refused)), 4);
+        assert_eq!(minutes(retries.prices_failed(&refused)), 1);
+    }
+
+    #[test]
+    fn another_league_starts_the_wait_of_the_prices_over() {
+        let mut retries = Retries::new(INTERVALS);
+        let refused = answered_error();
+        retries.prices_failed(&refused);
+        retries.prices_failed(&refused);
+        retries.leagues_failed(&refused);
+
+        retries.league_changed();
+
+        assert_eq!(retries.prices_failed(&refused), Duration::from_mins(1));
+        assert_eq!(retries.leagues_failed(&refused), Duration::from_mins(2));
+    }
+
+    /// The same in the thread: the leagues are read with success every 30 ms, and the prices
+    /// keep their longer and longer wait.
+    #[test]
+    fn the_leagues_read_often_dont_hasten_a_download_the_database_refuses() {
+        let directory = TestDirectory::new("market-backoff-leagues");
+        let database = FakeDatabase {
+            prices_refused: true,
+            ..FakeDatabase::default()
+        };
+        let requests = Arc::clone(&database.requests);
+        let cache = directory.0.clone();
+        let hourly = Intervals {
+            refresh: Duration::from_millis(30),
+            ..FAST
+        };
+        let _watch = MarketWatch::spawn(
+            move || database,
+            move || PriceCache::in_directory(cache),
+            hourly,
+            Some(League::new("Standard")),
+            || {},
+        );
+
+        thread::sleep(Duration::from_millis(400));
+
+        // Every 20 ms, about twenty; doubled, at 0, 20, 60, 140 and 300 ms.
+        let downloads = requests.prices.load(Ordering::SeqCst);
+        assert!(downloads <= 6, "{downloads} downloads");
+        assert!(
+            requests.leagues.load(Ordering::SeqCst) >= 3,
+            "the leagues are read"
+        );
     }
 
     #[test]

@@ -200,15 +200,31 @@ pub(super) struct ApiSearch {
     pub result: Vec<String>,
     /// Only shown: the offers are worth having without it.
     #[serde(default)]
-    pub total: u64,
+    total: Option<u64>,
+}
+
+impl ApiSearch {
+    /// The offers found; without the count of the trade site, at least those it gave, so
+    /// that an estimate never stands next to "0 similar".
+    pub fn total(&self) -> u64 {
+        self.total.unwrap_or(self.result.len() as u64)
+    }
 }
 
 /// The answer of `/fetch`.
 #[derive(Debug, Deserialize)]
 pub(super) struct ApiFetch {
-    /// An offer the application can't read is left out ([`http::each`]).
-    #[serde(deserialize_with = "http::each")]
-    result: Vec<Option<ApiListed>>,
+    #[serde(deserialize_with = "listed")]
+    result: Vec<ApiListed>,
+}
+
+/// The offers of `/fetch`: `null` for an offer gone since the search, left out first, so that
+/// it doesn't count as an offer read; then an offer the application can't read is left out
+/// ([`http::read_each`]).
+fn listed<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Vec<ApiListed>, D::Error> {
+    let mut offers = Vec::<Value>::deserialize(deserializer)?;
+    offers.retain(|offer| !offer.is_null());
+    http::read_each(offers).map_err(de::Error::custom)
 }
 
 #[derive(Debug, Deserialize)]
@@ -398,11 +414,11 @@ pub(super) struct ApiExchange {
     result: BTreeMap<String, ApiExchangeListed>,
     /// Only shown: the offers are worth having without it.
     #[serde(default)]
-    pub total: u64,
+    pub total: Option<u64>,
 }
 
 /// The listings of `/exchange` by id; an empty list without offers. A listing the application
-/// can't read is left out, as in [`http::read_each`]: an error when none can be read.
+/// can't read is left out ([`http::read_each_keyed`]).
 fn listings<'de, D: Deserializer<'de>>(
     deserializer: D,
 ) -> Result<BTreeMap<String, ApiExchangeListed>, D::Error> {
@@ -410,24 +426,8 @@ fn listings<'de, D: Deserializer<'de>>(
         Value::Array(listings) if listings.is_empty() => return Ok(BTreeMap::new()),
         listings => BTreeMap::<String, Value>::deserialize(listings).map_err(de::Error::custom)?,
     };
-    let (ids, values): (Vec<String>, Vec<Value>) = listings.into_iter().unzip();
-    // `None` for the listing left out, so that each id keeps its listing.
-    let read: Vec<Option<ApiExchangeListed>> = values
-        .into_iter()
-        .map(|value| serde_json::from_value(value).ok())
-        .collect();
-    if !read.is_empty() && read.iter().all(Option::is_none) {
-        return Err(de::Error::custom("no listing of the exchange can be read"));
-    }
-    let unreadable = read.iter().filter(|listing| listing.is_none()).count();
-    if unreadable > 0 {
-        log::warn!("{unreadable} listings of the currency exchange can't be read");
-    }
-    Ok(ids
-        .into_iter()
-        .zip(read)
-        .filter_map(|(id, listing)| Some((id, listing?)))
-        .collect())
+    let listings = http::read_each_keyed(listings.into_iter().collect());
+    Ok(listings.map_err(de::Error::custom)?.into_iter().collect())
 }
 
 #[derive(Debug, Deserialize)]
@@ -470,7 +470,6 @@ impl ApiFetch {
         let (offers, unreadable): (Vec<ItemOffer>, Vec<Unreadable>) = self
             .result
             .into_iter()
-            .flatten()
             .map(|listed| listed.offer(language))
             .unzip();
         for warning in warnings(&unreadable) {

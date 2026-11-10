@@ -37,8 +37,14 @@ const CURRENCY_CATEGORY: &str = "currency";
 #[derive(Debug)]
 pub enum FetchError {
     /// No answer, an error status (e.g. 429 when its limits are reached), or an answer that
-    /// isn't the expected JSON, to the request of this path.
-    Http { path: String, error: HttpError },
+    /// isn't the expected JSON, to the request of this path; `after_answers` when earlier
+    /// requests of the same download were answered: the database can be reached then, even if
+    /// this request hung.
+    Http {
+        path: String,
+        error: HttpError,
+        after_answers: bool,
+    },
     /// No current league in the answer: the database is wrong for a moment, and the league of
     /// the player must not be changed for that.
     NoCurrentLeague,
@@ -54,7 +60,11 @@ impl FetchError {
     #[must_use]
     pub fn answered(&self) -> bool {
         match self {
-            Self::Http { error, .. } => error.answered(),
+            Self::Http {
+                error,
+                after_answers,
+                ..
+            } => error.answered() || *after_answers,
             Self::NoCurrentLeague | Self::MissingRate(_) | Self::TooManyCategories(_) => true,
         }
     }
@@ -64,7 +74,7 @@ impl fmt::Display for FetchError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             // The path holds the name of a league, read from the database.
-            Self::Http { path, error } => {
+            Self::Http { path, error, .. } => {
                 write!(formatter, "{error} ({})", logging::plain(path))
             }
             Self::NoCurrentLeague => formatter.write_str("no current league in the answer"),
@@ -230,6 +240,8 @@ impl Kind {
 pub struct Poe2Scout {
     agent: ureq::Agent,
     pace: Pace,
+    /// A request of the download under way was answered ([`FetchError::Http`]).
+    answered: bool,
 }
 
 impl Poe2Scout {
@@ -238,6 +250,7 @@ impl Poe2Scout {
         Self {
             agent: http::agent(),
             pace: Pace::new(PACE),
+            answered: false,
         }
     }
 
@@ -268,22 +281,18 @@ impl Poe2Scout {
 
     /// The answer of `path` with the parameters `query`, at once.
     fn fetch<T: DeserializeOwned>(
-        &self,
+        &mut self,
         path: &str,
         query: &[(&str, &str)],
     ) -> Result<T, FetchError> {
-        http::get_json(&self.agent, &format!("{BASE_URL}{path}"), query).map_err(|error| {
-            FetchError::Http {
-                path: path.to_owned(),
-                error,
-            }
+        let answer = http::get_json(&self.agent, &format!("{BASE_URL}{path}"), query);
+        let after_answers = self.answered;
+        self.answered |= answer.is_ok();
+        answer.map_err(|error| FetchError::Http {
+            path: path.to_owned(),
+            error,
+            after_answers,
         })
-    }
-
-    /// The list `path` answers, at the pace of the API, each element read on its own.
-    fn list<T: DeserializeOwned>(&mut self, path: &str) -> Result<Vec<T>, FetchError> {
-        let values = self.get(path, &[])?;
-        each_of(path, values)
     }
 
     /// The items of every page of a category; `None` when `download` is interrupted before a
@@ -321,7 +330,10 @@ impl Poe2Scout {
 
 impl PriceDatabase for Poe2Scout {
     fn leagues(&mut self) -> Result<Vec<League>, FetchError> {
-        let leagues = current_leagues(self.list("/Leagues")?);
+        self.answered = false;
+        // Read strictly: a league left out because it can't be read would be taken for a
+        // league that ended, and the player moved to another one.
+        let leagues = current_leagues(self.get("/Leagues", &[])?);
         if leagues.is_empty() {
             return Err(FetchError::NoCurrentLeague);
         }
@@ -335,6 +347,7 @@ impl PriceDatabase for Poe2Scout {
         league: &League,
         download: &mut dyn DownloadObserver,
     ) -> Result<Option<PriceList>, FetchError> {
+        self.answered = false;
         let path = http::encode(league.id());
         let Some(categories) = self.get_unless_interrupted::<ApiCategories>(
             &format!("/Leagues/{path}/Items/Categories"),
@@ -454,6 +467,7 @@ fn each_of<T: DeserializeOwned>(
     http::read_each(values).map_err(|error| FetchError::Http {
         path: path.to_owned(),
         error: HttpError::Json(error),
+        after_answers: true,
     })
 }
 
@@ -808,10 +822,22 @@ mod tests {
 
         assert!(failure.answered());
         assert!(failure.to_string().ends_with("(/Leagues)"), "{failure}");
-        let offline = FetchError::Http {
+        let hung = |after_answers| FetchError::Http {
             path: "/Leagues".to_owned(),
-            error: HttpError::Request(ureq::Error::ConnectionFailed),
+            error: HttpError::Request(ureq::Error::Timeout(ureq::Timeout::Global)),
+            after_answers,
         };
-        assert!(!offline.answered());
+        assert!(!hung(false).answered());
+        // The twentieth request of a download hangs: the database was there for the others.
+        assert!(hung(true).answered());
+    }
+
+    /// The code review of the quality fixes: left out, a league that can't be read was taken
+    /// for a league that ended, and the player moved to Standard.
+    #[test]
+    fn a_league_that_cant_be_read_fails_the_whole_answer() {
+        let leagues = r#"[{"Value": "Standard", "IsCurrent": true}, {"Value": "Forbidden Rites"}]"#;
+
+        assert!(serde_json::from_str::<Vec<ApiLeague>>(leagues).is_err());
     }
 }

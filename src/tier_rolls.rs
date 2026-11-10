@@ -14,6 +14,9 @@
 //! of a match the numbers its stat counts on its lines, in their order: the numbers are read
 //! from the same matches as the tiers, so that each range lands on its number.
 
+use std::collections::BTreeSet;
+use std::sync::{Mutex, PoisonError};
+
 use crate::filters::StatKey;
 use crate::game_data::{self, LineMatch, ModifierTiers, Tier};
 use crate::item::{Currency, Modifier, ModifierKind, Range, TierDoubt};
@@ -199,19 +202,35 @@ fn tables_of(
 /// ([`game_data::lacks_table`]): the first sign that the game changed its modifiers, and the
 /// list of those to generate again, in the log a bug report carries.
 fn warn_of_a_missing_table(language: Language, base_type: &str, modifier: &Modifier) {
+    /// What was already told: an item is read again at each copy, and when the names of the
+    /// trade site arrive.
+    static TOLD: Mutex<BTreeSet<String>> = Mutex::new(BTreeSet::new());
+
     let matches = game_data::modifier_stats(language, modifier, None);
-    if game_data::lacks_table(language, base_type, modifier, &matches) {
+    if !game_data::lacks_table(language, base_type, modifier, &matches) {
+        return;
+    }
+    let told = format!(
+        "tier {:?} on {}: {}",
+        modifier.tier,
+        logging::plain(base_type),
+        modifier
+            .lines
+            .first()
+            .map_or_else(String::new, |line| logging::plain(&line.text))
+    );
+    let mut all = TOLD.lock().unwrap_or_else(PoisonError::into_inner);
+    // A few hundred at most: a session doesn't see that many odd modifiers.
+    if all.len() < MOST_TOLD && all.insert(told.clone()) {
         log::warn!(
-            "Game data, no table for a modifier copied as tier {:?} on {}: {}",
-            modifier.tier,
-            logging::plain(base_type),
-            modifier
-                .lines
-                .first()
-                .map_or_else(String::new, |line| logging::plain(&line.text))
+            "Game data, no table for a modifier copied as {told} (data behind the game, or \
+             an item of an older patch)"
         );
     }
 }
+
+/// The most missing tables told in a session.
+const MOST_TOLD: usize = 500;
 
 /// Whether the advanced copy writes `modifier`, a prefix or suffix, with its ranges but without
 /// tier: the game writes none for a modifier of the Genesis tree (`Reinforcing`, `Minions have

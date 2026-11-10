@@ -32,8 +32,10 @@ pub enum HttpError {
 impl HttpError {
     /// The service answered, with an error or something else than the expected JSON: the same
     /// request would likely fail the same way, so the next attempt waits longer and longer
-    /// ([`Backoff`]). Without an answer (no network, a request that hangs), nothing reached
-    /// the service, and the next attempt can come soon.
+    /// ([`Backoff`]). Without an answer (no network, a request that hangs), the next attempt
+    /// can come soon; a request that hangs may have reached the service all the same, which
+    /// this error alone can't tell: a client that sends several requests in a row counts a
+    /// failure after its first answers as answered too (`after_answers` in its error).
     #[must_use]
     pub fn answered(&self) -> bool {
         match self {
@@ -114,6 +116,15 @@ pub fn get_json<T: DeserializeOwned>(
     Ok(serde_json::from_str(&text)?)
 }
 
+/// The longest body read of an error status: a line of JSON that says why.
+const MAX_ERROR_BODY: u64 = 64 * 1024;
+
+/// The text of the answer of an error status, refused past a few kilobytes: only a short
+/// message is read in it.
+pub fn read_error_text(body: &mut ureq::Body) -> Result<String, ureq::Error> {
+    read_text_up_to(body, MAX_ERROR_BODY)
+}
+
 /// The text of an answer, refused past `MAX_BODY`. The limit of `Body::read_to_string` counts
 /// the bytes received, before they are decompressed: a few megabytes of gzip could fill the
 /// memory. As there, a byte that isn't UTF-8 is read as the replacement character.
@@ -134,22 +145,34 @@ fn read_text_up_to(body: &mut ureq::Body, limit: u64) -> Result<String, ureq::Er
 }
 
 /// Each element of a list read on its own: one the application can't read is left out, so
-/// that a single odd item doesn't lose a whole answer. An error when none can be read, since
-/// the service changed its answer then, and an empty list would say "nothing" instead.
+/// that a single odd item doesn't lose a whole answer. An error when more than half of them
+/// can't be read, since the service changed its answer then: a list with a few elements left
+/// would replace the complete one of the cache, or say "nothing" instead.
 pub fn read_each<T: DeserializeOwned>(values: Vec<Value>) -> Result<Vec<T>, serde_json::Error> {
+    let keyed = values.into_iter().map(|value| ((), value)).collect();
+    Ok(read_each_keyed(keyed)?
+        .into_iter()
+        .map(|((), element)| element)
+        .collect())
+}
+
+/// [`read_each`] for the values of a map, each kept with its key.
+pub fn read_each_keyed<K, T: DeserializeOwned>(
+    values: Vec<(K, Value)>,
+) -> Result<Vec<(K, T)>, serde_json::Error> {
     let total = values.len();
     let mut read = Vec::with_capacity(total);
     let mut first = None;
-    for value in values {
+    for (key, value) in values {
         match serde_json::from_value(value) {
-            Ok(element) => read.push(element),
+            Ok(element) => read.push((key, element)),
             Err(error) => {
                 first.get_or_insert(error);
             }
         }
     }
     match first {
-        Some(error) if read.is_empty() => Err(error),
+        Some(error) if read.len() * 2 < total => Err(error),
         Some(error) => {
             log::warn!(
                 "{} of the {total} elements of an answer can't be read, the first one: {}",
@@ -431,6 +454,36 @@ pub mod tests {
         let read = read_each::<u8>(values).expect("two numbers");
 
         assert_eq!(read, [1, 3]);
+    }
+
+    /// The code review of the quality fixes: a page with one price left in 250 replaced the
+    /// complete prices of the cache.
+    #[test]
+    fn a_list_more_than_half_of_which_cant_be_read_is_an_error() {
+        let list = |numbers: usize, texts: usize| -> Vec<Value> {
+            let numbers = (0..numbers).map(|_| Value::from(1));
+            numbers
+                .chain((0..texts).map(|_| Value::from("odd")))
+                .collect()
+        };
+
+        assert_eq!(read_each::<u8>(list(2, 2)).expect("half").len(), 2);
+        assert_eq!(read_each::<u8>(list(125, 125)).expect("half").len(), 125);
+        assert!(read_each::<u8>(list(1, 2)).is_err());
+        assert!(read_each::<u8>(list(1, 249)).is_err());
+    }
+
+    #[test]
+    fn the_values_of_a_map_keep_their_keys() {
+        let values = vec![
+            ("a", Value::from(1)),
+            ("b", Value::Null),
+            ("c", Value::from(3)),
+        ];
+
+        let read = read_each_keyed::<_, u8>(values).expect("two numbers");
+
+        assert_eq!(read, [("a", 1), ("c", 3)]);
     }
 
     /// A list of another shape isn't an empty list: "no offer" would be shown for it.

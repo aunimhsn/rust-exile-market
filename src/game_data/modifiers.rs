@@ -319,20 +319,33 @@ pub fn modifier_tiers(
         let summed = (*line, whole);
         return split_tiers(language, base_type, item_level, modifier, matches, summed);
     }
+    let (affix, base, copied) = copied_on_base(language, base_type, modifier, matches)?;
+    find(&TABLES, affix, base, &copied, Tie::Best)
+}
+
+/// What the tables are searched with for `modifier`: its affix, the base, and its lines as
+/// copied; none for a modifier that isn't a prefix or suffix, a base the data don't know, or a
+/// line without its stat.
+fn copied_on_base<'a>(
+    language: Language,
+    base_type: &str,
+    modifier: &'a Modifier,
+    matches: &'a [LineMatch<'_>],
+) -> Option<(TableAffix, &'static BaseSpawn, Copied<'a>)> {
     let affix = match modifier.kind {
         ModifierKind::Explicit(Some(Affix::Prefix)) => TableAffix::Prefix,
         ModifierKind::Explicit(Some(Affix::Suffix)) => TableAffix::Suffix,
         _ => return None,
     };
     let base = bases::spawn(language, base_type)?;
-    let copied = Copied::of(modifier, matches)?;
-    find(&TABLES, affix, base, &copied, Tie::Best)
+    Some((affix, base, Copied::of(modifier, matches)?))
 }
 
 /// Whether the tables should hold `modifier` and don't: a prefix or suffix the advanced copy
 /// writes with its tier, on a base the data know, each of its lines with its stat, and no
-/// table with these ranges. The advanced copy tells the truth: the data are then behind the
-/// game, after a patch, which is worth a line in the log ([`modifier_tiers`] gives nothing).
+/// table with these ranges. The advanced copy tells the truth: either the data are behind the
+/// game, after a patch, or the item kept the ranges of an older patch (in Standard), which this
+/// can't tell apart; worth a line in the log ([`modifier_tiers`] gives nothing).
 #[must_use]
 pub fn lacks_table(
     language: Language,
@@ -340,19 +353,12 @@ pub fn lacks_table(
     modifier: &Modifier,
     matches: &[LineMatch<'_>],
 ) -> bool {
-    let affix = match modifier.kind {
-        ModifierKind::Explicit(Some(Affix::Prefix)) => TableAffix::Prefix,
-        ModifierKind::Explicit(Some(Affix::Suffix)) => TableAffix::Suffix,
-        _ => return false,
-    };
     if modifier.tier.is_none() || modifier.doubt.is_some() {
         return false;
     }
-    let Some(base) = bases::spawn(language, base_type) else {
-        return false;
-    };
-    Copied::of(modifier, matches)
-        .is_some_and(|copied| find(&TABLES, affix, base, &copied, Tie::Best).is_none())
+    copied_on_base(language, base_type, modifier, matches).is_some_and(|(affix, base, copied)| {
+        find(&TABLES, affix, base, &copied, Tie::Best).is_none()
+    })
 }
 
 /// The tiers of the modifier of every line of `modifier`, whose line `line` adds up its part

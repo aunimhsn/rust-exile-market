@@ -506,7 +506,6 @@ fn a_property_of_an_offer_of_waystone_that_cant_be_read_is_kept_to_log() {
         fetch
             .result
             .into_iter()
-            .flatten()
             .map(|listed| listed.offer(language))
             .map(|(offer, unreadable)| (offer.item.waystone_unread, unreadable.waystone_properties))
             .collect::<Vec<_>>()
@@ -676,11 +675,23 @@ fn the_offers_are_read_without_their_total_and_a_whisper_is_whole_or_empty() {
     );
     let exchange: ApiExchange = serde_json::from_str(&answer).expect("read");
 
-    assert_eq!(exchange.total, 0);
+    assert_eq!(exchange.total, None);
     let offers = exchange.offers();
     assert_eq!(offers.len(), 2);
     assert_eq!(offers[0].whisper, "", "no half sentence");
     assert!(offers[1].whisper.starts_with("@Other Hi"));
     let search: ApiSearch = serde_json::from_str(r#"{"id": "a", "result": ["b"]}"#).expect("read");
-    assert_eq!(search.total, 0);
+    assert_eq!(search.total(), 1, "the offers it gave");
+}
+
+/// The code review of the quality fixes: a `null` counted as an offer read, and nine offers
+/// that can't be read next to one gone showed "no offer".
+#[test]
+fn an_offer_gone_doesnt_make_a_page_that_cant_be_read_a_page_without_offers() {
+    let fetch =
+        serde_json::from_str::<ApiFetch>(r#"{"result": [null, {"id": "odd"}, {"id": "odder"}]}"#);
+    assert!(fetch.is_err());
+
+    let gone: ApiFetch = serde_json::from_str(r#"{"result": [null, null]}"#).expect("read");
+    assert_eq!(gone.offers(Language::English), Vec::new());
 }
