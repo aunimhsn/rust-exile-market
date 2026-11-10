@@ -4,7 +4,8 @@
 
 1. Run the `security-auditor` subagent on `main` and fix the findings the owner approves (a critical or high one blocks the release), and run the guides of `docs/tests/` again ([the list](tests/README.md)).
 2. Update `version` in `Cargo.toml` (then run `cargo build` to update `Cargo.lock`) and merge it into `main`.
-3. Tag the merged commit with the same version and push the tag:
+3. Run the Release workflow by hand on `main` (Actions, Release, Run workflow) and wait for its builds on every system: a tag can't be moved, so a build that fails at the tag costs a version number.
+4. Tag the merged commit with the same version and push the tag:
 
    ```sh
    git switch main && git pull
@@ -12,7 +13,7 @@
    git push origin v0.1.0
    ```
 
-The [Release workflow](../.github/workflows/release.yml) builds the archives for Windows, macOS and Linux and publishes them as a GitHub release, with their checksums (`SHA256SUMS.txt`). It fails if the tag does not match the version of `Cargo.toml`, if its commit isn't on `main` (a commit that went through a pull request and its checks), or if a security advisory on a dependency isn't sorted yet (`cargo deny check advisories`: update the dependency, or list the advisory in `deny.toml` with its reason). A ruleset of the repository keeps the tags `v*` from being moved or deleted: a wrong tag is replaced by the next version, never pushed again.
+The [Release workflow](../.github/workflows/release.yml) builds the archives for Windows, macOS and Linux and publishes them as a GitHub release, with their checksums (`SHA256SUMS.txt`). It fails if the tag does not match the version of `Cargo.toml`, if its commit isn't on `main` (a commit that went through a pull request and its checks; a guard against a tag put by mistake, since the workflow that runs is the one of the tagged commit), or if a security advisory on a dependency isn't sorted yet (`cargo deny check advisories`: update the dependency, or list the advisory in `deny.toml` with its reason). A ruleset of the repository keeps the tags `v*` from being moved or deleted: a wrong tag is replaced by the next version, never pushed again.
 
 The version of Rust is pinned in `rust-toolchain.toml`: the release is built by the compiler the checks of `main` ran with. Dependabot proposes the new versions; each action of the workflows is pinned to a commit the same way (`.github/scripts/pinned-actions.sh`, run by the CI).
 

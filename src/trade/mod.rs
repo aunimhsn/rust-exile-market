@@ -155,7 +155,13 @@ fn watch(
                     due = Instant::now() + intervals.refresh;
                 }
                 // Not sent: the trade site refused a search, or the names, a moment ago.
-                Err(NamesError::Wait(until)) => due = until,
+                Err(NamesError::Wait(until)) => {
+                    log::info!(
+                        "The item names wait for the end of a refusal of the trade site, {} s",
+                        until.saturating_duration_since(Instant::now()).as_secs()
+                    );
+                    due = until;
+                }
                 Err(error) => {
                     // Once, then quietly.
                     if failing {
@@ -356,6 +362,25 @@ mod tests {
         assert_eq!(requests_after(&requests, Duration::from_millis(100)), 1);
     }
 
+    #[test]
+    fn a_refusal_waits_for_its_delay_when_longer_than_the_retry() {
+        let directory = TestDirectory::new("item-names-long-refusal");
+        // Every retry far shorter than the delay asked by the refusal.
+        let hasty = Intervals {
+            refresh: Duration::from_hours(24),
+            retry: Duration::from_millis(20),
+            retry_without_names: Duration::from_millis(20),
+        };
+        let site = FakeSite {
+            refused_for: Some(Duration::from_secs(60)),
+            ..FakeSite::default()
+        };
+        let requests = Arc::clone(&site.requests);
+        let _watch = ItemNamesWatch::spawn(move || site, Some(directory.0.clone()), hasty, || {});
+
+        assert_eq!(requests_after(&requests, Duration::from_millis(200)), 1);
+    }
+
     /// A trade site that waits for the end of a refusal, as during a refused search.
     struct WaitingSite {
         until: Instant,
@@ -377,7 +402,7 @@ mod tests {
         let directory = TestDirectory::new("item-names-wait");
         let requests = Arc::new(AtomicUsize::new(0));
         let site = WaitingSite {
-            until: Instant::now() + Duration::from_millis(150),
+            until: Instant::now() + Duration::from_millis(600),
             requests: Arc::clone(&requests),
         };
         let (woken, wakes) = mpsc::channel();
@@ -391,7 +416,7 @@ mod tests {
         );
 
         // Asked once during the wait, not every 20 ms as after a failure without names.
-        assert_eq!(requests_after(&requests, Duration::from_millis(100)), 1);
+        assert_eq!(requests_after(&requests, Duration::from_millis(200)), 1);
         assert_eq!(received(&mut watch, &wakes).len(), 1);
         assert_eq!(requests.load(Ordering::SeqCst), 2);
     }

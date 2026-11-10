@@ -17,6 +17,7 @@ use crate::game_data::TradeGroup;
 use crate::http::{HttpError, Pace};
 use crate::item_names::{ItemNames, Names, StatTemplate, UniqueName, UniqueNames};
 use crate::language::Language;
+use crate::logging;
 
 /// The time between two requests, at least: the data endpoints announce no limit.
 const PACE: Duration = Duration::from_secs(1);
@@ -305,7 +306,7 @@ fn unique_pairs(english: &[ApiItemCategory], french: &[ApiItemCategory]) -> Vec<
         let Some(translated) = french.iter().find(|other| other.id == category.id) else {
             log::warn!(
                 "No category {} in French: its uniques are left out",
-                category.id
+                logging::plain(&category.id)
             );
             continue;
         };
@@ -313,7 +314,7 @@ fn unique_pairs(english: &[ApiItemCategory], french: &[ApiItemCategory]) -> Vec<
         if let Some(reason) = misalignment(&english_uniques, &french_uniques) {
             log::warn!(
                 "The uniques of {} don't line up in English and French ({reason}): left out",
-                category.id
+                logging::plain(&category.id)
             );
             continue;
         }
@@ -375,6 +376,7 @@ fn unique_name(item: &ApiItem) -> Option<UniqueName> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::trade::client::Answer;
     use crate::trade::client::tests::FakeSite;
     use crate::trade::limits::LimitHeaders;
 
@@ -642,6 +644,43 @@ mod tests {
         assert!(matches!(error, NamesError::Wait(wait) if wait == until));
         assert_eq!(error.refused_until(), None);
         assert_eq!(site.requests(), []);
+    }
+
+    /// A trade site that refuses a search of the other thread while it answers the names.
+    struct RefusedMeanwhile {
+        site: FakeSite,
+        refusal: Refusal,
+        until: Instant,
+    }
+
+    impl Transport for RefusedMeanwhile {
+        fn send(&mut self, request: &Request) -> Result<Answer, ureq::Error> {
+            let answer = self.site.send(request);
+            self.refusal.extend(self.until);
+            answer
+        }
+    }
+
+    #[test]
+    fn a_search_refused_between_two_requests_stops_the_next_ones() {
+        let site = FakeSite::default();
+        for _ in 0..6 {
+            site.answer(200, LimitHeaders::default(), r#"{"result": []}"#);
+        }
+        let refusal = Refusal::default();
+        let until = Instant::now() + Duration::from_mins(30);
+        let transport = RefusedMeanwhile {
+            site: site.clone(),
+            refusal: refusal.clone(),
+            until,
+        };
+        let mut names = TradeSite::with_transport(transport, refusal);
+        names.pace = Pace::new(Duration::ZERO);
+
+        let error = names.item_names().expect_err("a wait");
+
+        assert!(matches!(error, NamesError::Wait(wait) if wait == until));
+        assert_eq!(site.requests().len(), 1);
     }
 
     #[test]

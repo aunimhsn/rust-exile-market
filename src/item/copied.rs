@@ -27,7 +27,7 @@ impl CopiedItem {
     #[must_use]
     pub fn from_text(text: &str) -> Option<Self> {
         let text = text.trim();
-        if text.len() > MAX_BYTES || text.lines().take(MAX_LINES + 1).count() > MAX_LINES {
+        if too_long(text) {
             return None;
         }
         let language = Language::ALL
@@ -37,6 +37,17 @@ impl CopiedItem {
             text: text.replace("\r\n", "\n"),
             language,
         })
+    }
+
+    /// Whether `text` starts as an item but is too long to be one: worth a line in the log,
+    /// without anything of the text.
+    #[must_use]
+    pub fn is_too_long_item(text: &str) -> bool {
+        let text = text.trim();
+        too_long(text)
+            && Language::ALL
+                .into_iter()
+                .any(|language| text.starts_with(Labels::of(language).item_class))
     }
 
     #[must_use]
@@ -55,6 +66,10 @@ impl CopiedItem {
     pub fn first_line(&self) -> &str {
         self.text.lines().next().unwrap_or_default()
     }
+}
+
+fn too_long(text: &str) -> bool {
+    text.len() > MAX_BYTES || text.lines().take(MAX_LINES + 1).count() > MAX_LINES
 }
 
 #[cfg(test)]
@@ -108,6 +123,9 @@ mod tests {
         assert_eq!(CopiedItem::from_text(&lines(MAX_LINES + 1)), None);
         assert!(CopiedItem::from_text(&bytes(MAX_BYTES)).is_some());
         assert_eq!(CopiedItem::from_text(&bytes(MAX_BYTES + 1)), None);
+        assert!(CopiedItem::is_too_long_item(&bytes(MAX_BYTES + 1)));
+        assert!(!CopiedItem::is_too_long_item(&bytes(MAX_BYTES)));
+        assert!(!CopiedItem::is_too_long_item(&"x".repeat(MAX_BYTES + 1)));
     }
 
     #[test]

@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::http::{self, HttpError};
 use crate::league::Leagues;
+use crate::logging;
 use crate::worker::{OnDrop, Worker};
 
 /// The repository of the application, e.g. `https://github.com/aunimhsn/rust-exile-market`.
@@ -190,7 +191,10 @@ fn check(
         }
     };
     let Some(version) = Version::parse(&tag) else {
-        log::warn!("Update check: the latest release {tag:?} isn't a version");
+        log::warn!(
+            "Update check: the latest release {:?} isn't a version",
+            logging::plain(&tag)
+        );
         return None;
     };
     if version <= running {
@@ -202,11 +206,20 @@ fn check(
     Some(Release { version, page })
 }
 
+/// The redirections followed to the API of GitHub, at most.
+const REDIRECTIONS: u32 = 3;
+
 /// The tag of the latest release; none while there is no release (GitHub answers 404).
 fn latest_tag() -> Result<Option<String>, HttpError> {
     let agent = http::agent();
+    // GitHub redirects the API of a repository renamed or moved (301): followed here, over
+    // HTTPS only as every request of the agent, so that the versions already released still
+    // see the new ones after a rename.
     let answer = agent
         .get(latest_release_api(REPOSITORY))
+        .config()
+        .max_redirects(REDIRECTIONS)
+        .build()
         .header("Accept", "application/vnd.github+json")
         .call();
     let mut response = match answer {

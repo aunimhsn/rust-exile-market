@@ -334,5 +334,5 @@ None of these files are in the Git repository.
 | Clipboard refuses a text the application copies (whisper, log) | The pill reads "Not copied, try again" in red, and a click tries again; the reason goes to the log. |
 | Copied text that starts like an item but can't be read | "This item couldn't be read. Copy it again, or copy another item.", without crashing; the next copy works normally. |
 | Trade site unreachable | The title row of the offers block shows "The trade site can't be reached.", with the search block to try again; the price and the stats are shown normally. |
-| Trade site refuses a search (HTTP 429, e.g. the same IP address also used the trade site in a browser) | The waiting block waits for the delay given by the trade site (`Retry-After`), for every search (items and currency exchange); the application never retries by itself, and doesn't download the item names meanwhile. |
+| Trade site refuses a search (HTTP 429 or 403, e.g. the same IP address also used the trade site in a browser) | The waiting block waits for the delay given by the trade site (`Retry-After`), for every search (items and currency exchange); the application never retries by itself, and doesn't download the item names meanwhile. |
 | Settings file unreadable | The default settings are used, and the file is rewritten at the next change. |

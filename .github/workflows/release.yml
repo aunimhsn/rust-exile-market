@@ -13,6 +13,8 @@ on:
       - .github/workflows/release.yml
       - Cargo.toml
       - Cargo.lock
+      # A new version of Rust builds every system before the next tag.
+      - rust-toolchain.toml
       - about.hbs
       - about.toml
       - deny.toml
@@ -35,8 +37,10 @@ env:
 
 jobs:
   # A release only from a commit of main, which went through a pull request and its checks, with
-  # the toolchain of rust-toolchain.toml: a tag put on another commit builds nothing. The ruleset
-  # of the tags (`v*`) keeps them from moving afterwards.
+  # the toolchain of rust-toolchain.toml: a tag put by mistake on another commit builds nothing.
+  # Not a lock: the workflow run is the one of the tagged commit, so a commit made to remove
+  # this job would still publish (an environment with the owner's approval would close that,
+  # see backlog.md). The ruleset of the tags (`v*`) keeps them from being moved or deleted.
   tag:
     name: Check that the tag is on main
     runs-on: ubuntu-latest

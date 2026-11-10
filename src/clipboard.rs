@@ -136,6 +136,12 @@ impl<S: ClipboardSource> ClipboardWatcher<S> {
                     if let Some(item) = item {
                         log::info!("Item copied: {}", logging::plain(item.first_line()));
                         emit(ClipboardEvent::Copied { item, hotkey });
+                    } else if CopiedItem::is_too_long_item(&text) {
+                        log::warn!(
+                            "A copied text of {} bytes starts as an item but is too long to \
+                             be one: ignored",
+                            text.len()
+                        );
                     }
                 }
             }

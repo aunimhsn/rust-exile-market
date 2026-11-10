@@ -9,6 +9,7 @@ use crate::game_data::{self, StatSource, TradeGroup, TradeStats};
 use crate::item::{CopiedItem, Item, ItemState, Modifier, ParseError, Rarity};
 use crate::item_names::ItemNames;
 use crate::league::{League, Leagues};
+use crate::logging;
 use crate::market::{MarketEvent, Source};
 use crate::prices::{PriceList, Rates};
 use crate::pricing::{self, FixedPrice, NoFixedPrice};
@@ -293,8 +294,8 @@ impl Session {
         if let Some(ended) = &choice.ended {
             log::info!(
                 "{} has ended: switched to {}",
-                ended.id(),
-                choice.league.id()
+                logging::plain(ended.id()),
+                logging::plain(choice.league.id())
             );
         }
         let change = (self.league.as_ref() != Some(&choice.league))
@@ -402,18 +403,22 @@ impl Session {
             && let Some(base_type) =
                 names.and_then(|names| names.magic_base_type(item.language(), item.base_type()))
         {
-            log::info!("Base type of the magic item: {base_type}");
+            log::info!("Base type of the magic item: {}", logging::plain(base_type));
         }
         match self.fixed_price(item).map(|(price, _)| price) {
             Ok(FixedPrice::Currency(currency)) => {
                 log::info!(
                     "Price of {}: {:.2} ex",
-                    currency.name,
+                    logging::plain(&currency.name),
                     currency.price.exalted
                 );
             }
             Ok(FixedPrice::Unique(unique)) => {
-                log::info!("Price of {}: {:.2} ex", unique.name, unique.price.exalted);
+                log::info!(
+                    "Price of {}: {:.2} ex",
+                    logging::plain(&unique.name),
+                    unique.price.exalted
+                );
             }
             Ok(FixedPrice::Uniques(candidates)) => {
                 let with_price = candidates.iter().filter(|unique| unique.price.is_some());
@@ -574,7 +579,7 @@ fn log_unknown_stats(item: &Item, trade: Option<&TradeStats>) {
         for found in game_data::modifier_stats(item.language(), modifier, trade) {
             let lines = modifier.lines.get(found.lines).unwrap_or_default();
             let text = lines.iter().map(|line| line.text.as_str());
-            let text = text.collect::<Vec<_>>().join(" / ");
+            let text = logging::plain(&text.collect::<Vec<_>>().join(" / "));
             match found.stat {
                 None => log::warn!("Stat not found: {text}"),
                 Some(stat) if stat.stat.trade_ids(group).is_empty() => {

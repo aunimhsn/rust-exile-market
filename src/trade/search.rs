@@ -13,6 +13,7 @@ use super::query::{Query, SearchKind};
 use super::refusal::Refusal;
 use crate::language::Language;
 use crate::league::League;
+use crate::logging;
 use crate::worker::{OnDrop, Outbox, Waited, Worker};
 
 /// The longest wait for the limits of a fetch asked by the player: a fetch that must wait
@@ -242,7 +243,11 @@ impl<T: Transport> Searches<T> {
                 query: Query::Exchange(want),
             }) => {
                 let search = self.client.search_exchange(language, &league, &want)?;
-                log::info!("Trade site: {} exchange offers of {want}", search.total);
+                log::info!(
+                    "Trade site: {} exchange offers of {}",
+                    search.total,
+                    logging::plain(&want)
+                );
                 Ok(Outcome::Exchange {
                     offers: search.offers,
                     total: search.total,
@@ -301,7 +306,7 @@ mod tests {
         let (woken, wakes) = mpsc::channel();
         let site = site.clone();
         let search = OfferSearch::spawn(
-            move || TradeClient::with_transport(site),
+            move || TradeClient::with_transport(site, Refusal::default()),
             move || {
                 let _ = woken.send(());
             },

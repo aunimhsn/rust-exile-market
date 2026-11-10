@@ -5,6 +5,3 @@
 [toolchain]
 channel = "1.99.1"
 components = ["rustfmt", "clippy"]
-# The systems linted from Linux (scripts/clippy-windows.sh, scripts/clippy-macos.sh): listed
-# here, they follow each new version without a `rustup target add`.
-targets = ["x86_64-pc-windows-msvc", "aarch64-apple-darwin"]
