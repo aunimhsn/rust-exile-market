@@ -3,6 +3,7 @@
 use super::*;
 use crate::game_data;
 use crate::item::modifier::{Range, Roll, StatLine};
+use crate::item::test_items;
 use crate::item::trade_copy::as_in_game_trade;
 use crate::item::{Affix, Catalyst, Defences, ModifierOrigin, QualityKind};
 use crate::language::Language;
@@ -47,10 +48,6 @@ const FR_TRADE_UNIQUE_BELT: &str = test_item!("fr-trade-unique-belt-mutated.txt"
 const EN_TRADE_RARE_HELMET: &str = test_item!("en-owner-trade-rare-helmet-fractured.txt");
 const EN_TRADE_RARE_BOW: &str = test_item!("en-owner-trade-rare-bow-mirrored.txt");
 const EN_TRADE_UNIQUE_BELT: &str = test_item!("en-owner-trade-unique-belt-mutated.txt");
-const EN_RARE_WAYSTONE: &str = test_item!("en-owner-rare-waystone.txt");
-const FR_RARE_WAYSTONE: &str = test_item!("fr-rare-waystone.txt");
-const EN_MAGIC_TABLET: &str = test_item!("en-owner-magic-tablet.txt");
-const FR_MAGIC_TABLET: &str = test_item!("fr-magic-tablet.txt");
 const EN_RARE_AMULET_CATALYST: &str = test_item!("en-owner-rare-amulet-catalyst.txt");
 const FR_RARE_AMULET_CATALYST: &str = test_item!("fr-rare-amulet-catalyst.txt");
 const EN_RARE_RING_CATALYST: &str = test_item!("en-owner-rare-ring-catalyst.txt");
@@ -75,71 +72,6 @@ const EN_GEM_SKILL: &str = test_item!("en-owner-skill-gem.txt");
 const FR_GEM_SKILL: &str = test_item!("fr-skill-gem.txt");
 const EN_CURRENCY_UNCUT_GEM_LEVEL_2: &str = test_item!("en-owner-currency-uncut-gem.txt");
 const FR_CURRENCY_UNCUT_GEM_LEVEL_4: &str = test_item!("fr-currency-uncut-gem.txt");
-
-const ALL: [&str; 62] = [
-    FR_RARE_STAFF,
-    FR_RARE_BODY_ARMOUR,
-    FR_UNIQUE_CROSSBOW,
-    FR_CURRENCY_STACK,
-    FR_NORMAL_EXCEPTIONAL_SHIELD,
-    FR_UNIQUE_MACE_FIXED_VALUES,
-    FR_MAGIC_MANA_FLASK,
-    FR_RARE_SCEPTRE_SANCTIFIED,
-    FR_RARE_FOCUS_UNREVEALED,
-    FR_UNIQUE_RING_MIRRORED,
-    FR_UNIQUE_BELT_VAAL,
-    FR_RARE_HELMET_RUNEFORGED,
-    EN_RARE_HELMET_RUNEFORGED,
-    EN_UNIQUE_MACE_FIXED_VALUES,
-    EN_RARE_SCEPTRE_SANCTIFIED,
-    EN_RARE_FOCUS_UNREVEALED,
-    EN_RARE_CROSSBOW,
-    EN_RARE_BOW_FRACTURED,
-    EN_RARE_WAND_UNIDENTIFIED,
-    EN_MAGIC_MACE,
-    EN_UNIQUE_FOCUS,
-    EN_NORMAL_HELMET,
-    EN_CURRENCY_UNCUT_GEM,
-    EN_PLAIN_RARE_RING,
-    EN_PLAIN_RARE_RING_UNIDENTIFIED,
-    EN_PLAIN_UNIQUE_JEWEL,
-    EN_PLAIN_MAGIC_JEWEL_UNIDENTIFIED,
-    EN_PLAIN_CURRENCY_LARGE_STACK,
-    FR_TRADE_RARE_HELMET,
-    FR_TRADE_RARE_BOW,
-    FR_TRADE_UNIQUE_BELT,
-    EN_TRADE_RARE_HELMET,
-    EN_TRADE_RARE_BOW,
-    EN_TRADE_UNIQUE_BELT,
-    EN_RARE_WAYSTONE,
-    FR_RARE_WAYSTONE,
-    EN_MAGIC_TABLET,
-    FR_MAGIC_TABLET,
-    EN_RARE_AMULET_CATALYST,
-    FR_RARE_AMULET_CATALYST,
-    EN_RARE_RING_CATALYST,
-    FR_RARE_RING_CATALYST,
-    EN_RARE_MACE_FRACTURED,
-    FR_RARE_MACE_FRACTURED,
-    EN_NORMAL_QUARTERSTAFF,
-    FR_NORMAL_QUARTERSTAFF,
-    EN_NORMAL_QUARTERSTAFF_RUNE,
-    FR_NORMAL_QUARTERSTAFF_RUNE,
-    EN_NORMAL_RING_IMPLICIT,
-    FR_RARE_RING_IMPLICIT,
-    EN_RARE_HELMET_ULAMAN,
-    FR_RARE_HELMET_ULAMAN,
-    EN_RARE_FOCUS_KURGAL,
-    FR_RARE_FOCUS_KURGAL,
-    EN_RARE_HELMET_AMANAMU,
-    FR_RARE_HELMET_AMANAMU,
-    EN_UNIQUE_CHARM,
-    FR_UNIQUE_CHARM,
-    EN_GEM_SKILL,
-    FR_GEM_SKILL,
-    EN_CURRENCY_UNCUT_GEM_LEVEL_2,
-    FR_CURRENCY_UNCUT_GEM_LEVEL_4,
-];
 
 const PREFIX: ModifierKind = ModifierKind::Explicit(Some(Affix::Prefix));
 const SUFFIX: ModifierKind = ModifierKind::Explicit(Some(Affix::Suffix));
@@ -792,7 +724,7 @@ fn reads_no_description_as_a_modifier_of_an_item_without_headers() {
     let jewel = item(&EN_PLAIN_UNIQUE_JEWEL.replace("A rainbow", "A rainbow of 7"));
     assert_eq!(explicit(&jewel).len(), 2);
     // Every copied item is read without warning.
-    for text in ALL {
+    for text in test_items::texts() {
         item(text);
     }
 }
@@ -924,7 +856,7 @@ fn reads_the_small_parts() {
 
 #[test]
 fn never_panics_on_a_cut_or_changed_item() {
-    for text in ALL {
+    for text in test_items::texts() {
         let chars: Vec<char> = text.chars().collect();
         for end in 0..=chars.len() {
             let cut: String = chars.iter().take(end).collect();
@@ -1451,7 +1383,7 @@ fn reads_the_explicit_lines_without_number_of_a_magic_item_without_headers() {
 
 #[test]
 fn an_advanced_copy_never_has_its_explicit_modifiers_found_without_header() {
-    for text in ALL.into_iter().filter(|text| text.contains("\n{ ")) {
+    for text in test_items::texts().filter(|text| text.contains("\n{ ")) {
         let copied = CopiedItem::from_text(text).expect("an item");
         let labels = Labels::of(copied.language());
         let text = copied.text().replace(['\u{a0}', '\u{202f}'], " ");
@@ -1835,7 +1767,7 @@ fn every_advanced_copy_is_read_the_same_from_the_in_game_trade() {
         lines
     };
     let mut read = 0;
-    for text in ALL.into_iter().filter(|text| text.contains("\n{ ")) {
+    for text in test_items::texts().filter(|text| text.contains("\n{ ")) {
         let Some(in_game_trade) = as_in_game_trade(text) else {
             continue;
         };

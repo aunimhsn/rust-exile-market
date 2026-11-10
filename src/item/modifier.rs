@@ -446,7 +446,15 @@ impl StatLine {
             }
             let mut number = String::from(c);
             while let Some(&next) = chars.peek() {
-                if next.is_ascii_digit() || next == '.' {
+                // A point is in the number only between two digits, as the strings of the
+                // stats are read (`numbers` in `game_data/lines.rs`): `2.5`, not the point
+                // that ends a sentence (`de 2.5.`).
+                let decimal_point = next == '.'
+                    && chars
+                        .clone()
+                        .nth(1)
+                        .is_some_and(|after| after.is_ascii_digit());
+                if next.is_ascii_digit() || decimal_point {
                     number.push(next);
                     chars.next();
                 } else {
@@ -600,6 +608,24 @@ mod tests {
             "Réduit la durée des saignements vous affectant de 41 %."
         );
         assert_eq!(line.rolls, [roll(41.0, Some((41.0, 45.0)))]);
+
+        // The point that ends a sentence isn't in its number.
+        let line = StatLine::parse("augmentent le nombre maximum de totems invoqués de 2.5.");
+        assert_eq!(
+            line.text,
+            "augmentent le nombre maximum de totems invoqués de 2.5."
+        );
+        assert_eq!(line.rolls, [roll(2.5, None)]);
+        let line = StatLine::parse("de 41.");
+        assert_eq!(
+            (line.text.as_str(), line.rolls),
+            ("de 41.", vec![roll(41.0, None)])
+        );
+        let line = StatLine::parse("de 2.5(2-3).");
+        assert_eq!(
+            (line.text.as_str(), line.rolls),
+            ("de 2.5.", vec![roll(2.5, Some((2.0, 3.0)))])
+        );
     }
 
     #[test]

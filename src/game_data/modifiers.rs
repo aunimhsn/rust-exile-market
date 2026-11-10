@@ -22,8 +22,8 @@ mod summed_readings;
 const ROUNDING: f64 = 0.051;
 
 /// The most ways to read the lines of an item copied from the in-game trade that are looked
-/// at: a handful on a real item, each hybrid the lines may be doubling them (42 at most on
-/// 5,600 items drawn with every modifier desecrated, 2026-10-30).
+/// at: a handful on a real item, each hybrid the lines may be doubling them (24 at most on
+/// the items drawn at random by `tests/random_items.rs`, 2026-11-10).
 const MAX_READINGS: usize = 4096;
 
 /// The tiers of a type of modifier that roll on the same bases, as the generator writes them.
@@ -613,7 +613,52 @@ pub fn trade_tiers(
     let Some(base) = bases::spawn(language, base_type) else {
         return Vec::new();
     };
-    let copied: Vec<Option<Copied<'_>>> = modifiers
+    let item = TradeItem {
+        language,
+        base_type,
+        base,
+        item_level,
+    };
+    let (found, effort) = trade_tiers_in(&TABLES, &item, modifiers, limits, sanctified);
+    log::debug!(
+        "Game data, {base_type} copied from the in-game trade: read in {} readings and {} steps",
+        effort.readings,
+        effort.steps
+    );
+    if effort.readings_cut {
+        log::warn!(
+            "Game data, {base_type} copied from the in-game trade: the readings of its lines couldn't all be looked at, the best of the first {MAX_READINGS} kept"
+        );
+    }
+    found
+}
+
+/// What the search of the tiers of an item copied from the in-game trade took, against its
+/// bounds.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Effort {
+    /// The readings of its lines looked at, [`MAX_READINGS`] at most.
+    readings: usize,
+    /// The steps of the search of the other readings ([`summed_readings::doubts`]).
+    steps: usize,
+    /// Whether the readings stopped at their bound, some not looked at: the best of those
+    /// looked at is kept, the lines alone first.
+    readings_cut: bool,
+}
+
+/// The item whose lines are read from the in-game trade: the language of its lines, its base
+/// (its name, for the log) and its level.
+struct TradeItem<'a> {
+    language: Language,
+    base_type: &'a str,
+    base: &'a BaseSpawn,
+    item_level: Option<u32>,
+}
+
+/// For each of `modifiers`, its lines as copied when it is a line of the in-game trade to
+/// read: an explicit modifier without header, with its stat of the game data.
+fn lines_to_read(language: Language, modifiers: &[Modifier]) -> Vec<Option<Copied<'static>>> {
+    modifiers
         .iter()
         .map(|modifier| {
             let open = modifier.kind == ModifierKind::Explicit(None)
@@ -623,8 +668,26 @@ pub fn trade_tiers(
             open.then(|| Copied::of(modifier, &modifier_stats(language, modifier, None)))
                 .flatten()
         })
-        .collect();
-    let candidates = candidates(modifiers, &copied, base, item_level, !sanctified);
+        .collect()
+}
+
+/// [`trade_tiers`] among `tables`: those of the game, or those of a test, so that the search
+/// is tested on tables a patch of the game doesn't change; with what the search took.
+fn trade_tiers_in(
+    tables: &[Table],
+    item: &TradeItem<'_>,
+    modifiers: &[Modifier],
+    limits: AffixLimits,
+    sanctified: bool,
+) -> (Vec<FoundTiers>, Effort) {
+    let &TradeItem {
+        language,
+        base_type,
+        base,
+        item_level,
+    } = item;
+    let copied = lines_to_read(language, modifiers);
+    let candidates = candidates(tables, modifiers, &copied, base, item_level, !sanctified);
     let known = |affix| {
         modifiers
             .iter()
@@ -646,8 +709,13 @@ pub fn trade_tiers(
         .count();
     let mut search = Search::new(&candidates, modifiers.len(), room, fractured);
     search.walk(0, &mut Vec::new());
+    let mut effort = Effort {
+        readings: search.readings,
+        steps: 0,
+        readings_cut: search.cut,
+    };
     let Some((key, reading)) = search.best else {
-        return Vec::new();
+        return (Vec::new(), effort);
     };
     let mut ambiguous = search.ambiguous;
     // Another reading in doubt may take another room, which no longer rules out an affix.
@@ -659,8 +727,9 @@ pub fn trade_tiers(
             room,
             fits_room: key.room,
         };
-        let doubts = summed_readings::doubts(base, item_level, modifiers, &copied, &best);
+        let doubts = summed_readings::doubts(tables, item, modifiers, &copied, &best);
         doubts.outcome.log(base_type);
+        effort.steps = doubts.steps;
         room_in_doubt = doubts.other_room;
         for line in doubts.lines {
             if !ambiguous.contains(&line) {
@@ -682,7 +751,7 @@ pub fn trade_tiers(
     } else {
         room.both(&reading, &candidates)
     };
-    reading
+    let found = reading
         .iter()
         .filter_map(|&index| {
             // A line split in two ways as good, and the other lines of its hybrids: without
@@ -710,7 +779,8 @@ pub fn trade_tiers(
                 added: candidate.added.clone(),
             })
         })
-        .collect()
+        .collect();
+    (found, effort)
 }
 
 /// The modifiers of a rare or magic item copied from the in-game trade read again with the
@@ -1039,22 +1109,23 @@ enum AffixSet {
     Both,
 }
 
-/// The most lines a modifier of the tables has: a hybrid of three lines.
-static MOST_LINES: LazyLock<usize> = LazyLock::new(|| {
-    TABLES
+/// The most lines a modifier of `tables` has: a hybrid of three lines in those of the game.
+fn most_lines(tables: &[Table]) -> usize {
+    tables
         .iter()
         .map(|table| table.lines.len())
         .max()
         .unwrap_or(1)
-});
+}
 
-/// Every modifier or run of modifiers among `modifiers` whose values the tables of `base`
+/// Every modifier or run of modifiers among `modifiers` whose values those of `tables` on `base`
 /// hold, the tier the worst among those `item_level` allows, `copied` giving the lines
 /// of each modifier to read (none for a modifier that isn't, or whose lines have no stat of the
 /// game data): one modifier, or up to as many as the lines of a hybrid, of the same origin;
 /// then, when they `may_split`, each way one of their lines adds up two modifiers
 /// ([`splits`]). The shorter first at each start.
 fn candidates(
+    tables: &[Table],
     modifiers: &[Modifier],
     copied: &[Option<Copied<'_>>],
     base: &BaseSpawn,
@@ -1062,12 +1133,13 @@ fn candidates(
     may_split: bool,
 ) -> Vec<Candidate> {
     let tie = Tie::Worst { item_level };
+    let most_lines = most_lines(tables);
     let mut candidates = Vec::new();
     for (start, first) in modifiers.iter().enumerate() {
         let mut lines = Vec::new();
         // The index among `modifiers` of the modifier of each line.
         let mut owners = Vec::new();
-        let run = modifiers.iter().zip(copied).skip(start).take(*MOST_LINES);
+        let run = modifiers.iter().zip(copied).skip(start).take(most_lines);
         for (end, (modifier, part)) in (start + 1..).zip(run) {
             let Some(part) = part.as_ref().filter(|_| modifier.origin == first.origin) else {
                 break;
@@ -1086,7 +1158,7 @@ fn candidates(
             ]
             .into_iter()
             .filter_map(|(affix, table_affix)| {
-                Some((affix, find(&TABLES, table_affix, base, &joined, tie)?))
+                Some((affix, find(tables, table_affix, base, &joined, tie)?))
             })
             .collect();
             let fractured = first.origin == Some(ModifierOrigin::Fractured);
@@ -1103,7 +1175,7 @@ fn candidates(
                 if !may_split || owners.iter().filter(|&&other| other == owner).count() != 1 {
                     continue;
                 }
-                for split in splits(&TABLES, base, &joined, (summed, owner), item_level) {
+                for split in splits(tables, base, &joined, (summed, owner), item_level) {
                     candidates.push(Candidate {
                         modifiers: start..end,
                         fractured,
@@ -1422,6 +1494,8 @@ struct Search<'a> {
     /// How many modifiers of the item are fractured.
     fractured: usize,
     readings: usize,
+    /// Whether the search stopped at [`MAX_READINGS`], some readings not looked at.
+    cut: bool,
     /// The best reading, the first one on a tie.
     best: Option<(ReadingKey, Vec<usize>)>,
     /// The lines of the splits that readings as good as the best one don't share, with the
@@ -1443,6 +1517,7 @@ impl<'a> Search<'a> {
             room,
             fractured,
             readings: 0,
+            cut: false,
             best: None,
             ambiguous: Vec::new(),
         }
@@ -1453,6 +1528,7 @@ impl<'a> Search<'a> {
     /// without tier.
     fn walk(&mut self, position: usize, chosen: &mut Vec<usize>) {
         if self.readings >= MAX_READINGS {
+            self.cut = true;
             return;
         }
         let Some(starting) = self.starting.get(position) else {
