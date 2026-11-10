@@ -12,10 +12,10 @@ use super::{
 use crate::item::{Modifier, ModifierOrigin};
 
 /// The most steps the search of the other readings takes: some fifty on a random rare item, a
-/// few hundred on the most tangled ones (1,349 at most on 5,600 items drawn, 2026-10-29; with
-/// the desecrated tables, 1,405 at most on 5,600 items of 14 bases with a third of their
-/// modifiers desecrated, 2,734 with all of them, 2026-10-30).
-const MAX_STEPS: usize = 50_000;
+/// few hundred on the most tangled ones (1,025 at most on the items drawn at random by
+/// `tests/random_items.rs`, 2026-11-10; up to 2,734 on the draws of 2026-10-30, whose code
+/// wasn't kept).
+pub(super) const MAX_STEPS: usize = 50_000;
 
 /// The best reading of the lines of an item, as [`super::trade_tiers`] found it.
 pub(super) struct Best<'b> {
@@ -38,6 +38,8 @@ pub(super) struct Doubts {
     pub(super) other_room: bool,
     /// How the search ended; unless it concluded, every line read is in doubt.
     pub(super) outcome: Outcome,
+    /// The steps it took, [`MAX_STEPS`] at most.
+    pub(super) steps: usize,
 }
 
 /// How the search of the other readings ended.
@@ -196,6 +198,7 @@ fn doubts_within(
             lines: state.doubts,
             other_room: state.other_room,
             outcome,
+            steps: state.steps,
         };
     }
     // Without every reading, or without the best one among them: no line keeps a tier the
@@ -206,6 +209,7 @@ fn doubts_within(
         lines: every,
         other_room: true,
         outcome,
+        steps: state.steps,
     }
 }
 

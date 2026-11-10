@@ -22,8 +22,8 @@ mod summed_readings;
 const ROUNDING: f64 = 0.051;
 
 /// The most ways to read the lines of an item copied from the in-game trade that are looked
-/// at: a handful on a real item, each hybrid the lines may be doubling them (42 at most on
-/// 5,600 items drawn with every modifier desecrated, 2026-10-30).
+/// at: a handful on a real item, each hybrid the lines may be doubling them (24 at most on
+/// the items drawn at random by `tests/random_items.rs`, 2026-11-10).
 const MAX_READINGS: usize = 4096;
 
 /// The tiers of a type of modifier that roll on the same bases, as the generator writes them.
@@ -619,7 +619,23 @@ pub fn trade_tiers(
         base,
         item_level,
     };
-    trade_tiers_in(&TABLES, &item, modifiers, limits, sanctified)
+    let (found, effort) = trade_tiers_in(&TABLES, &item, modifiers, limits, sanctified);
+    log::debug!(
+        "Game data, {base_type} copied from the in-game trade: read in {} readings and {} steps",
+        effort.readings,
+        effort.steps
+    );
+    found
+}
+
+/// What the search of the tiers of an item copied from the in-game trade took, against its
+/// bounds.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Effort {
+    /// The readings of its lines looked at, [`MAX_READINGS`] at most.
+    readings: usize,
+    /// The steps of the search of the other readings ([`summed_readings::doubts`]).
+    steps: usize,
 }
 
 /// The item whose lines are read from the in-game trade: the language of its lines, its base
@@ -631,22 +647,10 @@ struct TradeItem<'a> {
     item_level: Option<u32>,
 }
 
-/// [`trade_tiers`] among `tables`: those of the game, or those of a test, so that the search
-/// is tested on tables a patch of the game doesn't change.
-fn trade_tiers_in(
-    tables: &[Table],
-    item: &TradeItem<'_>,
-    modifiers: &[Modifier],
-    limits: AffixLimits,
-    sanctified: bool,
-) -> Vec<FoundTiers> {
-    let &TradeItem {
-        language,
-        base_type,
-        base,
-        item_level,
-    } = item;
-    let copied: Vec<Option<Copied<'_>>> = modifiers
+/// For each of `modifiers`, its lines as copied when it is a line of the in-game trade to
+/// read: an explicit modifier without header, with its stat of the game data.
+fn lines_to_read(language: Language, modifiers: &[Modifier]) -> Vec<Option<Copied<'static>>> {
+    modifiers
         .iter()
         .map(|modifier| {
             let open = modifier.kind == ModifierKind::Explicit(None)
@@ -656,7 +660,25 @@ fn trade_tiers_in(
             open.then(|| Copied::of(modifier, &modifier_stats(language, modifier, None)))
                 .flatten()
         })
-        .collect();
+        .collect()
+}
+
+/// [`trade_tiers`] among `tables`: those of the game, or those of a test, so that the search
+/// is tested on tables a patch of the game doesn't change; with what the search took.
+fn trade_tiers_in(
+    tables: &[Table],
+    item: &TradeItem<'_>,
+    modifiers: &[Modifier],
+    limits: AffixLimits,
+    sanctified: bool,
+) -> (Vec<FoundTiers>, Effort) {
+    let &TradeItem {
+        language,
+        base_type,
+        base,
+        item_level,
+    } = item;
+    let copied = lines_to_read(language, modifiers);
     let candidates = candidates(tables, modifiers, &copied, base, item_level, !sanctified);
     let known = |affix| {
         modifiers
@@ -679,8 +701,12 @@ fn trade_tiers_in(
         .count();
     let mut search = Search::new(&candidates, modifiers.len(), room, fractured);
     search.walk(0, &mut Vec::new());
+    let mut effort = Effort {
+        readings: search.readings,
+        steps: 0,
+    };
     let Some((key, reading)) = search.best else {
-        return Vec::new();
+        return (Vec::new(), effort);
     };
     let mut ambiguous = search.ambiguous;
     // Another reading in doubt may take another room, which no longer rules out an affix.
@@ -694,6 +720,7 @@ fn trade_tiers_in(
         };
         let doubts = summed_readings::doubts(tables, base, item_level, modifiers, &copied, &best);
         doubts.outcome.log(base_type);
+        effort.steps = doubts.steps;
         room_in_doubt = doubts.other_room;
         for line in doubts.lines {
             if !ambiguous.contains(&line) {
@@ -715,7 +742,7 @@ fn trade_tiers_in(
     } else {
         room.both(&reading, &candidates)
     };
-    reading
+    let found = reading
         .iter()
         .filter_map(|&index| {
             // A line split in two ways as good, and the other lines of its hybrids: without
@@ -743,7 +770,8 @@ fn trade_tiers_in(
                 added: candidate.added.clone(),
             })
         })
-        .collect()
+        .collect();
+    (found, effort)
 }
 
 /// The modifiers of a rare or magic item copied from the in-game trade read again with the
