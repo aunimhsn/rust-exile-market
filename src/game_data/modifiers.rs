@@ -27,7 +27,12 @@ const ROUNDING: f64 = 0.051;
 const MAX_READINGS: usize = 4096;
 
 /// The tiers of a type of modifier that roll on the same bases, as the generator writes them.
+/// A field the application doesn't know makes the line unreadable, here and in the lines and
+/// tiers: the generator and the application describe the file each on their side, and a field
+/// renamed on one side only would otherwise read as its default (a desecrated table as an
+/// ordinary one), without a failing test.
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 struct Table {
     /// The modifiers of one type can't be on the same item: its tiers.
     #[serde(rename = "type")]
@@ -94,6 +99,7 @@ enum TableAffix {
 }
 
 #[derive(Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
 struct TableLine {
     /// The English template of the line, as Exiled Exchange 2 writes it.
     template: String,
@@ -110,6 +116,7 @@ fn one() -> f64 {
 }
 
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 struct TableTier {
     level: u32,
     /// For each line, the range of each of its values, with the sign of the stat.
@@ -312,14 +319,46 @@ pub fn modifier_tiers(
         let summed = (*line, whole);
         return split_tiers(language, base_type, item_level, modifier, matches, summed);
     }
+    let (affix, base, copied) = copied_on_base(language, base_type, modifier, matches)?;
+    find(&TABLES, affix, base, &copied, Tie::Best)
+}
+
+/// What the tables are searched with for `modifier`: its affix, the base, and its lines as
+/// copied; none for a modifier that isn't a prefix or suffix, a base the data don't know, or a
+/// line without its stat.
+fn copied_on_base<'a>(
+    language: Language,
+    base_type: &str,
+    modifier: &'a Modifier,
+    matches: &'a [LineMatch<'_>],
+) -> Option<(TableAffix, &'static BaseSpawn, Copied<'a>)> {
     let affix = match modifier.kind {
         ModifierKind::Explicit(Some(Affix::Prefix)) => TableAffix::Prefix,
         ModifierKind::Explicit(Some(Affix::Suffix)) => TableAffix::Suffix,
         _ => return None,
     };
     let base = bases::spawn(language, base_type)?;
-    let copied = Copied::of(modifier, matches)?;
-    find(&TABLES, affix, base, &copied, Tie::Best)
+    Some((affix, base, Copied::of(modifier, matches)?))
+}
+
+/// Whether the tables should hold `modifier` and don't: a prefix or suffix the advanced copy
+/// writes with its tier, on a base the data know, each of its lines with its stat, and no
+/// table with these ranges. The advanced copy tells the truth: either the data are behind the
+/// game, after a patch, or the item kept the ranges of an older patch (in Standard), which this
+/// can't tell apart; worth a line in the log ([`modifier_tiers`] gives nothing).
+#[must_use]
+pub fn lacks_table(
+    language: Language,
+    base_type: &str,
+    modifier: &Modifier,
+    matches: &[LineMatch<'_>],
+) -> bool {
+    if modifier.tier.is_none() || modifier.doubt.is_some() {
+        return false;
+    }
+    copied_on_base(language, base_type, modifier, matches).is_some_and(|(affix, base, copied)| {
+        find(&TABLES, affix, base, &copied, Tie::Best).is_none()
+    })
 }
 
 /// The tiers of the modifier of every line of `modifier`, whose line `line` adds up its part

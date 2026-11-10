@@ -7,9 +7,11 @@
 //!   [<commit of the code of RePoE>]]` reads given ones, the code of RePoE for its license.
 //!
 //! The files it writes have one stat, one base or one modifier per line, so that the changes
-//! of a patch read well in a diff.
+//! of a patch read well in a diff. What it leaves out or finds odd goes to `report.md` next to
+//! them, to compare from a patch to the next.
 
 mod modifiers;
+mod report;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
@@ -17,6 +19,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
+
+use report::Report;
 
 const REPOSITORY: &str = "Kvan7/Exiled-Exchange-2";
 /// The data of Path of Exile 2 exported by the RePoE fork, in `data/`.
@@ -227,6 +231,7 @@ fn main() -> Result<()> {
 
     let output = output_directory();
     fs::create_dir_all(&output)?;
+    let mut report = Report::default();
     let mut sources = Vec::new();
     for language in LANGUAGES {
         let source = get(
@@ -247,7 +252,8 @@ fn main() -> Result<()> {
         .find(|(language, _)| *language == "en")
         .map(|(_, stats)| stats.as_slice())
         .ok_or("no English stats")?;
-    let (tables, base_tags) = modifier_tables(&agent, &repoe_commit.sha, &templates(english))?;
+    let (tables, base_tags) =
+        modifier_tables(&agent, &repoe_commit.sha, &templates(english), &mut report)?;
     println!("{} modifier tables", tables.len());
     write_lines(&output.join("modifiers.ndjson"), &tables)?;
 
@@ -270,20 +276,48 @@ fn main() -> Result<()> {
                 &format!("renderer/public/data/{language}/items.ndjson"),
             ),
         )?;
-        let bases =
-            reduce_bases(&source, &base_tags).map_err(|error| format!("{language}: {error}"))?;
+        let bases = reduce_bases(&source, &base_tags, language, &mut report)
+            .map_err(|error| format!("{language}: {error}"))?;
         println!("{language}: {} bases", bases.len());
         write_lines(&output.join(format!("bases-{language}.ndjson")), &bases)?;
     }
     if let [english, french] = ids_by_language.as_slice() {
-        report_differences(english, french);
+        report_differences(english, french, &mut report);
     }
 
-    let license = get(&agent, &raw_url(REPOSITORY, &commit.sha, "LICENSE"))?;
-    let repoe_code_commit = latest_commit(&agent, REPOE_CODE, &repoe_code_reference)?;
+    write_notice(
+        &agent,
+        &output,
+        (&commit, &repoe_commit),
+        repoe_version.trim(),
+        &repoe_code_reference,
+    )?;
+    fs::write(
+        output.join("report.md"),
+        report.to_markdown(&format!(
+            "the commit {} of Exiled Exchange 2 and the commit {} of the data of RePoE",
+            commit.sha, repoe_commit.sha
+        )),
+    )?;
+    println!("Written to {}", output.canonicalize()?.display());
+    Ok(())
+}
+
+/// Writes `NOTICE.md`: where the data come from (the commits of Exiled Exchange 2 and of the
+/// data of RePoE), and their licenses, that of RePoE read in its code at
+/// `repoe_code_reference`.
+fn write_notice(
+    agent: &ureq::Agent,
+    output: &Path,
+    (commit, repoe_commit): (&Commit, &Commit),
+    repoe_version: &str,
+    repoe_code_reference: &str,
+) -> Result<()> {
+    let license = get(agent, &raw_url(REPOSITORY, &commit.sha, "LICENSE"))?;
+    let repoe_code_commit = latest_commit(agent, REPOE_CODE, repoe_code_reference)?;
     println!("RePoE code, commit {}", repoe_code_commit.sha);
     let repoe_license = get(
-        &agent,
+        agent,
         &raw_url(REPOE_CODE, &repoe_code_commit.sha, "LICENSE.md"),
     )?;
     fs::write(
@@ -299,11 +333,10 @@ fn main() -> Result<()> {
                 date: &repoe_commit.commit.committer.date,
                 license: &repoe_license,
             },
-            repoe_version.trim(),
+            repoe_version,
             &repoe_code_commit.sha,
         ),
     )?;
-    println!("Written to {}", output.canonicalize()?.display());
     Ok(())
 }
 
@@ -330,9 +363,10 @@ fn modifier_tables(
     agent: &ureq::Agent,
     commit: &str,
     templates: &modifiers::Templates,
+    report: &mut Report,
 ) -> Result<(Vec<modifiers::Modifier>, modifiers::BaseTags)> {
     let repoe = |path: &str| get(agent, &raw_url(REPOE, commit, &format!("data/{path}")));
-    modifiers::reduce(
+    modifiers::reduce_with_report(
         &serde_json::from_str(&repoe("mods.json")?)?,
         &serde_json::from_str(&repoe("base_items.json")?)?,
         &serde_json::from_str::<Vec<_>>(&repoe("stat_translations/stat_descriptions.json")?)?,
@@ -341,6 +375,7 @@ fn modifier_tables(
         )?)?,
         templates,
         modifiers::CURRENCIES,
+        report,
     )
 }
 
@@ -435,7 +470,12 @@ fn reduce_stat(stat: SourceStat) -> Result<Stat> {
 /// (`Runemastered Venerable Defender`, three times a shield and once a buckler), the first in
 /// alphabetical order on a tie. Each takes the domain and the tags of its English name in
 /// `spawns`.
-fn reduce_bases(source: &str, spawns: &modifiers::BaseTags) -> Result<Vec<Base>> {
+fn reduce_bases(
+    source: &str,
+    spawns: &modifiers::BaseTags,
+    language: &str,
+    report: &mut Report,
+) -> Result<Vec<Base>> {
     let mut categories: BTreeMap<String, BTreeMap<String, usize>> = BTreeMap::new();
     let mut english_names = BTreeMap::new();
     for (index, line) in source.lines().enumerate() {
@@ -466,7 +506,10 @@ fn reduce_bases(source: &str, spawns: &modifiers::BaseTags) -> Result<Vec<Base>>
     let mut bases = Vec::new();
     for (name, counts) in categories {
         if counts.len() > 1 {
-            println!("In several categories: {name} {counts:?}");
+            report.note(
+                "Bases in several categories",
+                format!("{language}: {name} {counts:?}"),
+            );
         }
         let category = counts
             .into_iter()
@@ -487,7 +530,7 @@ fn reduce_bases(source: &str, spawns: &modifiers::BaseTags) -> Result<Vec<Base>>
             return Err(format!("unknown domain {domain} of {name}").into());
         }
         if tags.is_empty() {
-            println!("Without tags: {name}");
+            report.note("Bases without tags", format!("{language}: {name}"));
         }
         bases.push(Base {
             name,
@@ -510,19 +553,20 @@ fn write_lines<T: Serialize>(path: &Path, lines: &[T]) -> Result<()> {
     Ok(())
 }
 
-/// Prints the stats of one language only, and those whose trade ids differ between the
+/// Notes the stats of one language only, and those whose trade ids differ between the
 /// languages, to look at after a patch: the application reads each language on its own.
 fn report_differences(
     english: &BTreeMap<String, BTreeMap<String, Vec<String>>>,
     french: &BTreeMap<String, BTreeMap<String, Vec<String>>>,
+    report: &mut Report,
 ) {
     let references: BTreeSet<_> = english.keys().chain(french.keys()).collect();
     for reference in references {
         match (english.get(reference), french.get(reference)) {
-            (Some(_), None) => println!("English only: {reference}"),
-            (None, Some(_)) => println!("French only: {reference}"),
+            (Some(_), None) => report.note("Stats in English only", reference),
+            (None, Some(_)) => report.note("Stats in French only", reference),
             (Some(english), Some(french)) if english != french => {
-                println!("Other trade ids in French: {reference}");
+                report.note("Stats with other trade ids in French", reference);
             }
             _ => {}
         }
@@ -582,10 +626,15 @@ mod tests {
 
     /// The bases of `lines`, as name and category.
     fn bases(lines: &[&str]) -> Result<Vec<(String, String)>> {
-        Ok(reduce_bases(&lines.join("\n"), &BTreeMap::new())?
-            .into_iter()
-            .map(|base| (base.name, base.category))
-            .collect())
+        Ok(reduce_bases(
+            &lines.join("\n"),
+            &BTreeMap::new(),
+            "en",
+            &mut Report::default(),
+        )?
+        .into_iter()
+        .map(|base| (base.name, base.category))
+        .collect())
     }
 
     fn base(name: &str, category: &str) -> (String, String) {
@@ -604,6 +653,8 @@ mod tests {
             reduce_bases(
                 ring,
                 &BTreeMap::from([("Gold Ring".to_owned(), spawn(domain))]),
+                "en",
+                &mut Report::default(),
             )
         };
 

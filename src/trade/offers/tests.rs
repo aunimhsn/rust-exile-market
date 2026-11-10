@@ -506,7 +506,6 @@ fn a_property_of_an_offer_of_waystone_that_cant_be_read_is_kept_to_log() {
         fetch
             .result
             .into_iter()
-            .flatten()
             .map(|listed| listed.offer(language))
             .map(|(offer, unreadable)| (offer.item.waystone_unread, unreadable.waystone_properties))
             .collect::<Vec<_>>()
@@ -618,4 +617,81 @@ fn the_times_of_the_trade_site_are_read_in_utc() {
     assert_eq!(parse_time("2026-13-23T05:30:09Z"), None);
     assert_eq!(parse_time("yesterday"), None);
     assert_eq!(parse_time("9999999999999999-01-01T00:00:00Z"), None);
+}
+
+/// The network review of 2026-11-10: one odd offer lost the ten of its page.
+#[test]
+fn an_offer_that_cant_be_read_is_left_out_of_its_page() {
+    // An offer without its account, between the two of the answer.
+    let page = FETCH.replacen("null,", r#"{"id": "odd", "listing": {}, "item": {}},"#, 1);
+    let fetch: ApiFetch = serde_json::from_str(&page).expect("read");
+
+    let ids: Vec<String> = fetch
+        .offers(Language::English)
+        .into_iter()
+        .map(|offer| offer.id)
+        .collect();
+
+    assert_eq!(ids, ["c03d", "f553"]);
+}
+
+/// Not "no offer online": the trade site changed its answer.
+#[test]
+fn a_page_none_of_whose_offers_can_be_read_is_an_error() {
+    let fetch = serde_json::from_str::<ApiFetch>(r#"{"result": [{"id": "odd"}, {"id": "odder"}]}"#);
+
+    assert!(fetch.is_err());
+}
+
+#[test]
+fn a_listing_of_the_exchange_that_cant_be_read_is_left_out() {
+    // The first listing loses its account.
+    let answer = EXCHANGE.replacen(
+        r#""account": {"name": "Bruce""#,
+        r#""seller": {"name": "Bruce""#,
+        1,
+    );
+    let exchange: ApiExchange = serde_json::from_str(&answer).expect("read");
+
+    let offers = exchange.offers();
+
+    assert_eq!(offers.len(), 1);
+    assert_eq!(offers[0].seller, SellerStatus::Offline);
+}
+
+#[test]
+fn an_exchange_none_of_whose_listings_can_be_read_is_an_error() {
+    let answer = EXCHANGE.replace(r#""account":"#, r#""seller":"#);
+
+    assert!(serde_json::from_str::<ApiExchange>(&answer).is_err());
+}
+
+#[test]
+fn the_offers_are_read_without_their_total_and_a_whisper_is_whole_or_empty() {
+    let answer = EXCHANGE.replacen(r#""total": 2, "#, "", 1).replacen(
+        r#", "whisper": "{0} Exalted Orb""#,
+        "",
+        1,
+    );
+    let exchange: ApiExchange = serde_json::from_str(&answer).expect("read");
+
+    assert_eq!(exchange.total, None);
+    let offers = exchange.offers();
+    assert_eq!(offers.len(), 2);
+    assert_eq!(offers[0].whisper, "", "no half sentence");
+    assert!(offers[1].whisper.starts_with("@Other Hi"));
+    let search: ApiSearch = serde_json::from_str(r#"{"id": "a", "result": ["b"]}"#).expect("read");
+    assert_eq!(search.total(), 1, "the offers it gave");
+}
+
+/// The code review of the quality fixes: a `null` counted as an offer read, and nine offers
+/// that can't be read next to one gone showed "no offer".
+#[test]
+fn an_offer_gone_doesnt_make_a_page_that_cant_be_read_a_page_without_offers() {
+    let fetch =
+        serde_json::from_str::<ApiFetch>(r#"{"result": [null, {"id": "odd"}, {"id": "odder"}]}"#);
+    assert!(fetch.is_err());
+
+    let gone: ApiFetch = serde_json::from_str(r#"{"result": [null, null]}"#).expect("read");
+    assert_eq!(gone.offers(Language::English), Vec::new());
 }

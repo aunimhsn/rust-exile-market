@@ -285,13 +285,6 @@ fn leading_number(value: &str) -> Option<u32> {
     value.get(..end)?.parse().ok()
 }
 
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "read by the price display and the filters from step 9"
-    )
-)]
 impl Item {
     /// The language of the game client that copied the item.
     #[must_use]
@@ -325,6 +318,7 @@ impl Item {
     }
 
     /// An exceptional base, which can have more sockets.
+    #[cfg(test)]
     #[must_use]
     pub fn is_exceptional(&self) -> bool {
         self.exceptional
@@ -393,12 +387,14 @@ impl Item {
         self.has_state(ItemState::Corrupted) || self.has_state(ItemState::TwiceCorrupted)
     }
 
+    #[cfg(test)]
     #[must_use]
     pub fn states(&self) -> &[ItemState] {
         &self.states
     }
 
     /// The properties of the base: damage, defences, attack speed…
+    #[cfg(test)]
     #[must_use]
     pub fn properties(&self) -> &[Property] {
         &self.properties

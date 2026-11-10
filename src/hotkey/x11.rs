@@ -125,7 +125,7 @@ impl CopySender {
                 }
             },
         };
-        match keyboard.send_copy(shortcut, prepare, tell) {
+        match send_copy(&keyboard, shortcut, prepare, tell) {
             Ok(sent) => {
                 log::info!(
                     "Copy sent by the price-check hotkey to the window of class {} (Ctrl {}{})",
@@ -216,6 +216,12 @@ impl ActiveWindow {
     ///
     /// When the desktop doesn't tell its active window, or the X server is lost.
     fn follow(&self, game: &mut impl FnMut(Active) -> bool) -> Result<()> {
+        // Once, for the bug reports: the window over the game leans on what the window manager
+        // does with the active window and the focus, checked on KWin only.
+        match self.window_manager() {
+            Ok(name) => log::info!("Window manager: {name}"),
+            Err(error) => log::info!("Window manager: unknown ({error})"),
+        }
         if !self.tells_active_window()? {
             return Err("the desktop doesn't tell its active window (_NET_SUPPORTED)".into());
         }
@@ -279,6 +285,38 @@ impl ActiveWindow {
             supported.value32().into_iter().flatten(),
             self.atoms.active_window,
         ))
+    }
+
+    /// The name of the window manager: the `_NET_WM_NAME` of the window it names on the root
+    /// window (`_NET_SUPPORTING_WM_CHECK`, EWMH), e.g. `KWin` or `GNOME Shell`.
+    fn window_manager(&self) -> Result<String> {
+        let check = self
+            .connection
+            .intern_atom(false, b"_NET_SUPPORTING_WM_CHECK")?
+            .reply()?
+            .atom;
+        let window = self
+            .connection
+            .get_property(false, self.root, check, AtomEnum::WINDOW, 0, 1)?
+            .reply()?
+            .value32()
+            .and_then(|mut windows| windows.next());
+        let Some(window) = window else {
+            return Ok("none told (_NET_SUPPORTING_WM_CHECK)".to_owned());
+        };
+        let name = self
+            .connection
+            .get_property(
+                false,
+                window,
+                self.atoms.net_wm_name,
+                self.atoms.utf8_string,
+                0,
+                256,
+            )?
+            .reply()?
+            .value;
+        Ok(window_manager_name(&name))
     }
 
     /// Waits for a change that may change whether the active window is the game.
@@ -388,6 +426,15 @@ fn title(net_wm_name: Vec<u8>, wm_name: impl FnOnce() -> Result<Vec<u8>>) -> Res
     }
 }
 
+/// The name of a window manager from its `_NET_WM_NAME`, as the log writes the text of another
+/// program: one short line.
+fn window_manager_name(name: &[u8]) -> String {
+    if name.is_empty() {
+        return "unnamed".to_owned();
+    }
+    logging::plain(&String::from_utf8_lossy(name))
+}
+
 /// Whether a window title is the title of the game, exactly.
 fn is_game_title(title: &[u8]) -> bool {
     title == GAME_TITLE.as_bytes()
@@ -436,116 +483,18 @@ impl Keyboard {
         })
     }
 
-    fn send_copy<P>(
-        &self,
-        shortcut: Shortcut,
-        prepare: impl FnOnce() -> P,
-        tell: impl FnOnce(Option<Target>, P),
-    ) -> Result<Sent> {
-        // The window the keys go to, read before them; for the log and the window over the
-        // game, so that a failure doesn't stop the copy.
-        // On a single screen, the helper of the window over the game may be active in place of
-        // the game: the game is made active again, so that the copy and the window go to it.
-        let (window, refused) = self.active_game();
-        let window_class = match &window {
-            Ok(Some(window)) => self
-                .window_class(*window)
-                .unwrap_or_else(|error| format!("unknown ({error})")),
-            Ok(None) => "none (an application outside X11?)".to_owned(),
-            Err(error) => format!("unknown ({error})"),
-        };
-        // While a field of the window over the game is edited, the keys of the copy would go to
-        // it: the game gets the keyboard back first.
-        if let Ok(Some(game)) = window
-            && let Err(error) = self.give_back_keyboard(game)
-        {
-            log::warn!("The keyboard can't be given back to the game: {error}");
-        }
-        let game = match window {
-            Ok(Some(window)) => self.window_rect(window).unwrap_or_else(|error| {
-                log::warn!("The window of the game can't be measured: {error}");
-                None
-            }),
-            _ => None,
-        };
-        shared::drop_events(&self.connection);
-        // Read at each copy: the player may change the layout of the keyboard meanwhile.
+    /// The keyboard mapping, read at each copy: the player may change the layout of the
+    /// keyboard meanwhile.
+    fn read_layout(&self) -> Result<Layout> {
         let setup = self.connection.setup();
         let mapping = self
             .connection
             .get_keyboard_mapping(setup.min_keycode, setup.max_keycode - setup.min_keycode + 1)?
             .reply()?;
-        let keycode = |keysym| {
-            keycode_of(
-                keysym,
-                setup.min_keycode,
-                mapping.keysyms_per_keycode,
-                &mapping.keysyms,
-            )
-        };
-        let (Some(control), Some(c)) = (keycode(XK_CONTROL_L), keycode(XK_C)) else {
-            return Err("the keyboard has no Control or C key".into());
-        };
-        let prepared = prepare();
-        // Read after the preparation, which may take a moment: where the item is, and Ctrl as
-        // the player holds it, when the keys leave.
-        let pointer = self.connection.query_pointer(self.root)?.reply()?;
-        let control_held = pointer.mask.contains(KeyButMask::CONTROL);
-        let keymap = self.connection.query_keymap()?.reply()?.keys;
-        let modifiers_held = held_modifiers(
-            &keymap,
-            setup.min_keycode,
-            mapping.keysyms_per_keycode,
-            &mapping.keysyms,
-        );
-        let target = game.map(|game| Target {
-            pointer: Point {
-                x: i32::from(pointer.root_x),
-                y: i32::from(pointer.root_y),
-            },
-            game,
-        });
-        tell(target, prepared);
-        let mut first = true;
-        let missed = missed_modifiers(shortcut, &modifiers_held, keycode);
-        // Alt left held: Ctrl+Alt+C copies the same text.
-        let released: Vec<_> = modifiers_held
-            .into_iter()
-            .filter(|&(_, modifier)| modifier == Modifier::Shift)
-            .collect();
-        let keycodes = |keys: &[(Keycode, Modifier)]| keys.iter().map(|&(key, _)| key).collect();
-        let names = |keys: &[(Keycode, Modifier)]| {
-            keys.iter().map(|&(_, modifier)| modifier.name()).collect()
-        };
-        let held = Held {
-            control: control_held,
-            others: keycodes(&released),
-            missed: keycodes(&missed),
-        };
-        // Not twice when the desktop already refused.
-        if !refused {
-            self.game_in_front_again();
-        }
-        send_all(copy_keys(control, c, &held), |key| -> Result<()> {
-            let (event, keycode) = match key {
-                Key::Down(keycode) => (xproto::KEY_PRESS_EVENT, keycode),
-                Key::Up(keycode) => (xproto::KEY_RELEASE_EVENT, keycode),
-            };
-            let delay = if std::mem::take(&mut first) {
-                0
-            } else {
-                KEY_DELAY_MS
-            };
-            self.connection
-                .xtest_fake_input(event, keycode, delay, self.root, 0, 0, 0)?
-                .check()?;
-            Ok(())
-        })?;
-        Ok(Sent {
-            window_class,
-            control_held,
-            released: names(&released),
-            missed: names(&missed),
+        Ok(Layout {
+            min_keycode: setup.min_keycode,
+            keysyms_per_keycode: mapping.keysyms_per_keycode,
+            keysyms: mapping.keysyms,
         })
     }
 
@@ -653,6 +602,227 @@ impl Keyboard {
             .value;
         Ok(window_class(&class))
     }
+}
+
+/// What the copy reads from the X server and sends to it: the server itself ([`Keyboard`]),
+/// or a fake one in the tests, the order of these calls being the rule (no test may send keys
+/// to the game).
+trait Server {
+    /// The active window, the game in place of the helper of the window over the game; whether
+    /// the desktop refused to make the game active again.
+    fn active_game(&self) -> (Result<Option<Window>>, bool);
+    fn window_class(&self, window: Window) -> Result<String>;
+    fn give_back_keyboard(&self, game: Window) -> Result<()>;
+    fn window_rect(&self, window: Window) -> Result<Option<ScreenRect>>;
+    /// Forgets the events received since the last copy.
+    fn drop_events(&self);
+    fn layout(&self) -> Result<Layout>;
+    fn pointer(&self) -> Result<Pointer>;
+    /// The keys held, a bit for each keycode, from keycode 0.
+    fn keys_held(&self) -> Result<Vec<u8>>;
+    /// See [`Keyboard::game_in_front_again`]: it may wait up to [`ACTIVATION_WAIT`].
+    fn game_in_front_again(&self);
+    /// Presses or releases a key, `delay_ms` after the previous one.
+    fn fake_key(&self, key: Key<Keycode>, delay_ms: u32) -> Result<()>;
+}
+
+/// The keyboard mapping of the X server: `keysyms_per_keycode` keysyms for each keycode from
+/// `min_keycode`.
+struct Layout {
+    min_keycode: Keycode,
+    keysyms_per_keycode: u8,
+    keysyms: Vec<u32>,
+}
+
+impl Layout {
+    fn keycode(&self, keysym: u32) -> Option<Keycode> {
+        keycode_of(
+            keysym,
+            self.min_keycode,
+            self.keysyms_per_keycode,
+            &self.keysyms,
+        )
+    }
+
+    /// The keys of [`MODIFIERS`] held in `keymap`.
+    fn held(&self, keymap: &[u8]) -> Vec<(Keycode, Modifier)> {
+        held_modifiers(
+            keymap,
+            self.min_keycode,
+            self.keysyms_per_keycode,
+            &self.keysyms,
+        )
+    }
+}
+
+/// Where the pointer is, and whether Ctrl is held.
+#[derive(Debug, Clone, Copy)]
+struct Pointer {
+    position: Point,
+    control: bool,
+}
+
+impl Server for Keyboard {
+    fn active_game(&self) -> (Result<Option<Window>>, bool) {
+        Keyboard::active_game(self)
+    }
+
+    fn window_class(&self, window: Window) -> Result<String> {
+        Keyboard::window_class(self, window)
+    }
+
+    fn give_back_keyboard(&self, game: Window) -> Result<()> {
+        Keyboard::give_back_keyboard(self, game)
+    }
+
+    fn window_rect(&self, window: Window) -> Result<Option<ScreenRect>> {
+        Keyboard::window_rect(self, window)
+    }
+
+    fn drop_events(&self) {
+        shared::drop_events(&self.connection);
+    }
+
+    fn layout(&self) -> Result<Layout> {
+        self.read_layout()
+    }
+
+    fn pointer(&self) -> Result<Pointer> {
+        let pointer = self.connection.query_pointer(self.root)?.reply()?;
+        Ok(Pointer {
+            position: Point {
+                x: i32::from(pointer.root_x),
+                y: i32::from(pointer.root_y),
+            },
+            control: pointer.mask.contains(KeyButMask::CONTROL),
+        })
+    }
+
+    fn keys_held(&self) -> Result<Vec<u8>> {
+        Ok(self.connection.query_keymap()?.reply()?.keys.to_vec())
+    }
+
+    fn game_in_front_again(&self) {
+        Keyboard::game_in_front_again(self);
+    }
+
+    fn fake_key(&self, key: Key<Keycode>, delay_ms: u32) -> Result<()> {
+        let (event, keycode) = match key {
+            Key::Down(keycode) => (xproto::KEY_PRESS_EVENT, keycode),
+            Key::Up(keycode) => (xproto::KEY_RELEASE_EVENT, keycode),
+        };
+        self.connection
+            .xtest_fake_input(event, keycode, delay_ms, self.root, 0, 0, 0)?
+            .check()?;
+        Ok(())
+    }
+}
+
+/// Sends Ctrl+C through `server` to the active window. The order is the rule:
+///
+/// 1. the window the keys go to, the keyboard given back to it, and everything that can fail
+///    (the keyboard mapping, a first reading of the pointer and of the keys held): an error
+///    there leaves the clipboard alone;
+/// 2. `prepare`, which writes the marker to the clipboard and may take a moment: from there to
+///    the keys, nothing gives up, since a marker without a copy would replace the item of the
+///    player for nothing;
+/// 3. the pointer read again, where the item is when the keys leave, and `tell`, which opens
+///    the window over the game there, before the first key;
+/// 4. the game made the active window again, which may wait up to [`ACTIVATION_WAIT`];
+/// 5. Ctrl and Shift read last, as the player holds them right before the keys (as under
+///    Windows): read before that wait, a Ctrl released during it sent C alone to the game, and
+///    a Shift released during it was pressed again and left held (desktop review of
+///    2026-11-10). A reading that fails then keeps the one of step 1;
+/// 6. the keys.
+fn send_copy<P>(
+    server: &impl Server,
+    shortcut: Shortcut,
+    prepare: impl FnOnce() -> P,
+    tell: impl FnOnce(Option<Target>, P),
+) -> Result<Sent> {
+    // The window the keys go to, read before them; for the log and the window over the
+    // game, so that a failure doesn't stop the copy.
+    // On a single screen, the helper of the window over the game may be active in place of
+    // the game: the game is made active again, so that the copy and the window go to it.
+    let (window, refused) = server.active_game();
+    let window_class = match &window {
+        Ok(Some(window)) => server
+            .window_class(*window)
+            .unwrap_or_else(|error| format!("unknown ({error})")),
+        Ok(None) => "none (an application outside X11?)".to_owned(),
+        Err(error) => format!("unknown ({error})"),
+    };
+    // While a field of the window over the game is edited, the keys of the copy would go to
+    // it: the game gets the keyboard back first.
+    if let Ok(Some(game)) = window
+        && let Err(error) = server.give_back_keyboard(game)
+    {
+        log::warn!("The keyboard can't be given back to the game: {error}");
+    }
+    let game = match window {
+        Ok(Some(window)) => server.window_rect(window).unwrap_or_else(|error| {
+            log::warn!("The window of the game can't be measured: {error}");
+            None
+        }),
+        _ => None,
+    };
+    server.drop_events();
+    let layout = server.layout()?;
+    let (Some(control), Some(c)) = (layout.keycode(XK_CONTROL_L), layout.keycode(XK_C)) else {
+        return Err("the keyboard has no Control or C key".into());
+    };
+    let mut pointer = server.pointer()?;
+    let mut keys_held = server.keys_held()?;
+    let prepared = prepare();
+    // Read after the preparation, which may take a moment: where the item is.
+    if let Ok(read) = server.pointer() {
+        pointer = read;
+    }
+    let target = game.map(|game| Target {
+        pointer: pointer.position,
+        game,
+    });
+    tell(target, prepared);
+    // Not twice when the desktop already refused.
+    if !refused {
+        server.game_in_front_again();
+    }
+    let control_held = server
+        .pointer()
+        .map_or(pointer.control, |pointer| pointer.control);
+    if let Ok(read) = server.keys_held() {
+        keys_held = read;
+    }
+    let modifiers_held = layout.held(&keys_held);
+    let missed = missed_modifiers(shortcut, &modifiers_held, |keysym| layout.keycode(keysym));
+    // Alt left held: Ctrl+Alt+C copies the same text.
+    let released: Vec<_> = modifiers_held
+        .into_iter()
+        .filter(|&(_, modifier)| modifier == Modifier::Shift)
+        .collect();
+    let keycodes = |keys: &[(Keycode, Modifier)]| keys.iter().map(|&(key, _)| key).collect();
+    let names =
+        |keys: &[(Keycode, Modifier)]| keys.iter().map(|&(_, modifier)| modifier.name()).collect();
+    let held = Held {
+        control: control_held,
+        others: keycodes(&released),
+        missed: keycodes(&missed),
+    };
+    let mut first = true;
+    send_all(copy_keys(control, c, &held), |key| {
+        let delay = if std::mem::take(&mut first) {
+            0
+        } else {
+            KEY_DELAY_MS
+        };
+        server.fake_key(key, delay)
+    })?;
+    Ok(Sent {
+        window_class,
+        control_held,
+        released: names(&released),
+        missed: names(&missed),
+    })
 }
 
 /// Whether the hotkey gives the keyboard, at `focused`, back to `game`, the active window, before
@@ -1065,5 +1235,286 @@ mod tests {
             window_class(b"pathofexile2.exe\0PathOfExile2"),
             "PathOfExile2 (pathofexile2.exe)"
         );
+    }
+
+    /// The keycodes of the fake keyboard: one keysym for each, from 8.
+    const CONTROL: Keycode = 8;
+    const C: Keycode = 9;
+    const SHIFT: Keycode = 10;
+
+    /// An X server that records what the copy asks of it, in order, and answers the readings
+    /// it was given, in their order; a reading it has no answer left for fails.
+    struct FakeServer {
+        calls: std::cell::RefCell<Vec<String>>,
+        active: Option<Window>,
+        refused: bool,
+        keysyms: Vec<u32>,
+        pointers: std::cell::RefCell<std::collections::VecDeque<Pointer>>,
+        keys_held: std::cell::RefCell<std::collections::VecDeque<Vec<u8>>>,
+        /// The delay asked before each key.
+        delays: std::cell::RefCell<Vec<u32>>,
+    }
+
+    /// The pointer on the item, Ctrl held or not.
+    fn pointer(control: bool) -> Pointer {
+        Pointer {
+            position: Point { x: 300, y: 200 },
+            control,
+        }
+    }
+
+    /// The keys held: Shift, or none.
+    fn keys(shift: bool) -> Vec<u8> {
+        let mut keymap = vec![0; 32];
+        if shift {
+            keymap[usize::from(SHIFT / 8)] |= 1 << (SHIFT % 8);
+        }
+        keymap
+    }
+
+    impl FakeServer {
+        /// The game active, each reading answered three times: before the marker, for the
+        /// window over the game, and right before the keys.
+        fn new(control: [bool; 3], shift: [bool; 2]) -> Self {
+            Self {
+                calls: std::cell::RefCell::default(),
+                active: Some(GAME),
+                refused: false,
+                keysyms: vec![XK_CONTROL_L, XK_C, XK_SHIFT_L],
+                pointers: std::cell::RefCell::new(control.map(pointer).into()),
+                keys_held: std::cell::RefCell::new(shift.map(keys).into()),
+                delays: std::cell::RefCell::default(),
+            }
+        }
+
+        fn call(&self, call: impl Into<String>) {
+            self.calls.borrow_mut().push(call.into());
+        }
+
+        /// Sends the copy of Ctrl+D; what was asked of the server, in order, with the
+        /// preparation and the window over the game told among it.
+        fn copy(&self) -> (Result<Sent>, Vec<String>) {
+            let sent = send_copy(
+                self,
+                Shortcut::default(),
+                || self.call("prepare"),
+                |target, ()| self.call(format!("tell {}", target.is_some())),
+            );
+            (sent, self.calls.borrow().clone())
+        }
+    }
+
+    impl Server for FakeServer {
+        fn active_game(&self) -> (Result<Option<Window>>, bool) {
+            self.call("active game");
+            (Ok(self.active), self.refused)
+        }
+
+        fn window_class(&self, _: Window) -> Result<String> {
+            Ok("steam_app_2694490".to_owned())
+        }
+
+        fn give_back_keyboard(&self, _: Window) -> Result<()> {
+            self.call("keyboard back");
+            Ok(())
+        }
+
+        fn window_rect(&self, _: Window) -> Result<Option<ScreenRect>> {
+            Ok(Some(ScreenRect {
+                x: 0,
+                y: 0,
+                width: 1920,
+                height: 1080,
+            }))
+        }
+
+        fn drop_events(&self) {
+            self.call("drop events");
+        }
+
+        fn layout(&self) -> Result<Layout> {
+            self.call("layout");
+            Ok(Layout {
+                min_keycode: CONTROL,
+                keysyms_per_keycode: 1,
+                keysyms: self.keysyms.clone(),
+            })
+        }
+
+        fn pointer(&self) -> Result<Pointer> {
+            self.call("pointer");
+            let pointer = self.pointers.borrow_mut().pop_front();
+            pointer.ok_or_else(|| "no pointer".into())
+        }
+
+        fn keys_held(&self) -> Result<Vec<u8>> {
+            self.call("keys held");
+            let keys = self.keys_held.borrow_mut().pop_front();
+            keys.ok_or_else(|| "no keymap".into())
+        }
+
+        fn game_in_front_again(&self) {
+            self.call("game in front again");
+        }
+
+        fn fake_key(&self, key: Key<Keycode>, delay_ms: u32) -> Result<()> {
+            self.call(format!("{key:?}"));
+            self.delays.borrow_mut().push(delay_ms);
+            Ok(())
+        }
+    }
+
+    /// The keys sent among `calls`.
+    fn keys_sent(calls: &[String]) -> Vec<&str> {
+        calls
+            .iter()
+            .map(String::as_str)
+            .filter(|call| call.starts_with("Down") || call.starts_with("Up"))
+            .collect()
+    }
+
+    /// The desktop review of 2026-11-10: the order of these steps is the rule, and no test ran
+    /// it.
+    #[test]
+    fn the_window_is_told_before_the_first_key_and_the_keys_held_are_read_last() {
+        let server = FakeServer::new([true; 3], [false; 2]);
+
+        let (sent, calls) = server.copy();
+
+        assert_eq!(
+            calls,
+            [
+                "active game",
+                "keyboard back",
+                "drop events",
+                "layout",
+                "pointer",
+                "keys held",
+                "prepare",
+                "pointer",
+                "tell true",
+                "game in front again",
+                "pointer",
+                "keys held",
+                &format!("{:?}", Key::Down(C)),
+                &format!("{:?}", Key::Up(C)),
+            ]
+        );
+        assert!(sent.expect("sent").control_held);
+        // The first key at once, the next ones a moment apart, as a hand would press them.
+        assert_eq!(*server.delays.borrow(), [0, KEY_DELAY_MS]);
+    }
+
+    /// Read before the wait for the game to be active again, a Ctrl released during it sent C
+    /// alone to the game: a key of the game pressed.
+    #[test]
+    fn a_ctrl_released_while_the_game_is_made_active_again_is_pressed_by_the_copy() {
+        let server = FakeServer::new([true, true, false], [false; 2]);
+
+        let (sent, calls) = server.copy();
+
+        assert_eq!(keys_sent(&calls), ["Down(8)", "Down(9)", "Up(9)", "Up(8)"]);
+        assert!(!sent.expect("sent").control_held);
+    }
+
+    /// And a Shift released during it was pressed again last, left held for the X server.
+    #[test]
+    fn a_shift_released_while_the_game_is_made_active_again_isnt_pressed_again() {
+        let server = FakeServer::new([true; 3], [true, false]);
+
+        let (sent, calls) = server.copy();
+
+        assert_eq!(keys_sent(&calls), ["Down(9)", "Up(9)"]);
+        assert_eq!(sent.expect("sent").released, [""; 0]);
+    }
+
+    #[test]
+    fn a_shift_still_held_is_released_around_the_copy() {
+        let server = FakeServer::new([true; 3], [false, true]);
+
+        let (sent, calls) = server.copy();
+
+        assert_eq!(
+            keys_sent(&calls),
+            ["Up(10)", "Down(9)", "Up(9)", "Down(10)"]
+        );
+        assert_eq!(sent.expect("sent").released, ["Shift"]);
+    }
+
+    /// A marker without a copy would replace the item of the player in the clipboard.
+    #[test]
+    fn what_fails_before_the_marker_sends_no_key_and_leaves_the_clipboard_alone() {
+        let without_c = FakeServer {
+            keysyms: vec![XK_CONTROL_L],
+            ..FakeServer::new([true; 3], [false; 2])
+        };
+        let without_pointer = FakeServer {
+            pointers: std::cell::RefCell::default(),
+            ..FakeServer::new([true; 3], [false; 2])
+        };
+        let without_keymap = FakeServer {
+            keys_held: std::cell::RefCell::default(),
+            ..FakeServer::new([true; 3], [false; 2])
+        };
+
+        for server in [without_c, without_pointer, without_keymap] {
+            let (sent, calls) = server.copy();
+
+            assert!(sent.is_err());
+            assert!(!calls.iter().any(|call| call == "prepare"), "{calls:?}");
+            assert!(
+                !calls.iter().any(|call| call.starts_with("tell")),
+                "{calls:?}"
+            );
+            assert!(keys_sent(&calls).is_empty(), "{calls:?}");
+        }
+    }
+
+    #[test]
+    fn once_the_marker_is_written_a_failed_reading_keeps_the_first_one_and_the_keys_leave() {
+        // One answer each: the readings after the marker fail.
+        let server = FakeServer {
+            pointers: std::cell::RefCell::new([pointer(false)].into()),
+            keys_held: std::cell::RefCell::new([keys(true)].into()),
+            ..FakeServer::new([true; 3], [false; 2])
+        };
+
+        let (sent, calls) = server.copy();
+
+        assert!(calls.iter().any(|call| call == "tell true"), "{calls:?}");
+        assert_eq!(
+            keys_sent(&calls),
+            ["Up(10)", "Down(8)", "Down(9)", "Up(9)", "Up(8)", "Down(10)"]
+        );
+        assert!(sent.is_ok());
+    }
+
+    #[test]
+    fn a_desktop_that_refused_the_game_isnt_asked_twice_and_no_window_gets_no_keyboard_back() {
+        let refused = FakeServer {
+            refused: true,
+            ..FakeServer::new([true; 3], [false; 2])
+        };
+        let (_, calls) = refused.copy();
+        assert!(!calls.iter().any(|call| call == "game in front again"));
+        assert_eq!(keys_sent(&calls), ["Down(9)", "Up(9)"]);
+
+        let nowhere = FakeServer {
+            active: None,
+            ..FakeServer::new([true; 3], [false; 2])
+        };
+        let (sent, calls) = nowhere.copy();
+        assert!(!calls.iter().any(|call| call == "keyboard back"));
+        // No window to open over, and the keys still leave, to whatever has the keyboard.
+        assert!(calls.iter().any(|call| call == "tell false"), "{calls:?}");
+        assert!(sent.expect("sent").window_class.starts_with("none"));
+    }
+
+    #[test]
+    fn the_name_of_the_window_manager_is_written_as_one_short_line() {
+        assert_eq!(window_manager_name(b"KWin"), "KWin");
+        assert_eq!(window_manager_name(b"GNOME\nShell"), "GNOME Shell");
+        assert_eq!(window_manager_name(b""), "unnamed");
+        assert!(window_manager_name(&[b'a'; 5_000]).chars().count() < 250);
     }
 }

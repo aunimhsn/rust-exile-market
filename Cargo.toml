@@ -22,6 +22,10 @@ directories = "6.0.0"
 # `clipboard` makes the copies and the pastes in the fields of egui reach the clipboard of the
 # system: without it, egui-winit keeps the text to itself (.github/scripts/system-clipboard.sh
 # checks it). The whisper and the log go through `clipboard::write_text`, for its result.
+# `accesskit` is the support of the screen readers, which the controls drawn by hand feed
+# (`widget_info` in `src/ui/`): kept for the players who need one, though on Linux it brings
+# the D-Bus crates (zbus, atspi; about a hundred of them) and the three advisories ignored in
+# `deny.toml` (core review of 2026-11-10).
 eframe = { version = "0.37", default-features = false, features = ["accesskit", "clipboard", "glow", "links", "persistence", "x11"] }
 egui = { version = "0.37", default-features = false }
 egui_extras = { version = "0.37", default-features = false, features = ["svg", "image"] }

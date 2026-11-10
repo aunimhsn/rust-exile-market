@@ -10,6 +10,7 @@ use serde_json::Value;
 
 use crate::currencies;
 use crate::format::Currency;
+use crate::http;
 use crate::item::{
     Catalyst, ParseWarning, QualityKind, Rarity, Requirements, WaystoneValue, read_gem_level,
     read_quality, waystone_property, whole_percent, without_tier,
@@ -197,13 +198,33 @@ pub(super) struct ApiSearch {
     pub id: String,
     /// The ids of the offers, the cheapest first.
     pub result: Vec<String>,
-    pub total: u64,
+    /// Only shown: the offers are worth having without it.
+    #[serde(default)]
+    total: Option<u64>,
+}
+
+impl ApiSearch {
+    /// The offers found; without the count of the trade site, at least those it gave, so
+    /// that an estimate never stands next to "0 similar".
+    pub fn total(&self) -> u64 {
+        self.total.unwrap_or(self.result.len() as u64)
+    }
 }
 
 /// The answer of `/fetch`.
 #[derive(Debug, Deserialize)]
 pub(super) struct ApiFetch {
-    result: Vec<Option<ApiListed>>,
+    #[serde(deserialize_with = "listed")]
+    result: Vec<ApiListed>,
+}
+
+/// The offers of `/fetch`: `null` for an offer gone since the search, left out first, so that
+/// it doesn't count as an offer read; then an offer the application can't read is left out
+/// ([`http::read_each`]).
+fn listed<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Vec<ApiListed>, D::Error> {
+    let mut offers = Vec::<Value>::deserialize(deserializer)?;
+    offers.retain(|offer| !offer.is_null());
+    http::read_each(offers).map_err(de::Error::custom)
 }
 
 #[derive(Debug, Deserialize)]
@@ -391,17 +412,22 @@ enum ApiModifier {
 pub(super) struct ApiExchange {
     #[serde(deserialize_with = "listings")]
     result: BTreeMap<String, ApiExchangeListed>,
-    pub total: u64,
+    /// Only shown: the offers are worth having without it.
+    #[serde(default)]
+    pub total: Option<u64>,
 }
 
-/// The listings of `/exchange` by id; an empty list without offers.
+/// The listings of `/exchange` by id; an empty list without offers. A listing the application
+/// can't read is left out ([`http::read_each_keyed`]).
 fn listings<'de, D: Deserializer<'de>>(
     deserializer: D,
 ) -> Result<BTreeMap<String, ApiExchangeListed>, D::Error> {
-    match Value::deserialize(deserializer)? {
-        Value::Array(listings) if listings.is_empty() => Ok(BTreeMap::new()),
-        listings => serde_json::from_value(listings).map_err(de::Error::custom),
-    }
+    let listings = match Value::deserialize(deserializer)? {
+        Value::Array(listings) if listings.is_empty() => return Ok(BTreeMap::new()),
+        listings => BTreeMap::<String, Value>::deserialize(listings).map_err(de::Error::custom)?,
+    };
+    let listings = http::read_each_keyed(listings.into_iter().collect());
+    Ok(listings.map_err(de::Error::custom)?.into_iter().collect())
 }
 
 #[derive(Debug, Deserialize)]
@@ -413,8 +439,10 @@ struct ApiExchangeListed {
 struct ApiExchangeListing {
     indexed: Option<String>,
     account: ApiAccount,
+    #[serde(deserialize_with = "http::each")]
     offers: Vec<ApiExchangeOffer>,
     /// `@seller Hi, I'd like to buy your {0} for my {1} in League`.
+    #[serde(default)]
     whisper: String,
 }
 
@@ -430,6 +458,7 @@ struct ApiExchangeSide {
     amount: f64,
     stock: Option<u64>,
     /// `{0} Divine Orb`.
+    #[serde(default)]
     whisper: String,
 }
 
@@ -441,7 +470,6 @@ impl ApiFetch {
         let (offers, unreadable): (Vec<ItemOffer>, Vec<Unreadable>) = self
             .result
             .into_iter()
-            .flatten()
             .map(|listed| listed.offer(language))
             .unzip();
         for warning in warnings(&unreadable) {
@@ -660,9 +688,7 @@ impl ApiExchange {
                 listing.offers.into_iter().map(move |offer| ExchangeOffer {
                     seller,
                     listed,
-                    whisper: whisper
-                        .replacen("{0}", &side_text(&offer.item), 1)
-                        .replacen("{1}", &side_text(&offer.exchange), 1),
+                    whisper: exchange_whisper(&whisper, &offer),
                     stock: offer.item.stock.unwrap_or(0),
                     pay: offer.exchange.price(),
                     get: offer.item.price(),
@@ -683,6 +709,20 @@ impl ApiExchangeSide {
             currency: self.currency.clone(),
         }
     }
+}
+
+/// The whisper of an offer of the exchange, from the sentence of its listing and the texts of
+/// its two sides; none when one of the three is missing, rather than half a sentence.
+fn exchange_whisper(listing: &str, offer: &ApiExchangeOffer) -> String {
+    if [listing, &offer.item.whisper, &offer.exchange.whisper]
+        .iter()
+        .any(|text| text.is_empty())
+    {
+        return String::new();
+    }
+    listing
+        .replacen("{0}", &side_text(&offer.item), 1)
+        .replacen("{1}", &side_text(&offer.exchange), 1)
 }
 
 /// `1 Divine Orb`, from `{0} Divine Orb`.

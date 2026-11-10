@@ -14,10 +14,14 @@
 //! of a match the numbers its stat counts on its lines, in their order: the numbers are read
 //! from the same matches as the tiers, so that each range lands on its number.
 
+use std::collections::BTreeSet;
+use std::sync::{Mutex, PoisonError};
+
 use crate::filters::StatKey;
 use crate::game_data::{self, LineMatch, ModifierTiers, Tier};
 use crate::item::{Currency, Modifier, ModifierKind, Range, TierDoubt};
 use crate::language::Language;
+use crate::logging;
 use crate::trade::stat_filters::counted_numbers;
 
 /// The tiers of the lowest and of the highest roll of a line over every tier: "T13–T1".
@@ -86,6 +90,9 @@ impl TierRolls {
                 continue;
             }
             let Some((matches, tiers)) = found else {
+                if let Some(base_type) = base_type {
+                    warn_of_a_missing_table(language, base_type, modifier);
+                }
                 continue;
             };
             // A fixed value without tier: only of a modifier whose tier the game doesn't write
@@ -190,6 +197,47 @@ fn tables_of(
     let tiers = game_data::modifier_tiers(language, base_type, item_level, modifier, &matches)?;
     Some((matches, tiers))
 }
+
+/// Writes to the log that no table holds `modifier`, when one should
+/// ([`game_data::lacks_table`]): the first sign that the game changed its modifiers, and the
+/// list of those to generate again, in the log a bug report carries.
+fn warn_of_a_missing_table(language: Language, base_type: &str, modifier: &Modifier) {
+    /// What was already told: an item is read again at each copy, and when the names of the
+    /// trade site arrive.
+    static TOLD: Mutex<BTreeSet<String>> = Mutex::new(BTreeSet::new());
+
+    let matches = game_data::modifier_stats(language, modifier, None);
+    if !game_data::lacks_table(language, base_type, modifier, &matches) {
+        return;
+    }
+    // Its name, not its line: the same modifier rolled otherwise is the same missing table.
+    let key = format!(
+        "\"{}\" as tier {:?} on {}",
+        logging::plain(modifier.name.as_deref().unwrap_or_default()),
+        modifier.tier,
+        logging::plain(base_type),
+    );
+    let mut told = TOLD.lock().unwrap_or_else(PoisonError::into_inner);
+    if first_told(&mut told, &key) {
+        log::warn!(
+            "Game data, no table for the modifier {key} (data behind the game, or an item of \
+             an older patch): {}",
+            modifier
+                .lines
+                .first()
+                .map_or_else(String::new, |line| logging::plain(&line.text))
+        );
+    }
+}
+
+/// Whether `key` is told for the first time, kept in `told` then; never past [`MOST_TOLD`]
+/// keys, so that the log and the memory stay small whatever is copied.
+fn first_told(told: &mut BTreeSet<String>, key: &str) -> bool {
+    told.len() < MOST_TOLD && told.insert(key.to_owned())
+}
+
+/// The most missing tables told in a session.
+const MOST_TOLD: usize = 500;
 
 /// Whether the advanced copy writes `modifier`, a prefix or suffix, with its ranges but without
 /// tier: the game writes none for a modifier of the Genesis tree (`Reinforcing`, `Minions have
@@ -781,5 +829,64 @@ mod tests {
                 }),
             })
         );
+    }
+
+    /// The parser review of 2026-11-10: the best sign that the data are behind the game was
+    /// skipped without a line in the log.
+    #[test]
+    fn a_tier_the_copy_writes_and_no_table_holds_is_told_apart() {
+        let lacks = |lines: &str| {
+            let maul = format!(
+                "Item Class: Two Hand Maces\nRarity: Magic\nCrackling Temple Maul of the Brute\n\
+                 --------\nItem Level: 40\n--------\n{lines}"
+            );
+            let item = Item::parse(&CopiedItem::from_text(&maul).expect("an item")).expect("read");
+            let modifier = &item.modifiers()[0];
+            let matches = game_data::modifier_stats(item.language(), modifier, None);
+            game_data::lacks_table(item.language(), "Temple Maul", modifier, &matches)
+        };
+
+        // The tier of the data.
+        assert!(!lacks(
+            "{ Prefix Modifier \"Crackling\" (Tier: 7) — Damage, Elemental, Lightning, Attack }\n\
+             Adds 2(1-4) to 60(53-76) Lightning Damage"
+        ));
+        // Ranges no tier has: the game changed them.
+        assert!(lacks(
+            "{ Prefix Modifier \"Crackling\" (Tier: 7) — Damage, Elemental, Lightning, Attack }\n\
+             Adds 2(1-5) to 60(54-79) Lightning Damage"
+        ));
+        // Without a tier written, nothing says a table should hold it; nor for an implicit.
+        assert!(!lacks(
+            "{ Prefix Modifier \"Crackling\" — Damage, Elemental, Lightning, Attack }\n\
+             Adds 2(1-5) to 60(54-79) Lightning Damage"
+        ));
+        assert!(!lacks(
+            "{ Implicit Modifier — Damage }\nAdds 2(1-5) to 60(54-79) Lightning Damage"
+        ));
+    }
+
+    /// An item is read again at each copy: its missing table is told once.
+    #[test]
+    fn a_missing_table_is_told_once_and_not_past_a_few_hundred() {
+        let mut told = BTreeSet::new();
+
+        assert!(first_told(
+            &mut told,
+            "\"Crackling\" as tier Some(7) on Temple Maul"
+        ));
+        assert!(!first_told(
+            &mut told,
+            "\"Crackling\" as tier Some(7) on Temple Maul"
+        ));
+        assert!(first_told(
+            &mut told,
+            "\"Crackling\" as tier Some(6) on Temple Maul"
+        ));
+        for index in told.len()..MOST_TOLD {
+            assert!(first_told(&mut told, &index.to_string()));
+        }
+        assert!(!first_told(&mut told, "one more"));
+        assert_eq!(told.len(), MOST_TOLD);
     }
 }

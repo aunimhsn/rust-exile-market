@@ -1,6 +1,6 @@
 # Fenêtre par-dessus le jeu : les tests
 
-Fais les tests 1 à 15 sur ton installation habituelle, puis les tests 16 à 29 sur un seul écran. Fais-les d'affilée, sans m'attendre. Un ✅ suffit quand ça marche ; détaille seulement ce qui cloche. Puis dis-moi « fait ».
+Fais les tests 1 à 15 sur ton installation habituelle, puis les tests 16 à 31 sur un seul écran. Fais-les d'affilée, sans m'attendre. Un ✅ suffit quand ça marche ; détaille seulement ce qui cloche. Puis dis-moi « fait ».
 
 ## Avant
 
@@ -107,7 +107,13 @@ Débranche ou désactive ton deuxième écran (ou fais ces tests sur une machine
 28. **L'application tuée la fenêtre ouverte** : dans un second onglet de Konsole, lance `sleep 8; pkill -x exile-market`, retourne aussitôt dans le jeu, fais **Ctrl+D** sur un objet, attends que l'application s'arrête (8 secondes), puis appuie sur `1`. Ce test regarde ce que fait le bureau quand l'application disparaît sans se fermer : son résultat dépend de KWin, pas d'Exile Market.
    ✅ Le jeu reste au premier plan (pas de barre des tâches), et la flasque part, au besoin après un clic dans le jeu.
 
-29. **Test libre** : utilise la fenêtre comme en jeu pendant quelques minutes, sur un seul écran.
+29. **Alt+Tab, dix secondes ailleurs** (revue de qualité du 2026-11-10) : **Ctrl+D** sur un objet, puis **Alt+Tab** vers une autre fenêtre, restes-y au moins **dix secondes** sans cliquer, puis reviens au jeu par **Alt+Tab** et survole la fenêtre.
+   ✅ Comme au test 24 : après un instant, la souris marche dans la fenêtre, et la barre d'état dit « Les touches vont ici… ». (Avant, passé trois secondes ailleurs, la fenêtre restait sans survol ni clic.)
+
+30. **Ctrl+D frappé vite** (revue de qualité du 2026-11-10) : dix fois de suite, sur des objets différents, frappe **Ctrl+D** en relâchant les deux touches aussitôt ; puis cinq fois en gardant **Ctrl** enfoncé une seconde après le D. Regarde ensuite la première ligne du journal qui commence par « Window manager ».
+   ✅ Chaque frappe copie l'objet et ouvre la fenêtre ; aucune touche du jeu ne part (pas de flasque, pas de panneau ouvert par C), aucune touche ne reste enfoncée ensuite. Le journal dit « Window manager: KWin ».
+
+31. **Test libre** : utilise la fenêtre comme en jeu pendant quelques minutes, sur un seul écran.
    ✅ Rien d'étrange : pas de point noir à l'écran, pas de touche perdue, pas de clic qui traverse.
 
 ## Tes résultats
@@ -142,4 +148,6 @@ Débranche ou désactive ton deuxième écran (ou fais ces tests sur une machine
 | 26. Fenêtre principale réduite |  |  |
 | 27. Alt+F4 |  |  |
 | 28. L'application tuée la fenêtre ouverte |  |  |
-| 29. Test libre |  |  |
+| 29. Alt+Tab, dix secondes ailleurs |  |  |
+| 30. Ctrl+D frappé vite |  |  |
+| 31. Test libre |  |  |

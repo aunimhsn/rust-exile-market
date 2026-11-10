@@ -6,7 +6,11 @@ use std::io::Read;
 use std::thread;
 use std::time::{Duration, Instant};
 
-use serde::de::DeserializeOwned;
+use serde::de::{DeserializeOwned, Error as _};
+use serde::{Deserialize, Deserializer};
+use serde_json::Value;
+
+use crate::logging;
 
 /// A request that hangs is given up, and tried again later.
 const TIMEOUT: Duration = Duration::from_secs(30);
@@ -23,6 +27,25 @@ pub enum HttpError {
     Request(ureq::Error),
     /// An answer that isn't the expected JSON: the service changed.
     Json(serde_json::Error),
+}
+
+impl HttpError {
+    /// The service answered, with an error or something else than the expected JSON: the same
+    /// request would likely fail the same way, so the next attempt waits longer and longer
+    /// ([`Backoff`]). Without an answer (no network, a request that hangs), the next attempt
+    /// can come soon; a request that hangs may have reached the service all the same, which
+    /// this error alone can't tell: a client that sends several requests in a row counts a
+    /// failure after its first answers as answered too (`after_answers` in its error).
+    #[must_use]
+    pub fn answered(&self) -> bool {
+        match self {
+            Self::Request(error) => matches!(
+                error,
+                ureq::Error::StatusCode(_) | ureq::Error::BodyExceedsLimit(_)
+            ),
+            Self::Json(_) => true,
+        }
+    }
 }
 
 impl fmt::Display for HttpError {
@@ -93,6 +116,15 @@ pub fn get_json<T: DeserializeOwned>(
     Ok(serde_json::from_str(&text)?)
 }
 
+/// The longest body read of an error status: a line of JSON that says why.
+const MAX_ERROR_BODY: u64 = 64 * 1024;
+
+/// The text of the answer of an error status, refused past a few kilobytes: only a short
+/// message is read in it.
+pub fn read_error_text(body: &mut ureq::Body) -> Result<String, ureq::Error> {
+    read_text_up_to(body, MAX_ERROR_BODY)
+}
+
 /// The text of an answer, refused past `MAX_BODY`. The limit of `Body::read_to_string` counts
 /// the bytes received, before they are decompressed: a few megabytes of gzip could fill the
 /// memory. As there, a byte that isn't UTF-8 is read as the replacement character.
@@ -110,6 +142,56 @@ fn read_text_up_to(body: &mut ureq::Body, limit: u64) -> Result<String, ureq::Er
     } else {
         Err(ureq::Error::BodyExceedsLimit(limit))
     }
+}
+
+/// Each element of a list read on its own: one the application can't read is left out, so
+/// that a single odd item doesn't lose a whole answer. An error when more than half of them
+/// can't be read, since the service changed its answer then: a list with a few elements left
+/// would replace the complete one of the cache, or say "nothing" instead.
+pub fn read_each<T: DeserializeOwned>(values: Vec<Value>) -> Result<Vec<T>, serde_json::Error> {
+    let keyed = values.into_iter().map(|value| ((), value)).collect();
+    Ok(read_each_keyed(keyed)?
+        .into_iter()
+        .map(|((), element)| element)
+        .collect())
+}
+
+/// [`read_each`] for the values of a map, each kept with its key.
+pub fn read_each_keyed<K, T: DeserializeOwned>(
+    values: Vec<(K, Value)>,
+) -> Result<Vec<(K, T)>, serde_json::Error> {
+    let total = values.len();
+    let mut read = Vec::with_capacity(total);
+    let mut first = None;
+    for (key, value) in values {
+        match serde_json::from_value(value) {
+            Ok(element) => read.push((key, element)),
+            Err(error) => {
+                first.get_or_insert(error);
+            }
+        }
+    }
+    match first {
+        Some(error) if read.len() * 2 < total => Err(error),
+        Some(error) => {
+            log::warn!(
+                "{} of the {total} elements of an answer can't be read, the first one: {}",
+                total - read.len(),
+                logging::plain(&error.to_string())
+            );
+            Ok(read)
+        }
+        None => Ok(read),
+    }
+}
+
+/// [`read_each`] for a list inside an answer: `#[serde(deserialize_with = "http::each")]`.
+pub fn each<'de, D, T>(deserializer: D) -> Result<Vec<T>, D::Error>
+where
+    D: Deserializer<'de>,
+    T: DeserializeOwned,
+{
+    read_each(Vec::<Value>::deserialize(deserializer)?).map_err(D::Error::custom)
 }
 
 /// `text` escaped for a segment of a path or a value of a query, e.g. a league name with
@@ -153,6 +235,39 @@ impl Pace {
         }
         // Counted even when it fails: a refused request counts in the limits too.
         self.last = Some(Instant::now());
+    }
+}
+
+/// The wait after a failure the service answered ([`HttpError::answered`]): `first`, then
+/// doubled at each failure in a row, `longest` at most. A changed answer fails the same way
+/// at each attempt: asking again as often would only cost the service requests.
+#[derive(Debug, Clone, Copy)]
+pub struct Backoff {
+    first: Duration,
+    longest: Duration,
+    failures: u32,
+}
+
+impl Backoff {
+    #[must_use]
+    pub fn new(first: Duration, longest: Duration) -> Self {
+        Self {
+            first,
+            longest,
+            failures: 0,
+        }
+    }
+
+    /// The wait before the next attempt, after one more failure.
+    pub fn failed(&mut self) -> Duration {
+        let factor = 2_u32.saturating_pow(self.failures);
+        self.failures = self.failures.saturating_add(1);
+        self.first.saturating_mul(factor).min(self.longest)
+    }
+
+    /// The service answered as expected: the next failure waits `first` again.
+    pub fn succeeded(&mut self) {
+        self.failures = 0;
     }
 }
 
@@ -288,6 +403,114 @@ pub mod tests {
             ),
             "{answer:?}"
         );
+    }
+
+    #[test]
+    fn an_error_status_or_an_unexpected_answer_is_an_answer_of_the_service() {
+        let json = serde_json::from_str::<u8>("{").expect_err("not a number");
+
+        assert!(HttpError::Request(ureq::Error::StatusCode(500)).answered());
+        assert!(HttpError::Request(ureq::Error::BodyExceedsLimit(1)).answered());
+        assert!(HttpError::Json(json).answered());
+        assert!(!HttpError::Request(ureq::Error::HostNotFound).answered());
+        assert!(!HttpError::Request(ureq::Error::ConnectionFailed).answered());
+        assert!(!HttpError::Request(ureq::Error::Timeout(ureq::Timeout::Global)).answered());
+    }
+
+    #[test]
+    fn the_wait_after_an_answered_failure_doubles_up_to_the_longest() {
+        let minute = Duration::from_mins(1);
+        let mut backoff = Backoff::new(minute, Duration::from_hours(1));
+
+        let waits: Vec<u64> = (0..8).map(|_| backoff.failed().as_secs() / 60).collect();
+
+        assert_eq!(waits, [1, 2, 4, 8, 16, 32, 60, 60]);
+    }
+
+    #[test]
+    fn the_wait_never_overflows_after_many_failures() {
+        let mut backoff = Backoff::new(Duration::from_mins(1), Duration::from_hours(1));
+
+        let last = (0..100).map(|_| backoff.failed()).last();
+
+        assert_eq!(last, Some(Duration::from_hours(1)));
+    }
+
+    #[test]
+    fn a_success_starts_the_wait_over() {
+        let mut backoff = Backoff::new(Duration::from_mins(1), Duration::from_hours(1));
+        backoff.failed();
+        backoff.failed();
+
+        backoff.succeeded();
+
+        assert_eq!(backoff.failed(), Duration::from_mins(1));
+    }
+
+    #[test]
+    fn an_element_that_cant_be_read_is_left_out_of_its_list() {
+        let values = vec![Value::from(1), Value::from("two"), Value::from(3)];
+
+        let read = read_each::<u8>(values).expect("two numbers");
+
+        assert_eq!(read, [1, 3]);
+    }
+
+    /// The code review of the quality fixes: a page with one price left in 250 replaced the
+    /// complete prices of the cache.
+    #[test]
+    fn a_list_more_than_half_of_which_cant_be_read_is_an_error() {
+        let list = |numbers: usize, texts: usize| -> Vec<Value> {
+            let numbers = (0..numbers).map(|_| Value::from(1));
+            numbers
+                .chain((0..texts).map(|_| Value::from("odd")))
+                .collect()
+        };
+
+        assert_eq!(read_each::<u8>(list(2, 2)).expect("half").len(), 2);
+        assert_eq!(read_each::<u8>(list(125, 125)).expect("half").len(), 125);
+        assert!(read_each::<u8>(list(1, 2)).is_err());
+        assert!(read_each::<u8>(list(1, 249)).is_err());
+    }
+
+    #[test]
+    fn the_values_of_a_map_keep_their_keys() {
+        let values = vec![
+            ("a", Value::from(1)),
+            ("b", Value::Null),
+            ("c", Value::from(3)),
+        ];
+
+        let read = read_each_keyed::<_, u8>(values).expect("two numbers");
+
+        assert_eq!(read, [("a", 1), ("c", 3)]);
+    }
+
+    /// A list of another shape isn't an empty list: "no offer" would be shown for it.
+    #[test]
+    fn a_list_none_of_whose_elements_can_be_read_is_an_error() {
+        let values = vec![Value::from("one"), Value::from("two")];
+
+        assert!(read_each::<u8>(values).is_err());
+        assert_eq!(
+            read_each::<u8>(Vec::new()).expect("an empty list"),
+            [0_u8; 0]
+        );
+    }
+
+    #[test]
+    fn a_list_inside_an_answer_leaves_out_what_cant_be_read() {
+        #[derive(Deserialize)]
+        struct Answer {
+            #[serde(deserialize_with = "each")]
+            result: Vec<u8>,
+        }
+
+        let answer: Answer = serde_json::from_str(r#"{"result": [1, null, 3]}"#).expect("a list");
+
+        assert_eq!(answer.result, [1, 3]);
+        assert!(serde_json::from_str::<Answer>(r#"{"result": [null]}"#).is_err());
+        assert!(serde_json::from_str::<Answer>(r#"{"result": 1}"#).is_err());
     }
 
     #[test]
