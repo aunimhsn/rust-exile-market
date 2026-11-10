@@ -266,6 +266,47 @@ mod tests {
         assert!((baited.exalted - 1.3 * 700.0).abs() < 1e-9);
     }
 
+    /// The core review of 2026-11-10: "far below" starts under the quarter, not at it.
+    #[test]
+    fn an_offer_at_exactly_a_quarter_of_the_reference_is_counted() {
+        // The median of the five is 4 div: its quarter is 1 div.
+        let offers = divines(&[1.0, 2.0, 4.0, 4.0, 4.0]);
+
+        let at_the_quarter = estimate(&offers, 5, WORTH, None).unwrap();
+
+        assert_eq!(at_the_quarter.counted, 5);
+        assert!(!at_the_quarter.reference.suspicious(1.0, "divine"));
+        assert!(at_the_quarter.reference.suspicious(699.0, "exalted"));
+        let under = estimate(&divines(&[0.99, 2.0, 4.0, 4.0, 4.0]), 5, WORTH, None).unwrap();
+        assert_eq!(under.counted, 4);
+    }
+
+    /// The limit written at the top of this file, pinned so that a change of the rule shows:
+    /// the median of the page tells the bait only while fewer than half its offers are bait.
+    #[test]
+    fn with_half_the_page_of_bait_the_estimate_is_the_one_of_the_bait() {
+        let real = [2.0, 2.2, 2.4, 2.5, 3.0, 3.1];
+        let page = |bait: usize| {
+            let mut offers: Vec<ItemOffer> = (0..bait).map(|_| offer(1.0, "exalted")).collect();
+            offers.extend(divines(&real[..10 - bait]));
+            estimate(&offers, 10, WORTH, None).unwrap()
+        };
+
+        // Four in ten: left out, and the estimate is the median of the five cheapest real ones.
+        let four = page(4);
+        assert!(four.reference.suspicious(1.0, "exalted"));
+        assert!((four.exalted - 2.4 * 700.0).abs() < 1e-9);
+        // Five in ten: the median falls between the bait and the cheapest real offer, far
+        // enough to still tell the bait here, since the bait is so cheap.
+        let five = page(5);
+        assert!(five.reference.suspicious(1.0, "exalted"));
+        // Six in ten: the median is the bait, which is then the estimate.
+        let six = page(6);
+        assert!(!six.reference.suspicious(1.0, "exalted"));
+        assert!((six.exalted - 1.0).abs() < 1e-9);
+        assert_eq!(six.counted, 5);
+    }
+
     #[test]
     fn an_offer_without_a_known_price_isnt_counted() {
         let mut offers = vec![offer(1.0, "annul"), offer(2.0, "divine")];
