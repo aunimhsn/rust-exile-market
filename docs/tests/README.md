@@ -20,6 +20,7 @@ They may be written in French, the language of the testers (an exception to the 
 - [Update notice](linux/update-notice.md) (15, once a first release is out)
 - [Bug report](linux/bug-report.md) (16b)
 - [Executable: its name, its icon, a window that can't open](linux/executable.md) (17a)
+- [Another desktop than KDE: what was only checked on KWin](linux/other-desktops.md) (17e3b2, run in 17f)
 
 ## Windows
 
@@ -33,3 +34,4 @@ They may be written in French, the language of the testers (an exception to the 
 - [Bug report](windows/bug-report.md) (16b)
 - [Executable: its name and its icon](windows/executable.md) (17a)
 - [A copy refused by the system](windows/copy-failure.md)
+- [Three cases never tried on Windows](windows/unchecked-assumptions.md) (17e3b2)
