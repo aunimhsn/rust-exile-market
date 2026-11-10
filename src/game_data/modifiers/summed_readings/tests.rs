@@ -394,14 +394,13 @@ fn doubts_of(
         room,
         fits_room,
     };
-    doubts_within(
-        &TABLES,
-        (base, Some(82)),
-        &modifiers,
-        &copied,
-        &best,
-        max_steps,
-    )
+    let item = TradeItem {
+        language: Language::English,
+        base_type,
+        base,
+        item_level: Some(82),
+    };
+    doubts_within(&TABLES, &item, &modifiers, &copied, &best, max_steps)
 }
 
 /// The lines of a bow with three prefixes, read one way only.

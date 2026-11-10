@@ -512,17 +512,28 @@ fn the_readings_looked_at_are_bounded() {
     assert_eq!(search.best.map(|(key, _)| key.modifiers), Some(count));
 }
 
+/// What [`read_in`] gives: for each modifier read, how many lines it has and the tier number
+/// of each affix it can be; and the text of each line split with the affix and tier number of
+/// its pure modifier.
+type ReadIn = (Vec<(usize, AffixTiers)>, Added);
+
 /// The tiers of the lines `texts` of an item of `item_level` copied from the in-game trade,
-/// found among `tables` on a helmet with at most `limits` prefixes and suffixes: for each
-/// modifier read, how many lines it has and the tier number of each affix it can be; and the
-/// affix and tier number of the pure modifier of each line split.
-fn read_in(
+/// found among `tables` on a helmet with at most `limits` prefixes and suffixes. The tables
+/// are written by hand, but the lines find their stat in the embedded stats of the game: the
+/// templates of these tests ([`LIFE`], [`ENERGY_SHIELD`], [`RARITY`]) must stay among them.
+fn read_in(tables: &[Table], item_level: u32, texts: &[&str], limits: (u32, u32)) -> ReadIn {
+    let modifiers: Vec<Modifier> = texts.iter().map(|text| modifier(None, &[text])).collect();
+    read_modifiers(tables, item_level, &modifiers, limits, false).0
+}
+
+/// [`read_in`] for `modifiers`, of a `sanctified` item or not, with what the search took.
+fn read_modifiers(
     tables: &[Table],
     item_level: u32,
-    texts: &[&str],
+    modifiers: &[Modifier],
     (prefixes, suffixes): (u32, u32),
-) -> (Vec<(usize, AffixTiers)>, Added) {
-    let modifiers: Vec<Modifier> = texts.iter().map(|text| modifier(None, &[text])).collect();
+    sanctified: bool,
+) -> (ReadIn, Effort) {
     let item = TradeItem {
         language: Language::English,
         base_type: "A helmet",
@@ -530,8 +541,11 @@ fn read_in(
         item_level: Some(item_level),
     };
     let limits = AffixLimits::new(prefixes, suffixes);
-    let (found, _) = trade_tiers_in(tables, &item, &modifiers, limits, false);
-    (summary(&modifiers, &found), added(&modifiers, &found))
+    let (found, effort) = trade_tiers_in(tables, &item, modifiers, limits, sanctified);
+    (
+        (summary(modifiers, &found), added(modifiers, &found)),
+        effort,
+    )
 }
 
 /// A table of one or two lines that rolls on the helmets: its type, its affix, the template
@@ -703,4 +717,136 @@ fn a_line_a_prefix_and_a_suffix_hold_keeps_the_affix_the_room_leaves() {
         split,
         [("38% increased Rarity of Items found".to_owned(), Suffix, 1)]
     );
+}
+
+/// Two pure prefixes of one tier, `21–30`, and their hybrid of two tiers, `10–19` and
+/// `20–29` on each line.
+fn pure_and_hybrid_tables() -> Vec<Table> {
+    read(
+        &[
+            table("Life", "prefix", &[LIFE], &[(1, &[(21, 30)])]),
+            table(
+                "EnergyShield",
+                "prefix",
+                &[ENERGY_SHIELD],
+                &[(1, &[(21, 30)])],
+            ),
+            table(
+                "Hybrid",
+                "prefix",
+                &[ENERGY_SHIELD, LIFE],
+                &[(1, &[(10, 19), (10, 19)]), (20, &[(20, 29), (20, 29)])],
+            ),
+        ]
+        .join("\n"),
+    )
+}
+
+#[test]
+fn two_fractured_lines_are_one_hybrid_whatever_the_room() {
+    use Affix::Prefix;
+    let tables = pure_and_hybrid_tables();
+    let fractured = |text: &str| Modifier {
+        origin: Some(ModifierOrigin::Fractured),
+        ..modifier(None, &[text])
+    };
+    let lines = [
+        fractured("25% increased Energy Shield"),
+        fractured("+25 to maximum Life"),
+    ];
+
+    // An item has one fractured modifier: not two pure ones, even with room for them.
+    let ((read, _), _) = read_modifiers(&tables, 60, &lines, (3, 3), false);
+    assert_eq!(read, [(2, vec![(Prefix, 1)])]);
+    // A fractured line and another aren't the lines of one modifier.
+    let lines = [
+        fractured("25% increased Energy Shield"),
+        modifier(None, &["+25 to maximum Life"]),
+    ];
+    let ((read, _), _) = read_modifiers(&tables, 60, &lines, (3, 3), false);
+    assert_eq!(read, [(1, vec![(Prefix, 1)]), (1, vec![(Prefix, 1)])]);
+}
+
+#[test]
+fn no_line_of_a_sanctified_item_adds_up_two_modifiers() {
+    use Affix::Prefix;
+    let tables = pure_and_hybrid_tables();
+    let lines = [
+        modifier(None, &["25% increased Energy Shield"]),
+        modifier(None, &["+45 to maximum Life"]),
+    ];
+
+    // The life adds up the hybrid and the pure modifier.
+    let ((read, split), _) = read_modifiers(&tables, 60, &lines, (2, 0), false);
+    assert_eq!(read, [(2, vec![(Prefix, 1)])]);
+    assert_eq!(split.len(), 1);
+    // Sanctified, its values can leave their tiers: the life is read by no tier rather than
+    // split, the energy shield alone.
+    let ((read, split), _) = read_modifiers(&tables, 60, &lines, (2, 0), true);
+    assert_eq!(read, [(1, vec![(Prefix, 1)])]);
+    assert_eq!(split, []);
+}
+
+#[test]
+fn the_lines_another_reading_adds_up_in_as_many_modifiers_have_no_tier() {
+    use Affix::Prefix;
+    // A pure life from 1: with the hybrid of tier 1, it adds up to the 25 of the life as
+    // well, two modifiers as the two pure ones.
+    let tables = read(
+        &[
+            table("Life", "prefix", &[LIFE], &[(1, &[(1, 30)])]),
+            table(
+                "EnergyShield",
+                "prefix",
+                &[ENERGY_SHIELD],
+                &[(1, &[(21, 30)])],
+            ),
+            table(
+                "Hybrid",
+                "prefix",
+                &[ENERGY_SHIELD, LIFE],
+                &[(1, &[(20, 29), (20, 29)])],
+            ),
+            table("Rarity", "suffix", &[RARITY], &[(1, &[(10, 20)])]),
+        ]
+        .join("\n"),
+    );
+    assert_eq!(tables.len(), 4);
+    let lines = [
+        "25% increased Energy Shield",
+        "+25 to maximum Life",
+        "15% increased Rarity of Items found",
+    ];
+
+    // Both lines in doubt; the rarity, which no other reading touches, keeps its tier.
+    let (read, split) = read_in(&tables, 60, &lines, (2, 1));
+    assert_eq!(read, [(1, vec![(Affix::Suffix, 1)])]);
+    assert_eq!(split, []);
+    // With one prefix only, the hybrid alone is the only reading.
+    let (read, _) = read_in(&tables, 60, &lines, (1, 1));
+    assert_eq!(
+        read,
+        [(2, vec![(Prefix, 1)]), (1, vec![(Affix::Suffix, 1)])]
+    );
+}
+
+#[test]
+fn the_search_tells_when_the_readings_stop_at_their_bound() {
+    let tables = pure_and_hybrid_tables();
+    let lines = |count: usize| -> Vec<Modifier> {
+        ["25% increased Energy Shield", "+25 to maximum Life"]
+            .iter()
+            .cycle()
+            .take(count)
+            .map(|text| modifier(None, &[text]))
+            .collect()
+    };
+
+    let (_, effort) = read_modifiers(&tables, 60, &lines(2), (3, 3), false);
+    assert_eq!(effort.readings, 2);
+    assert!(!effort.readings_cut());
+    // Each line a hybrid with the one before or after: more readings than the bound.
+    let (_, effort) = read_modifiers(&tables, 60, &lines(24), (3, 3), false);
+    assert_eq!(effort.readings, MAX_READINGS);
+    assert!(effort.readings_cut());
 }

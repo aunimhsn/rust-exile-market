@@ -8,12 +8,13 @@
 //! cargo test --release random_items -- --ignored --nocapture
 //! ```
 //!
-//! The draw is the same at every run (a xorshift generator from a fixed seed). An item has one
-//! to three prefixes and as many suffixes, of other types, every tier its level allows as
-//! likely, every value of a tier as likely. Its lines are written as the in-game trade writes
-//! them: one line per stat, without affix, tier nor range, the values of two modifiers with the
-//! same stat added up. The modifiers of the Genesis tree, of the essences and of the alloys
-//! aren't drawn, nor a modifier one of whose lines no string of the stats writes back.
+//! The draw is the same at every run (a xorshift generator from a fixed seed), and the same for
+//! the ways that differ only by the order of the lines. An item has one to three prefixes and
+//! as many suffixes, of other types, every tier its level allows as likely, every value of a
+//! tier as likely. Its lines are written as the in-game trade writes them: one line per stat,
+//! without affix, tier nor range, the values of two modifiers with the same stat added up. The
+//! modifiers of the Genesis tree, of the essences and of the alloys aren't drawn, nor a modifier
+//! one of whose lines no string of the stats writes back.
 //!
 //! What a real copy does and the draw doesn't: the order of the lines (by stat in the game, in
 //! an order the data don't give: the draw tries the order of the modifiers, and a shuffled
@@ -40,28 +41,57 @@ const BASES: [&str; 14] = [
     "Veridical Chain",
 ];
 
-/// The items drawn on each base, in each way of [`WAYS`].
+/// The items drawn on each base, in each way of [`WAYS`]: 5,600 items a way.
 const ITEMS_PER_BASE: usize = 400;
 
-/// The level of the items: every tier of the tables rolls.
-const ITEM_LEVEL: u32 = 82;
+/// A way to draw the items.
+#[derive(Debug, Clone, Copy)]
+struct Way {
+    /// How many of the modifiers the game marks desecrated.
+    desecrated: Desecrated,
+    /// Whether a modifier marked desecrated is, one time in two, an ordinary modifier the
+    /// desecration revealed, which the game marks as well; a lord's otherwise.
+    revealed: bool,
+    /// Whether the lines are shuffled, rather than in the order of their modifiers.
+    shuffled: bool,
+    /// The level of the items: at 82, every tier of the tables rolls.
+    item_level: u32,
+}
 
-/// The ways the items are drawn: how many of their modifiers are desecrated, and whether their
-/// lines are shuffled.
-const WAYS: [(Desecrated, bool); 4] = [
-    (Desecrated::None, false),
-    (Desecrated::None, true),
-    (Desecrated::Third, false),
-    (Desecrated::All, false),
+const WAYS: [Way; 6] = [
+    Way::new(Desecrated::None, false, false, 82),
+    Way::new(Desecrated::None, false, true, 82),
+    Way::new(Desecrated::Third, false, false, 82),
+    Way::new(Desecrated::All, false, false, 82),
+    // The most tangled: every line may be an ordinary modifier or a lord's.
+    Way::new(Desecrated::All, true, false, 82),
+    // The best tiers above the level of the item.
+    Way::new(Desecrated::None, false, false, 45),
 ];
+
+impl Way {
+    const fn new(desecrated: Desecrated, revealed: bool, shuffled: bool, item_level: u32) -> Self {
+        Self {
+            desecrated,
+            revealed,
+            shuffled,
+            item_level,
+        }
+    }
+}
+
+/// The seed of the draw of the items, and of the draw that shuffles their lines.
+const SEED: u64 = 0x9E37_79B9_7F4A_7C15;
+const SHUFFLE_SEED: u64 = 0xD1B5_4A32_D192_ED03;
 
 /// What the draw gave for each of the [`WAYS`], with the game data of RePoE `75885a0`
 /// (2026-11-10): to record again when the data or the search change, after a look at what
 /// moved. A wrong tier is shown to the player as sure: `other_modifier` is the count to keep
 /// low.
-const RECORDED: [Counts; 4] = [
+const RECORDED: [Counts; 6] = [
     Counts {
         items: 5600,
+        discarded: 0,
         lines: 23920,
         summed_lines: 825,
         right: 21431,
@@ -74,39 +104,68 @@ const RECORDED: [Counts; 4] = [
     },
     Counts {
         items: 5600,
-        lines: 23816,
-        summed_lines: 844,
-        right: 19987,
-        without_tier: 2444,
-        other_tier: 65,
-        other_modifier: 1320,
-        summed_other_modifier: 178,
-        most_readings: 16,
-        most_steps: 1025,
-    },
-    Counts {
-        items: 5600,
-        lines: 22656,
-        summed_lines: 368,
-        right: 21054,
-        without_tier: 847,
-        other_tier: 60,
-        other_modifier: 695,
-        summed_other_modifier: 51,
+        discarded: 0,
+        lines: 23920,
+        summed_lines: 825,
+        right: 20084,
+        without_tier: 2401,
+        other_tier: 73,
+        other_modifier: 1362,
+        summed_other_modifier: 179,
         most_readings: 12,
-        most_steps: 415,
+        most_steps: 761,
     },
     Counts {
         items: 5600,
-        lines: 19506,
-        summed_lines: 10,
-        right: 19426,
-        without_tier: 16,
+        discarded: 0,
+        lines: 22519,
+        summed_lines: 349,
+        right: 20967,
+        without_tier: 811,
+        other_tier: 38,
+        other_modifier: 703,
+        summed_other_modifier: 60,
+        most_readings: 16,
+        most_steps: 456,
+    },
+    Counts {
+        items: 5600,
+        discarded: 0,
+        lines: 19602,
+        summed_lines: 16,
+        right: 19505,
+        without_tier: 38,
         other_tier: 0,
-        other_modifier: 64,
-        summed_other_modifier: 7,
+        other_modifier: 59,
+        summed_other_modifier: 5,
         most_readings: 8,
-        most_steps: 52,
+        most_steps: 58,
+    },
+    Counts {
+        items: 5600,
+        discarded: 0,
+        lines: 21805,
+        summed_lines: 236,
+        right: 20680,
+        without_tier: 529,
+        other_tier: 40,
+        other_modifier: 556,
+        summed_other_modifier: 49,
+        most_readings: 16,
+        most_steps: 451,
+    },
+    Counts {
+        items: 5600,
+        discarded: 0,
+        lines: 23835,
+        summed_lines: 843,
+        right: 21896,
+        without_tier: 1267,
+        other_tier: 24,
+        other_modifier: 648,
+        summed_other_modifier: 165,
+        most_readings: 16,
+        most_steps: 189,
     },
 ];
 
@@ -164,12 +223,13 @@ struct Rolled<'a> {
     tiers: Vec<&'a TableTier>,
 }
 
-/// The modifiers of `tables` an item of [`ITEM_LEVEL`] can roll on `base`, desecrated or not,
+/// The modifiers of `tables` an item of `item_level` can roll on `base`, desecrated or not,
 /// whose lines the stats write back; and the types of those left out for that.
 fn rolled<'a>(
     tables: &'a [Table],
     base: &BaseSpawn,
     desecrated: bool,
+    item_level: u32,
 ) -> (Vec<Rolled<'a>>, Vec<&'a str>) {
     let mut rolled = Vec::new();
     let mut unwritten = Vec::new();
@@ -193,7 +253,7 @@ fn rolled<'a>(
             })
         });
         tiers.reverse();
-        let Some(worst) = tiers.last().filter(|tier| tier.level <= ITEM_LEVEL) else {
+        let Some(worst) = tiers.last().filter(|tier| tier.level <= item_level) else {
             continue;
         };
         let origin = desecrated.then_some(ModifierOrigin::Desecrated);
@@ -333,10 +393,14 @@ impl<'a> DrawnItem<'a> {
         !kind && !clash
     }
 
-    /// Adds `rolled` in its tier `tier`, its values drawn.
-    fn add(&mut self, draw: &mut Draw, rolled: &'a Rolled<'a>, tier: usize) {
-        let origin =
-            (rolled.table.domain == Domain::Desecrated).then_some(ModifierOrigin::Desecrated);
+    /// Adds `rolled` in its tier `tier`, marked `origin`, its values drawn.
+    fn add(
+        &mut self,
+        draw: &mut Draw,
+        rolled: &'a Rolled<'a>,
+        tier: usize,
+        origin: Option<ModifierOrigin>,
+    ) {
         let index = self.modifiers.len();
         let mut lines = Vec::new();
         for (line, ranges) in rolled.table.lines.iter().zip(&rolled.tiers[tier].ranges) {
@@ -401,12 +465,12 @@ impl<'a> DrawnItem<'a> {
 }
 
 /// An item with one to three prefixes and as many suffixes drawn among `ordinary` and
-/// `desecrated`, the share of the second as `share` says.
+/// `desecrated` as `way` says.
 fn drawn<'a>(
     draw: &mut Draw,
     ordinary: &'a [Rolled<'a>],
     desecrated: &'a [Rolled<'a>],
-    share: Desecrated,
+    way: Way,
 ) -> DrawnItem<'a> {
     let mut item = DrawnItem {
         modifiers: Vec::new(),
@@ -414,37 +478,34 @@ fn drawn<'a>(
     };
     for affix in [TableAffix::Prefix, TableAffix::Suffix] {
         for _ in 0..=draw.below(3) {
-            let from_desecrated = match share {
+            let marked = match way.desecrated {
                 Desecrated::None => false,
                 Desecrated::Third => draw.below(3) == 0,
                 Desecrated::All => true,
             };
-            let pool: Vec<&Rolled<'_>> = if from_desecrated {
-                desecrated
-            } else {
-                ordinary
-            }
-            .iter()
-            .filter(|rolled| rolled.table.affix == affix)
-            .collect();
+            let of_a_lord = marked && !(way.revealed && draw.below(2) == 0);
+            let pool: Vec<&Rolled<'_>> = if of_a_lord { desecrated } else { ordinary }
+                .iter()
+                .filter(|rolled| rolled.table.affix == affix)
+                .collect();
             if pool.is_empty() {
                 continue;
             }
+            let origin = marked.then_some(ModifierOrigin::Desecrated);
             // A few tries: a type already on the item is drawn again.
             for _ in 0..20 {
                 let rolled = pool[draw.below(pool.len())];
-                let origin = from_desecrated.then_some(ModifierOrigin::Desecrated);
                 if !item.takes(rolled, origin) {
                     continue;
                 }
                 let allowed = rolled
                     .tiers
                     .iter()
-                    .filter(|tier| tier.level <= ITEM_LEVEL)
+                    .filter(|tier| tier.level <= way.item_level)
                     .count();
                 let first = rolled.tiers.len() - allowed;
                 let tier = first + draw.below(allowed);
-                item.add(draw, rolled, tier);
+                item.add(draw, rolled, tier, origin);
                 break;
             }
         }
@@ -453,9 +514,11 @@ fn drawn<'a>(
 }
 
 /// What the draw counts, over the lines of the items.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 struct Counts {
     items: usize,
+    /// The items drawn again, a sum of theirs written by no string (a line of two signs).
+    discarded: usize,
     lines: usize,
     /// The lines that add up two modifiers or more, among `lines`.
     summed_lines: usize,
@@ -477,21 +540,6 @@ struct Counts {
     most_steps: usize,
 }
 
-impl Counts {
-    const ZERO: Self = Self {
-        items: 0,
-        lines: 0,
-        summed_lines: 0,
-        right: 0,
-        without_tier: 0,
-        other_tier: 0,
-        other_modifier: 0,
-        summed_other_modifier: 0,
-        most_readings: 0,
-        most_steps: 0,
-    };
-}
-
 /// How a line was read against the modifiers it rolled.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Read {
@@ -499,6 +547,17 @@ enum Read {
     WithoutTier,
     OtherTier,
     OtherModifier,
+}
+
+/// Whether a modifier read is the one that rolled.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Same {
+    /// Another modifier: another affix, other lines or other tiers on the base.
+    No,
+    /// The modifier, in another tier than those read.
+    OtherTier,
+    /// The modifier, its tier among those read.
+    Yes,
 }
 
 /// The level and the ranges of each tier, the ranges sorted: the same for the same modifier
@@ -515,9 +574,9 @@ fn shape<'t>(tiers: impl Iterator<Item = (u32, Vec<Range>)> + 't) -> Vec<(u32, V
 }
 
 impl TrueModifier<'_> {
-    /// Whether `read` on the lines `lines` of the item is this modifier (its affix, its lines
-    /// and its tiers on the base), and whether its tier is among those `read` may be.
-    fn is(&self, affix: Affix, read: &ModifierTiers, lines: &[usize]) -> (bool, bool) {
+    /// Whether `read` on the lines `lines` of the item is this modifier: its affix, its lines
+    /// and its tiers on the base, then its tier among those `read` may be.
+    fn is(&self, affix: Affix, read: &ModifierTiers, lines: &[usize]) -> Same {
         let mut own = self.lines.clone();
         own.sort_unstable();
         let tiers = shape(self.rolled.tiers.iter().map(|tier| {
@@ -533,10 +592,14 @@ impl TrueModifier<'_> {
                 .iter()
                 .map(|tier| (tier.level, tier.ranges.clone())),
         );
-        let same =
-            Affix::from(self.rolled.table.affix) == affix && own == lines && tiers == read_tiers;
         let number = u32::try_from(self.tier + 1).expect("a tier number");
-        (same, read.possible().any(|tier| tier.number == number))
+        if Affix::from(self.rolled.table.affix) != affix || own != lines || tiers != read_tiers {
+            Same::No
+        } else if read.possible().any(|tier| tier.number == number) {
+            Same::Yes
+        } else {
+            Same::OtherTier
+        }
     }
 }
 
@@ -547,14 +610,14 @@ fn read_as(item: &DrawnItem<'_>, line: usize, found: &[FoundTiers]) -> Read {
     };
     let whole: Vec<usize> = found.modifiers.clone().collect();
     let added = found.added.as_ref().filter(|added| added.line == line);
-    // Each way to read the line: the modifier of its lines, of either affix in doubt, and
-    // the one added up on it.
     let truth: Vec<&TrueModifier<'_>> = item.lines[line]
         .modifiers
         .iter()
         .map(|&index| &item.modifiers[index])
         .collect();
     let mut best = Read::OtherModifier;
+    // Each way to read the line: the modifier of its lines, of either affix in doubt, and
+    // the one added up on it. A line of three modifiers or more is never read as them.
     for (affix, tiers) in &found.affixes {
         let read = match (truth.as_slice(), added) {
             ([one], None) => vec![one.is(*affix, tiers, &whole)],
@@ -567,18 +630,18 @@ fn read_as(item: &DrawnItem<'_>, line: usize, found: &[FoundTiers]) -> Read {
                     ]
                 };
                 let first = pair(one, other);
-                if first.iter().all(|&(same, _)| same) {
-                    first
-                } else {
+                if first.contains(&Same::No) {
                     pair(other, one)
+                } else {
+                    first
                 }
             }
             _ => continue,
         };
-        if read.iter().all(|&(same, tier)| same && tier) {
+        if read.iter().all(|&same| same == Same::Yes) {
             return Read::Right;
         }
-        if read.iter().all(|&(same, _)| same) {
+        if !read.contains(&Same::No) {
             best = Read::OtherTier;
         }
     }
@@ -586,30 +649,33 @@ fn read_as(item: &DrawnItem<'_>, line: usize, found: &[FoundTiers]) -> Read {
 }
 
 /// The items of one way of the draw, read and counted; with the types left out of the draw.
-fn measure(seed: u64, share: Desecrated, shuffled: bool) -> (Counts, Vec<&'static str>) {
-    let mut draw = Draw(seed);
-    let mut counts = Counts::ZERO;
+fn measure(way: Way) -> (Counts, Vec<&'static str>) {
+    // The lines shuffled by a draw of their own: the same items whatever their order.
+    let mut draw = Draw(SEED);
+    let mut shuffle = Draw(SHUFFLE_SEED);
+    let mut counts = Counts::default();
     let mut left_out = Vec::new();
     for base_type in BASES {
         let base = bases::spawn(Language::English, base_type).expect(base_type);
-        let (ordinary, unwritten) = rolled(&TABLES, base, false);
+        let (ordinary, unwritten) = rolled(&TABLES, base, false, way.item_level);
         left_out.extend(unwritten);
-        let (desecrated, unwritten) = rolled(&TABLES, base, true);
+        let (desecrated, unwritten) = rolled(&TABLES, base, true, way.item_level);
         left_out.extend(unwritten);
         let trade_item = TradeItem {
             language: Language::English,
             base_type,
             base,
-            item_level: Some(ITEM_LEVEL),
+            item_level: Some(way.item_level),
         };
         let mut read = 0;
         while read < ITEMS_PER_BASE {
-            let mut item = drawn(&mut draw, &ordinary, &desecrated, share);
-            if shuffled {
-                item.shuffle(&mut draw);
+            let mut item = drawn(&mut draw, &ordinary, &desecrated, way);
+            if way.shuffled {
+                item.shuffle(&mut shuffle);
             }
-            // A sum no string writes (a line of two signs): another item.
             let Some(modifiers) = item.copied() else {
+                counts.discarded += 1;
+                assert!(counts.discarded < ITEMS_PER_BASE, "{base_type}: {counts:?}");
                 continue;
             };
             read += 1;
@@ -643,12 +709,12 @@ fn measure(seed: u64, share: Desecrated, shuffled: bool) -> (Counts, Vec<&'stati
 #[ignore = "long, run by hand after the game data are generated again: see the module"]
 fn random_items_are_read_within_the_bounds_of_the_search() {
     let mut measured = Vec::new();
-    for (index, (share, shuffled)) in WAYS.into_iter().enumerate() {
-        let seed = 0x9E37_79B9_7F4A_7C15 + u64::try_from(index).expect("an index");
-        let (counts, left_out) = measure(seed, share, shuffled);
-        println!("{share:?} desecrated, shuffled {shuffled}: {counts:#?}");
+    for way in WAYS {
+        let (counts, left_out) = measure(way);
+        println!("{way:?}: {counts:#?}");
         println!("Not drawn, a line no string writes back: {left_out:?}");
-        // Far from the bounds: past them, the lines of an item are left without tier.
+        // Far from the bounds. Past the steps, every line of the item is left without tier;
+        // past the readings, the best of those looked at is kept, and the log says so.
         assert!(counts.most_readings < MAX_READINGS / 4, "{counts:?}");
         assert!(
             counts.most_steps < summed_readings::MAX_STEPS / 4,

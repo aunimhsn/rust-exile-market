@@ -625,6 +625,11 @@ pub fn trade_tiers(
         effort.readings,
         effort.steps
     );
+    if effort.readings_cut() {
+        log::warn!(
+            "Game data, {base_type} copied from the in-game trade: the readings of its lines couldn't all be looked at, the best of the first {MAX_READINGS} kept"
+        );
+    }
     found
 }
 
@@ -636,6 +641,14 @@ struct Effort {
     readings: usize,
     /// The steps of the search of the other readings ([`summed_readings::doubts`]).
     steps: usize,
+}
+
+impl Effort {
+    /// Whether the readings stopped at their bound, some not looked at: the best of those
+    /// looked at is kept, the lines alone first.
+    fn readings_cut(self) -> bool {
+        self.readings >= MAX_READINGS
+    }
 }
 
 /// The item whose lines are read from the in-game trade: the language of its lines, its base
@@ -718,7 +731,7 @@ fn trade_tiers_in(
             room,
             fits_room: key.room,
         };
-        let doubts = summed_readings::doubts(tables, base, item_level, modifiers, &copied, &best);
+        let doubts = summed_readings::doubts(tables, item, modifiers, &copied, &best);
         doubts.outcome.log(base_type);
         effort.steps = doubts.steps;
         room_in_doubt = doubts.other_room;

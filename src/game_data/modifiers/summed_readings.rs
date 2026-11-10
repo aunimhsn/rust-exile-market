@@ -7,12 +7,12 @@
 
 use super::{
     Affix, AffixSet, BaseSpawn, Candidate, Copied, CopiedLine, CopiedTier, ROUNDING, Range, Room,
-    Table, first_of_its_modifier, holds, tiers_on_base,
+    Table, TradeItem, first_of_its_modifier, holds, tiers_on_base,
 };
 use crate::item::{Modifier, ModifierOrigin};
 
 /// The most steps the search of the other readings takes: some fifty on a random rare item, a
-/// few hundred on the most tangled ones (1,025 at most on the items drawn at random by
+/// few hundred on the most tangled ones (761 at most on the items drawn at random by
 /// `tests/random_items.rs`, 2026-11-10; up to 2,734 on the draws of 2026-10-30, whose code
 /// wasn't kept).
 pub(super) const MAX_STEPS: usize = 50_000;
@@ -105,7 +105,7 @@ struct Placement<'a> {
 
 /// The indexes among `modifiers` of the lines that another reading of the item reads otherwise
 /// than the `best` one, where the best one splits a line, or with a line adding up several
-/// modifiers: on `base`, among the tiers `item_level` allows, `copied` giving the
+/// modifiers: on the base of `item`, among the tiers its level allows, `copied` giving the
 /// lines of each modifier (those of [`super::trade_tiers`]).
 ///
 /// Another reading covers the lines the best one reads, each within the sum of the ranges of its
@@ -127,20 +127,18 @@ struct Placement<'a> {
 /// a modifier of a split line, the neighbouring tier the best one gives it too, is the best one.
 pub(super) fn doubts(
     tables: &[Table],
-    base: &BaseSpawn,
-    item_level: Option<u32>,
+    item: &TradeItem<'_>,
     modifiers: &[Modifier],
     copied: &[Option<Copied<'_>>],
     best: &Best<'_>,
 ) -> Doubts {
-    let item = (base, item_level);
     doubts_within(tables, item, modifiers, copied, best, MAX_STEPS)
 }
 
 /// [`doubts`], in at most `max_steps` steps.
 fn doubts_within(
     tables: &[Table],
-    (base, item_level): (&BaseSpawn, Option<u32>),
+    item: &TradeItem<'_>,
     modifiers: &[Modifier],
     copied: &[Option<Copied<'_>>],
     best: &Best<'_>,
@@ -174,7 +172,7 @@ fn doubts_within(
             });
         }
     }
-    let placements = placements(tables, base, item_level, &lines, &values);
+    let placements = placements(tables, item.base, item.item_level, &lines, &values);
     let ground = Ground::new(
         &lines,
         &values,

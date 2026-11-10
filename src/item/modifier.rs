@@ -616,6 +616,16 @@ mod tests {
             "augmentent le nombre maximum de totems invoqués de 2.5."
         );
         assert_eq!(line.rolls, [roll(2.5, None)]);
+        let line = StatLine::parse("de 41.");
+        assert_eq!(
+            (line.text.as_str(), line.rolls),
+            ("de 41.", vec![roll(41.0, None)])
+        );
+        let line = StatLine::parse("de 2.5(2-3).");
+        assert_eq!(
+            (line.text.as_str(), line.rolls),
+            ("de 2.5.", vec![roll(2.5, Some((2.0, 3.0)))])
+        );
     }
 
     #[test]

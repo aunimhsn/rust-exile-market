@@ -780,9 +780,9 @@ mod tests {
     /// The parser reads the numbers of a line into its rolls (`StatLine::parse`), and
     /// [`numbers`] reads them again in its text for the strings and the values the stats
     /// count: the ranges of a tier are put on the rolls by their place, so both must find
-    /// the same numbers in the same order. Their rules differ a little (the parser takes
-    /// any point after a digit, [`numbers`] one between two digits only): no line of the
-    /// copied items nor string of the stats tells them apart.
+    /// the same numbers in the same order. Both take a point into a number only between two
+    /// digits: the parser used to take the point that ends a sentence too, and read no
+    /// value in `de 2.5.`, which a French string of the stats can write.
     #[test]
     fn the_parser_and_the_strings_read_the_same_numbers() {
         let same = |line: &str| {
