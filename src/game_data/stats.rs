@@ -455,6 +455,53 @@ mod tests {
         );
     }
 
+    /// When two stats write the same string, each with an id in the group of the line, the
+    /// first of the file is taken (`first_with_id` in `lines.rs`): the keystones a unique
+    /// grants, also written by one stat of that unique. A new string would change in silence
+    /// the id a line is searched with.
+    #[test]
+    fn the_strings_two_stats_write_in_one_group() {
+        let shared = |language| {
+            let stats = Stats::of(language);
+            let mut shared: Vec<&str> = stats
+                .by_string
+                .iter()
+                .filter(|(_, entries)| {
+                    let stats: Vec<&Stat> = entries
+                        .iter()
+                        .filter_map(|&(stat, _)| stats.list.get(stat))
+                        .collect();
+                    stats.iter().enumerate().any(|(index, stat)| {
+                        stats.iter().skip(index + 1).any(|other| {
+                            !std::ptr::eq(*stat, *other)
+                                && stat.ids.keys().any(|group| other.ids.contains_key(group))
+                        })
+                    })
+                })
+                .map(|(string, _)| string.as_str())
+                .collect();
+            shared.sort_unstable();
+            shared
+        };
+
+        // Checked on 2026-11-10: a new one is to look at before adding it here.
+        assert_eq!(
+            shared(Language::English),
+            [
+                "Blood Magic",
+                "Eldritch Battery",
+                "Giant's Blood",
+                "Glancing Blows",
+                "Iron Reflexes",
+                "Pain Attunement",
+                "Unwavering Stance",
+                "Vaal Pact",
+                "Zealot's Oath",
+            ]
+        );
+        assert_eq!(shared(Language::French), [] as [&str; 0]);
+    }
+
     /// A desecrated or a fractured line is searched by its explicit id ([`TradeGroup::of`]):
     /// without one, it couldn't be searched at all.
     #[test]

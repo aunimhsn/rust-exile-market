@@ -24,6 +24,8 @@ mod labels;
 mod modifier;
 mod parser;
 #[cfg(test)]
+pub(crate) mod test_items;
+#[cfg(test)]
 pub(crate) mod trade_copy;
 mod waystone;
 mod weapon;

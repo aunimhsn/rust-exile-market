@@ -370,7 +370,9 @@ pub fn equipment_strings(language: Language) -> Vec<(&'static str, Option<&'stat
 mod tests {
     use super::*;
     use crate::game_data::trade_stats;
-    use crate::item::{Affix, CopiedItem, Item, ModifierKind, ModifierOrigin, StatLine};
+    use crate::item::{
+        Affix, CopiedItem, Item, ModifierKind, ModifierOrigin, StatLine, test_items,
+    };
 
     fn modifier(kind: ModifierKind, origin: Option<ModifierOrigin>, lines: &[&str]) -> Modifier {
         Modifier {
@@ -775,52 +777,58 @@ mod tests {
         );
     }
 
-    macro_rules! test_item {
-        ($file:literal) => {
-            ($file, include_str!(concat!("../item/test-items/", $file)))
+    /// The parser reads the numbers of a line into its rolls (`StatLine::parse`), and
+    /// [`numbers`] reads them again in its text for the strings and the values the stats
+    /// count: the ranges of a tier are put on the rolls by their place, so both must find
+    /// the same numbers in the same order. Their rules differ a little (the parser takes
+    /// any point after a digit, [`numbers`] one between two digits only): no line of the
+    /// copied items nor string of the stats tells them apart.
+    #[test]
+    fn the_parser_and_the_strings_read_the_same_numbers() {
+        let same = |line: &str| {
+            let parsed = StatLine::parse(line);
+            let rolls: Vec<f64> = parsed.rolls.iter().map(|roll| roll.value).collect();
+            let read: Vec<f64> = numbers(&parsed.text).iter().map(Number::value).collect();
+            assert_eq!(read, rolls, "{line}");
         };
+        let mut lines = 0;
+        for (_, text) in test_items::ALL {
+            let item = Item::parse(&CopiedItem::from_text(text).unwrap()).unwrap();
+            for line in item.modifiers().iter().flat_map(|modifier| &modifier.lines) {
+                let rolls: Vec<f64> = line.rolls.iter().map(|roll| roll.value).collect();
+                let read: Vec<f64> = numbers(&line.text).iter().map(Number::value).collect();
+                assert_eq!(read, rolls, "{}", line.text);
+                lines += 1;
+            }
+        }
+        assert!(lines >= 330, "{lines} lines");
+        // Every string of the stats, a number in place of each `#`: a whole one, a decimal
+        // one, and one the advanced copy writes with its range.
+        let mut strings = 0;
+        for language in [Language::English, Language::French] {
+            for stat in Stats::of(language).all() {
+                for matcher in &stat.matchers {
+                    for number in ["7", "2.5", "7(5-10)", "2.5(1.5-3.5)"] {
+                        matcher.string.replace('#', number).lines().for_each(same);
+                    }
+                    strings += 1;
+                }
+            }
+        }
+        assert!(strings >= 9_000, "{strings} strings");
     }
-
-    /// Copied items of the parser tests (`src/item/test-items/`).
-    const TEST_ITEMS: [(&str, &str); 25] = [
-        test_item!("en-currency-uncut-gem.txt"),
-        test_item!("en-magic-mace.txt"),
-        test_item!("en-normal-helmet.txt"),
-        test_item!("en-owner-trade-rare-bow-mirrored.txt"),
-        test_item!("en-owner-trade-rare-helmet-fractured.txt"),
-        test_item!("en-owner-trade-unique-belt-mutated.txt"),
-        test_item!("en-owner-unique-mace-fixed-values.txt"),
-        test_item!("en-plain-currency-large-stack.txt"),
-        test_item!("en-plain-magic-jewel-unidentified.txt"),
-        test_item!("en-plain-rare-ring.txt"),
-        test_item!("en-plain-rare-ring-unidentified.txt"),
-        test_item!("en-plain-unique-jewel.txt"),
-        test_item!("en-rare-bow-fractured.txt"),
-        test_item!("en-rare-crossbow-all-modifiers.txt"),
-        test_item!("en-rare-wand-unidentified.txt"),
-        test_item!("en-unique-focus.txt"),
-        test_item!("fr-currency-stack.txt"),
-        test_item!("fr-normal-exceptional-shield.txt"),
-        test_item!("fr-rare-body-armour.txt"),
-        test_item!("fr-rare-staff.txt"),
-        test_item!("fr-trade-rare-bow-mirrored.txt"),
-        test_item!("fr-trade-rare-helmet-fractured.txt"),
-        test_item!("fr-trade-unique-belt-mutated.txt"),
-        test_item!("fr-unique-crossbow.txt"),
-        test_item!("fr-unique-mace-fixed-values.txt"),
-    ];
 
     /// The lines the game data doesn't know yet: the French data of Exiled Exchange 2 writes
     /// the notable with its English name, `Attribue Paragon` (step 21).
     const UNKNOWN_LINES: [&str; 1] = ["Attribue Parangon"];
 
-    /// Every modifier line of the copied items of the parser tests finds its stat, and an
+    /// Every modifier line of the copied items (`src/item/test-items/`) finds its stat, and an
     /// id in its group, but the [`UNKNOWN_LINES`].
     #[test]
     fn every_line_of_the_copied_items_finds_its_stat() {
         let mut missing = Vec::new();
         let mut found = 0;
-        for (name, text) in TEST_ITEMS {
+        for (name, text) in test_items::ALL {
             let item = Item::parse(&CopiedItem::from_text(text).unwrap()).unwrap();
             for modifier in item.modifiers() {
                 let group = TradeGroup::of(modifier);
@@ -840,6 +848,6 @@ mod tests {
         }
 
         assert!(missing.is_empty(), "{missing:#?}");
-        assert!(found >= 125, "{found} lines");
+        assert!(found >= 325, "{found} lines");
     }
 }
