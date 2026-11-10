@@ -716,7 +716,7 @@ mod tests {
 
     /// An event of the hotkey of `keys`, in `state`.
     fn event(keys: &str, state: HotKeyState) -> GlobalHotKeyEvent {
-        let keys: Shortcut = keys.parse().unwrap();
+        let keys: Shortcut = keys.parse().expect("keys the hotkey can have");
         GlobalHotKeyEvent {
             id: keys.hotkey().id(),
             state,

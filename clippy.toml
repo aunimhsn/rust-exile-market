@@ -10,3 +10,7 @@ disallowed-methods = [
 
 # The names written in the doc comments that aren't code (the default list kept with "..").
 doc-valid-idents = ["RePoE", "XWayland", "XTest", ".."]
+
+# `unwrap_used` is on for the workspace (Cargo.toml): a test may unwrap, its failure is the
+# message.
+allow-unwrap-in-tests = true
