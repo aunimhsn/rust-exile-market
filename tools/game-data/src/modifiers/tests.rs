@@ -537,13 +537,15 @@ fn a_modifier_of_a_currency_not_listed_and_the_other_domains_are_noted() {
 
     // None of them rolls.
     assert!(grouped.is_empty());
+    // The two sections whole, the last of the report: nothing else is noted.
     let text = report.to_markdown("a commit");
     assert!(
-        text.contains("don't list, left out\n\n- `AlloyNewOne1`\n- `EssenceNewOne1`\n"),
-        "{text}"
-    );
-    assert!(
-        text.contains("doesn't read, left out\n\n- `delve: 1`\n- `heist: 2`\n"),
+        text.ends_with(
+            "\n## Modifiers of a currency that ESSENCES and ALLOYS don't list, left out\n\n\
+             - `AlloyNewOne1`\n- `EssenceNewOne1`\n\
+             \n## Prefixes and suffixes of a domain the application doesn't read, left out\n\n\
+             - `delve: 1`\n- `heist: 2`\n"
+        ),
         "{text}"
     );
 }

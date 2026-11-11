@@ -347,7 +347,7 @@ fn a_string_of_the_game_becomes_the_template_of_exiled_exchange_2() {
 }
 
 #[test]
-fn a_value_per_minute_is_shown_per_second() {
+fn a_value_is_shown_as_the_handlers_of_its_stat_convert_it() {
     let per_second = shown_value(1386, &["per_minute_to_per_second".to_owned()]).expect("scaled");
     let permyriad = shown_value(
         -790,
@@ -357,6 +357,10 @@ fn a_value_per_minute_is_shown_per_second() {
 
     assert_eq!(serde_json::to_string(&per_second).expect("written"), "23.1");
     assert_eq!(serde_json::to_string(&permyriad).expect("written"), "-7.9");
+}
+
+#[test]
+fn an_unknown_handler_stops_the_generator() {
     assert!(shown_value(1, &["new_handler".to_owned()]).is_err());
 }
 
