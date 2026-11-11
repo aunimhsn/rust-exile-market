@@ -37,7 +37,7 @@ In the area mode:
 When the prompt says the branch is a refactoring (no change of behavior), in the branch mode:
 
 1. Check the moves. For each commit that moves code, run `git show --color-moved=dimmed-zebra --color-moved-ws=allow-indentation-change <commit>`: a moved block is dimmed, so read only what isn't. Paths, `use` lines, visibility and the line breaks `rustfmt` puts again (the same tokens) may change in a move; anything else is a finding.
-2. Check that the behavior didn't change. An assertion of a test changed or removed is a finding, unless a commit message gives the reason. The counts of the draw (`RECORDED` in `src/game_data/modifiers/tests/random_items.rs`) and the generated game data (`assets/game-data/`) stay the same.
+2. Check that the behavior didn't change. An assertion of a test changed or removed is a finding, unless a commit message gives the reason. The counts of the draw (`RECORDED` in `src/game_data/modifiers/tests/random_items.rs`) and the generated game data (`assets/game-data/`) stay the same. A commit of its own named as a small fix (`fix(…)`, the last rule of the Refactoring section of `docs/code-quality.md`) is the exception: review it as a change of behavior, every line it can read differently and its test, which must fail without it.
 3. Review each improvement against `docs/code-quality.md`, the names first: each name that doesn't say what its thing is for, with a better one.
 4. Review the files the branch touches as a whole, not only their diff: what `docs/code-quality.md` would still improve there belongs to the step.
 5. Leave out what the rules don't ask for: a pattern for its own sake, a rename of taste.
