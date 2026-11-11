@@ -6,10 +6,10 @@
 //! line alone where a hybrid holds it too (`30% increased Energy Shield` and `+30 to maximum
 //! Life` of a helmet: two pure modifiers, or their hybrid).
 
+use super::base_tiers::ItemTables;
 use super::best_reading::BestReading;
-use super::candidates::{Candidate, TradeItem};
+use super::candidates::Candidate;
 use super::copied::{Copied, CopiedLine};
-use super::tables::Table;
 use crate::item::{Affix, Modifier, ModifierOrigin, Range};
 use comparison::Ground;
 use placements::placements;
@@ -83,8 +83,8 @@ struct Shown {
 }
 
 /// The indexes among `modifiers` of the lines that another reading of the item reads otherwise
-/// than the `best` one, and that it leaves in doubt: on the base of `item`, among the tiers its
-/// level allows, `copied` giving the lines of each modifier (those of [`super::trade_tiers`]).
+/// than the `best` one, and that it leaves in doubt: among `tables`, `copied` giving the lines
+/// of each modifier (those of [`super::trade_tiers`]).
 ///
 /// Another reading reads the lines the best one reads, and maybe lines it leaves without tier,
 /// each within the sum of the ranges of its modifiers, in the room of the item, as many
@@ -122,19 +122,17 @@ struct Shown {
 /// above holds for it: once another reading fits, a line is in doubt as soon as one of them
 /// reads it otherwise, whatever it makes of the others.
 pub(super) fn doubts(
-    tables: &[Table],
-    item: &TradeItem<'_>,
+    tables: &ItemTables<'_>,
     modifiers: &[Modifier],
     copied: &[Option<Copied<'_>>],
     best: &BestReading<'_>,
 ) -> Doubts {
-    doubts_within(tables, item, modifiers, copied, best, MAX_STEPS)
+    doubts_within(tables, modifiers, copied, best, MAX_STEPS)
 }
 
 /// [`doubts`], in at most `max_steps` steps.
 fn doubts_within(
-    tables: &[Table],
-    item: &TradeItem<'_>,
+    tables: &ItemTables<'_>,
     modifiers: &[Modifier],
     copied: &[Option<Copied<'_>>],
     best: &BestReading<'_>,
@@ -165,7 +163,7 @@ fn doubts_within(
             });
         }
     }
-    let placements = placements(tables, item.base, item.item_level, &lines, &values);
+    let placements = placements(tables, &lines, &values);
     let ground = Ground::new(
         &lines,
         &values,

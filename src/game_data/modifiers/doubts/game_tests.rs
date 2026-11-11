@@ -6,6 +6,7 @@ use super::*;
 use crate::game_data::bases;
 use crate::game_data::lines::modifier_stats;
 use crate::game_data::modifiers::best_reading::{Room, best_reading};
+use crate::game_data::modifiers::candidates::candidates;
 use crate::game_data::modifiers::tables::TABLES;
 use crate::item::{ModifierKind, StatLine};
 use crate::language::Language;
@@ -40,9 +41,12 @@ fn doubts_of(
         .iter()
         .map(|modifier| Copied::of(modifier, &modifier_stats(Language::English, modifier, None)))
         .collect();
-    let base = bases::spawn(Language::English, base_type).expect("a base");
-    let candidates =
-        super::super::candidates::candidates(&TABLES, &modifiers, &copied, base, Some(82));
+    let tables = ItemTables {
+        all: &TABLES,
+        base: bases::spawn(Language::English, base_type).expect("a base"),
+        item_level: Some(82),
+    };
+    let candidates = candidates(&tables, &modifiers, &copied);
     let room = Room {
         prefixes: 3,
         suffixes: 3,
@@ -52,12 +56,7 @@ fn doubts_of(
         best.room = room;
         best.fits_room = fits_room;
     }
-    let item = TradeItem {
-        language: Language::English,
-        base,
-        item_level: Some(82),
-    };
-    doubts_within(&TABLES, &item, &modifiers, &copied, &best, max_steps)
+    doubts_within(&tables, &modifiers, &copied, &best, max_steps)
 }
 
 /// The lines of a bow with three prefixes, read one way only.

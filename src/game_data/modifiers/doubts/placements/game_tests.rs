@@ -43,7 +43,12 @@ fn only_the_tiers_the_item_level_allows_are_placed() {
     let base = bases::spawn(Language::English, "Warmonger Bow").expect("a base");
     // The pure T1 `170–179` needs the item level 82.
     let pure_t1 = |item_level| {
-        placements(&TABLES, base, Some(item_level), &lines, &[175.0])
+        let tables = ItemTables {
+            all: &TABLES,
+            base,
+            item_level: Some(item_level),
+        };
+        placements(&tables, &lines, &[175.0])
             .iter()
             .any(|placement| placement.shown.ranges == [range(170.0, 179.0)])
     };

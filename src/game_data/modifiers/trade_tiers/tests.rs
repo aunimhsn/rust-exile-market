@@ -7,7 +7,7 @@ use crate::game_data::modifiers::best_reading::MAX_READINGS;
 use crate::game_data::modifiers::fixtures::{
     Added, AffixTiers, added, equipment, modifier, summary,
 };
-use crate::game_data::modifiers::tables::read;
+use crate::game_data::modifiers::tables::{Table, read};
 
 /// What [`read_in`] gives: for each modifier read, how many lines it has and the tier number
 /// of each affix it can be; and the text of each line split with the affix and tier number of
@@ -30,13 +30,13 @@ fn read_modifiers(
     modifiers: &[Modifier],
     (prefixes, suffixes): (u32, u32),
 ) -> (ReadIn, Effort) {
-    let item = TradeItem {
-        language: Language::English,
+    let tables = ItemTables {
+        all: tables,
         base: &equipment(&["helmet"]),
         item_level: Some(item_level),
     };
     let limits = AffixLimits::new(prefixes, suffixes);
-    let (found, effort) = trade_tiers_in(tables, &item, modifiers, limits);
+    let (found, effort) = trade_tiers_in(&tables, Language::English, modifiers, limits);
     (
         (summary(modifiers, &found), added(modifiers, &found)),
         effort,

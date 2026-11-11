@@ -1,23 +1,13 @@
 //! The candidates of the reading of an item copied from the in-game trade: each line, and each
-//! run of consecutive lines, that a modifier of the tables holds, or that adds up two; and the
-//! item they are read on (`TradeItem`), which the files after this one read.
+//! run of consecutive lines, that a modifier of the tables holds, or that adds up two.
 
 use super::ModifierTiers;
+use super::base_tiers::ItemTables;
 use super::copied::{Copied, CopiedTier};
 use super::lookup::{Tie, find};
 use super::split_lines::{AddedTiers, splits};
 use super::tables::{Table, TableAffix};
-use crate::game_data::bases::BaseSpawn;
 use crate::item::{Affix, Modifier, ModifierOrigin};
-use crate::language::Language;
-
-/// The item whose lines are read from the in-game trade: the language of its lines, its base
-/// and its level.
-pub(super) struct TradeItem<'a> {
-    pub(super) language: Language,
-    pub(super) base: &'a BaseSpawn,
-    pub(super) item_level: Option<u32>,
-}
 
 /// Consecutive modifiers of an item copied from the in-game trade read as one, and the affixes
 /// whose tables hold their values; or one of these lines split into two modifiers.
@@ -67,21 +57,18 @@ fn most_lines(tables: &[Table]) -> usize {
         .unwrap_or(1)
 }
 
-/// Every modifier or run of modifiers among `modifiers` whose values those of `tables` on `base`
-/// hold, the tier the worst among those `item_level` allows, `copied` giving the lines
-/// of each modifier to read (none for a modifier that isn't, or whose lines have no stat of the
-/// game data): one modifier, or up to as many as the lines of a hybrid, of the same origin;
-/// then each way one of their lines adds up two modifiers ([`splits`]). The shorter first at
-/// each start.
+/// Every modifier or run of modifiers among `modifiers` whose values `tables` hold, the tier
+/// the worst among those the level of the item allows, `copied` giving the lines of each
+/// modifier to read (none for a modifier that isn't, or whose lines have no stat of the game
+/// data): one modifier, or up to as many as the lines of a hybrid, of the same origin; then
+/// each way one of their lines adds up two modifiers ([`splits`]). The shorter first at each
+/// start.
 pub(super) fn candidates(
-    tables: &[Table],
+    tables: &ItemTables<'_>,
     modifiers: &[Modifier],
     copied: &[Option<Copied<'_>>],
-    base: &BaseSpawn,
-    item_level: Option<u32>,
 ) -> Vec<Candidate> {
-    let tie = Tie::Worst { item_level };
-    let most_lines = most_lines(tables);
+    let most_lines = most_lines(tables.all);
     let mut candidates = Vec::new();
     for (start, first) in modifiers.iter().enumerate() {
         let mut lines = Vec::new();
@@ -106,7 +93,7 @@ pub(super) fn candidates(
             ]
             .into_iter()
             .filter_map(|(affix, table_affix)| {
-                Some((affix, find(tables, table_affix, base, &joined, tie)?))
+                Some((affix, find(tables, table_affix, &joined, Tie::Worst)?))
             })
             .collect();
             let fractured = first.origin == Some(ModifierOrigin::Fractured);
@@ -123,7 +110,7 @@ pub(super) fn candidates(
                 if owners.iter().filter(|&&other| other == owner).count() != 1 {
                     continue;
                 }
-                for split in splits(tables, base, &joined, (summed, owner), item_level) {
+                for split in splits(tables, &joined, (summed, owner)) {
                     candidates.push(Candidate {
                         modifiers: start..end,
                         fractured,

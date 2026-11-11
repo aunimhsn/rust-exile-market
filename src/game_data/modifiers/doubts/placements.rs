@@ -2,8 +2,7 @@
 //! the lines it can sit on, without those whose values no sum can hold.
 
 use super::{Line, Shown};
-use crate::game_data::bases::BaseSpawn;
-use crate::game_data::modifiers::base_tiers::tiers_on_base;
+use crate::game_data::modifiers::base_tiers::ItemTables;
 use crate::game_data::modifiers::copied::{Copied, CopiedTier, ROUNDING};
 use crate::game_data::modifiers::tables::{Table, first_of_its_modifier};
 use crate::item::{ModifierOrigin, Range};
@@ -20,19 +19,16 @@ pub(super) struct Placement<'a> {
     pub(super) ranges: Vec<(usize, Range)>,
 }
 
-/// Every tier of every modifier of `tables` on `base`, among those `item_level`
-/// allows, whose lines are among `lines`, of one origin; without a tier that can't hold the
-/// `values` whatever adds up with it.
+/// Every tier of every modifier of `tables`, among those the level of the item allows, whose
+/// lines are among `lines`, of one origin; without a tier that can't hold the `values`
+/// whatever adds up with it.
 pub(super) fn placements<'a>(
-    tables: &'a [Table],
-    base: &BaseSpawn,
-    item_level: Option<u32>,
+    tables: &ItemTables<'a>,
     lines: &[Line<'a>],
     values: &[f64],
 ) -> Vec<Placement<'a>> {
-    let allowed = |level: u32| item_level.is_none_or(|item_level| level <= item_level);
     let mut placements = Vec::new();
-    for (index, table) in tables.iter().enumerate() {
+    for (index, table) in tables.all.iter().enumerate() {
         for mapped in mappings(table, lines) {
             // The lines of a mapping are of one origin.
             let origin = mapped
@@ -55,7 +51,7 @@ pub(super) fn placements<'a>(
             let Some(order) = copied.order(&table.lines) else {
                 continue;
             };
-            if !first_of_its_modifier(tables, index) {
+            if !first_of_its_modifier(tables.all, index) {
                 continue;
             }
             // The value of a line without number is that of its stat: divided, it would differ
@@ -71,7 +67,7 @@ pub(super) fn placements<'a>(
             if divided {
                 continue;
             }
-            let Some(tiers) = tiers_on_base(tables, table, base, &order, &copied) else {
+            let Some(tiers) = tables.tiers_of(table, &order, &copied) else {
                 continue;
             };
             let indexes: Vec<usize> = mapped
@@ -87,7 +83,7 @@ pub(super) fn placements<'a>(
             modifiers.dedup();
             let fractured = origin == Some(ModifierOrigin::Fractured);
             for tier in &tiers {
-                if !allowed(tier.level) || tier.ranges.len() != indexes.len() {
+                if !tables.allows(tier) || tier.ranges.len() != indexes.len() {
                     continue;
                 }
                 placements.push(Placement {

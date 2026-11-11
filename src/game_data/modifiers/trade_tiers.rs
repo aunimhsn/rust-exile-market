@@ -3,13 +3,12 @@
 //! and how the search ended.
 
 use super::ModifierTiers;
+use super::base_tiers::ItemTables;
 use super::best_reading::{MAX_READINGS, Room, best_reading};
-use super::candidates::{AffixSet, Candidate, TradeItem, candidates};
+use super::candidates::{AffixSet, Candidate, candidates};
 use super::copied::Copied;
 use super::doubts::{self, Doubts, Outcome};
 use super::split_lines::AddedTiers;
-use super::tables::{TABLES, Table};
-use crate::game_data::bases;
 use crate::game_data::lines::modifier_stats;
 use crate::item::{Affix, Modifier, ModifierKind, ModifierOrigin};
 use crate::language::Language;
@@ -122,15 +121,10 @@ pub(super) fn trade_tiers(
     if sanctified {
         return Vec::new();
     }
-    let Some(base) = bases::spawn(language, base_type) else {
+    let Some(tables) = ItemTables::of_game(language, base_type, item_level) else {
         return Vec::new();
     };
-    let item = TradeItem {
-        language,
-        base,
-        item_level,
-    };
-    let (found, effort) = trade_tiers_in(&TABLES, &item, modifiers, limits);
+    let (found, effort) = trade_tiers_in(&tables, language, modifiers, limits);
     log::debug!(
         "Game data, {base_type} copied from the in-game trade: read in {} readings and {} steps",
         effort.readings,
@@ -231,21 +225,17 @@ fn lines_to_read(language: Language, modifiers: &[Modifier]) -> Vec<Option<Copie
         .collect()
 }
 
-/// [`trade_tiers`] among `tables`: those of the game, or those of a test, so that the search
-/// is tested on tables a patch of the game doesn't change; with what the search took.
+/// [`trade_tiers`] among `tables`, for lines written in `language`: those of the game, or
+/// those of a test, so that the search is tested on tables a patch of the game doesn't change;
+/// with what the search took.
 fn trade_tiers_in(
-    tables: &[Table],
-    item: &TradeItem<'_>,
+    tables: &ItemTables<'_>,
+    language: Language,
     modifiers: &[Modifier],
     limits: AffixLimits,
 ) -> (Vec<FoundTiers>, Effort) {
-    let &TradeItem {
-        language,
-        base,
-        item_level,
-    } = item;
     let copied = lines_to_read(language, modifiers);
-    let candidates = candidates(tables, modifiers, &copied, base, item_level);
+    let candidates = candidates(tables, modifiers, &copied);
     let known = |affix| {
         modifiers
             .iter()
@@ -275,7 +265,7 @@ fn trade_tiers_in(
         };
         return (Vec::new(), effort);
     };
-    let doubts = doubts::doubts(tables, item, modifiers, &copied, &best);
+    let doubts = doubts::doubts(tables, modifiers, &copied, &best);
     let effort = Effort {
         readings: best.readings,
         steps: doubts.steps,
