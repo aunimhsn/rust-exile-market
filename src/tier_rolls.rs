@@ -188,72 +188,13 @@ impl Written {
     fn rolls(self, modifier: &Modifier, found: Option<&Found>) -> Option<ModifierRolls> {
         match self {
             // Its copied ranges, whatever its base; the currency that adds it, from the tables.
-            Self::RangesWithoutTier => Some(ModifierRolls {
-                lines: copied_rolls(modifier).collect(),
-                hides_number: true,
-                currency: found.and_then(|found| found.tiers.currency),
-            }),
-            Self::Tier => {
-                let found = found?;
-                let single = found.tiers.single();
-                if single && modifier.tier != Some(1) {
-                    // The game knows more tiers than the data, e.g. after a patch: the tier
-                    // the copy writes is kept.
-                    log::warn!(
-                        "Game data, one tier only for a modifier copied as tier {:?}: {}",
-                        modifier.tier,
-                        modifier.lines.first().map_or("", |line| line.text.as_str())
-                    );
-                }
-                let over = Over {
-                    tiers: &found.tiers.tiers,
-                    tells_tiers: !single,
-                    sum: None,
-                };
-                Some(ModifierRolls {
-                    lines: found.rolls_over(modifier, &over),
-                    hides_number: single && modifier.tier == Some(1),
-                    currency: None,
-                })
-            }
-            // A fixed value without tier: only of a modifier whose tier the game doesn't write
-            // (the Genesis tree, an essence, an alloy), over that tier, as a line of the in-game
-            // trade read in it, a tier of fixed values too (not a value of a modifier whose tier
-            // the game writes, nor one that falls in a tier of the tree that rolls, `19–22`).
-            Self::FixedWithoutTier => {
-                let found = found?;
-                let unwritten = |tier: &&Tier| {
-                    found.tiers.tier_unwritten
-                        && tier.ranges.iter().all(|range| range.is_one_value())
-                };
-                let Some(tier) = found.tiers.tier().filter(unwritten) else {
-                    return Some(ModifierRolls::default());
-                };
-                let over = Over {
-                    tiers: std::slice::from_ref(tier),
-                    tells_tiers: false,
-                    sum: None,
-                };
-                Some(ModifierRolls {
-                    lines: found.rolls_over(modifier, &over),
-                    hides_number: true,
-                    currency: found.tiers.currency,
-                })
-            }
-            // The hybrid of a split line of one tier only too: its other lines tell no tiers.
-            Self::Split { line } => {
-                let found = found?;
-                let over = Over {
-                    tiers: &found.tiers.tiers,
-                    tells_tiers: !found.tiers.single(),
-                    sum: Some(line),
-                };
-                Some(ModifierRolls {
-                    lines: found.rolls_over(modifier, &over),
-                    hides_number: false,
-                    currency: None,
-                })
-            }
+            Self::RangesWithoutTier => Some(ModifierRolls::over_copied_ranges(
+                modifier,
+                found.and_then(|found| found.tiers.currency),
+            )),
+            Self::Tier => Some(ModifierRolls::over_every_tier(modifier, found?)),
+            Self::FixedWithoutTier => Some(ModifierRolls::over_fixed_tier(modifier, found?)),
+            Self::Split { line } => Some(ModifierRolls::over_hybrid_tiers(modifier, found?, line)),
         }
     }
 }
@@ -267,6 +208,81 @@ struct ModifierRolls {
     hides_number: bool,
     /// The currency that adds it, an essence or an alloy, written without tier.
     currency: Option<Currency>,
+}
+
+impl ModifierRolls {
+    /// The lines of a modifier written without tier, over the ranges the copy writes, added by
+    /// `currency` if any.
+    fn over_copied_ranges(modifier: &Modifier, currency: Option<Currency>) -> Self {
+        Self {
+            lines: copied_rolls(modifier).collect(),
+            hides_number: true,
+            currency,
+        }
+    }
+
+    /// The lines of a modifier written with its tier, over every tier `found` on the base.
+    fn over_every_tier(modifier: &Modifier, found: &Found) -> Self {
+        let single = found.tiers.single();
+        if single && modifier.tier != Some(1) {
+            // The game knows more tiers than the data, e.g. after a patch: the tier the copy
+            // writes is kept.
+            log::warn!(
+                "Game data, one tier only for a modifier copied as tier {:?}: {}",
+                modifier.tier,
+                modifier.lines.first().map_or("", |line| line.text.as_str())
+            );
+        }
+        let over = Over {
+            tiers: &found.tiers.tiers,
+            tells_tiers: !single,
+            sum: None,
+        };
+        Self {
+            lines: found.rolls_over(modifier, &over),
+            hides_number: single && modifier.tier == Some(1),
+            currency: None,
+        }
+    }
+
+    /// The lines of a fixed value written without tier, over its tier `found`: only of a modifier
+    /// whose tier the game doesn't write (the Genesis tree, an essence, an alloy), as a line of
+    /// the in-game trade read in it, a tier of fixed values too (not a value of a modifier whose
+    /// tier the game writes, nor one that falls in a tier of the tree that rolls, `19–22`);
+    /// nothing otherwise.
+    fn over_fixed_tier(modifier: &Modifier, found: &Found) -> Self {
+        let unwritten = |tier: &&Tier| {
+            found.tiers.tier_unwritten && tier.ranges.iter().all(|range| range.is_one_value())
+        };
+        let Some(tier) = found.tiers.tier().filter(unwritten) else {
+            return Self::default();
+        };
+        let over = Over {
+            tiers: std::slice::from_ref(tier),
+            tells_tiers: false,
+            sum: None,
+        };
+        Self {
+            lines: found.rolls_over(modifier, &over),
+            hides_number: true,
+            currency: found.tiers.currency,
+        }
+    }
+
+    /// The other lines of a hybrid whose part its line `sum` adds up, over the tiers of the
+    /// hybrid `found`; of one tier only, they tell no tiers.
+    fn over_hybrid_tiers(modifier: &Modifier, found: &Found, sum: usize) -> Self {
+        let over = Over {
+            tiers: &found.tiers.tiers,
+            tells_tiers: !found.tiers.single(),
+            sum: Some(sum),
+        };
+        Self {
+            lines: found.rolls_over(modifier, &over),
+            hides_number: false,
+            currency: None,
+        }
+    }
 }
 
 /// The tiers the lines of a modifier roll over.
