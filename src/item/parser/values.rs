@@ -124,7 +124,8 @@ pub(super) fn read_stack(line: &str, labels: &Labels) -> Option<Stack> {
 /// The quality line, `Quality: +20%` or the quality of a catalyst, `Quality (Mana Modifiers):
 /// +40%`.
 struct QualityLine<'a> {
-    /// The kind of a catalyst; none for the quality of the base.
+    /// The kind of a catalyst; none for the quality of the base, or for a quality of a catalyst
+    /// whose words don't close.
     kind: Option<QualityKind>,
     /// The text of the value; none for a quality of a catalyst whose words don't close.
     value: Option<&'a str>,

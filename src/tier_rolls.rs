@@ -227,11 +227,11 @@ impl ModifierRolls {
         }
     }
 
-    /// The lines of a fixed value written without tier, over its tier `in_tables`: only of a modifier
-    /// whose tier the game doesn't write (the Genesis tree, an essence, an alloy), as a line of
-    /// the in-game trade read in it, a tier of fixed values too (not a value of a modifier whose
-    /// tier the game writes, nor one that falls in a tier of the tree that rolls, `19–22`);
-    /// nothing otherwise.
+    /// The lines of a fixed value written without tier, over its tier `in_tables`: only of a
+    /// modifier whose tier the game doesn't write (the Genesis tree, an essence, an alloy), as a
+    /// line of the in-game trade read in it, a tier of fixed values too (not a value of a
+    /// modifier whose tier the game writes, nor one that falls in a tier of the tree that rolls,
+    /// `19–22`); nothing otherwise.
     fn over_fixed_tier(modifier: &Modifier, in_tables: &ModifierInTables) -> Self {
         let unwritten = |tier: &&Tier| {
             in_tables.tiers.tier_unwritten && tier.ranges.iter().all(|range| range.is_one_value())
