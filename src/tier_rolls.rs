@@ -69,15 +69,17 @@ impl TierRolls {
                 let Some(written) = Written::of(modifier) else {
                     return ModifierRolls::default();
                 };
-                let found = base_type.and_then(|base_type| {
-                    Found::in_tables(language, base_type, item_level, modifier)
+                let in_tables = base_type.and_then(|base_type| {
+                    ModifierInTables::of(language, base_type, item_level, modifier)
                 });
-                written.rolls(modifier, found.as_ref()).unwrap_or_else(|| {
-                    if let Some(base_type) = base_type {
-                        warn_of_a_missing_table(language, base_type, modifier);
-                    }
-                    ModifierRolls::default()
-                })
+                written
+                    .rolls(modifier, in_tables.as_ref())
+                    .unwrap_or_else(|| {
+                        if let Some(base_type) = base_type {
+                            warn_of_a_missing_table(language, base_type, modifier);
+                        }
+                        ModifierRolls::default()
+                    })
             })
             .collect();
         Self { modifiers }
@@ -161,17 +163,23 @@ impl Written {
     }
 
     /// What the lines of `modifier`, written so, roll over, from its line matches and its tiers
-    /// `found` in the modifier tables; none when it needs them and they don't hold it.
-    fn rolls(self, modifier: &Modifier, found: Option<&Found>) -> Option<ModifierRolls> {
+    /// `in_tables`; none when it needs them and the tables don't hold it.
+    fn rolls(
+        self,
+        modifier: &Modifier,
+        in_tables: Option<&ModifierInTables>,
+    ) -> Option<ModifierRolls> {
         match self {
             // Its copied ranges, whatever its base; the currency that adds it, from the tables.
             Self::RangesWithoutTier => Some(ModifierRolls::over_copied_ranges(
                 modifier,
-                found.and_then(|found| found.tiers.currency),
+                in_tables.and_then(|in_tables| in_tables.tiers.currency),
             )),
-            Self::Tier => Some(ModifierRolls::over_every_tier(modifier, found?)),
-            Self::FixedWithoutTier => Some(ModifierRolls::over_fixed_tier(modifier, found?)),
-            Self::Split { line } => Some(ModifierRolls::over_hybrid_tiers(modifier, found?, line)),
+            Self::Tier => Some(ModifierRolls::over_every_tier(modifier, in_tables?)),
+            Self::FixedWithoutTier => Some(ModifierRolls::over_fixed_tier(modifier, in_tables?)),
+            Self::Split { line } => {
+                Some(ModifierRolls::over_hybrid_tiers(modifier, in_tables?, line))
+            }
         }
     }
 }
@@ -199,9 +207,9 @@ impl ModifierRolls {
         }
     }
 
-    /// The lines of a modifier written with its tier, over every tier `found` on the base.
-    fn over_every_tier(modifier: &Modifier, found: &Found) -> Self {
-        let single = found.tiers.single();
+    /// The lines of a modifier written with its tier, over every tier of the base `in_tables`.
+    fn over_every_tier(modifier: &Modifier, in_tables: &ModifierInTables) -> Self {
+        let single = in_tables.tiers.single();
         if single && modifier.tier != Some(1) {
             // The game knows more tiers than the data, e.g. after a patch: the tier the copy
             // writes is kept.
@@ -212,52 +220,56 @@ impl ModifierRolls {
             );
         }
         Self {
-            lines: found.rolls_over(modifier, &found.tiers.tiers, None),
+            lines: in_tables.rolls_over(modifier, &in_tables.tiers.tiers, None),
             hides_number: single && modifier.tier == Some(1),
             currency: None,
         }
     }
 
-    /// The lines of a fixed value written without tier, over its tier `found`: only of a modifier
+    /// The lines of a fixed value written without tier, over its tier `in_tables`: only of a modifier
     /// whose tier the game doesn't write (the Genesis tree, an essence, an alloy), as a line of
     /// the in-game trade read in it, a tier of fixed values too (not a value of a modifier whose
     /// tier the game writes, nor one that falls in a tier of the tree that rolls, `19–22`);
     /// nothing otherwise.
-    fn over_fixed_tier(modifier: &Modifier, found: &Found) -> Self {
+    fn over_fixed_tier(modifier: &Modifier, in_tables: &ModifierInTables) -> Self {
         let unwritten = |tier: &&Tier| {
-            found.tiers.tier_unwritten && tier.ranges.iter().all(|range| range.is_one_value())
+            in_tables.tiers.tier_unwritten && tier.ranges.iter().all(|range| range.is_one_value())
         };
-        let Some(tier) = found.tiers.tier().filter(unwritten) else {
+        let Some(tier) = in_tables.tiers.tier().filter(unwritten) else {
             return Self::default();
         };
         Self {
-            lines: found.rolls_over(modifier, std::slice::from_ref(tier), None),
+            lines: in_tables.rolls_over(modifier, std::slice::from_ref(tier), None),
             hides_number: true,
-            currency: found.tiers.currency,
+            currency: in_tables.tiers.currency,
         }
     }
 
-    /// The other lines of a hybrid whose part its line `sum` adds up, over the tiers of the
-    /// hybrid `found`.
-    fn over_hybrid_tiers(modifier: &Modifier, found: &Found, sum: usize) -> Self {
+    /// The other lines of a hybrid whose part its `summed_line` adds up, over the tiers of the
+    /// hybrid `in_tables`.
+    fn over_hybrid_tiers(
+        modifier: &Modifier,
+        in_tables: &ModifierInTables,
+        summed_line: usize,
+    ) -> Self {
         Self {
-            lines: found.rolls_over(modifier, &found.tiers.tiers, Some(sum)),
+            lines: in_tables.rolls_over(modifier, &in_tables.tiers.tiers, Some(summed_line)),
             hides_number: false,
             currency: None,
         }
     }
 }
 
-/// A modifier found in the modifier tables, on the base of the item.
-struct Found {
+/// A modifier in the modifier tables, on the base of the item: its line matches and its tiers.
+struct ModifierInTables {
     matches: Vec<LineMatch<'static>>,
     tiers: ModifierTiers,
 }
 
-impl Found {
+impl ModifierInTables {
     /// `modifier`, written in `language`, in the tables of the base `base_type` of an item of
     /// `item_level`; none when no table holds it.
-    fn in_tables(
+    fn of(
         language: Language,
         base_type: &str,
         item_level: Option<u32>,
@@ -268,7 +280,7 @@ impl Found {
         Some(Self { matches, tiers })
     }
 
-    /// The rolls of each line of `modifier` over `tiers`, but its line `sum` that adds up two
+    /// The rolls of each line of `modifier` over `tiers`, but its `summed_line` that adds up two
     /// modifiers of its stat, a sum over no tiers, with the index of the line: the ranges of a
     /// tier follow the values of each line match, and the values of a match the numbers its
     /// stat counts on its lines, in their order.
@@ -276,7 +288,7 @@ impl Found {
         &self,
         modifier: &Modifier,
         tiers: &[Tier],
-        sum: Option<usize>,
+        summed_line: Option<usize>,
     ) -> Vec<(usize, LineRolls)> {
         let values_of_each_match = self.tiers.counts.iter().scan(0, |start, &count| {
             let first = *start;
@@ -291,10 +303,10 @@ impl Found {
                 Some(line_match.lines.clone().zip(values))
             })
             .flatten()
-            .filter(|&(line, _)| sum != Some(line))
+            .filter(|&(line, _)| summed_line != Some(line))
             .filter_map(|(line, values)| {
-                let numbers = modifier.lines.get(line).map_or(0, |line| line.rolls.len());
-                let mut rolls = line_rolls(tiers, &values, numbers)?;
+                let number_count = modifier.lines.get(line).map_or(0, |line| line.rolls.len());
+                let mut rolls = line_rolls(tiers, &values, number_count)?;
                 // Over one tier only, "T1–T1" would tell nothing.
                 if tiers.len() < 2 {
                     rolls.tiers = None;
@@ -393,37 +405,38 @@ fn share_values(
     )
 }
 
-/// The rolls over `tiers`, the best first, of a line of `rolls` numbers, whose `values` pair
+/// The rolls over `tiers`, the best first, of a line of `number_count` numbers, whose `values` pair
 /// the index of a number with the index of its value among the ranges of a tier; none for a
 /// line without such a number, or when a tier hasn't the value, or its range crosses zero.
-fn line_rolls(tiers: &[Tier], values: &[(usize, usize)], rolls: usize) -> Option<LineRolls> {
+fn line_rolls(tiers: &[Tier], values: &[(usize, usize)], number_count: usize) -> Option<LineRolls> {
     if values.is_empty() {
         return None;
     }
-    let mut ranges = vec![None; rolls];
+    let mut ranges = vec![None; number_count];
     for &(number, value) in values {
-        let over = tiers
+        let span = tiers
             .iter()
             .map(|tier| tier.ranges.get(value)?.magnitude())
-            .reduce(|over, range| {
-                let (over, range) = (over?, range?);
-                Some(over.spanning(range))
+            .reduce(|span, range| {
+                let (span, range) = (span?, range?);
+                Some(span.spanning(range))
             })
             .flatten()?;
-        *ranges.get_mut(number)? = Some(over);
+        *ranges.get_mut(number)? = Some(span);
     }
     let tiers = match values {
         &[(number, value)] => {
-            let over = ranges.get(number).copied().flatten()?;
-            let rolls = |tier: &&Tier| tier.ranges.get(value).and_then(|range| range.magnitude());
+            let span = ranges.get(number).copied().flatten()?;
+            let range_of =
+                |tier: &&Tier| tier.ranges.get(value).and_then(|range| range.magnitude());
             // The worst tier that rolls the lowest value, the best that rolls the highest.
             let lowest = tiers
                 .iter()
                 .rev()
-                .find(|tier| rolls(tier).is_some_and(|rolls| rolls.min <= over.min))?;
+                .find(|tier| range_of(tier).is_some_and(|range| range.min <= span.min))?;
             let highest = tiers
                 .iter()
-                .find(|tier| rolls(tier).is_some_and(|rolls| rolls.max >= over.max))?;
+                .find(|tier| range_of(tier).is_some_and(|range| range.max >= span.max))?;
             Some(TierSpan {
                 lowest: lowest.number,
                 highest: highest.number,
