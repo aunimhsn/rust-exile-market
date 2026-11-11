@@ -23,7 +23,8 @@ The name comes first: a reader who sees only the name should know what the thing
 
 - One function does one thing, at one level of detail, and reads from top to bottom. Past about 50 lines or three levels of nesting, look for the part that deserves a name.
 - The case that stops returns early (`let … else`, `?`), so the main path isn't nested.
-- At most four parameters. Two of the same type side by side (`bool, bool`, `usize, usize`) become a struct or an enum.
+- At most four parameters, `self` included.
+- Two parameters of the same type side by side become a struct or an enum when a call can swap them unseen: literals (`f(true, false)`, `f(3, 7)`), or values without a name of their own at the call. Two values named at the call (`english`, `french`) may stay.
 - No boolean parameter that switches what a function does: two functions, or an enum named by its cases.
 - The decision apart from the wiring: the rule in a pure function, without egui, threads or I/O, and tested; the code that calls it stays thin.
 
@@ -33,7 +34,7 @@ The name comes first: a reader who sees only the name should know what the thing
 - `match` on the enums of the project are exhaustive: no `_ =>` that would swallow a new variant. Adding a variant must point to every place to update.
 - A newtype when two values of one type can be mixed up (the index of a line and the index of a candidate; pixels and points), or when a value carries an invariant checked once, where it is built.
 - `Option` and `Result`, never a sentinel (`-1`, `""`, `NaN`).
-- The smallest visibility: private, then `pub(super)`, then `pub(crate)`. A `pub` field only on a plain data type.
+- The smallest visibility: private, then `pub(super)`, then `pub`. In a binary crate, as here, `pub` reaches the crate only, as `pub(crate)` would: one spelling, `pub`. A `pub` field only on a plain data type.
 
 ## Ownership and borrowing
 
@@ -65,10 +66,10 @@ The name comes first: a reader who sees only the name should know what the thing
 
 ## Comments
 
-- Each item has a doc comment that says what it is for, in one sentence, before how.
+- Each module, type, function and constant has a doc comment that says what it is for, in one sentence, before how; but `main` and the methods of a trait `impl`, which their module and their trait document. A field or a variant has one when its name and its type don't say it all.
 - A comment in a body says why, never what the code already says.
 - A comment that no longer matches the code is a bug, fixed in the same change.
-- The code says the rule of today; the history of its decisions, and their dates, live in `docs/`.
+- The code says the rule of today. The source of a fact stays next to it (what was measured, where and when), since it tells when to check again; the story of the decisions (what was tried, who chose, what changed) lives in `docs/`.
 
 ## Patterns
 
@@ -86,11 +87,12 @@ The name comes first: a reader who sees only the name should know what the thing
 
 - A test reads as an example of its rule: its name says the behavior, its body the case, built by a small helper rather than fifty lines of set-up.
 - Each rule is tested on data written by hand. The tests on the real data of the game are kept for what a patch of the game changes.
-- A test fails for one reason: one behavior per test.
+- An assertion compares the whole value (a list, a section, a struct); a part (`contains`, `starts_with`) only when the rest doesn't matter. An expected exception is a named list, compared whole.
+- Several cases of one behavior may share a test; two behaviors are two tests.
 
 ## Refactoring
 
-- No change of behavior: the tests, the counts of the draw (`RECORDED`) and the generated game data stay the same. A test whose assertion changes is named in the pull request, with the reason.
-- Before moving code, check it is tested; a path without a test gets one first.
-- The moves first, in commits of their own: `git diff --color-moved=dimmed-zebra` shows them unchanged, but for paths, `use` lines and visibility. Then one commit per improvement.
+- No change of behavior: the tests, the counts of the draw (`RECORDED`) and the generated game data stay the same, checked after each commit, not only at the end, so that a difference names its commit. Where a tool writes files, run it after each commit and compare its files and what it prints, byte for byte. A test whose assertion changes is named in the pull request, with the reason.
+- Before moving code, check it is tested; a path without a test gets one first, or, where only the network or the game reaches it, it is changed only by steps the compiler checks, and the pull request says so.
+- The moves first, in commits of their own: `git diff --color-moved=dimmed-zebra --color-moved-ws=allow-indentation-change` shows them unchanged, but for paths, `use` lines, visibility and the lines `rustfmt` wraps again. Then one commit per improvement.
 - Each small refactoring seen on the way is done in the same pull request. One that would change the behavior goes to `backlog.md`.
