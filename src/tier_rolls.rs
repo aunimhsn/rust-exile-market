@@ -187,6 +187,7 @@ impl Written {
 /// What the lines of one modifier roll over; nothing for a modifier whose lines roll over no
 /// tier.
 #[derive(Debug, Default)]
+#[cfg_attr(test, derive(PartialEq))]
 struct ModifierRolls {
     /// The rolls of each line that has them, with the index of the line.
     lines: Vec<(usize, LineRolls)>,

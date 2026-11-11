@@ -1,5 +1,5 @@
 use super::*;
-use crate::item::{CopiedItem, Item};
+use crate::item::{Affix, AffixTier, CopiedItem, Item, PartTier, StatLine};
 
 fn range(min: f64, max: f64) -> Range {
     Range { min, max }
@@ -526,4 +526,249 @@ fn a_missing_table_is_told_once_and_not_past_a_few_hundred() {
     }
     assert!(!first_told(&mut told, "one more"));
     assert_eq!(told.len(), MOST_TOLD);
+}
+
+/// A modifier of `kind`, of `tier` when written, with one line for each of `lines`.
+fn modifier(kind: ModifierKind, tier: Option<u32>, lines: &[&str]) -> Modifier {
+    Modifier {
+        kind,
+        origin: None,
+        name: None,
+        tier,
+        tags: Vec::new(),
+        unrevealed: false,
+        lines: lines.iter().map(|line| StatLine::parse(line)).collect(),
+        doubt: None,
+    }
+}
+
+const PREFIX: ModifierKind = ModifierKind::Explicit(Some(Affix::Prefix));
+
+/// A tier of one value in each of `ranges`.
+fn tier(number: u32, ranges: &[(f64, f64)]) -> Tier {
+    Tier {
+        number,
+        level: 1,
+        ranges: ranges.iter().map(|&(min, max)| range(min, max)).collect(),
+    }
+}
+
+/// A modifier of one number on each of its `lines` in the tables, of `tiers`, the tier of the
+/// copied one at `found`.
+fn in_tables(lines: usize, tiers: Vec<Tier>, found: usize) -> ModifierInTables {
+    ModifierInTables {
+        matches: (0..lines)
+            .map(|line| LineMatch {
+                lines: line..line + 1,
+                stat: None,
+            })
+            .collect(),
+        tiers: ModifierTiers {
+            tiers,
+            found,
+            neighbour: None,
+            counts: vec![1; lines],
+            tier_unwritten: false,
+            currency: None,
+            lord: None,
+        },
+    }
+}
+
+fn rolled(ranges: &[(f64, f64)], tiers: Option<(u32, u32)>) -> LineRolls {
+    LineRolls {
+        ranges: ranges
+            .iter()
+            .map(|&(min, max)| Some(range(min, max)))
+            .collect(),
+        tiers: tiers.map(|(lowest, highest)| TierSpan { lowest, highest }),
+    }
+}
+
+#[test]
+fn how_a_modifier_is_written_tells_what_its_lines_roll_over() {
+    let part = PartTier {
+        affix: Affix::Prefix,
+        tiers: vec![1],
+        hides_number: false,
+        ranges: Vec::new(),
+        currency: None,
+    };
+    let affix_tier = |affix| AffixTier {
+        affix,
+        tier: 1,
+        hides_number: false,
+        ranges: Vec::new(),
+        lord: None,
+    };
+    let with_doubt = |mut modifier: Modifier, doubt| {
+        modifier.doubt = Some(doubt);
+        modifier
+    };
+    let split = TierDoubt::Split {
+        line: 1,
+        whole: part.clone(),
+        added: part,
+    };
+    let either = TierDoubt::EitherAffix {
+        prefix: affix_tier(Affix::Prefix),
+        suffix: affix_tier(Affix::Suffix),
+    };
+    let unrevealed = Modifier {
+        unrevealed: true,
+        ..modifier(PREFIX, None, &[])
+    };
+    let ranged = "Minions have 21(19-22)% increased maximum Life";
+    let fixed = "+2 to Level of all Minion Skills";
+    let cases = [
+        (modifier(PREFIX, Some(7), &[ranged]), Some(Written::Tier)),
+        (
+            modifier(PREFIX, None, &[ranged]),
+            Some(Written::RangesWithoutTier),
+        ),
+        (
+            modifier(PREFIX, None, &[fixed]),
+            Some(Written::FixedWithoutTier),
+        ),
+        // The split line first, whatever the tier.
+        (
+            with_doubt(modifier(PREFIX, Some(2), &[fixed, fixed]), split.clone()),
+            Some(Written::Split { line: 1 }),
+        ),
+        (
+            with_doubt(modifier(PREFIX, None, &[fixed, fixed]), split),
+            Some(Written::Split { line: 1 }),
+        ),
+        // No tier to roll over.
+        (modifier(ModifierKind::Implicit, None, &[ranged]), None),
+        (modifier(ModifierKind::Rune, None, &[fixed]), None),
+        (
+            modifier(ModifierKind::Explicit(None), None, &[ranged]),
+            None,
+        ),
+        (with_doubt(modifier(PREFIX, None, &[ranged]), either), None),
+        (unrevealed, None),
+    ];
+    for (modifier, written) in cases {
+        assert_eq!(Written::of(&modifier), written, "{modifier:?}");
+    }
+}
+
+#[test]
+fn a_modifier_written_with_its_tier_rolls_over_every_tier_of_its_base() {
+    let life = modifier(PREFIX, Some(2), &["+50(45-55) to maximum Life"]);
+    let tiers = vec![
+        tier(1, &[(60.0, 70.0)]),
+        tier(2, &[(45.0, 55.0)]),
+        tier(3, &[(30.0, 40.0)]),
+    ];
+    assert_eq!(
+        ModifierRolls::over_every_tier(&life, &in_tables(1, tiers, 1)),
+        ModifierRolls {
+            lines: vec![(0, rolled(&[(30.0, 70.0)], Some((3, 1))))],
+            hides_number: false,
+            currency: None,
+        }
+    );
+}
+
+#[test]
+fn a_modifier_of_one_tier_only_hides_its_number_but_for_another_tier_copied() {
+    let only = || in_tables(1, vec![tier(1, &[(10.0, 15.0)])], 0);
+    let over_its_tier = vec![(0, rolled(&[(10.0, 15.0)], None))];
+    // "T1" would read as the best, while it is the only one; "T1–T1" would tell nothing.
+    let first = modifier(PREFIX, Some(1), &["12(10-15)% increased Spirit"]);
+    assert_eq!(
+        ModifierRolls::over_every_tier(&first, &only()),
+        ModifierRolls {
+            lines: over_its_tier.clone(),
+            hides_number: true,
+            currency: None,
+        }
+    );
+    // The game knows more tiers than the data: the tier the copy writes is kept.
+    let second = modifier(PREFIX, Some(2), &["9(8-9)% increased Spirit"]);
+    assert_eq!(
+        ModifierRolls::over_every_tier(&second, &only()),
+        ModifierRolls {
+            lines: over_its_tier,
+            hides_number: false,
+            currency: None,
+        }
+    );
+}
+
+#[test]
+fn a_fixed_value_rolls_over_its_tier_only_when_the_game_writes_none_of_fixed_values() {
+    let minions = modifier(PREFIX, None, &["+2 to Level of all Minion Skills"]);
+    let of_the_tree = |tiers: Vec<Tier>, tier_unwritten: bool| {
+        let mut in_tables = in_tables(1, tiers, 0);
+        in_tables.tiers.tier_unwritten = tier_unwritten;
+        in_tables.tiers.currency = Some(Currency::Essence);
+        in_tables
+    };
+    let fixed = || vec![tier(1, &[(2.0, 2.0)]), tier(2, &[(1.0, 1.0)])];
+    assert_eq!(
+        ModifierRolls::over_fixed_tier(&minions, &of_the_tree(fixed(), true)),
+        ModifierRolls {
+            lines: vec![(0, rolled(&[(2.0, 2.0)], None))],
+            hides_number: true,
+            currency: Some(Currency::Essence),
+        }
+    );
+    // Not of a modifier whose tier the game writes, nor in a tier that rolls.
+    assert_eq!(
+        ModifierRolls::over_fixed_tier(&minions, &of_the_tree(fixed(), false)),
+        ModifierRolls::default()
+    );
+    assert_eq!(
+        ModifierRolls::over_fixed_tier(&minions, &of_the_tree(vec![tier(1, &[(1.0, 3.0)])], true)),
+        ModifierRolls::default()
+    );
+}
+
+#[test]
+fn the_other_lines_of_a_hybrid_split_from_a_summed_line_roll_over_its_tiers() {
+    let hybrid = modifier(
+        PREFIX,
+        None,
+        &["258% increased Physical Damage", "+195 to Accuracy Rating"],
+    );
+    let tiers = vec![
+        tier(1, &[(75.0, 79.0), (161.0, 200.0)]),
+        tier(2, &[(65.0, 74.0), (131.0, 160.0)]),
+    ];
+    assert_eq!(
+        ModifierRolls::over_hybrid_tiers(&hybrid, &in_tables(2, tiers, 0), 0),
+        ModifierRolls {
+            lines: vec![(1, rolled(&[(131.0, 200.0)], Some((2, 1))))],
+            hides_number: false,
+            currency: None,
+        }
+    );
+}
+
+#[test]
+fn a_modifier_the_tables_dont_hold_rolls_only_over_the_ranges_its_copy_writes() {
+    let ranged = modifier(
+        PREFIX,
+        None,
+        &["Minions have 21(19-22)% increased maximum Life"],
+    );
+    assert_eq!(
+        Written::RangesWithoutTier.rolls(&ranged, None),
+        Some(ModifierRolls {
+            lines: vec![(0, rolled(&[(19.0, 22.0)], None))],
+            hides_number: true,
+            currency: None,
+        })
+    );
+    let written = modifier(PREFIX, Some(1), &["+50 to maximum Life"]);
+    for way in [
+        Written::Tier,
+        Written::FixedWithoutTier,
+        Written::Split { line: 0 },
+    ] {
+        assert_eq!(way.rolls(&written, None), None, "{way:?}");
+    }
 }
