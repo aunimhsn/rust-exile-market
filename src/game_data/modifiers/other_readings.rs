@@ -16,8 +16,8 @@ use crate::item::{Affix, Modifier, ModifierOrigin, Range};
 
 /// The most steps the search of the other readings takes: some fifty on a random rare item, a
 /// few hundred on the most tangled ones (1,810 at most on the items drawn at random by
-/// `tests/random_items.rs`, 2026-11-11; up to 2,734 on the draws of 2026-10-30, whose code
-/// wasn't kept).
+/// `trade_tiers/game_tests/random_items.rs`, 2026-11-11; up to 2,734 on the draws of
+/// 2026-10-30, whose code wasn't kept).
 pub(super) const MAX_STEPS: usize = 50_000;
 
 /// The best reading of the lines of an item, as [`super::trade_tiers`] found it.

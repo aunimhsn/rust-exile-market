@@ -41,7 +41,7 @@ pub(super) struct Split {
 /// only, whose values add up on that line, their tiers among those `item_level` allows. Only
 /// the ways that fit best, those of two neighbouring tiers of one modifier made one
 /// ([`neighbours_joined`]); none for a line without number. Of two pure modifiers, the prefix
-/// is the summed one, as [`TierDoubt::EitherAffix`] reads a prefix first.
+/// is the summed one, as [`crate::item::TierDoubt::EitherAffix`] reads a prefix first.
 pub(super) fn splits(
     tables: &[Table],
     base: &BaseSpawn,

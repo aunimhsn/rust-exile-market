@@ -47,7 +47,7 @@ pub struct FoundTiers {
     /// Each affix the modifier can be, with its tiers on the base, the copied one the worst
     /// that holds its values: a prefix or a suffix, or both when the item has room for either
     /// (the `18% increased Rarity of Items found` of a helmet), the prefix first, as
-    /// [`TierDoubt::EitherAffix`] reads them. The ranges of a tier, and
+    /// [`crate::item::TierDoubt::EitherAffix`] reads them. The ranges of a tier, and
     /// `counts`, follow the line matches of [`modifier_stats`] for each of these modifiers in
     /// their order.
     pub affixes: Vec<(Affix, ModifierTiers)>,
@@ -97,9 +97,9 @@ pub struct FoundTiers {
 /// fits the item as well, which [`other_readings::doubts`] tells: two pure modifiers or their
 /// hybrid, a line adding up modifiers in another way. When such readings leave another room
 /// to a line that can be a prefix or a suffix, it keeps both its affixes. A search that stops
-/// at one of its bounds ([`MAX_READINGS`], `MAX_STEPS`) leaves every line without tier, as
-/// does one that doesn't meet its best reading among the others: it can't vouch for the
-/// reading it would show.
+/// at one of its bounds ([`super::best_reading::MAX_READINGS`], `MAX_STEPS`) leaves every line
+/// without tier, as does one that doesn't meet its best reading among the others: it can't
+/// vouch for the reading it would show.
 ///
 /// A hybrid whose lines don't follow each other is never read as one modifier, a modifier
 /// being read on consecutive lines ([`FoundTiers::modifiers`]): its lines stay without tier,
@@ -143,7 +143,7 @@ pub fn trade_tiers(
 /// bounds, and how it ended.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct Effort {
-    /// The readings of its lines looked at, [`MAX_READINGS`] at most.
+    /// The readings of its lines looked at, [`super::best_reading::MAX_READINGS`] at most.
     readings: usize,
     /// The steps of the search of the other readings ([`other_readings::doubts`]).
     steps: usize,
@@ -155,7 +155,8 @@ struct Effort {
 enum Ending {
     /// With a reading in the room of the item, every other reading compared with it.
     Vouched,
-    /// The readings stopped at [`MAX_READINGS`], some not looked at: no line is read.
+    /// The readings stopped at [`super::best_reading::MAX_READINGS`], some not looked at: no
+    /// line is read.
     ReadingsCut,
     /// The other readings stopped at their bound, some not looked at: no line is read.
     OtherReadingsCut,

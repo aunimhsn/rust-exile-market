@@ -13,7 +13,7 @@ use crate::language::Language;
 
 /// Every tier of `modifier`, a prefix or suffix of an item of `item_level` (none when the copy
 /// doesn't write it) whose base type is `base_type` in `language` (the name its search looks
-/// for), its lines matched with their stats in `matches` ([`super::modifier_stats`]).
+/// for), its lines matched with their stats in `matches` ([`crate::game_data::modifier_stats`]).
 ///
 /// None for a modifier the tables don't hold: an implicit, a rune, an enchantment, a modifier
 /// whose header doesn't tell its affix, a line without stat, a base without tags; or whose

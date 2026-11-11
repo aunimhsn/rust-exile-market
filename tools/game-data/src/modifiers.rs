@@ -152,7 +152,7 @@ pub struct SourceBase {
 }
 
 /// The tiers of a type of modifier that roll on the same bases, as the application reads them
-/// (`src/game_data/modifiers.rs`).
+/// (`src/game_data/modifiers/tables.rs`).
 #[derive(Serialize)]
 pub struct Table {
     #[serde(rename = "type")]

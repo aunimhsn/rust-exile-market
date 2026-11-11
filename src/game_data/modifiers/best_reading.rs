@@ -6,8 +6,8 @@ use crate::item::Affix;
 
 /// The most ways to read the lines of an item copied from the in-game trade that are looked
 /// at: a handful on a real item, each hybrid the lines may be doubling them (24 at most on
-/// the items drawn at random by `tests/random_items.rs`, 2026-11-10). Past them, no line is
-/// read: the best of the readings looked at may not be the best of all.
+/// the items drawn at random by `trade_tiers/game_tests/random_items.rs`, 2026-11-10). Past
+/// them, no line is read: the best of the readings looked at may not be the best of all.
 pub(super) const MAX_READINGS: usize = 4096;
 
 /// How many prefixes and suffixes the modifiers read from their values can add to the item.
@@ -70,7 +70,7 @@ pub(super) struct ReadingKey {
     whole: usize,
     /// How many modifiers the lines make, those without tier counted: the lines alone
     /// first. Where a hybrid holds them too in the room of the item, the other readings
-    /// leave them without tier ([`other_readings::doubts`]), whichever is read here.
+    /// leave them without tier ([`super::other_readings::doubts`]), whichever is read here.
     modifiers: usize,
 }
 
