@@ -381,6 +381,9 @@ no-market-price-skill-gem = Pas de prix de marché pour les gemmes d'aptitude.
 no-market-price-magic = Pas de prix de marché pour les objets magiques.
 no-market-price-normal = Pas de prix de marché pour les objets normaux.
 search-to-estimate = Cherchez des offres similaires pour l'estimer.
+# Un objet rare ou magique dont aucun filtre ne compare les statistiques : les offres de tout
+# objet de sa base ne diraient rien de son prix.
+check-to-estimate = Cochez un modificateur pour estimer cet objet.
 # Un objet à nom fixe dont le prix n'est pas encore connu, ou manquant.
 prices-downloading = Les prix de { $league } sont en cours de téléchargement…
 # Avant que la ligue soit connue, au premier lancement.

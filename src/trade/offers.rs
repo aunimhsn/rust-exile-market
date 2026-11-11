@@ -12,15 +12,12 @@ use crate::currencies;
 use crate::format::Currency;
 use crate::http;
 use crate::item::{
-    Catalyst, ParseWarning, QualityKind, Rarity, Requirements, WaystoneValue, read_gem_level,
-    read_quality, waystone_property, whole_percent, without_tier,
+    Catalyst, ParseWarning, QualityKind, Rarity, Requirements, USUAL_QUALITY, WaystoneValue,
+    read_gem_level, read_quality, waystone_property, whole_percent, without_tier,
 };
 use crate::language::Language;
 use crate::logging;
 
-/// The highest quality of a catalyst on a ring, an amulet or a jewel, without a modifier
-/// `+#% to Maximum Quality`.
-const CATALYST_QUALITY: u32 = 20;
 /// The stat of `+#% to Maximum Quality` (the Essence of the Breach, the implicit of a Breach
 /// Ring), whatever its kind (`explicit.`, `implicit.`…).
 const MAXIMUM_QUALITY_STAT: &str = "stat_2039822488";
@@ -151,7 +148,7 @@ impl OfferItem {
             })
             // `+20% to Maximum Quality`, `+20% à la Qualité maximale`.
             .filter_map(|modifier| whole_percent(modifier.text.split_whitespace().next()?))
-            .fold(CATALYST_QUALITY, u32::saturating_add)
+            .fold(USUAL_QUALITY, u32::saturating_add)
     }
 }
 

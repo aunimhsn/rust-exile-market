@@ -15,12 +15,21 @@
 //! range field on the right, also when it has no limit; a stat of a unique that never varies
 //! isn't a filter and starts at the left edge; a line the trade site can't search shows the
 //! "not allowed" sign in place of its checkbox. A line better lower is searched with a
-//! maximum, any other with a minimum. The damage and attack speed modifiers of a weapon start
-//! unchecked: its DPS counts them, the physical one checked, the elemental one when it is at
-//! least the physical one. The pseudo totals start checked, and the lines they add up
-//! unchecked. A desecrated modifier not revealed yet is a line of its group without filter, on a
-//! band of the desecrated green; its item gets a filter of its number of unrevealed modifiers,
-//! and its other stats start unchecked, with a note under them. A line of a Time-Lost jewel is
+//! maximum, any other with a minimum.
+//!
+//! The DPS of a weapon and the pseudo totals start checked: the physical DPS, the elemental
+//! one when it is at least the physical one or in its place. On a rare or magic item, those
+//! any item of its base reaches start unchecked, since they compare nothing
+//! ([`LineStats::rules_out`]): its implicits at their best roll, with a catalyst on a ring,
+//! an amulet or a jewel, its runes and its enchantments, its damage at the usual quality. A
+//! line that a DPS or a total checked at first counts starts unchecked (the damage and the
+//! attack speed of a weapon, a line a total adds up). Every modifier of a rare starts
+//! unchecked, like Exiled Exchange 2: its value lies in the few modifiers the buyer needs,
+//! which the application can't tell, and several checked at once leave few offers.
+//!
+//! A desecrated modifier not revealed yet is a line of its group without filter, on a band of
+//! the desecrated green; its item gets a filter of its number of unrevealed modifiers, and
+//! its other stats start unchecked, with a note under them. A line of a Time-Lost jewel is
 //! written without the words of its radius, a tag of the passive skills they name after its
 //! range.
 //!
@@ -45,7 +54,7 @@ use crate::i18n::{Message, Translator};
 use crate::item::{
     self, Affix, AffixTier, Currency, Item, Lord, MAX_GEM_LEVEL, MAX_GEM_QUALITY, MAX_GEM_SOCKETS,
     MAX_WAYSTONE_TIER, Modifier, ModifierKind, ModifierOrigin, PartTier, QualityKind, Range,
-    Rarity, StatLine, TierDoubt, WaystoneProperty,
+    Rarity, StatLine, TierDoubt, USUAL_QUALITY, WaystoneProperty,
 };
 use crate::roll_difference::CopiedLines;
 use crate::tier_rolls::{LineRolls, TierRolls, TierSpan};
@@ -111,8 +120,6 @@ const RANGE_SEPARATOR: &str = " · ";
 /// for a minimum, above it for the maximum of a line better lower, to find comparable items
 /// and not only identical ones.
 const COMPARABLE_MARGIN: f64 = 0.1;
-/// The highest quality of an item that isn't exceptional, in percent.
-const MAX_USUAL_QUALITY: u32 = 20;
 /// The quality from which the quality of a charm is checked, in percent.
 const CHARM_QUALITY: u32 = 10;
 /// The highest required level and item level of a rare for leveling.
@@ -857,7 +864,7 @@ fn rows<'a>(
     let dps = if item.rarity().has_item_filters() {
         push_group(&mut rows, Group::Item, item_filters(item, base_type));
         push_group(&mut rows, Group::Waystone, waystone_filters(item));
-        dps_filters(item, !unrevealed)
+        dps_filters(item, stats, !unrevealed)
     } else {
         push_group(&mut rows, Group::Gem, gem_filters(item));
         Vec::new()
@@ -866,7 +873,7 @@ fn rows<'a>(
         stats
             .pseudo_totals()
             .iter()
-            .map(|total| pseudo_filter(total, !unrevealed))
+            .map(|total| pseudo_filter(total, stats, !unrevealed))
             .collect()
     } else {
         Vec::new()
@@ -875,9 +882,13 @@ fn rows<'a>(
         lines,
         stats,
         tiers,
-        dps_filters: !dps.is_empty(),
-        pseudo_filters: !pseudo.is_empty(),
-        unchecked: unrevealed || item.is_waystone(),
+        checked_sums: dps
+            .iter()
+            .chain(&pseudo)
+            .filter(|stat| stat.filter.is_some_and(|filter| filter.checked))
+            .map(|stat| stat.key)
+            .collect(),
+        unchecked: unrevealed || item.rarity() == Rarity::Rare || item.is_waystone(),
     };
     push_group(&mut rows, Group::Weapon, dps);
     push_group(&mut rows, Group::Pseudo, pseudo);
@@ -1278,8 +1289,8 @@ fn quality_filter(item: &Item, category: Option<Category>) -> Option<Stat<'_>> {
     }
     let checked = match category {
         Some(Category::Charm) => quality >= CHARM_QUALITY,
-        Some(Category::Flask) if quality >= MAX_USUAL_QUALITY => quality > MAX_USUAL_QUALITY,
-        _ if quality > MAX_USUAL_QUALITY => item.rarity() != Rarity::Rare,
+        Some(Category::Flask) if quality >= USUAL_QUALITY => quality > USUAL_QUALITY,
+        _ if quality > USUAL_QUALITY => item.rarity() != Rarity::Rare,
         _ if item.rarity() == Rarity::Normal => false,
         _ => return None,
     };
@@ -1311,30 +1322,34 @@ fn required_level_filter(item: &Item) -> Option<Stat<'static>> {
 /// The filters of the DPS of a weapon, each kind it deals, with a minimum at 90 % of its
 /// DPS, rounded down so that the weapon passes it: when `checkable`, the physical one checked,
 /// the elemental one when it is at least the physical one, so that a weapon mostly elemental is
-/// compared with elemental ones.
-fn dps_filters(item: &Item, checkable: bool) -> Vec<Stat<'static>> {
+/// compared with elemental ones, or in its place. On a rare or magic item, a DPS whose minimum
+/// any weapon of its base reaches compares nothing ([`LineStats::rules_out`]): unchecked.
+fn dps_filters(item: &Item, stats: &LineStats, checkable: bool) -> Vec<Stat<'static>> {
     let Some(weapon) = item.weapon() else {
         return Vec::new();
     };
     let dps = weapon.dps();
+    let minimum = |dps: f64| (dps * (1.0 - COMPARABLE_MARGIN)).floor();
+    // A normal item is priced by its base: its DPS is.
+    let compares = |property, dps| {
+        !item.priced_by_stats() || stats.compares(FilterKey::Property(property), minimum(dps))
+    };
+    let physical = compares(Property::PhysicalDps, dps.physical);
+    let elemental = compares(Property::ElementalDps, dps.elemental)
+        && (dps.elemental >= dps.physical || !physical);
     [
-        (Property::PhysicalDps, dps.physical, true),
-        (
-            Property::ElementalDps,
-            dps.elemental,
-            dps.elemental >= dps.physical,
-        ),
+        (Property::PhysicalDps, dps.physical, physical),
+        (Property::ElementalDps, dps.elemental, elemental),
     ]
     .into_iter()
     .filter_map(|(property, dps, checked)| {
         // As the item block shows it.
         let shown = dps.round();
         (shown >= 1.0).then(|| {
-            let minimum = (dps * (1.0 - COMPARABLE_MARGIN)).floor();
             property_filter(
                 property,
                 shown,
-                Limit::minimum(minimum),
+                Limit::minimum(minimum(dps)),
                 checkable && checked,
             )
         })
@@ -1356,18 +1371,19 @@ fn property_filter(property: Property, value: f64, limit: Limit, checked: bool) 
     }
 }
 
-/// The filter of a pseudo total, with a minimum at 90 % of its value.
-fn pseudo_filter(total: &PseudoTotal, checked: bool) -> Stat<'static> {
+/// The filter of a pseudo total, with a minimum at 90 % of its value; when `checkable`,
+/// checked if it compares the item ([`LineStats::rules_out`]): not when the lines of its base
+/// (its implicits at their best roll, its runes, its enchantments) reach its minimum, which
+/// any item of its base may then pass.
+fn pseudo_filter(total: &PseudoTotal, stats: &LineStats, checkable: bool) -> Stat<'static> {
+    let minimum = comparable(total.value, decimals(total.value), Half::Minimum);
+    let compares = stats.compares(FilterKey::Pseudo(total.pseudo), minimum);
     Stat {
         key: FilterKey::Pseudo(total.pseudo),
         text: StatText::Pseudo(total.pseudo, total.value),
         filter: Some(StatFilter {
-            checked,
-            limit: Some(Limit::minimum(comparable(
-                total.value,
-                decimals(total.value),
-                Half::Minimum,
-            ))),
+            checked: checkable && compares,
+            limit: Some(Limit::minimum(minimum)),
         }),
         unsearchable: false,
         roll: None,
@@ -1378,28 +1394,31 @@ fn pseudo_filter(total: &PseudoTotal, checked: bool) -> Stat<'static> {
 struct Reading<'r> {
     /// They tell the lines better lower.
     lines: &'r CopiedLines,
-    /// They tell the numbers of each line its stat counts, and the damage of a weapon.
+    /// They tell the numbers of each line its stat counts, and the lines a DPS or a pseudo
+    /// total counts.
     stats: &'r LineStats,
     /// They tell the rolls of every tier of a line of a prefix or suffix.
     tiers: &'r TierRolls,
-    /// The item has the filters of the DPS of a weapon.
-    dps_filters: bool,
-    /// The item has the filters of its pseudo totals.
-    pseudo_filters: bool,
+    /// The DPS and the pseudo totals checked at first, which count lines of the item.
+    checked_sums: Vec<FilterKey>,
     /// Every line starts unchecked: the item has an unrevealed modifier, which can change it,
-    /// or is a waystone, whose buyer pays for its properties, not for its monsters (like Exiled
+    /// or is a rare, whose value lies in the few modifiers its buyer needs, or a waystone of any
+    /// rarity, whose buyer pays for its properties, not for its monsters (both like Exiled
     /// Exchange 2).
     unchecked: bool,
 }
 
 impl Reading<'_> {
-    /// The line `key` starts checked: unchecked when the DPS of the weapon counts it, its
-    /// damage or its attack speed, when a pseudo total adds it up, or on an item whose lines
-    /// all start unchecked (an unrevealed modifier, a waystone).
+    /// The line `key` starts checked: unchecked when a DPS or a pseudo total checked at first
+    /// counts it already (the damage and the attack speed of a weapon, a line a total adds
+    /// up), or on an item whose lines all start unchecked (an unrevealed modifier, a rare, a
+    /// waystone).
     fn checked(&self, key: StatKey) -> bool {
-        let weapon_damage = self.dps_filters && self.stats.weapon_damage(key);
-        let added_up = self.pseudo_filters && self.stats.added_up(key);
-        !weapon_damage && !added_up && !self.unchecked
+        let counted = self
+            .checked_sums
+            .iter()
+            .any(|&sum| self.stats.counts_in(key, sum));
+        !counted && !self.unchecked
     }
 
     /// The half of the range field the stat `key` fills: the maximum for a line better lower.

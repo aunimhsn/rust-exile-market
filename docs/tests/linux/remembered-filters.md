@@ -19,14 +19,14 @@ Tu avais trouvé le souci au test libre de 14b2 : Ctrl+D sur A, un min tapé, Ct
 
 ## Les tests
 
-1. **Le cas trouvé** : **Ctrl+D** sur A, **« Show N stats »**, tape `12` dans le **min** d'une stat et décoche une autre stat. Puis **Ctrl+D** sur B, puis de nouveau sur A.
-   ✅ B arrive avec ses filtres par défaut ; A revient avec son `12` et sa stat décochée.
+1. **Le cas trouvé** : **Ctrl+D** sur A, **« Show N stats »**, coche une stat et tape `12` dans son **min**, puis décoche un total pseudo (ou coche une autre stat, si A n'en a pas). Puis **Ctrl+D** sur B, puis de nouveau sur A.
+   ✅ B arrive avec ses filtres par défaut ; A revient avec son `12` et ton autre choix.
 
 2. **Les offres** : sur A, clique sur la **loupe**, et attends les offres. **Ctrl+D** sur B, puis sur A.
    ✅ A revient avec ses offres et leur âge (« searched …s ago »), sans nouvelle recherche.
 
 3. **Le double chevron** : sur A, quand plus de 10 offres sont trouvées (« 10 of 13 online »), **Ctrl+D** sur B, **loupe** sur B, attends ses offres. Puis **Ctrl+D** sur A et clique sur le **double chevron** sous la liste.
-   ✅ Les 10 offres suivantes ajoutées sont bien des offres de A (même base, stats proches), pas celles de B. C'est aussi le point 8 de la revue : la suite d'une ancienne recherche se charge encore. Refais-le en laissant passer **5 minutes** avant de revenir sur A ; si le message « The trade site can't be reached. » apparaît, note-le.
+   ✅ Les 10 offres suivantes ajoutées sont bien des offres de A (même base, et proches de A pour les stats cochées), pas celles de B. C'est aussi le point 8 de la revue : la suite d'une ancienne recherche se charge encore. Refais-le en laissant passer **5 minutes** avant de revenir sur A ; si le message « The trade site can't be reached. » apparaît, note-le.
 
 4. **Ctrl+C aussi** : dans la fenêtre principale (pas la fenêtre par-dessus le jeu), copie A avec **Ctrl+C**, puis B, puis A.
    ✅ A revient avec ses filtres et ses offres, dans la fenêtre principale comme dans celle par-dessus le jeu.

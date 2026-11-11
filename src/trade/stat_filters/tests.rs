@@ -5,6 +5,7 @@
 use super::*;
 use crate::filters::Property;
 use crate::item::{CopiedItem, Item, ModifierOrigin, Range};
+use crate::language::Language;
 use crate::trade::pseudo::Pseudo;
 
 fn parse(text: &str) -> Item {
@@ -35,7 +36,7 @@ fn unique(lines: &str) -> Item {
 }
 
 fn line_stats(item: &Item) -> LineStats {
-    LineStats::new(item.language(), item.modifiers(), None)
+    LineStats::new(item, item.modifiers(), None)
 }
 
 fn key(modifier: usize, line: usize) -> StatKey {
@@ -68,6 +69,7 @@ fn stat(id: &str, minimum: Option<f64>, maximum: Option<f64>) -> StatFilter {
         ids: vec![id.to_owned()],
         minimum,
         maximum,
+        rules_out: RulesOut::OfTheBase,
     }
 }
 
@@ -205,7 +207,7 @@ fn a_stat_of_the_trade_site_is_searched_as_its_template_writes_it() {
         "20% reduced Damage per Patch\n\
          Sacrifice up to 10 Chaos Orbs to receive double on Trial completion",
     );
-    let stats = LineStats::new(item.language(), item.modifiers(), Some(&trade));
+    let stats = LineStats::new(&item, item.modifiers(), Some(&trade));
 
     assert_eq!(
         stats.stat_filters(refs(&[
@@ -390,16 +392,33 @@ fn the_damage_and_the_attack_speed_of_a_weapon_are_known_in_every_language() {
         "152% d'Augmentation des Dégâts Physiques\nAjoute 21 à 38 Dégâts Physiques",
     );
 
+    // For each modifier, whether the physical DPS counts it, then the elemental one.
     let damage = |item: &Item| {
         let stats = line_stats(item);
+        let counted =
+            |modifier, property| stats.counts_in(key(modifier, 0), FilterKey::Property(property));
         (0..item.modifiers().len())
-            .map(|modifier| stats.weapon_damage(key(modifier, 0)))
+            .map(|modifier| {
+                (
+                    counted(modifier, Property::PhysicalDps),
+                    counted(modifier, Property::ElementalDps),
+                )
+            })
             .collect::<Vec<_>>()
     };
-    // Not the elemental damage of its attacks, which any item gives; nor its chaos
-    // damage, which neither DPS filter counts.
-    assert_eq!(damage(&english), [true, true, true, false, false]);
-    assert_eq!(damage(&french), [true, true]);
+    // The attack speed counts in both. Not the elemental damage of its attacks, which any
+    // item gives; nor its chaos damage, which neither DPS filter counts.
+    assert_eq!(
+        damage(&english),
+        [
+            (true, false),
+            (false, true),
+            (true, true),
+            (false, false),
+            (false, false)
+        ]
+    );
+    assert_eq!(damage(&french), [(true, false), (true, false)]);
 }
 
 /// A rare ring with resistances, life and strength in several groups, in `language`.
@@ -451,8 +470,13 @@ fn the_pseudo_totals_add_up_the_lines_of_every_group_in_every_language() {
             ],
             "{language:?}"
         );
+        // Each of its lines counts in one of them.
         for modifier in 0..item.modifiers().len() {
-            assert!(stats.added_up(key(modifier, 0)), "{language:?} {modifier}");
+            let counted = stats
+                .pseudo_totals()
+                .iter()
+                .any(|total| stats.counts_in(key(modifier, 0), FilterKey::Pseudo(total.pseudo)));
+            assert!(counted, "{language:?} {modifier}");
         }
     }
 }
@@ -506,13 +530,19 @@ fn a_pseudo_stat_is_searched_by_its_id_before_the_lines() {
     assert_eq!(
         stats.search_filters(&filters).stats,
         [
+            // Beyond what its base reaches: its implicit, fixed in the advanced copy, with a
+            // catalyst (26.4), and its rune (10).
             stat(
                 "pseudo.pseudo_total_elemental_resistance",
                 Some(90.0),
                 Some(120.0)
             ),
             stat("pseudo.pseudo_total_life", None, None),
-            stat("pseudo.pseudo_number_of_unrevealed_mods", Some(1.0), None),
+            // It narrows the items of the base only: it compares no stat.
+            StatFilter {
+                rules_out: RulesOut::Nothing,
+                ..stat("pseudo.pseudo_number_of_unrevealed_mods", Some(1.0), None)
+            },
             stat("explicit.stat_3299347043", Some(60.0), None),
         ]
     );
@@ -545,6 +575,8 @@ fn the_filters_of_a_search_are_those_checked_and_any_base_when_it_is_unchecked()
             property: Property::PhysicalDps,
             minimum: Some(220.0),
             maximum: None,
+            // Not a weapon: no DPS of its base to go beyond, items of the league only.
+            rules_out: RulesOut::OfTheLeague,
         }]
     );
     assert_eq!(
@@ -564,7 +596,7 @@ fn counts_the_affixes_a_rune_or_an_implicit_allows() {
         include_str!("../../item/test-items/fr-trade-rare-bow-mirrored.txt"),
     ] {
         let bow = parse(text);
-        let stats = LineStats::new(bow.language(), bow.modifiers(), None);
+        let stats = LineStats::new(&bow, bow.modifiers(), None);
         assert_eq!(stats.affixes_allowed(Affix::Suffix), 1);
         assert_eq!(stats.affixes_allowed(Affix::Prefix), 0);
     }
@@ -575,7 +607,7 @@ fn counts_the_affixes_a_rune_or_an_implicit_allows() {
          { Implicit Modifier }\n-1 Prefix Modifier allowed\n\
          --------\n{ Prefix Modifier \"Hale\" (Tier: 9) }\n+12(10-14) to maximum Life",
     );
-    let stats = LineStats::new(amulet.language(), amulet.modifiers(), None);
+    let stats = LineStats::new(&amulet, amulet.modifiers(), None);
     assert_eq!(stats.affixes_allowed(Affix::Prefix), -1);
     assert_eq!(stats.affixes_allowed(Affix::Suffix), 2, "the plural");
 }
@@ -584,7 +616,7 @@ fn counts_the_affixes_a_rune_or_an_implicit_allows() {
 fn a_tablet_and_a_corrupted_waystone_have_their_own_affix_limits() {
     let limits = |text: &str| {
         let item = parse(text);
-        let limits = LineStats::new(item.language(), item.modifiers(), None).affix_limits(&item);
+        let limits = LineStats::new(&item, item.modifiers(), None).affix_limits(&item);
         (limits.prefixes, limits.suffixes, limits.counted_only)
     };
     let waystone = "Item Class: Waystones\nRarity: Rare\nGrim Path\nWaystone (Tier 15)\n\
@@ -630,7 +662,171 @@ fn counts_the_affixes_allowed_by_a_line_the_trade_site_finds() {
     ] {
         let found = game_data::modifier_stats(amulet.language(), &amulet.modifiers()[0], trade);
         assert_eq!(found[0].stat.as_ref().map(|stat| stat.source), Some(source));
-        let stats = LineStats::new(amulet.language(), amulet.modifiers(), trade);
+        let stats = LineStats::new(&amulet, amulet.modifiers(), trade);
         assert_eq!(stats.affixes_allowed(Affix::Prefix), 1);
     }
+}
+
+#[test]
+fn two_copies_of_one_base_reach_the_physical_dps_of_that_base_with_their_runes() {
+    // Two Warmonger Bows at 30 % quality, of other lines: 56-84 at their base, a hit of 70,
+    // if the quality multiplies apart from the increased physical damage (the only reading
+    // that gives both a whole base); at 30 % and 1.20 attacks per second, 109.2. The English
+    // one keeps its rune, 40 % increased physical damage, which any bow may have: 152.9.
+    for (text, reach) in [
+        (
+            include_str!("../../item/test-items/fr-trade-rare-bow-mirrored.txt"),
+            109.2,
+        ),
+        (
+            include_str!("../../item/test-items/en-owner-trade-rare-bow-mirrored.txt"),
+            152.9,
+        ),
+    ] {
+        let bow = parse(text);
+        let found = line_stats(&bow).dps_reach.expect("a weapon").physical;
+        assert!((found - reach).abs() < 1.0, "{found}");
+    }
+}
+
+#[test]
+fn what_a_corruption_added_compares_the_item_not_what_any_item_of_its_base_may_have() {
+    // The first line of the modifier of `kind` of `item`, as a filter without limit.
+    let rules_out = |item: &Item, kind: ModifierKind| {
+        let modifier = item
+            .modifiers()
+            .iter()
+            .position(|modifier| modifier.kind == kind)
+            .expect("a modifier of that kind");
+        line_stats(item).rules_out(FilterKey::Stat(key(modifier, 0)), None)
+    };
+    let ring = parse(include_str!(
+        "../../item/test-items/en-owner-rare-ring-catalyst.txt"
+    ));
+    // Rolled by its corruption: no other Prismatic Ring has its Dexterity.
+    assert_eq!(
+        rules_out(&ring, ModifierKind::Corruption),
+        RulesOut::OfTheBase
+    );
+    assert_eq!(
+        rules_out(&ring, ModifierKind::Implicit),
+        RulesOut::OfTheLeague
+    );
+    // An enchantment and a rune go on any item of the base.
+    let amulet = parse(include_str!(
+        "../../item/test-items/en-owner-rare-amulet-catalyst.txt"
+    ));
+    assert_eq!(
+        rules_out(&amulet, ModifierKind::Enchant),
+        RulesOut::OfTheLeague
+    );
+    let bow = parse(include_str!(
+        "../../item/test-items/en-owner-trade-rare-bow-mirrored.txt"
+    ));
+    assert_eq!(rules_out(&bow, ModifierKind::Rune), RulesOut::OfTheLeague);
+}
+
+#[test]
+fn the_dexterity_a_corruption_added_isnt_what_the_base_reaches() {
+    // 14 from its corruption and 28 from a suffix: a total of 42, which no line of its base
+    // gives; its minimum compares the ring.
+    let ring = parse(include_str!(
+        "../../item/test-items/en-owner-rare-ring-catalyst.txt"
+    ));
+    let stats = line_stats(&ring);
+    let dexterity = FilterKey::Pseudo(Pseudo::Dexterity);
+    assert_eq!(stats.rules_out(dexterity, Some(1.0)), RulesOut::OfTheBase);
+    // Its elemental resistance is its implicit alone, +10(7-10)% to all: no modifier adds to
+    // it, so that even a minimum beyond the 36 it reaches with its catalyst compares nothing.
+    let elemental = FilterKey::Pseudo(Pseudo::ElementalResistance);
+    assert_eq!(
+        stats.rules_out(elemental, Some(40.0)),
+        RulesOut::OfTheLeague
+    );
+}
+
+#[test]
+fn a_minimum_the_base_reaches_exactly_compares_nothing() {
+    // A rune of 12 and a suffix of 20: a helmet of the base with the rune alone has 12, and
+    // passes a minimum of 12; none passes 13.
+    let helmet = parse(
+        "Item Class: Helmets\nRarity: Rare\nGale Crest\nHunter Hood\n--------\n\
+         Item Level: 80\n--------\n+12% to Fire Resistance (rune)\n--------\n\
+         +20% to Fire Resistance",
+    );
+    let stats = line_stats(&helmet);
+    let elemental = FilterKey::Pseudo(Pseudo::ElementalResistance);
+    assert_eq!(
+        stats.rules_out(elemental, Some(12.0)),
+        RulesOut::OfTheLeague
+    );
+    assert_eq!(stats.rules_out(elemental, Some(13.0)), RulesOut::OfTheBase);
+}
+
+#[test]
+fn a_catalyst_raises_the_implicits_of_a_ring_an_amulet_or_a_jewel_only() {
+    let catalyst = |item: &str| ImplicitRolls::of(&parse(item)).catalyst;
+    let rare = |class: &str, base: &str, quality: &str| {
+        catalyst(&format!(
+            "Item Class: {class}\nRarity: Rare\nGale Coil\n{base}\n--------\n\
+             {quality}Item Level: 80"
+        ))
+    };
+    let close = |found: f64, expected: f64| (found - expected).abs() < 1e-9;
+
+    // The usual quality, which any item of the base may have; its own when higher.
+    assert!(close(rare("Rings", "Prismatic Ring", ""), 1.2));
+    assert!(close(rare("Amulets", "Gold Amulet", ""), 1.2));
+    assert!(close(rare("Jewels", "Ruby", ""), 1.2));
+    let cold = "Quality (Cold Modifiers): +40% (augmented)\n--------\n";
+    assert!(close(rare("Rings", "Prismatic Ring", cold), 1.4));
+    // The quality of an armour raises its defences, not its implicit.
+    let armour = "Quality: +30% (augmented)\n--------\n";
+    assert!(close(rare("Body Armours", "Ancestral Mail", armour), 1.0));
+    // By its item class, which every copy writes: a base the game data doesn't know, a
+    // magic item, whose name alone doesn't tell its base, and in French.
+    assert!(close(rare("Rings", "Mystery Ring", ""), 1.2));
+    let magic = |class: &str, name: &str| {
+        catalyst(&format!(
+            "Item Class: {class}\nRarity: Magic\n{name}\n--------\nItem Level: 80"
+        ))
+    };
+    assert!(close(
+        magic("Rings", "Hale Prismatic Ring of the Seal"),
+        1.2
+    ));
+    assert!(close(magic("Body Armours", "Hale Ancestral Mail"), 1.0));
+    let french = "Classe d'objet: Bagues\nRareté: Rare\nBoucle de tempête\n\
+                  Bague prismatique\n--------\nNiveau de l'objet: 80";
+    assert!(close(catalyst(french), 1.2));
+}
+
+#[test]
+fn the_rings_the_amulets_and_the_jewels_of_the_test_items_take_catalysts() {
+    // By their item class, in both languages: the copies whose file is named after one of
+    // the three, and no other.
+    for (file, text) in crate::item::test_items::ALL {
+        let named = ["ring", "amulet", "jewel"]
+            .iter()
+            .any(|kind| file.contains(kind));
+        assert_eq!(parse(text).takes_catalysts(), named, "{file}");
+    }
+}
+
+#[test]
+fn a_catalyst_doesnt_raise_an_implicit_that_counts_against_a_total() {
+    // -13 of chaos resistance, fixed in the advanced copy: a catalyst would make it -15.6,
+    // further from what the best ring of the base has.
+    let ring = parse(
+        "Item Class: Rings\nRarity: Rare\nVile Loop\nAmethyst Ring\n--------\n\
+         Item Level: 77\n--------\n{ Implicit Modifier }\n-13% to Chaos Resistance\n\
+         --------\n{ Suffix Modifier }\n+17% to Fire and Chaos Resistances",
+    );
+    let stats = line_stats(&ring);
+    let implicit = stats
+        .lines
+        .iter()
+        .find(|line| line.source == Source::Implicit)
+        .expect("its implicit");
+    assert!((implicit.reach + 13.0).abs() < 1e-9, "{}", implicit.reach);
 }

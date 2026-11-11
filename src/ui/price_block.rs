@@ -13,12 +13,15 @@ use super::images;
 use super::theme::{color, size, text};
 use super::widgets;
 use crate::estimate::{COUNTED, Estimate};
+use crate::filters::{Filter, FilterKey};
 use crate::format::{self, Currency};
 use crate::i18n::{Message, Translator};
 use crate::item::{Item, Rarity};
 use crate::prices::{Direction, Price, Rates};
 use crate::pricing::{Candidate, FixedPrice, NoFixedPrice};
 use crate::session::PricesState;
+use crate::trade::query::SearchFilters;
+use crate::trade::stat_filters::LineStats;
 
 /// The space above and under the block.
 const PADDING_Y: f32 = 12.0;
@@ -78,6 +81,61 @@ enum Fixed {
     /// An item of the currency exchange, on fewer than [`crate::prices::MIN_TRADES`] trades
     /// when `thin`.
     Exchange { thin: bool },
+}
+
+/// Whether the filters of the item, as the player left them, compare its stats.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StatChecks {
+    /// A filter that compares the item is checked: a line of a modifier, a pseudo total or
+    /// a DPS beyond what its base reaches, a property of a waystone or of a gem.
+    Checked,
+    /// Some can be checked, none is.
+    Unchecked,
+    /// None can be: an unidentified item, or lines the trade site can't search.
+    NoneToCheck,
+}
+
+impl StatChecks {
+    /// The checks of `search`, the filters of the search made of `all` the filters of the item,
+    /// checked or not, whose lines have the `stats`: by the one rule of the estimate
+    /// ([`SearchFilters::compares_stats`]), on the filters as they are, then on all of them
+    /// checked.
+    #[must_use]
+    pub fn of(search: &SearchFilters, stats: &LineStats, all: &[(FilterKey, Filter)]) -> Self {
+        if search.compares_stats() {
+            return Self::Checked;
+        }
+        let everything: Vec<(FilterKey, Filter)> = all
+            .iter()
+            .map(|(key, filter)| {
+                let filter = Filter {
+                    checked: true,
+                    ..filter.clone()
+                };
+                (*key, filter)
+            })
+            .collect();
+        if stats.search_filters(&everything).compares_stats() {
+            Self::Unchecked
+        } else {
+            Self::NoneToCheck
+        }
+    }
+}
+
+/// The line under "No market price…" of an item without estimate, given the `checks` of its
+/// filters: an item `priced_by_stats` ([`Item::priced_by_stats`]) is estimated only from a
+/// search that compares some, so that it asks for one to be checked, and says nothing when
+/// none can be (the offers of any item of its base would say nothing of its price).
+fn estimate_hint(priced_by_stats: bool, checks: StatChecks) -> Option<Message> {
+    if !priced_by_stats {
+        return Some(Message::SearchToEstimate);
+    }
+    match checks {
+        StatChecks::Checked => Some(Message::SearchToEstimate),
+        StatChecks::Unchecked => Some(Message::CheckToEstimate),
+        StatChecks::NoneToCheck => None,
+    }
 }
 
 /// Why the price block shows no price.
@@ -145,7 +203,10 @@ fn view<'a>(
 pub struct PriceBlock<'a> {
     item: &'a Item,
     price: Result<(FixedPrice<'a>, Rates), NoFixedPrice>,
+    /// The estimated price of an item without a fixed price, from its similar offers.
     estimate: Option<Estimate<'a>>,
+    /// Whether the filters of the item compare its stats.
+    checks: StatChecks,
     prices: PricesState,
     league: Option<&'a str>,
     i18n: &'a Translator,
@@ -153,11 +214,15 @@ pub struct PriceBlock<'a> {
 
 impl<'a> PriceBlock<'a> {
     /// The block of `item`: its fixed `price` with the rates of its prices, or why it has
-    /// none, given the state of the `prices` of the `league` shown.
+    /// none, given the state of the `prices` of the `league` shown; for an item without a
+    /// fixed price, its `estimate` from its similar offers, or else, by the `checks` of its
+    /// filters as the player left them, what to do to get one.
     #[must_use]
     pub fn new(
         item: &'a Item,
         price: Result<(FixedPrice<'a>, Rates), NoFixedPrice>,
+        estimate: Option<Estimate<'a>>,
+        checks: StatChecks,
         prices: PricesState,
         league: Option<&'a str>,
         i18n: &'a Translator,
@@ -165,18 +230,12 @@ impl<'a> PriceBlock<'a> {
         Self {
             item,
             price,
-            estimate: None,
+            estimate,
+            checks,
             prices,
             league,
             i18n,
         }
-    }
-
-    /// The estimated price of an item without a fixed price, from its similar offers.
-    #[must_use]
-    pub fn estimate(mut self, estimate: Option<Estimate<'a>>) -> Self {
-        self.estimate = estimate;
-        self
     }
 
     /// Draws the block, the whole width of `ui`.
@@ -388,9 +447,11 @@ impl<'a> PriceBlock<'a> {
             Notice::NoPriceFound(league) => i18n.no_price_found(league),
         };
         message(ui, &first, color::TEXT);
-        if let Notice::NoMarketPrice(_) = notice {
+        if let Notice::NoMarketPrice(_) = notice
+            && let Some(second) = estimate_hint(self.item.priced_by_stats(), self.checks)
+        {
             ui.add_space(MESSAGE_GAP);
-            message(ui, &i18n.text(Message::SearchToEstimate), color::WEAK);
+            message(ui, &i18n.text(second), color::WEAK);
         }
     }
 }
@@ -542,6 +603,31 @@ mod tests {
             view(&price, None, Rarity::Magic, KNOWN, Some("Standard")),
             PriceView::Notice(Notice::NoMarketPrice(Rarity::Magic))
         );
+    }
+
+    #[test]
+    fn a_rare_or_magic_item_asks_for_a_stat_to_estimate_it_and_says_nothing_when_none_can_be() {
+        use StatChecks::{Checked, NoneToCheck, Unchecked};
+
+        // A rare or magic item.
+        assert_eq!(
+            estimate_hint(true, Checked),
+            Some(Message::SearchToEstimate)
+        );
+        assert_eq!(
+            estimate_hint(true, Unchecked),
+            Some(Message::CheckToEstimate)
+        );
+        assert_eq!(estimate_hint(true, NoneToCheck), None);
+        // A normal item, a gem or a waystone: priced by its base, its quality, its level or
+        // its tier, not by modifiers.
+        for checks in [Checked, Unchecked, NoneToCheck] {
+            assert_eq!(
+                estimate_hint(false, checks),
+                Some(Message::SearchToEstimate),
+                "{checks:?}"
+            );
+        }
     }
 
     #[test]

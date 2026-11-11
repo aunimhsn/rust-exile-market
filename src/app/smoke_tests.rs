@@ -118,6 +118,24 @@ struct Drawn {
     with_a_fixed_price: usize,
     with_offers_of_items: usize,
     with_offers_of_the_exchange: usize,
+    /// The frames whose price block wrote an estimated price, and those where it wrote the
+    /// line that asks for a modifier to be checked instead.
+    with_an_estimate: usize,
+    with_a_check_hint: usize,
+}
+
+/// Whether one of `shapes`, the shapes of a frame, writes `text`.
+fn writes(shapes: &[egui::epaint::ClippedShape], text: &str) -> bool {
+    fn shape_writes(shape: &egui::Shape, text: &str) -> bool {
+        match shape {
+            egui::Shape::Text(shape) => shape.galley.text() == text,
+            egui::Shape::Vec(shapes) => shapes.iter().any(|shape| shape_writes(shape, text)),
+            _ => false,
+        }
+    }
+    shapes
+        .iter()
+        .any(|clipped| shape_writes(&clipped.shape, text))
 }
 
 /// An item shown, with what the application keeps next to its session.
@@ -204,6 +222,11 @@ impl Scene {
         });
         drawn.with_a_tooltip += usize::from(above);
         drawn.with_a_fixed_price += usize::from(self.session.fixed_price(self.item()).is_ok());
+        // By what the price block wrote, not by its rule told again.
+        let wrote = |text: &str| usize::from(writes(&output.shapes, text));
+        let estimated = self.i18n.text(Message::EstimatedPriceLabel).to_uppercase();
+        drawn.with_an_estimate += wrote(&estimated);
+        drawn.with_a_check_hint += wrote(&self.i18n.text(Message::CheckToEstimate));
         match self.offers.state() {
             OffersState::Items { .. } => drawn.with_offers_of_items += 1,
             OffersState::Exchange { .. } => drawn.with_offers_of_the_exchange += 1,
@@ -373,4 +396,10 @@ fn draw_every_test_item(interface: Language) {
         "an item of the currency exchange among the test items"
     );
     assert!(drawn.with_a_tooltip > items, "{}", drawn.with_a_tooltip);
+    assert!(drawn.with_an_estimate > items, "{}", drawn.with_an_estimate);
+    assert!(
+        drawn.with_a_check_hint > items,
+        "{}",
+        drawn.with_a_check_hint
+    );
 }

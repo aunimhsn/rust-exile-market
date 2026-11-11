@@ -29,6 +29,23 @@ pub enum Pseudo {
 }
 
 impl Pseudo {
+    /// A total of lines of the item, not the count of its unrevealed modifiers, which rules
+    /// out nothing: any item may have one.
+    #[must_use]
+    pub fn is_total(self) -> bool {
+        match self {
+            Self::ElementalResistance
+            | Self::ChaosResistance
+            | Self::Life
+            | Self::Mana
+            | Self::Strength
+            | Self::Dexterity
+            | Self::Intelligence
+            | Self::AllAttributes => true,
+            Self::UnrevealedModifiers => false,
+        }
+    }
+
     /// Its id on the trade site.
     #[must_use]
     pub fn trade_id(self) -> &'static str {

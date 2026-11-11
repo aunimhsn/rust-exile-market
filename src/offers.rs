@@ -12,7 +12,7 @@ use std::time::{Duration, Instant, SystemTime};
 use crate::filters::Property;
 use crate::item::{Catalyst, Item};
 use crate::trade::offers::{ExchangeOffer, ItemOffer};
-use crate::trade::query::SearchKind;
+use crate::trade::query::{Query, SearchKind};
 use crate::trade::search::{Answer, Failure, NextSearch, Order, Outcome, Rest, Search};
 
 /// The offers shown at once, and added by each click on the double chevron.
@@ -43,9 +43,8 @@ pub enum OffersState {
         /// Why the next offers couldn't come. Refused by its limits, the waiting block tells
         /// it already: `None`.
         more_failed: Option<Failure>,
-        /// The search filtered the quality, which the trade site searches of any kind: the
-        /// offers of a catalyst of another kind than the item's aren't counted.
-        quality_searched: bool,
+        /// What the search filtered.
+        searched_by: SearchedBy,
         searched: SystemTime,
     },
     /// The offers of the currency exchange, all of them, the first `shown` shown.
@@ -61,13 +60,32 @@ pub enum OffersState {
     Limited,
 }
 
+/// What a search of items filtered, which its offers keep.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct SearchedBy {
+    /// The quality, which the trade site searches of any kind: the offers of a catalyst of
+    /// another kind than the item's aren't counted.
+    quality: bool,
+    /// The stats of the item: without, its offers are any items of its base, and give no
+    /// estimate of a rare or magic item.
+    stats: bool,
+}
+
+impl SearchedBy {
+    fn of(query: &Query) -> Self {
+        Self {
+            quality: query.searches(Property::Quality),
+            stats: query.compares_stats(),
+        }
+    }
+}
+
 /// The kinds of orders.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum PendingOrder {
     Search {
         kind: SearchKind,
-        /// The search filters the quality.
-        quality_searched: bool,
+        searched_by: SearchedBy,
     },
     More,
 }
@@ -106,11 +124,24 @@ impl Offers {
     pub fn searched_catalyst(&self, item: &Item) -> Option<Catalyst> {
         match self.state {
             OffersState::Items {
-                quality_searched: true,
+                searched_by: SearchedBy { quality: true, .. },
                 ..
             } => item.quality_kind()?.catalyst,
             _ => None,
         }
+    }
+
+    /// The offers shown are those of a search of items that compared the stats of the item, not
+    /// only its base.
+    #[must_use]
+    pub fn compared_stats(&self) -> bool {
+        matches!(
+            self.state,
+            OffersState::Items {
+                searched_by: SearchedBy { stats: true, .. },
+                ..
+            }
+        )
     }
 
     /// When the last search was answered with its offers, for any item.
@@ -140,7 +171,7 @@ impl Offers {
                 total,
                 first_page,
                 rest,
-                quality_searched,
+                searched_by,
                 searched,
                 ..
             } => OffersState::Items {
@@ -150,7 +181,7 @@ impl Offers {
                 rest,
                 loading_more: false,
                 more_failed: None,
-                quality_searched,
+                searched_by,
                 searched,
             },
             exchange @ OffersState::Exchange { .. } => exchange,
@@ -188,7 +219,7 @@ impl Offers {
         self.pending = Some(Pending {
             order: PendingOrder::Search {
                 kind,
-                quality_searched: search.query.searches(Property::Quality),
+                searched_by: SearchedBy::of(&search.query),
             },
             shown: true,
         });
@@ -304,13 +335,10 @@ impl Offers {
                 rest,
                 loading_more: false,
                 more_failed: None,
-                quality_searched: matches!(
-                    pending.order,
-                    PendingOrder::Search {
-                        quality_searched: true,
-                        ..
-                    }
-                ),
+                searched_by: match pending.order {
+                    PendingOrder::Search { searched_by, .. } => searched_by,
+                    PendingOrder::More => SearchedBy::default(),
+                },
                 searched: now,
             },
             (Outcome::Exchange { offers, total }, _) => OffersState::Exchange {
@@ -325,7 +353,7 @@ impl Offers {
                     mut offers,
                     total,
                     first_page,
-                    quality_searched,
+                    searched_by,
                     searched,
                     ..
                 },
@@ -338,7 +366,7 @@ impl Offers {
                     rest,
                     loading_more: false,
                     more_failed: None,
-                    quality_searched,
+                    searched_by,
                     searched,
                 }
             }
@@ -350,7 +378,7 @@ impl Offers {
                     total,
                     first_page,
                     rest,
-                    quality_searched,
+                    searched_by,
                     searched,
                     ..
                 },
@@ -364,7 +392,7 @@ impl Offers {
                     Outcome::Failed(failure) => Some(failure),
                     _ => None,
                 },
-                quality_searched,
+                searched_by,
                 searched,
             },
             (Outcome::Failed(failure), _) => OffersState::Failed(failure),

@@ -6,7 +6,7 @@ use super::*;
 use crate::filters::Property;
 use crate::item::CopiedItem;
 use crate::item_names::tests::item_names;
-use crate::trade::query::{PropertyFilter, StatFilter};
+use crate::trade::query::{PropertyFilter, RulesOut, StatFilter};
 use serde_json::Value;
 
 fn parse(text: &str) -> Item {
@@ -349,11 +349,13 @@ fn a_unique_is_searched_with_its_stats_and_the_other_items_with_all_their_filter
         ids: vec!["explicit.stat_3299347043".to_owned()],
         minimum: Some(45.0),
         maximum: None,
+        rules_out: RulesOut::OfTheBase,
     }];
     let properties = vec![PropertyFilter {
         property: Property::ItemLevel,
         minimum: Some(81.0),
         maximum: None,
+        rules_out: RulesOut::OfTheLeague,
     }];
     let filters = |any_base| SearchFilters {
         any_base,
@@ -394,6 +396,7 @@ fn searched_base(item: &Item, any_base: bool, narrowed: bool) -> (Option<String>
             property: Property::ItemLevel,
             minimum: narrowed.then_some(81.0),
             maximum: None,
+            rules_out: RulesOut::OfTheLeague,
         }],
         stats: Vec::new(),
         states: Vec::new(),
@@ -462,6 +465,31 @@ fn a_base_the_game_data_doesnt_know_is_searched_when_nothing_else_narrows_the_se
         (Some("Mystery Ring".to_owned()), None)
     );
     assert_eq!(searched_base(&rare, true, true), (None, None));
+
+    // A checked stat narrows it, an implicit too; the count of the unrevealed modifiers,
+    // which any item may have, doesn't.
+    let target = target(&rare, None, None).expect("a target");
+    let base_with = |rules_out| {
+        let filters = SearchFilters {
+            any_base: true,
+            stats: vec![StatFilter {
+                ids: vec!["implicit.stat_681332047".to_owned()],
+                minimum: Some(10.0),
+                maximum: None,
+                rules_out,
+            }],
+            ..SearchFilters::default()
+        };
+        match super::query(&rare, &target, filters) {
+            Query::Items(items) => items.base_type,
+            Query::Exchange(_) => panic!("a search of items"),
+        }
+    };
+    assert_eq!(base_with(RulesOut::OfTheLeague), None);
+    assert_eq!(
+        base_with(RulesOut::Nothing),
+        Some("Mystery Ring".to_owned())
+    );
 }
 
 #[test]

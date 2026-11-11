@@ -101,7 +101,7 @@ impl ShownItem {
                 unique_rolls(item, copied, trade, names, prices)
             } else if let Some(base_type) = &base_type {
                 // The runes and the implicits, which tell the room, are never read again.
-                let stats = LineStats::new(item.language(), copied, trade);
+                let stats = LineStats::new(item, copied, trade);
                 game_data::with_trade_tiers(
                     item.language(),
                     base_type,
@@ -116,7 +116,7 @@ impl ShownItem {
             reshaped = shape(item.modifiers()) != shape(&modifiers);
             item.set_modifiers(modifiers);
         }
-        self.stats = LineStats::new(item.language(), item.modifiers(), trade);
+        self.stats = LineStats::new(item, item.modifiers(), trade);
         self.lines = CopiedLines::new(item.language(), item.modifiers(), &self.stats, trade);
         self.tiers = TierRolls::new(
             item.language(),

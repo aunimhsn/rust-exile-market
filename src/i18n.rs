@@ -100,6 +100,7 @@ pub enum Message {
     IdentifyToPrice,
     NoOffers,
     SearchToEstimate,
+    CheckToEstimate,
     NoMarketPriceRare,
     NoMarketPriceSkillGem,
     NoMarketPriceMagic,
@@ -208,7 +209,7 @@ pub enum Message {
 impl Message {
     /// Every message, for the tests.
     #[cfg(test)]
-    const ALL: [Self; 158] = [
+    const ALL: [Self; 159] = [
         Self::LeagueModeSoftcore,
         Self::LeagueModeHardcore,
         Self::LeagueLoading,
@@ -281,6 +282,7 @@ impl Message {
         Self::IdentifyToPrice,
         Self::NoOffers,
         Self::SearchToEstimate,
+        Self::CheckToEstimate,
         Self::NoMarketPriceRare,
         Self::NoMarketPriceSkillGem,
         Self::NoMarketPriceMagic,
@@ -445,6 +447,7 @@ impl Message {
             Self::IdentifyToPrice => "identify-to-price",
             Self::NoOffers => "no-offers",
             Self::SearchToEstimate => "search-to-estimate",
+            Self::CheckToEstimate => "check-to-estimate",
             Self::NoMarketPriceRare => "no-market-price-rare",
             Self::NoMarketPriceSkillGem => "no-market-price-skill-gem",
             Self::NoMarketPriceMagic => "no-market-price-magic",
@@ -1231,7 +1234,7 @@ impl Translator {
     }
 
     /// The state of the trade site in the status bar during a long wait before the next
-    /// search, written by [`wait`].
+    /// search, written by [`Self::wait`].
     #[must_use]
     pub fn status_trade_wait(&self, wait: Duration) -> String {
         self.format_wait(STATUS_TRADE_WAIT, wait)

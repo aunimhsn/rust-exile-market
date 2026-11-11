@@ -37,6 +37,16 @@ impl Query {
             Self::Exchange(_) => false,
         }
     }
+
+    /// Whether the query compares the stats of the item, more than its base: see
+    /// [`SearchFilters::compares_stats`].
+    #[must_use]
+    pub fn compares_stats(&self) -> bool {
+        match self {
+            Self::Items(query) => compares_stats(&query.stats, &query.properties),
+            Self::Exchange(_) => false,
+        }
+    }
 }
 
 /// The kinds of searches, whose limits differ.
@@ -86,12 +96,51 @@ pub struct SearchFilters {
 }
 
 impl SearchFilters {
-    /// Something other than the base type narrows the search: a stat, or a property with a
-    /// limit.
+    /// Something other than the base type narrows the search: a stat that rules out items of
+    /// the league (not the count of its unrevealed modifiers, which any item may have), or a
+    /// property with a limit.
     #[must_use]
     pub fn narrows(&self) -> bool {
-        !self.stats.is_empty() || self.properties.iter().any(PropertyFilter::limits_anything)
+        self.stats
+            .iter()
+            .any(|stat| stat.rules_out != RulesOut::Nothing)
+            || self.properties.iter().any(PropertyFilter::limits_anything)
     }
+
+    /// Something compares the stats of the item with the offers: a filter that rules out items
+    /// of its base ([`RulesOut::OfTheBase`]), a property only with a limit. Without, the offers
+    /// are any items of its base, whose price says nothing of its own.
+    #[must_use]
+    pub fn compares_stats(&self) -> bool {
+        compares_stats(&self.stats, &self.properties)
+    }
+}
+
+/// Whether `stats` and `properties` compare the stats of the item: see
+/// [`SearchFilters::compares_stats`].
+fn compares_stats(stats: &[StatFilter], properties: &[PropertyFilter]) -> bool {
+    stats
+        .iter()
+        .any(|stat| stat.rules_out == RulesOut::OfTheBase)
+        || properties
+            .iter()
+            .any(|filter| filter.rules_out == RulesOut::OfTheBase && filter.limits_anything())
+}
+
+/// What a filter rules out of the offers ([`LineStats::rules_out`]).
+///
+/// [`LineStats::rules_out`]: crate::trade::stat_filters::LineStats::rules_out
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RulesOut {
+    /// Items of the base of the item: it compares a stat of the item, what an estimate of a
+    /// rare or magic item needs.
+    OfTheBase,
+    /// Items of the league only: an implicit, a total its implicits reach, the DPS of its
+    /// base, its item level…; it narrows a search of any base.
+    OfTheLeague,
+    /// No stat, and no item of the league it alone rules out: the count of the unrevealed
+    /// modifiers, which any base may have.
+    Nothing,
 }
 
 /// A property of the offers, with its minimum and its maximum.
@@ -100,6 +149,8 @@ pub struct PropertyFilter {
     pub property: Property,
     pub minimum: Option<f64>,
     pub maximum: Option<f64>,
+    /// What it rules out of the offers. Not sent.
+    pub rules_out: RulesOut,
 }
 
 impl PropertyFilter {
@@ -152,6 +203,8 @@ pub struct StatFilter {
     pub ids: Vec<String>,
     pub minimum: Option<f64>,
     pub maximum: Option<f64>,
+    /// What it rules out of the offers. Not sent.
+    pub rules_out: RulesOut,
 }
 
 impl StatFilter {
@@ -414,11 +467,13 @@ mod tests {
                     ids: vec!["explicit.stat_3917489142".to_owned()],
                     minimum: Some(55.0),
                     maximum: None,
+                    rules_out: RulesOut::OfTheBase,
                 },
                 StatFilter {
                     ids: vec!["explicit.stat_3261801346".to_owned()],
                     minimum: None,
                     maximum: None,
+                    rules_out: RulesOut::OfTheBase,
                 },
             ],
         };
@@ -461,11 +516,13 @@ mod tests {
                     ],
                     minimum: Some(150.0),
                     maximum: Some(200.0),
+                    rules_out: RulesOut::OfTheBase,
                 },
                 StatFilter {
                     ids: vec!["explicit.stat_2250533757".to_owned()],
                     minimum: None,
                     maximum: Some(-15.0),
+                    rules_out: RulesOut::OfTheBase,
                 },
             ],
         };
@@ -500,6 +557,7 @@ mod tests {
                 ],
                 minimum: None,
                 maximum: None,
+                rules_out: RulesOut::OfTheBase,
             }],
         };
 
@@ -528,31 +586,37 @@ mod tests {
                     property: Property::ItemLevel,
                     minimum: Some(81.0),
                     maximum: None,
+                    rules_out: RulesOut::OfTheLeague,
                 },
                 PropertyFilter {
                     property: Property::Sockets,
                     minimum: Some(3.0),
                     maximum: None,
+                    rules_out: RulesOut::OfTheLeague,
                 },
                 PropertyFilter {
                     property: Property::Quality,
                     minimum: Some(24.0),
                     maximum: None,
+                    rules_out: RulesOut::OfTheLeague,
                 },
                 PropertyFilter {
                     property: Property::RequiredLevel,
                     minimum: None,
                     maximum: Some(40.0),
+                    rules_out: RulesOut::OfTheLeague,
                 },
                 PropertyFilter {
                     property: Property::PhysicalDps,
                     minimum: Some(220.0),
                     maximum: Some(300.0),
+                    rules_out: RulesOut::OfTheBase,
                 },
                 PropertyFilter {
                     property: Property::ElementalDps,
                     minimum: None,
                     maximum: None,
+                    rules_out: RulesOut::OfTheBase,
                 },
             ],
             stats: Vec::new(),
@@ -588,6 +652,7 @@ mod tests {
             property: Property::Waystone(property),
             minimum: Some(minimum),
             maximum: None,
+            rules_out: RulesOut::OfTheBase,
         };
         let query = ItemQuery {
             name: None,
@@ -626,6 +691,7 @@ mod tests {
             property,
             minimum: Some(minimum),
             maximum: None,
+            rules_out: RulesOut::OfTheBase,
         };
         let query = ItemQuery {
             name: None,
@@ -678,5 +744,60 @@ mod tests {
             })
         );
         assert_eq!(exchange("exalted")["have"], json!(["divine"]));
+    }
+
+    #[test]
+    fn a_search_compares_the_item_by_a_filter_that_rules_out_items_of_its_base() {
+        use RulesOut::{Nothing, OfTheBase, OfTheLeague};
+
+        let property = |rules_out, minimum| PropertyFilter {
+            property: Property::PhysicalDps,
+            minimum,
+            maximum: None,
+            rules_out,
+        };
+        let stat = |rules_out| StatFilter {
+            ids: vec!["explicit.stat_3917489142".to_owned()],
+            minimum: None,
+            maximum: None,
+            rules_out,
+        };
+        let filters = |properties, stats| SearchFilters {
+            any_base: false,
+            states: Vec::new(),
+            properties,
+            stats,
+        };
+        let league = || property(OfTheLeague, Some(80.0));
+
+        // Nothing, or filters that rule out items of the league only: any items of the base.
+        assert!(!filters(Vec::new(), Vec::new()).compares_stats());
+        let base = filters(vec![league()], vec![stat(OfTheLeague), stat(Nothing)]);
+        assert!(!base.compares_stats());
+        // A property without limit isn't sent.
+        assert!(!filters(vec![property(OfTheBase, None)], Vec::new()).compares_stats());
+        assert!(filters(vec![property(OfTheBase, Some(80.0))], Vec::new()).compares_stats());
+        assert!(filters(Vec::new(), vec![stat(Nothing), stat(OfTheBase)]).compares_stats());
+
+        // Narrowed: anything but the count of the unrevealed modifiers.
+        assert!(!filters(Vec::new(), vec![stat(Nothing)]).narrows());
+        assert!(filters(Vec::new(), vec![stat(OfTheLeague)]).narrows());
+        assert!(filters(vec![league()], Vec::new()).narrows());
+
+        // The query sent says the same; a search of the currency exchange compares nothing.
+        let query = |stats| {
+            Query::Items(ItemQuery {
+                name: None,
+                base_type: Some("Ruby".to_owned()),
+                category: None,
+                rarity: None,
+                states: StateFilters::default(),
+                properties: Vec::new(),
+                stats,
+            })
+        };
+        assert!(!query(vec![stat(OfTheLeague)]).compares_stats());
+        assert!(query(vec![stat(OfTheBase)]).compares_stats());
+        assert!(!Query::Exchange("divine".to_owned()).compares_stats());
     }
 }

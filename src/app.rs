@@ -16,7 +16,7 @@ use self::open_lists::{OpenList, OpenLists};
 use crate::bug_report::{Facts, JoinedItem, LogSession, Report};
 use crate::clipboard::{self, ClipboardEvent, ClipboardWatch};
 use crate::estimate::{self, Estimate, Reference, Worth};
-use crate::filters::{Filters, Window};
+use crate::filters::{Filter, FilterKey, Filters, Window};
 use crate::hotkey::PriceCheckHotkey;
 use crate::i18n::{DOWNLOAD_QUOTE_COUNT, Message, Translator};
 use crate::item::{CopiedItem, Item};
@@ -35,8 +35,8 @@ use crate::trade::{ItemNamesWatch, Refusal};
 use crate::ui::{
     self, Bubble, BubbleAction, BugReportAction, BugReportPanel, EmptyState, ItemBlock,
     ItemBlockAction, LeagueList, LeagueListAction, OffersAction, OffersBlock, PriceBlock,
-    PriceDownload, ResizeEdges, SettingsPanel, Stats, StatusBar, TitleBar, TitleBarAction,
-    TradeStatus, UnreadableItem, WarningBand,
+    PriceDownload, ResizeEdges, SettingsPanel, StatChecks, Stats, StatusBar, TitleBar,
+    TitleBarAction, TradeStatus, UnreadableItem, WarningBand,
 };
 use crate::update::{LeagueOfTheMoment, Release, UpdateCheck};
 
@@ -704,6 +704,18 @@ fn search_filters(
     item: &Item,
     filters: &Filters,
 ) -> SearchFilters {
+    let (_, search) = every_filter(session, shown, item, filters);
+    search
+}
+
+/// Every filter of `item`, the item `shown`, checked or not, as the player set them or else
+/// by default, and the filters of its search they make ([`search_filters`]).
+fn every_filter(
+    session: &Session,
+    shown: &ShownItem,
+    item: &Item,
+    filters: &Filters,
+) -> (Vec<(FilterKey, Filter)>, SearchFilters) {
     let stats = Stats::new(
         item,
         shown.lines(),
@@ -711,10 +723,12 @@ fn search_filters(
         shown.tiers(),
         session.filtered_base_type(item),
     );
-    SearchFilters {
+    let all = stats.filters(filters);
+    let search = SearchFilters {
         states: filters.lit_states_of(item).collect(),
-        ..shown.stats().search_filters(&stats.filters(filters))
-    }
+        ..shown.stats().search_filters(&all)
+    };
+    (all, search)
 }
 
 /// The blocks of the item shown, one under the other: the item with its filters, its price,
@@ -767,17 +781,16 @@ impl ItemView<'_> {
         .tradable(session.tradable(item))
         .stats(stats_open, session.filtered_base_type(item))
         .show(ui);
-        if action == Some(ItemBlockAction::CheckOnTrade) {
-            // With the filters as the player just left them.
-            let filters = search_filters(session, shown, item, filters);
-            if let Some(url) = session.trade_url(item, filters) {
-                ui.ctx().open_url(OpenUrl::new_tab(url));
-            }
+        // With the filters as the player just left them.
+        let (all, searched) = every_filter(session, shown, item, filters);
+        let checks = StatChecks::of(&searched, shown.stats(), &all);
+        if action == Some(ItemBlockAction::CheckOnTrade)
+            && let Some(url) = session.trade_url(item, searched)
+        {
+            ui.ctx().open_url(OpenUrl::new_tab(url));
         }
         let league = session.league().map(League::name);
-        PriceBlock::new(item, fixed_price, prices, league, i18n)
-            .estimate(estimate)
-            .show(ui);
+        PriceBlock::new(item, fixed_price, estimate, checks, prices, league, i18n).show(ui);
         let offers_action = if let Some(kind) = kind {
             OffersBlock::new(offers, kind, reference, item, shown.lines(), i18n)
                 .bug_report(bug_report)
@@ -1091,7 +1104,9 @@ fn reference<'a>(
 }
 
 /// The estimated price of `item`, the item shown, without a fixed price, from the `offers` of
-/// its search and the `worth` of the currencies with the prices of the league.
+/// its search and the `worth` of the currencies with the prices of the league; none for a rare
+/// or magic item whose search compared none of its stats, whose offers are any items of its
+/// base: their price says nothing of its own.
 fn shown_estimate<'a>(
     offers: &Offers,
     item: &Item,
@@ -1101,6 +1116,9 @@ fn shown_estimate<'a>(
     let Err(NoFixedPrice::NotFixedName) = fixed_price else {
         return None;
     };
+    if item.priced_by_stats() && !offers.compared_stats() {
+        return None;
+    }
     let searched_catalyst = offers.searched_catalyst(item);
     let OffersState::Items {
         offers,
@@ -1442,7 +1460,7 @@ mod tests {
 
     /// A search of items with the filters of `properties`.
     fn searched(properties: Vec<crate::trade::query::PropertyFilter>) -> Search {
-        use crate::trade::query::{ItemQuery, Query, StateFilters};
+        use crate::trade::query::{ItemQuery, Query, StatFilter, StateFilters};
 
         Search {
             language: crate::language::Language::English,
@@ -1457,7 +1475,13 @@ mod tests {
                     corrupted: Some(false),
                     ..StateFilters::default()
                 },
-                stats: Vec::new(),
+                // A stat compared: without, a rare has no estimate.
+                stats: vec![StatFilter {
+                    ids: vec!["explicit.stat_3917489142".to_owned()],
+                    minimum: Some(10.0),
+                    maximum: None,
+                    rules_out: crate::trade::query::RulesOut::OfTheBase,
+                }],
             }),
         }
     }
@@ -1616,6 +1640,48 @@ mod tests {
     }
 
     #[test]
+    fn a_rare_or_magic_item_searched_without_its_stats_has_no_estimate() {
+        use crate::trade::query::Query;
+
+        let amulet = amulet();
+        let now = Instant::now();
+        let estimated = |item: &Item, stats: bool| {
+            let mut search = searched(Vec::new());
+            if let (false, Query::Items(query)) = (stats, &mut search.query) {
+                query.stats.clear();
+            }
+            let mut offers = Offers::default();
+            let _ = offers.search(search, now);
+            offers.apply(
+                answer(divines(&[1.0, 1.1, 1.2]), 3, false, now),
+                SystemTime::now(),
+            );
+            shown_estimate(&offers, item, &Err(NoFixedPrice::NotFixedName), Some(WORTH))
+        };
+
+        // The offers of any item of its base say nothing of its price.
+        assert!(estimated(&amulet, true).is_some());
+        assert_eq!(estimated(&amulet, false), None);
+        let magic = Item::parse(
+            &CopiedItem::from_text(include_str!("item/test-items/en-magic-mace.txt")).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(estimated(&magic, false), None);
+        // A normal item, an exceptional base searched by its sockets or its quality, a skill
+        // gem by its level and a waystone by its tier: priced by them, not by modifiers. A
+        // magic item is estimated as a rare.
+        for text in [
+            include_str!("item/test-items/en-owner-normal-quarterstaff-exceptional.txt"),
+            include_str!("item/test-items/en-owner-skill-gem.txt"),
+            // A waystone, priced first by its tier, which its base type holds.
+            include_str!("item/test-items/en-owner-rare-waystone.txt"),
+        ] {
+            let item = Item::parse(&CopiedItem::from_text(text).unwrap()).unwrap();
+            assert!(estimated(&item, false).is_some(), "{:?}", item.rarity());
+        }
+    }
+
+    #[test]
     fn the_estimate_leaves_out_another_kind_of_quality_only_when_the_quality_is_searched() {
         use crate::filters::Property;
         use crate::item::{Catalyst, QualityKind};
@@ -1636,6 +1702,7 @@ mod tests {
             property: Property::Quality,
             minimum: Some(40.0),
             maximum: None,
+            rules_out: crate::trade::query::RulesOut::OfTheLeague,
         };
 
         for (properties, counted) in [(vec![quality], 2), (Vec::new(), 3)] {

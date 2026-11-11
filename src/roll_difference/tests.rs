@@ -2,7 +2,7 @@
 //! better side of a line read from its words, in English and French.
 
 use super::*;
-use crate::item::StatLine;
+use crate::item::{CopiedItem, Item, StatLine};
 
 /// The difference of the offer `line` from the copied `modifiers`, in `language`.
 fn difference(
@@ -180,7 +180,11 @@ fn a_number_written_by_the_string_of_a_stat_isnt_compared() {
         explicit("1% more Unarmed Damage per 5 Strength"),
         explicit("Adds 1 to 55 Lightning damage to Attacks"),
     ];
-    let stats = LineStats::new(Language::English, &copied, None);
+    let ring = Item::parse(
+        &CopiedItem::from_text("Item Class: Rings\nRarity: Rare\nWoe Loop\nGold Ring").unwrap(),
+    )
+    .unwrap();
+    let stats = LineStats::new(&ring, &copied, None);
     let lines = CopiedLines::new(Language::English, &copied, &stats, None);
     let value = |line: &str| {
         lines

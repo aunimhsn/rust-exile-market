@@ -13,6 +13,10 @@ pub(super) struct Labels {
     pub item_class: &'static str,
     /// The item class of the jewels, which have two prefixes and two suffixes at most.
     pub jewels: &'static str,
+    /// The item classes of the rings and of the amulets, whose quality is a catalyst's, as
+    /// that of a jewel.
+    pub rings: &'static str,
+    pub amulets: &'static str,
     pub rarity: &'static str,
     pub rarities: &'static [(&'static str, Rarity)],
     pub item_level: &'static str,
@@ -140,6 +144,8 @@ const UNIQUE: ModifierKind = ModifierKind::Explicit(None);
 static ENGLISH: Labels = Labels {
     item_class: "Item Class: ",
     jewels: "Jewels",
+    rings: "Rings",
+    amulets: "Amulets",
     rarity: "Rarity: ",
     rarities: &[
         ("Normal", Rarity::Normal),
@@ -236,6 +242,8 @@ static ENGLISH: Labels = Labels {
 static FRENCH: Labels = Labels {
     item_class: "Classe d'objet: ",
     jewels: "Joyaux",
+    rings: "Bagues",
+    amulets: "Amulettes",
     rarity: "Rareté: ",
     rarities: &[
         ("Normal", Rarity::Normal),
