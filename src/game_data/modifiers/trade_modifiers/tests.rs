@@ -1,5 +1,5 @@
 //! The modifiers written again, on tiers written by hand: what the writing does whatever the
-//! patch of the game.
+//! tables of the game. The lines still find their stat in the embedded stats of the game.
 
 use super::*;
 use crate::game_data::modifiers::fixtures::{part, range, trade_lines};
