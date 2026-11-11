@@ -249,7 +249,7 @@ pub(super) fn currency_spawns(
         if let Some(error) = error {
             return Err(format!("{id}: a modifier of {currency}: {error}").into());
         }
-        let weight = |(tag, weight): (&str, u32)| SpawnWeight {
+        let spawn_weight = |(tag, weight): (&str, u32)| SpawnWeight {
             tag: tag.to_owned(),
             weight,
         };
@@ -258,7 +258,12 @@ pub(super) fn currency_spawns(
             .iter()
             .all(|&(tag, _)| tag != "default")
             .then_some(("default", 0));
-        let spawn = tags.iter().copied().chain(default).map(weight).collect();
+        let spawn = tags
+            .iter()
+            .copied()
+            .chain(default)
+            .map(spawn_weight)
+            .collect();
         spawns.insert(id, CurrencySpawn { source, spawn });
     }
     Ok(spawns)

@@ -85,8 +85,8 @@ impl SourceModifier {
     fn rolling_tags(&self) -> impl Iterator<Item = &str> {
         self.spawn_weights
             .iter()
-            .filter(|spawn| spawn.rolls())
-            .map(|spawn| spawn.tag.as_str())
+            .filter(|spawn_weight| spawn_weight.rolls())
+            .map(|spawn_weight| spawn_weight.tag.as_str())
     }
 
     /// Whether it rolls on a Time-Lost jewel.
@@ -112,6 +112,16 @@ impl SpawnWeight {
     /// Whether the modifier rolls on the bases of its tag.
     fn rolls(&self) -> bool {
         self.weight > 0
+    }
+}
+
+/// Written as the application reads it, `["bow", 1]`.
+impl Serialize for SpawnWeight {
+    fn serialize<S: serde::Serializer>(
+        &self,
+        serializer: S,
+    ) -> std::result::Result<S::Ok, S::Error> {
+        (&self.tag, self.weight).serialize(serializer)
     }
 }
 
@@ -159,8 +169,8 @@ pub struct Table {
     #[serde(skip_serializing_if = "is_equipment")]
     domain: String,
     lines: Vec<Line>,
-    /// Each tag and its weight, as `["bow", 1]`.
-    spawn: Vec<(String, u32)>,
+    /// Each tag and its weight.
+    spawn: Vec<SpawnWeight>,
     /// Where the modifier comes from when it isn't an ordinary one, written when it isn't: a
     /// modifier of its own, whose tiers the game doesn't write.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -289,7 +299,7 @@ pub fn reduce(
         let spawn = released_spawn(key.spawn, &key.domain, &released);
         // A modifier that rolls on no released base of its domains, e.g. one of Path of Exile
         // left in the files, or a desecrated one of the waystones.
-        if !spawn.iter().any(|&(_, weight)| weight > 0) {
+        if !spawn.iter().any(SpawnWeight::rolls) {
             continue;
         }
         // A modifier without line, its values all 0 (`TrapThrowSpeed`), is never written.
@@ -348,8 +358,8 @@ pub fn reduce(
 fn lord(spawn: &[SpawnWeight]) -> Option<String> {
     spawn
         .iter()
-        .filter(|weight| weight.rolls())
-        .find_map(|weight| LORDS.iter().find(|&&(tag, _)| weight.tag == tag))
+        .filter(|spawn_weight| spawn_weight.rolls())
+        .find_map(|spawn_weight| LORDS.iter().find(|&&(tag, _)| spawn_weight.tag == tag))
         .map(|&(_, name)| name.to_owned())
 }
 
@@ -359,7 +369,7 @@ fn released_spawn(
     spawn: Vec<SpawnWeight>,
     domain: &str,
     released: &[&SourceBase],
-) -> Vec<(String, u32)> {
+) -> Vec<SpawnWeight> {
     let tags_of_bases: BTreeSet<&String> = released
         .iter()
         .filter(|base| rolls_on(domain, &base.domain))
@@ -367,8 +377,7 @@ fn released_spawn(
         .collect();
     spawn
         .into_iter()
-        .filter(|spawn| tags_of_bases.contains(&spawn.tag))
-        .map(|spawn| (spawn.tag, spawn.weight))
+        .filter(|spawn_weight| tags_of_bases.contains(&spawn_weight.tag))
         .collect()
 }
 
@@ -484,12 +493,12 @@ fn table_tier(
 fn spawn_on_bases(spawn: &[SpawnWeight]) -> (Vec<SpawnWeight>, bool) {
     let mut on_bases: Vec<SpawnWeight> = Vec::new();
     let mut genesis = false;
-    for weight in spawn {
-        if !GENESIS_TAGS.contains(&weight.tag.as_str()) {
-            on_bases.push(weight.clone());
+    for spawn_weight in spawn {
+        if !GENESIS_TAGS.contains(&spawn_weight.tag.as_str()) {
+            on_bases.push(spawn_weight.clone());
             continue;
         }
-        if weight.weight == 0 {
+        if !spawn_weight.rolls() {
             continue;
         }
         genesis = true;
@@ -497,7 +506,7 @@ fn spawn_on_bases(spawn: &[SpawnWeight]) -> (Vec<SpawnWeight>, bool) {
             if !on_bases.iter().any(|before| before.tag == tag) {
                 on_bases.push(SpawnWeight {
                     tag: tag.to_owned(),
-                    weight: weight.weight,
+                    weight: spawn_weight.weight,
                 });
             }
         }
@@ -510,7 +519,7 @@ fn spawn_on_bases(spawn: &[SpawnWeight]) -> (Vec<SpawnWeight>, bool) {
 fn base_spawns(released: &[&SourceBase], tables: &[Table]) -> BaseSpawns {
     let tags_used: BTreeSet<&String> = tables
         .iter()
-        .flat_map(|table| table.spawn.iter().map(|(tag, _)| tag))
+        .flat_map(|table| table.spawn.iter().map(|spawn_weight| &spawn_weight.tag))
         .collect();
     let mut base_spawns = BaseSpawns::new();
     for base in released {
