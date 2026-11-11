@@ -27,9 +27,9 @@ use serde::{Deserialize, Serialize};
 type Result<T> = std::result::Result<T, Box<dyn Error>>;
 
 /// The static data of the trade site, in English.
-const ENGLISH_STATIC_DATA: &str = "https://www.pathofexile.com/api/trade2/data/static";
+const ENGLISH_STATIC_DATA_URL: &str = "https://www.pathofexile.com/api/trade2/data/static";
 /// The static data of the trade site, in French.
-const FRENCH_STATIC_DATA: &str = "https://fr.pathofexile.com/api/trade2/data/static";
+const FRENCH_STATIC_DATA_URL: &str = "https://fr.pathofexile.com/api/trade2/data/static";
 /// The CDN of the images, before their path in the static data.
 const CDN: &str = "https://web.poecdn.com";
 /// How the tool names itself to the servers it reads.
@@ -94,9 +94,9 @@ fn main() -> Result<()> {
 
 /// The static data of the trade site in English and in French, a pause between the two.
 fn static_data(agent: &ureq::Agent) -> Result<[StaticData; 2]> {
-    let english = read_static_data(agent, "en", ENGLISH_STATIC_DATA)?;
+    let english = read_static_data(agent, "en", ENGLISH_STATIC_DATA_URL)?;
     thread::sleep(TRADE_SITE_PAUSE);
-    let french = read_static_data(agent, "fr", FRENCH_STATIC_DATA)?;
+    let french = read_static_data(agent, "fr", FRENCH_STATIC_DATA_URL)?;
     Ok([english, french])
 }
 
