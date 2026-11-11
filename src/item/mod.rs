@@ -24,9 +24,9 @@ mod labels;
 mod modifier;
 mod parser;
 #[cfg(test)]
-pub(crate) mod test_items;
+pub mod test_items;
 #[cfg(test)]
-pub(crate) mod trade_copy;
+pub mod trade_copy;
 mod waystone;
 mod weapon;
 
@@ -36,7 +36,7 @@ pub use gem::{
 };
 /// The values of a line, built by hand in the tests of the filters.
 #[cfg(test)]
-pub(crate) use modifier::Roll;
+pub use modifier::Roll;
 pub use modifier::{
     Affix, AffixTier, Currency, Lord, Modifier, ModifierKind, ModifierOrigin, PartTier, Range,
     StatLine, TierDoubt,
@@ -314,6 +314,7 @@ impl Item {
         &self.class
     }
 
+    /// The rarity, which also tells currencies and gems apart.
     #[must_use]
     pub fn rarity(&self) -> Rarity {
         self.rarity
@@ -349,11 +350,13 @@ impl Item {
         self.exceptional
     }
 
+    /// The size of a stack, and the largest stack of the item.
     #[must_use]
     pub fn stack(&self) -> Option<Stack> {
         self.stack
     }
 
+    /// The item level, which bounds the tiers its modifiers may roll.
     #[must_use]
     pub fn item_level(&self) -> Option<u32> {
         self.item_level
@@ -390,6 +393,7 @@ impl Item {
         self.sockets
     }
 
+    /// What a character needs to use the item.
     #[must_use]
     pub fn requirements(&self) -> Requirements {
         self.requirements
@@ -401,6 +405,7 @@ impl Item {
         &self.granted_skills
     }
 
+    /// Whether the item ends with the line of `state`.
     #[must_use]
     pub fn has_state(&self, state: ItemState) -> bool {
         self.states.contains(&state)
@@ -412,6 +417,7 @@ impl Item {
         self.has_state(ItemState::Corrupted) || self.has_state(ItemState::TwiceCorrupted)
     }
 
+    /// The states written at the end of the item, in their order.
     #[cfg(test)]
     #[must_use]
     pub fn states(&self) -> &[ItemState] {

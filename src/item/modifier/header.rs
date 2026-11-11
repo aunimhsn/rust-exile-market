@@ -24,6 +24,8 @@ impl Header {
         )
     }
 
+    /// The modifier a header tells from its `body`, between its braces; none when its kind
+    /// or its origin isn't in the labels.
     fn read(body: &str, labels: &Labels) -> Option<Modifier> {
         let (main, tags) = match body.split_once(" — ") {
             Some((main, tags)) => (main, tags.split(", ").map(str::to_owned).collect()),

@@ -17,6 +17,7 @@ pub enum Marker {
 }
 
 impl Marker {
+    /// Every marker, in the order they are looked for.
     const ALL: [Self; 7] = [
         Self::Implicit,
         Self::Enchant,
@@ -27,6 +28,7 @@ impl Marker {
         Self::Mutated,
     ];
 
+    /// The marker as the game writes it after the line, with its space.
     pub fn suffix(self) -> &'static str {
         match self {
             Self::Implicit => " (implicit)",
@@ -57,6 +59,7 @@ impl Marker {
         }
     }
 
+    /// The origin of the modifier that the marker tells, e.g. a fractured one.
     pub fn origin(self) -> Option<ModifierOrigin> {
         match self {
             Self::Crafted => Some(ModifierOrigin::Crafted),

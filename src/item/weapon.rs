@@ -35,6 +35,7 @@ struct DamageRange {
 }
 
 impl DamageRange {
+    /// The average damage of a hit in this range.
     fn average(self) -> f64 {
         f64::midpoint(self.min, self.max)
     }

@@ -178,6 +178,7 @@ struct Template {
 }
 
 impl Template {
+    /// `line` read as its template and its numbers.
     fn of(line: &str) -> Self {
         let mut text = String::with_capacity(line.len());
         let mut numbers = Vec::new();

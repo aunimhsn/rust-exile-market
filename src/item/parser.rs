@@ -20,6 +20,7 @@ pub use errors::{Field, ParseError, ParseWarning};
 use values::{count_sockets, number_after, read_properties, read_requirements, read_stack};
 pub use values::{read_quality, whole_percent};
 
+/// The line between two sections of a copied item.
 const SECTION_SEPARATOR: &str = "--------";
 
 /// A section after phase 1: recognized from its lines, or plain lines without label nor
@@ -69,6 +70,7 @@ enum Section<'a> {
     Unread,
 }
 
+/// Reads `copied` ([`Item::parse`]).
 pub(super) fn parse(copied: &CopiedItem) -> Result<Item, ParseError> {
     let labels = Labels::of(copied.language());
     // The French texts put no-break spaces around the punctuation: plain spaces for the parser.
@@ -267,10 +269,12 @@ fn is_known_stats(lines: &[&str], language: Language) -> bool {
         .all(|found| found.stat.is_some())
 }
 
+/// Whether `line` holds a digit.
 fn has_digit(line: &str) -> bool {
     line.chars().any(|c| c.is_ascii_digit())
 }
 
+/// The state a line at the end of the item tells, if it is one.
 fn state(line: &str, labels: &Labels) -> Option<ItemState> {
     labels.states.iter().find_map(|&(label, state)| {
         let matches = if state == ItemState::Unidentified {

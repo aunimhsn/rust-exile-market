@@ -8,7 +8,7 @@ macro_rules! test_items {
 }
 
 /// The name of the file of each copied item, and its text.
-pub(crate) const ALL: [(&str, &str); 70] = test_items![
+pub const ALL: [(&str, &str); 70] = test_items![
     "en-currency-uncut-gem.txt",
     "en-magic-mace.txt",
     "en-normal-helmet.txt",
@@ -82,7 +82,7 @@ pub(crate) const ALL: [(&str, &str); 70] = test_items![
 ];
 
 /// The texts of the copied items.
-pub(crate) fn texts() -> impl Iterator<Item = &'static str> {
+pub fn texts() -> impl Iterator<Item = &'static str> {
     ALL.into_iter().map(|(_, text)| text)
 }
 
