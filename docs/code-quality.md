@@ -9,6 +9,7 @@ Read it at the start of each step that changes code; `code-reviewer` reviews aga
 The name comes first: a reader who sees only the name should know what the thing is for.
 
 - A name says what a thing is or does, in the words of the domain (the game, the trade site, poe2scout), not how it is computed: `affix_limits`, not `counts`; `copied_lines`, not `list`.
+- A name says what its thing gives, not its place next to another one: no `other_…`, `misc`, `utils` nor `common`. The module that tells the lines in doubt is `doubts`, not `other_readings`.
 - Whole words. No abbreviation but those of the domain and of Rust: `id`, `dps`, `ui`, `ctx`, `i18n`. A single letter only for an index or a closure parameter of a line or two.
 - One notion, one word, across the whole code: a tier is always a `tier`. Two notions never share a word: when one word means two things (`currency` names four), one of them is renamed.
 - Types are nouns (`ModifierTiers`). A function that computes a value is named by what it returns (`trade_tiers`, `possible`); a function that acts, by a verb (`save`, `send_copy`).

@@ -2,12 +2,13 @@
 //! alone: its candidates, its best reading, then the other readings that put lines in doubt,
 //! and how the search ended.
 
+use super::ModifierTiers;
 use super::best_reading::{Room, Search};
 use super::candidates::{AffixSet, TradeItem, candidates};
 use super::copied::Copied;
+use super::doubts::{self, Best, Doubts, Outcome};
 use super::split_lines::AddedTiers;
 use super::tables::{TABLES, Table};
-use super::{ModifierTiers, other_readings};
 use crate::game_data::bases;
 use crate::game_data::lines::modifier_stats;
 use crate::item::{Affix, Modifier, ModifierKind, ModifierOrigin};
@@ -94,7 +95,7 @@ pub(super) struct FoundTiers {
 /// it otherwise (a rarity split into a prefix of tier 1 and a suffix of tier 2, or of tier 2
 /// and tier 1; a line a hybrid joins with the line before it, or another with the line after
 /// it), the other modifiers being read as the first of them does, and when another reading
-/// fits the item as well, which [`other_readings::doubts`] tells: two pure modifiers or their
+/// fits the item as well, which [`doubts::doubts`] tells: two pure modifiers or their
 /// hybrid, a line adding up modifiers in another way. When such readings leave another room
 /// to a line that can be a prefix or a suffix, it keeps both its affixes. A search that stops
 /// at one of its bounds ([`super::best_reading::MAX_READINGS`], `MAX_STEPS`) leaves every line
@@ -145,7 +146,7 @@ pub(super) fn trade_tiers(
 struct Effort {
     /// The readings of its lines looked at, [`super::best_reading::MAX_READINGS`] at most.
     readings: usize,
-    /// The steps of the search of the other readings ([`other_readings::doubts`]).
+    /// The steps of the search of the other readings ([`doubts::doubts`]).
     steps: usize,
     ending: Ending,
 }
@@ -177,13 +178,13 @@ enum Ending {
 impl Ending {
     /// How the search ended after the other readings, whose `doubts` these are, the best
     /// reading fitting the room of the item (`fits_room`) or not.
-    fn after(doubts: &other_readings::Doubts, fits_room: bool) -> Self {
+    fn after(doubts: &Doubts, fits_room: bool) -> Self {
         match doubts.outcome {
-            other_readings::Outcome::Cut => Self::OtherReadingsCut,
-            other_readings::Outcome::BestNotMet => Self::BestNotMet,
-            other_readings::Outcome::Concluded if fits_room => Self::Vouched,
-            other_readings::Outcome::Concluded if doubts.fits => Self::OnlyAnotherFits,
-            other_readings::Outcome::Concluded => Self::NoneFits,
+            Outcome::Cut => Self::OtherReadingsCut,
+            Outcome::BestNotMet => Self::BestNotMet,
+            Outcome::Concluded if fits_room => Self::Vouched,
+            Outcome::Concluded if doubts.fits => Self::OnlyAnotherFits,
+            Outcome::Concluded => Self::NoneFits,
         }
     }
 
@@ -278,13 +279,13 @@ fn trade_tiers_in(
     let (Some((key, reading)), false) = (search.best, search.cut) else {
         return (Vec::new(), effort_with(0, Ending::ReadingsCut));
     };
-    let best = other_readings::Best {
+    let best = Best {
         candidates: &candidates,
         reading: &reading,
         room,
         fits_room: key.room,
     };
-    let doubts = other_readings::doubts(tables, item, modifiers, &copied, &best);
+    let doubts = doubts::doubts(tables, item, modifiers, &copied, &best);
     let effort = effort_with(doubts.steps, Ending::after(&doubts, key.room));
     // A modifier that can be both keeps the affixes the others leave room for ([`Room::both`],
     // both when the reading doesn't fit the room): both too when a reading as good, or one in

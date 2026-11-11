@@ -40,8 +40,8 @@ One sub-section per rule. Each gives the rule of today first, then, where it has
 | [The candidates](#the-candidates) | `candidates.rs` |
 | [The best reading](#the-best-reading) | `best_reading.rs` |
 | [The split lines](#the-split-lines) | `split_lines.rs` |
-| [The other readings and their doubts](#the-other-readings-and-their-doubts) | `other_readings.rs`, `other_readings/` |
-| [The bounds and the end of the search](#the-bounds-and-the-end-of-the-search) | `best_reading.rs` (`MAX_READINGS`), `other_readings.rs` (`MAX_STEPS`), `trade_tiers.rs` (`Ending`) |
+| [The other readings and their doubts](#the-other-readings-and-their-doubts) | `doubts.rs`, `doubts/` |
+| [The bounds and the end of the search](#the-bounds-and-the-end-of-the-search) | `best_reading.rs` (`MAX_READINGS`), `doubts.rs` (`MAX_STEPS`), `trade_tiers.rs` (`Ending`) |
 | [The sanctified item](#the-sanctified-item) | `trade_tiers.rs` |
 | [The desecrated lines](#the-desecrated-lines) | `tables.rs` (`Table::may_hold`) |
 | [The order of the lines](#the-order-of-the-lines) | what the game does, behind the rules above |
@@ -113,7 +113,7 @@ Like a hybrid ([The best reading](#the-best-reading)), a split may take in a lin
 
 ### The other readings and their doubts
 
-Then every other reading is looked at (`other_readings::doubts`): any modifiers of the tables, their lines anywhere among the lines of the copy, those the best reading reads and maybe those it leaves without tier, each line within the sum of their ranges, in the room of the item, as many fractured modifiers as the best reading or one, one modifier of a type at most; a line without value never shared, a modifier written on several lines maybe read apart.
+Then every other reading is looked at (`doubts::doubts`): any modifiers of the tables, their lines anywhere among the lines of the copy, those the best reading reads and maybe those it leaves without tier, each line within the sum of their ranges, in the room of the item, as many fractured modifiers as the best reading or one, one modifier of a type at most; a line without value never shared, a modifier written on several lines maybe read apart.
 
 In each part of the item such a reading reads otherwise (the lines a modifier of either reading joins), the lines stay without tier, with the other lines of their hybrids:
 

@@ -604,7 +604,6 @@ fn a_best_reading_out_of_the_room_keeps_only_the_tiers_every_reading_in_the_room
 
 #[test]
 fn the_search_ends_as_the_other_readings_and_the_room_tell() {
-    use other_readings::{Doubts, Outcome};
     let after = |outcome, fits, fits_room| {
         let doubts = Doubts {
             lines: Vec::new(),

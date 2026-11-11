@@ -3,9 +3,9 @@
 
 use crate::game_data::modifiers::best_reading::Room;
 use crate::game_data::modifiers::copied::CopiedLine;
-use crate::game_data::modifiers::other_readings::comparison::Ground;
-use crate::game_data::modifiers::other_readings::placements::Placement;
-use crate::game_data::modifiers::other_readings::{Line, MAX_STEPS, Shown};
+use crate::game_data::modifiers::doubts::comparison::Ground;
+use crate::game_data::modifiers::doubts::placements::Placement;
+use crate::game_data::modifiers::doubts::{Line, MAX_STEPS, Shown};
 use crate::item::{Affix, ModifierOrigin, Range};
 
 /// A line of the modifier `modifier` of the item, of `template`, its values at `values` among

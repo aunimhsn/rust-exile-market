@@ -6,7 +6,7 @@
 //! generator writes them, the lines of a `copied` modifier, the tiers of a modifier on a base
 //! (`base_tiers`), a line that adds up two modifiers (`split_lines`), and the `lookup` of a
 //! modifier the advanced copy writes. Then the reading of an item copied from the in-game
-//! trade: its `candidates`, its `best_reading` and its `other_readings`, put together by
+//! trade: its `candidates`, its `best_reading` and its `doubts`, put together by
 //! `trade_tiers`, and its modifiers written again as the advanced copy writes them
 //! (`trade_modifiers`).
 
@@ -16,10 +16,10 @@ mod base_tiers;
 mod best_reading;
 mod candidates;
 mod copied;
+mod doubts;
 #[cfg(test)]
 mod fixtures;
 mod lookup;
-mod other_readings;
 mod split_lines;
 mod tables;
 mod trade_modifiers;

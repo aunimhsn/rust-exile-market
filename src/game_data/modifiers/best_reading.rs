@@ -70,7 +70,7 @@ pub(super) struct ReadingKey {
     whole: usize,
     /// How many modifiers the lines make, those without tier counted: the lines alone
     /// first. Where a hybrid holds them too in the room of the item, the other readings
-    /// leave them without tier ([`super::other_readings::doubts`]), whichever is read here.
+    /// leave them without tier ([`super::doubts::doubts`]), whichever is read here.
     modifiers: usize,
 }
 

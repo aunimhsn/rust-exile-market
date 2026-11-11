@@ -1,10 +1,10 @@
-//! The other readings of the lines of an item copied from the in-game trade, which tell the
-//! lines whose tier the best reading can't be sure of: its candidates only join lines that
-//! follow each other, and only split a line into a pure modifier and another (the `47%
-//! d'Augmentation de l'Armure et de l'Évasion` of the owner's body armour adds up two hybrids,
-//! one of whose other lines is a sum too), and it reads each line alone where a hybrid holds
-//! it too (`30% increased Energy Shield` and `+30 to maximum Life` of a helmet: two pure
-//! modifiers, or their hybrid).
+//! The doubts on the reading of an item copied from the in-game trade: the lines whose tier
+//! the best reading can't be sure of, told by every other reading of them. The candidates of
+//! the best reading only join lines that follow each other, and only split a line into a pure
+//! modifier and another (the `47% d'Augmentation de l'Armure et de l'Évasion` of the owner's
+//! body armour adds up two hybrids, one of whose other lines is a sum too), and it reads each
+//! line alone where a hybrid holds it too (`30% increased Energy Shield` and `+30 to maximum
+//! Life` of a helmet: two pure modifiers, or their hybrid).
 
 use super::best_reading::Room;
 use super::candidates::{Candidate, TradeItem};
