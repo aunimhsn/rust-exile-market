@@ -1,73 +1,66 @@
-//! The values of the lines `Label: value`: the properties (the quality, the damage of a weapon,
-//! the level of a gem, the properties of a waystone among them), the requirements, the sockets,
-//! the item level and the stack.
+//! The values of the lines `Label: value`: the properties (the quality, the level of a gem, the
+//! properties of a waystone and the damage of a weapon among them), the requirements, the
+//! sockets, the item level and the stack.
 
 use super::{Field, ParseWarning};
 use crate::item::labels::{Labels, marker};
-use crate::item::weapon::{self, DamageKind, Weapon};
+use crate::item::weapon::Weapon;
 use crate::item::{Item, Property, QualityKind, Rarity, Requirements, Stack, gem, waystone};
 use crate::language::Language;
 
-/// The lines `Name: value` of the properties section, and the quality, the damage of a weapon
-/// and the level of a gem among them; on a waystone, a warning for a property it can't read.
+/// The lines `Name: value` of the properties section, and the damage of a weapon among them.
 pub(super) fn read_properties(item: &mut Item, lines: &[&str], labels: &Labels) {
-    let mut damage = Vec::new();
-    let mut attacks_per_second = None;
     for line in lines {
-        let (line, augmented) = match line.strip_suffix(marker::AUGMENTED) {
-            Some(line) => (line, true),
-            None => (*line, false),
-        };
-        if let Some((kind, value)) = quality(line, labels) {
-            item.quality = digits(value);
-            if item.quality.is_none() {
-                item.warnings
-                    .push(ParseWarning::InvalidValue(Field::Quality));
-            } else if let Some(kind) = kind {
-                if kind.catalyst.is_none() {
-                    item.warnings.push(ParseWarning::UnknownQualityKind);
-                }
-                item.quality_kind = Some(kind);
-            }
-        }
-        let (name, value) = line.split_once(':').unwrap_or((line, ""));
-        let (name, value) = (name.trim(), value.trim());
-        if name == labels.attacks_per_second {
-            attacks_per_second = value.parse::<f64>().ok();
-        } else if let Some(ranges) = weapon::damage_ranges(value) {
-            // A physical range has no marker: only the physical damage line has one.
-            let physical = ranges
-                .iter()
-                .any(|range| range.kind == DamageKind::Physical);
-            if !physical || name == labels.physical_damage {
-                damage.extend(ranges);
-            }
-        }
-        if item.rarity == Rarity::Gem && name == labels.gem_level {
-            item.gem_level = gem::read_gem_level(value);
-            if item.gem_level.is_none() {
-                item.warnings
-                    .push(ParseWarning::InvalidValue(Field::GemLevel));
-            }
-        }
-        if item.class == labels.waystones
-            && let Err(warning) = waystone::read_property(labels, name, value)
-        {
-            item.warnings.push(warning);
-        }
-        item.properties.push(Property {
-            name: name.to_owned(),
-            value: value.to_owned(),
-            augmented,
-        });
+        read_property(item, line, labels);
     }
-    if let Some(attacks_per_second) = attacks_per_second
-        && !damage.is_empty()
+    item.weapon = Weapon::read(&item.properties, labels);
+}
+
+/// One line `Name: value` of the properties section, kept among the properties: the quality, the
+/// level of a gem and a property of a waystone read on the way, or a warning for one that can't
+/// be read.
+fn read_property(item: &mut Item, line: &str, labels: &Labels) {
+    let (line, augmented) = match line.strip_suffix(marker::AUGMENTED) {
+        Some(line) => (line, true),
+        None => (line, false),
+    };
+    if let Some((kind, value)) = quality(line, labels) {
+        fill_quality(item, kind, value);
+    }
+    let (name, value) = line.split_once(':').unwrap_or((line, ""));
+    let (name, value) = (name.trim(), value.trim());
+    if item.rarity == Rarity::Gem && name == labels.gem_level {
+        item.gem_level = gem::read_gem_level(value);
+        if item.gem_level.is_none() {
+            item.warnings
+                .push(ParseWarning::InvalidValue(Field::GemLevel));
+        }
+    }
+    if item.class == labels.waystones
+        && let Err(warning) = waystone::read_property(labels, name, value)
     {
-        item.weapon = Some(Weapon {
-            damage,
-            attacks_per_second,
-        });
+        item.warnings.push(warning);
+    }
+    item.properties.push(Property {
+        name: name.to_owned(),
+        value: value.to_owned(),
+        augmented,
+    });
+}
+
+/// The quality of `item`, of the `kind` and the `value` of its quality line: a warning for a
+/// value that isn't a number, or for the kind of a catalyst not in the labels, kept with the
+/// words of the game.
+fn fill_quality(item: &mut Item, kind: Option<QualityKind>, value: &str) {
+    item.quality = digits(value);
+    if item.quality.is_none() {
+        item.warnings
+            .push(ParseWarning::InvalidValue(Field::Quality));
+    } else if let Some(kind) = kind {
+        if kind.catalyst.is_none() {
+            item.warnings.push(ParseWarning::UnknownQualityKind);
+        }
+        item.quality_kind = Some(kind);
     }
 }
 
