@@ -758,13 +758,14 @@ mod tests {
     #[test]
     fn the_only_line_of_an_unrevealed_modifier_matches_its_affix() {
         let labels = Labels::of(Language::English);
-        let mut prefix = header(r#"{ Prefix Modifier "Veiled" }"#, Language::English);
+        let of_affix = |affix| Modifier::new(ModifierKind::Explicit(Some(affix)), None);
+        let mut prefix = of_affix(Affix::Prefix);
         prefix.push_line("Desecrated Prefix", labels);
         assert!(prefix.unrevealed && prefix.lines.is_empty());
         // The words of the other affix, or under a line, are a line.
-        let mut suffix = header(r#"{ Suffix Modifier "of the Veil" }"#, Language::English);
+        let mut suffix = of_affix(Affix::Suffix);
         suffix.push_line("Desecrated Prefix", labels);
-        let mut after = header(r#"{ Prefix Modifier "Veiled" }"#, Language::English);
+        let mut after = of_affix(Affix::Prefix);
         after.push_line("+12 to Strength", labels);
         after.push_line("Desecrated Prefix", labels);
         for modifier in [suffix, after] {
