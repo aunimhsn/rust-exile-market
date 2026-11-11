@@ -12,8 +12,36 @@ use crate::Result;
 pub type CurrencyModifier = (&'static str, &'static [(&'static str, u32)]);
 
 /// The modifiers each currency adds: those of the essences, then those of the alloys.
-pub const CURRENCIES: &[(Source, &[CurrencyModifier])] =
-    &[(Source::Essence, ESSENCES), (Source::Alloy, ALLOYS)];
+pub const CURRENCIES: &[(Currency, &[CurrencyModifier])] =
+    &[(Currency::Essence, ESSENCES), (Currency::Alloy, ALLOYS)];
+
+/// A currency that adds modifiers of its own.
+#[derive(Clone, Copy, Debug)]
+pub enum Currency {
+    /// An essence ([`ESSENCES`]).
+    Essence,
+    /// An alloy of Verisium ([`ALLOYS`]).
+    Alloy,
+}
+
+impl Currency {
+    /// Its name with its article, in the errors of its list.
+    fn with_article(self) -> &'static str {
+        match self {
+            Self::Essence => "an essence",
+            Self::Alloy => "an alloy",
+        }
+    }
+}
+
+impl From<Currency> for Source {
+    fn from(currency: Currency) -> Self {
+        match currency {
+            Currency::Essence => Self::Essence,
+            Currency::Alloy => Self::Alloy,
+        }
+    }
+}
 
 /// The modifiers only an essence adds, of the domain of the equipment, and the tags of the bases
 /// each one rolls on, as `(tag, weight)`, `default` at 0 after them: RePoE writes these
@@ -197,7 +225,7 @@ const CURRENCY_IDS: [&str; 2] = ["Essence", "Alloy"];
 
 /// The currency that adds a modifier of its lists, and the spawn weights it rolls with.
 pub(super) struct CurrencySpawn {
-    pub(super) source: Source,
+    pub(super) currency: Currency,
     pub(super) spawn: Vec<SpawnWeight>,
 }
 
@@ -213,7 +241,7 @@ pub(super) fn is_of_a_currency(id: &str, modifier: &SourceModifier) -> bool {
 /// patch of the game.
 pub(super) fn currency_spawns(
     modifiers: &BTreeMap<String, SourceModifier>,
-    currencies: &[(Source, &[CurrencyModifier])],
+    currencies: &[(Currency, &[CurrencyModifier])],
     released: &[&SourceBase],
 ) -> Result<HashMap<&'static str, CurrencySpawn>> {
     let equipment_tags: BTreeSet<&str> = released
@@ -224,12 +252,12 @@ pub(super) fn currency_spawns(
     let mut spawns = HashMap::new();
     let listed = currencies
         .iter()
-        .flat_map(|&(source, list)| list.iter().map(move |&(id, tags)| (source, id, tags)));
-    for (source, id, tags) in listed {
-        let currency = source.currency();
+        .flat_map(|&(currency, list)| list.iter().map(move |&(id, tags)| (currency, id, tags)));
+    for (currency, id, tags) in listed {
+        let named = currency.with_article();
         let modifier = modifiers
             .get(id)
-            .ok_or_else(|| format!("{id}: a modifier of {currency} that RePoE doesn't have"))?;
+            .ok_or_else(|| format!("{id}: a modifier of {named} that RePoE doesn't have"))?;
         let error = if spawns.contains_key(id) {
             Some("written twice in the list".to_owned())
         } else if modifier.domain != EQUIPMENT {
@@ -240,14 +268,14 @@ pub(super) fn currency_spawns(
                 modifier.generation_type
             ))
         } else if modifier.spawn_weights.iter().any(SpawnWeight::rolls) {
-            Some(format!("rolls without {currency}"))
+            Some(format!("rolls without {named}"))
         } else {
             tags.iter()
                 .find(|(tag, _)| !equipment_tags.contains(tag))
                 .map(|(tag, _)| format!("a tag no base of the equipment has, {tag}"))
         };
         if let Some(error) = error {
-            return Err(format!("{id}: a modifier of {currency}: {error}").into());
+            return Err(format!("{id}: a modifier of {named}: {error}").into());
         }
         let spawn_weight = |(tag, weight): (&str, u32)| SpawnWeight {
             tag: tag.to_owned(),
@@ -264,18 +292,18 @@ pub(super) fn currency_spawns(
             .chain(default)
             .map(spawn_weight)
             .collect();
-        spawns.insert(id, CurrencySpawn { source, spawn });
+        spawns.insert(id, CurrencySpawn { currency, spawn });
     }
     Ok(spawns)
 }
 
-/// An error when a line of the modifier `id` of `source` has no template, or when it has no
+/// An error when a line of the modifier `id` of `currency` has no template, or when it has no
 /// line: left out, it would be read as no modifier, without a word.
-pub(super) fn check_lines(id: &str, source: Source, lines: &[Line]) -> Result<()> {
+pub(super) fn check_lines(id: &str, currency: Currency, lines: &[Line]) -> Result<()> {
     if let Some(line) = lines.iter().find(|line| !line.known) {
         return Err(format!(
             "{id}: a modifier of {} with a line without template, {}",
-            source.currency(),
+            currency.with_article(),
             line.template
         )
         .into());
@@ -283,7 +311,7 @@ pub(super) fn check_lines(id: &str, source: Source, lines: &[Line]) -> Result<()
     if lines.is_empty() {
         return Err(format!(
             "{id}: a modifier of {} without line, its values all 0",
-            source.currency()
+            currency.with_article()
         )
         .into());
     }

@@ -11,7 +11,7 @@ fn essence_tables(modifiers: &str, essences: &[CurrencyModifier]) -> Result<serd
     let (tables, _) = reduce(
         &repoe(modifiers, BASES, translations),
         &[(template.to_owned(), template.to_owned())].into(),
-        &[(Source::Essence, essences)],
+        &[(Currency::Essence, essences)],
         &mut Report::default(),
     )?;
     Ok(serde_json::to_value(tables).expect("written"))
@@ -131,7 +131,7 @@ fn a_modifier_of_an_alloy_without_line_stops_the_generator() {
     let error = reduce(
         &repoe(&modifiers, BASES, translations),
         &[(template.to_owned(), template.to_owned())].into(),
-        &[(Source::Alloy, &[("Alloy", &[("bow", 1)])])],
+        &[(Currency::Alloy, &[("Alloy", &[("bow", 1)])])],
         &mut Report::default(),
     )
     .err()
@@ -163,7 +163,7 @@ fn a_modifier_of_an_essence_with_a_line_without_template_stops_the_generator() {
     let error = reduce(
         &repoe(&modifiers, BASES, translations),
         &[(template.to_owned(), template.to_owned())].into(),
-        &[(Source::Essence, &[("Essence", &[("bow", 1)])])],
+        &[(Currency::Essence, &[("Essence", &[("bow", 1)])])],
         &mut Report::default(),
     )
     .err()

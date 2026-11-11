@@ -18,7 +18,7 @@ use serde::{Deserialize, Serialize};
 use crate::Result;
 use crate::report::Report;
 pub use currencies::CURRENCIES;
-use currencies::{CurrencyModifier, CurrencySpawn, currency_spawns};
+use currencies::{Currency, CurrencyModifier, CurrencySpawn, currency_spawns};
 pub use lines::Templates;
 use lines::{Line, LineRanges, LineWriter, Translation, is_radius_jewel_tag};
 
@@ -194,17 +194,6 @@ pub enum Source {
     Alloy,
 }
 
-impl Source {
-    /// The currency, with its article, in the errors of its list.
-    fn currency(self) -> &'static str {
-        match self {
-            Self::Genesis => "the Genesis tree",
-            Self::Essence => "an essence",
-            Self::Alloy => "an alloy",
-        }
-    }
-}
-
 /// Whether `domain` is one of the bases kept, which the application knows.
 pub fn is_kept_domain(domain: &str) -> bool {
     DOMAINS.contains(&domain)
@@ -279,7 +268,7 @@ pub struct RepoeFiles {
 pub fn reduce(
     files: &RepoeFiles,
     templates: &Templates,
-    currencies: &[(Source, &[CurrencyModifier])],
+    currencies: &[(Currency, &[CurrencyModifier])],
     report: &mut Report,
 ) -> Result<(Vec<Table>, BaseSpawns)> {
     let released: Vec<&SourceBase> = files
@@ -402,21 +391,21 @@ fn group_tiers(
             *other_domains.entry(&modifier.domain).or_default() += 1;
             continue;
         }
-        let currency = currencies.get(id.as_str());
-        if currency.is_none() && currencies::is_of_a_currency(id, modifier) {
+        let currency_spawn = currencies.get(id.as_str());
+        if currency_spawn.is_none() && currencies::is_of_a_currency(id, modifier) {
             report.note(
                 "Modifiers of a currency that ESSENCES and ALLOYS don't list, left out",
                 id,
             );
         }
-        let rolls = (currency.is_some() || !modifier.is_essence_only)
-            && spawn_weights(modifier, currency)
+        let rolls = (currency_spawn.is_some() || !modifier.is_essence_only)
+            && spawn_weights(modifier, currency_spawn)
                 .iter()
                 .any(SpawnWeight::rolls);
         if !rolls {
             continue;
         }
-        let (key, tier) = table_tier(id, modifier, currency, writer)?;
+        let (key, tier) = table_tier(id, modifier, currency_spawn, writer)?;
         grouped.entry(key).or_default().push(tier);
     }
     for (domain, count) in other_domains {
@@ -428,21 +417,23 @@ fn group_tiers(
     Ok(grouped)
 }
 
-/// The spawn weights `modifier` rolls with: those of the `currency` that adds it, when it is a
-/// modifier only a currency adds, else its own.
+/// The spawn weights `modifier` rolls with: those of the currency that adds it
+/// (`currency_spawn`), when it is a modifier only a currency adds, else its own.
 fn spawn_weights<'m>(
     modifier: &'m SourceModifier,
-    currency: Option<&'m CurrencySpawn>,
+    currency_spawn: Option<&'m CurrencySpawn>,
 ) -> &'m [SpawnWeight] {
-    currency.map_or(&modifier.spawn_weights, |currency| &currency.spawn)
+    currency_spawn.map_or(&modifier.spawn_weights, |currency_spawn| {
+        &currency_spawn.spawn
+    })
 }
 
-/// The table of the modifier `id`, which rolls, and its tier, its lines written by `writer`;
-/// `currency` adds it when it is a modifier only a currency adds.
+/// The table of the modifier `id`, which rolls, and its tier, its lines written by `writer`; the
+/// currency of `currency_spawn` adds it when it is a modifier only a currency adds.
 fn table_tier(
     id: &str,
     modifier: &SourceModifier,
-    currency: Option<&CurrencySpawn>,
+    currency_spawn: Option<&CurrencySpawn>,
     writer: &LineWriter<'_>,
 ) -> Result<(TableKey, Tier)> {
     // Its lines would be written within the words of the passive skills on the other bases.
@@ -456,12 +447,12 @@ fn table_tier(
     let (lines, ranges) = writer
         .lines(modifier)
         .map_err(|error| format!("{id}: {error}"))?;
-    if let Some(currency) = currency {
-        currencies::check_lines(id, currency.source, &lines)?;
+    if let Some(currency_spawn) = currency_spawn {
+        currencies::check_lines(id, currency_spawn.currency, &lines)?;
     }
-    let (spawn, genesis) = spawn_on_bases(spawn_weights(modifier, currency));
-    let source = currency
-        .map(|currency| currency.source)
+    let (spawn, genesis) = spawn_on_bases(spawn_weights(modifier, currency_spawn));
+    let source = currency_spawn
+        .map(|currency_spawn| Source::from(currency_spawn.currency))
         .or_else(|| genesis.then_some(Source::Genesis));
     let key = TableKey {
         kind: modifier.kind.clone(),
@@ -476,7 +467,7 @@ fn table_tier(
         // level RePoE writes (72 for the Perfect essences): a Cultist Bow of level 33 with the
         // `+2 to Level of all Attack Skills` of an essence, on the trade site on 2026-10-30, a
         // helmet of level 7 with an alloy of level 25 on 2026-10-31.
-        level: if currency.is_some() {
+        level: if currency_spawn.is_some() {
             1
         } else {
             modifier.required_level

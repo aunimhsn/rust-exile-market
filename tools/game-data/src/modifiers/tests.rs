@@ -521,7 +521,7 @@ fn a_modifier_of_a_currency_not_listed_and_the_other_domains_are_noted() {
     let listed = HashMap::from([(
         "EssenceListed1",
         CurrencySpawn {
-            source: Source::Essence,
+            currency: Currency::Essence,
             spawn: Vec::new(),
         },
     )]);
