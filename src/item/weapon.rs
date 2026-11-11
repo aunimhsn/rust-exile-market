@@ -3,7 +3,8 @@
 //! The properties already count the quality and the modifiers of the weapon (`augmented`):
 //! its DPS is the average of each damage range times its attacks per second.
 
-use super::USUAL_QUALITY;
+use super::labels::Labels;
+use super::{Property, USUAL_QUALITY};
 
 /// The kind of damage of a range, told by the marker after it in every language, e.g.
 /// `1-50 (lightning)`; a range without marker is physical.
@@ -27,13 +28,14 @@ impl DamageKind {
 
 /// A damage range of a weapon, e.g. `74-231`.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub(super) struct DamageRange {
-    pub kind: DamageKind,
-    pub min: f64,
-    pub max: f64,
+struct DamageRange {
+    kind: DamageKind,
+    min: f64,
+    max: f64,
 }
 
 impl DamageRange {
+    /// The average damage of a hit in this range.
     fn average(self) -> f64 {
         f64::midpoint(self.min, self.max)
     }
@@ -70,11 +72,36 @@ pub struct BaseDps {
 /// The damage and the speed of a weapon.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Weapon {
-    pub(super) damage: Vec<DamageRange>,
-    pub(super) attacks_per_second: f64,
+    damage: Vec<DamageRange>,
+    attacks_per_second: f64,
 }
 
 impl Weapon {
+    /// The damage and the speed of a weapon, from the `properties` of the item, named in the
+    /// words of `labels`; none for an item without attacks per second or damage.
+    pub(super) fn read(properties: &[Property], labels: &Labels) -> Option<Self> {
+        let mut damage = Vec::new();
+        let mut attacks_per_second = None;
+        for Property { name, value, .. } in properties {
+            if name == labels.attacks_per_second {
+                attacks_per_second = value.parse::<f64>().ok();
+            } else if let Some(ranges) = damage_ranges(value) {
+                // A physical range has no marker: only the physical damage line has one.
+                let physical = ranges
+                    .iter()
+                    .any(|range| range.kind == DamageKind::Physical);
+                if !physical || name == labels.physical_damage {
+                    damage.extend(ranges);
+                }
+            }
+        }
+        let attacks_per_second = attacks_per_second?;
+        (!damage.is_empty()).then_some(Self {
+            damage,
+            attacks_per_second,
+        })
+    }
+
     /// The damage per second of each kind.
     #[must_use]
     pub fn dps(&self) -> Dps {
@@ -124,7 +151,7 @@ impl Weapon {
 
 /// The damage ranges of the value of a damage property, e.g. `74-231` or
 /// `10-20 (fire), 1-30 (lightning)`; `None` when a part can't be read.
-pub(super) fn damage_ranges(value: &str) -> Option<Vec<DamageRange>> {
+fn damage_ranges(value: &str) -> Option<Vec<DamageRange>> {
     value
         .split(", ")
         .map(|part| {

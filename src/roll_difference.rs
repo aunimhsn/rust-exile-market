@@ -11,9 +11,9 @@
 //! The better side of a line is read from its words: those of its English string when the
 //! line is in another language and its stat has one (`#% de Réduction de l'Armure` is read
 //! as `#% reduced Armour`), or else the English template of its stat on the trade site, its
-//! own words otherwise. The words were classified with the owner
-//! on 2026-10-26, on every string of the stats; the `better` value of Exiled Exchange 2 isn't
-//! used, wrong on lines such as `Lose # Life when you use a Skill`.
+//! own words otherwise. The words are classified on every string of the stats, rather than
+//! taken from the `better` value of the game data, wrong on lines such as `Lose # Life when you
+//! use a Skill` ("The better side" in `docs/game-data.md`).
 
 use crate::filters::StatKey;
 use crate::game_data::{self, TradeGroup, TradeStats};
@@ -98,8 +98,8 @@ const OTHER_SUBJECTS: &[&str] = &[
 const PLAYER_TARGETS: &[&str] = &["enemy monster", "enemy monsters"];
 /// The rewards of the monsters of a map, in lowercase: more is better, though the line is
 /// about monsters (`#% increased number of Monster Packs`, `Map has #% increased Monster
-/// Rarity` of the tablets; owner's choice on 2026-10-31: more monsters make a map harder at
-/// first, but they are a bonus in the end).
+/// Rarity` of the tablets): more monsters make a map harder at first, but they are a bonus in
+/// the end.
 const REWARDS: &[&str] = &[
     "monster packs",
     "pack of monsters",
@@ -178,36 +178,11 @@ struct Template {
 }
 
 impl Template {
+    /// `line` read as its template and its numbers, as the strings of the stats and the copied
+    /// lines read them ([`game_data::line_template`]).
     fn of(line: &str) -> Self {
-        let mut text = String::with_capacity(line.len());
-        let mut numbers = Vec::new();
-        let mut chars = line.chars().peekable();
-        // A sign right before a number, not inside a word: `-10%`, but not `X-10`.
-        let mut sign_allowed = true;
-        while let Some(c) = chars.next() {
-            let signed = matches!(c, '+' | '-') && sign_allowed;
-            let starts_number =
-                c.is_ascii_digit() || (signed && chars.peek().is_some_and(char::is_ascii_digit));
-            if !starts_number {
-                text.push(c);
-                sign_allowed = !c.is_alphanumeric();
-                continue;
-            }
-            let mut number = String::from(c);
-            while let Some(&next) = chars.peek() {
-                if next.is_ascii_digit() || next == '.' {
-                    number.push(next);
-                    chars.next();
-                } else {
-                    break;
-                }
-            }
-            text.push('#');
-            sign_allowed = false;
-            if let Ok(value) = number.parse() {
-                numbers.push(value);
-            }
-        }
+        let (text, numbers) =
+            game_data::line_template(line).unwrap_or_else(|| (line.to_owned(), Vec::new()));
         Self { text, numbers }
     }
 }
@@ -251,7 +226,7 @@ fn has_word(text: &str, word: &str) -> bool {
 
 /// Whether a modifier of the copied item of `kind` is where the trade site lists the
 /// modifiers of `offer`: the corruption adds enchantments, as the item block shows them.
-fn same_place(offer: OfferKind, kind: ModifierKind) -> bool {
+fn is_same_place(offer: OfferKind, kind: ModifierKind) -> bool {
     match offer {
         OfferKind::Enchant => matches!(kind, ModifierKind::Enchant | ModifierKind::Corruption),
         OfferKind::Rune => kind == ModifierKind::Rune,
@@ -264,12 +239,11 @@ fn same_place(offer: OfferKind, kind: ModifierKind) -> bool {
 #[derive(Debug)]
 struct CopiedLine {
     /// The index of its modifier among the modifiers of the item, and of the line in it.
-    modifier: usize,
-    line: usize,
+    key: StatKey,
     kind: ModifierKind,
     template: String,
     /// The numbers of the line as the item parser read them.
-    rolls: Vec<f64>,
+    numbers: Vec<f64>,
     /// The indexes of the numbers its stat counts, when known; the others are written by the
     /// string of the stat, the same on every item.
     counted: Option<Vec<usize>>,
@@ -305,12 +279,11 @@ impl CopiedLines {
                     let template = Template::of(&line.text).text;
                     let words = game_data::english_string(language, &line.text, group, trade);
                     CopiedLine {
-                        modifier: index,
-                        line: line_index,
+                        key,
                         kind: modifier.kind,
                         direction: direction(words.unwrap_or(&template)),
                         template,
-                        rolls: line.rolls.iter().map(|roll| roll.value).collect(),
+                        numbers: line.rolls.iter().map(|roll| roll.value).collect(),
                         counted: stats.numbers(key).map(<[usize]>::to_vec),
                     }
                 })
@@ -321,12 +294,10 @@ impl CopiedLines {
     /// Whether the line `key` of the copied item is better lower, as "18% reduced Movement
     /// Speed"; not when its better side is unknown.
     #[must_use]
-    pub fn better_lower(&self, key: StatKey) -> bool {
-        self.0.iter().any(|copied| {
-            copied.modifier == key.modifier
-                && copied.line == key.line
-                && copied.direction == Direction::Lower
-        })
+    pub fn is_better_lower(&self, key: StatKey) -> bool {
+        self.0
+            .iter()
+            .any(|copied| copied.key == key && copied.direction == Direction::Lower)
     }
 
     /// The difference of the offer `line`, listed as `kind`, from the same line of the
@@ -336,8 +307,8 @@ impl CopiedLines {
     pub fn difference(&self, line: &str, kind: OfferKind) -> Option<Difference> {
         let offer = Template::of(line);
         let copied = self.0.iter().find(|copied| {
-            same_place(kind, copied.kind)
-                && copied.rolls.len() == offer.numbers.len()
+            is_same_place(kind, copied.kind)
+                && copied.numbers.len() == offer.numbers.len()
                 && copied.template == offer.text
         })?;
         let counted = |numbers: &[f64]| -> Vec<f64> {
@@ -350,7 +321,7 @@ impl CopiedLines {
             }
         };
         let value = average(counted(&offer.numbers).into_iter())?
-            - average(counted(&copied.rolls).into_iter())?;
+            - average(counted(&copied.numbers).into_iter())?;
         // A difference written 0 isn't one.
         if crate::format::number(value.abs()) == "0" {
             return None;

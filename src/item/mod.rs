@@ -24,9 +24,9 @@ mod labels;
 mod modifier;
 mod parser;
 #[cfg(test)]
-pub(crate) mod test_items;
+pub mod test_items;
 #[cfg(test)]
-pub(crate) mod trade_copy;
+pub mod trade_copy;
 mod waystone;
 mod weapon;
 
@@ -36,7 +36,7 @@ pub use gem::{
 };
 /// The values of a line, built by hand in the tests of the filters.
 #[cfg(test)]
-pub(crate) use modifier::Roll;
+pub use modifier::Roll;
 pub use modifier::{
     Affix, AffixTier, Currency, Lord, Modifier, ModifierKind, ModifierOrigin, PartTier, Range,
     StatLine, TierDoubt,
@@ -174,7 +174,7 @@ pub struct Property {
     /// Empty for a line without value (`Name: value`).
     pub value: String,
     /// Changed by the quality or the modifiers of the item.
-    pub augmented: bool,
+    pub is_augmented: bool,
 }
 
 /// What the parser reads from a copied item.
@@ -187,7 +187,7 @@ pub struct Item {
     base_type: String,
     /// The base type as the game writes it, with "Exceptional" and "Superior".
     written_base_type: String,
-    exceptional: bool,
+    is_exceptional: bool,
     stack: Option<Stack>,
     #[expect(
         clippy::struct_field_names,
@@ -207,13 +207,13 @@ pub struct Item {
     /// The damage and the speed of a weapon.
     weapon: Option<Weapon>,
     modifiers: Vec<Modifier>,
-    rolls: RollsSource,
+    rolls_source: RollsSource,
     warnings: Vec<ParseWarning>,
 }
 
 /// Where the rolls of the modifiers of an item come from, by the way it was copied.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum RollsSource {
+pub enum RollsSource {
     /// The advanced copy: the `{ … }` header of each modifier gives its affix, its tier and
     /// its ranges.
     Headers,
@@ -233,7 +233,7 @@ impl Item {
     ///
     /// # Errors
     ///
-    /// When the header of the item (rarity, base type) can't be read: the window then shows
+    /// When the first section of the item (rarity, base type) can't be read: the window then shows
     /// the message of an item that can't be read. The other parts that can't be read are
     /// [`Item::warnings`]. An item copied from the trade of the game, without the `{ … }`
     /// headers of the advanced copy, is read with its modifiers, without their affixes, tiers
@@ -301,17 +301,7 @@ impl Item {
             runic_ward: value(labels.runic_ward),
         }
     }
-}
 
-/// The number at the start of a property value, e.g. 26 in `26%`.
-fn leading_number(value: &str) -> Option<u32> {
-    let end = value
-        .find(|character: char| !character.is_ascii_digit())
-        .unwrap_or(value.len());
-    value.get(..end)?.parse().ok()
-}
-
-impl Item {
     /// The language of the game client that copied the item.
     #[must_use]
     pub fn language(&self) -> Language {
@@ -324,6 +314,7 @@ impl Item {
         &self.class
     }
 
+    /// The rarity, which also tells currencies and gems apart.
     #[must_use]
     pub fn rarity(&self) -> Rarity {
         self.rarity
@@ -334,7 +325,7 @@ impl Item {
     /// magic item, a jewel too; not a waystone, whose price lies first in its tier, which its
     /// base type holds.
     #[must_use]
-    pub fn priced_by_stats(&self) -> bool {
+    pub fn is_priced_by_stats(&self) -> bool {
         matches!(self.rarity, Rarity::Magic | Rarity::Rare) && !self.is_waystone()
     }
 
@@ -356,14 +347,16 @@ impl Item {
     #[cfg(test)]
     #[must_use]
     pub fn is_exceptional(&self) -> bool {
-        self.exceptional
+        self.is_exceptional
     }
 
+    /// The size of a stack, and the largest stack of the item.
     #[must_use]
     pub fn stack(&self) -> Option<Stack> {
         self.stack
     }
 
+    /// The item level, which bounds the tiers its modifiers may roll.
     #[must_use]
     pub fn item_level(&self) -> Option<u32> {
         self.item_level
@@ -400,6 +393,7 @@ impl Item {
         self.sockets
     }
 
+    /// What a character needs to use the item.
     #[must_use]
     pub fn requirements(&self) -> Requirements {
         self.requirements
@@ -411,6 +405,7 @@ impl Item {
         &self.granted_skills
     }
 
+    /// Whether the item ends with the line of `state`.
     #[must_use]
     pub fn has_state(&self, state: ItemState) -> bool {
         self.states.contains(&state)
@@ -422,6 +417,7 @@ impl Item {
         self.has_state(ItemState::Corrupted) || self.has_state(ItemState::TwiceCorrupted)
     }
 
+    /// The states written at the end of the item, in their order.
     #[cfg(test)]
     #[must_use]
     pub fn states(&self) -> &[ItemState] {
@@ -447,12 +443,19 @@ impl Item {
         self.modifiers = modifiers;
     }
 
+    /// Where the rolls of its modifiers come from, by the way it was copied: what reads them
+    /// chooses by a `match`, so that a new way to copy an item names every place to update.
+    #[must_use]
+    pub fn rolls_source(&self) -> RollsSource {
+        self.rolls_source
+    }
+
     /// The item was read from the advanced copy, whose `{ … }` headers give the modifiers
     /// their ranges: a number written without range there is a fixed value. A copy from the
     /// trade of the game writes no range at all, the rolls of its numbers unknown.
     #[must_use]
     pub fn is_headed(&self) -> bool {
-        self.rolls == RollsSource::Headers
+        self.rolls_source == RollsSource::Headers
     }
 
     /// A rare or magic item copied from the trade of the game (another player's listing): its
@@ -460,7 +463,7 @@ impl Item {
     /// found from their values in the modifier tables.
     #[must_use]
     pub fn has_tiers_from_values(&self) -> bool {
-        self.rolls == RollsSource::Values
+        self.rolls_source == RollsSource::Values
     }
 
     /// A unique copied from the trade of the game (another player's listing): its implicit and
@@ -468,7 +471,7 @@ impl Item {
     /// the modifiers the price database writes for it.
     #[must_use]
     pub fn has_rolls_from_prices(&self) -> bool {
-        self.rolls == RollsSource::Prices
+        self.rolls_source == RollsSource::Prices
     }
 
     /// The number of desecrated modifiers not revealed yet.
@@ -477,8 +480,16 @@ impl Item {
         let count = self
             .modifiers
             .iter()
-            .filter(|modifier| modifier.unrevealed)
+            .filter(|modifier| modifier.is_unrevealed)
             .count();
         u32::try_from(count).unwrap_or(u32::MAX)
     }
+}
+
+/// The number at the start of a property value, e.g. 26 in `26%`.
+fn leading_number(value: &str) -> Option<u32> {
+    let end = value
+        .find(|character: char| !character.is_ascii_digit())
+        .unwrap_or(value.len());
+    value.get(..end)?.parse().ok()
 }

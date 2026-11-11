@@ -15,61 +15,73 @@ use super::{CopiedItem, Modifier, ModifierKind, ModifierOrigin};
 /// a corruption enhancement, or a modifier not revealed yet.
 pub fn as_in_game_trade(text: &str) -> Option<String> {
     let labels = Labels::of(CopiedItem::from_text(text)?.language());
-    let mut sections = Vec::new();
-    for section in text.split("\n--------\n") {
-        if !section.lines().any(|line| line.starts_with('{')) {
-            sections.push(section.to_owned());
-            continue;
-        }
-        // Each modifier, read under its header, its lines without ranges.
-        let mut modifiers: Vec<Modifier> = Vec::new();
-        for line in section
-            .lines()
-            .map(str::trim)
-            .filter(|line| !line.is_empty())
-        {
-            // The headers of the French texts put no-break spaces around the punctuation, read
-            // as plain spaces as the parser does; the other lines keep theirs, for a copy whose
-            // lines would have some (none of the test items has one in a modifier line).
-            if let Some(header) = Header::parse(&line.replace(['\u{a0}', '\u{202f}'], " "), labels)
-            {
-                let modifier = match header {
-                    Header::Known(modifier) => *modifier,
-                    Header::Unknown => Modifier::unknown(),
-                };
-                if modifier.kind == ModifierKind::Corruption {
-                    return None;
-                }
-                modifiers.push(modifier);
-            } else if let Some(modifier) = modifiers.last_mut() {
-                modifier.push_line(line, labels);
-                if modifier.unrevealed {
-                    return None;
-                }
+    let sections = text
+        .split("\n--------\n")
+        .map(|section| {
+            if section.lines().any(|line| line.starts_with('{')) {
+                let mut modifiers = headed_modifiers(section, labels)?;
+                // The fractured and Vaal modifiers first, the desecrated ones last.
+                modifiers.sort_by_key(|modifier| match modifier.origin {
+                    Some(ModifierOrigin::Fractured | ModifierOrigin::Vaal) => 0,
+                    Some(ModifierOrigin::Crafted) | None => 1,
+                    Some(ModifierOrigin::Desecrated) => 2,
+                });
+                Some(marked_lines(&modifiers))
+            } else {
+                Some(section.to_owned())
             }
-        }
-        // The fractured and Vaal modifiers first, the desecrated ones last.
-        modifiers.sort_by_key(|modifier| match modifier.origin {
-            Some(ModifierOrigin::Fractured | ModifierOrigin::Vaal) => 0,
-            Some(ModifierOrigin::Desecrated) => 2,
-            _ => 1,
-        });
-        let mut lines = Vec::new();
-        for modifier in &modifiers {
-            let mut written: Vec<String> = modifier
-                .lines
-                .iter()
-                .map(|line| line.text.clone())
-                .collect();
-            // Only the last line of a modifier is marked.
-            if let (Some(marker), Some(last)) = (marker(modifier), written.last_mut()) {
-                last.push_str(marker.suffix());
-            }
-            lines.append(&mut written);
-        }
-        sections.push(lines.join("\n"));
-    }
+        })
+        .collect::<Option<Vec<String>>>()?;
     Some(sections.join("\n--------\n"))
+}
+
+/// Each modifier of a section of the advanced copy, read under its header, its lines without
+/// ranges; none for a corruption enhancement or a modifier not revealed yet.
+fn headed_modifiers(section: &str, labels: &Labels) -> Option<Vec<Modifier>> {
+    let mut modifiers: Vec<Modifier> = Vec::new();
+    for line in section
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+    {
+        // The headers of the French texts put no-break spaces around the punctuation, read as
+        // plain spaces as the parser does; the other lines keep theirs, for a copy whose lines
+        // would have some (none of the test items has one in a modifier line).
+        if let Some(header) = Header::parse(&line.replace(['\u{a0}', '\u{202f}'], " "), labels) {
+            let modifier = match header {
+                Header::Known(modifier) => *modifier,
+                Header::Unknown => Modifier::unknown(),
+            };
+            if modifier.kind == ModifierKind::Corruption {
+                return None;
+            }
+            modifiers.push(modifier);
+        } else if let Some(modifier) = modifiers.last_mut() {
+            modifier.push_line(line, labels);
+            if modifier.is_unrevealed {
+                return None;
+            }
+        }
+    }
+    Some(modifiers)
+}
+
+/// The lines of `modifiers`, as the in-game trade writes them: only the last line of a modifier
+/// marked.
+fn marked_lines(modifiers: &[Modifier]) -> String {
+    let mut lines = Vec::new();
+    for modifier in modifiers {
+        let mut written: Vec<String> = modifier
+            .lines
+            .iter()
+            .map(|line| line.text.clone())
+            .collect();
+        if let (Some(marker), Some(last)) = (marker(modifier), written.last_mut()) {
+            last.push_str(marker.suffix());
+        }
+        lines.append(&mut written);
+    }
+    lines.join("\n")
 }
 
 /// The marker of the lines of `modifier`: none for a prefix, a suffix or a modifier of a

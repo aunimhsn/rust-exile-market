@@ -21,7 +21,7 @@ fn modifier(kind: ModifierKind, line: &str) -> Modifier {
         name: None,
         tier: None,
         tags: Vec::new(),
-        unrevealed: false,
+        is_unrevealed: false,
         lines: vec![StatLine::parse(line)],
         doubt: None,
     }
@@ -53,6 +53,28 @@ fn a_line_is_read_as_its_template_and_its_signed_numbers() {
     assert_eq!(Template::of("0.5% of Life Regenerated").numbers, [0.5]);
     // A minus sign inside a word isn't a sign.
     assert_eq!(Template::of("Non-1 thing").numbers, [1.0]);
+    // The point that ends a sentence isn't in its number.
+    assert_eq!(
+        Template::of("augmentent le nombre maximum de totems invoqués de 2.5."),
+        Template {
+            text: "augmentent le nombre maximum de totems invoqués de #.".to_owned(),
+            numbers: vec![2.5],
+        }
+    );
+}
+
+#[test]
+fn a_decimal_number_that_ends_a_sentence_shows_its_difference() {
+    let totems = "Les aptitudes d'attaques en mêlée augmentent le nombre maximum de totems \
+                  invoqués de";
+    let copied = [explicit(&format!("{totems} 2.5."))];
+    let offer = difference(
+        &format!("{totems} 3.5."),
+        OfferKind::Explicit,
+        Language::French,
+        &copied,
+    );
+    assert_eq!(offer.map(|difference| difference.value), Some(1.0));
 }
 
 #[test]
@@ -220,12 +242,12 @@ fn a_line_of_the_copied_item_tells_whether_it_is_better_lower() {
     let lines = CopiedLines::new(Language::English, &copied, &LineStats::default(), None);
     let key = |modifier, line| StatKey { modifier, line };
 
-    assert!(lines.better_lower(key(0, 0)));
-    assert!(!lines.better_lower(key(1, 0)));
-    assert!(lines.better_lower(key(1, 1)));
+    assert!(lines.is_better_lower(key(0, 0)));
+    assert!(!lines.is_better_lower(key(1, 0)));
+    assert!(lines.is_better_lower(key(1, 1)));
     // Its better side unknown: searched with a minimum, as any line.
-    assert!(!lines.better_lower(key(2, 0)));
-    assert!(!lines.better_lower(key(3, 0)));
+    assert!(!lines.is_better_lower(key(2, 0)));
+    assert!(!lines.is_better_lower(key(3, 0)));
 }
 
 #[test]

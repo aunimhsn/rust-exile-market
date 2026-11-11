@@ -87,6 +87,7 @@ pub(super) struct HeaderKind {
 }
 
 impl HeaderKind {
+    /// The kind of a header whose label tells no origin.
     const fn new(label: &'static str, kind: ModifierKind) -> Self {
         Self {
             label,
@@ -95,6 +96,7 @@ impl HeaderKind {
         }
     }
 
+    /// The kind of the header of the Vaal modifier of a unique.
     const fn vaal(label: &'static str) -> Self {
         Self {
             label,
@@ -122,6 +124,7 @@ impl Wording {
 }
 
 impl Labels {
+    /// The words of the game client in `language`.
     pub fn of(language: Language) -> &'static Self {
         match language {
             Language::English => &ENGLISH,
@@ -132,15 +135,19 @@ impl Labels {
 
 /// The markers at the end of a property or a requirement, in English in every language; the
 /// markers of the modifiers are [`super::modifier::Marker`].
-pub(super) mod marker {
+pub(super) mod value_marker {
+    /// After a value the quality or the modifiers of the item changed.
     pub const AUGMENTED: &str = " (augmented)";
+    /// After a requirement the character doesn't meet.
     pub const UNMET: &str = " (unmet)";
 }
 
+/// The kinds of the headers of the explicit modifiers, written short in the tables below.
 const PREFIX: ModifierKind = ModifierKind::Explicit(Some(Affix::Prefix));
 const SUFFIX: ModifierKind = ModifierKind::Explicit(Some(Affix::Suffix));
 const UNIQUE: ModifierKind = ModifierKind::Explicit(None);
 
+/// The words of the English game client.
 static ENGLISH: Labels = Labels {
     item_class: "Item Class: ",
     jewels: "Jewels",
@@ -239,6 +246,7 @@ static ENGLISH: Labels = Labels {
     ],
 };
 
+/// The words of the French game client.
 static FRENCH: Labels = Labels {
     item_class: "Classe d'objet: ",
     jewels: "Joyaux",

@@ -5,7 +5,7 @@ use crate::game_data;
 use crate::item::modifier::{Range, Roll, StatLine};
 use crate::item::test_items;
 use crate::item::trade_copy::as_in_game_trade;
-use crate::item::{Affix, Catalyst, Defences, ModifierOrigin, QualityKind};
+use crate::item::{Affix, Catalyst, Defences, ModifierOrigin, Property, QualityKind, Stack};
 use crate::language::Language;
 
 macro_rules! test_item {
@@ -174,7 +174,7 @@ fn reads_a_french_rare_body_armour() {
     assert!(item.properties().contains(&Property {
         name: "Bouclier d'énergie".to_owned(),
         value: "567".to_owned(),
-        augmented: true,
+        is_augmented: true,
     }));
     assert_eq!(
         item.requirements(),
@@ -242,7 +242,7 @@ fn reads_an_unrevealed_modifier_from_its_header_and_its_only_line() {
         assert_eq!(item.unrevealed_modifiers(), 1);
         let unrevealed = explicit(&item)
             .into_iter()
-            .find(|modifier| modifier.unrevealed)
+            .find(|modifier| modifier.is_unrevealed)
             .expect("an unrevealed modifier");
         assert_eq!(unrevealed.kind, ModifierKind::Explicit(Some(affix)));
         // `Desecrated Prefix` isn't a line of a stat.
@@ -275,7 +275,7 @@ fn an_unrevealed_modifier_keeps_no_line_after_its_marker() {
          --------\n{ Prefix Modifier \"Veiled\" }\nDesecrated Prefix\n+10 to maximum Life",
     );
     let unrevealed = &explicit(&item)[0];
-    assert!(unrevealed.unrevealed);
+    assert!(unrevealed.is_unrevealed);
     assert_eq!(unrevealed.lines, []);
 }
 
@@ -833,28 +833,6 @@ fn tells_why_an_item_can_t_be_read() {
 }
 
 #[test]
-fn reads_the_small_parts() {
-    assert_eq!(digits("+20%"), Some(20));
-    assert_eq!(digits("1 234"), Some(1234));
-    assert_eq!(digits("none"), None);
-    assert_eq!(digits("99999999999"), None);
-
-    let labels = Labels::of(Language::English);
-    assert_eq!(count_sockets("Sockets: S S S", labels), 3);
-    assert_eq!(count_sockets("Sockets: ", labels), 0);
-    assert_eq!(
-        read_requirements("Requires: 113 Intelligence", labels),
-        (
-            Requirements {
-                intelligence: Some(113),
-                ..Requirements::default()
-            },
-            true
-        )
-    );
-}
-
-#[test]
 fn never_panics_on_a_cut_or_changed_item() {
     for text in test_items::texts() {
         let chars: Vec<char> = text.chars().collect();
@@ -1392,9 +1370,13 @@ fn an_advanced_copy_never_has_its_explicit_modifiers_found_without_header() {
             .map(|lines| recognize(lines, labels))
             .collect();
         let rarity = item(&text).rarity();
+        let headers = Headers::of(&recognized);
         assert_eq!(
-            explicit_section(&recognized, rarity, copied.language()),
-            None,
+            (
+                headers,
+                explicit_section(&recognized, rarity, copied.language(), headers)
+            ),
+            (Headers::Written, None),
             "{text}"
         );
     }
@@ -1438,31 +1420,6 @@ fn tells_a_unique_copied_from_the_in_game_trade() {
     ] {
         assert!(!item(text).has_rolls_from_prices(), "{text}");
     }
-}
-
-#[test]
-fn a_quality_is_read_as_a_whole_percentage_only() {
-    assert_eq!(whole_percent("+20%"), Some(20));
-    assert_eq!(whole_percent(" 20% "), Some(20));
-    assert_eq!(whole_percent("+12.5%"), None);
-    assert_eq!(whole_percent("-10%"), None);
-    assert_eq!(whole_percent("+20"), None);
-    assert_eq!(
-        read_quality("Qualité (Modificateurs de Mana): +50%", Language::French),
-        Some((
-            Some(QualityKind {
-                catalyst: Some(Catalyst::Mana),
-                words: "Modificateurs de Mana".to_owned(),
-            }),
-            Some(50)
-        ))
-    );
-    assert_eq!(
-        read_quality("Quality: +12.5%", Language::English),
-        Some((None, None)),
-        "a quality, unreadable"
-    );
-    assert_eq!(read_quality("Spirit: 100", Language::English), None);
 }
 
 #[test]
@@ -1835,7 +1792,7 @@ fn a_long_run_of_lines_that_make_no_stat_is_read_at_once() {
         .collect();
     let start = std::time::Instant::now();
 
-    join_written_stats(&mut modifiers, Language::English, true);
+    join_written_stats(&mut modifiers, Language::English, Headers::Written);
 
     assert_eq!(modifiers.len(), 3000);
     assert!(start.elapsed() < std::time::Duration::from_secs(10));

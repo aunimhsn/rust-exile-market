@@ -96,7 +96,7 @@ fn stats_of<'a>(text: &str, kind: ModifierKind, trade: Option<&'a TradeStats>) -
         name: None,
         tier: None,
         tags: Vec::new(),
-        unrevealed: false,
+        is_unrevealed: false,
         lines: text
             .lines()
             .map(str::trim)

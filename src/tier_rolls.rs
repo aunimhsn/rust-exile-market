@@ -47,13 +47,8 @@ pub struct LineRolls {
 /// The rolls over every tier of the lines of the copied item that have them.
 #[derive(Debug, Default)]
 pub struct TierRolls {
-    lines: Vec<(StatKey, LineRolls)>,
-    /// The index of each modifier without tier to tell: of one tier only on the base of the
-    /// item, whose T1 would read as "the best" while it is "the only one", or whose tier the game
-    /// doesn't write (the Genesis tree, an essence, an alloy).
-    single: Vec<usize>,
-    /// The index of each modifier a currency adds, written without tier, and that currency.
-    currencies: Vec<(usize, Currency)>,
+    /// What the lines of each modifier of the item roll over, in the order of the item.
+    modifiers: Vec<ModifierRolls>,
 }
 
 impl TierRolls {
@@ -68,134 +63,259 @@ impl TierRolls {
         base_type: Option<&str>,
         item_level: Option<u32>,
     ) -> Self {
-        let mut lines = Vec::new();
-        let mut single = Vec::new();
-        let mut currencies = Vec::new();
-        for (index, modifier) in modifiers.iter().enumerate() {
-            let without_tier = written_without_tier(modifier);
-            let fixed = fixed_without_tier(modifier);
-            let summed = match &modifier.doubt {
-                Some(TierDoubt::Split { line, .. }) => Some(*line),
-                _ if without_tier || modifier.tier.is_some() || fixed => None,
-                _ => continue,
-            };
-            let found = base_type
-                .and_then(|base_type| tables_of(language, base_type, item_level, modifier));
-            // Its copied ranges, whatever its base; the currency that adds it, from the tables.
-            if without_tier {
-                single.push(index);
-                lines.extend(copied_rolls(index, modifier));
-                let currency = found.and_then(|(_, tiers)| tiers.currency);
-                currencies.extend(currency.map(|currency| (index, currency)));
-                continue;
-            }
-            let Some((matches, tiers)) = found else {
-                if let Some(base_type) = base_type {
-                    warn_of_a_missing_table(language, base_type, modifier);
-                }
-                continue;
-            };
-            // A fixed value without tier: only of a modifier whose tier the game doesn't write
-            // (the Genesis tree, an essence, an alloy), over that tier, as a line of the in-game
-            // trade read in it, a tier of fixed values too (not a value of a modifier whose tier
-            // the game writes, nor one that falls in a tier of the tree that rolls, `19–22`).
-            let rolled = if fixed {
-                let unwritten = |tier: &&Tier| {
-                    tiers.tier_unwritten && tier.ranges.iter().all(|range| range.is_one_value())
+        let modifiers = modifiers
+            .iter()
+            .map(|modifier| {
+                let Some(written) = Written::of(modifier) else {
+                    return ModifierRolls::default();
                 };
-                match tiers.tier().filter(unwritten) {
-                    Some(tier) => std::slice::from_ref(tier),
-                    None => continue,
-                }
-            } else {
-                tiers.tiers.as_slice()
-            };
-            // The hybrid of a split line of one tier only too: its other lines tell no tiers.
-            let one_tier = tiers.single() || fixed;
-            if fixed {
-                single.push(index);
-                currencies.extend(tiers.currency.map(|currency| (index, currency)));
-            } else if one_tier && summed.is_none() {
-                match modifier.tier {
-                    Some(1) => single.push(index),
-                    // The game knows more tiers than the data, e.g. after a patch: the tier
-                    // the copy writes is kept.
-                    tier => log::warn!(
-                        "Game data, one tier only for a modifier copied as tier {tier:?}: {}",
-                        modifier.lines.first().map_or("", |line| line.text.as_str())
-                    ),
-                }
-            }
-            let mut start = 0;
-            for (found, &count) in matches.iter().zip(&tiers.counts) {
-                let numbers = counted_numbers(found, modifier);
-                if let Some(values) = share_values(start, count, &numbers) {
-                    for (line, values) in found.lines.clone().zip(values) {
-                        if summed == Some(line) {
-                            continue;
+                let in_tables = base_type.and_then(|base_type| {
+                    ModifierInTables::of(language, base_type, item_level, modifier)
+                });
+                written
+                    .rolls(modifier, in_tables.as_ref())
+                    .unwrap_or_else(|| {
+                        if let Some(base_type) = base_type {
+                            warn_of_a_missing_table(language, base_type, modifier);
                         }
-                        let rolls = modifier.lines.get(line).map_or(0, |line| line.rolls.len());
-                        if let Some(mut rolls) = line_rolls(rolled, &values, rolls) {
-                            if one_tier {
-                                // "T1–T1" would tell nothing.
-                                rolls.tiers = None;
-                            }
-                            let key = StatKey {
-                                modifier: index,
-                                line,
-                            };
-                            lines.push((key, rolls));
-                        }
-                    }
-                }
-                start += count;
-            }
-        }
-        Self {
-            lines,
-            single,
-            currencies,
-        }
+                        ModifierRolls::default()
+                    })
+            })
+            .collect();
+        Self { modifiers }
     }
 
     /// The rolls of the line `key` over every tier; none for a line without them.
     #[must_use]
     pub fn get(&self, key: StatKey) -> Option<&LineRolls> {
-        self.lines
+        self.modifiers
+            .get(key.modifier)?
+            .lines
             .iter()
-            .find(|(line, _)| *line == key)
+            .find(|(line, _)| *line == key.line)
             .map(|(_, rolls)| rolls)
     }
 
-    /// Whether the modifier `index` has no tier to tell: one tier only on the base of the item,
-    /// or a tier the game doesn't write.
+    /// Whether the number of the tier of the modifier `index` isn't shown: one tier only on the
+    /// base of the item, or a tier the game doesn't write.
     #[must_use]
-    pub fn single(&self, index: usize) -> bool {
-        self.single.contains(&index)
+    pub fn hides_number(&self, index: usize) -> bool {
+        self.modifiers
+            .get(index)
+            .is_some_and(|modifier| modifier.hides_number)
     }
 
     /// The currency that adds the modifier `index`, an essence or an alloy, written without
     /// tier: none for another modifier.
     #[must_use]
     pub fn currency(&self, index: usize) -> Option<Currency> {
-        self.currencies
-            .iter()
-            .find(|&&(modifier, _)| modifier == index)
-            .map(|&(_, currency)| currency)
+        self.modifiers.get(index)?.currency
     }
 }
 
-/// The line matches of `modifier` and its tiers among the modifier tables, on the base
-/// `base_type` of an item of `item_level`; none when no table holds it.
-fn tables_of(
-    language: Language,
-    base_type: &str,
-    item_level: Option<u32>,
-    modifier: &Modifier,
-) -> Option<(Vec<LineMatch<'static>>, ModifierTiers)> {
-    let matches = game_data::modifier_stats(language, modifier, None);
-    let tiers = game_data::modifier_tiers(language, base_type, item_level, modifier, &matches)?;
-    Some((matches, tiers))
+/// How the copied item writes a modifier, which tells what its lines roll over.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Written {
+    /// With its tier, from the header of the advanced copy or found from its values: its lines
+    /// roll over every tier of its modifier on the base.
+    Tier,
+    /// A prefix or suffix with its ranges but without tier: the game writes none for a modifier
+    /// of the Genesis tree (`Reinforcing`, `Minions have 21(19-22)% increased maximum Life`, the
+    /// third of its six tiers), nor does the application for such a line copied from the in-game
+    /// trade (`with_trade_tiers`). Its lines roll over the ranges the copy writes.
+    RangesWithoutTier,
+    /// A prefix or suffix without tier nor range: a fixed value of a modifier whose tier the game
+    /// doesn't write (`of the Despot` of the Genesis tree on a belt, `+2 to Level of all Minion
+    /// Skills`; `of the Essence` on a bow, `+2 to Level of all Attack Skills`). Its lines roll
+    /// over that tier, which the tables find.
+    FixedWithoutTier,
+    /// A modifier found from its values whose `line` adds up two modifiers of its stat: its other
+    /// lines roll over the tiers of the hybrid, that line, a sum, over none.
+    Split { line: usize },
+}
+
+impl Written {
+    /// How `modifier` is written; none for a modifier whose lines roll over no tier: an implicit,
+    /// a rune, an enchantment, a modifier of a unique, one left in doubt between two affixes, or
+    /// one not revealed yet.
+    fn of(modifier: &Modifier) -> Option<Self> {
+        if let Some(TierDoubt::Split { line, .. }) = &modifier.doubt {
+            return Some(Self::Split { line: *line });
+        }
+        if modifier.tier.is_some() {
+            return Some(Self::Tier);
+        }
+        let is_affix = matches!(modifier.kind, ModifierKind::Explicit(Some(_)))
+            && modifier.doubt.is_none()
+            && !modifier.is_unrevealed;
+        if !is_affix {
+            return None;
+        }
+        let has_ranges = modifier
+            .lines
+            .iter()
+            .any(|line| line.rolls.iter().any(|roll| roll.range.is_some()));
+        Some(if has_ranges {
+            Self::RangesWithoutTier
+        } else {
+            Self::FixedWithoutTier
+        })
+    }
+
+    /// What the lines of `modifier`, written so, roll over, from its line matches and its tiers
+    /// `in_tables`; none when it needs them and the tables don't hold it.
+    fn rolls(
+        self,
+        modifier: &Modifier,
+        in_tables: Option<&ModifierInTables>,
+    ) -> Option<ModifierRolls> {
+        match self {
+            // Its copied ranges, whatever its base; the currency that adds it, from the tables.
+            Self::RangesWithoutTier => Some(ModifierRolls::over_copied_ranges(
+                modifier,
+                in_tables.and_then(|in_tables| in_tables.tiers.currency),
+            )),
+            Self::Tier => Some(ModifierRolls::over_every_tier(modifier, in_tables?)),
+            Self::FixedWithoutTier => Some(ModifierRolls::over_fixed_tier(modifier, in_tables?)),
+            Self::Split { line } => {
+                Some(ModifierRolls::over_hybrid_tiers(modifier, in_tables?, line))
+            }
+        }
+    }
+}
+
+/// What the lines of one modifier roll over; nothing for a modifier whose lines roll over no
+/// tier.
+#[derive(Debug, Default)]
+#[cfg_attr(test, derive(PartialEq))]
+struct ModifierRolls {
+    /// The rolls of each line that has them, with the index of the line.
+    lines: Vec<(usize, LineRolls)>,
+    /// Whether the number of its tier isn't shown ([`TierRolls::hides_number`]).
+    hides_number: bool,
+    /// The currency that adds it, an essence or an alloy, written without tier.
+    currency: Option<Currency>,
+}
+
+impl ModifierRolls {
+    /// The lines of a modifier written without tier, over the ranges the copy writes, added by
+    /// `currency` if any.
+    fn over_copied_ranges(modifier: &Modifier, currency: Option<Currency>) -> Self {
+        Self {
+            lines: copied_rolls(modifier).collect(),
+            hides_number: true,
+            currency,
+        }
+    }
+
+    /// The lines of a modifier written with its tier, over every tier of the base `in_tables`.
+    fn over_every_tier(modifier: &Modifier, in_tables: &ModifierInTables) -> Self {
+        let single = in_tables.tiers.single();
+        if single && modifier.tier != Some(1) {
+            // The game knows more tiers than the data, e.g. after a patch: the tier the copy
+            // writes is kept.
+            log::warn!(
+                "Game data, one tier only for a modifier copied as tier {:?}: {}",
+                modifier.tier,
+                modifier.lines.first().map_or("", |line| line.text.as_str())
+            );
+        }
+        Self {
+            lines: in_tables.rolls_over(modifier, &in_tables.tiers.tiers, None),
+            hides_number: single && modifier.tier == Some(1),
+            currency: None,
+        }
+    }
+
+    /// The lines of a fixed value written without tier, over its tier `in_tables`: only of a
+    /// modifier whose tier the game doesn't write (the Genesis tree, an essence, an alloy), as a
+    /// line of the in-game trade read in it, a tier of fixed values too (not a value of a
+    /// modifier whose tier the game writes, nor one that falls in a tier of the tree that rolls,
+    /// `19–22`); nothing otherwise.
+    fn over_fixed_tier(modifier: &Modifier, in_tables: &ModifierInTables) -> Self {
+        let unwritten = |tier: &&Tier| {
+            in_tables.tiers.tier_unwritten && tier.ranges.iter().all(|range| range.is_one_value())
+        };
+        let Some(tier) = in_tables.tiers.tier().filter(unwritten) else {
+            return Self::default();
+        };
+        Self {
+            lines: in_tables.rolls_over(modifier, std::slice::from_ref(tier), None),
+            hides_number: true,
+            currency: in_tables.tiers.currency,
+        }
+    }
+
+    /// The other lines of a hybrid whose part its `summed_line` adds up, over the tiers of the
+    /// hybrid `in_tables`.
+    fn over_hybrid_tiers(
+        modifier: &Modifier,
+        in_tables: &ModifierInTables,
+        summed_line: usize,
+    ) -> Self {
+        Self {
+            lines: in_tables.rolls_over(modifier, &in_tables.tiers.tiers, Some(summed_line)),
+            hides_number: false,
+            currency: None,
+        }
+    }
+}
+
+/// A modifier in the modifier tables, on the base of the item: its line matches and its tiers.
+struct ModifierInTables {
+    matches: Vec<LineMatch<'static>>,
+    tiers: ModifierTiers,
+}
+
+impl ModifierInTables {
+    /// `modifier`, written in `language`, in the tables of the base `base_type` of an item of
+    /// `item_level`; none when no table holds it.
+    fn of(
+        language: Language,
+        base_type: &str,
+        item_level: Option<u32>,
+        modifier: &Modifier,
+    ) -> Option<Self> {
+        let matches = game_data::modifier_stats(language, modifier, None);
+        let tiers = game_data::modifier_tiers(language, base_type, item_level, modifier, &matches)?;
+        Some(Self { matches, tiers })
+    }
+
+    /// The rolls of each line of `modifier` over `tiers`, but its `summed_line` that adds up two
+    /// modifiers of its stat, a sum over no tiers, with the index of the line: the ranges of a
+    /// tier follow the values of each line match, and the values of a match the numbers its
+    /// stat counts on its lines, in their order.
+    fn rolls_over(
+        &self,
+        modifier: &Modifier,
+        tiers: &[Tier],
+        summed_line: Option<usize>,
+    ) -> Vec<(usize, LineRolls)> {
+        let values_of_each_match = self.tiers.counts.iter().scan(0, |start, &count| {
+            let first = *start;
+            *start += count;
+            Some((first, count))
+        });
+        self.matches
+            .iter()
+            .zip(values_of_each_match)
+            .filter_map(|(line_match, (start, count))| {
+                let values = share_values(start, count, &counted_numbers(line_match, modifier))?;
+                Some(line_match.lines.clone().zip(values))
+            })
+            .flatten()
+            .filter(|&(line, _)| summed_line != Some(line))
+            .filter_map(|(line, values)| {
+                let number_count = modifier.lines.get(line).map_or(0, |line| line.rolls.len());
+                let mut rolls = line_rolls(tiers, &values, number_count)?;
+                // Over one tier only, "T1–T1" would tell nothing.
+                if tiers.len() < 2 {
+                    rolls.tiers = None;
+                }
+                Some((line, rolls))
+            })
+            .collect()
+    }
 }
 
 /// Writes to the log that no table holds `modifier`, when one should
@@ -239,62 +359,27 @@ fn first_told(told: &mut BTreeSet<String>, key: &str) -> bool {
 /// The most missing tables told in a session.
 const MOST_TOLD: usize = 500;
 
-/// Whether the advanced copy writes `modifier`, a prefix or suffix, with its ranges but without
-/// tier: the game writes none for a modifier of the Genesis tree (`Reinforcing`, `Minions have
-/// 21(19-22)% increased maximum Life`, the third of its six tiers), nor does the application for
-/// such a line copied from the in-game trade (`with_trade_tiers`).
-fn written_without_tier(modifier: &Modifier) -> bool {
-    matches!(modifier.kind, ModifierKind::Explicit(Some(_)))
-        && modifier.tier.is_none()
-        && modifier.doubt.is_none()
-        && !modifier.unrevealed
-        && modifier
-            .lines
-            .iter()
-            .any(|line| line.rolls.iter().any(|roll| roll.range.is_some()))
-}
-
-/// Whether the advanced copy writes `modifier`, a prefix or suffix, without tier nor range: a
-/// fixed value of a modifier whose tier the game doesn't write (`of the Despot` of the Genesis
-/// tree on a belt, `+2 to Level of all Minion Skills`; `of the Essence` on a bow, `+2 to Level of
-/// all Attack Skills`).
-fn fixed_without_tier(modifier: &Modifier) -> bool {
-    matches!(modifier.kind, ModifierKind::Explicit(Some(_)))
-        && modifier.tier.is_none()
-        && modifier.doubt.is_none()
-        && !modifier.unrevealed
-        && modifier
-            .lines
-            .iter()
-            .all(|line| line.rolls.iter().all(|roll| roll.range.is_none()))
-}
-
-/// The rolls of each line of the modifier `index`, `modifier`, over the ranges the advanced copy
-/// writes, without their sign.
-fn copied_rolls(index: usize, modifier: &Modifier) -> impl Iterator<Item = (StatKey, LineRolls)> {
+/// The rolls of each line of `modifier` over the ranges the advanced copy writes, without their
+/// sign, with the index of the line.
+fn copied_rolls(modifier: &Modifier) -> impl Iterator<Item = (usize, LineRolls)> {
     modifier
         .lines
         .iter()
         .enumerate()
-        .filter_map(move |(line, text)| {
-            let ranges: Vec<Option<Range>> = text
+        .filter_map(|(line, stat_line)| {
+            let ranges: Vec<Option<Range>> = stat_line
                 .rolls
                 .iter()
                 .map(|roll| roll.range.and_then(Range::magnitude))
                 .collect();
-            ranges.iter().any(Option::is_some).then(|| {
-                let key = StatKey {
-                    modifier: index,
-                    line,
-                };
-                (
-                    key,
-                    LineRolls {
-                        ranges,
-                        tiers: None,
-                    },
-                )
-            })
+            let has_ranges = ranges.iter().any(Option::is_some);
+            has_ranges.then_some((
+                line,
+                LineRolls {
+                    ranges,
+                    tiers: None,
+                },
+            ))
         })
 }
 
@@ -321,37 +406,38 @@ fn share_values(
     )
 }
 
-/// The rolls over `tiers`, the best first, of a line of `rolls` numbers, whose `values` pair
+/// The rolls over `tiers`, the best first, of a line of `number_count` numbers, whose `values` pair
 /// the index of a number with the index of its value among the ranges of a tier; none for a
 /// line without such a number, or when a tier hasn't the value, or its range crosses zero.
-fn line_rolls(tiers: &[Tier], values: &[(usize, usize)], rolls: usize) -> Option<LineRolls> {
+fn line_rolls(tiers: &[Tier], values: &[(usize, usize)], number_count: usize) -> Option<LineRolls> {
     if values.is_empty() {
         return None;
     }
-    let mut ranges = vec![None; rolls];
+    let mut ranges = vec![None; number_count];
     for &(number, value) in values {
-        let over = tiers
+        let span = tiers
             .iter()
             .map(|tier| tier.ranges.get(value)?.magnitude())
-            .reduce(|over, range| {
-                let (over, range) = (over?, range?);
-                Some(over.spanning(range))
+            .reduce(|span, range| {
+                let (span, range) = (span?, range?);
+                Some(span.spanning(range))
             })
             .flatten()?;
-        *ranges.get_mut(number)? = Some(over);
+        *ranges.get_mut(number)? = Some(span);
     }
     let tiers = match values {
         &[(number, value)] => {
-            let over = ranges.get(number).copied().flatten()?;
-            let rolls = |tier: &&Tier| tier.ranges.get(value).and_then(|range| range.magnitude());
+            let span = ranges.get(number).copied().flatten()?;
+            let range_of =
+                |tier: &&Tier| tier.ranges.get(value).and_then(|range| range.magnitude());
             // The worst tier that rolls the lowest value, the best that rolls the highest.
             let lowest = tiers
                 .iter()
                 .rev()
-                .find(|tier| rolls(tier).is_some_and(|rolls| rolls.min <= over.min))?;
+                .find(|tier| range_of(tier).is_some_and(|range| range.min <= span.min))?;
             let highest = tiers
                 .iter()
-                .find(|tier| rolls(tier).is_some_and(|rolls| rolls.max >= over.max))?;
+                .find(|tier| range_of(tier).is_some_and(|range| range.max >= span.max))?;
             Some(TierSpan {
                 lowest: lowest.number,
                 highest: highest.number,
@@ -363,530 +449,4 @@ fn line_rolls(tiers: &[Tier], values: &[(usize, usize)], rolls: usize) -> Option
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::item::{CopiedItem, Item};
-
-    fn range(min: f64, max: f64) -> Range {
-        Range { min, max }
-    }
-
-    fn rolls_of(text: &str) -> TierRolls {
-        let item = Item::parse(&CopiedItem::from_text(text).expect("an item")).expect("read");
-        TierRolls::new(
-            item.language(),
-            item.modifiers(),
-            Some(item.base_type()),
-            item.item_level(),
-        )
-    }
-
-    fn key(modifier: usize, line: usize) -> StatKey {
-        StatKey { modifier, line }
-    }
-
-    fn one(min: f64, max: f64, lowest: u32, highest: u32) -> LineRolls {
-        LineRolls {
-            ranges: vec![Some(range(min, max))],
-            tiers: Some(TierSpan { lowest, highest }),
-        }
-    }
-
-    #[test]
-    fn a_line_rolls_from_the_lowest_roll_of_its_worst_tier_to_the_highest_of_tier_1() {
-        let rolls = rolls_of(
-            "Item Class: Body Armours\nRarity: Rare\nDoom Shell\nAncestral Mail\n--------\n\
-             Item Level: 82\n--------\n\
-             { Prefix Modifier \"Vigorous\" (Tier: 7) — Life }\n+86(85-99) to maximum Life\n\
-             { Prefix Modifier \"Lacquered\" (Tier: 4) — Defences }\n\
-             +98(86-102) to Armour\n+88(79-94) to Evasion Rating\n\
-             { Suffix Modifier \"of the Penguin\" (Tier: 1) — Elemental, Cold, Resistance }\n\
-             +41(41-45)% to Cold Resistance",
-        );
-
-        assert_eq!(rolls.get(key(0, 0)), Some(&one(10.0, 214.0, 13, 1)));
-        // Each line of a hybrid over the tiers of its own numbers.
-        assert_eq!(rolls.get(key(1, 0)), Some(&one(9.0, 170.0, 8, 1)));
-        assert_eq!(rolls.get(key(1, 1)), Some(&one(6.0, 161.0, 8, 1)));
-        assert_eq!(rolls.get(key(2, 0)), Some(&one(6.0, 45.0, 8, 1)));
-    }
-
-    #[test]
-    fn a_modifier_of_one_tier_only_on_its_base_has_no_tier_to_tell() {
-        let rolls = rolls_of(
-            "Item Class: Jewels\nRarity: Rare\nViper Glimmer\nRuby\n--------\n\
-             Item Level: 43\n--------\n\
-             { Prefix Modifier \"Brutish\" (Tier: 1) — Minion, Life }\n\
-             Minions have 12(5-15)% increased maximum Life",
-        );
-
-        assert!(rolls.single(0));
-        // Over its only tier, without "T1–T1".
-        assert_eq!(
-            rolls.get(key(0, 0)),
-            Some(&LineRolls {
-                ranges: vec![Some(range(5.0, 15.0))],
-                tiers: None,
-            })
-        );
-    }
-
-    #[test]
-    fn a_modifier_copied_with_another_tier_than_the_only_one_of_the_data_keeps_it() {
-        // After a patch that adds a tier the data doesn't know yet.
-        let rolls = rolls_of(
-            "Item Class: Jewels\nRarity: Rare\nViper Glimmer\nRuby\n--------\n\
-             Item Level: 43\n--------\n\
-             { Prefix Modifier \"Brutish\" (Tier: 2) — Minion, Life }\n\
-             Minions have 12(5-15)% increased maximum Life",
-        );
-
-        assert!(!rolls.single(0));
-        // Nor "T1–T1" against its T2.
-        assert_eq!(rolls.get(key(0, 0)).map(|rolls| rolls.tiers), Some(None));
-    }
-
-    #[test]
-    fn a_hybrid_of_one_tier_only_has_no_tier_to_tell() {
-        let flask = "Item Class: Life Flasks\nRarity: Magic\nSaturated Ultimate Life Flask\n\
-                     --------\nItem Level: 82\n--------\n\
-                     { Prefix Modifier \"Saturated\" (Tier: 1) — Life }\n\
-                     Instant Recovery\n50(50)% reduced Amount Recovered";
-        let item = Item::parse(&CopiedItem::from_text(flask).expect("an item")).expect("read");
-        // The base of a magic item, from the names of the trade site.
-        let rolls = TierRolls::new(
-            item.language(),
-            item.modifiers(),
-            Some("Ultimate Life Flask"),
-            item.item_level(),
-        );
-
-        assert!(rolls.single(0));
-        // A line without number has no rolls.
-        assert_eq!(rolls.get(key(0, 0)), None);
-        assert_eq!(
-            rolls.get(key(0, 1)),
-            Some(&LineRolls {
-                ranges: vec![Some(range(50.0, 50.0))],
-                tiers: None,
-            })
-        );
-    }
-
-    #[test]
-    fn a_fixed_value_without_tier_rolls_over_its_tier_only_of_the_genesis_tree_or_an_essence() {
-        // `of the Despot` of the Genesis tree on a belt, the best of its two tiers (+1, +2),
-        // which the copy writes without tier nor range: fixed in its tier.
-        let belt = rolls_of(
-            "Item Class: Belts\nRarity: Rare\nGrip Clasp\nHeavy Belt\n--------\n\
-             Item Level: 79\n--------\n\
-             { Suffix Modifier \"of the Despot\" — Minion, Gem }\n\
-             +2 to Level of all Minion Skills",
-        );
-        assert!(belt.single(0));
-        let fixed = LineRolls {
-            ranges: vec![Some(range(2.0, 2.0))],
-            tiers: None,
-        };
-        assert_eq!(belt.get(key(0, 0)), Some(&fixed));
-
-        // An essence on a bow, of one value.
-        let bow = rolls_of(
-            "Item Class: Bows\nRarity: Rare\nMiracle Siege\nObliterator Bow\n--------\n\
-             Item Level: 81\n--------\n\
-             { Suffix Modifier \"of the Essence\" — Attack }\n\
-             +2 to Level of all Attack Skills",
-        );
-        assert!(bow.single(0));
-        assert_eq!(bow.get(key(0, 0)), Some(&fixed));
-        // On a wand, where its value is the ordinary T2 of 4 as well: the essence's, fixed.
-        let wand = |header: &str| {
-            rolls_of(&format!(
-                "Item Class: Wands\nRarity: Rare\nWoe Song\nAcrid Wand\n--------\n\
-                 Item Level: 81\n--------\n\
-                 {{ Suffix Modifier {header} — Caster, Gem }}\n\
-                 +3 to Level of all Spell Skills"
-            ))
-        };
-        let essence = wand("\"of the Essence\"");
-        assert!(essence.single(0));
-        assert_eq!(
-            essence.get(key(0, 0)),
-            Some(&LineRolls {
-                ranges: vec![Some(range(3.0, 3.0))],
-                tiers: None,
-            })
-        );
-        assert!(!wand("\"of the Magus\" (Tier: 2)").single(0));
-
-        // The same without tier on a quiver, a modifier of the tables, of one tier there, but
-        // neither of the tree nor of an essence (none adds it): no rolls.
-        let quiver = |header: &str| {
-            rolls_of(&format!(
-                "Item Class: Quivers\nRarity: Rare\nStorm Song\nFire Quiver\n--------\n\
-                 Item Level: 79\n--------\n\
-                 {{ Suffix Modifier {header} — Attack, Gem }}\n\
-                 +1 to Level of all Projectile Skills"
-            ))
-        };
-        assert!(quiver("\"of the Archer\" (Tier: 1)").single(0));
-        let essence = quiver("\"of the Essence\"");
-        assert!(!essence.single(0));
-        assert_eq!(essence.get(key(0, 0)), None);
-
-        // Nor a value of an essence that falls in a tier of the tree that rolls, `Reinforcing`
-        // (19–22), which the copy would write with its range.
-        let ring = rolls_of(
-            "Item Class: Rings\nRarity: Rare\nGlyph Circle\nBreach Ring\n--------\n\
-             Item Level: 77\n--------\n\
-             { Prefix Modifier \"of the Essence\" — Life, Minion }\n\
-             Minions have 21% increased maximum Life",
-        );
-        assert!(!ring.single(0));
-        assert_eq!(ring.get(key(0, 0)), None);
-    }
-
-    #[test]
-    fn a_modifier_written_without_tier_rolls_over_its_copied_range() {
-        let rolls = rolls_of(
-            "Item Class: Rings\nRarity: Rare\nGlyph Circle\nBreach Ring\n--------\n\
-             Item Level: 77\n--------\n\
-             { Prefix Modifier \"Reinforcing\" — Life, Minion }\n\
-             Minions have 21(19-22)% increased maximum Life\n\
-             { Prefix Modifier \"Aqua\" (Tier: 7) — Mana }\n\
-             +76(65-79) to maximum Mana",
-        );
-
-        // The Genesis tree, whose tier the game doesn't write: over the copied range.
-        assert!(rolls.single(0));
-        assert_eq!(
-            rolls.get(key(0, 0)),
-            Some(&LineRolls {
-                ranges: vec![Some(range(19.0, 22.0))],
-                tiers: None,
-            })
-        );
-        assert!(!rolls.single(1));
-        assert!(
-            rolls
-                .get(key(1, 0))
-                .is_some_and(|rolls| rolls.tiers.is_some())
-        );
-
-        // Copied from the in-game trade, without its range: no rolls.
-        let rolls = rolls_of(
-            "Item Class: Rings\nRarity: Rare\nGlyph Circle\nBreach Ring\n--------\n\
-             Item Level: 77\n--------\n\
-             Minions have 21% increased maximum Life",
-        );
-        assert!(!rolls.single(0));
-        assert_eq!(rolls.get(key(0, 0)), None);
-
-        // In French, and before the base is known (a magic item before the names of the trade
-        // site): its copied range needs no base.
-        let french = "Classe d'objet: Bagues\nRareté: Rare\nCercle glyphe\nBague de Brèche\n\
-                      --------\nNiveau de l'objet: 77\n--------\n\
-                      { Préfixe : « Renforçant » — Vie, Créature }\n\
-                      Les Créatures ont 21(19-22)% d'Augmentation de Vie maximale";
-        let item = Item::parse(&CopiedItem::from_text(french).expect("an item")).expect("read");
-        let rolls = TierRolls::new(item.language(), item.modifiers(), None, None);
-        assert!(rolls.single(0));
-        assert_eq!(
-            rolls.get(key(0, 0)),
-            Some(&LineRolls {
-                ranges: vec![Some(range(19.0, 22.0))],
-                tiers: None,
-            })
-        );
-    }
-
-    #[test]
-    fn a_line_of_two_numbers_rolls_each_over_the_tiers_without_tiers_to_tell() {
-        let rolls = rolls_of(
-            "Item Class: Bows\nRarity: Rare\nStorm Bite\nGemini Bow\n--------\n\
-             Item Level: 81\n--------\n\
-             { Prefix Modifier \"Tempered\" (Tier: 2) — Damage, Physical, Attack }\n\
-             Adds 21(21-31) to 38(36-53) Physical Damage\n\
-             { Suffix Modifier \"of the Sniper\" (Tier: 2) — Gem }\n\
-             +3 to Level of all Projectile Skills",
-        );
-
-        assert_eq!(
-            rolls.get(key(0, 0)),
-            Some(&LineRolls {
-                ranges: vec![Some(range(1.0, 39.0)), Some(range(4.0, 66.0))],
-                tiers: None,
-            })
-        );
-        // Fixed in its tier, not over the tiers.
-        assert_eq!(rolls.get(key(1, 0)), Some(&one(1.0, 4.0, 4, 1)));
-    }
-
-    #[test]
-    fn a_reduced_line_rolls_without_its_sign() {
-        let rolls = rolls_of(
-            "Item Class: Belts\nRarity: Rare\nGlyph Cord\nDouble Belt\n--------\n\
-             Item Level: 82\n--------\n\
-             { Suffix Modifier \"of Sipping\" (Tier: 2) — Flask }\n\
-             21(20-22)% reduced Flask Charges used",
-        );
-
-        // The table rolls -8 to -25: the game writes 8 to 25.
-        assert_eq!(rolls.get(key(0, 0)), Some(&one(8.0, 25.0, 6, 1)));
-    }
-
-    #[test]
-    fn a_french_line_rolls_over_the_tiers_of_its_english_modifier() {
-        let rolls = rolls_of(include_str!("item/test-items/fr-rare-body-armour.txt"));
-
-        // After its rune and its implicit, `+70(61-73) de Bouclier d'énergie maximal`, the
-        // energy shield T4 among 11.
-        assert_eq!(
-            rolls.get(key(2, 0)).and_then(|rolls| rolls.tiers),
-            Some(TierSpan {
-                lowest: 11,
-                highest: 1
-            })
-        );
-    }
-
-    #[test]
-    fn a_line_has_no_rolls_without_its_tier_nor_base() {
-        // A header the parser doesn't know gives no tier: its modifier isn't looked for in the
-        // tables.
-        let unknown = "Item Class: Body Armours\nRarity: Rare\nDoom Shell\nAncestral Mail\n\
-                       --------\nItem Level: 82\n--------\n{ Strange Modifier }\n\
-                       +86(85-99) to maximum Life";
-        assert_eq!(rolls_of(unknown).get(key(0, 0)), None);
-
-        let advanced = "Item Class: Body Armours\nRarity: Rare\nDoom Shell\nAncestral Mail\n\
-                        --------\nItem Level: 82\n--------\n\
-                        { Prefix Modifier \"Vigorous\" (Tier: 7) — Life }\n\
-                        +86(85-99) to maximum Life";
-        let item = Item::parse(&CopiedItem::from_text(advanced).expect("an item")).expect("read");
-        let rolls = TierRolls::new(item.language(), item.modifiers(), None, None);
-        assert_eq!(rolls.get(key(0, 0)), None);
-    }
-
-    #[test]
-    fn the_other_line_of_a_hybrid_whose_part_a_line_adds_up_rolls_over_the_tiers_of_the_hybrid() {
-        use crate::item::{Affix, ModifierKind, PartTier, StatLine};
-
-        let part = |tiers: Vec<u32>, min, max| PartTier {
-            affix: Affix::Prefix,
-            tiers,
-            hides_number: false,
-            ranges: vec![range(min, max)],
-            currency: None,
-        };
-        // 258% is a pure T1 (170–179) and the hybrid T1 (75–79) with the accuracy.
-        let split = Modifier {
-            kind: ModifierKind::Explicit(Some(Affix::Prefix)),
-            origin: None,
-            name: None,
-            tier: None,
-            tags: Vec::new(),
-            unrevealed: false,
-            lines: vec![
-                StatLine::parse("258% increased Physical Damage"),
-                StatLine::parse("+195(175-200) to Accuracy Rating"),
-            ],
-            doubt: Some(TierDoubt::Split {
-                line: 0,
-                whole: part(vec![1], 75.0, 79.0),
-                added: part(vec![1], 170.0, 179.0),
-            }),
-        };
-
-        let rolls = TierRolls::new(
-            Language::English,
-            std::slice::from_ref(&split),
-            Some("Warmonger Bow"),
-            None,
-        );
-
-        // A sum over no tiers; the accuracy over the 8 tiers of the hybrid.
-        assert_eq!(rolls.get(key(0, 0)), None);
-        assert_eq!(rolls.get(key(0, 1)), Some(&one(16.0, 200.0, 8, 1)));
-
-        // A part whose ranges the hybrid doesn't give the line: another table, no rolls.
-        let mut other = split.clone();
-        other.doubt = Some(TierDoubt::Split {
-            line: 0,
-            whole: part(vec![1], 76.0, 79.0),
-            added: part(vec![1], 170.0, 179.0),
-        });
-        let rolls = TierRolls::new(Language::English, &[other], Some("Warmonger Bow"), None);
-        assert_eq!(rolls.get(key(0, 1)), None);
-
-        // Two pure modifiers on one line: no rolls.
-        let mut pure = split;
-        pure.lines.truncate(1);
-        pure.doubt = Some(TierDoubt::Split {
-            line: 0,
-            whole: part(vec![1], 75.0, 79.0),
-            added: part(vec![1], 170.0, 179.0),
-        });
-        let rolls = TierRolls::new(Language::English, &[pure], Some("Warmonger Bow"), None);
-        assert_eq!(rolls.get(key(0, 0)), None);
-    }
-
-    #[test]
-    fn the_other_line_of_a_hybrid_of_one_tier_only_whose_part_a_line_adds_up_tells_no_tiers() {
-        use crate::item::{Affix, ModifierKind, ModifierOrigin, PartTier, StatLine};
-
-        let part = |min, max| PartTier {
-            affix: Affix::Prefix,
-            tiers: vec![1],
-            hides_number: true,
-            ranges: vec![range(min, max)],
-            currency: None,
-        };
-        // The hybrid of Kurgal (110–154, and 15% reduced Attack Speed), desecrated, and a pure
-        // T1 (170–179) of a maul.
-        let split = Modifier {
-            kind: ModifierKind::Explicit(Some(Affix::Prefix)),
-            origin: Some(ModifierOrigin::Desecrated),
-            name: None,
-            tier: None,
-            tags: Vec::new(),
-            unrevealed: false,
-            lines: vec![
-                StatLine::parse("300% increased Physical Damage"),
-                StatLine::parse("15% reduced Attack Speed"),
-            ],
-            doubt: Some(TierDoubt::Split {
-                line: 0,
-                whole: part(110.0, 154.0),
-                added: part(170.0, 179.0),
-            }),
-        };
-
-        let rolls = TierRolls::new(
-            Language::English,
-            std::slice::from_ref(&split),
-            Some("Temple Maul"),
-            Some(82),
-        );
-
-        // Over its one tier, without "T1–T1"; the modifier not counted as one of one tier
-        // only, the split line having no tier.
-        let speed = rolls.get(key(0, 1)).expect("the rolls of the Attack Speed");
-        assert_eq!(speed.ranges, [Some(range(15.0, 15.0))]);
-        assert_eq!(speed.tiers, None);
-        assert!(!rolls.single(0));
-    }
-
-    #[test]
-    fn the_values_of_a_match_are_shared_among_its_lines() {
-        // A stat on two lines, a number on each.
-        assert_eq!(
-            share_values(3, 2, &[vec![0], vec![0]]),
-            Some(vec![vec![(0, 3)], vec![(0, 4)]])
-        );
-        // A stat on two lines, its number on the first only: the other line has no roll.
-        assert_eq!(
-            share_values(0, 1, &[vec![0], vec![]]),
-            Some(vec![vec![(0, 0)], vec![]])
-        );
-        // Two numbers on a line.
-        assert_eq!(
-            share_values(1, 2, &[vec![0, 1]]),
-            Some(vec![vec![(0, 1), (1, 2)]])
-        );
-        // A line without number whose string gives the value: no roll.
-        assert_eq!(share_values(0, 1, &[vec![]]), None);
-        // More numbers than values.
-        assert_eq!(share_values(0, 1, &[vec![0, 1]]), None);
-    }
-
-    #[test]
-    fn a_range_across_zero_has_no_rolls() {
-        let tier = |number, min, max| Tier {
-            number,
-            level: 1,
-            ranges: vec![range(min, max)],
-        };
-
-        assert_eq!(
-            line_rolls(&[tier(1, 5.0, 10.0), tier(2, 1.0, 4.0)], &[(0, 0)], 1),
-            Some(one(1.0, 10.0, 2, 1))
-        );
-        assert_eq!(
-            line_rolls(&[tier(1, 5.0, 10.0), tier(2, -4.0, 4.0)], &[(0, 0)], 1),
-            None
-        );
-        // A value no tier has.
-        assert_eq!(line_rolls(&[tier(1, 5.0, 10.0)], &[(0, 1)], 1), None);
-        // A line of two numbers whose stat counts the first only: the 3 of `for 3 seconds`.
-        assert_eq!(
-            line_rolls(&[tier(1, 5.0, 10.0), tier(2, 1.0, 4.0)], &[(0, 0)], 2),
-            Some(LineRolls {
-                ranges: vec![Some(range(1.0, 10.0)), None],
-                tiers: Some(TierSpan {
-                    lowest: 2,
-                    highest: 1
-                }),
-            })
-        );
-    }
-
-    /// The parser review of 2026-11-10: the best sign that the data are behind the game was
-    /// skipped without a line in the log.
-    #[test]
-    fn a_tier_the_copy_writes_and_no_table_holds_is_told_apart() {
-        let lacks = |lines: &str| {
-            let maul = format!(
-                "Item Class: Two Hand Maces\nRarity: Magic\nCrackling Temple Maul of the Brute\n\
-                 --------\nItem Level: 40\n--------\n{lines}"
-            );
-            let item = Item::parse(&CopiedItem::from_text(&maul).expect("an item")).expect("read");
-            let modifier = &item.modifiers()[0];
-            let matches = game_data::modifier_stats(item.language(), modifier, None);
-            game_data::lacks_table(item.language(), "Temple Maul", modifier, &matches)
-        };
-
-        // The tier of the data.
-        assert!(!lacks(
-            "{ Prefix Modifier \"Crackling\" (Tier: 7) — Damage, Elemental, Lightning, Attack }\n\
-             Adds 2(1-4) to 60(53-76) Lightning Damage"
-        ));
-        // Ranges no tier has: the game changed them.
-        assert!(lacks(
-            "{ Prefix Modifier \"Crackling\" (Tier: 7) — Damage, Elemental, Lightning, Attack }\n\
-             Adds 2(1-5) to 60(54-79) Lightning Damage"
-        ));
-        // Without a tier written, nothing says a table should hold it; nor for an implicit.
-        assert!(!lacks(
-            "{ Prefix Modifier \"Crackling\" — Damage, Elemental, Lightning, Attack }\n\
-             Adds 2(1-5) to 60(54-79) Lightning Damage"
-        ));
-        assert!(!lacks(
-            "{ Implicit Modifier — Damage }\nAdds 2(1-5) to 60(54-79) Lightning Damage"
-        ));
-    }
-
-    /// An item is read again at each copy: its missing table is told once.
-    #[test]
-    fn a_missing_table_is_told_once_and_not_past_a_few_hundred() {
-        let mut told = BTreeSet::new();
-
-        assert!(first_told(
-            &mut told,
-            "\"Crackling\" as tier Some(7) on Temple Maul"
-        ));
-        assert!(!first_told(
-            &mut told,
-            "\"Crackling\" as tier Some(7) on Temple Maul"
-        ));
-        assert!(first_told(
-            &mut told,
-            "\"Crackling\" as tier Some(6) on Temple Maul"
-        ));
-        for index in told.len()..MOST_TOLD {
-            assert!(first_told(&mut told, &index.to_string()));
-        }
-        assert!(!first_told(&mut told, "one more"));
-        assert_eq!(told.len(), MOST_TOLD);
-    }
-}
+mod tests;

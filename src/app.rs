@@ -1116,7 +1116,7 @@ fn shown_estimate<'a>(
     let Err(NoFixedPrice::NotFixedName) = fixed_price else {
         return None;
     };
-    if item.priced_by_stats() && !offers.compared_stats() {
+    if item.is_priced_by_stats() && !offers.compared_stats() {
         return None;
     }
     let searched_catalyst = offers.searched_catalyst(item);

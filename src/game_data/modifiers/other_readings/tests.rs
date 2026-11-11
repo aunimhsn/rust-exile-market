@@ -258,7 +258,7 @@ fn only_the_tiers_the_item_level_allows_are_placed() {
         name: None,
         tier: None,
         tags: Vec::new(),
-        unrevealed: false,
+        is_unrevealed: false,
         lines: vec![StatLine {
             text: "175% increased Physical Damage".to_owned(),
             rolls: Vec::new(),
@@ -425,7 +425,7 @@ fn doubts_of(
             name: None,
             tier: None,
             tags: Vec::new(),
-            unrevealed: false,
+            is_unrevealed: false,
             lines: vec![StatLine {
                 text: (*text).to_owned(),
                 rolls: Vec::new(),

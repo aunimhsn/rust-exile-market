@@ -726,7 +726,7 @@ fn lines_to_read(language: Language, modifiers: &[Modifier]) -> Vec<Option<Copie
         .map(|modifier| {
             let open = modifier.kind == ModifierKind::Explicit(None)
                 && modifier.tier.is_none()
-                && !modifier.unrevealed
+                && !modifier.is_unrevealed
                 && !modifier.lines.is_empty();
             open.then(|| Copied::of(modifier, &modifier_stats(language, modifier, None)))
                 .flatten()

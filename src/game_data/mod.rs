@@ -30,7 +30,9 @@ mod unique_rolls;
 pub use bases::{Category, category, trade_category};
 #[cfg(test)]
 pub use lines::equipment_strings;
-pub use lines::{LineMatch, StatMatch, StatSource, english_string, max_stat_lines, modifier_stats};
+pub use lines::{
+    LineMatch, StatMatch, StatSource, english_string, line_template, max_stat_lines, modifier_stats,
+};
 pub use modifiers::{
     AffixLimits, ModifierTiers, Tier, lacks_table, modifier_tiers, with_trade_tiers,
 };

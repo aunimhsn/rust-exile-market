@@ -14,6 +14,7 @@ pub struct CopiedItem {
 /// lines. Everything that reads an item (the parser, the tables of the modifiers, the lines
 /// drawn at each frame, the log) is then bounded too.
 const MAX_BYTES: usize = 16 * 1024;
+/// A text of more lines than this isn't an item either.
 const MAX_LINES: usize = 300;
 
 impl CopiedItem {
@@ -27,12 +28,10 @@ impl CopiedItem {
     #[must_use]
     pub fn from_text(text: &str) -> Option<Self> {
         let text = text.trim();
-        if too_long(text) {
+        if is_too_long(text) {
             return None;
         }
-        let language = Language::ALL
-            .into_iter()
-            .find(|&language| text.starts_with(Labels::of(language).item_class))?;
+        let language = language_of(text)?;
         Some(Self {
             text: text.replace("\r\n", "\n"),
             language,
@@ -44,12 +43,10 @@ impl CopiedItem {
     #[must_use]
     pub fn is_too_long_item(text: &str) -> bool {
         let text = text.trim();
-        too_long(text)
-            && Language::ALL
-                .into_iter()
-                .any(|language| text.starts_with(Labels::of(language).item_class))
+        is_too_long(text) && language_of(text).is_some()
     }
 
+    /// The text of the item, its lines ended with `\n`.
     #[must_use]
     pub fn text(&self) -> &str {
         &self.text
@@ -68,7 +65,16 @@ impl CopiedItem {
     }
 }
 
-fn too_long(text: &str) -> bool {
+/// The language of the game client whose item class line `text` starts with; none for a text
+/// that doesn't start as an item.
+fn language_of(text: &str) -> Option<Language> {
+    Language::ALL
+        .into_iter()
+        .find(|&language| text.starts_with(Labels::of(language).item_class))
+}
+
+/// Whether `text` is too long to be an item.
+fn is_too_long(text: &str) -> bool {
     text.len() > MAX_BYTES || text.lines().take(MAX_LINES + 1).count() > MAX_LINES
 }
 

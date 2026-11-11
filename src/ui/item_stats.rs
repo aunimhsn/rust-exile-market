@@ -1333,7 +1333,7 @@ fn dps_filters(item: &Item, stats: &LineStats, checkable: bool) -> Vec<Stat<'sta
     let minimum = |dps: f64| (dps * (1.0 - COMPARABLE_MARGIN)).floor();
     // A normal item is priced by its base: its DPS is.
     let compares = |property, dps| {
-        !item.priced_by_stats() || stats.compares(FilterKey::Property(property), minimum(dps))
+        !item.is_priced_by_stats() || stats.compares(FilterKey::Property(property), minimum(dps))
     };
     let physical = compares(Property::PhysicalDps, dps.physical);
     let elemental = compares(Property::ElementalDps, dps.elemental)
@@ -1424,7 +1424,7 @@ impl Reading<'_> {
 
     /// The half of the range field the stat `key` fills: the maximum for a line better lower.
     fn half(&self, key: StatKey) -> Half {
-        if self.lines.better_lower(key) {
+        if self.lines.is_better_lower(key) {
             Half::Maximum
         } else {
             Half::Minimum
@@ -1668,12 +1668,12 @@ fn affix_stats<'a>(item: &'a Item, affix: Option<Affix>, reading: &Reading<'_>) 
             .iter()
             .enumerate()
             .any(|line| line_varies(index, line));
-        (modifier.unrevealed, fixed)
+        (modifier.is_unrevealed, fixed)
     });
     modifiers
         .iter()
         .flat_map(|&(index, modifier)| -> Vec<Stat<'a>> {
-            if modifier.unrevealed
+            if modifier.is_unrevealed
                 && let ModifierKind::Explicit(Some(affix)) = modifier.kind
             {
                 // No line yet: the key of its first one, which no filter has.
@@ -1719,10 +1719,10 @@ fn affix_stats<'a>(item: &'a Item, affix: Option<Affix>, reading: &Reading<'_>) 
                             // A modifier of one tier only: the ranges of that tier without its
                             // number, also when the copy writes no tier; nothing when its
                             // value is fixed.
-                            let single = reading.tiers.single(index);
-                            let number = modifier.tier.filter(|_| !single);
+                            let hides_number = reading.tiers.hides_number(index);
+                            let number = modifier.tier.filter(|_| !hides_number);
                             let ranges = tier_ranges(modifier);
-                            (number.is_some() || (single && !ranges.is_empty()))
+                            (number.is_some() || (hides_number && !ranges.is_empty()))
                                 .then(|| TierRow::plain(ModifierTier { number, ranges }))
                         }
                     };
