@@ -22,6 +22,8 @@ pub(super) struct Candidate {
 }
 
 impl Candidate {
+    /// The affixes its modifier can be; for a split line, the one of the modifier of every
+    /// line.
     pub(super) fn set(&self) -> AffixSet {
         match self.affixes.as_slice() {
             [(affix, _)] => AffixSet::Only(*affix),

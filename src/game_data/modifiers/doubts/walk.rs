@@ -1,5 +1,6 @@
-//! The walk through the other readings: the modifiers chosen line after line, within the
-//! room of the item and the bound of the search, each reading compared with the best one.
+//! The walk through the other readings: what it reads from, the modifiers chosen line after
+//! line, within the room of the item and the bound of the search, and what it keeps of each
+//! reading compared with the best one.
 
 use super::comparison::{BestShown, Reading};
 use super::placements::{Directions, Placement};

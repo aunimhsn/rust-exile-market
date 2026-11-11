@@ -27,6 +27,9 @@ pub(super) struct Copied<'a> {
 }
 
 impl<'a> Copied<'a> {
+    /// The lines of `modifier` as the tables are searched with them, each matched with its
+    /// stat in `matches`; none when a line has no stat, or one the trade site alone knows,
+    /// which has no template of the tables.
     pub(super) fn of(modifier: &Modifier, matches: &[LineMatch<'a>]) -> Option<Self> {
         let mut lines = Vec::new();
         let mut ranges = Some(Vec::new());
