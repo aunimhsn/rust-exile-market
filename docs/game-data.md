@@ -33,7 +33,7 @@ The data of the game the application needs beyond the copied text: the id of eac
 
 A copy of the in-game trade writes each explicit line alone, without affix, tier nor range (step 13k2e2). `trade_tiers` (`src/game_data/modifiers/trade_tiers.rs`, step 13k2e3b) finds the affix and the tier of each line from its values alone: the candidates, the best reading, then the other readings, which leave without tier what the best one can't be sure of. `with_trade_tiers` then writes the modifiers again as the advanced copy writes them.
 
-One sub-section per rule. Each gives the rule of today first, then, under **Decisions**, how it came to be: what was chosen, by whom and when, and what the code did before. The files are those of `src/game_data/modifiers/`; the tests of a file on tables written by hand are in its `tests.rs`, those on the tables of the game, to record again when the game data are generated again, in its `game_tests.rs`.
+One sub-section per rule. Each gives the rule of today first, then, where it has some, under **Decisions**, how it came to be: what was chosen, by whom and when, and what the code did before. The files are those of `src/game_data/modifiers/`; the tests of a file on tables written by hand are in its `tests.rs`, those on the tables of the game, to record again when the game data are generated again, in its `game_tests.rs`.
 
 | Rule | File |
 |---|---|
@@ -45,7 +45,7 @@ One sub-section per rule. Each gives the rule of today first, then, under **Deci
 | [The sanctified item](#the-sanctified-item) | `trade_tiers.rs` |
 | [The desecrated lines](#the-desecrated-lines) | `tables.rs` (`Table::may_hold`) |
 | [The order of the lines](#the-order-of-the-lines) | what the game does, behind the rules above |
-| [The modifiers read again](#the-modifiers-read-again) | `trade_modifiers.rs` |
+| [The modifiers read again](#the-modifiers-read-again) | `trade_modifiers.rs`; `split_lines.rs` (`split_tiers`) for the other lines of a split |
 | [The measures of the draw](#the-measures-of-the-draw) | `trade_tiers/game_tests/random_items.rs` |
 | [The checks on the advanced copies](#the-checks-on-the-advanced-copies) | `trade_tiers/game_tests.rs`, `trade_modifiers/game_tests.rs` |
 
@@ -55,8 +55,7 @@ Each line, and each run of up to three consecutive lines of the same origin, is 
 
 - The runs are of consecutive lines: the lines of the hybrids follow each other on the owner's copies ([The order of the lines](#the-order-of-the-lines)).
 - Each way one of these lines adds up two modifiers is a candidate too ([The split lines](#the-split-lines)).
-- A line no tier holds is read without tier and isn't counted: a stat the tables don't know, or a line split in more than one way.
-- A line without tier for another reason (a line copied before a patch) may be taken into a hybrid with the line next to it when its values fall in it: far rarer, and none on the checked items.
+- A line no tier holds is read without tier and isn't counted as a prefix or a suffix: a stat the tables don't know, or a line split in more than one way.
 
 ### The best reading
 
@@ -70,21 +69,25 @@ The readings of the item are looked at, at most 4096, the lines alone first: eac
 
 On a tie, the first reading is kept. Where a hybrid holds lines read alone too, in the room of the item, the other readings leave them without tier ([The other readings and their doubts](#the-other-readings-and-their-doubts)).
 
+A line that has no tier alone for another reason than being a line of a hybrid (a line copied before a patch) may be taken into a hybrid with the line next to it when its values fall in it: far rarer, and none on the checked items.
+
 **The affix the room leaves.** A line that can be a prefix or a suffix keeps the affixes that still fit, the other one left out without a word, the room making it certain: on the owner's tiara, the fractured `41% increased Energy Shield` and `+34 to maximum Mana` are one hybrid (read apart, the tiara would have four prefixes and two fractured modifiers), and its `18% increased Rarity of Items found` is a suffix since its three prefixes are full.
 
-**Two readings as good.** When two readings as good split a line in other ways, or one of them only splits it, the line and the other lines of its hybrids stay without tier, also alone or in a hybrid. So do the lines two readings as good join otherwise or don't both read (`Search::keep`, `differently_read`): the energy shield of a hybrid with the life, or with the mana, neither having a tier alone, where the order of the lines chose one, when the lines of each hybrid follow each other; with the lines of one apart, no candidate holds it and the other is still shown ([backlog.md](../backlog.md)). A line these readings leave another room to keeps both its affixes. The other lines are read as the best of these readings does, with the room the split takes:
+**Two readings as good.** When two readings as good split a line in other ways, or one of them only splits it, the line and the other lines of its hybrids stay without tier, also alone or in a hybrid: `33% increased Rarity of Items found` of a helmet is a prefix and a suffix of T1 and T2, or of T2 and T1, while `37%` is both of T1 (19 and 18); the `50% increased Armour` of the greaves of [The split lines](#the-split-lines) splits in two ways, and stays without tier with its stun threshold.
 
-- with `248%`, the pure part of the owner's bow is a T1 or a T2 with the same hybrid: its accuracy, read alone, would be a pure prefix of tier 5;
-- `33% increased Rarity of Items found` of a helmet is a prefix and a suffix of T1 and T2, or of T2 and T1, while `37%` is both of T1 (19 and 18);
-- the `50% increased Armour` of the greaves of [The split lines](#the-split-lines) splits in two ways, and stays without tier with its stun threshold;
+So do the lines two readings as good join otherwise or don't both read (`Search::keep`, `differently_read`): the energy shield of a hybrid with the life, or with the mana, neither having a tier alone, when the lines of each hybrid follow each other; with the lines of one apart, no candidate holds it and the other is still shown ([backlog.md](../backlog.md)). A line these readings leave another room to keeps both its affixes.
+
+The other lines are read as the best of these readings does, with the room the split takes:
+
+- with `248%`, the pure part of the owner's bow is a T1 or a T2 with the same hybrid, the one of its `258%` in [The split lines](#the-split-lines): its accuracy, read alone, would be a pure prefix of tier 5;
 - the `33% increased Rarity of Items found` of a tiara is a prefix and a suffix whichever way, so that its `30% increased Energy Shield` and `+30 to maximum Life` stay one hybrid T3.
 
 **Decisions**
 
 - The most lines read with a tier, before the most modifiers: second code review of 13k2e3b, for the `30% increased Physical Damage` only a hybrid holds.
 - The affix the room rules out, left out without a word: owner's choice in step 13k2e3c2.
-- The other lines read as the best of the readings as good does, with the room the split takes: second code review of 13k2e4a (the `248%` of the bow), and third code review of 13k2e4a (the `33%` of the tiara), against searching again without the line, which freed a prefix it takes.
-- The lines two readings as good join otherwise or don't both read, without tier: since step 17e3e (code review of 17e3e); the counts of the draw don't move.
+- The other lines read as the best of the readings as good does, with the room the split takes: second code review of 13k2e4a (the `248%` of the bow); third code review of 13k2e4a (the `33%` of the tiara), against searching again without the line, which freed a prefix it takes.
+- The lines two readings as good join otherwise or don't both read, without tier, and both affixes kept by a line these readings leave another room to: since step 17e3e (code review of 17e3e). The order of the lines chose one of the two hybrids until then; the counts of the draw don't move.
 - The lines a hybrid holds too in the room of the item, left without tier by the other readings: step 17e3e.
 
 ### The split lines
@@ -100,7 +103,7 @@ The split counts two affixes in the room, so that a split that overflows it lose
 
 A fractured line isn't split either: it would be two fractured modifiers.
 
-Like a hybrid, a split may take in a line without tier for another reason (a line copied before a patch) when its value falls in the sum of two tiers: none on the checked items. Two pure modifiers share a line only for the rarity, on every base.
+Like a hybrid ([The best reading](#the-best-reading)), a split may take in a line without tier for another reason (a line copied before a patch) when its value falls in the sum of two tiers: none on the checked items. Two pure modifiers share a line only for the rarity, on every base.
 
 **Decisions**
 
@@ -135,15 +138,15 @@ The candidates only split a line into a pure modifier and another whose lines ar
 
 ### The bounds and the end of the search
 
-The search vouches for what it shows, or shows nothing:
+How the search ends (`Ending` in `trade_tiers.rs`):
 
-- **Past the readings, as past the steps**, every line is left without tier, and the log says so (`Ending::ReadingsCut`, `Ending::OtherReadingsCut`): at most 4,096 readings of the candidates are looked at, and 50,000 steps taken among the other readings.
-- **When the search of the other readings is cut at its bound, or doesn't meet the best reading among the others** (`Ending::BestNotMet`: a line it can't read, a table out of step with the candidates, a best reading with two modifiers of one type, which the candidates don't rule out), every line read is left without tier, and the log tells which.
+- **Past the readings** (`Ending::ReadingsCut`: at most 4,096 readings of the candidates are looked at), as past the steps, every line is left without tier, and the log says so.
+- **When the search of the other readings is cut at its bound** (`Ending::OtherReadingsCut`: 50,000 steps at most), **or doesn't meet the best reading among the others** (`Ending::BestNotMet`: a line it can't read, a table out of step with the candidates, a best reading with two modifiers of one type, which the candidates don't rule out), every line read is left without tier, and the log tells which.
 - **When no reading fits** (`Ending::NoneFits`), every affix is kept, and the log says so (a warning).
 - **A hybrid whose lines don't follow each other** is never read as one modifier, a modifier being read on consecutive lines (`FoundTiers::modifiers`, a range): when the room of the item leaves no other reading (the lines read alone overflow it), its lines stay without tier, the other lines keep every affix, and the log tells it apart from the case above (`Ending::OnlyAnotherFits`, a debug line: another reading fits).
 - **A best reading that overflows the room** isn't a reading of the item: once another reading fits, a line keeps its tier only if every reading in the room reads it as the best one does, whatever they make of the other lines, more modifiers adding up or another tier (`+50 to maximum Life` and `+30 to maximum Mana` read as two prefixes with room for one, while a hybrid suffix and two pure suffixes add up to them, or each prefix with three suffixes of the other stat: no tier). On the draw, 18 lines lose their tier by it, 11 with the tier they rolled and 7 in another tier of their modifier; on the draw, 16 of 6,400 items in the order of the modifiers and 159 with the lines shuffled (2.5 %; [backlog.md](../backlog.md)).
 
-The search takes some fifty steps on an item, 1,349 at most, within a bound of 50,000 (with the desecrated tables, 1,405 at most on 5,600 items of 14 bases with a third of their modifiers desecrated, 2,734 with all of them, and 42 readings at most within the bound of 4,096; 2026-10-30). The draw of the repository gives 24 readings and 995 steps at most ([The measures of the draw](#the-measures-of-the-draw)).
+What the search takes against these bounds is measured on the draws ([The measures of the draw](#the-measures-of-the-draw)).
 
 **Decisions**
 
@@ -173,7 +176,7 @@ Only a line the game marks desecrated (` (desecrated)`) may be read with a desec
 
 ### The order of the lines
 
-The in-game trade copy sorts its lines by stat, not by modifier: `+26 de Force` before `+31% à la Résistance au froid` on the owner's body armour, against its advanced copy; the fractured line first, the desecrated one last, `Adds # to # Physical Damage` after the suffixes on the owner's bow. The lines of its two hybrids follow each other there, their stats being neighbours in that order.
+The in-game trade copy sorts its lines by stat, not by modifier: `+26 de Force` before `+31% à la Résistance au froid` on the owner's body armour, against its advanced copy; the fractured line first, the desecrated one last, `Adds # to # Physical Damage` after the suffixes on the owner's bow. The lines of the two hybrids of that body armour ([The other readings and their doubts](#the-other-readings-and-their-doubts)) follow each other there, their stats being neighbours in that order.
 
 One copy agrees with the runs of neighbouring lines without proving them for a hybrid whose two stats another stat parts: the candidates keep them, and the other readings don't need them. A `Soldier Cuirass` with `119% increased Armour`, `+74 to Armour` and `+23 to maximum Life`, which the best reading splits with its neighbour, the hybrid of the armour, may be the hybrid with the life, the `+74` then a pure T9: the three lines stay without tier.
 
@@ -186,7 +189,7 @@ Then the modifiers are read again as the advanced copy writes them (`with_trade_
 - a line that adds up two modifiers is one modifier with the other lines of its hybrid, of their affix (explicit without affix for a prefix and a suffix), without tier, with the tiers of each part and their ranges on that line, a part in two neighbouring tiers over the range of both (`TierDoubt::Split`), the other lines of a hybrid with its ranges over its tiers and that line without range;
 - a line without tier stays as it was.
 
-For the other lines of the hybrid of a split, `modifier_tiers` finds the table of that hybrid from the values of its other lines, the summed line taken at the lowest roll of its part, so that its other lines get their bars over its tiers; a table whose tiers of the part don't give the summed line the ranges of the part is another one, and the other lines then have no bar. A split whose ranges can't be written, its two tiers giving ranges to other values, stays without tier and counted in no affix, and the log says so.
+For the other lines of the hybrid of a split, `modifier_tiers` (`lookup.rs`, by `split_tiers` of `split_lines.rs`) finds the table of that hybrid from the values of its other lines, the summed line taken at the lowest roll of its part, so that its other lines get their bars over its tiers; a table whose tiers of the part don't give the summed line the ranges of the part is another one, and the other lines then have no bar. A split whose ranges can't be written, its two tiers giving ranges to other values, stays without tier and counted in no affix, and the log says so.
 
 The session does it from the copy as the parser read it, once the base is known: at once for a rare item, once the names of the trade site tell the base of a magic item. When that joins the lines of a hybrid, or splits them again (names that no longer know the base), the choices of the player on the lines are forgotten, the filters being kept by the place of their line.
 
@@ -224,19 +227,24 @@ The draw isn't the game's: every modifier and tier as likely, the order of the l
 - 7,140 lines without tier before (4.6 %) and 11,737 after (7.6 %);
 - 926 lines read right with their affix in doubt, a prefix or a suffix, before and 989 after, a reading in doubt leaving another room.
 
-**The draws of 2026-10-29 and 2026-10-30, whose code wasn't kept.** On 2,800 rare items drawn at random (7 bases, item level 82, from one to three prefixes and suffixes, every tier as likely, the lines in the order of their modifiers, 2026-10-29), the lines adding up modifiers with a wrong tier fell from 496 to 122 of 11,468 lines, all the wrong tiers from 2,117 to 996, for 250 right tiers lost (8,969 to 8,719); as many items with their lines shuffled gave the same (wrong tiers 2,233 to 1,229, right ones 8,118 to 7,933). Most wrong tiers left were then hybrids read as two pure modifiers, the lines being read alone first (without tier since step 17e3e), and values in two tiers, the worst taken. The steps and the readings of the draws of 2026-10-30 are in [The bounds and the end of the search](#the-bounds-and-the-end-of-the-search).
+**The draws of 2026-10-29 and 2026-10-30, whose code wasn't kept.** With the other readings (step 13k2e4b2a), on 2,800 rare items drawn at random (7 bases, item level 82, from one to three prefixes and suffixes, every tier as likely, the lines in the order of their modifiers, 2026-10-29), the lines adding up modifiers with a wrong tier fell from 496 to 122 of 11,468 lines, all the wrong tiers from 2,117 to 996, for 250 right tiers lost (8,969 to 8,719); as many items with their lines shuffled gave the same (wrong tiers 2,233 to 1,229, right ones 8,118 to 7,933). Most wrong tiers left were then hybrids read as two pure modifiers, the lines being read alone first (without tier since step 17e3e), and values in two tiers, the worst taken. The search took some fifty steps on an item, 1,349 at most, within a bound of 50,000 (with the desecrated tables, 1,405 at most on 5,600 items of 14 bases with a third of their modifiers desecrated, 2,734 with all of them, and 42 readings at most within the bound of 4,096; 2026-10-30).
 
 ### The checks on the advanced copies
 
 The 16 rare and magic items of the advanced copy are written as the in-game trade writes them (a test):
 
 - no hybrid is made up, and none of the 16 advanced copies is split;
-- 64 of the 78 modifiers find the affix and the tier the advanced copy writes (the 4 of Amanamu since step 13k3b1, `Reinforcing` of the Breach Rings since step 13k3b2, the 12 lines of the Time-Lost Sapphires since step 13k3c1, the Onslaught of an essence on a bow since step 13k3d1);
+- 64 of the 78 modifiers find the affix and the tier the advanced copy writes, among them the 4 of Amanamu, `Reinforcing` of the Breach Rings, the 12 lines of the Time-Lost Sapphires and the Onslaught of an essence on a bow;
 - 2 find no tier: the `+3 to Level of all Attack Skills` of an essence on a bow, of an older patch, and a line copied before a patch;
-- the 10 of the owner's sanctified sceptre, in both languages, get none (72 were counted found until step 17e3e, the test taking any tier for a sanctified value out of its range: 2 of them, the mana of the sceptre, had the tier next to theirs);
+- the 10 of the owner's sanctified sceptre, in both languages, get none ([The sanctified item](#the-sanctified-item));
 - the rarity of the runeforged crown stays a prefix or a suffix, its two prefixes and two other suffixes leaving room for either.
 
 On the same 16 items, the 64 modifiers read again have the affix, the tier, the origin and the ranges the advanced copy writes (a test), the lines of the sanctified sceptre staying as they were.
+
+**Decisions**
+
+- Found since a later step: the 4 of Amanamu since step 13k3b1, `Reinforcing` of the Breach Rings since step 13k3b2, the 12 lines of the Time-Lost Sapphires since step 13k3c1, the Onslaught of an essence on a bow since step 13k3d1.
+- 72 modifiers were counted found until step 17e3e, the test taking any tier for a sanctified value out of its range: 2 of them, the mana of the sceptre, had the tier next to theirs.
 
 ## Checks on the copied items
 
