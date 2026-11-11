@@ -124,11 +124,11 @@ impl StatChecks {
 }
 
 /// The line under "No market price…" of an item without estimate, given the `checks` of its
-/// filters: an item `priced_by_stats` ([`Item::priced_by_stats`]) is estimated only from a
+/// filters: an item priced by its stats ([`Item::is_priced_by_stats`]) is estimated only from a
 /// search that compares some, so that it asks for one to be checked, and says nothing when
 /// none can be (the offers of any item of its base would say nothing of its price).
-fn estimate_hint(priced_by_stats: bool, checks: StatChecks) -> Option<Message> {
-    if !priced_by_stats {
+fn estimate_hint(is_priced_by_stats: bool, checks: StatChecks) -> Option<Message> {
+    if !is_priced_by_stats {
         return Some(Message::SearchToEstimate);
     }
     match checks {
@@ -448,7 +448,7 @@ impl<'a> PriceBlock<'a> {
         };
         message(ui, &first, color::TEXT);
         if let Notice::NoMarketPrice(_) = notice
-            && let Some(second) = estimate_hint(self.item.priced_by_stats(), self.checks)
+            && let Some(second) = estimate_hint(self.item.is_priced_by_stats(), self.checks)
         {
             ui.add_space(MESSAGE_GAP);
             message(ui, &i18n.text(second), color::WEAK);

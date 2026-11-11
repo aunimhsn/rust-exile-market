@@ -361,7 +361,7 @@ fn written(template: &str, values: &[f64], origin: Option<ModifierOrigin>) -> Op
             name: None,
             tier: None,
             tags: Vec::new(),
-            unrevealed: false,
+            is_unrevealed: false,
             lines: text.lines().map(StatLine::parse).collect(),
             doubt: None,
         };

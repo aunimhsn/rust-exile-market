@@ -58,7 +58,7 @@ fn headed_modifiers(section: &str, labels: &Labels) -> Option<Vec<Modifier>> {
             modifiers.push(modifier);
         } else if let Some(modifier) = modifiers.last_mut() {
             modifier.push_line(line, labels);
-            if modifier.unrevealed {
+            if modifier.is_unrevealed {
                 return None;
             }
         }

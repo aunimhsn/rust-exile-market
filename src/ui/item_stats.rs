@@ -1333,7 +1333,7 @@ fn dps_filters(item: &Item, stats: &LineStats, checkable: bool) -> Vec<Stat<'sta
     let minimum = |dps: f64| (dps * (1.0 - COMPARABLE_MARGIN)).floor();
     // A normal item is priced by its base: its DPS is.
     let compares = |property, dps| {
-        !item.priced_by_stats() || stats.compares(FilterKey::Property(property), minimum(dps))
+        !item.is_priced_by_stats() || stats.compares(FilterKey::Property(property), minimum(dps))
     };
     let physical = compares(Property::PhysicalDps, dps.physical);
     let elemental = compares(Property::ElementalDps, dps.elemental)
@@ -1668,12 +1668,12 @@ fn affix_stats<'a>(item: &'a Item, affix: Option<Affix>, reading: &Reading<'_>) 
             .iter()
             .enumerate()
             .any(|line| line_varies(index, line));
-        (modifier.unrevealed, fixed)
+        (modifier.is_unrevealed, fixed)
     });
     modifiers
         .iter()
         .flat_map(|&(index, modifier)| -> Vec<Stat<'a>> {
-            if modifier.unrevealed
+            if modifier.is_unrevealed
                 && let ModifierKind::Explicit(Some(affix)) = modifier.kind
             {
                 // No line yet: the key of its first one, which no filter has.

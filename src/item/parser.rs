@@ -156,7 +156,7 @@ fn read_first_section(
         (_, [base_type, ..]) => (None, *base_type),
         (_, []) => return Err(ParseError::MissingBaseType),
     };
-    let (base_type, exceptional) = base_type_without_qualities(full_base_type, labels);
+    let (base_type, is_exceptional) = base_type_without_qualities(full_base_type, labels);
 
     Ok(Item {
         language,
@@ -165,7 +165,7 @@ fn read_first_section(
         name: name.map(str::to_owned),
         base_type: base_type.to_owned(),
         written_base_type: full_base_type.to_owned(),
-        exceptional,
+        is_exceptional,
         stack: None,
         item_level: None,
         gem_level: None,
@@ -186,7 +186,7 @@ fn read_first_section(
 /// The base type without "Exceptional" and "Superior", in any order, and whether it was
 /// exceptional.
 fn base_type_without_qualities<'a>(mut base_type: &'a str, labels: &Labels) -> (&'a str, bool) {
-    let mut exceptional = false;
+    let mut is_exceptional = false;
     // Each word found makes the name shorter: the loop ends.
     loop {
         if let Some(rest) = labels
@@ -194,7 +194,7 @@ fn base_type_without_qualities<'a>(mut base_type: &'a str, labels: &Labels) -> (
             .iter()
             .find_map(|word| word.strip(base_type))
         {
-            exceptional = true;
+            is_exceptional = true;
             base_type = rest;
         } else if let Some(rest) = labels
             .superior
@@ -203,7 +203,7 @@ fn base_type_without_qualities<'a>(mut base_type: &'a str, labels: &Labels) -> (
         {
             base_type = rest;
         } else {
-            return (base_type, exceptional);
+            return (base_type, is_exceptional);
         }
     }
 }

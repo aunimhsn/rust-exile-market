@@ -28,7 +28,7 @@ impl CopiedItem {
     #[must_use]
     pub fn from_text(text: &str) -> Option<Self> {
         let text = text.trim();
-        if too_long(text) {
+        if is_too_long(text) {
             return None;
         }
         let language = Language::ALL
@@ -45,7 +45,7 @@ impl CopiedItem {
     #[must_use]
     pub fn is_too_long_item(text: &str) -> bool {
         let text = text.trim();
-        too_long(text)
+        is_too_long(text)
             && Language::ALL
                 .into_iter()
                 .any(|language| text.starts_with(Labels::of(language).item_class))
@@ -71,7 +71,7 @@ impl CopiedItem {
 }
 
 /// Whether `text` is too long to be an item.
-fn too_long(text: &str) -> bool {
+fn is_too_long(text: &str) -> bool {
     text.len() > MAX_BYTES || text.lines().take(MAX_LINES + 1).count() > MAX_LINES
 }
 

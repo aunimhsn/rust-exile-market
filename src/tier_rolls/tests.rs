@@ -324,7 +324,7 @@ fn the_other_line_of_a_hybrid_whose_part_a_line_adds_up_rolls_over_the_tiers_of_
         name: None,
         tier: None,
         tags: Vec::new(),
-        unrevealed: false,
+        is_unrevealed: false,
         lines: vec![
             StatLine::parse("258% increased Physical Damage"),
             StatLine::parse("+195(175-200) to Accuracy Rating"),
@@ -388,7 +388,7 @@ fn the_other_line_of_a_hybrid_of_one_tier_only_whose_part_a_line_adds_up_tells_n
         name: None,
         tier: None,
         tags: Vec::new(),
-        unrevealed: false,
+        is_unrevealed: false,
         lines: vec![
             StatLine::parse("300% increased Physical Damage"),
             StatLine::parse("15% reduced Attack Speed"),
@@ -536,7 +536,7 @@ fn modifier(kind: ModifierKind, tier: Option<u32>, lines: &[&str]) -> Modifier {
         name: None,
         tier,
         tags: Vec::new(),
-        unrevealed: false,
+        is_unrevealed: false,
         lines: lines.iter().map(|line| StatLine::parse(line)).collect(),
         doubt: None,
     }
@@ -615,7 +615,7 @@ fn how_a_modifier_is_written_tells_what_its_lines_roll_over() {
         suffix: affix_tier(Affix::Suffix),
     };
     let unrevealed = Modifier {
-        unrevealed: true,
+        is_unrevealed: true,
         ..modifier(PREFIX, None, &[])
     };
     let ranged = "Minions have 21(19-22)% increased maximum Life";

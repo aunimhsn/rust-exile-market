@@ -174,7 +174,7 @@ fn reads_a_french_rare_body_armour() {
     assert!(item.properties().contains(&Property {
         name: "Bouclier d'énergie".to_owned(),
         value: "567".to_owned(),
-        augmented: true,
+        is_augmented: true,
     }));
     assert_eq!(
         item.requirements(),
@@ -242,7 +242,7 @@ fn reads_an_unrevealed_modifier_from_its_header_and_its_only_line() {
         assert_eq!(item.unrevealed_modifiers(), 1);
         let unrevealed = explicit(&item)
             .into_iter()
-            .find(|modifier| modifier.unrevealed)
+            .find(|modifier| modifier.is_unrevealed)
             .expect("an unrevealed modifier");
         assert_eq!(unrevealed.kind, ModifierKind::Explicit(Some(affix)));
         // `Desecrated Prefix` isn't a line of a stat.
@@ -275,7 +275,7 @@ fn an_unrevealed_modifier_keeps_no_line_after_its_marker() {
          --------\n{ Prefix Modifier \"Veiled\" }\nDesecrated Prefix\n+10 to maximum Life",
     );
     let unrevealed = &explicit(&item)[0];
-    assert!(unrevealed.unrevealed);
+    assert!(unrevealed.is_unrevealed);
     assert_eq!(unrevealed.lines, []);
 }
 

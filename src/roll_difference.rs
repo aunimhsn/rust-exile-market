@@ -269,7 +269,7 @@ struct CopiedLine {
     kind: ModifierKind,
     template: String,
     /// The numbers of the line as the item parser read them.
-    rolls: Vec<f64>,
+    numbers: Vec<f64>,
     /// The indexes of the numbers its stat counts, when known; the others are written by the
     /// string of the stat, the same on every item.
     counted: Option<Vec<usize>>,
@@ -309,7 +309,7 @@ impl CopiedLines {
                         kind: modifier.kind,
                         direction: direction(words.unwrap_or(&template)),
                         template,
-                        rolls: line.rolls.iter().map(|roll| roll.value).collect(),
+                        numbers: line.rolls.iter().map(|roll| roll.value).collect(),
                         counted: stats.numbers(key).map(<[usize]>::to_vec),
                     }
                 })
@@ -334,7 +334,7 @@ impl CopiedLines {
         let offer = Template::of(line);
         let copied = self.0.iter().find(|copied| {
             is_same_place(kind, copied.kind)
-                && copied.rolls.len() == offer.numbers.len()
+                && copied.numbers.len() == offer.numbers.len()
                 && copied.template == offer.text
         })?;
         let counted = |numbers: &[f64]| -> Vec<f64> {
@@ -347,7 +347,7 @@ impl CopiedLines {
             }
         };
         let value = average(counted(&offer.numbers).into_iter())?
-            - average(counted(&copied.rolls).into_iter())?;
+            - average(counted(&copied.numbers).into_iter())?;
         // A difference written 0 isn't one.
         if crate::format::number(value.abs()) == "0" {
             return None;

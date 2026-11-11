@@ -150,7 +150,7 @@ pub struct Modifier {
     pub tags: Vec<String>,
     /// A desecrated modifier not revealed yet: its affix is known, not its lines, so it has
     /// none.
-    pub unrevealed: bool,
+    pub is_unrevealed: bool,
     pub lines: Vec<StatLine>,
     /// What its values leave in doubt about its tier, when it was found from them.
     pub doubt: Option<TierDoubt>,
@@ -164,7 +164,7 @@ impl Modifier {
             name: None,
             tier: None,
             tags: Vec::new(),
-            unrevealed: false,
+            is_unrevealed: false,
             lines: Vec::new(),
             doubt: None,
         }
@@ -189,14 +189,14 @@ impl Modifier {
     /// only line of a prefix or suffix not revealed yet (`Desecrated Prefix`, in `labels`)
     /// marks it unrevealed instead, and no line follows it.
     pub(super) fn push_line(&mut self, line: &str, labels: &Labels) {
-        if self.unrevealed {
+        if self.is_unrevealed {
             return;
         }
         if let ModifierKind::Explicit(Some(affix)) = self.kind
             && self.lines.is_empty()
             && labels.unrevealed.contains(&(line.trim(), affix))
         {
-            self.unrevealed = true;
+            self.is_unrevealed = true;
             return;
         }
         let (text, marker) = Marker::take(line);
@@ -260,7 +260,7 @@ mod tests {
         let of_affix = |affix| Modifier::new(ModifierKind::Explicit(Some(affix)), None);
         let mut prefix = of_affix(Affix::Prefix);
         prefix.push_line("Desecrated Prefix", labels);
-        assert!(prefix.unrevealed && prefix.lines.is_empty());
+        assert!(prefix.is_unrevealed && prefix.lines.is_empty());
         // The words of the other affix, or under a line, are a line.
         let mut suffix = of_affix(Affix::Suffix);
         suffix.push_line("Desecrated Prefix", labels);
@@ -268,7 +268,7 @@ mod tests {
         after.push_line("+12 to Strength", labels);
         after.push_line("Desecrated Prefix", labels);
         for modifier in [suffix, after] {
-            assert!(!modifier.unrevealed);
+            assert!(!modifier.is_unrevealed);
             assert_eq!(
                 modifier.lines.last().map(|line| line.text.as_str()),
                 Some("Desecrated Prefix")

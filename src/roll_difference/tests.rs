@@ -21,7 +21,7 @@ fn modifier(kind: ModifierKind, line: &str) -> Modifier {
         name: None,
         tier: None,
         tags: Vec::new(),
-        unrevealed: false,
+        is_unrevealed: false,
         lines: vec![StatLine::parse(line)],
         doubt: None,
     }

@@ -3210,7 +3210,7 @@ fn a_modifier_counts_the_affixes_it_takes_in_the_room_of_its_item() {
         name: None,
         tier: None,
         tags: Vec::new(),
-        unrevealed: false,
+        is_unrevealed: false,
         lines: Vec::new(),
         doubt,
     };
@@ -3259,7 +3259,7 @@ fn a_modifier_counts_the_affixes_it_takes_in_the_room_of_its_item() {
     assert_eq!(counts(&modifier(ModifierKind::Implicit, None)), (0, 0));
     // An unrevealed prefix takes its room.
     let unrevealed = Modifier {
-        unrevealed: true,
+        is_unrevealed: true,
         ..modifier(prefix, None)
     };
     assert_eq!(counts(&unrevealed), (1, 0));

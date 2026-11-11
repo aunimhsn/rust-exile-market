@@ -174,7 +174,7 @@ pub struct Property {
     /// Empty for a line without value (`Name: value`).
     pub value: String,
     /// Changed by the quality or the modifiers of the item.
-    pub augmented: bool,
+    pub is_augmented: bool,
 }
 
 /// What the parser reads from a copied item.
@@ -187,7 +187,7 @@ pub struct Item {
     base_type: String,
     /// The base type as the game writes it, with "Exceptional" and "Superior".
     written_base_type: String,
-    exceptional: bool,
+    is_exceptional: bool,
     stack: Option<Stack>,
     #[expect(
         clippy::struct_field_names,
@@ -325,7 +325,7 @@ impl Item {
     /// magic item, a jewel too; not a waystone, whose price lies first in its tier, which its
     /// base type holds.
     #[must_use]
-    pub fn priced_by_stats(&self) -> bool {
+    pub fn is_priced_by_stats(&self) -> bool {
         matches!(self.rarity, Rarity::Magic | Rarity::Rare) && !self.is_waystone()
     }
 
@@ -347,7 +347,7 @@ impl Item {
     #[cfg(test)]
     #[must_use]
     pub fn is_exceptional(&self) -> bool {
-        self.exceptional
+        self.is_exceptional
     }
 
     /// The size of a stack, and the largest stack of the item.
@@ -473,7 +473,7 @@ impl Item {
         let count = self
             .modifiers
             .iter()
-            .filter(|modifier| modifier.unrevealed)
+            .filter(|modifier| modifier.is_unrevealed)
             .count();
         u32::try_from(count).unwrap_or(u32::MAX)
     }

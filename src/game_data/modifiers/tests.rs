@@ -231,7 +231,7 @@ fn modifier(affix: Option<Affix>, lines: &[&str]) -> Modifier {
         name: None,
         tier: None,
         tags: Vec::new(),
-        unrevealed: false,
+        is_unrevealed: false,
         lines: lines
             .iter()
             .map(|text| StatLine {
@@ -693,7 +693,7 @@ fn a_modifier_whose_header_tells_its_affix_takes_its_room() {
     let mut modifiers = item.modifiers().to_vec();
     // A desecrated prefix not revealed yet in place of `+69 to maximum Energy Shield`.
     let mut unrevealed = modifier(Some(Affix::Prefix), &[]);
-    unrevealed.unrevealed = true;
+    unrevealed.is_unrevealed = true;
     *modifiers.last_mut().expect("a modifier") = unrevealed;
 
     let found = found_tiers(&item, &modifiers, (3, 3));
@@ -914,7 +914,7 @@ fn as_in_game_trade(item: &Item, base_type: &str) -> (Vec<Modifier>, Vec<Written
             modifiers.push(modifier.clone());
             continue;
         };
-        if modifier.unrevealed {
+        if modifier.is_unrevealed {
             modifiers.push(modifier.clone());
             continue;
         }
@@ -933,7 +933,7 @@ fn as_in_game_trade(item: &Item, base_type: &str) -> (Vec<Modifier>, Vec<Written
                 name: None,
                 tier: None,
                 tags: Vec::new(),
-                unrevealed: false,
+                is_unrevealed: false,
                 lines,
                 doubt: None,
             });
@@ -1093,7 +1093,7 @@ fn the_lines_read_again_from_their_values_are_the_modifiers_of_the_advanced_copy
         );
 
         let advanced = item.modifiers().iter().filter(|modifier| {
-            matches!(modifier.kind, ModifierKind::Explicit(Some(_))) && !modifier.unrevealed
+            matches!(modifier.kind, ModifierKind::Explicit(Some(_))) && !modifier.is_unrevealed
         });
         for (modifier, written) in advanced.zip(written) {
             let again = read.iter().find(|again| texts(again) == texts(modifier));

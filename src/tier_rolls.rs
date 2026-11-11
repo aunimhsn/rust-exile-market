@@ -147,7 +147,7 @@ impl Written {
         }
         let is_affix = matches!(modifier.kind, ModifierKind::Explicit(Some(_)))
             && modifier.doubt.is_none()
-            && !modifier.unrevealed;
+            && !modifier.is_unrevealed;
         if !is_affix {
             return None;
         }

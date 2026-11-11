@@ -20,7 +20,7 @@ pub(super) fn read_properties(item: &mut Item, lines: &[&str], labels: &Labels) 
 /// level of a gem and a property of a waystone read on the way, or a warning for one that can't
 /// be read.
 fn read_property(item: &mut Item, line: &str, labels: &Labels) {
-    let (line, augmented) = match line.strip_suffix(marker::AUGMENTED) {
+    let (line, is_augmented) = match line.strip_suffix(marker::AUGMENTED) {
         Some(line) => (line, true),
         None => (line, false),
     };
@@ -44,7 +44,7 @@ fn read_property(item: &mut Item, line: &str, labels: &Labels) {
     item.properties.push(Property {
         name: name.to_owned(),
         value: value.to_owned(),
-        augmented,
+        is_augmented,
     });
 }
 
