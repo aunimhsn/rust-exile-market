@@ -79,6 +79,7 @@ pub(super) type LinesRead = Vec<(Vec<String>, AffixTiers)>;
 /// The text of each line split, and the affix and tier number of its pure modifier.
 pub(super) type Added = Vec<(String, Affix, u32)>;
 
+/// The item copied as `text`, as the parser reads it.
 pub(super) fn parse(text: &str) -> Item {
     Item::parse(&CopiedItem::from_text(text).expect("an item")).expect("read")
 }

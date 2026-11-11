@@ -86,7 +86,7 @@ The name comes first: a reader who sees only the name should know what the thing
 ## Tests
 
 - A test reads as an example of its rule: its name says the behavior, its body the case, built by a small helper rather than fifty lines of set-up.
-- Each rule is tested on data written by hand. The tests on the real data of the game are kept for what a patch of the game changes.
+- Each rule is tested on data written by hand, in the `tests.rs` of its file. The tests on the real data of the game are kept for what a patch of the game changes, in a `game_tests.rs` next to it: the ones to look at, and to record again, when the game data are generated again, while the `tests.rs` must still pass as they are. What the tests of several files share (the builders of their data, the readers of a result) lives in the `fixtures.rs` of their module.
 - An assertion compares the whole value (a list, a section, a struct); a part (`contains`, `starts_with`) only when the rest doesn't matter. An expected exception is a named list, compared whole.
 - Several cases of one behavior may share a test; two behaviors are two tests.
 
