@@ -28,80 +28,14 @@ pub(super) fn placements<'a>(tables: &ItemTables<'a>, lines: &ItemLines<'a>) -> 
     } = lines;
     let mut placements = Vec::new();
     for (index, table) in tables.all.iter().enumerate() {
-        for mapped in mappings(table, lines) {
-            // The lines of a mapping are of one origin.
-            let origin = mapped
-                .first()
-                .and_then(|&line| lines.get(line))
-                .and_then(|line| line.origin);
-            if !table.may_hold(origin) {
-                continue;
-            }
-            let copied = Copied {
-                lines: mapped
-                    .iter()
-                    .filter_map(|&line| lines.get(line))
-                    .map(|line| line.copied.clone())
-                    .collect(),
-                ranges: None,
-                tier: CopiedTier::Unknown,
-                origin,
-            };
-            let Some(order) = copied.order(&table.lines) else {
-                continue;
-            };
-            if !first_of_its_modifier(tables.all, index) {
-                continue;
-            }
-            // The value of a line without number is that of its stat: divided, it would differ
-            // from a modifier to another (no such line rolls on a base, 2026-10-28; the best
-            // reading isn't met then, and every line is in doubt).
-            let divided = copied.lines.iter().zip(&order).any(|(line, &index)| {
-                line.written.is_some()
-                    && table
-                        .lines
-                        .get(index)
-                        .is_some_and(|line| (line.divisor - 1.0).abs() > f64::EPSILON)
-            });
-            if divided {
-                continue;
-            }
-            let Some(tiers) = tables.tiers_of(table, &order, &copied) else {
-                continue;
-            };
-            let indexes: Vec<usize> = mapped
-                .iter()
-                .filter_map(|&line| lines.get(line))
-                .flat_map(|line| line.values.clone())
-                .collect();
-            let mut modifiers: Vec<usize> = mapped
-                .iter()
-                .filter_map(|&line| lines.get(line))
-                .map(|line| line.modifier)
-                .collect();
-            modifiers.dedup();
-            let fractured = origin == Some(ModifierOrigin::Fractured);
-            for tier in &tiers {
-                if !tables.allows(tier) || tier.ranges.len() != indexes.len() {
-                    continue;
-                }
-                placements.push(Placement {
-                    kind: &table.kind,
-                    fractured,
-                    shown: Shown {
-                        affix: table.affix.into(),
-                        tier: tier.number,
-                        modifiers: modifiers.clone(),
-                        ranges: tier.ranges.clone(),
-                    },
-                    lines: mapped.clone(),
-                    ranges: indexes
-                        .iter()
-                        .copied()
-                        .zip(tier.ranges.iter().copied())
-                        .collect(),
-                });
-            }
+        let mappings = mappings(table, lines);
+        // Each modifier once, at its first table: told only for a table whose lines are among
+        // those of the item, being the costliest to tell.
+        if mappings.is_empty() || !first_of_its_modifier(tables.all, index) {
+            continue;
+        }
+        for mapped in mappings {
+            placements.extend(placed(tables, table, &mapped, lines));
         }
     }
     // A value whose ranges only add up one way: a tier past it can't be among those of its line.
@@ -113,6 +47,74 @@ pub(super) fn placements<'a>(tables: &ItemTables<'a>, lines: &ItemLines<'a>) -> 
             .all(|&(index, range)| !directions.is_past(values, index, range))
     });
     placements
+}
+
+/// The tiers of the modifier of `table`, among those the level of the item allows, on the
+/// lines `mapped` of the item, one for each line of the table ([`mappings`]); none when the
+/// table may not hold lines of their origin, or shows the value of a line without number
+/// divided.
+fn placed<'a>(
+    tables: &ItemTables<'a>,
+    table: &'a Table,
+    mapped: &[usize],
+    lines: &[Line<'a>],
+) -> Vec<Placement<'a>> {
+    let mapped_lines = || mapped.iter().filter_map(|&line| lines.get(line));
+    // The lines of a mapping are of one origin.
+    let origin = mapped_lines().next().and_then(|line| line.origin);
+    if !table.may_hold(origin) {
+        return Vec::new();
+    }
+    let copied = Copied {
+        lines: mapped_lines().map(|line| line.copied.clone()).collect(),
+        ranges: None,
+        tier: CopiedTier::Unknown,
+        origin,
+    };
+    let Some(order) = copied.order(&table.lines) else {
+        return Vec::new();
+    };
+    // The value of a line without number is that of its stat: divided, it would differ from a
+    // modifier to another (no such line rolls on a base, 2026-10-28; the best reading isn't
+    // met then, and every line is in doubt).
+    let divided = copied.lines.iter().zip(&order).any(|(line, &index)| {
+        line.written.is_some()
+            && table
+                .lines
+                .get(index)
+                .is_some_and(|line| (line.divisor - 1.0).abs() > f64::EPSILON)
+    });
+    if divided {
+        return Vec::new();
+    }
+    let Some(tiers) = tables.tiers_of(table, &order, &copied) else {
+        return Vec::new();
+    };
+    let indexes: Vec<usize> = mapped_lines()
+        .flat_map(|line| line.values.clone())
+        .collect();
+    let mut modifiers: Vec<usize> = mapped_lines().map(|line| line.modifier).collect();
+    modifiers.dedup();
+    tiers
+        .iter()
+        .filter(|tier| tables.allows(tier) && tier.ranges.len() == indexes.len())
+        .map(|tier| Placement {
+            kind: &table.kind,
+            fractured: origin == Some(ModifierOrigin::Fractured),
+            shown: Shown {
+                affix: table.affix.into(),
+                tier: tier.number,
+                modifiers: modifiers.clone(),
+                ranges: tier.ranges.clone(),
+            },
+            lines: mapped.to_vec(),
+            ranges: indexes
+                .iter()
+                .copied()
+                .zip(tier.ranges.iter().copied())
+                .collect(),
+        })
+        .collect()
 }
 
 /// For each value of the lines, which way its sum goes as modifiers are added.
