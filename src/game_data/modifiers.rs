@@ -661,8 +661,9 @@ enum Ending {
     /// is read.
     BestNotMet,
     /// The best reading doesn't fit the room of the item while another one does, which the
-    /// candidates don't hold (a hybrid whose lines don't follow each other): the lines it
-    /// reads otherwise stay without tier, the others keep every affix.
+    /// candidates don't hold (a hybrid whose lines don't follow each other): the lines no
+    /// reading in the room reads as the best one does stay without tier, the others keep
+    /// every affix.
     OnlyAnotherFits,
     /// No reading fits the room of the item, the tables being out of step with the game: the
     /// lines keep the tiers of the best reading, with every affix.
@@ -700,7 +701,7 @@ impl Ending {
                 "Game data, {base_type} copied from the in-game trade: the other readings of its lines don't hold its best one, its lines left without tier"
             ),
             Self::OnlyAnotherFits => log::debug!(
-                "Game data, {base_type} copied from the in-game trade: its lines read alone don't fit {prefixes} prefixes and {suffixes} suffixes, another reading does, the lines it reads otherwise left without tier"
+                "Game data, {base_type} copied from the in-game trade: its best reading doesn't fit {prefixes} prefixes and {suffixes} suffixes, another one does, the lines it doesn't read the same left without tier"
             ),
             Self::NoneFits => log::warn!(
                 "Game data, {base_type} copied from the in-game trade: no reading of its lines fits {prefixes} prefixes and {suffixes} suffixes"
@@ -770,18 +771,16 @@ fn trade_tiers_in(
     let mut search = Search::new(&candidates, modifiers.len(), room, fractured);
     search.walk(0, &mut Vec::new());
     let readings = search.readings;
-    let effort = |steps, ending| Effort {
+    let effort_with = |steps, ending| Effort {
         readings,
         steps,
         ending,
     };
     // Past the bound, a reading not looked at may be as good as the best of the others, or
-    // better: no line keeps a tier the search can't vouch for.
-    if search.cut {
-        return (Vec::new(), effort(0, Ending::ReadingsCut));
-    }
-    let Some((key, reading)) = search.best else {
-        return (Vec::new(), effort(0, Ending::Vouched));
+    // better: no line keeps a tier the search can't vouch for. The search keeps a reading
+    // otherwise, the one of no line for an item without any.
+    let (Some((key, reading)), false) = (search.best, search.cut) else {
+        return (Vec::new(), effort_with(0, Ending::ReadingsCut));
     };
     let best = other_readings::Best {
         candidates: &candidates,
@@ -790,10 +789,11 @@ fn trade_tiers_in(
         fits_room: key.room,
     };
     let doubts = other_readings::doubts(tables, item, modifiers, &copied, &best);
-    let effort = effort(doubts.steps, Ending::after(&doubts, key.room));
-    // A modifier that can be both keeps the affixes the others leave room for: both when no
-    // reading fits the room, or when a reading as good, or one in doubt, leaves another room.
-    let both = if !key.room || search.room_in_doubt || doubts.other_room {
+    let effort = effort_with(doubts.steps, Ending::after(&doubts, key.room));
+    // A modifier that can be both keeps the affixes the others leave room for ([`Room::both`],
+    // both when the reading doesn't fit the room): both too when a reading as good, or one in
+    // doubt, leaves another room.
+    let both = if search.room_in_doubt || doubts.other_room {
         (true, true)
     } else {
         room.both(&reading, &candidates)

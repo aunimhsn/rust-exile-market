@@ -198,8 +198,24 @@ fn doubts_within(
         Outcome::BestNotMet
     };
     if outcome == Outcome::Concluded {
+        let mut doubts = state.doubts;
+        // Once a reading in the room is met, a line of the best reading keeps its tier only
+        // if one of them reads it the same: the best reading itself when it fits the room,
+        // which confirms every line; otherwise none of a line the readings that fit read
+        // another way, also when they add up more modifiers than the best reading makes.
+        if state.met != Met::Nothing {
+            let unconfirmed = lines.iter().filter(|line| {
+                let confirmed = state.confirmed.get(line.modifier).copied().unwrap_or(false);
+                line.read_by_best && !confirmed
+            });
+            for line in unconfirmed {
+                if !doubts.contains(&line.modifier) {
+                    doubts.push(line.modifier);
+                }
+            }
+        }
         return Doubts {
-            lines: state.doubts,
+            lines: doubts,
             other_room: state.other_room,
             outcome,
             fits: state.met != Met::Nothing,
@@ -730,6 +746,9 @@ struct State {
     cut: bool,
     /// The readings met so far.
     met: Met,
+    /// For each modifier of the item, whether a reading met reads its line as the best
+    /// reading does.
+    confirmed: Vec<bool>,
     /// Whether a reading that leaves lines in doubt leaves another room than the best one to the
     /// modifiers that can be a prefix or a suffix.
     other_room: bool,
@@ -749,6 +768,7 @@ impl State {
             steps: 0,
             cut: false,
             met: Met::Nothing,
+            confirmed: vec![false; ground.best.len()],
             other_room: false,
             doubts: Vec::new(),
         }
@@ -904,6 +924,9 @@ impl State {
             .filter_map(|&index| ground.placements.get(index))
             .collect();
         let otherwise = ground.otherwise(&chosen);
+        for (modifier, confirmed) in self.confirmed.iter_mut().enumerate() {
+            *confirmed |= !otherwise.contains(&modifier);
+        }
         if otherwise.is_empty() {
             self.met = Met::Best;
             return;

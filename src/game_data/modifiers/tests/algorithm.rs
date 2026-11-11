@@ -1067,7 +1067,7 @@ fn a_doubt_stays_in_the_part_of_the_item_it_is_about() {
 }
 
 #[test]
-fn two_hybrids_that_share_a_line_leave_it_without_tier_whatever_the_order_of_the_lines() {
+fn two_hybrids_that_share_a_line_leave_it_without_tier_when_both_follow_it() {
     use Affix::{Prefix, Suffix};
     let hybrid = |kind, affix, other| {
         table(
@@ -1094,6 +1094,10 @@ fn two_hybrids_that_share_a_line_leave_it_without_tier_whatever_the_order_of_the
     assert_eq!(read, []);
     let (read, _) = read_in(&tables, 60, &[mana, shield, life], (3, 3));
     assert_eq!(read, []);
+    // The energy shield first, the lines of one hybrid are apart, which no candidate reads:
+    // the other one is shown as sure (an entry of the backlog).
+    let (read, _) = read_in(&tables, 60, &[shield, life, mana], (3, 3));
+    assert_eq!(read, [(2, vec![(Prefix, 1)])]);
     // The hybrid with the mana a suffix: a rarity that rolls as both keeps both affixes,
     // each reading leaving it another one.
     let tables = written(&[
@@ -1108,6 +1112,73 @@ fn two_hybrids_that_share_a_line_leave_it_without_tier_whatever_the_order_of_the
     assert_eq!(read, both);
     let (read, _) = read_in(&tables, 60, &[mana, shield, life, rarity], (1, 1));
     assert_eq!(read, both);
+}
+
+#[test]
+fn a_best_reading_out_of_the_room_keeps_only_the_tiers_a_reading_in_the_room_confirms() {
+    use Affix::Prefix;
+    let tables = written(&[
+        table("LifePrefix", "prefix", &[LIFE], &[(1, &[(40, 60)])]),
+        table("ManaPrefix", "prefix", &[MANA], &[(1, &[(25, 35)])]),
+        table(
+            "HybridSuffix",
+            "suffix",
+            &[LIFE, MANA],
+            &[(1, &[(20, 29), (10, 19)])],
+        ),
+        table("LifeSuffix", "suffix", &[LIFE], &[(1, &[(20, 29)])]),
+        table("ManaSuffix", "suffix", &[MANA], &[(1, &[(10, 19)])]),
+    ]);
+    let lines = ["+50 to maximum Life", "+30 to maximum Mana"].map(|text| modifier(None, &[text]));
+    let prefixes = [(1, vec![(Prefix, 1)]), (1, vec![(Prefix, 1)])];
+
+    // Room for both prefixes: the hybrid and two pure suffixes add up to them as well, three
+    // modifiers for two, which a modifier holding its line alone rules out.
+    let ((read, _), effort) = read_modifiers(&tables, 60, &lines, (2, 3));
+    assert_eq!(read, prefixes);
+    assert_eq!(effort.ending, Ending::Vouched);
+    // Room for one prefix only: the two prefixes can't be, and the three suffixes, the only
+    // reading in the room, read neither line as they do.
+    let ((read, _), effort) = read_modifiers(&tables, 60, &lines, (1, 3));
+    assert_eq!(read, []);
+    assert_eq!(effort.ending, Ending::OnlyAnotherFits);
+    // No room for three suffixes either: no reading fits, and the lines keep their tiers.
+    let ((read, _), effort) = read_modifiers(&tables, 60, &lines, (1, 2));
+    assert_eq!(read, prefixes);
+    assert_eq!(effort.ending, Ending::NoneFits);
+}
+
+#[test]
+fn the_search_ends_as_the_other_readings_and_the_room_tell() {
+    use other_readings::{Doubts, Outcome};
+    let after = |outcome, fits, fits_room| {
+        let doubts = Doubts {
+            lines: Vec::new(),
+            other_room: false,
+            outcome,
+            fits,
+            steps: 0,
+        };
+        Ending::after(&doubts, fits_room)
+    };
+
+    // Without every other reading, or without the best one among them, the room says nothing.
+    for fits_room in [true, false] {
+        assert_eq!(
+            after(Outcome::Cut, true, fits_room),
+            Ending::OtherReadingsCut
+        );
+        assert_eq!(
+            after(Outcome::BestNotMet, true, fits_room),
+            Ending::BestNotMet
+        );
+    }
+    assert_eq!(after(Outcome::Concluded, true, true), Ending::Vouched);
+    assert_eq!(
+        after(Outcome::Concluded, true, false),
+        Ending::OnlyAnotherFits
+    );
+    assert_eq!(after(Outcome::Concluded, false, false), Ending::NoneFits);
 }
 
 #[test]
