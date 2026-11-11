@@ -321,10 +321,11 @@ fn is_unidentified(recognized: &[Recognized<'_>]) -> bool {
 
 /// The index of the explicit modifiers of an identified item copied without any `{ … }`
 /// header, its first plain section after the item level: a section with a marker of a kind
-/// is never plain ([`Section::Marked`], [`Section::MixedMarkers`]). Two copies have none: an item copied from the trade of the game (another player's
-/// listing), its lines without affix, tier nor range, those of a fractured, desecrated or Vaal
-/// modifier marked (` (fractured)`), and a unique whose lines have no header in either copy,
-/// the same on every copy (`Reflects opposite Ring` of Kalandra's Touch).
+/// is never plain ([`Section::Marked`], [`Section::MixedMarkers`]). Two kinds of copies have no
+/// header: an item copied from the trade of the game (another player's listing), its lines
+/// without affix, tier nor range, those of a fractured, desecrated or Vaal modifier marked
+/// (` (fractured)`); and a unique whose lines have no header in either copy, the same on every
+/// copy (`Reflects opposite Ring` of Kalandra's Touch).
 ///
 /// A modifier has a number in nearly every line, unlike a description: a magic item whose only
 /// modifier was removed keeps its description, which isn't taken for it. Lines without number

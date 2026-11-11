@@ -135,7 +135,7 @@ impl Labels {
 
 /// The markers at the end of a property or a requirement, in English in every language; the
 /// markers of the modifiers are [`super::modifier::Marker`].
-pub(super) mod marker {
+pub(super) mod value_marker {
     /// After a value the quality or the modifiers of the item changed.
     pub const AUGMENTED: &str = " (augmented)";
     /// After a requirement the character doesn't meet.

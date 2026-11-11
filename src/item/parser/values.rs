@@ -3,7 +3,7 @@
 //! sockets, the item level and the stack.
 
 use super::{Field, ParseWarning};
-use crate::item::labels::{Labels, marker};
+use crate::item::labels::{Labels, value_marker};
 use crate::item::weapon::Weapon;
 use crate::item::{Item, Property, QualityKind, Rarity, Requirements, Stack, gem, waystone};
 use crate::language::Language;
@@ -20,7 +20,7 @@ pub(super) fn read_properties(item: &mut Item, lines: &[&str], labels: &Labels) 
 /// level of a gem and a property of a waystone read on the way, or a warning for one that can't
 /// be read.
 fn read_property(item: &mut Item, line: &str, labels: &Labels) {
-    let (line, is_augmented) = match line.strip_suffix(marker::AUGMENTED) {
+    let (line, is_augmented) = match line.strip_suffix(value_marker::AUGMENTED) {
         Some(line) => (line, true),
         None => (line, false),
     };
@@ -73,8 +73,8 @@ pub(super) fn read_requirements(line: &str, labels: &Labels) -> (Requirements, b
         .split(',')
     {
         let part = part
-            .replace(marker::UNMET, "")
-            .replace(marker::AUGMENTED, "");
+            .replace(value_marker::UNMET, "")
+            .replace(value_marker::AUGMENTED, "");
         complete &= read_requirement(part.trim(), labels, &mut requirements).is_some();
     }
     (requirements, complete)
@@ -201,15 +201,23 @@ mod tests {
     use crate::item::Catalyst;
 
     #[test]
-    fn reads_the_small_parts() {
+    fn the_digits_of_a_value_make_its_number_whatever_its_separators() {
         assert_eq!(digits("+20%"), Some(20));
         assert_eq!(digits("1 234"), Some(1234));
         assert_eq!(digits("none"), None);
         assert_eq!(digits("99999999999"), None);
+    }
 
+    #[test]
+    fn the_sockets_are_counted() {
         let labels = Labels::of(Language::English);
         assert_eq!(count_sockets("Sockets: S S S", labels), 3);
         assert_eq!(count_sockets("Sockets: ", labels), 0);
+    }
+
+    #[test]
+    fn a_requirement_is_read_with_its_attribute() {
+        let labels = Labels::of(Language::English);
         assert_eq!(
             read_requirements("Requires: 113 Intelligence", labels),
             (

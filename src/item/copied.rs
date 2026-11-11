@@ -31,9 +31,7 @@ impl CopiedItem {
         if is_too_long(text) {
             return None;
         }
-        let language = Language::ALL
-            .into_iter()
-            .find(|&language| text.starts_with(Labels::of(language).item_class))?;
+        let language = language_of(text)?;
         Some(Self {
             text: text.replace("\r\n", "\n"),
             language,
@@ -45,10 +43,7 @@ impl CopiedItem {
     #[must_use]
     pub fn is_too_long_item(text: &str) -> bool {
         let text = text.trim();
-        is_too_long(text)
-            && Language::ALL
-                .into_iter()
-                .any(|language| text.starts_with(Labels::of(language).item_class))
+        is_too_long(text) && language_of(text).is_some()
     }
 
     /// The text of the item, its lines ended with `\n`.
@@ -68,6 +63,14 @@ impl CopiedItem {
     pub fn first_line(&self) -> &str {
         self.text.lines().next().unwrap_or_default()
     }
+}
+
+/// The language of the game client whose item class line `text` starts with; none for a text
+/// that doesn't start as an item.
+fn language_of(text: &str) -> Option<Language> {
+    Language::ALL
+        .into_iter()
+        .find(|&language| text.starts_with(Labels::of(language).item_class))
 }
 
 /// Whether `text` is too long to be an item.
