@@ -11,15 +11,18 @@
 //! The draw is the same at every run (a xorshift generator from a fixed seed), and the same for
 //! the ways that differ only by the order of the lines. An item has from one prefix to the most
 //! its base can have (three, two on a jewel) and as many suffixes, of other types, every tier
-//! its level allows as likely, every value of a tier as likely. Its lines are written as the in-game trade writes them: one line per stat,
-//! without affix, tier nor range, the values of two modifiers with the same stat added up. The
-//! modifiers of the Genesis tree, of the essences and of the alloys aren't drawn, nor a modifier
-//! one of whose lines no string of the stats writes back.
+//! its level allows as likely, every value of a tier as likely. Its lines are written as the
+//! in-game trade writes them: one line per stat, without affix, tier nor range, the values of
+//! two modifiers with the same stat added up. The modifiers of the Genesis tree, of the
+//! essences and of the alloys aren't drawn, nor a modifier one of whose lines no string of the
+//! stats writes back.
 //!
 //! What a real copy does and the draw doesn't: the order of the lines (by stat in the game, in
 //! an order the data don't give: the draw tries the order of the modifiers, and a shuffled
-//! one), the weights of the modifiers, and the items players list (the best tiers far more
-//! often).
+//! one), the weights of the modifiers, the items players list (the best tiers far more often),
+//! and a line no table explains (copied before a patch, or of a stat the tables don't know):
+//! every line of the draw has a reading, so that its counts say nothing of two readings as good
+//! that don't read the same lines. No item is sanctified, such an item finding no tier.
 
 use super::*;
 
@@ -732,7 +735,6 @@ fn measure(way: Way) -> (Counts, Vec<&'static str>) {
         left_out.extend(unwritten);
         let trade_item = TradeItem {
             language: Language::English,
-            base_type,
             base,
             item_level: Some(way.item_level),
         };
@@ -750,7 +752,7 @@ fn measure(way: Way) -> (Counts, Vec<&'static str>) {
             };
             read += 1;
             let limits = AffixLimits::new(most, most);
-            let (found, effort) = trade_tiers_in(&TABLES, &trade_item, &modifiers, limits, false);
+            let (found, effort) = trade_tiers_in(&TABLES, &trade_item, &modifiers, limits);
             counts.items += 1;
             counts.most_readings = counts.most_readings.max(effort.readings);
             counts.most_steps = counts.most_steps.max(effort.steps);

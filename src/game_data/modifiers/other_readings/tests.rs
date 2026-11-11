@@ -9,12 +9,6 @@ use crate::game_data::modifiers::{AddedTiers, ModifierTiers, TABLES, TableAffix,
 use crate::item::{ModifierKind, StatLine};
 use crate::language::Language;
 
-/// Every reading looked at, those adding up modifiers on a line too.
-const EVERY_READING: Bounds = Bounds {
-    max_steps: MAX_STEPS,
-    sums: true,
-};
-
 fn range(min: f64, max: f64) -> Range {
     Range { min, max }
 }
@@ -148,7 +142,7 @@ fn line(
             written: None,
         },
         values,
-        read: true,
+        read_by_best: true,
     }
 }
 
@@ -284,7 +278,7 @@ fn only_the_tiers_the_item_level_allows_are_placed() {
             origin: None,
             copied: copied.clone(),
             values: 0..1,
-            read: true,
+            read_by_best: true,
         })
         .collect();
     let base = bases::spawn(Language::English, "Warmonger Bow").expect("a base");
@@ -322,20 +316,11 @@ fn a_modifier_is_added_once_per_type_in_the_room_and_never_on_a_line_without_val
         placement("Increased", Suffix, &[4], &ranges(3), true),
     ];
     let ground = Ground {
-        lines: &lines,
-        values: &values,
-        placements: &placements,
-        starting: vec![Vec::new(); lines.len()],
         room: Room {
             prefixes: 2,
             suffixes: 3,
         },
-        fractured: 1,
-        rising: vec![true; values.len()],
-        falling: vec![false; values.len()],
-        best: Vec::new(),
-        best_candidates: Vec::new(),
-        bounds: EVERY_READING,
+        ..ground(&lines, &values, &placements)
     };
     let mut state = State::new(&ground);
 
@@ -363,13 +348,12 @@ fn a_modifier_is_added_once_per_type_in_the_room_and_never_on_a_line_without_val
     assert_eq!((state.prefixes, state.suffixes, state.fractured), (0, 0, 0));
 }
 
-/// What the search reads `lines` and `placements` from, with `values`, within `bounds`: room
-/// for three prefixes and suffixes, no best reading.
+/// What the search reads `lines` and `placements` from, with `values`: room for three
+/// prefixes and suffixes, no best reading.
 fn ground<'s>(
     lines: &'s [Line<'static>],
     values: &'s [f64],
     placements: &'s [Placement<'static>],
-    bounds: Bounds,
 ) -> Ground<'s, 'static> {
     Ground {
         lines,
@@ -385,7 +369,7 @@ fn ground<'s>(
         falling: vec![false; values.len()],
         best: Vec::new(),
         best_candidates: Vec::new(),
-        bounds,
+        max_steps: MAX_STEPS,
     }
 }
 
@@ -396,7 +380,7 @@ fn a_line_is_settled_once_its_modifiers_hold_it_or_left_as_the_best_reading_leav
         line(0, "+# to maximum Life", 0..1, None),
         // A line the best reading leaves without tier.
         Line {
-            read: false,
+            read_by_best: false,
             ..line(1, "+# to maximum Mana", 1..2, None)
         },
     ];
@@ -406,7 +390,7 @@ fn a_line_is_settled_once_its_modifiers_hold_it_or_left_as_the_best_reading_leav
         placement("Mana", Prefix, &[1], &[(1, range(60.0, 100.0))], false),
         placement("More", Prefix, &[1], &[(1, range(-20.0, -10.0))], false),
     ];
-    let ground = ground(&lines, &values, &placements, EVERY_READING);
+    let ground = ground(&lines, &values, &placements);
     let mut state = State::new(&ground);
 
     // Without a modifier: only the line the best reading doesn't read either.
@@ -421,41 +405,6 @@ fn a_line_is_settled_once_its_modifiers_hold_it_or_left_as_the_best_reading_leav
     assert!(state.line_settled(&ground, 1));
     // A line out of the item.
     assert!(!state.line_settled(&ground, 2));
-}
-
-#[test]
-fn no_modifier_is_added_to_a_line_that_has_one_when_no_reading_adds_them_up() {
-    use Affix::Prefix;
-    let lines = [
-        line(0, "+# to maximum Life", 0..1, None),
-        line(1, "+# to maximum Mana", 1..2, None),
-    ];
-    let values = [50.0, 50.0];
-    let placements = [
-        placement("Life", Prefix, &[0], &[(0, range(1.0, 100.0))], false),
-        placement(
-            "Hybrid",
-            Prefix,
-            &[0, 1],
-            &[(0, range(1.0, 100.0)), (1, range(1.0, 100.0))],
-            false,
-        ),
-        placement("Mana", Prefix, &[1], &[(1, range(1.0, 100.0))], false),
-    ];
-    let fits_after_life = |sums| {
-        let bounds = Bounds {
-            sums,
-            ..EVERY_READING
-        };
-        let ground = ground(&lines, &values, &placements, bounds);
-        let mut state = State::new(&ground);
-        state.push(&ground, 0);
-        (state.fits(&ground, 1), state.fits(&ground, 2))
-    };
-
-    // The hybrid shares the line of the life, the mana doesn't.
-    assert_eq!(fits_after_life(true), (true, true));
-    assert_eq!(fits_after_life(false), (false, true));
 }
 
 /// The lines `texts` of an item of `base_type` of item level 82, with 3 prefixes and 3
@@ -489,7 +438,7 @@ fn doubts_of(
         .map(|modifier| Copied::of(modifier, &modifier_stats(Language::English, modifier, None)))
         .collect();
     let base = bases::spawn(Language::English, base_type).expect("a base");
-    let candidates = super::super::candidates(&TABLES, &modifiers, &copied, base, Some(82), true);
+    let candidates = super::super::candidates(&TABLES, &modifiers, &copied, base, Some(82));
     let room = Room {
         prefixes: 3,
         suffixes: 3,
@@ -506,15 +455,10 @@ fn doubts_of(
     };
     let item = TradeItem {
         language: Language::English,
-        base_type,
         base,
         item_level: Some(82),
     };
-    let bounds = Bounds {
-        max_steps,
-        ..EVERY_READING
-    };
-    doubts_within(&TABLES, &item, &modifiers, &copied, &best, bounds)
+    doubts_within(&TABLES, &item, &modifiers, &copied, &best, max_steps)
 }
 
 /// The lines of a bow with three prefixes, read one way only.
@@ -569,18 +513,6 @@ fn a_reading_leaves_the_same_room_to_a_prefix_or_suffix_with_as_many_of_each_els
     let on =
         |line: usize, affix| placement("Kind", affix, &[line], &[(line, range(1.0, 100.0))], false);
     let ground = Ground {
-        lines: &lines,
-        values: &values,
-        placements: &[],
-        starting: Vec::new(),
-        room: Room {
-            prefixes: 3,
-            suffixes: 3,
-        },
-        fractured: 1,
-        rising: Vec::new(),
-        falling: Vec::new(),
-        best: Vec::new(),
         // The rarity a prefix or a suffix, the life a prefix, the accuracy a suffix.
         best_candidates: vec![
             BestCandidate {
@@ -596,7 +528,7 @@ fn a_reading_leaves_the_same_room_to_a_prefix_or_suffix_with_as_many_of_each_els
                 sets: vec![AffixSet::Only(Suffix)],
             },
         ],
-        bounds: EVERY_READING,
+        ..ground(&lines, &values, &[])
     };
     let same =
         |placements: &[Placement<'_>]| ground.same_room(&placements.iter().collect::<Vec<_>>());

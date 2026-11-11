@@ -40,6 +40,9 @@ pub(super) struct Doubts {
     pub(super) other_room: bool,
     /// How the search ended; unless it concluded, every line read is in doubt.
     pub(super) outcome: Outcome,
+    /// Whether the search met a reading of the lines, which all fit the room of the item: the
+    /// best one, or another one when the best one doesn't fit it.
+    pub(super) fits: bool,
     /// The steps it took, [`MAX_STEPS`] at most.
     pub(super) steps: usize,
 }
@@ -57,21 +60,6 @@ pub(super) enum Outcome {
     BestNotMet,
 }
 
-impl Outcome {
-    /// Logs why the lines of an item of `base_type` are left without tier, unless it concluded.
-    pub(super) fn log(self, base_type: &str) {
-        match self {
-            Self::Concluded => {}
-            Self::Cut => log::warn!(
-                "Game data, {base_type} copied from the in-game trade: the other readings of its lines couldn't all be looked at, its lines left without tier"
-            ),
-            Self::BestNotMet => log::warn!(
-                "Game data, {base_type} copied from the in-game trade: the other readings of its lines don't hold its best one, its lines left without tier"
-            ),
-        }
-    }
-}
-
 /// A line of the item copied from the in-game trade, with its stat of the game data.
 struct Line<'a> {
     /// The index among the modifiers of the item of its modifier.
@@ -82,7 +70,7 @@ struct Line<'a> {
     values: std::ops::Range<usize>,
     /// Whether the best reading reads it: another reading reads it too, while it may leave
     /// without tier a line the best one leaves so.
-    read: bool,
+    read_by_best: bool,
 }
 
 /// A modifier as a reading shows it, compared from a reading to another.
@@ -111,8 +99,6 @@ struct Placement<'a> {
 /// The indexes among `modifiers` of the lines that another reading of the item reads otherwise
 /// than the `best` one, and that it leaves in doubt: on the base of `item`, among the tiers its
 /// level allows, `copied` giving the lines of each modifier (those of [`super::trade_tiers`]).
-/// On a `sanctified` item, whose values can leave their tiers, no reading adds up modifiers on a
-/// line, as the best one splits none.
 ///
 /// Another reading reads the lines the best one reads, and maybe lines it leaves without tier,
 /// each within the sum of the ranges of its modifiers, in the room of the item, as many
@@ -150,39 +136,25 @@ pub(super) fn doubts(
     modifiers: &[Modifier],
     copied: &[Option<Copied<'_>>],
     best: &Best<'_>,
-    sanctified: bool,
 ) -> Doubts {
-    let bounds = Bounds {
-        max_steps: MAX_STEPS,
-        sums: !sanctified,
-    };
-    doubts_within(tables, item, modifiers, copied, best, bounds)
+    doubts_within(tables, item, modifiers, copied, best, MAX_STEPS)
 }
 
-/// What bounds the search of the other readings.
-#[derive(Debug, Clone, Copy)]
-struct Bounds {
-    /// The most steps it takes.
-    max_steps: usize,
-    /// Whether a reading may add up several modifiers on a line.
-    sums: bool,
-}
-
-/// [`doubts`], within `bounds`.
+/// [`doubts`], in at most `max_steps` steps.
 fn doubts_within(
     tables: &[Table],
     item: &TradeItem<'_>,
     modifiers: &[Modifier],
     copied: &[Option<Copied<'_>>],
     best: &Best<'_>,
-    bounds: Bounds,
+    max_steps: usize,
 ) -> Doubts {
     let chosen: Vec<&Candidate> = best
         .reading
         .iter()
         .filter_map(|&index| best.candidates.get(index))
         .collect();
-    let read = |modifier: usize| {
+    let read_by_best = |modifier: usize| {
         chosen
             .iter()
             .any(|candidate| candidate.modifiers.contains(&modifier))
@@ -202,7 +174,7 @@ fn doubts_within(
                 origin: modifier.origin,
                 copied: line.clone(),
                 values: start..values.len(),
-                read: read(index),
+                read_by_best: read_by_best(index),
             });
         }
     }
@@ -214,13 +186,13 @@ fn doubts_within(
         best,
         &chosen,
         modifiers.len(),
-        bounds,
+        max_steps,
     );
     let mut state = State::new(&ground);
     state.walk(&ground, 0);
     let outcome = if state.cut {
         Outcome::Cut
-    } else if state.met_best || !best.fits_room {
+    } else if state.met == Met::Best || !best.fits_room {
         Outcome::Concluded
     } else {
         Outcome::BestNotMet
@@ -230,6 +202,7 @@ fn doubts_within(
             lines: state.doubts,
             other_room: state.other_room,
             outcome,
+            fits: state.met != Met::Nothing,
             steps: state.steps,
         };
     }
@@ -241,6 +214,7 @@ fn doubts_within(
         lines: every,
         other_room: true,
         outcome,
+        fits: state.met != Met::Nothing,
         steps: state.steps,
     }
 }
@@ -514,7 +488,7 @@ impl PartRead {
         }
         // A line the best reading leaves without tier is in a part by a modifier of the
         // reading only.
-        if lines().any(|(line, _)| !line.read) {
+        if lines().any(|(line, _)| !line.read_by_best) {
             return Self::ReadsMore;
         }
         // The lines of each modifier of the reading there, then of the best one, each of
@@ -622,11 +596,12 @@ struct Ground<'s, 'a> {
     /// For each modifier of the item, what the best reading reads on its line.
     best: Vec<Vec<Vec<Shown>>>,
     best_candidates: Vec<BestCandidate>,
-    bounds: Bounds,
+    max_steps: usize,
 }
 
 impl<'s, 'a> Ground<'s, 'a> {
-    /// `count` is the number of modifiers of the item.
+    /// `count` is the number of modifiers of the item, `max_steps` the most steps the search
+    /// takes.
     fn new(
         lines: &'s [Line<'a>],
         values: &'s [f64],
@@ -634,7 +609,7 @@ impl<'s, 'a> Ground<'s, 'a> {
         best: &Best<'_>,
         chosen: &[&Candidate],
         count: usize,
-        bounds: Bounds,
+        max_steps: usize,
     ) -> Self {
         let mut starting = vec![Vec::new(); lines.len()];
         for (index, placement) in placements.iter().enumerate() {
@@ -669,7 +644,7 @@ impl<'s, 'a> Ground<'s, 'a> {
                     sets: candidate.sets().collect(),
                 })
                 .collect(),
-            bounds,
+            max_steps,
         }
     }
 
@@ -678,12 +653,12 @@ impl<'s, 'a> Ground<'s, 'a> {
     fn otherwise(&self, chosen: &[&Placement<'_>]) -> Vec<usize> {
         let mut otherwise = Vec::new();
         for (modifier, best) in self.best.iter().enumerate() {
-            let read: Vec<&Shown> = chosen
+            let shown: Vec<&Shown> = chosen
                 .iter()
                 .filter(|placement| placement.shown.modifiers.contains(&modifier))
                 .map(|placement| &placement.shown)
                 .collect();
-            if !same(best, &read) {
+            if !same(best, &shown) {
                 otherwise.push(modifier);
             }
         }
@@ -727,6 +702,17 @@ impl<'s, 'a> Ground<'s, 'a> {
     }
 }
 
+/// The readings of the lines the search met, each of them in the room of the item: the more
+/// it knows the greater.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+enum Met {
+    Nothing,
+    /// Some readings, none of them the best one.
+    Others,
+    /// The best reading, maybe among others.
+    Best,
+}
+
 /// Where the search of the other readings is: the modifiers chosen so far, and what it found.
 struct State {
     /// For each value, the sum of the ranges of the chosen modifiers.
@@ -742,8 +728,8 @@ struct State {
     steps: usize,
     /// Whether the search stopped at the most steps, some readings not looked at.
     cut: bool,
-    /// Whether a reading the same as the best one was met.
-    met_best: bool,
+    /// The readings met so far.
+    met: Met,
     /// Whether a reading that leaves lines in doubt leaves another room than the best one to the
     /// modifiers that can be a prefix or a suffix.
     other_room: bool,
@@ -762,7 +748,7 @@ impl State {
             fractured: 0,
             steps: 0,
             cut: false,
-            met_best: false,
+            met: Met::Nothing,
             other_room: false,
             doubts: Vec::new(),
         }
@@ -781,7 +767,7 @@ impl State {
     /// Every set of the modifiers whose first line is `line`, from its `from`th on, added to
     /// the chosen ones; the next line once `line` is settled.
     fn choose(&mut self, ground: &Ground<'_, '_>, line: usize, from: usize) {
-        if self.steps >= ground.bounds.max_steps {
+        if self.steps >= ground.max_steps {
             self.cut = true;
             return;
         }
@@ -812,7 +798,7 @@ impl State {
             return false;
         };
         if count == 0 {
-            return !line.read;
+            return !line.read_by_best;
         }
         let (Some(values), Some(sums)) = (
             ground.values.get(line.values.clone()),
@@ -824,8 +810,7 @@ impl State {
     }
 
     /// Whether the placement of `index` can be added: its type not chosen yet, room for its
-    /// affix and for a fractured modifier, no modifier yet on a line of it without value, nor
-    /// on any of its lines when no reading adds up modifiers.
+    /// affix and for a fractured modifier, no modifier yet on a line of it without value.
     fn fits(&self, ground: &Ground<'_, '_>, index: usize) -> bool {
         let Some(placement) = ground.placements.get(index) else {
             return false;
@@ -842,11 +827,10 @@ impl State {
         let fractured = !placement.fractured || self.fractured < ground.fractured;
         // A line without value can't add up modifiers.
         let shared = placement.lines.iter().any(|&line| {
-            let valueless = ground
+            ground
                 .lines
                 .get(line)
-                .is_some_and(|line| line.values.is_empty());
-            (valueless || !ground.bounds.sums)
+                .is_some_and(|line| line.values.is_empty())
                 && self.counts.get(line).is_some_and(|&count| count > 0)
         });
         !kind && room && fractured && !shared
@@ -921,9 +905,10 @@ impl State {
             .collect();
         let otherwise = ground.otherwise(&chosen);
         if otherwise.is_empty() {
-            self.met_best = true;
+            self.met = Met::Best;
             return;
         }
+        self.met = self.met.max(Met::Others);
         let mut parts = Parts::new(ground.best.len());
         for placement in &chosen {
             parts.join(placement.shown.modifiers.iter().copied());
@@ -939,10 +924,10 @@ impl State {
         roots.sort_unstable();
         roots.dedup();
         for root in roots {
-            let read = PartRead::new(ground, &chosen, &self.counts, |modifier| {
+            let part_read = PartRead::new(ground, &chosen, &self.counts, |modifier| {
                 part(modifier) == root
             });
-            if !read.in_doubt() {
+            if !part_read.in_doubt() {
                 continue;
             }
             if !ground.same_room(&chosen) {
