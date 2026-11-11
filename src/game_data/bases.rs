@@ -58,13 +58,6 @@ pub enum Category {
 }
 
 impl Category {
-    /// Whether the quality of its items is that of a catalyst, which raises their modifiers
-    /// of a kind, an implicit too, instead of their base: the jewellery and the jewels.
-    #[must_use]
-    pub fn takes_catalysts(self) -> bool {
-        matches!(self, Self::Ring | Self::Amulet | Self::Jewel)
-    }
-
     /// The augmentable sockets a base of the category has at most, as Exiled Exchange 2 counts
     /// them (`getMaxSockets`): an exceptional base, or a corruption, can give it more.
     #[must_use]

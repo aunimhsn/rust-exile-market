@@ -86,7 +86,8 @@ enum Fixed {
 /// Whether the filters of the item, as the player left them, compare its stats.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StatChecks {
-    /// A line, a pseudo total, a DPS or a property that is a stat is checked.
+    /// A filter that compares the item is checked: a line of a modifier, a pseudo total or
+    /// a DPS beyond what its base reaches, a property of a waystone or of a gem.
     Checked,
     /// Some can be checked, none is.
     Unchecked,
@@ -101,6 +102,9 @@ impl StatChecks {
     /// checked.
     #[must_use]
     pub fn of(search: &SearchFilters, stats: &LineStats, all: &[(FilterKey, Filter)]) -> Self {
+        if search.compares_stats() {
+            return Self::Checked;
+        }
         let everything: Vec<(FilterKey, Filter)> = all
             .iter()
             .map(|(key, filter)| {
@@ -111,9 +115,7 @@ impl StatChecks {
                 (*key, filter)
             })
             .collect();
-        if search.compares_stats() {
-            Self::Checked
-        } else if stats.search_filters(&everything).compares_stats() {
+        if stats.search_filters(&everything).compares_stats() {
             Self::Unchecked
         } else {
             Self::NoneToCheck

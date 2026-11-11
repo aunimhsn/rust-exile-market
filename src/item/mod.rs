@@ -268,6 +268,14 @@ impl Item {
         self.class == labels::Labels::of(self.language).jewels
     }
 
+    /// A ring, an amulet or a jewel, whose quality is that of a catalyst: it raises the
+    /// modifiers of its kind, an implicit too, instead of the base.
+    #[must_use]
+    pub fn takes_catalysts(&self) -> bool {
+        let labels = labels::Labels::of(self.language);
+        [labels.rings, labels.amulets, labels.jewels].contains(&self.class.as_str())
+    }
+
     /// The damage and the speed of a weapon.
     #[must_use]
     pub fn weapon(&self) -> Option<&Weapon> {

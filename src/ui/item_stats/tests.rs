@@ -1540,11 +1540,13 @@ fn a_line_of_a_magic_item_starts_unchecked_only_when_a_checked_dps_or_total_coun
     let ring = |lines: &str| {
         parse(&format!(
             "Item Class: Rings\nRarity: Magic\nHale Prismatic Ring of the Seal\n--------\n\
-             Item Level: 80\n--------\n+8(7-10)% to all Elemental Resistances (implicit)\n\
-             --------\n{lines}"
+             Item Level: 80\n--------\n{{ Implicit Modifier }}\n\
+             +8(7-10)% to all Elemental Resistances\n--------\n{lines}"
         ))
     };
-    let both = ring("+30 to maximum Life\n+6% to Cold Resistance");
+    let life = "{ Prefix Modifier }\n+30 to maximum Life";
+    let cold = "{ Suffix Modifier }\n+6% to Cold Resistance";
+    let both = ring(&format!("{life}\n{cold}"));
     assert_eq!(
         rows(
             &both,
@@ -1559,10 +1561,7 @@ fn a_line_of_a_magic_item_starts_unchecked_only_when_a_checked_dps_or_total_coun
         ]
     );
     // Its cold resistance alone compares the ring.
-    assert_eq!(
-        default_checks(&ring("+6% to Cold Resistance")),
-        crate::ui::StatChecks::Checked
-    );
+    assert_eq!(default_checks(&ring(cold)), crate::ui::StatChecks::Checked);
 }
 
 #[test]
@@ -4052,8 +4051,23 @@ fn the_filters_of_an_item_by_default_compare_its_stats_or_ask_for_one() {
     }
 }
 
-/// A rare item of `base`, of the item `class`, as the in-game trade copies it: `top`, its
-/// properties, then its modifier `lines`.
+/// A rare item of `base`, of the item `class`, as the advanced copy writes it: its `implicit`
+/// line under its header, then each of its modifier `lines` under the header of a prefix (what
+/// a filter compares doesn't depend on the affix).
+fn advanced_rare(base: &str, class: &str, implicit: &str, lines: &str) -> Item {
+    let modifiers = lines
+        .lines()
+        .map(|line| format!("{{ Prefix Modifier }}\n{line}"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    parse(&format!(
+        "Item Class: {class}\nRarity: Rare\nGale Coil\n{base}\n--------\n\
+         Item Level: 80\n--------\n{{ Implicit Modifier }}\n{implicit}\n--------\n{modifiers}"
+    ))
+}
+
+/// A rare item of `base`, of the item `class`, as the in-game trade copies it, without
+/// header nor range: `top`, its properties, then its modifier `lines`.
 fn rare_item(base: &str, class: &str, top: &str, lines: &str) -> Item {
     parse(&format!(
         "Item Class: {class}\nRarity: Rare\nGale Coil\n{base}\n--------\n{top}\
@@ -4070,12 +4084,8 @@ fn a_total_that_the_lines_of_the_base_reach_compares_nothing() {
 
     // A Prismatic Ring, its implicit +8(7-10)% to all Elemental Resistances, with `lines`.
     let ring = |lines: &str| {
-        rare_item(
-            "Prismatic Ring",
-            "Rings",
-            "",
-            &format!("+8(7-10)% to all Elemental Resistances (implicit)\n--------\n{lines}"),
-        )
+        let implicit = "+8(7-10)% to all Elemental Resistances";
+        advanced_rare("Prismatic Ring", "Rings", implicit, lines)
     };
     // Its resistance from its implicit only, which every Prismatic Ring has.
     let alone = ring(&format!("+125 to Evasion Rating\n{RARITY}"));
@@ -4102,20 +4112,20 @@ fn a_total_that_the_lines_of_the_base_reach_compares_nothing() {
     assert_eq!(default_checks(&traded), Unchecked);
     // In the advanced copy, a number without range is a fixed value, its best roll: 10 of
     // Strength, 12 with a catalyst, under the minimum of 20 of its total of 22.
-    let fixed = parse(
-        "Item Class: Rings\nRarity: Rare\nGale Coil\nPrismatic Ring\n--------\n\
-         Item Level: 80\n--------\n{ Implicit Modifier — Attribute }\n+10 to Strength\n\
-         --------\n{ Suffix Modifier \"of the Bear\" (Tier: 7) — Attribute }\n\
-         +12(9-12) to Strength",
+    let fixed = advanced_rare(
+        "Prismatic Ring",
+        "Rings",
+        "+10 to Strength",
+        "+12 to Strength",
     );
     assert_eq!(default_checks(&fixed), Checked);
     // The quality of an armour raises its defences, not its implicit: 80 of Life at its best
     // roll, under the minimum of 87 of its total of 97 (96 with a catalyst).
-    let armour = rare_item(
+    let armour = advanced_rare(
         "Ancestral Mail",
         "Body Armours",
-        "",
-        "+65(60-80) to maximum Life (implicit)\n--------\n+32 to maximum Life",
+        "+65(60-80) to maximum Life",
+        "+32 to maximum Life",
     );
     assert_eq!(default_checks(&armour), Checked);
     // A rune goes on any item of the base: a total it alone gives compares nothing.

@@ -736,10 +736,97 @@ fn the_dexterity_a_corruption_added_isnt_what_the_base_reaches() {
     let stats = line_stats(&ring);
     let dexterity = FilterKey::Pseudo(Pseudo::Dexterity);
     assert_eq!(stats.rules_out(dexterity, Some(1.0)), RulesOut::OfTheBase);
-    // Its elemental resistance is its implicit alone, +10(7-10)% to all, with its catalyst.
+    // Its elemental resistance is its implicit alone, +10(7-10)% to all: no modifier adds to
+    // it, so that even a minimum beyond the 36 it reaches with its catalyst compares nothing.
     let elemental = FilterKey::Pseudo(Pseudo::ElementalResistance);
     assert_eq!(
-        stats.rules_out(elemental, Some(27.0)),
+        stats.rules_out(elemental, Some(40.0)),
         RulesOut::OfTheLeague
     );
+}
+
+#[test]
+fn a_minimum_the_base_reaches_exactly_compares_nothing() {
+    // A rune of 12 and a suffix of 20: a helmet of the base with the rune alone has 12, and
+    // passes a minimum of 12; none passes 13.
+    let helmet = parse(
+        "Item Class: Helmets\nRarity: Rare\nGale Crest\nHunter Hood\n--------\n\
+         Item Level: 80\n--------\n+12% to Fire Resistance (rune)\n--------\n\
+         +20% to Fire Resistance",
+    );
+    let stats = line_stats(&helmet);
+    let elemental = FilterKey::Pseudo(Pseudo::ElementalResistance);
+    assert_eq!(
+        stats.rules_out(elemental, Some(12.0)),
+        RulesOut::OfTheLeague
+    );
+    assert_eq!(stats.rules_out(elemental, Some(13.0)), RulesOut::OfTheBase);
+}
+
+#[test]
+fn a_catalyst_raises_the_implicits_of_a_ring_an_amulet_or_a_jewel_only() {
+    let catalyst = |item: &str| ImplicitRolls::of(&parse(item)).catalyst;
+    let rare = |class: &str, base: &str, quality: &str| {
+        catalyst(&format!(
+            "Item Class: {class}\nRarity: Rare\nGale Coil\n{base}\n--------\n\
+             {quality}Item Level: 80"
+        ))
+    };
+    let close = |found: f64, expected: f64| (found - expected).abs() < 1e-9;
+
+    // The usual quality, which any item of the base may have; its own when higher.
+    assert!(close(rare("Rings", "Prismatic Ring", ""), 1.2));
+    assert!(close(rare("Amulets", "Gold Amulet", ""), 1.2));
+    assert!(close(rare("Jewels", "Ruby", ""), 1.2));
+    let cold = "Quality (Cold Modifiers): +40% (augmented)\n--------\n";
+    assert!(close(rare("Rings", "Prismatic Ring", cold), 1.4));
+    // The quality of an armour raises its defences, not its implicit.
+    let armour = "Quality: +30% (augmented)\n--------\n";
+    assert!(close(rare("Body Armours", "Ancestral Mail", armour), 1.0));
+    // By its item class, which every copy writes: a base the game data doesn't know, a
+    // magic item, whose name alone doesn't tell its base, and in French.
+    assert!(close(rare("Rings", "Mystery Ring", ""), 1.2));
+    let magic = |class: &str, name: &str| {
+        catalyst(&format!(
+            "Item Class: {class}\nRarity: Magic\n{name}\n--------\nItem Level: 80"
+        ))
+    };
+    assert!(close(
+        magic("Rings", "Hale Prismatic Ring of the Seal"),
+        1.2
+    ));
+    assert!(close(magic("Body Armours", "Hale Ancestral Mail"), 1.0));
+    let french = "Classe d'objet: Bagues\nRareté: Rare\nBoucle de tempête\n\
+                  Bague prismatique\n--------\nNiveau de l'objet: 80";
+    assert!(close(catalyst(french), 1.2));
+}
+
+#[test]
+fn the_rings_the_amulets_and_the_jewels_of_the_test_items_take_catalysts() {
+    // By their item class, in both languages: the copies whose file is named after one of
+    // the three, and no other.
+    for (file, text) in crate::item::test_items::ALL {
+        let named = ["ring", "amulet", "jewel"]
+            .iter()
+            .any(|kind| file.contains(kind));
+        assert_eq!(parse(text).takes_catalysts(), named, "{file}");
+    }
+}
+
+#[test]
+fn a_catalyst_doesnt_raise_an_implicit_that_counts_against_a_total() {
+    // -13 of chaos resistance, fixed in the advanced copy: a catalyst would make it -15.6,
+    // further from what the best ring of the base has.
+    let ring = parse(
+        "Item Class: Rings\nRarity: Rare\nVile Loop\nAmethyst Ring\n--------\n\
+         Item Level: 77\n--------\n{ Implicit Modifier }\n-13% to Chaos Resistance\n\
+         --------\n{ Suffix Modifier }\n+17% to Fire and Chaos Resistances",
+    );
+    let stats = line_stats(&ring);
+    let implicit = stats
+        .lines
+        .iter()
+        .find(|line| line.source == Source::Implicit)
+        .expect("its implicit");
+    assert!((implicit.reach + 13.0).abs() < 1e-9, "{}", implicit.reach);
 }

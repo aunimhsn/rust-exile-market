@@ -6,6 +6,8 @@ One entry per item: what it is, its kind (the section it sits in), what it depen
 
 ## Polish
 
+- The line "Check a modifier to estimate this item." stays after the player checks an implicit, a rune, an enchantment or a total its base reaches, which compare nothing (sixth code review of 17e3f, 2026-11-11): the rule is right, but the game itself calls an implicit a modifier, so that the line reads as a bug. Other words ("Check a prefix or a suffix…"), or a tooltip on the line that says what doesn't compare. Mock-up first; depends on the owner's choice of the words.
+
 - The text of a filter without range field (the base, a fixed implicit, a line without number, a line of one possible value like `1% of Damage taken Recouped as Life` of a Time-Lost jewel) over the column of the range field too, so that it wraps less, the French above all (asked by the owner in step 13k1, 2026-10-28): today the column stays kept on every line with a checkbox, so that the texts stay aligned (specifications, Item block; `stat_row` in `src/ui/item_stats.rs` takes `RANGE_COLUMN` away even without a field); only the right edge of such a text would change, mock-up first in every section, then the rule of the specifications, then the code (two lines), checked with screenshots of the application since the tests of `item_stats.rs` check the rows decided, not their widths.
 
 - A tooltip on the DPS of a weapon telling it counts its quality, modifiers and runes ("With its quality, modifiers and runes"), so that it isn't taken for the DPS of the base.
@@ -23,6 +25,10 @@ One entry per item: what it is, its kind (the section it sits in), what it depen
 - A refusal of the trade site that isn't a limit (HTTP 403, a refusal since the security audit of 2026-11-10) reads "Trade site limit" in the waiting block, as a 429 (`src/ui/offers_block.rs`; `TradeError::Refused` carries no status, written to the log only): a text of its own, e.g. "The trade site refused the search", mock-up first. Depends on nothing; never seen in play so far. Noted on 2026-11-10.
 
 ## Edge cases
+
+- How a copy from the in-game trade marks what a corruption added (fifth and sixth code reviews of 17e3f, 2026-11-11): unknown (`as_in_game_trade` in `src/item/trade_copy.rs` writes none). Marked `(enchant)`, it is read as an enchantment, which compares nothing, while the advanced copy reads it as a modifier of the item. Depends on a copy from the owner of a corrupted item with an enhancement, from another player's listing; with the copies of Path of Exile 2 1.0.
+
+- The quality at which the trade site computes the DPS of an offer (fourth and sixth code reviews of 17e3f, 2026-11-11): taken as the quality of the offer. If it were brought to 20 %, the minimum at 90 % of the DPS copied from a weapon without quality would be lower than meant. A search by hand on the trade site, with an offer under 20 % of quality; with the checks of Path of Exile 2 1.0.
 
 - A second advanced copy of a ring or an amulet under a catalyst (fifth code review of 17e3f, 2026-11-11), to confirm that the range of its implicit is written without the quality (`+10(7-10)%` at 20 % on the one copy known): an implicit whose value is beyond its range would. The implicits of the jewellery are counted with the usual quality of a catalyst until then, by prudence (`docs/game-data.md`, "What a base reaches"). Depends on a copy from the owner; with the copies of Path of Exile 2 1.0.
 

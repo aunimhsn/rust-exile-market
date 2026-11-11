@@ -7,6 +7,13 @@
 //! Onslaught for 3 seconds`); the trade site reads the average of the numbers of the stat,
 //! with the sign of the stat: a `reduced` line of an `increased` stat, or an inverted stat
 //! (`#% less Damage`), has the other sign there, its minimum and its maximum swapped.
+//!
+//! Each filter of a search also tells what it rules out of the offers
+//! ([`LineStats::rules_out`]): it compares the item only when it rules out items of its base,
+//! those that have nothing but what the base gives, read once with the lines: its implicits
+//! at their best roll, its runes and its enchantments ([`Line::reach`]), and the damage of
+//! its base ([`base_dps`]). A rare or magic item is estimated only from a search with such a
+//! filter, and a pseudo total or a DPS the base reaches starts unchecked.
 
 use super::pseudo::{self, CountedLine, Pseudo, PseudoTotal};
 use super::query::{PropertyFilter, RulesOut, SearchFilters, StatFilter};
@@ -167,10 +174,11 @@ fn trade_value(
     })
 }
 
-/// The DPS the base of `item`, a weapon, reaches with the `lines` of the item that any item
-/// of the base may have (its runes), the physical one at the usual quality
-/// ([`Weapon::base_dps`](crate::item::Weapon::base_dps)); none for another item.
-fn dps_reach(item: &Item, lines: &[Line]) -> Option<BaseDps> {
+/// The DPS the base of `item`, a weapon whose modifier lines are `lines`, reaches with its
+/// runes, which any item of the base may have, and without its modifiers; the physical one
+/// at the usual quality ([`Weapon::base_dps`](crate::item::Weapon::base_dps)). None for
+/// another item.
+fn base_dps(item: &Item, lines: &[Line]) -> Option<BaseDps> {
     let weapon = item.weapon()?;
     // What the lines from one of `sources` add; never those of an implicit, which the
     // properties count as the base's.
@@ -197,39 +205,56 @@ fn dps_reach(item: &Item, lines: &[Line]) -> Option<BaseDps> {
     ))
 }
 
-/// What the quality of a catalyst may multiply an implicit of `item` by, on any item of its
-/// base: the usual quality, or its own when higher, on a ring, an amulet or a jewel, whose
-/// quality is a catalyst's, which raises the modifiers of its kind, an implicit too (the
-/// advanced copy writes the range of the implicit without it: `+10(7-10)%` at 20 %); as much
-/// on a base the game data doesn't know, which may be one, a magic item among them, whose
-/// name doesn't tell its base alone; nothing on another item.
-fn catalyst_factor(item: &Item) -> f64 {
-    let category = game_data::category(item.language(), item.base_type());
-    if category.is_none_or(game_data::Category::takes_catalysts) {
-        1.0 + f64::from(item.quality().unwrap_or(0).max(USUAL_QUALITY)) / 100.0
-    } else {
-        1.0
+/// What tells the best roll of an implicit of the copied item on any item of its base.
+#[derive(Debug, Clone, Copy)]
+struct ImplicitRolls {
+    /// The item was read from the advanced copy, where a number written without range is a
+    /// fixed value; a copy from the in-game trade writes no range, its rolls unknown.
+    headed: bool,
+    /// What the quality of a catalyst may multiply an implicit by: the usual quality, or that
+    /// of the item when higher, on a ring, an amulet or a jewel, whose quality raises the
+    /// modifiers of its kind, an implicit too (the advanced copy writes the range of the
+    /// implicit without it: `+10(7-10)%` at 20 %); nothing on another item.
+    catalyst: f64,
+}
+
+impl ImplicitRolls {
+    /// What `item` tells of the rolls of its implicits: how it was copied, and its catalyst.
+    fn of(item: &Item) -> Self {
+        let quality = if item.takes_catalysts() {
+            item.quality().unwrap_or(0).max(USUAL_QUALITY)
+        } else {
+            0
+        };
+        Self {
+            headed: item.is_headed(),
+            catalyst: 1.0 + f64::from(quality) / 100.0,
+        }
+    }
+
+    /// The most a line of an implicit gives on the trade site to any item of the base: its
+    /// best roll ([`best_roll`]) under a catalyst, infinite when its rolls are unknown.
+    /// `value` is its value there, read from the `numbers` its `line` counts.
+    fn best(self, value: TradeValue, line: &StatLine, numbers: &[usize]) -> f64 {
+        // A catalyst raises it away from zero: no higher when it counts against a total.
+        best_roll(value, line, numbers, self.headed)
+            .map_or(f64::INFINITY, |best| best.max(best * self.catalyst))
     }
 }
 
 /// What a line from `source` gives on the trade site to any item of the base
-/// ([`Line::reach`]): `value` is its value there, read from the `numbers` its `line` counts;
-/// `headed` and `catalyst` tell the best roll of an implicit ([`best_roll`],
-/// [`catalyst_factor`]).
-fn reach(
+/// ([`Line::reach`]): `value` is its value there, read from the `numbers` its `line` counts.
+fn line_reach(
     source: Source,
     value: TradeValue,
     line: &StatLine,
     numbers: &[usize],
-    headed: bool,
-    catalyst: f64,
+    implicits: ImplicitRolls,
 ) -> f64 {
     match source {
         Source::Modifier => 0.0,
         Source::Added => value.trade,
-        // A catalyst raises it away from zero: no higher when it counts against a total.
-        Source::Implicit => best_roll(value, line, numbers, headed)
-            .map_or(f64::INFINITY, |best| best.max(best * catalyst)),
+        Source::Implicit => implicits.best(value, line, numbers),
     }
 }
 
@@ -317,8 +342,8 @@ struct Line {
     source: Source,
     /// What the line gives on the trade site to any item of the base, which a filter must go
     /// beyond to compare the item: nothing for a line of a modifier; for an implicit, its best
-    /// roll, raised by a catalyst on a jewel, infinite when unknown (a copy from the in-game
-    /// trade); for a rune or an enchantment, its value.
+    /// roll, raised by a catalyst on a ring, an amulet or a jewel, infinite when unknown (a
+    /// copy from the in-game trade); for a rune or an enchantment, its value.
     reach: f64,
 }
 
@@ -384,8 +409,7 @@ impl LineStats {
     #[must_use]
     pub fn new(item: &Item, modifiers: &[Modifier], trade: Option<&TradeStats>) -> Self {
         let language = item.language();
-        // What tells the best roll of an implicit on any item of the base.
-        let (headed, catalyst) = (item.is_headed(), catalyst_factor(item));
+        let implicits = ImplicitRolls::of(item);
         let mut lines = Vec::new();
         let (mut prefixes_allowed, mut suffixes_allowed) = (0.0, 0.0);
         for (index, modifier) in modifiers.iter().enumerate() {
@@ -414,7 +438,7 @@ impl LineStats {
                     .and_then(|stat| stat.value)
                     .zip(searched_line)
                     .map_or(0.0, |(value, line)| {
-                        reach(source, value, line, counted, headed, catalyst)
+                        line_reach(source, value, line, counted, implicits)
                     });
                 let known = found.stat.is_some();
                 let game_id = found.stat.as_ref().and_then(|found| found.stat.id.clone());
@@ -470,7 +494,7 @@ impl LineStats {
             .into_iter()
             .map(|total| (total.pseudo, total.value))
             .collect();
-        let dps_reach = dps_reach(item, &lines);
+        let dps_reach = base_dps(item, &lines);
         Self {
             lines,
             pseudo,
@@ -624,9 +648,9 @@ impl LineStats {
             }
             FilterKey::Property(property) => {
                 // A DPS beyond what the base reaches; without a minimum, any weapon passes.
-                let beyond_the_base = |reach: fn(BaseDps) -> f64| {
+                let beyond_the_base = |kind: fn(BaseDps) -> f64| {
                     self.dps_reach
-                        .map(reach)
+                        .map(kind)
                         .zip(minimum)
                         .is_some_and(|(reach, minimum)| minimum > reach)
                 };

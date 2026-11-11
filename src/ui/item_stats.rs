@@ -20,12 +20,12 @@
 //! The DPS of a weapon and the pseudo totals start checked: the physical DPS, the elemental
 //! one when it is at least the physical one or in its place. On a rare or magic item, those
 //! any item of its base reaches start unchecked, since they compare nothing
-//! ([`LineStats::rules_out`]): its implicits at their best roll, with a catalyst on the
-//! jewellery, its runes and its enchantments, its damage at the usual quality. A line that a DPS or a
-//! total checked at first counts starts unchecked (the damage and the attack speed of a
-//! weapon, a line a total adds up). Every modifier of a rare starts unchecked, like Exiled
-//! Exchange 2: its value lies in the few modifiers the buyer needs, which the application
-//! can't tell, and several checked at once leave few offers.
+//! ([`LineStats::rules_out`]): its implicits at their best roll, with a catalyst on a ring,
+//! an amulet or a jewel, its runes and its enchantments, its damage at the usual quality. A
+//! line that a DPS or a total checked at first counts starts unchecked (the damage and the
+//! attack speed of a weapon, a line a total adds up). Every modifier of a rare starts
+//! unchecked, like Exiled Exchange 2: its value lies in the few modifiers the buyer needs,
+//! which the application can't tell, and several checked at once leave few offers.
 //!
 //! A desecrated modifier not revealed yet is a line of its group without filter, on a band of
 //! the desecrated green; its item gets a filter of its number of unrevealed modifiers, and
@@ -1372,8 +1372,9 @@ fn property_filter(property: Property, value: f64, limit: Limit, checked: bool) 
 }
 
 /// The filter of a pseudo total, with a minimum at 90 % of its value; when `checkable`,
-/// checked if it compares the item ([`LineStats::rules_out`]): not when the implicits of the
-/// item at their best roll reach its minimum, which any item of its base may then pass.
+/// checked if it compares the item ([`LineStats::rules_out`]): not when the lines of its base
+/// (its implicits at their best roll, its runes, its enchantments) reach its minimum, which
+/// any item of its base may then pass.
 fn pseudo_filter(total: &PseudoTotal, stats: &LineStats, checkable: bool) -> Stat<'static> {
     let minimum = comparable(total.value, decimals(total.value), Half::Minimum);
     let compares = stats.compares(FilterKey::Pseudo(total.pseudo), minimum);
@@ -1393,7 +1394,8 @@ fn pseudo_filter(total: &PseudoTotal, stats: &LineStats, checkable: bool) -> Sta
 struct Reading<'r> {
     /// They tell the lines better lower.
     lines: &'r CopiedLines,
-    /// They tell the numbers of each line its stat counts, and the damage of a weapon.
+    /// They tell the numbers of each line its stat counts, and the lines a DPS or a pseudo
+    /// total counts.
     stats: &'r LineStats,
     /// They tell the rolls of every tier of a line of a prefix or suffix.
     tiers: &'r TierRolls,
