@@ -6,7 +6,7 @@ use std::time::{Duration, SystemTime};
 use crate::clipboard::ClipboardEvent;
 use crate::estimate::Worth;
 use crate::game_data::{self, StatSource, TradeGroup, TradeStats};
-use crate::item::{CopiedItem, Item, ItemState, Modifier, ParseError, Rarity};
+use crate::item::{CopiedItem, Item, ItemState, Modifier, ParseError, Rarity, RollsSource};
 use crate::item_names::ItemNames;
 use crate::league::{League, Leagues};
 use crate::logging;
@@ -63,7 +63,10 @@ impl ShownItem {
         let trade_copy = parsed
             .as_ref()
             .ok()
-            .filter(|item| item.has_tiers_from_values() || item.has_rolls_from_prices())
+            .filter(|item| match item.rolls_source() {
+                RollsSource::Values | RollsSource::Prices => true,
+                RollsSource::Headers | RollsSource::Nowhere => false,
+            })
             .map(|item| item.modifiers().to_vec());
         let mut shown = Self {
             parsed,
@@ -97,21 +100,24 @@ impl ShownItem {
             .map(str::to_owned);
         let mut reshaped = false;
         if let Some(copied) = &self.trade_copy {
-            let modifiers = if item.has_rolls_from_prices() {
-                unique_rolls(item, copied, trade, names, prices)
-            } else if let Some(base_type) = &base_type {
-                // The runes and the implicits, which tell the room, are never read again.
-                let stats = LineStats::new(item, copied, trade);
-                game_data::with_trade_tiers(
-                    item.language(),
-                    base_type,
-                    item.item_level(),
-                    copied,
-                    stats.affix_limits(item),
-                    item.has_state(ItemState::Sanctified),
-                )
-            } else {
-                copied.clone()
+            let modifiers = match (item.rolls_source(), &base_type) {
+                (RollsSource::Prices, _) => unique_rolls(item, copied, trade, names, prices),
+                (RollsSource::Values, Some(base_type)) => {
+                    // The runes and the implicits, which tell the room, are never read again.
+                    let stats = LineStats::new(item, copied, trade);
+                    game_data::with_trade_tiers(
+                        item.language(),
+                        base_type,
+                        item.item_level(),
+                        copied,
+                        stats.affix_limits(item),
+                        item.has_state(ItemState::Sanctified),
+                    )
+                }
+                // A magic item before the names of the trade site tell its base.
+                (RollsSource::Values, None) | (RollsSource::Headers | RollsSource::Nowhere, _) => {
+                    copied.clone()
+                }
             };
             reshaped = shape(item.modifiers()) != shape(&modifiers);
             item.set_modifiers(modifiers);

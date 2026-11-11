@@ -213,7 +213,7 @@ pub struct Item {
 
 /// Where the rolls of the modifiers of an item come from, by the way it was copied.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum RollsSource {
+pub enum RollsSource {
     /// The advanced copy: the `{ … }` header of each modifier gives its affix, its tier and
     /// its ranges.
     Headers,
@@ -441,6 +441,13 @@ impl Item {
     /// an item copied from the in-game trade.
     pub fn set_modifiers(&mut self, modifiers: Vec<Modifier>) {
         self.modifiers = modifiers;
+    }
+
+    /// Where the rolls of its modifiers come from, by the way it was copied: what reads them
+    /// chooses by a `match`, so that a new way to copy an item names every place to update.
+    #[must_use]
+    pub fn rolls_source(&self) -> RollsSource {
+        self.rolls_source
     }
 
     /// The item was read from the advanced copy, whose `{ … }` headers give the modifiers
