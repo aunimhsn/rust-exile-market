@@ -26,7 +26,7 @@ pub enum Currency {
 
 impl Currency {
     /// Its name with its article, in the errors of its list.
-    fn with_article(self) -> &'static str {
+    fn name_with_article(self) -> &'static str {
         match self {
             Self::Essence => "an essence",
             Self::Alloy => "an alloy",
@@ -234,7 +234,7 @@ pub(super) fn is_of_a_currency(id: &str, modifier: &SourceModifier) -> bool {
     modifier.is_essence_only
         || CURRENCY_ID_PREFIXES
             .iter()
-            .any(|start| id.starts_with(start))
+            .any(|prefix| id.starts_with(prefix))
 }
 
 /// The currency and the spawn weights of each modifier of `currencies` by its id, `default` at 0
@@ -257,10 +257,10 @@ pub(super) fn currency_spawns(
         .iter()
         .flat_map(|&(currency, list)| list.iter().map(move |&(id, tags)| (currency, id, tags)));
     for (currency, id, tags) in listed {
-        let named = currency.with_article();
-        let modifier = modifiers
-            .get(id)
-            .ok_or_else(|| format!("{id}: a modifier of {named} that RePoE doesn't have"))?;
+        let currency_name = currency.name_with_article();
+        let modifier = modifiers.get(id).ok_or_else(|| {
+            format!("{id}: a modifier of {currency_name} that RePoE doesn't have")
+        })?;
         let error = if spawns.contains_key(id) {
             Some("written twice in the list".to_owned())
         } else if modifier.domain != EQUIPMENT {
@@ -271,14 +271,14 @@ pub(super) fn currency_spawns(
                 modifier.generation_type
             ))
         } else if modifier.spawn_weights.iter().any(SpawnWeight::rolls) {
-            Some(format!("rolls without {named}"))
+            Some(format!("rolls without {currency_name}"))
         } else {
             tags.iter()
                 .find(|(tag, _)| !equipment_tags.contains(tag))
                 .map(|(tag, _)| format!("a tag no base of the equipment has, {tag}"))
         };
         if let Some(error) = error {
-            return Err(format!("{id}: a modifier of {named}: {error}").into());
+            return Err(format!("{id}: a modifier of {currency_name}: {error}").into());
         }
         let spawn_weight = |(tag, weight): (&str, u32)| SpawnWeight {
             tag: tag.to_owned(),
@@ -306,7 +306,7 @@ pub(super) fn check_lines(id: &str, currency: Currency, lines: &[Line]) -> Resul
     if let Some(line) = lines.iter().find(|line| !line.is_known) {
         return Err(format!(
             "{id}: a modifier of {} with a line without template, {}",
-            currency.with_article(),
+            currency.name_with_article(),
             line.template
         )
         .into());
@@ -314,7 +314,7 @@ pub(super) fn check_lines(id: &str, currency: Currency, lines: &[Line]) -> Resul
     if lines.is_empty() {
         return Err(format!(
             "{id}: a modifier of {} without line, its values all 0",
-            currency.with_article()
+            currency.name_with_article()
         )
         .into());
     }

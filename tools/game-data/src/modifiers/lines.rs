@@ -18,8 +18,15 @@ const UNWRITTEN_ROLLS: [&str; 2] = [
 
 /// Whether `tag` is one of the Time-Lost jewels, whose modifiers the game writes within the
 /// words of [`RADIUS_GRANTS`].
-pub(super) fn is_radius_jewel_tag(tag: &str) -> bool {
+fn is_radius_jewel_tag(tag: &str) -> bool {
     tag == "radius_jewel" || tag.ends_with("_radius_jewel")
+}
+
+impl SourceModifier {
+    /// Whether it rolls on a Time-Lost jewel.
+    fn rolls_on_radius_jewel(&self) -> bool {
+        self.rolling_tags().any(is_radius_jewel_tag)
+    }
 }
 
 /// The words the game writes before a line the small passive skills in the radius of a
@@ -168,7 +175,8 @@ impl<'a> LineTranslator<'a> {
     /// The lines of `modifier`, each with the English template of Exiled Exchange 2 of one of
     /// its strings, and the range of each of their values. A line without template is marked
     /// unknown (written as the game writes it, without range): [`reduce`](super::reduce)
-    /// leaves its modifier out.
+    /// leaves its modifier out. An error for a modifier of the Time-Lost jewels that rolls on
+    /// other bases too.
     pub(super) fn lines(&self, modifier: &SourceModifier) -> Result<(Vec<Line>, Vec<LineRanges>)> {
         // Its lines would be written within the words of the passive skills on the other bases.
         if modifier.rolls_on_radius_jewel()

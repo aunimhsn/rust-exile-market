@@ -20,7 +20,7 @@ use crate::report::Report;
 pub use currencies::CURRENCIES;
 use currencies::{Currency, CurrencyModifier, CurrencySpawn, currency_spawns};
 pub use lines::Templates;
-use lines::{Line, LineRanges, LineTranslator, Translation, is_radius_jewel_tag};
+use lines::{Line, LineRanges, LineTranslator, Translation};
 
 /// The domain of the modifiers of the equipment, which the application takes when none is
 /// written.
@@ -87,11 +87,6 @@ impl SourceModifier {
             .iter()
             .filter(|spawn_weight| spawn_weight.rolls())
             .map(|spawn_weight| spawn_weight.tag.as_str())
-    }
-
-    /// Whether it rolls on a Time-Lost jewel.
-    fn rolls_on_radius_jewel(&self) -> bool {
-        self.rolling_tags().any(is_radius_jewel_tag)
     }
 
     /// Its stat `id`, if it has it.
@@ -277,10 +272,10 @@ pub fn reduce(
         .values()
         .filter(|base| base.release_state == "released")
         .collect();
-    let currencies = currency_spawns(&files.modifiers, currencies, &released)?;
+    let currency_spawns = currency_spawns(&files.modifiers, currencies, &released)?;
     let translator =
         LineTranslator::new(&files.translations, &files.tablet_translations, templates);
-    let grouped = group_tiers(&files.modifiers, &translator, &currencies, report)?;
+    let grouped = group_tiers(&files.modifiers, &translator, &currency_spawns, report)?;
 
     let mut notes = LineNotes::default();
     let mut tables: Vec<Table> = grouped
@@ -304,7 +299,8 @@ pub fn reduce(
 #[derive(Default)]
 struct LineNotes {
     without_template: BTreeSet<String>,
-    with_plus: BTreeSet<(String, String)>,
+    /// The string of the game, with its `+`, and the template it is known as.
+    known_without_plus: BTreeSet<(String, String)>,
 }
 
 impl LineNotes {
@@ -316,7 +312,7 @@ impl LineNotes {
                 line,
             );
         }
-        for (string, template) in self.with_plus {
+        for (string, template) in self.known_without_plus {
             report.note(
                 "Modifier lines known without the + of their number",
                 format!("{string} as {template}"),
@@ -353,10 +349,12 @@ fn table(
             .extend(unknown.iter().map(|line| line.template.clone()));
         return None;
     }
-    notes.with_plus.extend(key.lines.iter().filter_map(|line| {
-        let string = line.string_with_plus.clone()?;
-        Some((string, line.template.clone()))
-    }));
+    notes
+        .known_without_plus
+        .extend(key.lines.iter().filter_map(|line| {
+            let string = line.string_with_plus.clone()?;
+            Some((string, line.template.clone()))
+        }));
     // By level, then by ranges: of two tiers of one level, the higher ranges last, the better
     // tier for the application (`Upgrades Radius to Large` after `to Medium`, both of level 1: its
     // T1, as the game writes it).
@@ -401,14 +399,14 @@ fn released_spawn(
 }
 
 /// The tiers of the prefixes and suffixes of `modifiers` that roll (with the currency and the
-/// spawn weights of `currencies` for those only a currency adds), grouped by table, their lines
+/// spawn weights of `currency_spawns` for those only a currency adds), grouped by table, their lines
 /// written by `translator`. Notes in `report` those left out without an error, which a patch may
 /// have brought: one only a currency adds that its lists don't have, and those of a domain the
 /// application doesn't read.
 fn group_tiers(
     modifiers: &BTreeMap<String, SourceModifier>,
     translator: &LineTranslator<'_>,
-    currencies: &HashMap<&str, CurrencySpawn>,
+    currency_spawns: &HashMap<&str, CurrencySpawn>,
     report: &mut Report,
 ) -> Result<BTreeMap<TableKey, Vec<Tier>>> {
     let mut grouped: BTreeMap<TableKey, Vec<Tier>> = BTreeMap::new();
@@ -421,7 +419,7 @@ fn group_tiers(
             *other_domains.entry(&modifier.domain).or_default() += 1;
             continue;
         }
-        let currency_spawn = currencies.get(id.as_str());
+        let currency_spawn = currency_spawns.get(id.as_str());
         if currency_spawn.is_none() && currencies::is_of_a_currency(id, modifier) {
             report.note(
                 "Modifiers of a currency that ESSENCES and ALLOYS don't list, left out",

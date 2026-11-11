@@ -15,23 +15,23 @@ pub fn write(
     repoe_code_reference: &str,
 ) -> Result<()> {
     let exiled_exchange = &commits.exiled_exchange;
-    let license = github.file(EXILED_EXCHANGE, &exiled_exchange.sha, "LICENSE")?;
-    let repoe_code = github.commit(REPOE_CODE, repoe_code_reference)?;
-    println!("RePoE code, commit {}", repoe_code.sha);
-    let repoe_license = github.file(REPOE_CODE, &repoe_code.sha, "LICENSE.md")?;
+    let exiled_exchange_license = github.file(EXILED_EXCHANGE, &exiled_exchange.sha, "LICENSE")?;
+    let repoe_code_commit = github.commit(REPOE_CODE, repoe_code_reference)?;
+    println!("RePoE code, commit {}", repoe_code_commit.sha);
+    let repoe_license = github.file(REPOE_CODE, &repoe_code_commit.sha, "LICENSE.md")?;
     fs::write(
         output.join("NOTICE.md"),
         text(
             &Origin {
                 commit: exiled_exchange,
-                license: &license,
+                license: &exiled_exchange_license,
             },
             &Origin {
                 commit: &commits.repoe_data,
                 license: &repoe_license,
             },
             &commits.repoe_version,
-            &repoe_code.sha,
+            &repoe_code_commit.sha,
         ),
     )?;
     Ok(())
@@ -44,12 +44,12 @@ struct Origin<'a> {
 }
 
 /// The notice of the generated files; the license of `repoe_data` is that of its code, at the
-/// commit `repoe_code`.
+/// commit `repoe_code_commit`.
 fn text(
     exiled_exchange: &Origin,
     repoe_data: &Origin,
     repoe_version: &str,
-    repoe_code: &str,
+    repoe_code_commit: &str,
 ) -> String {
     let exiled_exchange_commit = &exiled_exchange.commit.sha;
     let exiled_exchange_date = exiled_exchange.commit.date();
@@ -72,7 +72,7 @@ Their texts, ids and values come from the files of Path of Exile 2 and belong to
 {exiled_exchange_license}
 ```
 
-The code of the RePoE fork ([{REPOE_CODE}](https://github.com/{REPOE_CODE}), commit `{repoe_code}`), which exports these data, is under the MIT license, whose notice follows:
+The code of the RePoE fork ([{REPOE_CODE}](https://github.com/{REPOE_CODE}), commit `{repoe_code_commit}`), which exports these data, is under the MIT license, whose notice follows:
 
 ```text
 {repoe_license}
