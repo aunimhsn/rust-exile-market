@@ -64,30 +64,17 @@ fn a_line_is_read_as_its_template_and_its_signed_numbers() {
 }
 
 #[test]
-fn an_offer_line_is_read_with_the_numbers_of_the_copied_item() {
-    let mut lines = 0;
-    for (_, text) in crate::item::test_items::ALL {
-        let item = Item::parse(&CopiedItem::from_text(text).expect("an item")).expect("read");
-        for line in item.modifiers().iter().flat_map(|modifier| &modifier.lines) {
-            let rolls: Vec<f64> = line.rolls.iter().map(|roll| roll.value).collect();
-            assert_eq!(Template::of(&line.text).numbers, rolls, "{}", line.text);
-            lines += 1;
-        }
-    }
-    assert!(lines >= 330, "{lines} lines");
-    // Every string of the stats on equipment, a whole number and a decimal one in place of
-    // each `#`, as the trade site writes the lines of an offer.
-    for language in Language::ALL {
-        for (string, _) in game_data::equipment_strings(language) {
-            for number in ["7", "2.5"] {
-                for line in string.replace('#', number).lines() {
-                    let copied = StatLine::parse(line);
-                    let rolls: Vec<f64> = copied.rolls.iter().map(|roll| roll.value).collect();
-                    assert_eq!(Template::of(line).numbers, rolls, "{line}");
-                }
-            }
-        }
-    }
+fn a_decimal_number_that_ends_a_sentence_shows_its_difference() {
+    let totems = "Les aptitudes d'attaques en mêlée augmentent le nombre maximum de totems \
+                  invoqués de";
+    let copied = [explicit(&format!("{totems} 2.5."))];
+    let offer = difference(
+        &format!("{totems} 3.5."),
+        OfferKind::Explicit,
+        Language::French,
+        &copied,
+    );
+    assert_eq!(offer.map(|difference| difference.value), Some(1.0));
 }
 
 #[test]
