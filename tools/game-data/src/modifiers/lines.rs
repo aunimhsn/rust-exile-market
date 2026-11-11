@@ -5,7 +5,7 @@ use std::collections::{BTreeMap, HashMap};
 
 use serde::{Deserialize, Serialize};
 
-use super::{DESECRATED, SourceModifier, StatRange};
+use super::{DESECRATED, SourceModifier, StatRange, TABLETS};
 use crate::Result;
 
 /// The stats of the waystones that roll while their line writes no value: the game writes
@@ -76,10 +76,22 @@ pub(super) struct Line {
     #[serde(skip)]
     pub(super) known: bool,
     /// The string of the game whose template is known without the `+` of its number
-    /// ([`known_template`]), printed by the generator; the same for every tier of a
+    /// ([`LineWriter::known_alone`]), printed by the generator; the same for every tier of a
     /// translation, so it doesn't split the tiers of a table.
     #[serde(skip)]
     pub(super) unsigned: Option<String>,
+}
+
+impl Line {
+    /// A line without template, written `template`: it can't be found, nor its modifier.
+    fn unknown(template: String) -> Self {
+        Self {
+            template,
+            divisor: 1,
+            known: false,
+            unsigned: None,
+        }
+    }
 }
 
 #[expect(
@@ -127,8 +139,190 @@ impl Serialize for ShownValue {
 /// each template itself: `Loads # additional bolts` is `Loads an additional bolt`.
 pub type Templates = BTreeMap<String, String>;
 
+/// What writes the lines of the modifiers: the translation of each stat, those of the tablets
+/// first for a modifier of the tablets, and the templates of Exiled Exchange 2.
+pub(super) struct LineWriter<'a> {
+    by_stat: HashMap<&'a str, &'a Translation>,
+    tablet_by_stat: HashMap<&'a str, &'a Translation>,
+    templates: &'a Templates,
+}
+
+impl<'a> LineWriter<'a> {
+    /// The writer of the lines `translations` write (`stat_descriptions.json`), those of the
+    /// tablets by `tablet_translations` first (`tablet_stat_descriptions.json`), as `templates`.
+    pub(super) fn new(
+        translations: &'a [Translation],
+        tablet_translations: &'a [Translation],
+        templates: &'a Templates,
+    ) -> Self {
+        Self {
+            by_stat: by_stat(&[translations]),
+            tablet_by_stat: by_stat(&[tablet_translations, translations]),
+            templates,
+        }
+    }
+
+    /// The lines of `modifier`, each with the English template of Exiled Exchange 2 of one of
+    /// its strings, and the range of each of their values. A line without template is marked
+    /// unknown (written as the game writes it, without range): [`reduce`](super::reduce)
+    /// leaves its modifier out.
+    pub(super) fn lines(&self, modifier: &SourceModifier) -> Result<(Vec<Line>, Vec<LineRanges>)> {
+        let by_stat = if modifier.domain == TABLETS {
+            &self.tablet_by_stat
+        } else {
+            &self.by_stat
+        };
+        let mut lines = Vec::new();
+        let mut ranges = Vec::new();
+        // The translations written, once each: one can write several stats.
+        let mut written: Vec<&Translation> = Vec::new();
+        for stat in &modifier.stats {
+            let Some(&translation) = by_stat.get(stat.id.as_str()) else {
+                // A stat the game doesn't write, e.g. `dummy_stat_display_nothing`; one that
+                // rolls is written by a translation RePoE doesn't have (`minion_area_of_effect_+%`
+                // of a hybrid of the Abyss on the jewels), whose line can't be found.
+                if stat.rolls() {
+                    lines.push(Line::unknown(stat.id.clone()));
+                    ranges.push(Vec::new());
+                }
+                continue;
+            };
+            // The game writes no line of values all 0: the `0% increased Quantity of Waystones
+            // found in Map` RePoE gives the additional Essence of a tablet.
+            let zero = translation
+                .ids
+                .iter()
+                .filter_map(|id| modifier.stat(id))
+                .all(StatRange::is_zero);
+            let again = written
+                .iter()
+                .any(|&before| std::ptr::eq(before, translation));
+            if translation.hidden == Some(true) || zero || again {
+                continue;
+            }
+            written.push(translation);
+            let (line, line_ranges) =
+                self.line(&ModifierTranslation::new(modifier, translation)?)?;
+            lines.push(line);
+            ranges.push(line_ranges);
+        }
+        Ok((lines, ranges))
+    }
+
+    /// The line `translation` writes, and the range of each of its values.
+    fn line(&self, translation: &ModifierTranslation<'_>) -> Result<(Line, LineRanges)> {
+        let modifier = translation.modifier;
+        let Some(Known { template, unsigned }) =
+            self.known_template(modifier, &translation.templates_of_strings())?
+        else {
+            return Ok((translation.unknown_line(), Vec::new()));
+        };
+        let indexes = translation.value_indexes(template);
+        translation.check_rolls_written(&indexes)?;
+        let ranges = translation.ranges(&indexes)?;
+        // A string without number of Exiled Exchange 2 gives the value of the stat, e.g. 1000
+        // milliseconds for `Inherent Rage loss starts 1 second later`, which the application
+        // divides to compare it with the ranges as the game shows them; a line without such a
+        // string needs no divisor.
+        let written_without_number = self
+            .known_template(modifier, &translation.templates_without_number())?
+            .is_some_and(|known| known.template == template);
+        let line = Line {
+            template: template.to_owned(),
+            divisor: translation.divisor(&indexes, written_without_number)?,
+            known: true,
+            unsigned,
+        };
+        Ok((line, ranges))
+    }
+
+    /// The template of Exiled Exchange 2 of a line of `modifier` written one of `strings`
+    /// (templates of the game, [`template_of`]): on a Time-Lost jewel, within the words of the
+    /// passive skills that grant it ([`Self::known_on_radius_jewel`]), else alone
+    /// ([`Self::known_alone`]).
+    fn known_template(
+        &self,
+        modifier: &SourceModifier,
+        strings: &[String],
+    ) -> Result<Option<Known<'a>>> {
+        if modifier.rolls_on_radius_jewel() {
+            self.known_on_radius_jewel(modifier, strings)
+        } else {
+            Ok(self.known_alone(strings))
+        }
+    }
+
+    /// The template of the first of `strings` it knows, else of the first it knows without the
+    /// `+` of its numbers, which the application reads in their values (`+#% Monster Elemental
+    /// Resistances` of the waystones, `#% Monster Elemental Resistances`).
+    fn known_alone(&self, strings: &[String]) -> Option<Known<'a>> {
+        strings
+            .iter()
+            .find_map(|string| self.templates.get(string))
+            .map(|template| Known::exact(template))
+            .or_else(|| {
+                strings.iter().find_map(|string| {
+                    let template = self.templates.get(&string.replace("+#", "#"))?;
+                    Some(Known {
+                        template,
+                        unsigned: Some(string.clone()),
+                    })
+                })
+            })
+    }
+
+    /// The template of a line of a Time-Lost jewel written one of `strings`: the line within the
+    /// words of [`RADIUS_GRANTS`] of which it knows one kind only (`Small Passive Skills in
+    /// Radius also grant #% increased Elemental Damage`), with its number when a string writes
+    /// one: known without its number only (`Small Passive Skills in Radius also grant Attack Hits
+    /// apply Incision`, while the game writes `… 4% chance for Attack Hits to apply Incision`,
+    /// seen on the trade site on 2026-10-30), the line can't be found, and has none. A line about
+    /// the radius itself ([`RADIUS_LINES`]) is written alone; another line known within neither
+    /// has none. Of a desecrated modifier, which it knows within both (`#% increased maximum
+    /// Life`), the notables: the trade site has a desecrated stat for them only, as for every
+    /// other desecrated modifier of these jewels (checked on 2026-10-30).
+    fn known_on_radius_jewel(
+        &self,
+        modifier: &SourceModifier,
+        strings: &[String],
+    ) -> Result<Option<Known<'a>>> {
+        let within = |words: &str, string: &str| self.templates.get(&format!("{words}{string}"));
+        let granted: Vec<&str> = RADIUS_GRANTS
+            .into_iter()
+            .filter(|words| strings.iter().any(|string| within(words, string).is_some()))
+            .collect();
+        let words = match granted.as_slice() {
+            [] => {
+                return Ok(self
+                    .known_alone(strings)
+                    .filter(|known| RADIUS_LINES.contains(&known.template)));
+            }
+            &[words] => words,
+            [_, _] if modifier.domain == DESECRATED => NOTABLE_GRANTS,
+            _ => {
+                // Named by its string with a number, as the lines left out are printed.
+                let named = strings
+                    .iter()
+                    .find(|string| string.contains('#'))
+                    .or(strings.first());
+                return Err(format!(
+                    "{} is known within the words of both kinds of passive skills",
+                    named.map_or("", String::as_str)
+                )
+                .into());
+            }
+        };
+        let numbered = strings.iter().any(|string| string.contains('#'));
+        Ok(strings
+            .iter()
+            .filter(|string| !numbered || string.contains('#'))
+            .find_map(|string| within(words, string))
+            .map(|template| Known::exact(template)))
+    }
+}
+
 /// The translation of each stat, the first of `files` that writes it, the first of its file.
-pub(super) fn by_stat<'a>(files: &[&'a [Translation]]) -> HashMap<&'a str, &'a Translation> {
+fn by_stat<'a>(files: &[&'a [Translation]]) -> HashMap<&'a str, &'a Translation> {
     let mut by_stat = HashMap::new();
     for translation in files.iter().copied().flatten() {
         for id in &translation.ids {
@@ -138,251 +332,153 @@ pub(super) fn by_stat<'a>(files: &[&'a [Translation]]) -> HashMap<&'a str, &'a T
     by_stat
 }
 
-/// The lines of `modifier`, each with the English template of Exiled Exchange 2 of one of its
-/// strings, and the range of each of their values. A line without template is marked unknown
-/// (written as the game writes it, without range): [`reduce`] leaves its modifier out.
-pub(super) fn lines(
-    modifier: &SourceModifier,
-    by_stat: &HashMap<&str, &Translation>,
-    templates: &Templates,
-) -> Result<(Vec<Line>, Vec<LineRanges>)> {
-    let mut lines = Vec::new();
-    let mut ranges = Vec::new();
-    // The translations written, once each: one can write several stats.
-    let mut written: Vec<&Translation> = Vec::new();
-    for stat in &modifier.stats {
-        let Some(&translation) = by_stat.get(stat.id.as_str()) else {
-            // A stat the game doesn't write, e.g. `dummy_stat_display_nothing`; one that rolls
-            // is written by a translation RePoE doesn't have (`minion_area_of_effect_+%` of a
-            // hybrid of the Abyss on the jewels), whose line can't be found.
-            if stat.rolls() {
-                lines.push(Line {
-                    template: stat.id.clone(),
-                    divisor: 1,
-                    known: false,
-                    unsigned: None,
-                });
-                ranges.push(Vec::new());
-            }
-            continue;
-        };
-        // The game writes no line of values all 0: the `0% increased Quantity of Waystones
-        // found in Map` RePoE gives the additional Essence of a tablet.
-        let zero = translation
-            .ids
-            .iter()
-            .filter_map(|id| modifier.stat(id))
-            .all(StatRange::is_zero);
-        if translation.hidden == Some(true)
-            || zero
-            || written
-                .iter()
-                .any(|&before| std::ptr::eq(before, translation))
-        {
-            continue;
-        }
-        written.push(translation);
-        let (line, line_ranges) = line(modifier, translation, templates)?;
-        lines.push(line);
-        ranges.push(line_ranges);
-    }
-    Ok((lines, ranges))
+/// A translation of the stats of a modifier, and its string that writes the most values, whose
+/// values the line takes: `Loads {0} additional bolts`, not `Loads an additional bolt`.
+struct ModifierTranslation<'t> {
+    modifier: &'t SourceModifier,
+    translation: &'t Translation,
+    with_most_values: &'t Variant,
 }
 
-/// The line `translation` writes for `modifier`, and the range of each of its values.
-fn line(
-    modifier: &SourceModifier,
-    translation: &Translation,
-    templates: &Templates,
-) -> Result<(Line, LineRanges)> {
-    let first = translation
-        .english
-        .first()
-        .ok_or("a translation without text")?;
-    // The values are those of the string that writes the most of them: `Loads {0} additional
-    // bolts`, not `Loads an additional bolt` (`max_by_key` keeps the last of the maximums: the
-    // variants reversed, the first one).
-    let general = translation
-        .english
-        .iter()
-        .rev()
-        .max_by_key(|variant| placeholders(&variant.string).len())
-        .unwrap_or(first);
-    let strings: Vec<String> = translation
-        .english
-        .iter()
-        .map(|variant| template(&variant.string))
-        .collect();
-    let Some(Known { template, unsigned }) = known_template(modifier, &strings, templates)? else {
-        // Without template, the line can't be found: written as the game writes it, its string
-        // with the most numbers; one of the Time-Lost jewels, which the game writes within the
-        // words of the passive skills that grant it, saying so.
-        let jewel = if modifier.rolls_on_radius_jewel() {
+impl<'t> ModifierTranslation<'t> {
+    /// `translation` of the stats of `modifier`; an error when it has no text.
+    fn new(modifier: &'t SourceModifier, translation: &'t Translation) -> Result<Self> {
+        // `max_by_key` keeps the last of the maximums: the variants reversed, the first one.
+        let with_most_values = translation
+            .english
+            .iter()
+            .rev()
+            .max_by_key(|variant| placeholders(&variant.string).len())
+            .ok_or("a translation without text")?;
+        Ok(Self {
+            modifier,
+            translation,
+            with_most_values,
+        })
+    }
+
+    /// The templates of its strings, as the game writes them.
+    fn templates_of_strings(&self) -> Vec<String> {
+        self.translation
+            .english
+            .iter()
+            .map(|variant| template_of(&variant.string))
+            .collect()
+    }
+
+    /// The templates of its strings without number.
+    fn templates_without_number(&self) -> Vec<String> {
+        self.translation
+            .english
+            .iter()
+            .filter(|variant| placeholders(&variant.string).is_empty())
+            .map(|variant| template_of(&variant.string))
+            .collect()
+    }
+
+    /// Its line when Exiled Exchange 2 knows none of its templates: written as the game writes
+    /// it, its string with the most numbers; one of the Time-Lost jewels, which the game writes
+    /// within the words of the passive skills that grant it, saying so.
+    fn unknown_line(&self) -> Line {
+        let jewel = if self.modifier.rolls_on_radius_jewel() {
             " (Time-Lost jewels: not known within the words of the passive skills, with its number)"
         } else {
             ""
         };
-        let line = Line {
-            template: format!("{}{jewel}", template(&general.string)),
-            divisor: 1,
-            known: false,
-            unsigned: None,
-        };
-        return Ok((line, Vec::new()));
-    };
-    let mut indexes = placeholders(&general.string);
-    // A template with a value no string writes (`Upgrades Radius to #`, `Upgrades Radius to
-    // Medium`) has the values of its stats, as Exiled Exchange 2 gives them; a template
-    // without value (`Instant Recovery`) has none.
-    if indexes.is_empty() && template.contains('#') {
-        indexes = (0..translation.ids.len())
-            .filter(|&index| {
-                translation
-                    .ids
-                    .get(index)
-                    .is_some_and(|id| modifier.stat(id).is_some())
-            })
-            .collect();
+        Line::unknown(format!(
+            "{}{jewel}",
+            template_of(&self.with_most_values.string)
+        ))
     }
-    let handlers = |index: usize| {
-        general
+
+    /// The index of the stat of each value of its line, of `template`: the placeholders of its
+    /// string with the most values. A template with a value no string writes (`Upgrades Radius
+    /// to #`, `Upgrades Radius to Medium`) has the values of the stats the modifier has, as
+    /// Exiled Exchange 2 gives them; a template without value (`Instant Recovery`) has none.
+    fn value_indexes(&self, template: &str) -> Vec<usize> {
+        let indexes = placeholders(&self.with_most_values.string);
+        if !indexes.is_empty() || !template.contains('#') {
+            return indexes;
+        }
+        self.translation
+            .ids
+            .iter()
+            .enumerate()
+            .filter(|(_, id)| self.modifier.stat(id).is_some())
+            .map(|(index, _)| index)
+            .collect()
+    }
+
+    /// An error when a stat that rolls isn't written by a value of `indexes`: its range would be
+    /// lost.
+    fn check_rolls_written(&self, indexes: &[usize]) -> Result<()> {
+        for (index, id) in self.translation.ids.iter().enumerate() {
+            let rolls = self.modifier.stat(id).is_some_and(StatRange::rolls);
+            if rolls && !indexes.contains(&index) && !UNWRITTEN_ROLLS.contains(&id.as_str()) {
+                return Err(format!(
+                    "{id} rolls but {} doesn't write it",
+                    self.with_most_values.string
+                )
+                .into());
+            }
+        }
+        Ok(())
+    }
+
+    /// The range of the value of each stat of `indexes`, as the game shows it.
+    fn ranges(&self, indexes: &[usize]) -> Result<LineRanges> {
+        indexes
+            .iter()
+            .map(|&index| -> Result<[ShownValue; 2]> {
+                let id = self.translation.ids.get(index).ok_or_else(|| {
+                    format!("no stat {index} in {}", self.with_most_values.string)
+                })?;
+                // A stat the modifier doesn't have is 0, e.g. `local_weapon_no_physical_damage`.
+                let (min, max) = self
+                    .modifier
+                    .stat(id)
+                    .map_or((0, 0), |stat| (stat.min, stat.max));
+                let handlers = self.handlers(index);
+                Ok([shown_value(min, handlers)?, shown_value(max, handlers)?])
+            })
+            .collect()
+    }
+
+    /// What the value of the line is divided by when it is written by a string without number
+    /// (`written_without_number`), whose value is that of the stat of its one value: 1 for
+    /// another line. An error when the line has several values.
+    fn divisor(&self, indexes: &[usize], written_without_number: bool) -> Result<i64> {
+        match (written_without_number, indexes) {
+            (false, _) | (true, []) => Ok(1),
+            (true, &[index]) => divisor_of(self.handlers(index)),
+            // Which of its values the string without number gives is to decide.
+            (true, _) => Err(format!(
+                "{} has several values and a string without number",
+                self.with_most_values.string
+            )
+            .into()),
+        }
+    }
+
+    /// The handlers of the value of the stat `index`.
+    fn handlers(&self, index: usize) -> &[String] {
+        self.with_most_values
             .index_handlers
             .get(index)
-            .map_or(&[][..], Vec::as_slice)
-    };
-    // A stat that rolls is written by a value of its line, or its range would be lost.
-    for (index, id) in translation.ids.iter().enumerate() {
-        let rolls = modifier.stat(id).is_some_and(StatRange::rolls);
-        if rolls && !indexes.contains(&index) && !UNWRITTEN_ROLLS.contains(&id.as_str()) {
-            return Err(format!("{id} rolls but {} doesn't write it", general.string).into());
-        }
+            .map_or(&[], Vec::as_slice)
     }
-    let mut ranges = Vec::new();
-    for &index in &indexes {
-        let id = translation
-            .ids
-            .get(index)
-            .ok_or_else(|| format!("no stat {index} in {}", general.string))?;
-        // A stat the modifier doesn't have is 0, e.g. `local_weapon_no_physical_damage`.
-        let (min, max) = modifier
-            .stat(id)
-            .map_or((0, 0), |stat| (stat.min, stat.max));
-        ranges.push([
-            shown_value(min, handlers(index))?,
-            shown_value(max, handlers(index))?,
-        ]);
-    }
-    // A string without number of Exiled Exchange 2 gives the value of the stat, e.g. 1000
-    // milliseconds for `Inherent Rage loss starts 1 second later`, which the application
-    // divides to compare it with the ranges as the game shows them; a line without such a
-    // string needs no divisor.
-    let without_number: Vec<String> = translation
-        .english
-        .iter()
-        .filter(|variant| placeholders(&variant.string).is_empty())
-        .map(|variant| self::template(&variant.string))
-        .collect();
-    let written = known_template(modifier, &without_number, templates)?
-        .is_some_and(|known| known.template == template);
-    let divisor = match (written, indexes.as_slice()) {
-        (false, _) | (true, []) => 1,
-        (true, &[index]) => divisor_of(handlers(index))?,
-        // Which of its values the string without number gives is to decide.
-        (true, _) => {
-            return Err(format!(
-                "{} has several values and a string without number",
-                general.string
-            )
-            .into());
-        }
-    };
-    let line = Line {
-        template: template.clone(),
-        divisor,
-        known: true,
-        unsigned,
-    };
-    Ok((line, ranges))
 }
 
-/// The template of Exiled Exchange 2 of a line of `modifier` written one of `strings` (templates of
-/// the game, [`template`]), the first it knows, else the first it knows without the `+` of its
-/// numbers, which the application reads in their values (`+#% Monster Elemental Resistances` of the
-/// waystones, `#% Monster Elemental Resistances`). On a Time-Lost jewel, the line within the words
-/// of [`RADIUS_GRANTS`] of which it knows one kind only (`Small Passive Skills in Radius also grant
-/// #% increased Elemental Damage`), with its number when a string writes one: known without its
-/// number only (`Small Passive Skills in Radius also grant Attack Hits apply Incision`, while the
-/// game writes `… 4% chance for Attack Hits to apply Incision`, seen on the trade site on
-/// 2026-10-30), the line can't be found, and has none. A line about the radius itself
-/// ([`RADIUS_LINES`]) is written alone; another line known within neither has none. Of a desecrated
-/// modifier, which it knows within both (`#% increased maximum Life`), the notables: the trade site
-/// has a desecrated stat for them only, as for every other desecrated modifier of these jewels
-/// (checked on 2026-10-30).
-fn known_template<'a>(
-    modifier: &SourceModifier,
-    strings: &[String],
-    templates: &'a Templates,
-) -> Result<Option<Known<'a>>> {
-    let alone = || {
-        strings
-            .iter()
-            .find_map(|string| templates.get(string))
-            .map(Known::exact)
-            .or_else(|| {
-                strings.iter().find_map(|string| {
-                    let template = templates.get(&string.replace("+#", "#"))?;
-                    Some(Known {
-                        template,
-                        unsigned: Some(string.clone()),
-                    })
-                })
-            })
-    };
-    if !modifier.rolls_on_radius_jewel() {
-        return Ok(alone());
-    }
-    let within = |words: &str, string: &String| templates.get(&format!("{words}{string}"));
-    let granted: Vec<&str> = RADIUS_GRANTS
-        .into_iter()
-        .filter(|words| strings.iter().any(|string| within(words, string).is_some()))
-        .collect();
-    let words = match granted.as_slice() {
-        [] => {
-            return Ok(alone().filter(|known| RADIUS_LINES.contains(&known.template.as_str())));
-        }
-        &[words] => words,
-        [_, _] if modifier.domain == DESECRATED => NOTABLE_GRANTS,
-        _ => {
-            // Named by its string with a number, as the lines left out are printed.
-            let named = strings
-                .iter()
-                .find(|string| string.contains('#'))
-                .or(strings.first());
-            return Err(format!(
-                "{} is known within the words of both kinds of passive skills",
-                named.map_or("", String::as_str)
-            )
-            .into());
-        }
-    };
-    let numbered = strings.iter().any(|string| string.contains('#'));
-    Ok(strings
-        .iter()
-        .filter(|string| !numbered || string.contains('#'))
-        .find_map(|string| within(words, string))
-        .map(Known::exact))
-}
-
-/// The template of Exiled Exchange 2 [`known_template`] finds, and the string of the game it
-/// knows without the `+` of its number, when it is so.
+/// The template of Exiled Exchange 2 a [`LineWriter`] knows, and the string of the game it knows
+/// without the `+` of its number, when it is so.
 struct Known<'a> {
-    template: &'a String,
+    template: &'a str,
     unsigned: Option<String>,
 }
 
 impl<'a> Known<'a> {
     /// A template known as the game writes the line.
-    fn exact(template: &'a String) -> Self {
+    fn exact(template: &'a str) -> Self {
         Self {
             template,
             unsigned: None,
@@ -392,7 +488,7 @@ impl<'a> Known<'a> {
 
 /// The template of a string of the game, as Exiled Exchange 2 writes it: `{0:+d} to
 /// [Accuracy|Accuracy] Rating` is `# to Accuracy Rating`.
-fn template(string: &str) -> String {
+fn template_of(string: &str) -> String {
     let mut text = String::new();
     let mut rest = string;
     while let Some(start) = rest.find(['{', '[']) {

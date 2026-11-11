@@ -1,6 +1,7 @@
 use super::*;
-use crate::modifiers::fixtures::{BASES, modifier};
+use crate::modifiers::fixtures::{BASES, modifier, repoe};
 use crate::modifiers::reduce;
+use crate::report::Report;
 
 /// The tables from `modifiers` of `mods.json` on the bases of [`BASES`], those of `essences`
 /// among them, each with a line `{0} to Level of all Spell Skills`.
@@ -8,12 +9,10 @@ fn essence_tables(modifiers: &str, essences: &[CurrencyModifier]) -> Result<serd
     let translations = r#"[{"ids": ["spell_skill_gem_level_+"], "English": [{"string": "{0:+d} to Level of all Spell Skills", "index_handlers": [[]]}], "hidden": null}]"#;
     let template = "# to Level of all Spell Skills";
     let (tables, _) = reduce(
-        &serde_json::from_str(modifiers).expect("modifiers"),
-        &serde_json::from_str(BASES).expect("bases"),
-        &serde_json::from_str::<Vec<_>>(translations).expect("translations"),
-        &[],
+        &repoe(modifiers, BASES, translations),
         &[(template.to_owned(), template.to_owned())].into(),
         &[(Source::Essence, essences)],
+        &mut Report::default(),
     )?;
     Ok(serde_json::to_value(tables).expect("written"))
 }
@@ -130,12 +129,10 @@ fn a_modifier_of_an_alloy_without_line_stops_the_generator() {
     let translations = r#"[{"ids": ["spell_skill_gem_level_+"], "English": [{"string": "{0:+d} to Level of all Spell Skills", "index_handlers": [[]]}], "hidden": null}]"#;
     let template = "# to Level of all Spell Skills";
     let error = reduce(
-        &serde_json::from_str(&modifiers).expect("modifiers"),
-        &serde_json::from_str(BASES).expect("bases"),
-        &serde_json::from_str::<Vec<_>>(translations).expect("translations"),
-        &[],
+        &repoe(&modifiers, BASES, translations),
         &[(template.to_owned(), template.to_owned())].into(),
         &[(Source::Alloy, &[("Alloy", &[("bow", 1)])])],
+        &mut Report::default(),
     )
     .err()
     .map(|error| error.to_string());
@@ -164,12 +161,10 @@ fn a_modifier_of_an_essence_with_a_line_without_template_stops_the_generator() {
     ]"#;
     let template = "# to Level of all Spell Skills";
     let error = reduce(
-        &serde_json::from_str(&modifiers).expect("modifiers"),
-        &serde_json::from_str(BASES).expect("bases"),
-        &serde_json::from_str::<Vec<_>>(translations).expect("translations"),
-        &[],
+        &repoe(&modifiers, BASES, translations),
         &[(template.to_owned(), template.to_owned())].into(),
         &[(Source::Essence, &[("Essence", &[("bow", 1)])])],
+        &mut Report::default(),
     )
     .err()
     .map(|error| error.to_string());

@@ -20,7 +20,7 @@ use crate::report::Report;
 pub use currencies::CURRENCIES;
 use currencies::{CurrencyModifier, CurrencySpawn, currency_spawns};
 pub use lines::Templates;
-use lines::{Line, LineRanges, Translation, by_stat, is_radius_jewel_tag, lines};
+use lines::{Line, LineRanges, LineWriter, Translation, is_radius_jewel_tag};
 
 /// The domain of the modifiers of the equipment, which the application takes when none is
 /// written.
@@ -249,98 +249,60 @@ pub struct BaseSpawn {
 /// The domain and the tags of each base, by its English name.
 pub type BaseSpawns = BTreeMap<String, BaseSpawn>;
 
-/// The modifier tables of `modifiers`, those only a currency of `currencies` adds among them
-/// ([`CURRENCIES`]), the lines of their stats written as the English templates of Exiled
-/// Exchange 2 (by `tablet_translations` first for the tablets), and the tags of the bases that
-/// the tables read, by English name of the base.
-#[cfg(test)]
-pub fn reduce(
-    modifiers: &BTreeMap<String, SourceModifier>,
-    bases: &BTreeMap<String, SourceBase>,
-    translations: &[Translation],
-    tablet_translations: &[Translation],
-    templates: &Templates,
-    currencies: &[(Source, &[CurrencyModifier])],
-) -> Result<(Vec<Table>, BaseSpawns)> {
-    reduce_with_report(
-        modifiers,
-        bases,
-        translations,
-        tablet_translations,
-        templates,
-        currencies,
-        &mut Report::default(),
-    )
+/// The files of the RePoE fork the tables are read from.
+pub struct RepoeFiles {
+    /// `mods.json`.
+    pub modifiers: BTreeMap<String, SourceModifier>,
+    /// `base_items.json`.
+    pub bases: BTreeMap<String, SourceBase>,
+    /// `stat_translations/stat_descriptions.json`.
+    pub translations: Vec<Translation>,
+    /// `stat_translations/tablet_stat_descriptions.json`, which writes the lines of the tablets
+    /// first.
+    pub tablet_translations: Vec<Translation>,
 }
 
-/// [`reduce`], with what is left out or odd noted in `report`.
-pub fn reduce_with_report(
-    modifiers: &BTreeMap<String, SourceModifier>,
-    bases: &BTreeMap<String, SourceBase>,
-    translations: &[Translation],
-    tablet_translations: &[Translation],
+/// The modifier tables of `files`, those only a currency of `currencies` adds among them
+/// ([`CURRENCIES`]), the lines of their stats written as the English templates of Exiled
+/// Exchange 2 (`templates`), and the domain and the tags of the bases the tables read, by
+/// English name of the base. What is left out or odd is noted in `report`.
+pub fn reduce(
+    files: &RepoeFiles,
     templates: &Templates,
     currencies: &[(Source, &[CurrencyModifier])],
     report: &mut Report,
 ) -> Result<(Vec<Table>, BaseSpawns)> {
-    let released: Vec<&SourceBase> = bases
+    let released: Vec<&SourceBase> = files
+        .bases
         .values()
         .filter(|base| base.release_state == "released")
         .collect();
-    let currencies = currency_spawns(modifiers, currencies, &released)?;
-    let grouped = group_tiers(
-        modifiers,
-        &by_stat(&[translations]),
-        &by_stat(&[tablet_translations, translations]),
-        templates,
-        &currencies,
-        report,
-    )?;
+    let currencies = currency_spawns(&files.modifiers, currencies, &released)?;
+    let writer = LineWriter::new(&files.translations, &files.tablet_translations, templates);
+    let grouped = group_tiers(&files.modifiers, &writer, &currencies, report)?;
 
     let mut tables = Vec::new();
     let mut unknown_lines = BTreeSet::new();
     let mut unsigned_lines = BTreeSet::new();
     for (key, mut tiers) in grouped {
-        let TableKey {
-            kind,
-            affix,
-            domain,
-            lines,
-            spawn,
-            source,
-        } = key;
-        let lord = spawn
-            .iter()
-            .filter(|weight| weight.rolls())
-            .find_map(|weight| LORDS.iter().find(|&&(tag, _)| weight.tag == tag))
-            .map(|&(_, name)| name.to_owned());
-        let tags_of_bases: BTreeSet<&String> = released
-            .iter()
-            .filter(|base| rolls_on(&domain, &base.domain))
-            .flat_map(|base| &base.tags)
-            .collect();
-        // Only the tags of the bases matter, in their order: the first one a base has decides.
-        let spawn: Vec<(String, u32)> = spawn
-            .into_iter()
-            .filter(|spawn| tags_of_bases.contains(&spawn.tag))
-            .map(|spawn| (spawn.tag, spawn.weight))
-            .collect();
+        let lord = lord(&key.spawn);
+        let spawn = released_spawn(key.spawn, &key.domain, &released);
         // A modifier that rolls on no released base of its domains, e.g. one of Path of Exile
         // left in the files, or a desecrated one of the waystones.
         if !spawn.iter().any(|&(_, weight)| weight > 0) {
             continue;
         }
         // A modifier without line, its values all 0 (`TrapThrowSpeed`), is never written.
-        if lines.is_empty() {
+        if key.lines.is_empty() {
             continue;
         }
         // A line without template can't be found, nor its modifier.
-        let unknown: Vec<&Line> = lines.iter().filter(|line| !line.known).collect();
+        let unknown: Vec<&Line> = key.lines.iter().filter(|line| !line.known).collect();
         if !unknown.is_empty() {
             unknown_lines.extend(unknown.iter().map(|line| line.template.clone()));
             continue;
         }
-        unsigned_lines.extend(lines.iter().filter_map(|line| {
+        unsigned_lines.extend(key.lines.iter().filter_map(|line| {
             let string = line.unsigned.clone()?;
             Some((string, line.template.clone()))
         }));
@@ -349,12 +311,12 @@ pub fn reduce_with_report(
         // 1: its T1, as the game writes it).
         tiers.sort();
         tables.push(Table {
-            kind,
-            affix,
-            domain,
-            lines,
+            kind: key.kind,
+            affix: key.affix,
+            domain: key.domain,
+            lines: key.lines,
             spawn,
-            source,
+            source: key.source,
             lord,
             tiers,
         });
@@ -382,16 +344,42 @@ pub fn reduce_with_report(
     Ok((tables, base_spawns))
 }
 
+/// The lord of the Abyss whose modifier rolls with `spawn`, by the first of his tags that rolls.
+fn lord(spawn: &[SpawnWeight]) -> Option<String> {
+    spawn
+        .iter()
+        .filter(|weight| weight.rolls())
+        .find_map(|weight| LORDS.iter().find(|&&(tag, _)| weight.tag == tag))
+        .map(|&(_, name)| name.to_owned())
+}
+
+/// The tags of `spawn` that a base among `released` of the bases of `domain` has, in their order,
+/// with their weight: only those matter, the first one a base has deciding.
+fn released_spawn(
+    spawn: Vec<SpawnWeight>,
+    domain: &str,
+    released: &[&SourceBase],
+) -> Vec<(String, u32)> {
+    let tags_of_bases: BTreeSet<&String> = released
+        .iter()
+        .filter(|base| rolls_on(domain, &base.domain))
+        .flat_map(|base| &base.tags)
+        .collect();
+    spawn
+        .into_iter()
+        .filter(|spawn| tags_of_bases.contains(&spawn.tag))
+        .map(|spawn| (spawn.tag, spawn.weight))
+        .collect()
+}
+
 /// The tiers of the prefixes and suffixes of `modifiers` that roll (with the currency and the
 /// spawn weights of `currencies` for those only a currency adds), grouped by table, their lines
-/// written by the translations of `by_stat`, those of the tablets by `tablet_by_stat`. Notes in
-/// `report` those left out without an error, which a patch may have brought: one only a
-/// currency adds that its lists don't have, and those of a domain the application doesn't read.
+/// written by `writer`. Notes in `report` those left out without an error, which a patch may
+/// have brought: one only a currency adds that its lists don't have, and those of a domain the
+/// application doesn't read.
 fn group_tiers(
     modifiers: &BTreeMap<String, SourceModifier>,
-    by_stat: &HashMap<&str, &Translation>,
-    tablet_by_stat: &HashMap<&str, &Translation>,
-    templates: &Templates,
+    writer: &LineWriter<'_>,
     currencies: &HashMap<&str, CurrencySpawn>,
     report: &mut Report,
 ) -> Result<BTreeMap<TableKey, Vec<Tier>>> {
@@ -412,58 +400,15 @@ fn group_tiers(
                 id,
             );
         }
-        let spawn_weights = currency.map_or(&modifier.spawn_weights, |currency| &currency.spawn);
         let rolls = (currency.is_some() || !modifier.is_essence_only)
-            && spawn_weights.iter().any(SpawnWeight::rolls);
+            && spawn_weights(modifier, currency)
+                .iter()
+                .any(SpawnWeight::rolls);
         if !rolls {
             continue;
         }
-        // Its lines would be written within the words of the passive skills on the other bases.
-        if modifier.rolls_on_radius_jewel()
-            && modifier.rolling_tags().any(|tag| !is_radius_jewel_tag(tag))
-        {
-            return Err(format!(
-                "{id}: a modifier of the Time-Lost jewels that rolls on other bases"
-            )
-            .into());
-        }
-        let by_stat = if modifier.domain == TABLETS {
-            tablet_by_stat
-        } else {
-            by_stat
-        };
-        let (lines, ranges) =
-            lines(modifier, by_stat, templates).map_err(|error| format!("{id}: {error}"))?;
-        if let Some(currency) = currency {
-            currencies::check_lines(id, currency.source, &lines)?;
-        }
-        let (spawn, genesis) = spawn_on_bases(spawn_weights);
-        let source = currency
-            .map(|currency| currency.source)
-            .or_else(|| genesis.then_some(Source::Genesis));
-        grouped
-            .entry(TableKey {
-                kind: modifier.kind.clone(),
-                affix: modifier.generation_type.clone(),
-                domain: modifier.domain.clone(),
-                lines,
-                spawn,
-                source,
-            })
-            .or_default()
-            .push(Tier {
-                // An essence or an alloy adds its modifier whatever the level of the item,
-                // below the level RePoE writes (72 for the Perfect essences): a Cultist Bow of
-                // level 33 with the `+2 to Level of all Attack Skills` of an essence, on the
-                // trade site on 2026-10-30, a helmet of level 7 with an alloy of level 25 on
-                // 2026-10-31.
-                level: if currency.is_some() {
-                    1
-                } else {
-                    modifier.required_level
-                },
-                ranges,
-            });
+        let (key, tier) = table_tier(id, modifier, currency, writer)?;
+        grouped.entry(key).or_default().push(tier);
     }
     for (domain, count) in other_domains {
         report.note(
@@ -472,6 +417,64 @@ fn group_tiers(
         );
     }
     Ok(grouped)
+}
+
+/// The spawn weights `modifier` rolls with: those of the `currency` that adds it, when it is a
+/// modifier only a currency adds, else its own.
+fn spawn_weights<'m>(
+    modifier: &'m SourceModifier,
+    currency: Option<&'m CurrencySpawn>,
+) -> &'m [SpawnWeight] {
+    currency.map_or(&modifier.spawn_weights, |currency| &currency.spawn)
+}
+
+/// The table of the modifier `id`, which rolls, and its tier, its lines written by `writer`;
+/// `currency` adds it when it is a modifier only a currency adds.
+fn table_tier(
+    id: &str,
+    modifier: &SourceModifier,
+    currency: Option<&CurrencySpawn>,
+    writer: &LineWriter<'_>,
+) -> Result<(TableKey, Tier)> {
+    // Its lines would be written within the words of the passive skills on the other bases.
+    if modifier.rolls_on_radius_jewel()
+        && modifier.rolling_tags().any(|tag| !is_radius_jewel_tag(tag))
+    {
+        return Err(
+            format!("{id}: a modifier of the Time-Lost jewels that rolls on other bases").into(),
+        );
+    }
+    let (lines, ranges) = writer
+        .lines(modifier)
+        .map_err(|error| format!("{id}: {error}"))?;
+    if let Some(currency) = currency {
+        currencies::check_lines(id, currency.source, &lines)?;
+    }
+    let (spawn, genesis) = spawn_on_bases(spawn_weights(modifier, currency));
+    let source = currency
+        .map(|currency| currency.source)
+        .or_else(|| genesis.then_some(Source::Genesis));
+    let key = TableKey {
+        kind: modifier.kind.clone(),
+        affix: modifier.generation_type.clone(),
+        domain: modifier.domain.clone(),
+        lines,
+        spawn,
+        source,
+    };
+    let tier = Tier {
+        // An essence or an alloy adds its modifier whatever the level of the item, below the
+        // level RePoE writes (72 for the Perfect essences): a Cultist Bow of level 33 with the
+        // `+2 to Level of all Attack Skills` of an essence, on the trade site on 2026-10-30, a
+        // helmet of level 7 with an alloy of level 25 on 2026-10-31.
+        level: if currency.is_some() {
+            1
+        } else {
+            modifier.required_level
+        },
+        ranges,
+    };
+    Ok((key, tier))
 }
 
 /// The tags of `spawn` with a tag of the Genesis tree ([`GENESIS_TAGS`]) that rolls in place of

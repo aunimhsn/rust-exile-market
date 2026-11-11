@@ -133,25 +133,24 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-/// The modifier tables of the commit `commit` of the data of RePoE, and the tags of the bases.
+/// The modifier tables of the commit `commit` of the data of RePoE, and the domain and the tags
+/// of the bases.
 fn modifier_tables(
     agent: &ureq::Agent,
     commit: &str,
     templates: &modifiers::Templates,
     report: &mut Report,
 ) -> Result<(Vec<modifiers::Table>, modifiers::BaseSpawns)> {
-    let repoe = |path: &str| get(agent, &raw_url(REPOE_DATA, commit, &format!("data/{path}")));
-    modifiers::reduce_with_report(
-        &serde_json::from_str(&repoe("mods.json")?)?,
-        &serde_json::from_str(&repoe("base_items.json")?)?,
-        &serde_json::from_str::<Vec<_>>(&repoe("stat_translations/stat_descriptions.json")?)?,
-        &serde_json::from_str::<Vec<_>>(&repoe(
+    let file = |path: &str| get(agent, &raw_url(REPOE_DATA, commit, &format!("data/{path}")));
+    let files = modifiers::RepoeFiles {
+        modifiers: serde_json::from_str(&file("mods.json")?)?,
+        bases: serde_json::from_str(&file("base_items.json")?)?,
+        translations: serde_json::from_str(&file("stat_translations/stat_descriptions.json")?)?,
+        tablet_translations: serde_json::from_str(&file(
             "stat_translations/tablet_stat_descriptions.json",
         )?)?,
-        templates,
-        modifiers::CURRENCIES,
-        report,
-    )
+    };
+    modifiers::reduce(&files, templates, modifiers::CURRENCIES, report)
 }
 
 /// `assets/game-data/` of the application.

@@ -1,6 +1,7 @@
 use super::*;
-use crate::modifiers::fixtures::{BASES, modifier, tables};
-use crate::modifiers::reduce;
+use crate::modifiers::fixtures::{BASES, modifier, repoe, tables};
+use crate::modifiers::{RepoeFiles, reduce};
+use crate::report::Report;
 
 /// A waystone of the band of tiers 11 to 15 and a tablet, of `base_items.json`.
 const MAP_BASES: &str = r#"{
@@ -17,15 +18,17 @@ fn map_lines(
     templates: &[&str],
 ) -> Vec<serde_json::Value> {
     let (tables, _) = reduce(
-        &serde_json::from_str(modifiers).expect("modifiers"),
-        &serde_json::from_str(MAP_BASES).expect("bases"),
-        &serde_json::from_str::<Vec<_>>(translations).expect("translations"),
-        &serde_json::from_str::<Vec<_>>(tablet_translations).expect("tablet translations"),
+        &RepoeFiles {
+            tablet_translations: serde_json::from_str(tablet_translations)
+                .expect("tablet translations"),
+            ..repoe(modifiers, MAP_BASES, translations)
+        },
         &templates
             .iter()
             .map(|&template| (template.to_owned(), template.to_owned()))
             .collect(),
         &[],
+        &mut Report::default(),
     )
     .expect("reduced");
     tables
@@ -330,17 +333,17 @@ fn a_number_of_a_stat_the_modifier_doesnt_have_is_zero() {
 #[test]
 fn a_string_of_the_game_becomes_the_template_of_exiled_exchange_2() {
     assert_eq!(
-        template("{0:+d} to [Accuracy|Accuracy] Rating"),
+        template_of("{0:+d} to [Accuracy|Accuracy] Rating"),
         "# to Accuracy Rating"
     );
     assert_eq!(
-        template("[LifeLeech|Leech] {0}% of [Physical] [Attack] Damage as Life"),
+        template_of("[LifeLeech|Leech] {0}% of [Physical] [Attack] Damage as Life"),
         "Leech #% of Physical Attack Damage as Life"
     );
     assert_eq!(placeholders("Adds {1} to {0} Damage, {} more"), [1, 0, 2]);
     // A brace or a bracket not closed is written as it is.
-    assert_eq!(template("abc {0"), "abc {0");
-    assert_eq!(template("abc [Fire"), "abc [Fire");
+    assert_eq!(template_of("abc {0"), "abc {0");
+    assert_eq!(template_of("abc [Fire"), "abc [Fire");
 }
 
 #[test]
@@ -392,16 +395,14 @@ fn a_stat_that_rolls_without_being_written_stops_the_generator() {
     ], "hidden": null}]"#;
 
     let error = reduce(
-        &serde_json::from_str(&modifiers).expect("modifiers"),
-        &serde_json::from_str(BASES).expect("bases"),
-        &serde_json::from_str::<Vec<_>>(translations).expect("translations"),
-        &[],
+        &repoe(&modifiers, BASES, translations),
         &[(
             "Loads an additional bolt".to_owned(),
             "Loads an additional bolt".to_owned(),
         )]
         .into(),
         &[],
+        &mut Report::default(),
     )
     .err()
     .map(|error| error.to_string());
@@ -431,12 +432,10 @@ fn a_line_of_several_values_with_a_string_without_number_stops_the_generator() {
     ], "hidden": null}]"#;
 
     let error = reduce(
-        &serde_json::from_str(&modifiers).expect("modifiers"),
-        &serde_json::from_str(BASES).expect("bases"),
-        &serde_json::from_str::<Vec<_>>(translations).expect("translations"),
-        &[],
+        &repoe(&modifiers, BASES, translations),
         &[("Thorns".to_owned(), "# to # Thorns damage".to_owned())].into(),
         &[],
+        &mut Report::default(),
     )
     .err()
     .map(|error| error.to_string());
@@ -496,16 +495,17 @@ fn time_lost_tables(
         })
         .collect();
     let (tables, _) = reduce(
-        &serde_json::from_str(&format!("{{{}}}", modifiers.join(", "))).expect("modifiers"),
-        &serde_json::from_str(bases).expect("bases"),
-        &serde_json::from_str::<Vec<_>>(&format!("[{}]", translations.join(", ")))
-            .expect("translations"),
-        &[],
+        &repoe(
+            &format!("{{{}}}", modifiers.join(", ")),
+            bases,
+            &format!("[{}]", translations.join(", ")),
+        ),
         &templates
             .iter()
             .map(|&template| (template.to_owned(), template.to_owned()))
             .collect(),
         &[],
+        &mut Report::default(),
     )?;
     Ok(serde_json::to_value(tables)
         .expect("written")
@@ -660,12 +660,10 @@ fn a_line_of_a_time_lost_jewel_known_for_both_kinds_by_two_strings_stops_the_gen
     .collect();
 
     let error = reduce(
-        &serde_json::from_str(&modifiers).expect("modifiers"),
-        &serde_json::from_str(bases).expect("bases"),
-        &serde_json::from_str::<Vec<_>>(translations).expect("translations"),
-        &[],
+        &repoe(&modifiers, bases, translations),
         &templates,
         &[],
+        &mut Report::default(),
     )
     .err()
     .map(|error| error.to_string());

@@ -529,9 +529,7 @@ fn a_modifier_of_a_currency_not_listed_and_the_other_domains_are_noted() {
 
     let grouped = group_tiers(
         &modifiers,
-        &HashMap::new(),
-        &HashMap::new(),
-        &Templates::new(),
+        &LineWriter::new(&[], &[], &Templates::new()),
         &listed,
         &mut report,
     )

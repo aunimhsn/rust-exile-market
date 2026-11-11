@@ -2,6 +2,17 @@
 
 use super::*;
 
+/// The files of RePoE written as JSON: `modifiers` of `mods.json`, `bases` of `base_items.json`
+/// and `translations` of `stat_descriptions.json`, without translation of the tablets.
+pub(super) fn repoe(modifiers: &str, bases: &str, translations: &str) -> RepoeFiles {
+    RepoeFiles {
+        modifiers: serde_json::from_str(modifiers).expect("modifiers"),
+        bases: serde_json::from_str(bases).expect("bases"),
+        translations: serde_json::from_str(translations).expect("translations"),
+        tablet_translations: Vec::new(),
+    }
+}
+
 /// The tables and the tags of the bases from `modifiers` of `mods.json`, `bases` of
 /// `base_items.json` and `translations` of `stat_descriptions.json`, written as JSON, the
 /// templates of Exiled Exchange 2 being `templates` (string, template).
@@ -16,12 +27,10 @@ pub(super) fn tables(
         .map(|&(string, template)| (string.to_owned(), template.to_owned()))
         .collect();
     let (tables, tags) = reduce(
-        &serde_json::from_str(modifiers).expect("modifiers"),
-        &serde_json::from_str(bases).expect("bases"),
-        &serde_json::from_str::<Vec<_>>(translations).expect("translations"),
-        &[],
+        &repoe(modifiers, bases, translations),
         &templates,
         &[],
+        &mut Report::default(),
     )
     .expect("reduced");
     (serde_json::to_value(tables).expect("written"), tags)
