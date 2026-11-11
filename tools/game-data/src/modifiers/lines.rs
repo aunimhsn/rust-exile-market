@@ -94,6 +94,7 @@ impl Line {
     }
 }
 
+/// Whether a divisor is 1, left unwritten.
 #[expect(
     clippy::trivially_copy_pass_by_ref,
     reason = "the signature serde asks for"
@@ -113,6 +114,8 @@ pub(super) struct ShownValue {
 }
 
 impl ShownValue {
+    /// A multiple of the divisors of the handlers (60 for a value per minute, 100, 10, 1000), so
+    /// that a value shown stays exact: [`shown_value`] stops on one it can't divide.
     const SCALE: i64 = 60_000;
 }
 
@@ -167,6 +170,12 @@ impl<'a> LineTranslator<'a> {
     /// unknown (written as the game writes it, without range): [`reduce`](super::reduce)
     /// leaves its modifier out.
     pub(super) fn lines(&self, modifier: &SourceModifier) -> Result<(Vec<Line>, Vec<LineRanges>)> {
+        // Its lines would be written within the words of the passive skills on the other bases.
+        if modifier.rolls_on_radius_jewel()
+            && modifier.rolling_tags().any(|tag| !is_radius_jewel_tag(tag))
+        {
+            return Err("a modifier of the Time-Lost jewels that rolls on other bases".into());
+        }
         let by_stat = if modifier.domain == TABLETS {
             &self.tablet_by_stat
         } else {
@@ -229,9 +238,14 @@ impl<'a> LineTranslator<'a> {
         let written_without_number = self
             .known_template(modifier, &translation.templates_without_number())?
             .is_some_and(|known| known.template == template);
+        let divisor = if written_without_number {
+            translation.divisor_of_its_value(&indexes)?
+        } else {
+            1
+        };
         let line = Line {
             template: template.to_owned(),
-            divisor: translation.divisor(&indexes, written_without_number)?,
+            divisor,
             is_known: true,
             string_with_plus,
         };
@@ -446,15 +460,15 @@ impl<'t> ModifierTranslation<'t> {
             .collect()
     }
 
-    /// What the value of the line is divided by when it is written by a string without number
-    /// (`written_without_number`), whose value is that of the stat of its one value: 1 for
-    /// another line. An error when the line has several values.
-    fn divisor(&self, indexes: &[usize], written_without_number: bool) -> Result<i64> {
-        match (written_without_number, indexes) {
-            (false, _) | (true, []) => Ok(1),
-            (true, &[index]) => divisor_of(self.handlers(index)),
+    /// What the value of a line written by a string without number is divided by: that of the
+    /// stat of its one value of `indexes`, 1 without value. An error when the line has several
+    /// values.
+    fn divisor_of_its_value(&self, indexes: &[usize]) -> Result<i64> {
+        match indexes {
+            [] => Ok(1),
+            &[index] => divisor_of(self.handlers(index)),
             // Which of its values the string without number gives is to decide.
-            (true, _) => Err(format!(
+            _ => Err(format!(
                 "{} has several values and a string without number",
                 self.with_most_values.string
             )

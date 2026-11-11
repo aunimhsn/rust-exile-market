@@ -20,11 +20,13 @@ pub(crate) struct Commit {
     commit: CommitDetail,
 }
 
+/// The detail of a commit, of which the generator reads who committed it.
 #[derive(Deserialize)]
 struct CommitDetail {
     committer: Committer,
 }
 
+/// Who committed a commit, and when.
 #[derive(Deserialize)]
 struct Committer {
     date: String,
@@ -38,6 +40,7 @@ impl Commit {
 }
 
 impl GitHub {
+    /// A reader through the agent of `ureq` and its defaults.
     pub(crate) fn new() -> Self {
         Self {
             agent: ureq::Agent::new_with_defaults(),

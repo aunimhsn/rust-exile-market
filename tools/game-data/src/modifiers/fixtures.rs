@@ -43,6 +43,7 @@ pub(super) fn modifier(kind: &str, level: u32, spawn: &str, stats: &str) -> Stri
     )
 }
 
+/// Four bases of `base_items.json`: a bow, a ring and a flask, and a base not released.
 pub(super) const BASES: &str = r#"{
     "Bow": {"domain": "item", "name": "Bow", "release_state": "released", "tags": ["bow", "weapon", "default"]},
     "Ring": {"domain": "item", "name": "Ring", "release_state": "released", "tags": ["ring", "default"]},

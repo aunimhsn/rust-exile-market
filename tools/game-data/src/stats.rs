@@ -36,6 +36,8 @@ struct SourceStat {
     trade: SourceTrade,
 }
 
+/// A string of a stat of `stats.ndjson` that a copied line matches, with the fields the
+/// generator reads.
 #[derive(Deserialize)]
 struct SourceMatcher {
     string: String,
@@ -46,6 +48,7 @@ struct SourceMatcher {
     advanced: Option<String>,
 }
 
+/// What the trade site knows of a stat: its ids by group, and how it searches it.
 #[derive(Deserialize)]
 struct SourceTrade {
     ids: Option<BTreeMap<String, Vec<String>>>,
@@ -74,6 +77,7 @@ pub(crate) struct Stat {
     inverted: bool,
 }
 
+/// A string of a stat as the application reads it.
 #[derive(Serialize, PartialEq)]
 struct Matcher {
     string: String,
@@ -83,6 +87,7 @@ struct Matcher {
     negate: bool,
 }
 
+/// Whether a flag is off, left unwritten.
 #[expect(
     clippy::trivially_copy_pass_by_ref,
     reason = "the signature serde asks for"

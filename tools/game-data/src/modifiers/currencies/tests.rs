@@ -3,6 +3,12 @@ use crate::modifiers::fixtures::{BASES, modifier, repoe};
 use crate::modifiers::reduce;
 use crate::report::Report;
 
+/// The English bases the generator wrote, with their tags.
+const GENERATED_ENGLISH_BASES: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../assets/game-data/bases-en.ndjson"
+));
+
 /// The tables from `modifiers` of `mods.json` on the bases of [`BASES`], those of `essences`
 /// among them, each with a line `{0} to Level of all Spell Skills`.
 fn essence_tables(modifiers: &str, essences: &[CurrencyModifier]) -> Result<serde_json::Value> {
@@ -214,12 +220,7 @@ fn assert_rolls_on_classes(list: &[CurrencyModifier], expected: &[(&str, Vec<&st
     // The categories of the equipment and the tags of each base, as the generator wrote
     // them; a name of several bases has none.
     let mut categories: BTreeMap<String, Vec<Vec<String>>> = BTreeMap::new();
-    for line in include_str!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../../assets/game-data/bases-en.ndjson"
-    ))
-    .lines()
-    {
+    for line in GENERATED_ENGLISH_BASES.lines() {
         let base: serde_json::Value = serde_json::from_str(line).expect("a base");
         // Unwritten when it has none.
         let tags: Vec<String> = base
@@ -252,15 +253,12 @@ fn assert_rolls_on_classes(list: &[CurrencyModifier], expected: &[(&str, Vec<&st
 
 /// The categories of the bases of the equipment, as the generator wrote them.
 fn equipment_categories() -> Vec<String> {
-    let mut categories: Vec<String> = include_str!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../../assets/game-data/bases-en.ndjson"
-    ))
-    .lines()
-    .map(|line| serde_json::from_str::<serde_json::Value>(line).expect("a base"))
-    .filter(|base| base.get("domain").is_none())
-    .map(|base| base["category"].as_str().expect("its category").to_owned())
-    .collect();
+    let mut categories: Vec<String> = GENERATED_ENGLISH_BASES
+        .lines()
+        .map(|line| serde_json::from_str::<serde_json::Value>(line).expect("a base"))
+        .filter(|base| base.get("domain").is_none())
+        .map(|base| base["category"].as_str().expect("its category").to_owned())
+        .collect();
     categories.sort();
     categories.dedup();
     categories

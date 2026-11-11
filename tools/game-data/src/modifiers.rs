@@ -178,7 +178,7 @@ pub struct Table {
     /// The lord of the Abyss whose modifier it is, written when it is one ("Amanamu"): named
     /// by the application before the affix of a line that can be his or an ordinary modifier.
     #[serde(skip_serializing_if = "Option::is_none")]
-    lord: Option<String>,
+    lord: Option<&'static str>,
     tiers: Vec<Tier>,
 }
 
@@ -217,6 +217,7 @@ pub fn is_equipment(domain: &String) -> bool {
     domain == EQUIPMENT
 }
 
+/// A tier of a table: the level an item needs for it, and the ranges of its values.
 #[derive(Serialize, PartialEq, Eq, PartialOrd, Ord)]
 struct Tier {
     level: u32,
@@ -281,58 +282,12 @@ pub fn reduce(
         LineTranslator::new(&files.translations, &files.tablet_translations, templates);
     let grouped = group_tiers(&files.modifiers, &translator, &currencies, report)?;
 
-    let mut tables = Vec::new();
-    let mut lines_without_template = BTreeSet::new();
-    let mut lines_with_plus = BTreeSet::new();
-    for (key, mut tiers) in grouped {
-        let lord = lord(&key.spawn);
-        let spawn = released_spawn(key.spawn, &key.domain, &released);
-        // A modifier that rolls on no released base of its domains, e.g. one of Path of Exile
-        // left in the files, or a desecrated one of the waystones.
-        if !spawn.iter().any(SpawnWeight::rolls) {
-            continue;
-        }
-        // A modifier without line, its values all 0 (`TrapThrowSpeed`), is never written.
-        if key.lines.is_empty() {
-            continue;
-        }
-        // A line without template can't be found, nor its modifier.
-        let unknown: Vec<&Line> = key.lines.iter().filter(|line| !line.is_known).collect();
-        if !unknown.is_empty() {
-            lines_without_template.extend(unknown.iter().map(|line| line.template.clone()));
-            continue;
-        }
-        lines_with_plus.extend(key.lines.iter().filter_map(|line| {
-            let string = line.string_with_plus.clone()?;
-            Some((string, line.template.clone()))
-        }));
-        // By level, then by ranges: of two tiers of one level, the higher ranges last, the better
-        // tier for the application (`Upgrades Radius to Large` after `to Medium`, both of level
-        // 1: its T1, as the game writes it).
-        tiers.sort();
-        tables.push(Table {
-            kind: key.kind,
-            affix: key.affix,
-            domain: key.domain,
-            lines: key.lines,
-            spawn,
-            source: key.source,
-            lord,
-            tiers,
-        });
-    }
-    for line in lines_without_template {
-        report.note(
-            "Modifier lines without template, their modifier left out",
-            line,
-        );
-    }
-    for (string, template) in lines_with_plus {
-        report.note(
-            "Modifier lines known without the + of their number",
-            format!("{string} as {template}"),
-        );
-    }
+    let mut notes = LineNotes::default();
+    let mut tables: Vec<Table> = grouped
+        .into_iter()
+        .filter_map(|(key, tiers)| table(key, tiers, &released, &mut notes))
+        .collect();
+    notes.write_to(report);
     // The ordinary tables first, then those of the Genesis tree, of the essences and of the
     // alloys, then the desecrated ones: of two tables that hold a copied modifier as well, the
     // application takes the first of the file, the ordinary one (`+2 to Level of all Minion
@@ -344,13 +299,87 @@ pub fn reduce(
     Ok((tables, base_spawns))
 }
 
+/// The lines the tables note once they are built: those without template, whose modifier is
+/// left out, and those known without the `+` of their number, with their template.
+#[derive(Default)]
+struct LineNotes {
+    without_template: BTreeSet<String>,
+    with_plus: BTreeSet<(String, String)>,
+}
+
+impl LineNotes {
+    /// Notes them in `report`.
+    fn write_to(self, report: &mut Report) {
+        for line in self.without_template {
+            report.note(
+                "Modifier lines without template, their modifier left out",
+                line,
+            );
+        }
+        for (string, template) in self.with_plus {
+            report.note(
+                "Modifier lines known without the + of their number",
+                format!("{string} as {template}"),
+            );
+        }
+    }
+}
+
+/// The table of the `tiers` grouped under `key`, or none when it is left out: it rolls on no base
+/// among `released` of its domains, has no line, or has a line without template, noted in
+/// `notes` with its lines known without the `+` of their number.
+fn table(
+    key: TableKey,
+    mut tiers: Vec<Tier>,
+    released: &[&SourceBase],
+    notes: &mut LineNotes,
+) -> Option<Table> {
+    let lord = lord(&key.spawn);
+    let spawn = released_spawn(key.spawn, &key.domain, released);
+    // A modifier that rolls on no released base of its domains, e.g. one of Path of Exile left
+    // in the files, or a desecrated one of the waystones.
+    if !spawn.iter().any(SpawnWeight::rolls) {
+        return None;
+    }
+    // A modifier without line, its values all 0 (`TrapThrowSpeed`), is never written.
+    if key.lines.is_empty() {
+        return None;
+    }
+    // A line without template can't be found, nor its modifier.
+    let unknown: Vec<&Line> = key.lines.iter().filter(|line| !line.is_known).collect();
+    if !unknown.is_empty() {
+        notes
+            .without_template
+            .extend(unknown.iter().map(|line| line.template.clone()));
+        return None;
+    }
+    notes.with_plus.extend(key.lines.iter().filter_map(|line| {
+        let string = line.string_with_plus.clone()?;
+        Some((string, line.template.clone()))
+    }));
+    // By level, then by ranges: of two tiers of one level, the higher ranges last, the better
+    // tier for the application (`Upgrades Radius to Large` after `to Medium`, both of level 1: its
+    // T1, as the game writes it).
+    tiers.sort();
+    Some(Table {
+        kind: key.kind,
+        affix: key.affix,
+        domain: key.domain,
+        lines: key.lines,
+        spawn,
+        source: key.source,
+        lord,
+        tiers,
+    })
+}
+
 /// The lord of the Abyss whose modifier rolls with `spawn`, by the first of his tags that rolls.
-fn lord(spawn: &[SpawnWeight]) -> Option<String> {
+fn lord(spawn: &[SpawnWeight]) -> Option<&'static str> {
     spawn
         .iter()
         .filter(|spawn_weight| spawn_weight.rolls())
         .find_map(|spawn_weight| LORDS.iter().find(|&&(tag, _)| spawn_weight.tag == tag))
-        .map(|&(_, name)| name.to_owned())
+        .map(|&(_, name)| name)
 }
 
 /// The tags of `spawn` that a base among `released` of the bases of `domain` has, in their order,
@@ -438,14 +467,6 @@ fn table_tier(
     currency_spawn: Option<&CurrencySpawn>,
     translator: &LineTranslator<'_>,
 ) -> Result<(TableKey, Tier)> {
-    // Its lines would be written within the words of the passive skills on the other bases.
-    if modifier.rolls_on_radius_jewel()
-        && modifier.rolling_tags().any(|tag| !is_radius_jewel_tag(tag))
-    {
-        return Err(
-            format!("{id}: a modifier of the Time-Lost jewels that rolls on other bases").into(),
-        );
-    }
     let (lines, ranges) = translator
         .lines(modifier)
         .map_err(|error| format!("{id}: {error}"))?;

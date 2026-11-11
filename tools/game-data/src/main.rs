@@ -35,6 +35,7 @@ const REPOE_CODE: &str = "repoe-fork/repoe";
 /// The languages of the stats and the bases, English first.
 const LANGUAGES: [&str; 2] = ["en", "fr"];
 
+/// The result of a step of the generator, its error a message that stops it.
 pub(crate) type Result<T> = std::result::Result<T, Box<dyn Error>>;
 
 /// What the generator reads of each repository, from its arguments: a branch or a commit,
@@ -46,6 +47,8 @@ struct References {
 }
 
 impl References {
+    /// The references given as arguments, in this order: Exiled Exchange 2, the data of RePoE,
+    /// the code of RePoE.
     fn from_arguments() -> Self {
         let mut arguments = std::env::args().skip(1);
         let mut next = || arguments.next().unwrap_or_else(|| "master".to_owned());
