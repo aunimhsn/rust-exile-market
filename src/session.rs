@@ -31,13 +31,35 @@ pub struct ShownItem {
     /// time the names of the trade site arrive (they tell the base of a magic item, and their
     /// stats the affixes a rune or an implicit allows), and for a unique when the prices arrive
     /// (they write the ranges of its modifiers).
-    trade_copy: Option<Vec<Modifier>>,
+    trade_copy: Option<TradeCopy>,
     /// Its modifier lines, which the offers are compared with; none for an unreadable item.
     lines: CopiedLines,
     /// The stat of each modifier line on the trade site, which searches it.
     stats: LineStats,
     /// The rolls of each line of a prefix or suffix over every tier of its modifier.
     tiers: TierRolls,
+}
+
+/// The modifiers of an item copied from the in-game trade as the parser read them, by where
+/// their rolls come from.
+#[derive(Debug)]
+enum TradeCopy {
+    /// A rare or magic item, its tiers found from its values in the modifier tables.
+    Values(Vec<Modifier>),
+    /// A unique, its ranges taken from its modifiers in the price database.
+    Prices(Vec<Modifier>),
+}
+
+impl TradeCopy {
+    /// The modifiers of `item` copied from the in-game trade; none for an item copied
+    /// otherwise.
+    fn of(item: &Item) -> Option<Self> {
+        match item.rolls_source() {
+            RollsSource::Values => Some(Self::Values(item.modifiers().to_vec())),
+            RollsSource::Prices => Some(Self::Prices(item.modifiers().to_vec())),
+            RollsSource::Headers | RollsSource::Nowhere => None,
+        }
+    }
 }
 
 impl ShownItem {
@@ -60,14 +82,7 @@ impl ShownItem {
             }
             Err(error) => log::warn!("A copied item couldn't be read: {error}"),
         }
-        let trade_copy = parsed
-            .as_ref()
-            .ok()
-            .filter(|item| match item.rolls_source() {
-                RollsSource::Values | RollsSource::Prices => true,
-                RollsSource::Headers | RollsSource::Nowhere => false,
-            })
-            .map(|item| item.modifiers().to_vec());
+        let trade_copy = parsed.as_ref().ok().and_then(TradeCopy::of);
         let mut shown = Self {
             parsed,
             trade_copy,
@@ -99,10 +114,10 @@ impl ShownItem {
             .and_then(|target| target.base_type())
             .map(str::to_owned);
         let mut reshaped = false;
-        if let Some(copied) = &self.trade_copy {
-            let modifiers = match (item.rolls_source(), &base_type) {
-                (RollsSource::Prices, _) => unique_rolls(item, copied, trade, names, prices),
-                (RollsSource::Values, Some(base_type)) => {
+        if let Some(trade_copy) = &self.trade_copy {
+            let modifiers = match (trade_copy, &base_type) {
+                (TradeCopy::Prices(copied), _) => unique_rolls(item, copied, trade, names, prices),
+                (TradeCopy::Values(copied), Some(base_type)) => {
                     // The runes and the implicits, which tell the room, are never read again.
                     let stats = LineStats::new(item, copied, trade);
                     game_data::with_trade_tiers(
@@ -115,9 +130,7 @@ impl ShownItem {
                     )
                 }
                 // A magic item before the names of the trade site tell its base.
-                (RollsSource::Values, None) | (RollsSource::Headers | RollsSource::Nowhere, _) => {
-                    copied.clone()
-                }
+                (TradeCopy::Values(copied), None) => copied.clone(),
             };
             reshaped = shape(item.modifiers()) != shape(&modifiers);
             item.set_modifiers(modifiers);
