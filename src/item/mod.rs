@@ -301,17 +301,7 @@ impl Item {
             runic_ward: value(labels.runic_ward),
         }
     }
-}
 
-/// The number at the start of a property value, e.g. 26 in `26%`.
-fn leading_number(value: &str) -> Option<u32> {
-    let end = value
-        .find(|character: char| !character.is_ascii_digit())
-        .unwrap_or(value.len());
-    value.get(..end)?.parse().ok()
-}
-
-impl Item {
     /// The language of the game client that copied the item.
     #[must_use]
     pub fn language(&self) -> Language {
@@ -481,4 +471,12 @@ impl Item {
             .count();
         u32::try_from(count).unwrap_or(u32::MAX)
     }
+}
+
+/// The number at the start of a property value, e.g. 26 in `26%`.
+fn leading_number(value: &str) -> Option<u32> {
+    let end = value
+        .find(|character: char| !character.is_ascii_digit())
+        .unwrap_or(value.len());
+    value.get(..end)?.parse().ok()
 }
