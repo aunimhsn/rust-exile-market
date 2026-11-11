@@ -11,6 +11,7 @@ use crate::item::{
 };
 use crate::language::Language;
 
+/// The range from `min` to `max`.
 pub(super) fn range(min: f64, max: f64) -> Range {
     Range { min, max }
 }

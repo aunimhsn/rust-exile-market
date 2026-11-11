@@ -3,8 +3,9 @@
 
 use super::*;
 use crate::game_data::modifiers::best_reading::Room;
+use crate::game_data::modifiers::fixtures::range;
 use crate::game_data::modifiers::other_readings::Line;
-use crate::game_data::modifiers::other_readings::fixtures::{ground, line, placement, range};
+use crate::game_data::modifiers::other_readings::fixtures::{ground, line, placement};
 use crate::item::ModifierOrigin;
 
 #[test]

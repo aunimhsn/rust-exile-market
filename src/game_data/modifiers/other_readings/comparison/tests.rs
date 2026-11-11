@@ -2,7 +2,8 @@
 //! same, the parts of the item, the lines in doubt and the room left to a prefix or suffix.
 
 use super::*;
-use crate::game_data::modifiers::other_readings::fixtures::{ground, line, placement, range};
+use crate::game_data::modifiers::fixtures::range;
+use crate::game_data::modifiers::other_readings::fixtures::{ground, line, placement};
 use crate::game_data::modifiers::split_lines::AddedTiers;
 use crate::game_data::modifiers::{ModifierTiers, Tier};
 

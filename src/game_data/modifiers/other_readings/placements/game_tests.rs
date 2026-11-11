@@ -4,7 +4,7 @@
 use super::*;
 use crate::game_data::bases;
 use crate::game_data::lines::modifier_stats;
-use crate::game_data::modifiers::other_readings::fixtures::range;
+use crate::game_data::modifiers::fixtures::range;
 use crate::game_data::modifiers::tables::TABLES;
 use crate::item::{Modifier, ModifierKind, StatLine};
 use crate::language::Language;

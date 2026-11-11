@@ -8,10 +8,6 @@ use crate::game_data::modifiers::other_readings::placements::Placement;
 use crate::game_data::modifiers::other_readings::{Line, MAX_STEPS, Shown};
 use crate::item::{Affix, ModifierOrigin, Range};
 
-pub(super) fn range(min: f64, max: f64) -> Range {
-    Range { min, max }
-}
-
 /// A line of the modifier `modifier` of the item, of `template`, its values at `values` among
 /// those of every line.
 pub(super) fn line(

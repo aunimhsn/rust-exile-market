@@ -3,7 +3,8 @@
 
 use super::*;
 use crate::game_data::bases::Domain;
-use crate::game_data::modifiers::other_readings::fixtures::{line, placement, range};
+use crate::game_data::modifiers::fixtures::range;
+use crate::game_data::modifiers::other_readings::fixtures::{line, placement};
 use crate::game_data::modifiers::tables::{TableAffix, TableLine};
 use crate::item::Affix;
 
