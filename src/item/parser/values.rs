@@ -1,0 +1,239 @@
+//! The values of the lines `Label: value`: the properties (the quality, the damage of a weapon,
+//! the level of a gem, the properties of a waystone among them), the requirements, the sockets,
+//! the item level and the stack.
+
+use super::{Field, ParseWarning};
+use crate::item::labels::{Labels, marker};
+use crate::item::weapon::{self, DamageKind, Weapon};
+use crate::item::{Item, Property, QualityKind, Rarity, Requirements, Stack, gem, waystone};
+use crate::language::Language;
+
+/// The lines `Name: value` of the properties section, and the quality, the damage of a weapon
+/// and the level of a gem among them; on a waystone, a warning for a property it can't read.
+pub(super) fn read_properties(item: &mut Item, lines: &[&str], labels: &Labels) {
+    let mut damage = Vec::new();
+    let mut attacks_per_second = None;
+    for line in lines {
+        let (line, augmented) = match line.strip_suffix(marker::AUGMENTED) {
+            Some(line) => (line, true),
+            None => (*line, false),
+        };
+        if let Some((kind, value)) = quality(line, labels) {
+            item.quality = digits(value);
+            if item.quality.is_none() {
+                item.warnings
+                    .push(ParseWarning::InvalidValue(Field::Quality));
+            } else if let Some(kind) = kind {
+                if kind.catalyst.is_none() {
+                    item.warnings.push(ParseWarning::UnknownQualityKind);
+                }
+                item.quality_kind = Some(kind);
+            }
+        }
+        let (name, value) = line.split_once(':').unwrap_or((line, ""));
+        let (name, value) = (name.trim(), value.trim());
+        if name == labels.attacks_per_second {
+            attacks_per_second = value.parse::<f64>().ok();
+        } else if let Some(ranges) = weapon::damage_ranges(value) {
+            // A physical range has no marker: only the physical damage line has one.
+            let physical = ranges
+                .iter()
+                .any(|range| range.kind == DamageKind::Physical);
+            if !physical || name == labels.physical_damage {
+                damage.extend(ranges);
+            }
+        }
+        if item.rarity == Rarity::Gem && name == labels.gem_level {
+            item.gem_level = gem::read_gem_level(value);
+            if item.gem_level.is_none() {
+                item.warnings
+                    .push(ParseWarning::InvalidValue(Field::GemLevel));
+            }
+        }
+        if item.class == labels.waystones
+            && let Err(warning) = waystone::read_property(labels, name, value)
+        {
+            item.warnings.push(warning);
+        }
+        item.properties.push(Property {
+            name: name.to_owned(),
+            value: value.to_owned(),
+            augmented,
+        });
+    }
+    if let Some(attacks_per_second) = attacks_per_second
+        && !damage.is_empty()
+    {
+        item.weapon = Some(Weapon {
+            damage,
+            attacks_per_second,
+        });
+    }
+}
+
+/// `Requires: Level 78, 89 Str, 163 (unmet) Dex`, and whether every part was read.
+pub(super) fn read_requirements(line: &str, labels: &Labels) -> (Requirements, bool) {
+    let mut requirements = Requirements::default();
+    let mut complete = true;
+    for part in line
+        .strip_prefix(labels.requires)
+        .unwrap_or_default()
+        .split(',')
+    {
+        let part = part
+            .replace(marker::UNMET, "")
+            .replace(marker::AUGMENTED, "");
+        complete &= read_requirement(part.trim(), labels, &mut requirements).is_some();
+    }
+    (requirements, complete)
+}
+
+/// One part of the requirements: `Level 78` or `89 Str`.
+fn read_requirement(part: &str, labels: &Labels, requirements: &mut Requirements) -> Option<()> {
+    if let Some(level) = part.strip_prefix(labels.level) {
+        requirements.level = Some(digits(level)?);
+        return Some(());
+    }
+    let (value, attribute) = part.split_once(' ')?;
+    let value = Some(digits(value)?);
+    let attribute = attribute.trim();
+    let target = if labels.strength.contains(&attribute) {
+        &mut requirements.strength
+    } else if labels.dexterity.contains(&attribute) {
+        &mut requirements.dexterity
+    } else if labels.intelligence.contains(&attribute) {
+        &mut requirements.intelligence
+    } else {
+        return None;
+    };
+    *target = value;
+    Some(())
+}
+
+/// `Sockets: S S` gives 2.
+pub(super) fn count_sockets(line: &str, labels: &Labels) -> u32 {
+    let count = line
+        .strip_prefix(labels.sockets)
+        .unwrap_or_default()
+        .split_whitespace()
+        .count();
+    u32::try_from(count).unwrap_or(u32::MAX)
+}
+
+/// `Stack Size: 40/40`, with or without thousands separators.
+pub(super) fn read_stack(line: &str, labels: &Labels) -> Option<Stack> {
+    let (size, max) = line.strip_prefix(labels.stack_size)?.split_once('/')?;
+    Some(Stack {
+        size: digits(size)?,
+        max: digits(max)?,
+    })
+}
+
+/// The quality line, `Quality: +20%` or the quality of a catalyst, `Quality (Mana Modifiers):
+/// +40%`: the kind of a catalyst, and the text of the value, empty for a quality of a catalyst
+/// whose words don't close.
+fn quality<'a>(line: &'a str, labels: &Labels) -> Option<(Option<QualityKind>, &'a str)> {
+    if let Some(value) = line.strip_prefix(labels.quality) {
+        return Some((None, value));
+    }
+    let (open, close) = labels.catalyst_quality;
+    let Some((words, value)) = line.strip_prefix(open)?.split_once(close) else {
+        return Some((None, ""));
+    };
+    let catalyst = labels
+        .catalysts
+        .iter()
+        .find(|&&(known, _)| known == words)
+        .map(|&(_, catalyst)| catalyst);
+    let kind = QualityKind {
+        catalyst,
+        words: words.to_owned(),
+    };
+    Some((Some(kind), value))
+}
+
+/// The quality of a property written as the game writes it in `language`, `Quality (Mana
+/// Modifiers): +40%` or `Quality: +20%`: its kind, none for the quality of the base, and its
+/// value, none when it isn't a whole percentage; `None` for another property.
+#[must_use]
+pub fn read_quality(line: &str, language: Language) -> Option<(Option<QualityKind>, Option<u32>)> {
+    let (kind, value) = quality(line, Labels::of(language))?;
+    Some((kind, whole_percent(value)))
+}
+
+/// A whole percentage written `+20%` or `20%`; `None` for another text, a decimal or a
+/// negative one.
+#[must_use]
+pub fn whole_percent(text: &str) -> Option<u32> {
+    let text = text.trim();
+    text.strip_prefix('+')
+        .unwrap_or(text)
+        .strip_suffix('%')?
+        .parse()
+        .ok()
+}
+
+/// The number after a label, e.g. `Item Level: 80` or `Quality: +20%`.
+pub(super) fn number_after(line: &str, label: &str) -> Option<u32> {
+    digits(line.strip_prefix(label)?)
+}
+
+/// The number made of all the digits of a text: `+20%` gives 20, `1,234` gives 1234; `None`
+/// without digits or when too large.
+fn digits(text: &str) -> Option<u32> {
+    let digits: String = text.chars().filter(char::is_ascii_digit).collect();
+    digits.parse().ok()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::item::Catalyst;
+
+    #[test]
+    fn reads_the_small_parts() {
+        assert_eq!(digits("+20%"), Some(20));
+        assert_eq!(digits("1 234"), Some(1234));
+        assert_eq!(digits("none"), None);
+        assert_eq!(digits("99999999999"), None);
+
+        let labels = Labels::of(Language::English);
+        assert_eq!(count_sockets("Sockets: S S S", labels), 3);
+        assert_eq!(count_sockets("Sockets: ", labels), 0);
+        assert_eq!(
+            read_requirements("Requires: 113 Intelligence", labels),
+            (
+                Requirements {
+                    intelligence: Some(113),
+                    ..Requirements::default()
+                },
+                true
+            )
+        );
+    }
+
+    #[test]
+    fn a_quality_is_read_as_a_whole_percentage_only() {
+        assert_eq!(whole_percent("+20%"), Some(20));
+        assert_eq!(whole_percent(" 20% "), Some(20));
+        assert_eq!(whole_percent("+12.5%"), None);
+        assert_eq!(whole_percent("-10%"), None);
+        assert_eq!(whole_percent("+20"), None);
+        assert_eq!(
+            read_quality("Qualité (Modificateurs de Mana): +50%", Language::French),
+            Some((
+                Some(QualityKind {
+                    catalyst: Some(Catalyst::Mana),
+                    words: "Modificateurs de Mana".to_owned(),
+                }),
+                Some(50)
+            ))
+        );
+        assert_eq!(
+            read_quality("Quality: +12.5%", Language::English),
+            Some((None, None)),
+            "a quality, unreadable"
+        );
+        assert_eq!(read_quality("Spirit: 100", Language::English), None);
+    }
+}

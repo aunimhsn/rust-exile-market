@@ -5,7 +5,7 @@ use crate::game_data;
 use crate::item::modifier::{Range, Roll, StatLine};
 use crate::item::test_items;
 use crate::item::trade_copy::as_in_game_trade;
-use crate::item::{Affix, Catalyst, Defences, ModifierOrigin, QualityKind};
+use crate::item::{Affix, Catalyst, Defences, ModifierOrigin, Property, QualityKind, Stack};
 use crate::language::Language;
 
 macro_rules! test_item {
@@ -833,28 +833,6 @@ fn tells_why_an_item_can_t_be_read() {
 }
 
 #[test]
-fn reads_the_small_parts() {
-    assert_eq!(digits("+20%"), Some(20));
-    assert_eq!(digits("1 234"), Some(1234));
-    assert_eq!(digits("none"), None);
-    assert_eq!(digits("99999999999"), None);
-
-    let labels = Labels::of(Language::English);
-    assert_eq!(count_sockets("Sockets: S S S", labels), 3);
-    assert_eq!(count_sockets("Sockets: ", labels), 0);
-    assert_eq!(
-        read_requirements("Requires: 113 Intelligence", labels),
-        (
-            Requirements {
-                intelligence: Some(113),
-                ..Requirements::default()
-            },
-            true
-        )
-    );
-}
-
-#[test]
 fn never_panics_on_a_cut_or_changed_item() {
     for text in test_items::texts() {
         let chars: Vec<char> = text.chars().collect();
@@ -1438,31 +1416,6 @@ fn tells_a_unique_copied_from_the_in_game_trade() {
     ] {
         assert!(!item(text).has_rolls_from_prices(), "{text}");
     }
-}
-
-#[test]
-fn a_quality_is_read_as_a_whole_percentage_only() {
-    assert_eq!(whole_percent("+20%"), Some(20));
-    assert_eq!(whole_percent(" 20% "), Some(20));
-    assert_eq!(whole_percent("+12.5%"), None);
-    assert_eq!(whole_percent("-10%"), None);
-    assert_eq!(whole_percent("+20"), None);
-    assert_eq!(
-        read_quality("Qualité (Modificateurs de Mana): +50%", Language::French),
-        Some((
-            Some(QualityKind {
-                catalyst: Some(Catalyst::Mana),
-                words: "Modificateurs de Mana".to_owned(),
-            }),
-            Some(50)
-        ))
-    );
-    assert_eq!(
-        read_quality("Quality: +12.5%", Language::English),
-        Some((None, None)),
-        "a quality, unreadable"
-    );
-    assert_eq!(read_quality("Spirit: 100", Language::English), None);
 }
 
 #[test]
