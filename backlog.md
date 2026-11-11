@@ -92,6 +92,10 @@ One entry per item: what it is, its kind (the section it sits in), what it depen
 
 - The certificates of the system rather than those built into the executable (security audit of 2026-11-10, finding 16, info): `ureq` trusts the list of `webpki-roots` of the day of the build, so an old version keeps authorities since withdrawn and lacks the new ones; its `platform-verifier` feature reads the store of the system, with more dependencies. To weigh with step 20 (Automatic updates). Noted on 2026-11-10.
 
+## Process
+
+- Guards against the files that grow by accretion (owner, 2026-11-11, after a post on the God Object AI assistants grow, and Claude Code's own account of this project: `ExileMarketApp` with 26 fields, files of 2,000 to 2,900 lines, 76 feature commits for 2 of refactoring before step 17e3, the refactoring asked by the owner and the reviews, never proposed by Claude Code). Two guards: at the start of each step, say which file the new code makes grow and whether it passes about 800 lines of code, the sign `docs/code-quality.md` gives, and split it before adding to it; and a check of the CI that warns when a file of `src/` or `tools/` passes about 800 lines of code, its tests apart (Clippy pedantic already caps a function at 100 lines: 2 exceptions, lists of messages). Kind: process. Depends on step 17e3d, which splits the files, so that the warning starts from a clean state: to discuss at its end.
+
 ## Features
 
 ### Settings (step 19)
