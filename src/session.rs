@@ -116,7 +116,7 @@ impl ShownItem {
             reshaped = shape(item.modifiers()) != shape(&modifiers);
             item.set_modifiers(modifiers);
         }
-        self.stats = LineStats::new(item.language(), item.modifiers(), trade);
+        self.stats = LineStats::for_item(item, trade);
         self.lines = CopiedLines::new(item.language(), item.modifiers(), &self.stats, trade);
         self.tiers = TierRolls::new(
             item.language(),

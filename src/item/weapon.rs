@@ -46,6 +46,20 @@ pub struct Dps {
     pub chaos: f64,
 }
 
+/// What the lines of a weapon add to the damage and the speed of its base: its increased
+/// physical damage in percent, its added physical damage (the average of a hit), its
+/// increased attack speed in percent.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub struct WeaponLines {
+    pub increased: f64,
+    pub added: f64,
+    pub attack_speed: f64,
+}
+
+/// The quality a base usually reaches, which every weapon of it may have: its physical DPS
+/// there is what its base alone reaches.
+const USUAL_QUALITY: f64 = 20.0;
+
 /// The damage and the speed of a weapon.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Weapon {
@@ -67,6 +81,23 @@ impl Weapon {
             }
         }
         dps
+    }
+
+    /// The physical DPS its base alone reaches, without the `lines` of the weapon, at the
+    /// usual quality or at its own `quality` (in percent) when higher: the properties count the
+    /// quality and the increased physical damage together, the added damage before them, and
+    /// the attack speed apart.
+    #[must_use]
+    pub fn base_physical_dps(&self, quality: f64, lines: WeaponLines) -> f64 {
+        let hit: f64 = self
+            .damage
+            .iter()
+            .filter(|range| range.kind == DamageKind::Physical)
+            .map(|range| range.average())
+            .sum();
+        let base = hit / (1.0 + (lines.increased + quality) / 100.0) - lines.added;
+        let speed = self.attacks_per_second / (1.0 + lines.attack_speed / 100.0);
+        base.max(0.0) * (1.0 + quality.max(USUAL_QUALITY) / 100.0) * speed
     }
 }
 
@@ -93,6 +124,42 @@ pub(super) fn damage_ranges(value: &str) -> Option<Vec<DamageRange>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_physical_dps_of_the_base_leaves_out_the_lines_and_takes_the_usual_quality() {
+        // 10-20, a hit of 15, with 20 % increased physical damage and no quality: 12.5 from
+        // the base.
+        let weapon = Weapon {
+            damage: vec![range(DamageKind::Physical, 10.0, 20.0)],
+            attacks_per_second: 1.0,
+        };
+        let lines = WeaponLines {
+            increased: 20.0,
+            ..WeaponLines::default()
+        };
+        // At 20 % quality: 15, as much as the weapon.
+        assert!((weapon.base_physical_dps(0.0, lines) - 15.0).abs() < 1e-9);
+        // Its own quality, higher, counted in the properties: 15 / 1.5 = 10, at 30 %: 13.
+        let weapon = Weapon {
+            damage: vec![range(DamageKind::Physical, 10.0, 20.0)],
+            attacks_per_second: 1.0,
+        };
+        assert!((weapon.base_physical_dps(30.0, lines) - 13.0).abs() < 1e-9);
+        // Added damage and attack speed: (40 / 1.0 - 10) * 1.2 * (1.2 / 1.2) = 36.
+        let weapon = Weapon {
+            damage: vec![
+                range(DamageKind::Physical, 30.0, 50.0),
+                range(DamageKind::Elemental, 1.0, 59.0),
+            ],
+            attacks_per_second: 1.2,
+        };
+        let lines = WeaponLines {
+            added: 10.0,
+            attack_speed: 20.0,
+            ..WeaponLines::default()
+        };
+        assert!((weapon.base_physical_dps(0.0, lines) - 36.0).abs() < 1e-9);
+    }
 
     fn range(kind: DamageKind, min: f64, max: f64) -> DamageRange {
         DamageRange { kind, min, max }

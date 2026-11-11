@@ -20,7 +20,9 @@
 //! least the physical one. The pseudo totals start checked, and the lines they add up
 //! unchecked. Every modifier of a rare starts unchecked, like Exiled Exchange 2: its value lies
 //! in the few modifiers the buyer needs, which the application can't tell, and several checked
-//! at once leave few offers; its pseudo totals and its DPS stay checked. A desecrated
+//! at once leave few offers; its pseudo totals and its DPS stay checked, but those any item
+//! of its base reaches (its implicits at their best roll, its base at the usual quality),
+//! which compare nothing ([`LineStats::rules_out`]). A desecrated
 //! modifier not revealed yet is a line of its group without filter, on a band of the
 //! desecrated green; its item gets a filter of its number of unrevealed modifiers, and its
 //! other stats start unchecked, with a note under them. A line of a Time-Lost jewel is
@@ -869,10 +871,7 @@ fn rows<'a>(
         stats
             .pseudo_totals()
             .iter()
-            .map(|total| {
-                let compares = stats.compares(FilterKey::Pseudo(total.pseudo));
-                pseudo_filter(total, !unrevealed && compares)
-            })
+            .map(|total| pseudo_filter(total, stats, !unrevealed))
             .collect()
     } else {
         Vec::new()
@@ -1317,37 +1316,34 @@ fn required_level_filter(item: &Item) -> Option<Stat<'static>> {
 /// The filters of the DPS of a weapon, each kind it deals, with a minimum at 90 % of its
 /// DPS, rounded down so that the weapon passes it: when `checkable`, the physical one checked,
 /// the elemental one when it is at least the physical one, so that a weapon mostly elemental is
-/// compared with elemental ones, or when the physical one is that of its base. On a rare or
-/// magic item, a DPS that no line of the weapon counts, that of its base, which every weapon of
-/// it passes, compares nothing ([`LineStats::compares`]): unchecked.
+/// compared with elemental ones, or in its place. On a rare or magic item, a DPS whose minimum
+/// any weapon of its base reaches compares nothing ([`LineStats::rules_out`]): unchecked.
 fn dps_filters(item: &Item, stats: &LineStats, checkable: bool) -> Vec<Stat<'static>> {
     let Some(weapon) = item.weapon() else {
         return Vec::new();
     };
     let dps = weapon.dps();
+    let minimum = |dps: f64| (dps * (1.0 - COMPARABLE_MARGIN)).floor();
     // A normal item is priced by its base: its DPS is.
-    let compares =
-        |property| !item.priced_by_stats() || stats.compares(FilterKey::Property(property));
-    let physical = compares(Property::PhysicalDps);
-    let elemental = compares(Property::ElementalDps);
+    let compares = |property, dps| {
+        !item.priced_by_stats() || stats.compares(FilterKey::Property(property), minimum(dps))
+    };
+    let physical = compares(Property::PhysicalDps, dps.physical);
+    let elemental = compares(Property::ElementalDps, dps.elemental)
+        && (dps.elemental >= dps.physical || !physical);
     [
         (Property::PhysicalDps, dps.physical, physical),
-        (
-            Property::ElementalDps,
-            dps.elemental,
-            elemental && (dps.elemental >= dps.physical || !physical),
-        ),
+        (Property::ElementalDps, dps.elemental, elemental),
     ]
     .into_iter()
     .filter_map(|(property, dps, checked)| {
         // As the item block shows it.
         let shown = dps.round();
         (shown >= 1.0).then(|| {
-            let minimum = (dps * (1.0 - COMPARABLE_MARGIN)).floor();
             property_filter(
                 property,
                 shown,
-                Limit::minimum(minimum),
+                Limit::minimum(minimum(dps)),
                 checkable && checked,
             )
         })
@@ -1369,20 +1365,18 @@ fn property_filter(property: Property, value: f64, limit: Limit, checked: bool) 
     }
 }
 
-/// The filter of a pseudo total, with a minimum at 90 % of its value; checked when
-/// `checked`: on a rare or magic item without an unrevealed modifier, when it adds up a line
-/// but an implicit (a total of implicits only, which come with the base, compares nothing).
-fn pseudo_filter(total: &PseudoTotal, checked: bool) -> Stat<'static> {
+/// The filter of a pseudo total, with a minimum at 90 % of its value; when `checkable`,
+/// checked if it compares the item ([`LineStats::rules_out`]): not when the implicits of the
+/// item at their best roll reach its minimum, which any item of its base may then pass.
+fn pseudo_filter(total: &PseudoTotal, stats: &LineStats, checkable: bool) -> Stat<'static> {
+    let minimum = comparable(total.value, decimals(total.value), Half::Minimum);
+    let compares = stats.compares(FilterKey::Pseudo(total.pseudo), minimum);
     Stat {
         key: FilterKey::Pseudo(total.pseudo),
         text: StatText::Pseudo(total.pseudo, total.value),
         filter: Some(StatFilter {
-            checked,
-            limit: Some(Limit::minimum(comparable(
-                total.value,
-                decimals(total.value),
-                Half::Minimum,
-            ))),
+            checked: checkable && compares,
+            limit: Some(Limit::minimum(minimum)),
         }),
         unsearchable: false,
         roll: None,

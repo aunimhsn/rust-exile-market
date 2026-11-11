@@ -1481,7 +1481,7 @@ mod tests {
                     ids: vec!["explicit.stat_3917489142".to_owned()],
                     minimum: Some(10.0),
                     maximum: None,
-                    compares: true,
+                    rules_out: crate::trade::query::RulesOut::OfTheBase,
                 }],
             }),
         }
@@ -1703,7 +1703,7 @@ mod tests {
             property: Property::Quality,
             minimum: Some(40.0),
             maximum: None,
-            compares: false,
+            rules_out: crate::trade::query::RulesOut::OfTheLeague,
         };
 
         for (properties, counted) in [(vec![quality], 2), (Vec::new(), 3)] {

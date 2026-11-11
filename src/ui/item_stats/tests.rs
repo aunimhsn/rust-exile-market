@@ -32,7 +32,7 @@ fn rows_of<'a>(item: &'a Item, base_type: Option<&'a str>) -> Vec<Row<'a>> {
         &LineStats::default(),
         None,
     );
-    let stats = LineStats::new(item.language(), item.modifiers(), None);
+    let stats = LineStats::for_item(item, None);
     let tiers = TierRolls::new(
         item.language(),
         item.modifiers(),
@@ -215,7 +215,7 @@ fn tier_text(tier: &ModifierTier) -> String {
 /// `item`, copied from the in-game trade, read again with the tiers found from its values,
 /// as the session does.
 fn read_again(mut item: Item) -> Item {
-    let stats = LineStats::new(item.language(), item.modifiers(), None);
+    let stats = LineStats::for_item(&item, None);
     let modifiers = crate::game_data::with_trade_tiers(
         item.language(),
         item.base_type(),
@@ -326,7 +326,7 @@ fn a_modifier_of_one_tier_only_shows_its_ranges_without_tier() {
         &LineStats::default(),
         None,
     );
-    let stats = LineStats::new(flask.language(), flask.modifiers(), None);
+    let stats = LineStats::for_item(&flask, None);
     let tiers = TierRolls::new(
         flask.language(),
         flask.modifiers(),
@@ -1452,26 +1452,35 @@ fn a_weapon_mostly_elemental_is_searched_by_its_elemental_dps_too() {
         ))
     };
     let dps = |item: &Item| texts(item)[4..6].to_vec();
-    let both = "20% increased Physical Damage\nAdds 1 to 59 Lightning Damage";
+    let strong = "100% increased Physical Damage";
 
     assert_eq!(
-        dps(&weapon("10-20", "1-59", both)),
-        ["■ PhysicalDps: 15 ≥13", "■ ElementalDps: 30 ≥27"]
+        dps(&weapon(
+            "20-40",
+            "1-59",
+            &format!("{strong}\nAdds 1 to 59 Lightning Damage")
+        )),
+        ["■ PhysicalDps: 30 ≥27", "■ ElementalDps: 30 ≥27"]
     );
     // 90 % of a small DPS, of 2.5 and not of the 3 shown, rounded down: the weapon
     // passes its own filter.
+    assert_eq!(
+        dps(&weapon(
+            "20-40",
+            "1-4",
+            &format!("{strong}\nAdds 1 to 4 Lightning Damage")
+        )),
+        ["■ PhysicalDps: 30 ≥27", "□ ElementalDps: 3 ≥2"]
+    );
+    // A small line of physical damage: its base reaches 15 at 20 % quality, beyond the
+    // minimum, so that every weapon of it may pass; the elemental one, smaller, is checked in
+    // its place.
     assert_eq!(
         dps(&weapon(
             "10-20",
             "1-4",
             "20% increased Physical Damage\nAdds 1 to 4 Lightning Damage"
         )),
-        ["■ PhysicalDps: 15 ≥13", "□ ElementalDps: 3 ≥2"]
-    );
-    // The physical DPS of its base, which every weapon of it passes: the elemental one,
-    // smaller, is checked in its place.
-    assert_eq!(
-        dps(&weapon("10-20", "1-4", "Adds 1 to 4 Lightning Damage")),
         ["□ PhysicalDps: 15 ≥13", "■ ElementalDps: 3 ≥2"]
     );
     // Without a line of damage nor of attack speed: the DPS of its base, unchecked.
@@ -1594,7 +1603,7 @@ fn item_group(item: &Item) -> Vec<String> {
 /// base type of a magic item is found among the names of the trade site.
 fn item_group_of<'a>(item: &'a Item, base_type: Option<&'a str>) -> Vec<String> {
     let lines = CopiedLines::default();
-    let stats = LineStats::new(item.language(), item.modifiers(), None);
+    let stats = LineStats::for_item(item, None);
     let rows = super::rows(item, &lines, &stats, &TierRolls::default(), base_type);
     row_texts(
         rows.into_iter()
@@ -1648,7 +1657,7 @@ fn the_base_type_tells_the_item_class_searched_when_it_is_unchecked() {
     // The class under the base type `base_type` of `item`, when it is unchecked.
     let class_of = |item: &Item, base_type: &str| {
         let lines = CopiedLines::default();
-        let stats = LineStats::new(item.language(), item.modifiers(), None);
+        let stats = LineStats::for_item(item, None);
         let tiers = TierRolls::default();
         super::rows(item, &lines, &stats, &tiers, Some(base_type))
             .into_iter()
@@ -2480,7 +2489,7 @@ fn a_line_the_trade_site_cant_search_isnt_a_filter() {
         &LineStats::default(),
         None,
     );
-    let line_stats = LineStats::new(unique.language(), unique.modifiers(), None);
+    let line_stats = LineStats::for_item(&unique, None);
     let stats = Stats::new(&unique, &lines, &line_stats, &TierRolls::default(), None);
 
     assert_eq!(
@@ -2529,7 +2538,7 @@ fn the_stats_of_one_modifier_are_joined_each_on_its_own_lines() {
         &LineStats::default(),
         None,
     );
-    let line_stats = LineStats::new(unique.language(), unique.modifiers(), None);
+    let line_stats = LineStats::for_item(&unique, None);
     let stats = Stats::new(&unique, &lines, &line_stats, &TierRolls::default(), None);
 
     assert_eq!(
@@ -2677,7 +2686,7 @@ fn the_active_filters_count_the_choices_of_the_player() {
         &LineStats::default(),
         None,
     );
-    let line_stats = LineStats::new(crossbow.language(), crossbow.modifiers(), None);
+    let line_stats = LineStats::for_item(&crossbow, None);
     let tiers = TierRolls::new(
         crossbow.language(),
         crossbow.modifiers(),
@@ -3337,7 +3346,7 @@ fn a_waystone_searches_its_base_and_its_checked_properties() {
             &LineStats::default(),
             None,
         );
-        let line_stats = LineStats::new(item.language(), item.modifiers(), None);
+        let line_stats = LineStats::for_item(&item, None);
         let tiers = TierRolls::new(
             item.language(),
             item.modifiers(),
@@ -3864,7 +3873,7 @@ fn the_search_of_a_skill_gem_sends_its_name_and_its_checked_properties() {
     ] {
         let item = parse(text);
         let lines = CopiedLines::default();
-        let line_stats = LineStats::new(item.language(), item.modifiers(), None);
+        let line_stats = LineStats::for_item(&item, None);
         let tiers = TierRolls::default();
         let target = link::target(&item, None, None).expect("a target");
         assert_eq!(target, link::TradeTarget::Base { base_type: name });
@@ -3927,7 +3936,7 @@ fn the_filters_of_an_item_by_default_compare_its_stats_or_ask_for_one() {
             &LineStats::default(),
             None,
         );
-        let line_stats = LineStats::new(item.language(), item.modifiers(), None);
+        let line_stats = LineStats::for_item(item, None);
         let tiers = TierRolls::new(item.language(), item.modifiers(), base, item.item_level());
         let stats = Stats::new(item, &lines, &line_stats, &tiers, base);
         let all = stats.filters(&Filters::default());
@@ -3958,6 +3967,10 @@ fn the_filters_of_an_item_by_default_compare_its_stats_or_ask_for_one() {
         ("en-plain-magic-jewel-unidentified.txt", NoneToCheck),
         // Unidentified, its implicit only, which comes with the base, and its total.
         ("en-plain-rare-ring-unidentified.txt", NoneToCheck),
+        // In French, and copied from the in-game trade, without headers.
+        ("fr-rare-two-hand-mace-fractured.txt", Checked),
+        ("en-owner-trade-rare-bow-mirrored.txt", Checked),
+        ("fr-trade-rare-bow-mirrored.txt", Checked),
     ] {
         assert_eq!(checks(&file(name)), expected, "{name}");
     }
@@ -3978,6 +3991,45 @@ fn the_filters_of_an_item_by_default_compare_its_stats_or_ask_for_one() {
          +125 to Evasion Rating\n16% increased Rarity of Items found",
     );
     assert_eq!(checks(&ring), Unchecked);
+    // A small explicit resistance on top: 32, its minimum of 29 within the 30 its implicit
+    // reaches at its best roll, which every Prismatic Ring may.
+    let small = rare(
+        "Prismatic Ring",
+        "Rings",
+        "",
+        "+8(7-10)% to all Elemental Resistances (implicit)\n--------\n\
+         +8% to Cold Resistance\n16% increased Rarity of Items found",
+    );
+    assert_eq!(checks(&small), Unchecked);
+    let large = rare(
+        "Prismatic Ring",
+        "Rings",
+        "",
+        "+8(7-10)% to all Elemental Resistances (implicit)\n--------\n\
+         +40% to Cold Resistance",
+    );
+    assert_eq!(checks(&large), Checked);
+    // A small line of physical damage: its base reaches the minimum at 20 % quality.
+    let maul = |lines: &str| {
+        rare(
+            "Temple Maul",
+            "Two Hand Maces",
+            "Physical Damage: 10-20 (augmented)\nAttacks per Second: 1.00\n--------\n",
+            lines,
+        )
+    };
+    let rarity = "16% increased Rarity of Items found";
+    assert_eq!(
+        checks(&maul(&format!("20% increased Physical Damage\n{rarity}"))),
+        Unchecked
+    );
+    // An attack speed of its base, implicit, never compares the weapon.
+    assert_eq!(
+        checks(&maul(&format!(
+            "10% increased Attack Speed (implicit)\n--------\n{rarity}"
+        ))),
+        Unchecked
+    );
     // A bow without a line of damage nor of attack speed: the DPS of its base.
     let bow = rare(
         "Gemini Bow",

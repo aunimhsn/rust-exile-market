@@ -118,6 +118,10 @@ struct Drawn {
     with_a_fixed_price: usize,
     with_offers_of_items: usize,
     with_offers_of_the_exchange: usize,
+    /// The frames with an estimated price, and with the line that asks for a modifier to be
+    /// checked in its place.
+    with_an_estimate: usize,
+    with_a_check_hint: usize,
 }
 
 /// An item shown, with what the application keeps next to its session.
@@ -204,6 +208,15 @@ impl Scene {
         });
         drawn.with_a_tooltip += usize::from(above);
         drawn.with_a_fixed_price += usize::from(self.session.fixed_price(self.item()).is_ok());
+        let shown = self.session.item().expect("an item shown");
+        let item = self.item();
+        let fixed_price = self.session.fixed_price(item);
+        let estimate = shown_estimate(&self.offers, item, &fixed_price, self.session.worth());
+        let (_, checks) = search_filters_and_checks(&self.session, shown, item, &self.filters);
+        drawn.with_an_estimate += usize::from(estimate.is_some());
+        drawn.with_a_check_hint += usize::from(
+            estimate.is_none() && item.priced_by_stats() && checks == StatChecks::Unchecked,
+        );
         match self.offers.state() {
             OffersState::Items { .. } => drawn.with_offers_of_items += 1,
             OffersState::Exchange { .. } => drawn.with_offers_of_the_exchange += 1,
@@ -373,4 +386,10 @@ fn draw_every_test_item(interface: Language) {
         "an item of the currency exchange among the test items"
     );
     assert!(drawn.with_a_tooltip > items, "{}", drawn.with_a_tooltip);
+    assert!(drawn.with_an_estimate > items, "{}", drawn.with_an_estimate);
+    assert!(
+        drawn.with_a_check_hint > items,
+        "{}",
+        drawn.with_a_check_hint
+    );
 }

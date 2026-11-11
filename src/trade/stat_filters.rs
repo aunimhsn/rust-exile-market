@@ -9,10 +9,10 @@
 //! (`#% less Damage`), has the other sign there, its minimum and its maximum swapped.
 
 use super::pseudo::{self, CountedLine, PseudoTotal};
-use super::query::{PropertyFilter, SearchFilters, StatFilter};
+use super::query::{PropertyFilter, RulesOut, SearchFilters, StatFilter};
 use crate::filters::{Filter, FilterKey, Property, StatKey};
 use crate::game_data::{self, AffixLimits, TradeGroup, TradeStats};
-use crate::item::{Affix, Item, Modifier, Rarity, StatLine};
+use crate::item::{Affix, Item, Modifier, Range, Rarity, StatLine, WeaponLines};
 use crate::language::Language;
 
 /// The game stats of the damage and the attack speed of a weapon, which its DPS counts.
@@ -25,20 +25,18 @@ const WEAPON_DAMAGE: [&str; 6] = [
     "local_attack_speed_+%",
 ];
 
-/// The stats of the game of the lines its physical DPS counts: a weapon without any of them
-/// has the physical DPS of its base, which compares nothing.
-const PHYSICAL_DPS: [&str; 3] = [
-    "local_physical_damage_+%",
-    "local_minimum_added_physical_damage",
-    "local_attack_speed_+%",
-];
+/// The stats of the game of the lines of a weapon that raise the physical DPS of its base:
+/// its increased physical damage, its added physical damage, its attack speed.
+const INCREASED_PHYSICAL: &str = "local_physical_damage_+%";
+const ADDED_PHYSICAL: &str = "local_minimum_added_physical_damage";
+const ATTACK_SPEED: &str = "local_attack_speed_+%";
 
-/// The stats of the game of the lines its elemental DPS counts.
-const ELEMENTAL_DPS: [&str; 4] = [
+/// The stats of the game of the lines that add elemental damage to a weapon, whose base has
+/// none: its elemental DPS compares it once one of them is there.
+const ADDED_ELEMENTAL: [&str; 3] = [
     "local_minimum_added_fire_damage",
     "local_minimum_added_cold_damage",
     "local_minimum_added_lightning_damage",
-    "local_attack_speed_+%",
 ];
 
 /// The stats of the trade site of the lines that add prefixes or suffixes to those an item
@@ -120,7 +118,7 @@ impl TradeStat {
 
     /// The filter of the search with the limits of `filter`, the minimum never above the
     /// maximum.
-    fn filter(&self, filter: &Filter) -> StatFilter {
+    fn filter(&self, filter: &Filter, rules_out: RulesOut) -> StatFilter {
         let (minimum, maximum) = match (self.value, filter.limits()) {
             (Some(value), (minimum, maximum)) => {
                 let minimum = minimum.map(|field| written(value.of(field)));
@@ -137,7 +135,7 @@ impl TradeStat {
             ids: self.ids.clone(),
             minimum,
             maximum,
-            compares: true,
+            rules_out,
         }
     }
 }
@@ -169,6 +167,28 @@ fn trade_value(
         // The field moves the numbers of the stat on its line by as much.
         slope: inverted * written_sign * numbers / values,
     })
+}
+
+/// The value on the trade site of `line`, of the trade `value`, at its best roll: the end of
+/// the ranges of the `numbers` it counts that gives the most, or the value of a number
+/// without range (a copy from the in-game trade writes none).
+fn best_roll(value: TradeValue, line: &StatLine, numbers: &[usize]) -> f64 {
+    let rolls: Vec<_> = numbers
+        .iter()
+        .filter_map(|&number| line.rolls.get(number))
+        .collect();
+    #[expect(clippy::cast_precision_loss, reason = "a few numbers in a line")]
+    let count = rolls.len().max(1) as f64;
+    let field = |end: fn(&Range) -> f64| {
+        rolls
+            .iter()
+            .map(|roll| roll.range.as_ref().map_or(roll.value, end))
+            .sum::<f64>()
+            / count
+    };
+    value
+        .of(field(|range| range.max))
+        .max(value.of(field(|range| range.min)))
 }
 
 /// For each line of `found`, a line of `modifier`, the indexes of its numbers the stat counts;
@@ -230,6 +250,9 @@ struct Line {
     game_id: Option<String>,
     /// A line of an implicit modifier, which comes with the base.
     implicit: bool,
+    /// For a line of an implicit modifier, its value on the trade site at its best roll,
+    /// which an item of the base may have: the end of its range, else its value.
+    reach: Option<f64>,
 }
 
 /// The stats of the modifier lines of the copied item, and its pseudo totals.
@@ -237,6 +260,11 @@ struct Line {
 pub struct LineStats {
     lines: Vec<Line>,
     pseudo: Vec<PseudoTotal>,
+    /// What each pseudo total reaches with the implicit lines of the item at their best roll,
+    /// and its other lines left out: what any item of its base may reach.
+    pseudo_reach: Vec<PseudoTotal>,
+    /// The physical DPS the base of a weapon reaches alone ([`Self::for_item`]).
+    physical_reach: Option<f64>,
     /// The prefixes the lines of [`AFFIXES_ALLOWED`] add, negative when they take some away.
     prefixes_allowed: i32,
     /// The suffixes they add.
@@ -270,6 +298,16 @@ impl LineStats {
                         let counted = numbers.get(offset).map_or(&[][..], Vec::as_slice);
                         TradeStat::new(stat, group, line, counted)
                     });
+                let implicit = group == TradeGroup::Implicit;
+                let reach = stat
+                    .as_ref()
+                    .and_then(|stat| stat.value)
+                    .zip(modifier.lines.get(searched))
+                    .filter(|_| implicit)
+                    .map(|(value, line)| {
+                        let counted = numbers.get(offset).map_or(&[][..], Vec::as_slice);
+                        best_roll(value, line, counted)
+                    });
                 let known = found.stat.is_some();
                 let game_id = found.stat.as_ref().and_then(|found| found.stat.id.clone());
                 if let Some(stat) = &found.stat
@@ -299,28 +337,36 @@ impl LineStats {
                         stat: line_stat,
                         numbers: known.then_some(numbers),
                         game_id: game_id.clone(),
-                        implicit: group == TradeGroup::Implicit,
+                        implicit,
+                        reach,
                     });
                 }
             }
         }
-        let counted: Vec<CountedLine<'_>> = lines
-            .iter()
-            .filter_map(|line| match &line.stat {
-                LineStat::Searched(TradeStat {
-                    value: Some(value), ..
-                }) => Some(CountedLine {
-                    key: line.key,
-                    game_id: line.game_id.as_deref()?,
-                    value: value.trade,
-                }),
-                _ => None,
-            })
-            .collect();
-        let pseudo = pseudo::totals(&counted);
+        // The lines a pseudo total adds up, each with the value `value` gives it.
+        let counted = |value: fn(&Line, TradeValue) -> f64| -> Vec<CountedLine<'_>> {
+            lines
+                .iter()
+                .filter_map(|line| match &line.stat {
+                    LineStat::Searched(TradeStat {
+                        value: Some(trade), ..
+                    }) => Some(CountedLine {
+                        key: line.key,
+                        game_id: line.game_id.as_deref()?,
+                        value: value(line, *trade),
+                    }),
+                    _ => None,
+                })
+                .collect()
+        };
+        let pseudo = pseudo::totals(&counted(|_, trade| trade.trade));
+        // The implicit lines at their best roll, the others left out.
+        let pseudo_reach = pseudo::totals(&counted(|line, _| line.reach.unwrap_or(0.0)));
         Self {
             lines,
             pseudo,
+            pseudo_reach,
+            physical_reach: None,
             prefixes_allowed: affixes(prefixes_allowed),
             suffixes_allowed: affixes(suffixes_allowed),
         }
@@ -412,35 +458,104 @@ impl LineStats {
         self.lines.iter().find(|line| line.key == key)
     }
 
-    /// The filter `key` compares a stat of the item with the offers, not only its base, whose
-    /// every item would pass it: a line of a modifier but an implicit, which comes with the
-    /// base; a pseudo total that adds up such a line (not the count of the unrevealed
-    /// modifiers); a DPS that a line of the weapon counts (its damage, its attack speed), not
-    /// that of its base; a property of a waystone or of a gem. The rule of the estimate of a
-    /// rare or magic item, which needs one, and of the filters checked by default.
+    /// What the filter `key` with the `minimum` rules out of the offers: items of the base of
+    /// the item when it compares a stat of the item, the rule of the estimate of a rare or
+    /// magic item, which needs one, and of the filters checked by default. A line of a
+    /// modifier but an implicit, which comes with the base; a pseudo total that adds up such a
+    /// line, with a minimum beyond what the implicits of the item reach at their best roll; a
+    /// physical DPS whose minimum is beyond what the base reaches alone, at the usual quality;
+    /// an elemental DPS that a line adds; a property of a waystone or of a gem. The others
+    /// rule out items of the league only (an implicit, the item level…), and the count of the
+    /// unrevealed modifiers nothing: any item may have one.
     #[must_use]
-    pub fn compares(&self, key: FilterKey) -> bool {
+    pub fn rules_out(&self, key: FilterKey, minimum: Option<f64>) -> RulesOut {
         let explicit = |key: &StatKey| self.line(*key).is_some_and(|line| !line.implicit);
-        let counted = |ids: &[&str]| {
-            self.lines
-                .iter()
-                .any(|line| line.game_id.as_deref().is_some_and(|id| ids.contains(&id)))
+        let base = |compares: bool| {
+            if compares {
+                RulesOut::OfTheBase
+            } else {
+                RulesOut::OfTheLeague
+            }
         };
+        // Beyond what any item of the base reaches; with an empty field, only what it never
+        // has.
+        let beyond = |reach: f64| minimum.map_or(reach <= 0.0, |minimum| minimum > reach);
         match key {
-            FilterKey::Stat(key) => explicit(&key),
-            FilterKey::BaseType => false,
+            FilterKey::Stat(key) => base(explicit(&key)),
+            FilterKey::BaseType => RulesOut::OfTheLeague,
+            FilterKey::Pseudo(pseudo) if !pseudo.is_total() => RulesOut::Nothing,
             FilterKey::Pseudo(pseudo) => {
-                pseudo.compares_stats()
-                    && self
-                        .pseudo
+                let reach = self
+                    .pseudo_reach
+                    .iter()
+                    .find(|total| total.pseudo == pseudo)
+                    .map_or(0.0, |total| total.value);
+                base(
+                    self.pseudo
                         .iter()
                         .filter(|total| total.pseudo == pseudo)
                         .any(|total| total.lines.iter().any(explicit))
+                        && beyond(reach),
+                )
             }
-            FilterKey::Property(Property::PhysicalDps) => counted(&PHYSICAL_DPS),
-            FilterKey::Property(Property::ElementalDps) => counted(&ELEMENTAL_DPS),
-            FilterKey::Property(property) => property.is_stat(),
+            FilterKey::Property(property) => match property {
+                Property::PhysicalDps => base(
+                    self.physical_reach
+                        .zip(minimum)
+                        .is_some_and(|(reach, minimum)| minimum > reach),
+                ),
+                Property::ElementalDps => base(self.lines.iter().any(|line| {
+                    !line.implicit
+                        && line
+                            .game_id
+                            .as_deref()
+                            .is_some_and(|id| ADDED_ELEMENTAL.contains(&id))
+                })),
+                Property::Waystone(_) | Property::GemLevel | Property::GemSockets => {
+                    RulesOut::OfTheBase
+                }
+                Property::ItemLevel
+                | Property::Sockets
+                | Property::Quality
+                | Property::RequiredLevel => RulesOut::OfTheLeague,
+            },
         }
+    }
+
+    /// The filter `key` with the `minimum` compares a stat of the item: it rules out items of
+    /// its base ([`Self::rules_out`]).
+    #[must_use]
+    pub fn compares(&self, key: FilterKey, minimum: f64) -> bool {
+        self.rules_out(key, Some(minimum)) == RulesOut::OfTheBase
+    }
+
+    /// The stats of the lines of `item`, as [`Self::new`], and the physical DPS its base
+    /// reaches alone, for a weapon.
+    #[must_use]
+    pub fn for_item(item: &Item, trade: Option<&TradeStats>) -> Self {
+        let mut stats = Self::new(item.language(), item.modifiers(), trade);
+        stats.physical_reach = item.weapon().map(|weapon| {
+            let sum = |id: &str| -> f64 {
+                stats
+                    .lines
+                    .iter()
+                    .filter(|line| !line.implicit && line.game_id.as_deref() == Some(id))
+                    .filter_map(|line| match &line.stat {
+                        LineStat::Searched(TradeStat {
+                            value: Some(value), ..
+                        }) => Some(value.trade),
+                        _ => None,
+                    })
+                    .sum()
+            };
+            let lines = WeaponLines {
+                increased: sum(INCREASED_PHYSICAL),
+                added: sum(ADDED_PHYSICAL),
+                attack_speed: sum(ATTACK_SPEED),
+            };
+            weapon.base_physical_dps(f64::from(item.quality().unwrap_or(0)), lines)
+        });
+        stats
     }
 
     /// The filters of the search, from every filter of the item as the player set it: those
@@ -460,7 +575,7 @@ impl LineStats {
                     ids: vec![pseudo.trade_id().to_owned()],
                     minimum: minimum.map(written),
                     maximum: maximum.map(written),
-                    compares: self.compares(*key),
+                    rules_out: self.rules_out(*key, minimum),
                 })
             }
             FilterKey::Stat(_) | FilterKey::BaseType | FilterKey::Property(_) => None,
@@ -477,7 +592,7 @@ impl LineStats {
                             property: *property,
                             minimum,
                             maximum,
-                            compares: self.compares(*key),
+                            rules_out: self.rules_out(*key, minimum),
                         })
                     }
                     FilterKey::Stat(_) | FilterKey::BaseType | FilterKey::Pseudo(_) => None,
@@ -498,10 +613,9 @@ impl LineStats {
         checked
             .into_iter()
             .filter_map(|(key, filter)| match self.get(key)? {
-                LineStat::Searched(stat) => Some(StatFilter {
-                    compares: self.compares(FilterKey::Stat(key)),
-                    ..stat.filter(filter)
-                }),
+                LineStat::Searched(stat) => {
+                    Some(stat.filter(filter, self.rules_out(FilterKey::Stat(key), None)))
+                }
                 LineStat::Continued | LineStat::Unsearchable => None,
             })
             .collect()

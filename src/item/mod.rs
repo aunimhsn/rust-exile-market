@@ -46,7 +46,7 @@ pub use waystone::{
     MAX_WAYSTONE_TIER, WaystoneProperty, WaystoneValue, base_and_tier, waystone_property,
     without_tier,
 };
-pub use weapon::{DamageKind, Weapon};
+pub use weapon::{DamageKind, Weapon, WeaponLines};
 
 use crate::language::Language;
 

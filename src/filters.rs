@@ -54,24 +54,6 @@ pub enum Property {
     GemSockets,
 }
 
-impl Property {
-    /// A stat of the item by its kind: its DPS (which compares it only when a line of the
-    /// weapon counts in it, `LineStats::compares`), a property of a waystone or of a gem; not
-    /// its item level, its sockets, its quality nor its required level, which only narrow the
-    /// items of its base.
-    #[must_use]
-    pub fn is_stat(self) -> bool {
-        match self {
-            Self::PhysicalDps
-            | Self::ElementalDps
-            | Self::Waystone(_)
-            | Self::GemLevel
-            | Self::GemSockets => true,
-            Self::ItemLevel | Self::Sockets | Self::Quality | Self::RequiredLevel => false,
-        }
-    }
-}
-
 /// A half of the range field of a filter.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Half {

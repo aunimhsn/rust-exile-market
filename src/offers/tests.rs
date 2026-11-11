@@ -2,7 +2,7 @@ use super::*;
 use crate::language::Language;
 use crate::league::League;
 use crate::trade::offers::{OfferItem, Price, SellerStatus};
-use crate::trade::query::{ItemQuery, Query, StateFilters};
+use crate::trade::query::{ItemQuery, Query, RulesOut, StateFilters};
 
 pub(crate) fn item_search() -> Search {
     Search {
@@ -119,7 +119,7 @@ fn quality_between(minimum: Option<f64>, maximum: Option<f64>) -> Search {
             property: Property::Quality,
             minimum,
             maximum,
-            compares: false,
+            rules_out: RulesOut::OfTheLeague,
         });
     }
     search
@@ -164,7 +164,7 @@ fn the_offers_tell_whether_their_search_compared_the_stats_of_the_item() {
             ids: vec!["explicit.stat_3917489142".to_owned()],
             minimum: Some(10.0),
             maximum: None,
-            compares: true,
+            rules_out: RulesOut::OfTheBase,
         });
     }
 

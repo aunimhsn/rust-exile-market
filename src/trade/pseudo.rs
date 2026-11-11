@@ -29,10 +29,10 @@ pub enum Pseudo {
 }
 
 impl Pseudo {
-    /// It compares a stat of the item: a total, not the count of its unrevealed modifiers,
-    /// which only narrows the items of its base (any of them with a modifier unrevealed).
+    /// A total of lines of the item, not the count of its unrevealed modifiers, which rules
+    /// out nothing: any item may have one.
     #[must_use]
-    pub fn compares_stats(self) -> bool {
+    pub fn is_total(self) -> bool {
         match self {
             Self::ElementalResistance
             | Self::ChaosResistance

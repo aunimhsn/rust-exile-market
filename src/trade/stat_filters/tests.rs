@@ -68,7 +68,7 @@ fn stat(id: &str, minimum: Option<f64>, maximum: Option<f64>) -> StatFilter {
         ids: vec![id.to_owned()],
         minimum,
         maximum,
-        compares: true,
+        rules_out: RulesOut::OfTheBase,
     }
 }
 
@@ -515,7 +515,7 @@ fn a_pseudo_stat_is_searched_by_its_id_before_the_lines() {
             stat("pseudo.pseudo_total_life", None, None),
             // It narrows the items of the base only: it compares no stat.
             StatFilter {
-                compares: false,
+                rules_out: RulesOut::Nothing,
                 ..stat("pseudo.pseudo_number_of_unrevealed_mods", Some(1.0), None)
             },
             stat("explicit.stat_3299347043", Some(60.0), None),
@@ -551,7 +551,7 @@ fn the_filters_of_a_search_are_those_checked_and_any_base_when_it_is_unchecked()
             minimum: Some(220.0),
             maximum: None,
             // No line of damage nor of attack speed: the DPS of its base.
-            compares: false,
+            rules_out: RulesOut::OfTheLeague,
         }]
     );
     assert_eq!(
