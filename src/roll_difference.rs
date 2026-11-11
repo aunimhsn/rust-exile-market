@@ -178,38 +178,22 @@ struct Template {
 }
 
 impl Template {
-    /// `line` read as its template and its numbers.
+    /// `line` read as its template and its numbers, as the strings of the stats and the copied
+    /// lines read them ([`game_data::numbers`]): `#` in place of each number, its sign with it.
     fn of(line: &str) -> Self {
+        let numbers = game_data::numbers(line);
         let mut text = String::with_capacity(line.len());
-        let mut numbers = Vec::new();
-        let mut chars = line.chars().peekable();
-        // A sign right before a number, not inside a word: `-10%`, but not `X-10`.
-        let mut sign_allowed = true;
-        while let Some(c) = chars.next() {
-            let signed = matches!(c, '+' | '-') && sign_allowed;
-            let starts_number =
-                c.is_ascii_digit() || (signed && chars.peek().is_some_and(char::is_ascii_digit));
-            if !starts_number {
-                text.push(c);
-                sign_allowed = !c.is_alphanumeric();
-                continue;
-            }
-            let mut number = String::from(c);
-            while let Some(&next) = chars.peek() {
-                if next.is_ascii_digit() || next == '.' {
-                    number.push(next);
-                    chars.next();
-                } else {
-                    break;
-                }
-            }
+        let mut copied = 0;
+        for number in &numbers {
+            text.push_str(line.get(copied..number.start).unwrap_or_default());
             text.push('#');
-            sign_allowed = false;
-            if let Ok(value) = number.parse() {
-                numbers.push(value);
-            }
+            copied = number.end;
         }
-        Self { text, numbers }
+        text.push_str(line.get(copied..).unwrap_or_default());
+        Self {
+            text,
+            numbers: numbers.iter().map(game_data::Number::value).collect(),
+        }
     }
 }
 

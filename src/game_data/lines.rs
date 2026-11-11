@@ -202,17 +202,19 @@ fn first_with_id<T>(items: impl Iterator<Item = T>, has_id: impl Fn(&T) -> bool)
 
 /// A number of a line, with its sign when it has one.
 #[derive(Debug, PartialEq)]
-struct Number {
+pub struct Number {
     /// Where it starts, at its sign or else at its first digit.
-    start: usize,
+    pub start: usize,
     digits: usize,
-    end: usize,
+    /// Where it ends, after its last digit.
+    pub end: usize,
     magnitude: f64,
     negative: bool,
 }
 
 impl Number {
-    fn value(&self) -> f64 {
+    /// Its value, with its sign.
+    pub fn value(&self) -> f64 {
         if self.negative {
             -self.magnitude
         } else {
@@ -221,9 +223,11 @@ impl Number {
     }
 }
 
-/// The numbers of `text`. A sign right before a number is its own, unless it ends a word
-/// (`X-10`); a point is in a number only between two digits (`2.5`, not `2 times.`).
-fn numbers(text: &str) -> Vec<Number> {
+/// The numbers of `text`, as the parser reads those of a copied line (the test
+/// `the_parser_and_the_strings_read_the_same_numbers`). A sign right before a number is its
+/// own, unless it ends a word (`X-10`); a point is in a number only between two digits (`2.5`,
+/// not `2 times.`).
+pub fn numbers(text: &str) -> Vec<Number> {
     let bytes = text.as_bytes();
     let mut numbers = Vec::new();
     let mut index = 0;
