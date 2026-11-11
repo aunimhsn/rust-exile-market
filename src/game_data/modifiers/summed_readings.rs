@@ -1,9 +1,10 @@
-//! The other readings of the lines of an item copied from the in-game trade, with a line adding
-//! up several modifiers of its stat, whichever, or any reading where the best one splits a line:
-//! the lines whose tier the best reading can't be sure of, since its candidates only split a line
-//! into a pure modifier and another whose lines follow each other (the `47% d'Augmentation de
-//! l'Armure et de l'Évasion` of the owner's body armour adds up two hybrids, one of whose other
-//! lines is a sum too).
+//! The other readings of the lines of an item copied from the in-game trade, which tell the
+//! lines whose tier the best reading can't be sure of: its candidates only join lines that
+//! follow each other, and only split a line into a pure modifier and another (the `47%
+//! d'Augmentation de l'Armure et de l'Évasion` of the owner's body armour adds up two hybrids,
+//! one of whose other lines is a sum too), and it reads each line alone where a hybrid holds
+//! it too (`30% increased Energy Shield` and `+30 to maximum Life` of a helmet: two pure
+//! modifiers, or their hybrid).
 
 use super::{
     Affix, AffixSet, BaseSpawn, Candidate, Copied, CopiedLine, CopiedTier, ROUNDING, Range, Room,
@@ -12,8 +13,8 @@ use super::{
 use crate::item::{Modifier, ModifierOrigin};
 
 /// The most steps the search of the other readings takes: some fifty on a random rare item, a
-/// few hundred on the most tangled ones (761 at most on the items drawn at random by
-/// `tests/random_items.rs`, 2026-11-10; up to 2,734 on the draws of 2026-10-30, whose code
+/// few hundred on the most tangled ones (1,810 at most on the items drawn at random by
+/// `tests/random_items.rs`, 2026-11-11; up to 2,734 on the draws of 2026-10-30, whose code
 /// wasn't kept).
 pub(super) const MAX_STEPS: usize = 50_000;
 
@@ -30,7 +31,8 @@ pub(super) struct Best<'b> {
 
 /// What the other readings leave in doubt.
 pub(super) struct Doubts {
-    /// The indexes among the modifiers of the item of the lines in doubt.
+    /// The indexes among the modifiers of the item of the lines in doubt, with those another
+    /// reading reads and the best one leaves without tier, which have none to lose.
     pub(super) lines: Vec<usize>,
     /// Whether a reading that leaves lines in doubt leaves another room to the modifiers that
     /// can be a prefix or a suffix: an affix the full prefixes or suffixes seemed to rule out
@@ -70,7 +72,7 @@ impl Outcome {
     }
 }
 
-/// A line of the item that the best reading reads.
+/// A line of the item copied from the in-game trade, with its stat of the game data.
 struct Line<'a> {
     /// The index among the modifiers of the item of its modifier.
     modifier: usize,
@@ -78,6 +80,9 @@ struct Line<'a> {
     copied: CopiedLine<'a>,
     /// Its values among those of every line.
     values: std::ops::Range<usize>,
+    /// Whether the best reading reads it: another reading reads it too, while it may leave
+    /// without tier a line the best one leaves so.
+    read: bool,
 }
 
 /// A modifier as a reading shows it, compared from a reading to another.
@@ -104,45 +109,73 @@ struct Placement<'a> {
 }
 
 /// The indexes among `modifiers` of the lines that another reading of the item reads otherwise
-/// than the `best` one, where the best one splits a line, or with a line adding up several
-/// modifiers: on the base of `item`, among the tiers its level allows, `copied` giving the
-/// lines of each modifier (those of [`super::trade_tiers`]).
+/// than the `best` one, and that it leaves in doubt: on the base of `item`, among the tiers its
+/// level allows, `copied` giving the lines of each modifier (those of [`super::trade_tiers`]).
+/// On a `sanctified` item, whose values can leave their tiers, no reading adds up modifiers on a
+/// line, as the best one splits none.
 ///
-/// Another reading covers the lines the best one reads, each within the sum of the ranges of its
-/// modifiers, in the room of the item, as many fractured modifiers as the best reading or one,
-/// two modifiers of one type never, a line without value never shared; its modifiers aren't
-/// bound to follow each other, the in-game trade copy sorting its lines by stat, not by modifier,
-/// and a modifier written on several lines may have each read apart. In each part of the item it
-/// reads otherwise (the lines a modifier of either reading joins), it leaves the lines in doubt
-/// when the best reading splits a line there (the `217% increased Physical Damage` and `+200 to
-/// Accuracy Rating` of a bow with a prefix open: the hybrid T1 and a pure T3, or a pure T1, the
-/// hybrid T5 and a pure accuracy, three prefixes; a `119% increased Armour` split with its
-/// neighbour, while it may be summed with the hybrid of another line: any other reading there,
-/// with a sum or not), or when it adds up several modifiers on a line there and makes no more
-/// modifiers there than the best one (the two
-/// hybrids of the owner's body armour, three prefixes either way, while the best reading splits
-/// no line): the best reading prefers fewer split lines, a modifier holding a line alone being
-/// likelier than two adding up, and a hybrid likelier than two pure modifiers only when one of
-/// them can't hold its line alone. A reading that differs from the best one only by the tier of
-/// a modifier of a split line, the neighbouring tier the best one gives it too, is the best one.
+/// Another reading reads the lines the best one reads, and maybe lines it leaves without tier,
+/// each within the sum of the ranges of its modifiers, in the room of the item, as many
+/// fractured modifiers as the best reading or one, two modifiers of one type never, a line
+/// without value never shared; its modifiers aren't bound to follow each other, the in-game
+/// trade copy sorting its lines by stat, not by modifier, and a modifier written on several
+/// lines may have each read apart. In each part of the item it reads otherwise (the lines a
+/// modifier of either reading joins), it leaves the lines in doubt ([`PartRead::in_doubt`]):
+///
+/// - when the best reading splits a line there (the `217% increased Physical Damage` and `+200
+///   to Accuracy Rating` of a bow with a prefix open: the hybrid T1 and a pure T3, or a pure
+///   T1, the hybrid T5 and a pure accuracy, three prefixes; a `119% increased Armour` split
+///   with its neighbour, while it may be summed with the hybrid of another line);
+/// - when it reads a line there that the best reading leaves without tier: a hybrid whose
+///   other line no modifier holds alone, lines apart (`30% increased Physical Damage`, the pure
+///   modifier starting at 40%, and `+150 to Accuracy Rating` two lines away, read alone as a
+///   pure modifier), the best reading being the one that reads the most lines among its
+///   candidates only;
+/// - when it adds up several modifiers on a line there and makes no more modifiers there than
+///   the best one (the two hybrids of the owner's body armour, three prefixes either way,
+///   while the best reading splits no line): a modifier holding a line alone is likelier than
+///   two adding up, not than as many read otherwise;
+/// - when it adds up none and joins the lines there into other modifiers: a hybrid where the
+///   best reading reads its lines alone, each a pure modifier (`30% increased Energy Shield`
+///   and `+30 to maximum Life` of a helmet), or lines apart. Nothing tells which rolled, and
+///   when the application can't tell, it doesn't decide (owner's rule, 2026-11-10; on the
+///   items drawn at random, such lines were a hybrid far more often than pure modifiers).
+///
+/// A reading that keeps the lines of each modifier and differs by a tier isn't a doubt: a value
+/// in two tiers takes the worst, and one that differs from the best one only by the tier of a
+/// modifier of a split line, the neighbouring tier the best one gives it too, is the best one.
 pub(super) fn doubts(
     tables: &[Table],
     item: &TradeItem<'_>,
     modifiers: &[Modifier],
     copied: &[Option<Copied<'_>>],
     best: &Best<'_>,
+    sanctified: bool,
 ) -> Doubts {
-    doubts_within(tables, item, modifiers, copied, best, MAX_STEPS)
+    let bounds = Bounds {
+        max_steps: MAX_STEPS,
+        sums: !sanctified,
+    };
+    doubts_within(tables, item, modifiers, copied, best, bounds)
 }
 
-/// [`doubts`], in at most `max_steps` steps.
+/// What bounds the search of the other readings.
+#[derive(Debug, Clone, Copy)]
+struct Bounds {
+    /// The most steps it takes.
+    max_steps: usize,
+    /// Whether a reading may add up several modifiers on a line.
+    sums: bool,
+}
+
+/// [`doubts`], within `bounds`.
 fn doubts_within(
     tables: &[Table],
     item: &TradeItem<'_>,
     modifiers: &[Modifier],
     copied: &[Option<Copied<'_>>],
     best: &Best<'_>,
-    max_steps: usize,
+    bounds: Bounds,
 ) -> Doubts {
     let chosen: Vec<&Candidate> = best
         .reading
@@ -157,7 +190,7 @@ fn doubts_within(
     let mut lines = Vec::new();
     let mut values = Vec::new();
     for (index, (modifier, copied)) in modifiers.iter().zip(copied).enumerate() {
-        let Some(copied) = copied.as_ref().filter(|_| read(index)) else {
+        let Some(copied) = copied else {
             continue;
         };
         for line in &copied.lines {
@@ -169,6 +202,7 @@ fn doubts_within(
                 origin: modifier.origin,
                 copied: line.clone(),
                 values: start..values.len(),
+                read: read(index),
             });
         }
     }
@@ -180,7 +214,7 @@ fn doubts_within(
         best,
         &chosen,
         modifiers.len(),
-        max_steps,
+        bounds,
     );
     let mut state = State::new(&ground);
     state.walk(&ground, 0);
@@ -434,11 +468,91 @@ fn same(best: &[Vec<Shown>], other: &[&Shown]) -> bool {
     })
 }
 
-/// Whether the lines a reading reads otherwise in a part of the item are in doubt: when the
-/// best reading splits a line there, or when the reading adds up modifiers on a line there
-/// (`summed`) and makes no more modifiers there (`made`) than the best one (`best_made`).
-fn in_doubt(split: bool, summed: bool, made: usize, best_made: usize) -> bool {
-    split || summed && made <= best_made
+/// How a reading reads a part of the item, the lines a modifier of it or of the best reading
+/// joins, against the best one: the first that holds, in this order.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PartRead {
+    /// The best reading splits a line there.
+    BestSplits,
+    /// The reading reads a line there that the best one leaves without tier.
+    ReadsMore,
+    /// The reading adds up several modifiers on a line there.
+    Sums {
+        /// How many modifiers it makes there.
+        made: usize,
+        /// How many the best reading makes there.
+        best_made: usize,
+    },
+    /// The reading adds up none and joins the lines there into other modifiers than the best
+    /// one: a hybrid where the best one reads pure modifiers, or lines apart.
+    JoinsOtherwise,
+    /// The reading keeps the lines of each modifier of the best one: other tiers of them, or
+    /// other modifiers of the same lines.
+    SameLines,
+}
+
+impl PartRead {
+    /// How the placements `chosen`, a reading with `counts` modifiers on each line, read
+    /// against the best reading of `ground` the part of the item made of the modifiers
+    /// `in_part` tells.
+    fn new(
+        ground: &Ground<'_, '_>,
+        chosen: &[&Placement<'_>],
+        counts: &[usize],
+        in_part: impl Fn(usize) -> bool,
+    ) -> Self {
+        let lines = || {
+            let lines = ground.lines.iter().zip(counts);
+            lines.filter(|(line, _)| in_part(line.modifier))
+        };
+        let best = || {
+            let candidates = ground.best_candidates.iter();
+            candidates.filter(|candidate| in_part(candidate.modifiers.start))
+        };
+        if best().any(|candidate| candidate.sets.len() > 1) {
+            return Self::BestSplits;
+        }
+        // A line the best reading leaves without tier is in a part by a modifier of the
+        // reading only.
+        if lines().any(|(line, _)| !line.read) {
+            return Self::ReadsMore;
+        }
+        // The lines of each modifier of the reading there, then of the best one, each of
+        // its candidates making one modifier since none splits a line.
+        let mut joined: Vec<&[usize]> = chosen
+            .iter()
+            .map(|placement| placement.shown.modifiers.as_slice())
+            .filter(|modifiers| modifiers.first().is_some_and(|&first| in_part(first)))
+            .collect();
+        joined.sort_unstable();
+        if lines().any(|(_, &count)| count > 1) {
+            return Self::Sums {
+                made: joined.len(),
+                best_made: best().count(),
+            };
+        }
+        let mut best_joined: Vec<Vec<usize>> = best()
+            .map(|candidate| candidate.modifiers.clone().collect())
+            .collect();
+        best_joined.sort_unstable();
+        if joined == best_joined {
+            Self::SameLines
+        } else {
+            Self::JoinsOtherwise
+        }
+    }
+
+    /// Whether the lines the reading reads otherwise there are in doubt ([`doubts`]): always,
+    /// but a reading that adds up modifiers on a line in more modifiers than the best one, a
+    /// modifier holding a line alone being likelier than two adding up, and one that keeps
+    /// the lines of each modifier, a value in two tiers taking the worst.
+    fn in_doubt(self) -> bool {
+        match self {
+            Self::BestSplits | Self::ReadsMore | Self::JoinsOtherwise => true,
+            Self::Sums { made, best_made } => made <= best_made,
+            Self::SameLines => false,
+        }
+    }
 }
 
 /// The parts of the item: the lines joined by a modifier, each part known by one of its lines.
@@ -508,12 +622,11 @@ struct Ground<'s, 'a> {
     /// For each modifier of the item, what the best reading reads on its line.
     best: Vec<Vec<Vec<Shown>>>,
     best_candidates: Vec<BestCandidate>,
-    max_steps: usize,
+    bounds: Bounds,
 }
 
 impl<'s, 'a> Ground<'s, 'a> {
-    /// `count` is the number of modifiers of the item, `max_steps` the most steps the search
-    /// takes.
+    /// `count` is the number of modifiers of the item.
     fn new(
         lines: &'s [Line<'a>],
         values: &'s [f64],
@@ -521,7 +634,7 @@ impl<'s, 'a> Ground<'s, 'a> {
         best: &Best<'_>,
         chosen: &[&Candidate],
         count: usize,
-        max_steps: usize,
+        bounds: Bounds,
     ) -> Self {
         let mut starting = vec![Vec::new(); lines.len()];
         for (index, placement) in placements.iter().enumerate() {
@@ -556,7 +669,7 @@ impl<'s, 'a> Ground<'s, 'a> {
                     sets: candidate.sets().collect(),
                 })
                 .collect(),
-            max_steps,
+            bounds,
         }
     }
 
@@ -666,14 +779,14 @@ impl State {
     }
 
     /// Every set of the modifiers whose first line is `line`, from its `from`th on, added to
-    /// the chosen ones; the next line once `line` holds its values.
+    /// the chosen ones; the next line once `line` is settled.
     fn choose(&mut self, ground: &Ground<'_, '_>, line: usize, from: usize) {
-        if self.steps >= ground.max_steps {
+        if self.steps >= ground.bounds.max_steps {
             self.cut = true;
             return;
         }
         self.steps += 1;
-        if self.line_holds(ground, line) {
+        if self.line_settled(ground, line) {
             self.walk(ground, line + 1);
         }
         let Some(starting) = ground.starting.get(line) else {
@@ -691,23 +804,28 @@ impl State {
         }
     }
 
-    /// Whether the line of `index` has a modifier and the sum of their ranges holds its values.
-    fn line_holds(&self, ground: &Ground<'_, '_>, index: usize) -> bool {
-        let Some(line) = ground.lines.get(index) else {
+    /// Whether the search can leave the line of `index` as it is: it has modifiers and the sum
+    /// of their ranges holds its values; or it has none, a line the best reading leaves
+    /// without tier too.
+    fn line_settled(&self, ground: &Ground<'_, '_>, index: usize) -> bool {
+        let (Some(line), Some(&count)) = (ground.lines.get(index), self.counts.get(index)) else {
             return false;
         };
-        let covered = self.counts.get(index).is_some_and(|&count| count > 0);
+        if count == 0 {
+            return !line.read;
+        }
         let (Some(values), Some(sums)) = (
             ground.values.get(line.values.clone()),
             self.sums.get(line.values.clone()),
         ) else {
             return false;
         };
-        covered && holds(values, sums).is_some()
+        holds(values, sums).is_some()
     }
 
     /// Whether the placement of `index` can be added: its type not chosen yet, room for its
-    /// affix and for a fractured modifier, no modifier yet on a line of it without value.
+    /// affix and for a fractured modifier, no modifier yet on a line of it without value, nor
+    /// on any of its lines when no reading adds up modifiers.
     fn fits(&self, ground: &Ground<'_, '_>, index: usize) -> bool {
         let Some(placement) = ground.placements.get(index) else {
             return false;
@@ -724,10 +842,11 @@ impl State {
         let fractured = !placement.fractured || self.fractured < ground.fractured;
         // A line without value can't add up modifiers.
         let shared = placement.lines.iter().any(|&line| {
-            ground
+            let valueless = ground
                 .lines
                 .get(line)
-                .is_some_and(|line| line.values.is_empty())
+                .is_some_and(|line| line.values.is_empty());
+            (valueless || !ground.bounds.sums)
                 && self.counts.get(line).is_some_and(|&count| count > 0)
         });
         !kind && room && fractured && !shared
@@ -791,8 +910,9 @@ impl State {
         })
     }
 
-    /// Compares the chosen placements, a reading of every line, with the best reading: the lines
-    /// it reads otherwise in each part of the item go in doubt as [`in_doubt`] says.
+    /// Compares the chosen placements, a reading of every line the best reading reads, with the
+    /// best one: the lines it reads otherwise in each part of the item go in doubt as
+    /// [`PartRead::in_doubt`] says.
     fn compare(&mut self, ground: &Ground<'_, '_>) {
         let chosen: Vec<&Placement<'_>> = self
             .chosen
@@ -819,33 +939,10 @@ impl State {
         roots.sort_unstable();
         roots.dedup();
         for root in roots {
-            let summed = ground
-                .lines
-                .iter()
-                .zip(&self.counts)
-                .any(|(line, &count)| count > 1 && part(line.modifier) == root);
-            let made = chosen
-                .iter()
-                .filter(|placement| {
-                    placement
-                        .shown
-                        .modifiers
-                        .first()
-                        .and_then(|&first| part(first))
-                        == root
-                })
-                .count();
-            let (best_made, split) = ground
-                .best_candidates
-                .iter()
-                .filter(|candidate| part(candidate.modifiers.start) == root)
-                .fold((0, false), |(made, split), candidate| {
-                    (
-                        made + candidate.sets.len(),
-                        split || candidate.sets.len() > 1,
-                    )
-                });
-            if !in_doubt(split, summed, made, best_made) {
+            let read = PartRead::new(ground, &chosen, &self.counts, |modifier| {
+                part(modifier) == root
+            });
+            if !read.in_doubt() {
                 continue;
             }
             if !ground.same_room(&chosen) {

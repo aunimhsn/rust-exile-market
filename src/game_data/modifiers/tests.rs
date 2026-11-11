@@ -1991,16 +1991,14 @@ fn energy_shield_and_life() -> Vec<Modifier> {
 }
 
 #[test]
-fn lines_that_fit_a_hybrid_are_read_alone_while_the_item_has_room() {
+fn lines_that_fit_pure_modifiers_and_their_hybrid_have_no_tier_while_the_item_has_room() {
     use Affix::Prefix;
     let item = parse(TIARA_EN);
     let modifiers = energy_shield_and_life();
 
+    // The pure T6 and T8, or their hybrid T3: nothing tells which rolled.
     let found = found_tiers(&item, &modifiers, (3, 3));
-    assert_eq!(
-        summary(&modifiers, &found),
-        [(1, vec![(Prefix, 6)]), (1, vec![(Prefix, 8)])]
-    );
+    assert_eq!(found, []);
 
     // With room for one prefix only, the hybrid.
     let found = found_tiers(&item, &modifiers, (1, 3));

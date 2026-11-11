@@ -622,12 +622,79 @@ fn a_line_copied_from_the_in_game_trade_takes_the_worst_tier_its_item_level_allo
 }
 
 #[test]
-fn the_lines_of_a_hybrid_are_one_modifier_only_when_the_room_needs_it() {
+fn lines_pure_modifiers_and_their_hybrid_hold_have_no_tier_while_the_item_has_room() {
     use Affix::Prefix;
+    let tables = pure_and_hybrid_tables();
+    let lines = ["25% increased Energy Shield", "+25 to maximum Life"];
+
+    // Two pure prefixes or their hybrid, the item having room for either: nothing tells which
+    // rolled.
+    let (read, split) = read_in(&tables, 60, &lines, (2, 0));
+    assert_eq!(read, []);
+    assert_eq!(split, []);
+    // One prefix only: the hybrid, in its tier 1.
+    let (read, split) = read_in(&tables, 60, &lines, (1, 0));
+    assert_eq!(read, [(2, vec![(Prefix, 1)])]);
+    assert_eq!(split, []);
+    // In the other order of its lines too.
+    let (read, _) = read_in(&tables, 60, &[lines[1], lines[0]], (1, 0));
+    assert_eq!(read, [(2, vec![(Prefix, 1)])]);
+    // Values no tier of the hybrid holds: two pure prefixes.
+    let pure = ["30% increased Energy Shield", "+30 to maximum Life"];
+    let (read, _) = read_in(&tables, 60, &pure, (2, 0));
+    assert_eq!(read, [(1, vec![(Prefix, 1)]), (1, vec![(Prefix, 1)])]);
+    // The tier of the hybrid that holds them above the level of the item: two pure prefixes.
+    let (read, _) = read_in(&tables, 15, &lines, (2, 0));
+    assert_eq!(read, [(1, vec![(Prefix, 1)]), (1, vec![(Prefix, 1)])]);
+    // A life above its pure tier adds up the hybrid and the pure modifier, after the other
+    // line of the hybrid.
+    let lines = ["25% increased Energy Shield", "+45 to maximum Life"];
+    let (read, split) = read_in(&tables, 60, &lines, (2, 0));
+    assert_eq!(read, [(2, vec![(Prefix, 1)])]);
+    assert_eq!(split, [("+45 to maximum Life".to_owned(), Prefix, 1)]);
+}
+
+/// The tables of [`pure_and_hybrid_tables`], with a rarity that rolls as a suffix.
+fn pure_hybrid_and_rarity_tables() -> Vec<Table> {
+    let mut tables = pure_and_hybrid_tables();
+    tables.extend(read(&table(
+        "Rarity",
+        "suffix",
+        &[RARITY],
+        &[(1, &[(10, 20)])],
+    )));
+    tables
+}
+
+#[test]
+fn the_lines_of_a_hybrid_needn_t_follow_each_other_to_be_in_doubt() {
+    use Affix::Suffix;
+    let tables = pure_hybrid_and_rarity_tables();
+    assert_eq!(tables.len(), 4);
+    // The in-game trade sorts its lines by stat: the rarity between the lines of the hybrid.
+    let lines = [
+        "25% increased Energy Shield",
+        "15% increased Rarity of Items found",
+        "+25 to maximum Life",
+    ];
+
+    // Two pure prefixes or their hybrid; the rarity, which no other reading touches, keeps
+    // its tier.
+    let (read, split) = read_in(&tables, 60, &lines, (2, 1));
+    assert_eq!(read, [(1, vec![(Suffix, 1)])]);
+    assert_eq!(split, []);
+    // One prefix only: the hybrid is the only reading that fits, which the lines apart
+    // don't let read; no tier rather than two pure prefixes the item has no room for.
+    let (read, _) = read_in(&tables, 60, &lines, (1, 1));
+    assert_eq!(read, [(1, vec![(Suffix, 1)])]);
+}
+
+#[test]
+fn a_line_read_alone_is_in_doubt_when_its_hybrid_reads_a_line_left_without_tier() {
+    use Affix::{Prefix, Suffix};
+    // No pure life: its line has no tier alone.
     let tables = read(
         &[
-            // Too high to add up with a tier of the hybrid on a line of 25.
-            table("Life", "prefix", &[LIFE], &[(1, &[(21, 30)])]),
             table(
                 "EnergyShield",
                 "prefix",
@@ -638,31 +705,93 @@ fn the_lines_of_a_hybrid_are_one_modifier_only_when_the_room_needs_it() {
                 "Hybrid",
                 "prefix",
                 &[ENERGY_SHIELD, LIFE],
-                &[(1, &[(10, 19), (10, 19)]), (20, &[(20, 29), (20, 29)])],
+                &[(1, &[(20, 29), (10, 19)])],
             ),
+            table("Rarity", "suffix", &[RARITY], &[(1, &[(10, 20)])]),
         ]
         .join("\n"),
     );
     assert_eq!(tables.len(), 3);
-    let lines = ["25% increased Energy Shield", "+25 to maximum Life"];
+    let (shield, rarity, life) = (
+        "25% increased Energy Shield",
+        "15% increased Rarity of Items found",
+        "+15 to maximum Life",
+    );
 
-    // Two pure prefixes while the item has room for them.
-    let (read, split) = read_in(&tables, 60, &lines, (2, 0));
-    assert_eq!(read, [(1, vec![(Prefix, 1)]), (1, vec![(Prefix, 1)])]);
+    // The lines of the hybrid following each other: the reading that reads the most lines.
+    let (read, _) = read_in(&tables, 60, &[shield, life, rarity], (3, 3));
+    assert_eq!(read, [(2, vec![(Prefix, 1)]), (1, vec![(Suffix, 1)])]);
+    // Apart, the life is left without tier and the energy shield read alone, a pure prefix:
+    // in doubt, since the hybrid reads both.
+    let (read, _) = read_in(&tables, 60, &[shield, rarity, life], (3, 3));
+    assert_eq!(read, [(1, vec![(Suffix, 1)])]);
+    // A life the hybrid doesn't hold: the energy shield is the pure prefix.
+    let (read, _) = read_in(
+        &tables,
+        60,
+        &[shield, rarity, "+25 to maximum Life"],
+        (3, 3),
+    );
+    assert_eq!(read, [(1, vec![(Prefix, 1)]), (1, vec![(Suffix, 1)])]);
+}
+
+#[test]
+fn a_line_read_alone_is_in_doubt_when_its_hybrid_adds_up_on_a_line_left_without_tier() {
+    use Affix::{Prefix, Suffix};
+    let tables = pure_hybrid_and_rarity_tables();
+    // The life is above its pure tier, and apart from the energy shield: no candidate splits
+    // it with the hybrid, and it is left without tier.
+    let lines = [
+        "25% increased Energy Shield",
+        "15% increased Rarity of Items found",
+        "+45 to maximum Life",
+    ];
+
+    // The hybrid and the pure life add up to 45: the energy shield may be the hybrid's.
+    let (read, split) = read_in(&tables, 60, &lines, (2, 1));
+    assert_eq!(read, [(1, vec![(Suffix, 1)])]);
     assert_eq!(split, []);
-    // One prefix only: the hybrid, in its tier 1.
-    let (read, split) = read_in(&tables, 60, &lines, (1, 0));
-    assert_eq!(read, [(2, vec![(Prefix, 1)])]);
-    assert_eq!(split, []);
-    // In the other order of its lines too.
-    let (read, _) = read_in(&tables, 60, &[lines[1], lines[0]], (1, 0));
-    assert_eq!(read, [(2, vec![(Prefix, 1)])]);
-    // A life above its pure tier adds up the hybrid and the pure modifier, after the other
-    // line of the hybrid.
-    let lines = ["25% increased Energy Shield", "+45 to maximum Life"];
-    let (read, split) = read_in(&tables, 60, &lines, (2, 0));
-    assert_eq!(read, [(2, vec![(Prefix, 1)])]);
-    assert_eq!(split, [("+45 to maximum Life".to_owned(), Prefix, 1)]);
+    // No room for the hybrid and the pure life with a pure energy shield in doubt: with one
+    // prefix only, nothing adds up to the life, and the energy shield is the pure prefix.
+    let (read, _) = read_in(&tables, 60, &lines, (1, 1));
+    assert_eq!(read, [(1, vec![(Prefix, 1)]), (1, vec![(Suffix, 1)])]);
+}
+
+#[test]
+fn a_hybrid_in_doubt_leaves_its_room_to_a_line_that_can_be_a_prefix_or_a_suffix() {
+    use Affix::{Prefix, Suffix};
+    let mut tables = pure_hybrid_and_rarity_tables();
+    tables.extend(read(&table(
+        "RarityPrefix",
+        "prefix",
+        &[RARITY],
+        &[(1, &[(10, 20)])],
+    )));
+    assert_eq!(tables.len(), 5);
+    let lines = [
+        "25% increased Energy Shield",
+        "+25 to maximum Life",
+        "15% increased Rarity of Items found",
+    ];
+
+    // Two pure prefixes would leave the rarity the suffix only, their hybrid a prefix too.
+    let (read, _) = read_in(&tables, 60, &lines, (2, 1));
+    assert_eq!(read, [(1, vec![(Prefix, 1), (Suffix, 1)])]);
+    // Values only the pure modifiers hold: the prefixes are full, the rarity is the suffix.
+    let pure = [
+        "30% increased Energy Shield",
+        "+30 to maximum Life",
+        lines[2],
+    ];
+    let (read, _) = read_in(&tables, 60, &pure, (2, 1));
+    assert_eq!(
+        read,
+        [
+            (1, vec![(Prefix, 1)]),
+            (1, vec![(Prefix, 1)]),
+            (1, vec![(Suffix, 1)])
+        ]
+    );
 }
 
 #[test]
@@ -806,17 +935,24 @@ fn no_line_of_a_sanctified_item_adds_up_two_modifiers() {
     assert_eq!(read, [(2, vec![(Prefix, 1)])]);
     assert_eq!(split, [("+45 to maximum Life".to_owned(), Prefix, 1)]);
     // Sanctified, its values can leave their tiers: the life is read by no tier rather than
-    // split, the energy shield alone.
+    // split, the energy shield alone, which no other reading adding up modifiers puts in doubt.
     let ((read, split), _) = read_modifiers(&tables, 60, &lines, (2, 0), true);
     assert_eq!(read, [(1, vec![(Prefix, 1)])]);
     assert_eq!(split, []);
+    // Lines the pure modifiers and their hybrid hold are in doubt on a sanctified item too.
+    let lines = [
+        modifier(None, &["25% increased Energy Shield"]),
+        modifier(None, &["+25 to maximum Life"]),
+    ];
+    let ((read, _), _) = read_modifiers(&tables, 60, &lines, (2, 0), true);
+    assert_eq!(read, []);
 }
 
 #[test]
 fn the_lines_another_reading_adds_up_in_as_many_modifiers_have_no_tier() {
-    use Affix::Prefix;
-    // A pure life from 1: with the hybrid of tier 1, it adds up to the 25 of the life as
-    // well, two modifiers as the two pure ones.
+    use Affix::{Prefix, Suffix};
+    // A pure life from 1: with the life of the hybrid, `10–19`, it adds up to the 25 of the
+    // life as well, two modifiers as the two pure ones; the hybrid alone doesn't hold 25.
     let tables = read(
         &[
             table("Life", "prefix", &[LIFE], &[(1, &[(1, 30)])]),
@@ -830,7 +966,7 @@ fn the_lines_another_reading_adds_up_in_as_many_modifiers_have_no_tier() {
                 "Hybrid",
                 "prefix",
                 &[ENERGY_SHIELD, LIFE],
-                &[(1, &[(20, 29), (20, 29)])],
+                &[(1, &[(20, 29), (10, 19)])],
             ),
             table("Rarity", "suffix", &[RARITY], &[(1, &[(10, 20)])]),
         ]
@@ -845,14 +981,18 @@ fn the_lines_another_reading_adds_up_in_as_many_modifiers_have_no_tier() {
 
     // Both lines in doubt; the rarity, which no other reading touches, keeps its tier.
     let (read, split) = read_in(&tables, 60, &lines, (2, 1));
-    assert_eq!(read, [(1, vec![(Affix::Suffix, 1)])]);
+    assert_eq!(read, [(1, vec![(Suffix, 1)])]);
     assert_eq!(split, []);
-    // With one prefix only, the hybrid alone is the only reading.
-    let (read, _) = read_in(&tables, 60, &lines, (1, 1));
-    assert_eq!(
-        read,
-        [(2, vec![(Prefix, 1)]), (1, vec![(Affix::Suffix, 1)])]
-    );
+    // With room for a third prefix, the hybrid and two pure modifiers add up as well, one
+    // modifier more than the two pure ones: a modifier holding a line alone is the likelier.
+    let pure = [(1, vec![(Prefix, 1)]), (1, vec![(Prefix, 1)])];
+    let high = [
+        "30% increased Energy Shield",
+        "+30 to maximum Life",
+        "15% increased Rarity of Items found",
+    ];
+    let (read, _) = read_in(&tables, 60, &high, (3, 1));
+    assert_eq!(read, [pure.as_slice(), &[(1, vec![(Suffix, 1)])]].concat());
 }
 
 #[test]
@@ -867,13 +1007,15 @@ fn a_search_whose_readings_stop_at_their_bound_reads_no_line() {
             .collect()
     };
 
-    let ((read, _), effort) = read_modifiers(&tables, 60, &lines(2), (3, 3), false);
+    // Two lines, alone or their hybrid, the only reading that fits one prefix.
+    let ((read, _), effort) = read_modifiers(&tables, 60, &lines(2), (1, 0), false);
     assert_eq!(effort.readings, 2);
     assert!(!effort.readings_cut);
-    assert_eq!(read.len(), 2);
+    assert_eq!(read, [(2, vec![(Affix::Prefix, 1)])]);
     // Each line a hybrid with the one before or after: more readings than the bound, and no
-    // line read, the best of those looked at being maybe not the best of all.
-    let ((read, split), effort) = read_modifiers(&tables, 60, &lines(24), (3, 3), false);
+    // line read, the best of those looked at being maybe not the best of all (twelve hybrids
+    // fit twelve prefixes).
+    let ((read, split), effort) = read_modifiers(&tables, 60, &lines(24), (12, 0), false);
     assert_eq!(effort.readings, MAX_READINGS);
     assert!(effort.readings_cut);
     assert_eq!(read, []);

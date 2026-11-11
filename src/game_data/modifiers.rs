@@ -591,20 +591,25 @@ pub struct AddedTiers {
 /// room. No line of a `sanctified` item is split: its values can leave their tiers.
 ///
 /// A line stays without tier too, with the other lines of its hybrids, when another reading
-/// fits the item as well ([`summed_readings::doubts`]), with a line adding up several
-/// modifiers, whichever, or any reading where the best one splits a line: the `47%
-/// d'Augmentation de l'Armure et de l'Évasion` of the owner's body armour adds up two hybrids,
-/// one with `+23 à l'Armure` and `+19 au Score d'Évasion`, the other with the life; a line split
-/// with its neighbour may be summed with another line's hybrid, the copy sorting its lines by
-/// stat, not by modifier. Such a reading
-/// that leaves another room to a line that can be a prefix or a suffix keeps both its affixes.
+/// fits the item as well ([`summed_readings::doubts`]): lines joined into other modifiers,
+/// two pure modifiers or their hybrid (`30% increased Energy Shield` and `+30 to maximum Life`
+/// of a helmet with room for two prefixes: when the application can't tell, it doesn't decide,
+/// owner's rule on 2026-11-10), also a hybrid whose lines don't follow each other, or whose
+/// other line has no tier alone; a line adding up several modifiers, whichever, in no more
+/// modifiers; or any reading where the best one splits a line: the `47% d'Augmentation de
+/// l'Armure et de l'Évasion` of the owner's body armour adds up two hybrids, one with `+23 à
+/// l'Armure` and `+19 au Score d'Évasion`, the other with the life; a line split with its
+/// neighbour may be summed with another line's hybrid, the copy sorting its lines by stat, not
+/// by modifier. Such a reading that leaves another room to a line that can be a prefix or a
+/// suffix keeps both its affixes. On a `sanctified` item, no other reading adds up modifiers
+/// on a line either.
 ///
 /// A search that stops at one of its bounds ([`MAX_READINGS`], `MAX_STEPS`) leaves every line
 /// it reads without tier, as does one that doesn't meet its best reading among the others: it
 /// can't vouch for the reading it would show.
 ///
-/// A hybrid whose other line is read on its own (a sanctified value out of its tier, or two
-/// lines apart) counts twice and may rule out an affix wrongly: a rare case, left as it is.
+/// A hybrid whose lines are read each on its own, a sanctified value having left the tiers of
+/// the hybrid, counts twice and may rule out an affix wrongly: a rare case, left as it is.
 #[must_use]
 pub fn trade_tiers(
     language: Language,
@@ -723,23 +728,18 @@ fn trade_tiers_in(
         return (Vec::new(), effort);
     };
     let mut ambiguous = search.ambiguous;
-    // Another reading in doubt may take another room, which no longer rules out an affix.
-    let mut room_in_doubt = false;
-    if !sanctified {
-        let best = summed_readings::Best {
-            candidates: &candidates,
-            reading: &reading,
-            room,
-            fits_room: key.room,
-        };
-        let doubts = summed_readings::doubts(tables, item, modifiers, &copied, &best);
-        doubts.outcome.log(base_type);
-        effort.steps = doubts.steps;
-        room_in_doubt = doubts.other_room;
-        for line in doubts.lines {
-            if !ambiguous.contains(&line) {
-                ambiguous.push(line);
-            }
+    let best = summed_readings::Best {
+        candidates: &candidates,
+        reading: &reading,
+        room,
+        fits_room: key.room,
+    };
+    let doubts = summed_readings::doubts(tables, item, modifiers, &copied, &best, sanctified);
+    doubts.outcome.log(base_type);
+    effort.steps = doubts.steps;
+    for line in doubts.lines {
+        if !ambiguous.contains(&line) {
+            ambiguous.push(line);
         }
     }
     // A modifier that can be both, when the others leave room for one affix only: the lines
@@ -751,7 +751,8 @@ fn trade_tiers_in(
             limits.suffixes
         );
         (true, true)
-    } else if room_in_doubt {
+    } else if doubts.other_room {
+        // Another reading in doubt takes another room, which no longer rules out an affix.
         (true, true)
     } else {
         room.both(&reading, &candidates)
@@ -1485,7 +1486,9 @@ struct ReadingKey {
     /// How many lines aren't split into two modifiers: a line that a modifier holds alone
     /// isn't split (`18% increased Rarity of Items found` would also fit two of 9%).
     whole: usize,
-    /// How many modifiers the lines make, those without tier counted.
+    /// How many modifiers the lines make, those without tier counted: the lines alone
+    /// first. Where a hybrid holds them too in the room of the item, the other readings
+    /// leave them without tier ([`summed_readings::doubts`]), whichever is read here.
     modifiers: usize,
 }
 

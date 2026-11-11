@@ -107,97 +107,105 @@ const SHUFFLE_SEED: u64 = 0xD1B5_4A32_D192_ED03;
 /// What the draw gave for each of the [`WAYS`], with the game data of RePoE `75885a0`
 /// (2026-11-11): to record again when the data or the search change, after a look at what
 /// moved. A wrong tier is shown to the player as sure: `other_modifier` is the count to keep
-/// low, and `wrong_items` the items it shows on.
+/// low, and `wrong_items` the items it shows on. Before step 17e3e, which leaves without tier
+/// the lines pure modifiers and their hybrid both hold, the first way read 858 lines as
+/// another modifier, 656 of them lines of a hybrid read alone, on 559 items.
 const RECORDED: [Counts; 6] = [
     Counts {
         items: 6400,
-        wrong_items: 559,
+        wrong_items: 111,
         discarded: 0,
         lines: 26789,
         summed_lines: 871,
-        right: 24159,
-        without_tier: 1684,
-        other_tier: 88,
-        other_modifier: 858,
-        summed_other_modifier: 161,
-        hybrid_other_modifier: 656,
-        most_readings: 24,
-        most_steps: 477,
-    },
-    Counts {
-        items: 6400,
-        wrong_items: 1005,
-        discarded: 0,
-        lines: 26789,
-        summed_lines: 871,
-        right: 22723,
-        without_tier: 2546,
+        right: 24139,
+        either_affix: 198,
+        without_tier: 2516,
         other_tier: 87,
-        other_modifier: 1433,
-        summed_other_modifier: 187,
-        hybrid_other_modifier: 1211,
-        most_readings: 12,
-        most_steps: 761,
+        other_modifier: 47,
+        summed_other_modifier: 47,
+        hybrid_other_modifier: 0,
+        most_readings: 24,
+        most_steps: 995,
     },
     Counts {
         items: 6400,
-        wrong_items: 447,
+        wrong_items: 110,
+        discarded: 0,
+        lines: 26789,
+        summed_lines: 871,
+        right: 22678,
+        either_affix: 216,
+        without_tier: 3980,
+        other_tier: 87,
+        other_modifier: 44,
+        summed_other_modifier: 44,
+        hybrid_other_modifier: 0,
+        most_readings: 12,
+        most_steps: 1810,
+    },
+    Counts {
+        items: 6400,
+        wrong_items: 60,
         discarded: 0,
         lines: 25638,
         summed_lines: 381,
-        right: 23949,
-        without_tier: 893,
+        right: 23925,
+        either_affix: 172,
+        without_tier: 1648,
         other_tier: 43,
-        other_modifier: 753,
-        summed_other_modifier: 72,
-        hybrid_other_modifier: 621,
+        other_modifier: 22,
+        summed_other_modifier: 11,
+        hybrid_other_modifier: 0,
         most_readings: 16,
         most_steps: 456,
     },
     Counts {
         items: 6400,
-        wrong_items: 101,
+        wrong_items: 54,
         discarded: 0,
         lines: 23059,
         summed_lines: 42,
-        right: 22830,
-        without_tier: 94,
+        right: 22705,
+        either_affix: 75,
+        without_tier: 300,
         other_tier: 0,
-        other_modifier: 135,
-        summed_other_modifier: 18,
-        hybrid_other_modifier: 63,
+        other_modifier: 54,
+        summed_other_modifier: 0,
+        hybrid_other_modifier: 0,
         most_readings: 8,
         most_steps: 58,
     },
     Counts {
         items: 6400,
-        wrong_items: 377,
+        wrong_items: 68,
         discarded: 0,
         lines: 25022,
         summed_lines: 258,
-        right: 23793,
-        without_tier: 576,
+        right: 23743,
+        either_affix: 153,
+        without_tier: 1207,
         other_tier: 42,
-        other_modifier: 611,
-        summed_other_modifier: 55,
-        hybrid_other_modifier: 497,
+        other_modifier: 30,
+        summed_other_modifier: 9,
+        hybrid_other_modifier: 0,
         most_readings: 16,
-        most_steps: 451,
+        most_steps: 536,
     },
     Counts {
         items: 6400,
-        wrong_items: 442,
+        wrong_items: 42,
         discarded: 0,
         lines: 26716,
         summed_lines: 904,
-        right: 24665,
-        without_tier: 1347,
-        other_tier: 25,
-        other_modifier: 679,
-        summed_other_modifier: 195,
-        hybrid_other_modifier: 453,
+        right: 24590,
+        either_affix: 175,
+        without_tier: 2068,
+        other_tier: 24,
+        other_modifier: 34,
+        summed_other_modifier: 34,
+        hybrid_other_modifier: 0,
         most_readings: 16,
-        most_steps: 189,
+        most_steps: 580,
     },
 ];
 
@@ -561,6 +569,9 @@ struct Counts {
     /// The lines read as their modifiers, each in its tier (one of two neighbouring tiers for
     /// a line read so), a prefix or suffix in doubt counting when the true one is among them.
     right: usize,
+    /// Those of `right` whose affix stays in doubt, a prefix or a suffix, the room of the
+    /// item leaving both.
+    either_affix: usize,
     /// The lines left without tier.
     without_tier: usize,
     /// The lines read as their modifiers, one in another tier: a value in two tiers takes the
@@ -571,7 +582,7 @@ struct Counts {
     /// Those of `other_modifier` that add up two modifiers or more.
     summed_other_modifier: usize,
     /// Those of `other_modifier` that are a line of one hybrid read alone, as a modifier of
-    /// that line only.
+    /// that line only: none, the other readings leaving such a line without tier.
     hybrid_other_modifier: usize,
     /// The most readings looked at for an item, of [`MAX_READINGS`].
     most_readings: usize,
@@ -687,6 +698,13 @@ fn read_as(item: &DrawnItem<'_>, line: usize, found: &[FoundTiers]) -> Read {
     best
 }
 
+/// Whether `found` reads the line `line` as a modifier that can be a prefix or a suffix.
+fn either_affix(line: usize, found: &[FoundTiers]) -> bool {
+    found
+        .iter()
+        .any(|found| found.modifiers.contains(&line) && found.affixes.len() > 1)
+}
+
 /// Whether the line `line` of `item` is a line of one hybrid that `found` reads alone, as a
 /// modifier of that line only.
 fn hybrid_read_alone(item: &DrawnItem<'_>, line: usize, found: &[FoundTiers]) -> bool {
@@ -742,7 +760,10 @@ fn measure(way: Way) -> (Counts, Vec<&'static str>) {
                 counts.lines += 1;
                 counts.summed_lines += usize::from(summed);
                 match read_as(&item, index, &found) {
-                    Read::Right => counts.right += 1,
+                    Read::Right => {
+                        counts.right += 1;
+                        counts.either_affix += usize::from(either_affix(index, &found));
+                    }
                     Read::WithoutTier => counts.without_tier += 1,
                     Read::OtherTier => {
                         counts.other_tier += 1;
