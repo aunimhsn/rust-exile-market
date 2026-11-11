@@ -22,7 +22,6 @@ use crate::game_data::{self, LineMatch, ModifierTiers, Tier};
 use crate::item::{Currency, Modifier, ModifierKind, Range, TierDoubt};
 use crate::language::Language;
 use crate::logging;
-use crate::trade::stat_filters::counted_numbers;
 
 /// The tiers of the lowest and of the highest roll of a line over every tier: "T13–T1".
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -300,7 +299,7 @@ impl ModifierInTables {
             .iter()
             .zip(values_of_each_match)
             .filter_map(|(line_match, (start, count))| {
-                let values = share_values(start, count, &counted_numbers(line_match, modifier))?;
+                let values = share_values(start, count, &line_match.counted_numbers(modifier))?;
                 Some(line_match.lines.clone().zip(values))
             })
             .flatten()

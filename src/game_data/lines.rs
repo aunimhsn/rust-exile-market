@@ -36,8 +36,9 @@ pub struct StatMatch<'a> {
     pub values: Vec<f64>,
     /// For each number of the line, in its order (over all its lines for a stat written on
     /// several), whether it is a `#` of the stat; not a number the string writes (the 3 of
-    /// `#% chance to gain Onslaught for 3 seconds`).
-    pub counted: Vec<bool>,
+    /// `#% chance to gain Onslaught for 3 seconds`). Read by [`Self::counted`] and
+    /// [`LineMatch::counted_numbers`] only.
+    is_counted: Vec<bool>,
     /// The value given by the string of the line: the option of an option stat (the skill of
     /// `# to Level of all Arc Skills`), or else the value of a line without number.
     pub matcher_value: Option<f64>,
@@ -48,12 +49,55 @@ pub struct StatMatch<'a> {
     matcher_index: usize,
 }
 
+impl StatMatch<'_> {
+    /// Of `numbers`, one for each number of the lines of the stat in their order, those the
+    /// stat counts: its `#`, not a number its string writes. Numbers that don't line up with
+    /// those the stat read stop at the fewer of both.
+    pub fn counted<T>(&self, numbers: impl IntoIterator<Item = T>) -> impl Iterator<Item = T> {
+        numbers
+            .into_iter()
+            .zip(&self.is_counted)
+            .filter_map(|(number, &counted)| counted.then_some(number))
+    }
+}
+
 /// The lines of a modifier written by one stat, or a line found nowhere.
 #[derive(Debug, Clone, PartialEq)]
 pub struct LineMatch<'a> {
     /// One line, or several for a stat written on several lines.
     pub lines: Range<usize>,
     pub stat: Option<StatMatch<'a>>,
+}
+
+impl LineMatch<'_> {
+    /// For each of its lines, a line of `modifier`, the indexes of its numbers the stat counts;
+    /// all of them when the numbers of the lines don't line up with those the stat read.
+    #[must_use]
+    pub fn counted_numbers(&self, modifier: &Modifier) -> Vec<Vec<usize>> {
+        let counts: Vec<usize> = self
+            .lines
+            .clone()
+            .map(|line| modifier.lines.get(line).map_or(0, |line| line.rolls.len()))
+            .collect();
+        let counted = self
+            .stat
+            .as_ref()
+            .map(|stat| stat.is_counted.as_slice())
+            .filter(|counted| counted.len() == counts.iter().sum::<usize>());
+        let mut start = 0;
+        counts
+            .iter()
+            .map(|&count| {
+                let numbers = (0..count)
+                    .filter(|number| {
+                        counted.is_none_or(|counted| counted.get(start + number) == Some(&true))
+                    })
+                    .collect();
+                start += count;
+                numbers
+            })
+            .collect()
+    }
 }
 
 /// Where the lines of a language are looked up.
@@ -152,7 +196,7 @@ fn stat_match<'a>(
         stat,
         source,
         values: template.values.iter().map(|value| value * sign).collect(),
-        counted: template.counted.clone(),
+        is_counted: template.counted.clone(),
         matcher_value: matcher.value,
         negate: matcher.negate,
         matcher_index,
