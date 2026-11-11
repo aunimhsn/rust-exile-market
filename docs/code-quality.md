@@ -66,7 +66,7 @@ The name comes first: a reader who sees only the name should know what the thing
 
 ## Comments
 
-- Each module, type, function and constant has a doc comment that says what it is for, in one sentence, before how; but `main` and the methods of a trait `impl`, which their module and their trait document. A field or a variant has one when its name and its type don't say it all.
+- Each module, type, function and constant has a doc comment that says what it is for, in one sentence, before how; but `main`, the tests (their name is their sentence) and the methods of a trait `impl`, which their module and their trait document. A field or a variant has one when its name and its type don't say it all.
 - A comment in a body says why, never what the code already says.
 - A comment that no longer matches the code is a bug, fixed in the same change.
 - The code says the rule of today. The source of a fact stays next to it (what was measured, where and when), since it tells when to check again; the story of the decisions (what was tried, who chose, what changed) lives in `docs/`.
@@ -92,7 +92,7 @@ The name comes first: a reader who sees only the name should know what the thing
 
 ## Refactoring
 
-- No change of behavior: the tests, the counts of the draw (`RECORDED`) and the generated game data stay the same, checked after each commit, not only at the end, so that a difference names its commit. Where a tool writes files, run it after each commit and compare its files and what it prints, byte for byte. A test whose assertion changes is named in the pull request, with the reason.
+- No change of behavior: the tests, the counts of the draw (`RECORDED`) and the generated game data stay the same, checked after each commit, not only at the end, so that a difference names its commit. Where a commit changes the generator (`tools/game-data`), run it after that commit at the commits the `NOTICE.md` of `main` names (without arguments, it reads `master`, which moves), and compare its files and what it prints, byte for byte. A tool that reads the trade site (`tools/exchange-icons`) isn't run for a refactoring: the next rule applies to it. A test whose assertion changes is named in the pull request, with the reason.
 - Before moving code, check it is tested; a path without a test gets one first, or, where only the network or the game reaches it, it is changed only by steps the compiler checks, and the pull request says so.
-- The moves first, in commits of their own: `git diff --color-moved=dimmed-zebra --color-moved-ws=allow-indentation-change` shows them unchanged, but for paths, `use` lines, visibility and the lines `rustfmt` wraps again. Then one commit per improvement.
+- The moves first, in commits of their own: `git diff --color-moved=dimmed-zebra --color-moved-ws=allow-indentation-change` shows them unchanged, but for paths, `use` lines, visibility and the line breaks `rustfmt` puts again, the same tokens. Then one commit per improvement.
 - Each small refactoring seen on the way is done in the same pull request. One that would change the behavior goes to `backlog.md`.
