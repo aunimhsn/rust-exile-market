@@ -59,7 +59,7 @@ fn a_table_rolling_on_no_released_base_is_left_out_with_the_tags_of_no_base() {
         {"ids": ["base_maximum_life"], "English": [{"string": "{0:+d} to maximum Life", "index_handlers": [[]]}], "hidden": null}
     ]"#;
 
-    let (tables, tags) = tables(
+    let (tables, base_spawns) = tables(
         &modifiers,
         BASES,
         translations,
@@ -84,10 +84,16 @@ fn a_table_rolling_on_no_released_base_is_left_out_with_the_tags_of_no_base() {
         domain: domain.to_owned(),
         tags: tags.iter().map(|&tag| tag.to_owned()).collect(),
     };
-    assert_eq!(tags.get("Ring"), Some(&spawn("item", &["ring", "default"])));
-    assert_eq!(tags.get("Bow"), Some(&spawn("item", &["default"])));
-    assert_eq!(tags.get("Flask"), Some(&spawn("flask", &["default"])));
-    assert_eq!(tags.get("Old"), None);
+    assert_eq!(
+        base_spawns.get("Ring"),
+        Some(&spawn("item", &["ring", "default"]))
+    );
+    assert_eq!(base_spawns.get("Bow"), Some(&spawn("item", &["default"])));
+    assert_eq!(
+        base_spawns.get("Flask"),
+        Some(&spawn("flask", &["default"]))
+    );
+    assert_eq!(base_spawns.get("Old"), None);
 }
 
 #[test]
@@ -108,14 +114,14 @@ fn a_name_of_several_bases_with_other_tags_gets_none() {
     );
     let translations = r#"[{"ids": ["local_energy_shield"], "English": [{"string": "{0:+d} to maximum Energy Shield", "index_handlers": [[]]}], "hidden": null}]"#;
 
-    let (_, tags) = tables(
+    let (_, base_spawns) = tables(
         &modifiers,
         bases,
         translations,
         &[("# to maximum Energy Shield", "# to maximum Energy Shield")],
     );
 
-    let tags_of = |name: &str| tags.get(name).map(|spawn| spawn.tags.clone());
+    let tags_of = |name: &str| base_spawns.get(name).map(|spawn| spawn.tags.clone());
     assert_eq!(tags_of("Random Helmet"), Some(Vec::new()));
     assert_eq!(
         tags_of("Cap"),
@@ -194,7 +200,7 @@ fn a_desecrated_table_rolls_on_the_equipment_and_the_jewels_after_the_ordinary_o
     );
     let translations = r#"[{"ids": ["life_leech_+%"], "English": [{"string": "{0}% increased amount of Life Leeched", "index_handlers": [[]]}], "hidden": null}]"#;
 
-    let (tables, tags) = tables(
+    let (tables, base_spawns) = tables(
         &modifiers,
         bases,
         translations,
@@ -236,7 +242,7 @@ fn a_desecrated_table_rolls_on_the_equipment_and_the_jewels_after_the_ordinary_o
         ]
     );
     assert_eq!(
-        tags.get("Ruby").map(|spawn| spawn.tags.clone()),
+        base_spawns.get("Ruby").map(|spawn| spawn.tags.clone()),
         Some(vec!["strjewel".to_owned(), "default".to_owned()])
     );
 }
@@ -288,7 +294,7 @@ fn a_modifier_of_the_genesis_tree_rolls_on_the_rings_the_amulets_and_the_belts_i
         {"ids": ["exposure_effect_+%"], "English": [{"string": "{0}% increased Exposure Effect", "index_handlers": [[]]}], "hidden": null}
     ]"#;
 
-    let (tables, tags) = tables(
+    let (tables, base_spawns) = tables(
         &modifiers,
         bases,
         translations,
@@ -345,7 +351,7 @@ fn a_modifier_of_the_genesis_tree_rolls_on_the_rings_the_amulets_and_the_belts_i
         ]
     );
     assert_eq!(
-        tags.get("Belt").map(|spawn| spawn.tags.clone()),
+        base_spawns.get("Belt").map(|spawn| spawn.tags.clone()),
         Some(vec!["belt".to_owned(), "default".to_owned()])
     );
 }
@@ -529,7 +535,7 @@ fn a_modifier_of_a_currency_not_listed_and_the_other_domains_are_noted() {
 
     let grouped = group_tiers(
         &modifiers,
-        &LineWriter::new(&[], &[], &Templates::new()),
+        &LineTranslator::new(&[], &[], &Templates::new()),
         &listed,
         &mut report,
     )

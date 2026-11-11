@@ -20,7 +20,7 @@ use crate::report::Report;
 pub use currencies::CURRENCIES;
 use currencies::{Currency, CurrencyModifier, CurrencySpawn, currency_spawns};
 pub use lines::Templates;
-use lines::{Line, LineRanges, LineWriter, Translation, is_radius_jewel_tag};
+use lines::{Line, LineRanges, LineTranslator, Translation, is_radius_jewel_tag};
 
 /// The domain of the modifiers of the equipment, which the application takes when none is
 /// written.
@@ -48,7 +48,7 @@ const GENESIS_TAGS: [&str; 2] = ["breach_desecration", "genesis_tree_minion"];
 /// The tags of the bases the Genesis tree grows, the rings, the amulets and the belts (seen on
 /// the trade site on 2026-10-30): a modifier of a tag of [`GENESIS_TAGS`] rolls on them, but on
 /// those its tags before rule out (`ring` and `belt` at 0 for one of the amulets).
-const GENESIS_BASES: [&str; 3] = ["ring", "amulet", "belt"];
+const GENESIS_BASE_TAGS: [&str; 3] = ["ring", "amulet", "belt"];
 
 /// The domains of the bases kept, and of their modifiers: the equipment, the jewels, the flasks
 /// and the charms, the waystones (`area`) and the tablets; each one a domain the application
@@ -277,12 +277,13 @@ pub fn reduce(
         .filter(|base| base.release_state == "released")
         .collect();
     let currencies = currency_spawns(&files.modifiers, currencies, &released)?;
-    let writer = LineWriter::new(&files.translations, &files.tablet_translations, templates);
-    let grouped = group_tiers(&files.modifiers, &writer, &currencies, report)?;
+    let translator =
+        LineTranslator::new(&files.translations, &files.tablet_translations, templates);
+    let grouped = group_tiers(&files.modifiers, &translator, &currencies, report)?;
 
     let mut tables = Vec::new();
-    let mut unknown_lines = BTreeSet::new();
-    let mut unsigned_lines = BTreeSet::new();
+    let mut lines_without_template = BTreeSet::new();
+    let mut lines_with_plus = BTreeSet::new();
     for (key, mut tiers) in grouped {
         let lord = lord(&key.spawn);
         let spawn = released_spawn(key.spawn, &key.domain, &released);
@@ -296,13 +297,13 @@ pub fn reduce(
             continue;
         }
         // A line without template can't be found, nor its modifier.
-        let unknown: Vec<&Line> = key.lines.iter().filter(|line| !line.known).collect();
+        let unknown: Vec<&Line> = key.lines.iter().filter(|line| !line.is_known).collect();
         if !unknown.is_empty() {
-            unknown_lines.extend(unknown.iter().map(|line| line.template.clone()));
+            lines_without_template.extend(unknown.iter().map(|line| line.template.clone()));
             continue;
         }
-        unsigned_lines.extend(key.lines.iter().filter_map(|line| {
-            let string = line.unsigned.clone()?;
+        lines_with_plus.extend(key.lines.iter().filter_map(|line| {
+            let string = line.string_with_plus.clone()?;
             Some((string, line.template.clone()))
         }));
         // By level, then by ranges: of two tiers of one level, the higher ranges last, the better
@@ -320,13 +321,13 @@ pub fn reduce(
             tiers,
         });
     }
-    for line in unknown_lines {
+    for line in lines_without_template {
         report.note(
             "Modifier lines without template, their modifier left out",
             line,
         );
     }
-    for (string, template) in unsigned_lines {
+    for (string, template) in lines_with_plus {
         report.note(
             "Modifier lines known without the + of their number",
             format!("{string} as {template}"),
@@ -372,12 +373,12 @@ fn released_spawn(
 
 /// The tiers of the prefixes and suffixes of `modifiers` that roll (with the currency and the
 /// spawn weights of `currencies` for those only a currency adds), grouped by table, their lines
-/// written by `writer`. Notes in `report` those left out without an error, which a patch may
+/// written by `translator`. Notes in `report` those left out without an error, which a patch may
 /// have brought: one only a currency adds that its lists don't have, and those of a domain the
 /// application doesn't read.
 fn group_tiers(
     modifiers: &BTreeMap<String, SourceModifier>,
-    writer: &LineWriter<'_>,
+    translator: &LineTranslator<'_>,
     currencies: &HashMap<&str, CurrencySpawn>,
     report: &mut Report,
 ) -> Result<BTreeMap<TableKey, Vec<Tier>>> {
@@ -405,7 +406,7 @@ fn group_tiers(
         if !rolls {
             continue;
         }
-        let (key, tier) = table_tier(id, modifier, currency_spawn, writer)?;
+        let (key, tier) = table_tier(id, modifier, currency_spawn, translator)?;
         grouped.entry(key).or_default().push(tier);
     }
     for (domain, count) in other_domains {
@@ -428,13 +429,14 @@ fn spawn_weights<'m>(
     })
 }
 
-/// The table of the modifier `id`, which rolls, and its tier, its lines written by `writer`; the
-/// currency of `currency_spawn` adds it when it is a modifier only a currency adds.
+/// The table of the modifier `id`, which rolls, and its tier, its lines written by
+/// `translator`; the currency of `currency_spawn` adds it when it is a modifier only a currency
+/// adds.
 fn table_tier(
     id: &str,
     modifier: &SourceModifier,
     currency_spawn: Option<&CurrencySpawn>,
-    writer: &LineWriter<'_>,
+    translator: &LineTranslator<'_>,
 ) -> Result<(TableKey, Tier)> {
     // Its lines would be written within the words of the passive skills on the other bases.
     if modifier.rolls_on_radius_jewel()
@@ -444,16 +446,16 @@ fn table_tier(
             format!("{id}: a modifier of the Time-Lost jewels that rolls on other bases").into(),
         );
     }
-    let (lines, ranges) = writer
+    let (lines, ranges) = translator
         .lines(modifier)
         .map_err(|error| format!("{id}: {error}"))?;
     if let Some(currency_spawn) = currency_spawn {
         currencies::check_lines(id, currency_spawn.currency, &lines)?;
     }
-    let (spawn, genesis) = spawn_on_bases(spawn_weights(modifier, currency_spawn));
+    let (spawn, grown_by_genesis) = spawn_on_bases(spawn_weights(modifier, currency_spawn));
     let source = currency_spawn
         .map(|currency_spawn| Source::from(currency_spawn.currency))
-        .or_else(|| genesis.then_some(Source::Genesis));
+        .or_else(|| grown_by_genesis.then_some(Source::Genesis));
     let key = TableKey {
         kind: modifier.kind.clone(),
         affix: modifier.generation_type.clone(),
@@ -478,12 +480,12 @@ fn table_tier(
 }
 
 /// The tags of `spawn` with a tag of the Genesis tree ([`GENESIS_TAGS`]) that rolls in place of
-/// the tags of the bases it grows ([`GENESIS_BASES`]), with its weight, after the tags before it
-/// (a tag written twice is decided by the first), and whether it had one. A tag of the tree at 0
-/// is left out: on no base, it decides nothing.
+/// the tags of the bases it grows ([`GENESIS_BASE_TAGS`]), with its weight, after the tags before
+/// it (a tag written twice is decided by the first), and whether it had one. A tag of the tree at
+/// 0 is left out: on no base, it decides nothing.
 fn spawn_on_bases(spawn: &[SpawnWeight]) -> (Vec<SpawnWeight>, bool) {
     let mut on_bases: Vec<SpawnWeight> = Vec::new();
-    let mut genesis = false;
+    let mut grown_by_genesis = false;
     for spawn_weight in spawn {
         if !GENESIS_TAGS.contains(&spawn_weight.tag.as_str()) {
             on_bases.push(spawn_weight.clone());
@@ -492,8 +494,8 @@ fn spawn_on_bases(spawn: &[SpawnWeight]) -> (Vec<SpawnWeight>, bool) {
         if !spawn_weight.rolls() {
             continue;
         }
-        genesis = true;
-        for tag in GENESIS_BASES {
+        grown_by_genesis = true;
+        for tag in GENESIS_BASE_TAGS {
             if !on_bases.iter().any(|before| before.tag == tag) {
                 on_bases.push(SpawnWeight {
                     tag: tag.to_owned(),
@@ -502,7 +504,7 @@ fn spawn_on_bases(spawn: &[SpawnWeight]) -> (Vec<SpawnWeight>, bool) {
             }
         }
     }
-    (on_bases, genesis)
+    (on_bases, grown_by_genesis)
 }
 
 /// The domain of each base among `released` and its tags that tell where a modifier of

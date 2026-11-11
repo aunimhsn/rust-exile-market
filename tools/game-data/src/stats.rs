@@ -29,7 +29,7 @@ const LEFT_OUT_GROUPS: [&str; 1] = ["sanctum"];
 #[derive(Deserialize)]
 struct SourceStat {
     #[serde(rename = "ref")]
-    reference: String,
+    template: String,
     id: Option<String>,
     better: i8,
     matchers: Vec<SourceMatcher>,
@@ -133,7 +133,7 @@ fn reduce_one(stat: SourceStat) -> Result<Stat> {
         }
         // A new group of the trade site is decided before it is embedded.
         if !GROUPS.contains(&group.as_str()) {
-            return Err(format!("unknown group {group} in {}", stat.reference).into());
+            return Err(format!("unknown group {group} in {}", stat.template).into());
         }
         ids.insert(group, group_ids);
     }
@@ -152,7 +152,7 @@ fn reduce_one(stat: SourceStat) -> Result<Stat> {
         }
     }
     Ok(Stat {
-        template: stat.reference,
+        template: stat.template,
         id: stat.id,
         better: stat.better,
         matchers,

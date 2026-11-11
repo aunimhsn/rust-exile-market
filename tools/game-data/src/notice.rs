@@ -4,17 +4,17 @@ use std::fs;
 use std::path::Path;
 
 use crate::github::{Commit, GitHub};
-use crate::{EXILED_EXCHANGE, REPOE_CODE, REPOE_DATA, Result, Sources};
+use crate::{Commits, EXILED_EXCHANGE, REPOE_CODE, REPOE_DATA, Result};
 
-/// Writes `NOTICE.md` in `output`: where the data come from (`sources`), and their licenses, that
+/// Writes `NOTICE.md` in `output`: where the data come from (`commits`), and their licenses, that
 /// of RePoE read in its code at `repoe_code_reference`.
 pub(crate) fn write(
     github: &GitHub,
     output: &Path,
-    sources: &Sources,
+    commits: &Commits,
     repoe_code_reference: &str,
 ) -> Result<()> {
-    let exiled_exchange = &sources.exiled_exchange;
+    let exiled_exchange = &commits.exiled_exchange;
     let license = github.file(EXILED_EXCHANGE, &exiled_exchange.sha, "LICENSE")?;
     let repoe_code = github.commit(REPOE_CODE, repoe_code_reference)?;
     println!("RePoE code, commit {}", repoe_code.sha);
@@ -27,10 +27,10 @@ pub(crate) fn write(
                 license: &license,
             },
             &Origin {
-                commit: &sources.repoe_data,
+                commit: &commits.repoe_data,
                 license: &repoe_license,
             },
-            &sources.repoe_version,
+            &commits.repoe_version,
             &repoe_code.sha,
         ),
     )?;

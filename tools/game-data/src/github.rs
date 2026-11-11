@@ -6,7 +6,7 @@ use crate::Result;
 
 /// The most a file read may hold: more than the 10 MB `ureq` reads by default, which `mods.json`
 /// of RePoE passes (13 MB on 2026-11-11).
-const MAX_FILE_SIZE: u64 = 64 * 1024 * 1024;
+const MAX_FILE_BYTES: u64 = 64 * 1024 * 1024;
 
 /// The API and the files of GitHub, read through one agent.
 pub(crate) struct GitHub {
@@ -70,7 +70,7 @@ impl GitHub {
                 .call()?
                 .body_mut()
                 .with_config()
-                .limit(MAX_FILE_SIZE)
+                .limit(MAX_FILE_BYTES)
                 .read_to_string()?)
         };
         read().map_err(|error| format!("{url}: {error}").into())

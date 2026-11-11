@@ -74,12 +74,12 @@ pub(super) struct Line {
     /// Whether the template is one of Exiled Exchange 2: a line without template can't be
     /// found, nor its modifier.
     #[serde(skip)]
-    pub(super) known: bool,
+    pub(super) is_known: bool,
     /// The string of the game whose template is known without the `+` of its number
-    /// ([`LineWriter::known_alone`]), printed by the generator; the same for every tier of a
+    /// ([`LineTranslator::known_alone`]), printed by the generator; the same for every tier of a
     /// translation, so it doesn't split the tiers of a table.
     #[serde(skip)]
-    pub(super) unsigned: Option<String>,
+    pub(super) string_with_plus: Option<String>,
 }
 
 impl Line {
@@ -88,8 +88,8 @@ impl Line {
         Self {
             template,
             divisor: 1,
-            known: false,
-            unsigned: None,
+            is_known: false,
+            string_with_plus: None,
         }
     }
 }
@@ -139,16 +139,16 @@ impl Serialize for ShownValue {
 /// each template itself: `Loads # additional bolts` is `Loads an additional bolt`.
 pub type Templates = BTreeMap<String, String>;
 
-/// What writes the lines of the modifiers: the translation of each stat, those of the tablets
-/// first for a modifier of the tablets, and the templates of Exiled Exchange 2.
-pub(super) struct LineWriter<'a> {
+/// What translates the stats of the modifiers into lines: the translation of each stat, those of
+/// the tablets first for a modifier of the tablets, and the templates of Exiled Exchange 2.
+pub(super) struct LineTranslator<'a> {
     by_stat: HashMap<&'a str, &'a Translation>,
     tablet_by_stat: HashMap<&'a str, &'a Translation>,
     templates: &'a Templates,
 }
 
-impl<'a> LineWriter<'a> {
-    /// The writer of the lines `translations` write (`stat_descriptions.json`), those of the
+impl<'a> LineTranslator<'a> {
+    /// The translator of the lines `translations` write (`stat_descriptions.json`), those of the
     /// tablets by `tablet_translations` first (`tablet_stat_descriptions.json`), as `templates`.
     pub(super) fn new(
         translations: &'a [Translation],
@@ -189,15 +189,15 @@ impl<'a> LineWriter<'a> {
             };
             // The game writes no line of values all 0: the `0% increased Quantity of Waystones
             // found in Map` RePoE gives the additional Essence of a tablet.
-            let zero = translation
+            let all_zero = translation
                 .ids
                 .iter()
                 .filter_map(|id| modifier.stat(id))
                 .all(StatRange::is_zero);
-            let again = written
+            let already_written = written
                 .iter()
                 .any(|&before| std::ptr::eq(before, translation));
-            if translation.hidden == Some(true) || zero || again {
+            if translation.hidden == Some(true) || all_zero || already_written {
                 continue;
             }
             written.push(translation);
@@ -212,8 +212,10 @@ impl<'a> LineWriter<'a> {
     /// The line `translation` writes, and the range of each of its values.
     fn line(&self, translation: &ModifierTranslation<'_>) -> Result<(Line, LineRanges)> {
         let modifier = translation.modifier;
-        let Some(Known { template, unsigned }) =
-            self.known_template(modifier, &translation.templates_of_strings())?
+        let Some(Known {
+            template,
+            string_with_plus,
+        }) = self.known_template(modifier, &translation.templates_of_strings())?
         else {
             return Ok((translation.unknown_line(), Vec::new()));
         };
@@ -230,8 +232,8 @@ impl<'a> LineWriter<'a> {
         let line = Line {
             template: template.to_owned(),
             divisor: translation.divisor(&indexes, written_without_number)?,
-            known: true,
-            unsigned,
+            is_known: true,
+            string_with_plus,
         };
         Ok((line, ranges))
     }
@@ -265,7 +267,7 @@ impl<'a> LineWriter<'a> {
                     let template = self.templates.get(&string.replace("+#", "#"))?;
                     Some(Known {
                         template,
-                        unsigned: Some(string.clone()),
+                        string_with_plus: Some(string.clone()),
                     })
                 })
             })
@@ -312,10 +314,10 @@ impl<'a> LineWriter<'a> {
                 .into());
             }
         };
-        let numbered = strings.iter().any(|string| string.contains('#'));
+        let has_numbered_string = strings.iter().any(|string| string.contains('#'));
         Ok(strings
             .iter()
-            .filter(|string| !numbered || string.contains('#'))
+            .filter(|string| !has_numbered_string || string.contains('#'))
             .find_map(|string| within(words, string))
             .map(|template| Known::exact(template)))
     }
@@ -469,11 +471,11 @@ impl<'t> ModifierTranslation<'t> {
     }
 }
 
-/// The template of Exiled Exchange 2 a [`LineWriter`] knows, and the string of the game it knows
-/// without the `+` of its number, when it is so.
+/// The template of Exiled Exchange 2 a [`LineTranslator`] knows, and the string of the game it
+/// knows without the `+` of its number, when it is so.
 struct Known<'a> {
     template: &'a str,
-    unsigned: Option<String>,
+    string_with_plus: Option<String>,
 }
 
 impl<'a> Known<'a> {
@@ -481,7 +483,7 @@ impl<'a> Known<'a> {
     fn exact(template: &'a str) -> Self {
         Self {
             template,
-            unsigned: None,
+            string_with_plus: None,
         }
     }
 }

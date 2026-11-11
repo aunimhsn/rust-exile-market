@@ -13,7 +13,7 @@ pub(super) fn repoe(modifiers: &str, bases: &str, translations: &str) -> RepoeFi
     }
 }
 
-/// The tables and the tags of the bases from `modifiers` of `mods.json`, `bases` of
+/// The tables and the spawns of the bases from `modifiers` of `mods.json`, `bases` of
 /// `base_items.json` and `translations` of `stat_descriptions.json`, written as JSON, the
 /// templates of Exiled Exchange 2 being `templates` (string, template).
 pub(super) fn tables(
@@ -26,14 +26,14 @@ pub(super) fn tables(
         .iter()
         .map(|&(string, template)| (string.to_owned(), template.to_owned()))
         .collect();
-    let (tables, tags) = reduce(
+    let (tables, base_spawns) = reduce(
         &repoe(modifiers, bases, translations),
         &templates,
         &[],
         &mut Report::default(),
     )
     .expect("reduced");
-    (serde_json::to_value(tables).expect("written"), tags)
+    (serde_json::to_value(tables).expect("written"), base_spawns)
 }
 
 /// A modifier of `mods.json`, rolling where `spawn` says, with `stats`.

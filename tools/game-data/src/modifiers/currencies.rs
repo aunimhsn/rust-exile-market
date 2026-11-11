@@ -221,7 +221,7 @@ pub const ALLOYS: &[CurrencyModifier] = &[
 ];
 
 /// The ids of the modifiers only a currency adds start with these words in `mods.json`.
-const CURRENCY_IDS: [&str; 2] = ["Essence", "Alloy"];
+const CURRENCY_ID_PREFIXES: [&str; 2] = ["Essence", "Alloy"];
 
 /// The currency that adds a modifier of its lists, and the spawn weights it rolls with.
 pub(super) struct CurrencySpawn {
@@ -231,7 +231,10 @@ pub(super) struct CurrencySpawn {
 
 /// Whether the modifier `id` is one only a currency adds, by its flag or by its name.
 pub(super) fn is_of_a_currency(id: &str, modifier: &SourceModifier) -> bool {
-    modifier.is_essence_only || CURRENCY_IDS.iter().any(|start| id.starts_with(start))
+    modifier.is_essence_only
+        || CURRENCY_ID_PREFIXES
+            .iter()
+            .any(|start| id.starts_with(start))
 }
 
 /// The currency and the spawn weights of each modifier of `currencies` by its id, `default` at 0
@@ -300,7 +303,7 @@ pub(super) fn currency_spawns(
 /// An error when a line of the modifier `id` of `currency` has no template, or when it has no
 /// line: left out, it would be read as no modifier, without a word.
 pub(super) fn check_lines(id: &str, currency: Currency, lines: &[Line]) -> Result<()> {
-    if let Some(line) = lines.iter().find(|line| !line.known) {
+    if let Some(line) = lines.iter().find(|line| !line.is_known) {
         return Err(format!(
             "{id}: a modifier of {} with a line without template, {}",
             currency.with_article(),

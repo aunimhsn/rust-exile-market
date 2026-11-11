@@ -58,14 +58,14 @@ impl References {
 }
 
 /// The commits the generated data are read from.
-struct Sources {
+struct Commits {
     exiled_exchange: Commit,
     repoe_data: Commit,
     /// The version of the game the data of RePoE were exported from.
     repoe_version: String,
 }
 
-impl Sources {
+impl Commits {
     /// The commits of `references`, printed.
     fn read(github: &GitHub, references: &References) -> Result<Self> {
         let exiled_exchange = github.commit(EXILED_EXCHANGE, &references.exiled_exchange)?;
@@ -96,7 +96,7 @@ impl Sources {
 fn main() -> Result<()> {
     let references = References::from_arguments();
     let github = GitHub::new();
-    let sources = Sources::read(&github, &references)?;
+    let commits = Commits::read(&github, &references)?;
     let output = output_directory();
     fs::create_dir_all(&output)?;
     let mut report = Report::default();
@@ -104,7 +104,7 @@ fn main() -> Result<()> {
     let stats_by_language = LANGUAGES
         .into_iter()
         .map(|language| {
-            let source = sources.exiled_exchange_file(&github, language, "stats.ndjson")?;
+            let source = commits.exiled_exchange_file(&github, language, "stats.ndjson")?;
             let reduced = stats::reduce(&source).map_err(|error| format!("{language}: {error}"))?;
             Ok((language, reduced))
         })
@@ -114,28 +114,28 @@ fn main() -> Result<()> {
     };
     let (tables, base_spawns) = modifier_tables(
         &github,
-        &sources.repoe_data.sha,
+        &commits.repoe_data.sha,
         &stats::templates(english),
         &mut report,
     )?;
     println!("{} modifier tables", tables.len());
-    write_lines(&output.join("modifiers.ndjson"), &tables)?;
+    write_ndjson(&output.join("modifiers.ndjson"), &tables)?;
 
     for (language, stats) in &stats_by_language {
         println!("{language}: {} stats", stats.len());
-        write_lines(&output.join(format!("stats-{language}.ndjson")), stats)?;
-        let source = sources.exiled_exchange_file(&github, language, "items.ndjson")?;
+        write_ndjson(&output.join(format!("stats-{language}.ndjson")), stats)?;
+        let source = commits.exiled_exchange_file(&github, language, "items.ndjson")?;
         let bases = bases::reduce(&source, &base_spawns, language, &mut report)
             .map_err(|error| format!("{language}: {error}"))?;
         println!("{language}: {} bases", bases.len());
-        write_lines(&output.join(format!("bases-{language}.ndjson")), &bases)?;
+        write_ndjson(&output.join(format!("bases-{language}.ndjson")), &bases)?;
     }
     stats::report_differences(english, french, &mut report);
 
-    notice::write(&github, &output, &sources, &references.repoe_code)?;
+    notice::write(&github, &output, &commits, &references.repoe_code)?;
     let read_from = format!(
         "the commit {} of Exiled Exchange 2 and the commit {} of the data of RePoE",
-        sources.exiled_exchange.sha, sources.repoe_data.sha
+        commits.exiled_exchange.sha, commits.repoe_data.sha
     );
     fs::write(output.join("report.md"), report.to_markdown(&read_from))?;
     println!("Written to {}", output.canonicalize()?.display());
@@ -167,11 +167,11 @@ fn output_directory() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets/game-data")
 }
 
-/// Writes one stat or one base per line.
-fn write_lines<T: Serialize>(path: &Path, lines: &[T]) -> Result<()> {
+/// Writes `records` in `path`, one per line: a stat, a base or a table.
+fn write_ndjson<T: Serialize>(path: &Path, records: &[T]) -> Result<()> {
     let mut text = String::new();
-    for line in lines {
-        text.push_str(&serde_json::to_string(line)?);
+    for record in records {
+        text.push_str(&serde_json::to_string(record)?);
         text.push('\n');
     }
     fs::write(path, text)?;
