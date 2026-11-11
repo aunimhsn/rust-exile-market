@@ -911,7 +911,8 @@ fn rows<'a>(
     // Once a tier is found, also for a line that can be a prefix or a suffix, or that adds up
     // two modifiers, or one of the Genesis tree, read with the ranges of its tier but without
     // its number, which the game doesn't write: none before the names of the trade site tell
-    // the base of a magic item, nor on a base the game data doesn't know.
+    // the base of a magic item, nor on a base the game data doesn't know, nor on a sanctified
+    // item, whose values find no tier.
     let found = item.modifiers().iter().any(|modifier| {
         let ranged = modifier
             .lines

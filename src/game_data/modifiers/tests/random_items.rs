@@ -9,39 +9,47 @@
 //! ```
 //!
 //! The draw is the same at every run (a xorshift generator from a fixed seed), and the same for
-//! the ways that differ only by the order of the lines. An item has one to three prefixes and
-//! as many suffixes, of other types, every tier its level allows as likely, every value of a
-//! tier as likely. Its lines are written as the in-game trade writes them: one line per stat,
-//! without affix, tier nor range, the values of two modifiers with the same stat added up. The
-//! modifiers of the Genesis tree, of the essences and of the alloys aren't drawn, nor a modifier
-//! one of whose lines no string of the stats writes back.
+//! the ways that differ only by the order of the lines. An item has from one prefix to the most
+//! its base can have (three, two on a jewel) and as many suffixes, of other types, every tier
+//! its level allows as likely, every value of a tier as likely. Its lines are written as the
+//! in-game trade writes them: one line per stat, without affix, tier nor range, the values of
+//! two modifiers with the same stat added up. The modifiers of the Genesis tree, of the
+//! essences and of the alloys aren't drawn, nor a modifier one of whose lines no string of the
+//! stats writes back.
 //!
 //! What a real copy does and the draw doesn't: the order of the lines (by stat in the game, in
 //! an order the data don't give: the draw tries the order of the modifiers, and a shuffled
-//! one), the weights of the modifiers, and the items players list (the best tiers far more
-//! often).
+//! one), the weights of the modifiers, the items players list (the best tiers far more often),
+//! and a line no table explains (copied before a patch, or of a stat the tables don't know):
+//! every line of the draw has a reading, so that its counts say nothing of two readings as good
+//! that don't read the same lines. No item is sanctified, such an item finding no tier.
 
 use super::*;
 
-/// The bases the items are drawn on: weapons, armours of several attributes and jewellery.
-const BASES: [&str; 14] = [
-    "Warmonger Bow",
-    "Gemini Crossbow",
-    "Temple Maul",
-    "Acrid Wand",
-    "Voltaic Staff",
-    "Wyrm Quarterstaff",
-    "Divine Crown",
-    "Ancestral Mail",
-    "Soldier Cuirass",
-    "Vaal Wraps",
-    "Wrapped Sandals",
-    "Gold Ring",
-    "Wide Belt",
-    "Veridical Chain",
+/// The bases the items are drawn on, each with the most prefixes, and suffixes, a rare item of
+/// it can have: weapons, armours of several attributes and jewellery; then a jewel and a
+/// cannon, where many desecrated lines can be an ordinary modifier or a lord's (26 templates
+/// on a Diamond). A new base goes last: the draw of the others stays the same.
+const BASES: [(&str, u32); 16] = [
+    ("Warmonger Bow", 3),
+    ("Gemini Crossbow", 3),
+    ("Temple Maul", 3),
+    ("Acrid Wand", 3),
+    ("Voltaic Staff", 3),
+    ("Wyrm Quarterstaff", 3),
+    ("Divine Crown", 3),
+    ("Ancestral Mail", 3),
+    ("Soldier Cuirass", 3),
+    ("Vaal Wraps", 3),
+    ("Wrapped Sandals", 3),
+    ("Gold Ring", 3),
+    ("Wide Belt", 3),
+    ("Veridical Chain", 3),
+    ("Diamond", 2),
+    ("Trarthan Cannon", 3),
 ];
 
-/// The items drawn on each base, in each way of [`WAYS`]: 5,600 items a way.
+/// The items drawn on each base, in each way of [`WAYS`]: 6,400 items a way.
 const ITEMS_PER_BASE: usize = 400;
 
 /// A way to draw the items.
@@ -72,8 +80,7 @@ const WAYS: [Way; 6] = [
         desecrated: Desecrated::All,
         ..Way::PLAIN
     },
-    // On these bases, few lines can be an ordinary modifier or a lord's (four templates on
-    // three bases): the jewels and the cannons, where many can, aren't drawn.
+    // A line marked desecrated that an ordinary modifier and a lord's both hold.
     Way {
         desecrated: Desecrated::All,
         revealed: true,
@@ -101,87 +108,107 @@ const SEED: u64 = 0x9E37_79B9_7F4A_7C15;
 const SHUFFLE_SEED: u64 = 0xD1B5_4A32_D192_ED03;
 
 /// What the draw gave for each of the [`WAYS`], with the game data of RePoE `75885a0`
-/// (2026-11-10): to record again when the data or the search change, after a look at what
+/// (2026-11-11): to record again when the data or the search change, after a look at what
 /// moved. A wrong tier is shown to the player as sure: `other_modifier` is the count to keep
-/// low.
+/// low, and `wrong_items` the items it shows on. Before step 17e3e, which leaves without tier
+/// the lines pure modifiers and their hybrid both hold, the first way read 858 lines as
+/// another modifier, 656 of them lines of a hybrid read alone, on 559 items.
 const RECORDED: [Counts; 6] = [
     Counts {
-        items: 5600,
+        items: 6400,
+        wrong_items: 109,
         discarded: 0,
-        lines: 23920,
-        summed_lines: 825,
-        right: 21431,
-        without_tier: 1581,
-        other_tier: 73,
-        other_modifier: 835,
-        summed_other_modifier: 153,
+        lines: 26789,
+        summed_lines: 871,
+        right: 24137,
+        either_affix: 198,
+        without_tier: 2520,
+        other_tier: 85,
+        other_modifier: 47,
+        summed_other_modifier: 47,
+        hybrid_other_modifier: 0,
         most_readings: 24,
-        most_steps: 477,
+        most_steps: 995,
     },
     Counts {
-        items: 5600,
+        items: 6400,
+        wrong_items: 105,
         discarded: 0,
-        lines: 23920,
-        summed_lines: 825,
-        right: 20084,
-        without_tier: 2401,
-        other_tier: 73,
-        other_modifier: 1362,
-        summed_other_modifier: 179,
+        lines: 26789,
+        summed_lines: 871,
+        right: 22669,
+        either_affix: 216,
+        without_tier: 3994,
+        other_tier: 82,
+        other_modifier: 44,
+        summed_other_modifier: 44,
+        hybrid_other_modifier: 0,
         most_readings: 12,
-        most_steps: 761,
+        most_steps: 1810,
     },
     Counts {
-        items: 5600,
+        items: 6400,
+        wrong_items: 60,
         discarded: 0,
-        lines: 22519,
-        summed_lines: 349,
-        right: 20967,
-        without_tier: 811,
-        other_tier: 38,
-        other_modifier: 703,
-        summed_other_modifier: 60,
+        lines: 25638,
+        summed_lines: 381,
+        right: 23925,
+        either_affix: 172,
+        without_tier: 1648,
+        other_tier: 43,
+        other_modifier: 22,
+        summed_other_modifier: 11,
+        hybrid_other_modifier: 0,
         most_readings: 16,
         most_steps: 456,
     },
     Counts {
-        items: 5600,
+        items: 6400,
+        wrong_items: 54,
         discarded: 0,
-        lines: 19602,
-        summed_lines: 16,
-        right: 19505,
-        without_tier: 38,
+        lines: 23059,
+        summed_lines: 42,
+        right: 22705,
+        either_affix: 75,
+        without_tier: 300,
         other_tier: 0,
-        other_modifier: 59,
-        summed_other_modifier: 5,
+        other_modifier: 54,
+        summed_other_modifier: 0,
+        hybrid_other_modifier: 0,
         most_readings: 8,
         most_steps: 58,
     },
     Counts {
-        items: 5600,
+        items: 6400,
+        wrong_items: 68,
         discarded: 0,
-        lines: 21805,
-        summed_lines: 236,
-        right: 20680,
-        without_tier: 529,
-        other_tier: 40,
-        other_modifier: 556,
-        summed_other_modifier: 49,
+        lines: 25022,
+        summed_lines: 258,
+        right: 23743,
+        either_affix: 153,
+        without_tier: 1207,
+        other_tier: 42,
+        other_modifier: 30,
+        summed_other_modifier: 9,
+        hybrid_other_modifier: 0,
         most_readings: 16,
-        most_steps: 451,
+        most_steps: 536,
     },
     Counts {
-        items: 5600,
+        items: 6400,
+        wrong_items: 42,
         discarded: 0,
-        lines: 23835,
-        summed_lines: 843,
-        right: 21896,
-        without_tier: 1267,
+        lines: 26716,
+        summed_lines: 904,
+        right: 24590,
+        either_affix: 175,
+        without_tier: 2068,
         other_tier: 24,
-        other_modifier: 648,
-        summed_other_modifier: 165,
+        other_modifier: 34,
+        summed_other_modifier: 34,
+        hybrid_other_modifier: 0,
         most_readings: 16,
-        most_steps: 189,
+        most_steps: 580,
     },
 ];
 
@@ -480,20 +507,22 @@ impl<'a> DrawnItem<'a> {
     }
 }
 
-/// An item with one to three prefixes and as many suffixes drawn among `ordinary` and
+/// An item with one to `most` prefixes and as many suffixes drawn among `ordinary` and
 /// `desecrated` as `way` says.
 fn drawn<'a>(
     draw: &mut Draw,
     ordinary: &'a [Rolled<'a>],
     desecrated: &'a [Rolled<'a>],
     way: Way,
+    most: u32,
 ) -> DrawnItem<'a> {
+    let most = usize::try_from(most).expect("a count");
     let mut item = DrawnItem {
         modifiers: Vec::new(),
         lines: Vec::new(),
     };
     for affix in [TableAffix::Prefix, TableAffix::Suffix] {
-        for _ in 0..=draw.below(3) {
+        for _ in 0..=draw.below(most) {
             let marked = match way.desecrated {
                 Desecrated::None => false,
                 Desecrated::Third => draw.below(3) == 0,
@@ -533,6 +562,8 @@ fn drawn<'a>(
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 struct Counts {
     items: usize,
+    /// The items with a line read in another tier or as another modifier, among `items`.
+    wrong_items: usize,
     /// The items drawn again, a sum of theirs written by no string (a line of two signs).
     discarded: usize,
     lines: usize,
@@ -541,6 +572,9 @@ struct Counts {
     /// The lines read as their modifiers, each in its tier (one of two neighbouring tiers for
     /// a line read so), a prefix or suffix in doubt counting when the true one is among them.
     right: usize,
+    /// Those of `right` whose affix stays in doubt, a prefix or a suffix, the room of the
+    /// item leaving both.
+    either_affix: usize,
     /// The lines left without tier.
     without_tier: usize,
     /// The lines read as their modifiers, one in another tier: a value in two tiers takes the
@@ -550,6 +584,9 @@ struct Counts {
     other_modifier: usize,
     /// Those of `other_modifier` that add up two modifiers or more.
     summed_other_modifier: usize,
+    /// Those of `other_modifier` that are a line of one hybrid read alone, as a modifier of
+    /// that line only: none, the other readings leaving such a line without tier.
+    hybrid_other_modifier: usize,
     /// The most readings looked at for an item, of [`MAX_READINGS`].
     most_readings: usize,
     /// The most steps of the search of the other readings for an item, of `MAX_STEPS`.
@@ -664,6 +701,25 @@ fn read_as(item: &DrawnItem<'_>, line: usize, found: &[FoundTiers]) -> Read {
     best
 }
 
+/// Whether `found` reads the line `line` as a modifier that can be a prefix or a suffix.
+fn either_affix(line: usize, found: &[FoundTiers]) -> bool {
+    found
+        .iter()
+        .any(|found| found.modifiers.contains(&line) && found.affixes.len() > 1)
+}
+
+/// Whether the line `line` of `item` is a line of one hybrid that `found` reads alone, as a
+/// modifier of that line only.
+fn hybrid_read_alone(item: &DrawnItem<'_>, line: usize, found: &[FoundTiers]) -> bool {
+    let [modifier] = item.lines[line].modifiers.as_slice() else {
+        return false;
+    };
+    item.modifiers[*modifier].lines.len() > 1
+        && found
+            .iter()
+            .any(|found| found.modifiers == (line..line + 1) && found.added.is_none())
+}
+
 /// The items of one way of the draw, read and counted; with the types left out of the draw.
 fn measure(way: Way) -> (Counts, Vec<&'static str>) {
     // The lines shuffled by a draw of their own: the same items whatever their order.
@@ -671,7 +727,7 @@ fn measure(way: Way) -> (Counts, Vec<&'static str>) {
     let mut shuffle = Draw(SHUFFLE_SEED);
     let mut counts = Counts::default();
     let mut left_out = Vec::new();
-    for base_type in BASES {
+    for (base_type, most) in BASES {
         let base = bases::spawn(Language::English, base_type).expect(base_type);
         let (ordinary, unwritten) = rolled(&TABLES, base, false, way.item_level);
         left_out.extend(unwritten);
@@ -679,13 +735,12 @@ fn measure(way: Way) -> (Counts, Vec<&'static str>) {
         left_out.extend(unwritten);
         let trade_item = TradeItem {
             language: Language::English,
-            base_type,
             base,
             item_level: Some(way.item_level),
         };
         let mut read = 0;
         while read < ITEMS_PER_BASE {
-            let mut item = drawn(&mut draw, &ordinary, &desecrated, way);
+            let mut item = drawn(&mut draw, &ordinary, &desecrated, way, most);
             if way.shuffled {
                 item.shuffle(&mut shuffle);
             }
@@ -696,25 +751,36 @@ fn measure(way: Way) -> (Counts, Vec<&'static str>) {
                 continue;
             };
             read += 1;
-            let limits = AffixLimits::new(3, 3);
-            let (found, effort) = trade_tiers_in(&TABLES, &trade_item, &modifiers, limits, false);
+            let limits = AffixLimits::new(most, most);
+            let (found, effort) = trade_tiers_in(&TABLES, &trade_item, &modifiers, limits);
             counts.items += 1;
             counts.most_readings = counts.most_readings.max(effort.readings);
             counts.most_steps = counts.most_steps.max(effort.steps);
+            let mut wrong = false;
             for (index, line) in item.lines.iter().enumerate() {
                 let summed = line.modifiers.len() > 1;
                 counts.lines += 1;
                 counts.summed_lines += usize::from(summed);
                 match read_as(&item, index, &found) {
-                    Read::Right => counts.right += 1,
+                    Read::Right => {
+                        counts.right += 1;
+                        counts.either_affix += usize::from(either_affix(index, &found));
+                    }
                     Read::WithoutTier => counts.without_tier += 1,
-                    Read::OtherTier => counts.other_tier += 1,
+                    Read::OtherTier => {
+                        counts.other_tier += 1;
+                        wrong = true;
+                    }
                     Read::OtherModifier => {
                         counts.other_modifier += 1;
                         counts.summed_other_modifier += usize::from(summed);
+                        counts.hybrid_other_modifier +=
+                            usize::from(hybrid_read_alone(&item, index, &found));
+                        wrong = true;
                     }
                 }
             }
+            counts.wrong_items += usize::from(wrong);
         }
     }
     left_out.sort_unstable();
@@ -730,11 +796,10 @@ fn random_items_are_read_within_the_bounds_of_the_search() {
         let (counts, left_out) = measure(way);
         println!("{way:?}: {counts:#?}");
         println!("Not drawn, a line no string writes back: {left_out:?}");
-        // Far from the bounds. Past the steps, every line of the item is left without tier;
-        // past the readings, the best of those looked at is kept, and the log says so.
+        // Far from the bounds, past which every line of the item is left without tier.
         assert!(counts.most_readings < MAX_READINGS / 4, "{counts:?}");
         assert!(
-            counts.most_steps < summed_readings::MAX_STEPS / 4,
+            counts.most_steps < other_readings::MAX_STEPS / 4,
             "{counts:?}"
         );
         measured.push(counts);

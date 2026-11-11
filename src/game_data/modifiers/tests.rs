@@ -902,8 +902,6 @@ struct Written {
     affix: Affix,
     /// Its tier, found by the ranges of the copy.
     tier: Option<u32>,
-    /// Whether its values are within these ranges: not a sanctified value out of its tier.
-    within: bool,
 }
 
 /// The explicit modifiers of an advanced copy as the in-game trade writes them, one per
@@ -923,10 +921,6 @@ fn as_in_game_trade(item: &Item, base_type: &str) -> (Vec<Modifier>, Vec<Written
         let matches = modifier_stats(item.language(), modifier, None);
         let tier = modifier_tiers(item.language(), base_type, None, modifier, &matches)
             .and_then(|tiers| Some(tiers.tier()?.number));
-        let rolls = modifier.lines.iter().flat_map(|line| &line.rolls);
-        let within = rolls
-            .filter_map(|roll| Some((roll.value, roll.range?)))
-            .all(|(value, range)| range.min <= value && value <= range.max);
         let start = modifiers.len();
         for line_match in &matches {
             let mut lines = modifier.lines[line_match.lines.clone()].to_vec();
@@ -948,7 +942,6 @@ fn as_in_game_trade(item: &Item, base_type: &str) -> (Vec<Modifier>, Vec<Written
             modifiers: start..modifiers.len(),
             affix,
             tier,
-            within,
         });
     }
     (modifiers, written)
@@ -957,6 +950,7 @@ fn as_in_game_trade(item: &Item, base_type: &str) -> (Vec<Modifier>, Vec<Written
 #[test]
 fn the_tiers_found_from_the_values_alone_are_those_of_the_advanced_copy() {
     let mut found = 0;
+    let mut sanctified = 0;
     let mut without_tier = Vec::new();
     let mut unknown_affix = Vec::new();
     for (text, base_type) in ADVANCED_COPIES {
@@ -974,11 +968,16 @@ fn the_tiers_found_from_the_values_alone_are_those_of_the_advanced_copy() {
             item.has_state(ItemState::Sanctified),
         );
 
+        // The values of a sanctified item can have left their tiers: none is found.
+        if item.has_state(ItemState::Sanctified) {
+            assert_eq!(read, [], "{base_type}");
+            sanctified += written.len();
+            continue;
+        }
         for Written {
             modifiers: lines,
             affix,
             tier,
-            within,
         } in written
         {
             let text = modifiers[lines.start].lines[0].text.clone();
@@ -1000,7 +999,7 @@ fn the_tiers_found_from_the_values_alone_are_those_of_the_advanced_copy() {
                 .collect();
             let same = tiers
                 .iter()
-                .any(|&(read, number)| read == affix && (!within || number == tier));
+                .any(|&(read, number)| read == affix && number == tier);
             assert!(same, "{text}: {tiers:?}, written {affix:?} {tier:?}");
             if tiers.len() > 1 {
                 unknown_affix.push(text);
@@ -1013,7 +1012,10 @@ fn the_tiers_found_from_the_values_alone_are_those_of_the_advanced_copy() {
     // `Reinforcing` of the Genesis tree on the Breach Rings, the lines of the Time-Lost jewels,
     // each within the words of the passive skills it grants but the radius, and the Onslaught
     // of an essence on a bow.
-    assert_eq!(found, 72);
+    assert_eq!(found, 64);
+    // The 5 modifiers of the owner's sanctified sceptre, in both languages: read from its
+    // values, its `+74 to maximum Mana`, a T5 `80–89`, would be the T6.
+    assert_eq!(sanctified, 10);
     assert_eq!(
         without_tier,
         [
@@ -1021,9 +1023,6 @@ fn the_tiers_found_from_the_values_alone_are_those_of_the_advanced_copy() {
             "+3 to Level of all Attack Skills",
             // Copied before a patch changed its ranges.
             "Adds 1 to 50 Lightning Damage",
-            // A sanctified value out of its tier, 29(30)%.
-            "29% reduced Attribute Requirements",
-            "29% de Réduction du prérequis d'Attributs",
         ]
     );
     // The rarity of the runeforged crown rolls as both: with two prefixes and two other
@@ -1108,14 +1107,12 @@ fn the_lines_read_again_from_their_values_are_the_modifiers_of_the_advanced_copy
             let text = &modifier.lines[0].text;
             assert_eq!(again.kind, modifier.kind, "{text}");
             assert_eq!(again.origin, modifier.origin, "{text}");
-            if written.within {
-                // Without tier when the copy writes none (`Reinforcing` of the Genesis tree).
-                assert_eq!(again.tier, modifier.tier.and(written.tier), "{text}");
-                // As both copies show them: no range under a fixed value, which the advanced
-                // copy writes without range (`1% of Damage taken Recouped as Life` of a
-                // Time-Lost jewel), the tables with its range of one value.
-                assert_eq!(shown_ranges(again), shown_ranges(modifier), "{text}");
-            }
+            // Without tier when the copy writes none (`Reinforcing` of the Genesis tree).
+            assert_eq!(again.tier, modifier.tier.and(written.tier), "{text}");
+            // As both copies show them: no range under a fixed value, which the advanced
+            // copy writes without range (`1% of Damage taken Recouped as Life` of a
+            // Time-Lost jewel), the tables with its range of one value.
+            assert_eq!(shown_ranges(again), shown_ranges(modifier), "{text}");
             read_again += 1;
         }
         // The other lines stay as they were.
@@ -1124,8 +1121,9 @@ fn the_lines_read_again_from_their_values_are_the_modifiers_of_the_advanced_copy
         assert_eq!(lines(&read), lines(&modifiers));
     }
     // With `Reinforcing` of the Breach Rings and the Onslaught of an essence on a bow, read
-    // again without tier, as the copy writes them, and the lines of the Time-Lost jewels.
-    assert_eq!(read_again, 72);
+    // again without tier, as the copy writes them, and the lines of the Time-Lost jewels;
+    // without the sanctified sceptre, whose lines stay as they were.
+    assert_eq!(read_again, 64);
 }
 
 #[test]
@@ -1981,31 +1979,6 @@ fn a_base_the_data_doesnt_know_has_no_tiers_found() {
     assert_eq!(found, []);
 }
 
-#[test]
-fn many_lines_that_pair_as_hybrids_are_read_within_a_bound() {
-    let item = parse(TIARA_EN);
-    // Each line makes a hybrid with the one before and the one after: more readings than
-    // the bound.
-    let modifiers: Vec<_> = (0..20)
-        .map(|index| {
-            let line = if index % 2 == 0 {
-                "41% increased Energy Shield"
-            } else {
-                "+34 to maximum Mana"
-            };
-            modifier(None, &[line])
-        })
-        .collect();
-
-    let found = found_tiers(&item, &modifiers, (10, 0));
-
-    // The readings that fit, ten hybrids, are past the bound: the lines are read alone,
-    // the pure energy shield T6 and mana T8, every affix kept.
-    let alone = [(1, vec![(Affix::Prefix, 6)]), (1, vec![(Affix::Prefix, 8)])];
-    let expected: Vec<_> = alone.iter().cycle().take(20).cloned().collect();
-    assert_eq!(summary(&modifiers, &found), expected);
-}
-
 /// The lines of two pure prefixes of a helmet that also fit the hybrid of both, T3
 /// (`27–32 · 26–32`).
 fn energy_shield_and_life() -> Vec<Modifier> {
@@ -2016,16 +1989,14 @@ fn energy_shield_and_life() -> Vec<Modifier> {
 }
 
 #[test]
-fn lines_that_fit_a_hybrid_are_read_alone_while_the_item_has_room() {
+fn lines_that_fit_pure_modifiers_and_their_hybrid_have_no_tier_while_the_item_has_room() {
     use Affix::Prefix;
     let item = parse(TIARA_EN);
     let modifiers = energy_shield_and_life();
 
+    // The pure T6 and T8, or their hybrid T3: nothing tells which rolled.
     let found = found_tiers(&item, &modifiers, (3, 3));
-    assert_eq!(
-        summary(&modifiers, &found),
-        [(1, vec![(Prefix, 6)]), (1, vec![(Prefix, 8)])]
-    );
+    assert_eq!(found, []);
 
     // With room for one prefix only, the hybrid.
     let found = found_tiers(&item, &modifiers, (1, 3));
@@ -2450,26 +2421,22 @@ fn the_tiers_of_a_split_are_those_the_item_level_allows() {
 }
 
 #[test]
-fn no_line_of_a_sanctified_item_is_split() {
+fn no_tier_is_found_from_the_values_of_a_sanctified_item() {
     let item = parse(BOW_EN);
-    let limits = AffixLimits::new(3, 4);
+    let read = |sanctified| {
+        trade_tiers(
+            item.language(),
+            item.base_type(),
+            item.item_level(),
+            item.modifiers(),
+            AffixLimits::new(3, 4),
+            sanctified,
+        )
+    };
 
-    let found = trade_tiers(
-        item.language(),
-        item.base_type(),
-        item.item_level(),
-        item.modifiers(),
-        limits,
-        true,
-    );
-
-    // Its values can leave their tiers: the `258%` without tier, the accuracy a pure prefix.
-    assert_eq!(added(item.modifiers(), &found), []);
-    let accuracy = (
-        vec!["+195 to Accuracy Rating".to_owned()],
-        vec![(Affix::Prefix, 5)],
-    );
-    assert!(lines_read(item.modifiers(), &found).contains(&accuracy));
+    // Its values can each have left their tier, for the one next to it as well.
+    assert_ne!(read(false), []);
+    assert_eq!(read(true), []);
 }
 
 #[test]

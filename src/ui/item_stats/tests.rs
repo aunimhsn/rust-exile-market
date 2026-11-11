@@ -774,6 +774,37 @@ fn the_ranges_written_under_a_modifier_are_those_of_its_numbers_that_vary() {
 }
 
 #[test]
+fn a_sanctified_item_copied_from_the_in_game_trade_shows_no_tier_nor_the_note() {
+    let text = include_str!("../../item/test-items/en-owner-trade-rare-helmet-fractured.txt");
+    let tiara = read_again(parse(&format!(
+        "{}\n--------\nSanctified\n",
+        text.trim_end()
+    )));
+    assert!(tiara.has_state(crate::item::ItemState::Sanctified));
+
+    // Its values can each have left their tier: every line as copied, without affix, tier
+    // nor bar, and no note, no tier being found.
+    let texts = texts(&tiara);
+    let explicit = texts
+        .iter()
+        .position(|text| text == "Explicit")
+        .expect("its explicit modifiers");
+    assert_eq!(
+        texts[explicit..],
+        [
+            "Explicit",
+            "□ 41% increased Energy Shield ≥37 [Fractured]",
+            "□ +34 to maximum Mana ≥31 [Fractured]",
+            "□ 98% increased Energy Shield ≥88",
+            "□ 18% increased Rarity of Items found ≥16",
+            "□ +43% to Fire Resistance ≥39",
+            "□ +40% to Cold Resistance ≥36",
+            "□ +69 to maximum Energy Shield ≥62 [Desecrated]",
+        ]
+    );
+}
+
+#[test]
 fn only_the_tiers_found_from_the_values_have_the_note() {
     // Copied from the in-game trade, not read again yet: no tier found.
     let tiara = parse(include_str!(

@@ -15,7 +15,7 @@ use crate::item::{
 };
 use crate::language::Language;
 
-mod summed_readings;
+mod other_readings;
 
 /// How far a copied value can be from a tier: the game rounds the values it scales, e.g. a
 /// regeneration stored per minute shown per second with one decimal.
@@ -23,7 +23,8 @@ const ROUNDING: f64 = 0.051;
 
 /// The most ways to read the lines of an item copied from the in-game trade that are looked
 /// at: a handful on a real item, each hybrid the lines may be doubling them (24 at most on
-/// the items drawn at random by `tests/random_items.rs`, 2026-11-10).
+/// the items drawn at random by `tests/random_items.rs`, 2026-11-10). Past them, no line is
+/// read: the best of the readings looked at may not be the best of all.
 const MAX_READINGS: usize = 4096;
 
 /// The tiers of a type of modifier that roll on the same bases, as the generator writes them.
@@ -566,13 +567,12 @@ pub struct AddedTiers {
 /// Only the explicit modifiers without header are read, one line each, as the parser reads
 /// such a copy: a modifier whose header the parser doesn't know isn't a line of the in-game
 /// trade, the caller leaves it out. Each line is read alone, unless a line has no tier that
-/// way, or the item more prefixes or suffixes than `limits`, or two fractured modifiers (a Fracturing Orb
-/// fractures one modifier of an item not fractured yet): the consecutive lines of one origin
-/// are then read as one modifier when they fit a hybrid of the tables (the fractured `41%
-/// increased Energy Shield` and `+34 to maximum Mana` of a tiara), as the lines of the hybrids
-/// follow each other on the owner's copies. An affix the full prefixes or suffixes rule out is
-/// left out, unless no reading fits them, the tables being then out of step with the game. A
-/// value in several tiers takes the worst of them.
+/// way, or the item more prefixes or suffixes than `limits`, or two fractured modifiers (a
+/// Fracturing Orb fractures one modifier of an item not fractured yet): the consecutive lines
+/// of one origin are then read as one modifier when they fit a hybrid of the tables (the
+/// fractured `41% increased Energy Shield` and `+34 to maximum Mana` of a tiara). An affix the
+/// full prefixes or suffixes rule out is left out, unless no reading fits them, the tables
+/// being then out of step with the game. A value in several tiers takes the worst of them.
 ///
 /// A line no other reading holds is split into two modifiers of two types with its stat, as
 /// the game writes them on one line (the `258% increased Physical Damage` of a bow, a pure
@@ -584,23 +584,28 @@ pub struct AddedTiers {
 /// with `+100 to maximum Life`: the hybrid T6 and the pure T7). Two ways to split a line that
 /// differ only by the tier of one of its modifiers, two neighbouring tiers, are one, that
 /// modifier in both (`248%` with `+195 to Accuracy Rating`: the hybrid T1 and the pure T1 or
-/// T2). A line that two readings as good split in other ways (a rarity of a prefix of tier 1
-/// and a suffix of tier 2, or of tier 2 and tier 1) stays without tier, with the other lines of
-/// its hybrids, while the other modifiers are read as the best of these readings does, with its
-/// room. No line of a `sanctified` item is split: its values can leave their tiers.
+/// T2).
 ///
-/// A line stays without tier too, with the other lines of its hybrids, when another reading
-/// fits the item as well ([`summed_readings::doubts`]), with a line adding up several
-/// modifiers, whichever, or any reading where the best one splits a line: the `47%
-/// d'Augmentation de l'Armure et de l'Évasion` of the owner's body armour adds up two hybrids,
-/// one with `+23 à l'Armure` and `+19 au Score d'Évasion`, the other with the life; a line split
-/// with its neighbour may be summed with another line's hybrid, the copy sorting its lines by
-/// stat, not by modifier. Such a reading
-/// that leaves another room to a line that can be a prefix or a suffix keeps both its affixes;
-/// a search that can't conclude leaves every line it reads without tier.
+/// When the application can't tell, it doesn't decide (owner's rule on 2026-11-10): a line
+/// stays without tier, with the other lines of its modifiers, when two readings as good read
+/// it otherwise (a rarity split into a prefix of tier 1 and a suffix of tier 2, or of tier 2
+/// and tier 1; a line a hybrid joins with the line before it, or another with the line after
+/// it), the other modifiers being read as the first of them does, and when another reading
+/// fits the item as well, which [`other_readings::doubts`] tells: two pure modifiers or their
+/// hybrid, a line adding up modifiers in another way. When such readings leave another room
+/// to a line that can be a prefix or a suffix, it keeps both its affixes. A search that stops
+/// at one of its bounds ([`MAX_READINGS`], `MAX_STEPS`) leaves every line without tier, as
+/// does one that doesn't meet its best reading among the others: it can't vouch for the
+/// reading it would show.
 ///
-/// A hybrid whose other line is read on its own (a sanctified value out of its tier, or two
-/// lines apart) counts twice and may rule out an affix wrongly: a rare case, left as it is.
+/// A hybrid whose lines don't follow each other is never read as one modifier, a modifier
+/// being read on consecutive lines ([`FoundTiers::modifiers`]): its lines stay without tier,
+/// also when the room of the item leaves no other reading.
+///
+/// No tier is found on a `sanctified` item, whose values can each have left their tier, for
+/// the one next to it as well (the `+74 to maximum Mana` of the owner's sceptre, a T5
+/// `80–89`, falls in the T6): nothing in such a copy tells which did (owner's choice on
+/// 2026-11-11).
 #[must_use]
 pub fn trade_tiers(
     language: Language,
@@ -610,47 +615,105 @@ pub fn trade_tiers(
     limits: AffixLimits,
     sanctified: bool,
 ) -> Vec<FoundTiers> {
+    if sanctified {
+        return Vec::new();
+    }
     let Some(base) = bases::spawn(language, base_type) else {
         return Vec::new();
     };
     let item = TradeItem {
         language,
-        base_type,
         base,
         item_level,
     };
-    let (found, effort) = trade_tiers_in(&TABLES, &item, modifiers, limits, sanctified);
+    let (found, effort) = trade_tiers_in(&TABLES, &item, modifiers, limits);
     log::debug!(
         "Game data, {base_type} copied from the in-game trade: read in {} readings and {} steps",
         effort.readings,
         effort.steps
     );
-    if effort.readings_cut {
-        log::warn!(
-            "Game data, {base_type} copied from the in-game trade: the readings of its lines couldn't all be looked at, the best of the first {MAX_READINGS} kept"
-        );
-    }
+    effort.ending.log(base_type, limits);
     found
 }
 
 /// What the search of the tiers of an item copied from the in-game trade took, against its
-/// bounds.
+/// bounds, and how it ended.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct Effort {
     /// The readings of its lines looked at, [`MAX_READINGS`] at most.
     readings: usize,
-    /// The steps of the search of the other readings ([`summed_readings::doubts`]).
+    /// The steps of the search of the other readings ([`other_readings::doubts`]).
     steps: usize,
-    /// Whether the readings stopped at their bound, some not looked at: the best of those
-    /// looked at is kept, the lines alone first.
-    readings_cut: bool,
+    ending: Ending,
+}
+
+/// How the search of the tiers of an item copied from the in-game trade ended.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Ending {
+    /// With a reading in the room of the item, every other reading compared with it.
+    Vouched,
+    /// The readings stopped at [`MAX_READINGS`], some not looked at: no line is read.
+    ReadingsCut,
+    /// The other readings stopped at their bound, some not looked at: no line is read.
+    OtherReadingsCut,
+    /// None of the other readings is the best one, a line the search of the other readings
+    /// can't read, or a best reading the game can't roll (two modifiers of one type): no line
+    /// is read.
+    BestNotMet,
+    /// The best reading doesn't fit the room of the item while another one does, which the
+    /// candidates don't hold (a hybrid whose lines don't follow each other): a line keeps its
+    /// tier only when every reading in the room reads it as the best one does, with every
+    /// affix.
+    OnlyAnotherFits,
+    /// No reading fits the room of the item, the tables being out of step with the game: the
+    /// lines keep the tiers of the best reading, with every affix.
+    NoneFits,
+}
+
+impl Ending {
+    /// How the search ended after the other readings, whose `doubts` these are, the best
+    /// reading fitting the room of the item (`fits_room`) or not.
+    fn after(doubts: &other_readings::Doubts, fits_room: bool) -> Self {
+        match doubts.outcome {
+            other_readings::Outcome::Cut => Self::OtherReadingsCut,
+            other_readings::Outcome::BestNotMet => Self::BestNotMet,
+            other_readings::Outcome::Concluded if fits_room => Self::Vouched,
+            other_readings::Outcome::Concluded if doubts.fits => Self::OnlyAnotherFits,
+            other_readings::Outcome::Concluded => Self::NoneFits,
+        }
+    }
+
+    /// Logs what the search couldn't vouch for on an item of `base_type`, which can have
+    /// `limits` prefixes and suffixes.
+    fn log(self, base_type: &str, limits: AffixLimits) {
+        let AffixLimits {
+            prefixes, suffixes, ..
+        } = limits;
+        match self {
+            Self::Vouched => {}
+            Self::ReadingsCut => log::warn!(
+                "Game data, {base_type} copied from the in-game trade: the readings of its lines couldn't all be looked at, its lines left without tier"
+            ),
+            Self::OtherReadingsCut => log::warn!(
+                "Game data, {base_type} copied from the in-game trade: the other readings of its lines couldn't all be looked at, its lines left without tier"
+            ),
+            Self::BestNotMet => log::warn!(
+                "Game data, {base_type} copied from the in-game trade: the other readings of its lines don't hold its best one, its lines left without tier"
+            ),
+            Self::OnlyAnotherFits => log::debug!(
+                "Game data, {base_type} copied from the in-game trade: its best reading doesn't fit {prefixes} prefixes and {suffixes} suffixes, others do, the lines they don't all read the same left without tier"
+            ),
+            Self::NoneFits => log::warn!(
+                "Game data, {base_type} copied from the in-game trade: no reading of its lines fits {prefixes} prefixes and {suffixes} suffixes"
+            ),
+        }
+    }
 }
 
 /// The item whose lines are read from the in-game trade: the language of its lines, its base
-/// (its name, for the log) and its level.
+/// and its level.
 struct TradeItem<'a> {
     language: Language,
-    base_type: &'a str,
     base: &'a BaseSpawn,
     item_level: Option<u32>,
 }
@@ -678,16 +741,14 @@ fn trade_tiers_in(
     item: &TradeItem<'_>,
     modifiers: &[Modifier],
     limits: AffixLimits,
-    sanctified: bool,
 ) -> (Vec<FoundTiers>, Effort) {
     let &TradeItem {
         language,
-        base_type,
         base,
         item_level,
     } = item;
     let copied = lines_to_read(language, modifiers);
-    let candidates = candidates(tables, modifiers, &copied, base, item_level, !sanctified);
+    let candidates = candidates(tables, modifiers, &copied, base, item_level);
     let known = |affix| {
         modifiers
             .iter()
@@ -709,53 +770,46 @@ fn trade_tiers_in(
         .count();
     let mut search = Search::new(&candidates, modifiers.len(), room, fractured);
     search.walk(0, &mut Vec::new());
-    let mut effort = Effort {
-        readings: search.readings,
-        steps: 0,
-        readings_cut: search.cut,
+    let readings = search.readings;
+    let effort_with = |steps, ending| Effort {
+        readings,
+        steps,
+        ending,
     };
-    let Some((key, reading)) = search.best else {
-        return (Vec::new(), effort);
+    // Past the bound, a reading not looked at may be as good as the best of the others, or
+    // better: no line keeps a tier the search can't vouch for. The search keeps a reading
+    // otherwise, the one of no line for an item without any.
+    let (Some((key, reading)), false) = (search.best, search.cut) else {
+        return (Vec::new(), effort_with(0, Ending::ReadingsCut));
     };
-    let mut ambiguous = search.ambiguous;
-    // Another reading in doubt may take another room, which no longer rules out an affix.
-    let mut room_in_doubt = false;
-    if !sanctified {
-        let best = summed_readings::Best {
-            candidates: &candidates,
-            reading: &reading,
-            room,
-            fits_room: key.room,
-        };
-        let doubts = summed_readings::doubts(tables, item, modifiers, &copied, &best);
-        doubts.outcome.log(base_type);
-        effort.steps = doubts.steps;
-        room_in_doubt = doubts.other_room;
-        for line in doubts.lines {
-            if !ambiguous.contains(&line) {
-                ambiguous.push(line);
-            }
-        }
-    }
-    // A modifier that can be both, when the others leave room for one affix only: the lines
-    // split in two ways as good take their room too.
-    let both = if !key.room {
-        log::warn!(
-            "Game data, {base_type} copied from the in-game trade: no reading of its lines fits {} prefixes and {} suffixes",
-            limits.prefixes,
-            limits.suffixes
-        );
-        (true, true)
-    } else if room_in_doubt {
+    let best = other_readings::Best {
+        candidates: &candidates,
+        reading: &reading,
+        room,
+        fits_room: key.room,
+    };
+    let doubts = other_readings::doubts(tables, item, modifiers, &copied, &best);
+    let effort = effort_with(doubts.steps, Ending::after(&doubts, key.room));
+    // A modifier that can be both keeps the affixes the others leave room for ([`Room::both`],
+    // both when the reading doesn't fit the room): both too when a reading as good, or one in
+    // doubt, leaves another room.
+    let both = if search.room_in_doubt || doubts.other_room {
         (true, true)
     } else {
         room.both(&reading, &candidates)
     };
+    let mut ambiguous = search.ambiguous;
+    for line in doubts.lines {
+        if !ambiguous.contains(&line) {
+            ambiguous.push(line);
+        }
+    }
     let found = reading
         .iter()
         .filter_map(|&index| {
-            // A line split in two ways as good, and the other lines of its hybrids: without
-            // tier, the others read as the best reading does.
+            // A line two readings as good read otherwise, or another reading leaves in doubt,
+            // and the other lines of its modifiers: without tier, the others read as the best
+            // reading does.
             let candidate = candidates.get(index).filter(|candidate| {
                 !ambiguous
                     .iter()
@@ -1122,15 +1176,14 @@ fn most_lines(tables: &[Table]) -> usize {
 /// hold, the tier the worst among those `item_level` allows, `copied` giving the lines
 /// of each modifier to read (none for a modifier that isn't, or whose lines have no stat of the
 /// game data): one modifier, or up to as many as the lines of a hybrid, of the same origin;
-/// then, when they `may_split`, each way one of their lines adds up two modifiers
-/// ([`splits`]). The shorter first at each start.
+/// then each way one of their lines adds up two modifiers ([`splits`]). The shorter first at
+/// each start.
 fn candidates(
     tables: &[Table],
     modifiers: &[Modifier],
     copied: &[Option<Copied<'_>>],
     base: &BaseSpawn,
     item_level: Option<u32>,
-    may_split: bool,
 ) -> Vec<Candidate> {
     let tie = Tie::Worst { item_level };
     let most_lines = most_lines(tables);
@@ -1172,7 +1225,7 @@ fn candidates(
             }
             for (summed, &owner) in owners.iter().enumerate() {
                 // A modifier of one line only: the line the game writes for both.
-                if !may_split || owners.iter().filter(|&&other| other == owner).count() != 1 {
+                if owners.iter().filter(|&&other| other == owner).count() != 1 {
                     continue;
                 }
                 for split in splits(tables, base, &joined, (summed, owner), item_level) {
@@ -1480,7 +1533,9 @@ struct ReadingKey {
     /// How many lines aren't split into two modifiers: a line that a modifier holds alone
     /// isn't split (`18% increased Rarity of Items found` would also fit two of 9%).
     whole: usize,
-    /// How many modifiers the lines make, those without tier counted.
+    /// How many modifiers the lines make, those without tier counted: the lines alone
+    /// first. Where a hybrid holds them too in the room of the item, the other readings
+    /// leave them without tier ([`other_readings::doubts`]), whichever is read here.
     modifiers: usize,
 }
 
@@ -1498,9 +1553,12 @@ struct Search<'a> {
     cut: bool,
     /// The best reading, the first one on a tie.
     best: Option<(ReadingKey, Vec<usize>)>,
-    /// The lines of the splits that readings as good as the best one don't share, with the
-    /// other lines of their hybrids: the indexes among the modifiers of the item.
+    /// The lines that a reading as good as the best one reads otherwise, with the other lines
+    /// of their modifiers: the indexes among the modifiers of the item.
     ambiguous: Vec<usize>,
+    /// Whether a reading as good as the best one leaves another room to the modifiers that
+    /// can be a prefix or a suffix.
+    room_in_doubt: bool,
 }
 
 impl<'a> Search<'a> {
@@ -1520,6 +1578,7 @@ impl<'a> Search<'a> {
             cut: false,
             best: None,
             ambiguous: Vec::new(),
+            room_in_doubt: false,
         }
     }
 
@@ -1581,39 +1640,35 @@ impl<'a> Search<'a> {
         };
         match &self.best {
             Some((best, _)) if key < *best => {}
+            // As good as the best one: nothing tells which of them rolled, and the order of
+            // the lines, which made one the first, doesn't.
             Some((best, reading)) if key == *best => {
-                let lines = differently_split(self.candidates, reading, chosen);
+                let lines = differently_read(self.candidates, reading, chosen);
                 for line in lines {
                     if !self.ambiguous.contains(&line) {
                         self.ambiguous.push(line);
                     }
                 }
+                let both = |reading| self.room.both(reading, self.candidates);
+                if both(reading) != both(chosen) {
+                    self.room_in_doubt = true;
+                }
             }
             _ => {
                 self.best = Some((key, chosen.to_vec()));
                 self.ambiguous.clear();
+                self.room_in_doubt = false;
             }
         }
     }
 }
 
-/// The lines of the splits that the readings `one` and `other`, as good, don't share: the line
-/// one only splits, or splits into other modifiers, with the other lines of its hybrid, which
-/// would otherwise be read alone (the `30% increased Rarity of Items found` of a tiara, a prefix
-/// T1 and a suffix T2, or a T2 and a T1).
-fn differently_split(candidates: &[Candidate], one: &[usize], other: &[usize]) -> Vec<usize> {
-    let splits = |reading: &[usize]| -> Vec<usize> {
-        reading
-            .iter()
-            .copied()
-            .filter(|&index| {
-                candidates
-                    .get(index)
-                    .is_some_and(|candidate| candidate.added.is_some())
-            })
-            .collect()
-    };
-    let (one, other) = (splits(one), splits(other));
+/// The lines that the readings `one` and `other`, as good, read otherwise: those of the
+/// candidates only one of them has, a line split into other modifiers (the `30% increased
+/// Rarity of Items found` of a tiara, a prefix T1 and a suffix T2, or a T2 and a T1), joined
+/// with another line, or read by one of them only, with the other lines of these modifiers,
+/// which would otherwise be read alone.
+fn differently_read(candidates: &[Candidate], one: &[usize], other: &[usize]) -> Vec<usize> {
     let only_one = one.iter().filter(|index| !other.contains(index));
     let only_other = other.iter().filter(|index| !one.contains(index));
     only_one
