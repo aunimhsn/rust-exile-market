@@ -47,13 +47,8 @@ pub struct LineRolls {
 /// The rolls over every tier of the lines of the copied item that have them.
 #[derive(Debug, Default)]
 pub struct TierRolls {
-    lines: Vec<(StatKey, LineRolls)>,
-    /// The index of each modifier whose tier number isn't shown: of one tier only on the base
-    /// of the item, whose T1 would read as "the best" while it is "the only one", or whose tier
-    /// the game doesn't write (the Genesis tree, an essence, an alloy).
-    without_number: Vec<usize>,
-    /// The index of each modifier a currency adds, written without tier, and that currency.
-    currencies: Vec<(usize, Currency)>,
+    /// What the lines of each modifier of the item roll over, in the order of the item.
+    modifiers: Vec<ModifierRolls>,
 }
 
 impl TierRolls {
@@ -68,51 +63,34 @@ impl TierRolls {
         base_type: Option<&str>,
         item_level: Option<u32>,
     ) -> Self {
-        let mut rolls = Self::default();
-        for (index, modifier) in modifiers.iter().enumerate() {
-            let Some(written) = Written::of(modifier) else {
-                continue;
-            };
-            let found = base_type
-                .and_then(|base_type| Found::in_tables(language, base_type, item_level, modifier));
-            let Some(modifier_rolls) = written.rolls(modifier, found.as_ref()) else {
-                if let Some(base_type) = base_type {
-                    warn_of_a_missing_table(language, base_type, modifier);
-                }
-                continue;
-            };
-            rolls.add(index, modifier_rolls);
-        }
-        rolls
-    }
-
-    /// Adds what the lines of the modifier `index` roll over.
-    fn add(&mut self, index: usize, rolls: ModifierRolls) {
-        let ModifierRolls {
-            lines,
-            hides_number,
-            currency,
-        } = rolls;
-        self.lines.extend(lines.into_iter().map(|(line, rolls)| {
-            let key = StatKey {
-                modifier: index,
-                line,
-            };
-            (key, rolls)
-        }));
-        if hides_number {
-            self.without_number.push(index);
-        }
-        self.currencies
-            .extend(currency.map(|currency| (index, currency)));
+        let modifiers = modifiers
+            .iter()
+            .map(|modifier| {
+                let Some(written) = Written::of(modifier) else {
+                    return ModifierRolls::default();
+                };
+                let found = base_type.and_then(|base_type| {
+                    Found::in_tables(language, base_type, item_level, modifier)
+                });
+                written.rolls(modifier, found.as_ref()).unwrap_or_else(|| {
+                    if let Some(base_type) = base_type {
+                        warn_of_a_missing_table(language, base_type, modifier);
+                    }
+                    ModifierRolls::default()
+                })
+            })
+            .collect();
+        Self { modifiers }
     }
 
     /// The rolls of the line `key` over every tier; none for a line without them.
     #[must_use]
     pub fn get(&self, key: StatKey) -> Option<&LineRolls> {
-        self.lines
+        self.modifiers
+            .get(key.modifier)?
+            .lines
             .iter()
-            .find(|(line, _)| *line == key)
+            .find(|(line, _)| *line == key.line)
             .map(|(_, rolls)| rolls)
     }
 
@@ -120,17 +98,16 @@ impl TierRolls {
     /// base of the item, or a tier the game doesn't write.
     #[must_use]
     pub fn hides_number(&self, index: usize) -> bool {
-        self.without_number.contains(&index)
+        self.modifiers
+            .get(index)
+            .is_some_and(|modifier| modifier.hides_number)
     }
 
     /// The currency that adds the modifier `index`, an essence or an alloy, written without
     /// tier: none for another modifier.
     #[must_use]
     pub fn currency(&self, index: usize) -> Option<Currency> {
-        self.currencies
-            .iter()
-            .find(|&&(modifier, _)| modifier == index)
-            .map(|&(_, currency)| currency)
+        self.modifiers.get(index)?.currency
     }
 }
 
@@ -199,7 +176,8 @@ impl Written {
     }
 }
 
-/// What the lines of one modifier roll over.
+/// What the lines of one modifier roll over; nothing for a modifier whose lines roll over no
+/// tier.
 #[derive(Debug, Default)]
 struct ModifierRolls {
     /// The rolls of each line that has them, with the index of the line.
