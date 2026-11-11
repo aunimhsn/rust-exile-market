@@ -42,6 +42,8 @@ const TRADE_SITE_PAUSE: Duration = Duration::from_secs(1);
 const CDN_PAUSE: Duration = Duration::from_millis(200);
 const OUTPUT: &str = "assets/exchange";
 const INDEX: &str = "currencies.ndjson";
+/// The most an answer read may hold, a bound against one that doesn't end.
+const MAX_BODY_SIZE: u64 = 16 * 1024 * 1024;
 
 /// The answer of `/data/static`: the items of the currency exchange, by group.
 #[derive(Deserialize)]
@@ -75,28 +77,51 @@ struct Currency<'a> {
 
 fn main() -> Result<()> {
     let agent = ureq::Agent::new_with_defaults();
+    let [english, french] = static_data(&agent)?;
+    // Every icon is taken before any file is replaced, so that a failure halfway leaves the
+    // icons of the last run as they were.
+    let icons = download_icons(&agent, &english, &french)?;
+    icons.replace_those_of_the_last_run()?;
+    println!("{} icons written to {OUTPUT}/", icons.files.len());
+    Ok(())
+}
+
+/// The static data of the trade site in English and in French, a pause between the two.
+fn static_data(agent: &ureq::Agent) -> Result<[StaticData; 2]> {
     let mut languages = Vec::new();
     for (index, (language, url)) in STATIC_DATA.iter().enumerate() {
         if index > 0 {
             thread::sleep(TRADE_SITE_PAUSE);
         }
-        let data: StaticData = serde_json::from_slice(&get(&agent, url)?)?;
+        let data: StaticData = serde_json::from_slice(&get(agent, url)?)?;
         println!("{language}: {} groups", data.result.len());
         languages.push(data);
     }
-    let [english, french] =
-        <[StaticData; 2]>::try_from(languages).map_err(|_| "the static data of two languages")?;
+    Ok(<[StaticData; 2]>::try_from(languages).map_err(|_| "the static data of two languages")?)
+}
+
+/// The icons of the items of the currency exchange and their index.
+struct Icons {
+    /// Each icon, by the name of its file.
+    files: Vec<(String, Vec<u8>)>,
+    /// `currencies.ndjson`.
+    index: String,
+}
+
+/// The icon of each item of `english` with an image, downloaded from the CDN, a pause between
+/// two, and the index of their names in English and in `french`. An error for an id that can't
+/// name a file, or an item without French name.
+fn download_icons(agent: &ureq::Agent, english: &StaticData, french: &StaticData) -> Result<Icons> {
     let french_names: BTreeMap<&str, &str> = french
         .result
         .iter()
         .flat_map(|group| &group.entries)
         .map(|entry| (entry.id.as_str(), entry.text.trim()))
         .collect();
-
-    // Every icon is taken before any file is replaced, so that a failure halfway leaves the
-    // icons of the last run as they were.
-    let mut index = String::new();
-    let mut icons = Vec::new();
+    let mut icons = Icons {
+        files: Vec::new(),
+        index: String::new(),
+    };
     for group in &english.result {
         for entry in &group.entries {
             let Some(image) = &entry.image else { continue };
@@ -106,36 +131,41 @@ fn main() -> Result<()> {
             let french = french_names
                 .get(entry.id.as_str())
                 .ok_or_else(|| format!("{}: no French name", entry.id))?;
-            if !icons.is_empty() {
+            if !icons.files.is_empty() {
                 thread::sleep(CDN_PAUSE);
             }
-            let png = shrunk(&get(&agent, &format!("{CDN}{image}"))?)
+            let png = shrunk(&get(agent, &format!("{CDN}{image}"))?)
                 .map_err(|error| format!("{}: {error}", entry.id))?;
-            icons.push((format!("{}.png", entry.id), png));
-            index.push_str(&serde_json::to_string(&Currency {
+            icons.files.push((format!("{}.png", entry.id), png));
+            icons.index.push_str(&serde_json::to_string(&Currency {
                 id: &entry.id,
                 group: &group.id,
                 english: entry.text.trim(),
                 french,
             })?);
-            index.push('\n');
+            icons.index.push('\n');
         }
     }
+    Ok(icons)
+}
 
-    let output = Path::new(OUTPUT);
-    fs::create_dir_all(output)?;
-    for file in fs::read_dir(output)? {
-        let path = file?.path();
-        if path.extension().is_some_and(|extension| extension == "png") {
-            fs::remove_file(path)?;
+impl Icons {
+    /// Writes the icons and their index in [`OUTPUT`], in place of the icons of the last run.
+    fn replace_those_of_the_last_run(&self) -> Result<()> {
+        let output = Path::new(OUTPUT);
+        fs::create_dir_all(output)?;
+        for file in fs::read_dir(output)? {
+            let path = file?.path();
+            if path.extension().is_some_and(|extension| extension == "png") {
+                fs::remove_file(path)?;
+            }
         }
+        for (name, png) in &self.files {
+            fs::write(output.join(name), png)?;
+        }
+        fs::write(output.join(INDEX), &self.index)?;
+        Ok(())
     }
-    for (name, png) in &icons {
-        fs::write(output.join(name), png)?;
-    }
-    fs::write(output.join(INDEX), index)?;
-    println!("{} icons written to {OUTPUT}/", icons.len());
-    Ok(())
 }
 
 /// Whether the id of an item can name its file on every system: no separator of a path, no
@@ -168,21 +198,21 @@ fn shrunk(png: &[u8]) -> Result<Vec<u8>> {
     Ok(bytes)
 }
 
+/// The body of `url`, its errors naming it.
 fn get(agent: &ureq::Agent, url: &str) -> Result<Vec<u8>> {
-    read(agent, url).map_err(|error| format!("{url}: {error}").into())
-}
-
-fn read(agent: &ureq::Agent, url: &str) -> Result<Vec<u8>> {
-    let mut bytes = Vec::new();
-    agent
-        .get(url)
-        .header("User-Agent", USER_AGENT)
-        .call()?
-        .into_body()
-        .into_reader()
-        .take(16 * 1024 * 1024)
-        .read_to_end(&mut bytes)?;
-    Ok(bytes)
+    let read = || -> Result<Vec<u8>> {
+        let mut bytes = Vec::new();
+        agent
+            .get(url)
+            .header("User-Agent", USER_AGENT)
+            .call()?
+            .into_body()
+            .into_reader()
+            .take(MAX_BODY_SIZE)
+            .read_to_end(&mut bytes)?;
+        Ok(bytes)
+    };
+    read().map_err(|error| format!("{url}: {error}").into())
 }
 
 #[cfg(test)]
