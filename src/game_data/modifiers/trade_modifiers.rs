@@ -296,4 +296,7 @@ fn with_ranges(
 }
 
 #[cfg(test)]
+mod tests;
+
+#[cfg(test)]
 mod game_tests;

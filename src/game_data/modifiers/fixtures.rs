@@ -59,6 +59,17 @@ pub(super) fn desecrated(affix: Affix, lines: &[&str]) -> Modifier {
     }
 }
 
+/// Modifiers of one line each, as the in-game trade writes them, with their values.
+pub(super) fn trade_lines(lines: &[&str]) -> Vec<Modifier> {
+    lines
+        .iter()
+        .map(|line| Modifier {
+            lines: vec![StatLine::parse(line)],
+            ..modifier(None, &[])
+        })
+        .collect()
+}
+
 /// The tiara and the bow copied by the owner from the in-game trade, English and French.
 pub(super) const TIARA_EN: &str =
     include_str!("../../item/test-items/en-owner-trade-rare-helmet-fractured.txt");
