@@ -13,6 +13,9 @@ Before reviewing, read:
 - `CLAUDE.md`: project conventions (naming, language, workflow).
 - `specs.md`: expected behavior of the application.
 - `roadmap.md`: current step; `docs/technical-choices.md`: the technical choices.
+- `docs/code-quality.md`: the rules of the code, which you review against.
+
+Run `date +%H:%M` when you start and when you finish: the length of a review is a criterion of the split of a step, written in your review.
 
 The project owner is an experienced software engineer, newer to Rust. Explain each recommendation clearly enough to understand the Rust concept behind it.
 
@@ -31,12 +34,21 @@ In the area mode:
 2. Review the whole area as it is at `HEAD`, not a diff: the design of its modules and how they fit together, the code repeated between its files, what is dead or more complex than it needs, and the tests missing for its riskiest paths. Read the code of other areas only where the area calls it or is called by it.
 3. Keep to the area: a finding outside it goes in one line under "Outside the area", for the review of its own area.
 
+When the prompt says the branch is a refactoring (no change of behavior), in the branch mode:
+
+1. Check the moves. For each commit that moves code, run `git show --color-moved=dimmed-zebra --color-moved-ws=allow-indentation-change <commit>`: a moved block is dimmed, so read only what isn't. Paths, `use` lines and visibility may change in a move; anything else is a finding.
+2. Check that the behavior didn't change. An assertion of a test changed or removed is a finding, unless a commit message gives the reason. The counts of the draw (`RECORDED` in `src/game_data/modifiers/tests/random_items.rs`) and the generated game data (`assets/game-data/`) stay the same.
+3. Review each improvement against `docs/code-quality.md`, the names first: each name that doesn't say what its thing is for, with a better one.
+4. Review the files the branch touches as a whole, not only their diff: what `docs/code-quality.md` would still improve there belongs to the step.
+5. Leave out what the rules don't ask for: a pattern for its own sake, a rename of taste.
+
 In both modes, run `cargo clippy --workspace --all-targets --all-features -- -D warnings` and `cargo test --workspace --all-features`. If `cargo` is not on the `PATH`, prepend `$HOME/.cargo/bin`. Work in the project folder: don't copy it to `/tmp`.
 
 Only run read-only commands (`git fetch`, `git diff`, `git log`, `cargo clippy`, `cargo test`, etc.). Never commit, push, edit or format files.
 
 ## What to look for
 
+- **The rules of `docs/code-quality.md`**, the names first.
 - **Idiomatic Rust**: ownership and borrowing, iterators, `Option` / `Result` combinators, pattern matching, use of the standard library, trait usage.
 - **Error handling**: error types, context in messages, no `unwrap` / `expect` outside tests unless justified.
 - **Readability**: naming, function size, module structure, comments and doc comments.
@@ -63,6 +75,7 @@ Use this structure:
 - **Commits**: <short list>
 - **Clippy**: <result>
 - **Tests**: <result>
+- **Duration**: <minutes, from the start to the end of the review>
 
 ## Summary
 
