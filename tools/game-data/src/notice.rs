@@ -3,50 +3,43 @@
 use std::fs;
 use std::path::Path;
 
-use crate::github::{Commit, get, latest_commit, raw_url};
-use crate::{EXILED_EXCHANGE, REPOE_CODE, REPOE_DATA, Result};
+use crate::github::{Commit, GitHub};
+use crate::{EXILED_EXCHANGE, REPOE_CODE, REPOE_DATA, Result, Sources};
 
-/// Writes `NOTICE.md`: where the data come from (the commits of Exiled Exchange 2 and of the
-/// data of RePoE), and their licenses, that of RePoE read in its code at
-/// `repoe_code_reference`.
+/// Writes `NOTICE.md` in `output`: where the data come from (`sources`), and their licenses, that
+/// of RePoE read in its code at `repoe_code_reference`.
 pub(crate) fn write(
-    agent: &ureq::Agent,
+    github: &GitHub,
     output: &Path,
-    (commit, repoe_commit): (&Commit, &Commit),
-    repoe_version: &str,
+    sources: &Sources,
     repoe_code_reference: &str,
 ) -> Result<()> {
-    let license = get(agent, &raw_url(EXILED_EXCHANGE, &commit.sha, "LICENSE"))?;
-    let repoe_code_commit = latest_commit(agent, REPOE_CODE, repoe_code_reference)?;
-    println!("RePoE code, commit {}", repoe_code_commit.sha);
-    let repoe_license = get(
-        agent,
-        &raw_url(REPOE_CODE, &repoe_code_commit.sha, "LICENSE.md"),
-    )?;
+    let exiled_exchange = &sources.exiled_exchange;
+    let license = github.file(EXILED_EXCHANGE, &exiled_exchange.sha, "LICENSE")?;
+    let repoe_code = github.commit(REPOE_CODE, repoe_code_reference)?;
+    println!("RePoE code, commit {}", repoe_code.sha);
+    let repoe_license = github.file(REPOE_CODE, &repoe_code.sha, "LICENSE.md")?;
     fs::write(
         output.join("NOTICE.md"),
         text(
             &Origin {
-                commit: &commit.sha,
-                date: &commit.commit.committer.date,
+                commit: exiled_exchange,
                 license: &license,
             },
             &Origin {
-                commit: &repoe_commit.sha,
-                date: &repoe_commit.commit.committer.date,
+                commit: &sources.repoe_data,
                 license: &repoe_license,
             },
-            repoe_version,
-            &repoe_code_commit.sha,
+            &sources.repoe_version,
+            &repoe_code.sha,
         ),
     )?;
     Ok(())
 }
 
-/// Where data come from: the commit of their repository, its date, and their license.
+/// Where data come from: the commit of their repository, and their license.
 struct Origin<'a> {
-    commit: &'a str,
-    date: &'a str,
+    commit: &'a Commit,
     license: &'a str,
 }
 
@@ -76,10 +69,10 @@ The code of the RePoE fork ([{REPOE_CODE}](https://github.com/{REPOE_CODE}), com
 
 This product isn't affiliated with or endorsed by Grinding Gear Games in any way.
 ",
-        exiled_exchange.commit,
-        exiled_exchange.date,
-        repoe.commit,
-        repoe.date,
+        exiled_exchange.commit.sha,
+        exiled_exchange.commit.date(),
+        repoe.commit.sha,
+        repoe.commit.date(),
         exiled_exchange.license.trim_end(),
         repoe.license.trim_end(),
     )

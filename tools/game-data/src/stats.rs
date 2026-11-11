@@ -58,14 +58,16 @@ struct SourceTrade {
 /// A stat as the application reads it (`src/game_data/stats.rs`).
 #[derive(Serialize)]
 pub(crate) struct Stat {
+    /// Its English template, the `ref` of Exiled Exchange 2.
     #[serde(rename = "ref")]
-    pub(crate) reference: String,
+    template: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     id: Option<String>,
     better: i8,
     matchers: Vec<Matcher>,
+    /// Its ids on the trade site, by group.
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
-    pub(crate) ids: BTreeMap<String, Vec<String>>,
+    ids: BTreeMap<String, Vec<String>>,
     #[serde(skip_serializing_if = "is_false")]
     option: bool,
     #[serde(skip_serializing_if = "is_false")]
@@ -94,14 +96,14 @@ fn is_false(value: &bool) -> bool {
 pub(crate) fn templates(stats: &[Stat]) -> modifiers::Templates {
     let mut templates = modifiers::Templates::new();
     for stat in stats {
-        templates.insert(stat.reference.clone(), stat.reference.clone());
+        templates.insert(stat.template.clone(), stat.template.clone());
     }
     // A template is its own first: a string of another stat can be written the same.
     for stat in stats {
         for matcher in &stat.matchers {
             templates
                 .entry(matcher.string.clone())
-                .or_insert_with(|| stat.reference.clone());
+                .or_insert_with(|| stat.template.clone());
         }
     }
     templates
@@ -116,12 +118,14 @@ pub(crate) fn reduce(source: &str) -> Result<Vec<Stat>> {
         }
         let stat: SourceStat =
             serde_json::from_str(line).map_err(|error| format!("line {}: {error}", index + 1))?;
-        stats.push(reduce_stat(stat)?);
+        stats.push(reduce_one(stat)?);
     }
     Ok(stats)
 }
 
-fn reduce_stat(stat: SourceStat) -> Result<Stat> {
+/// `stat` with only the fields and the groups the application reads; an error for a group of
+/// the trade site it doesn't know.
+fn reduce_one(stat: SourceStat) -> Result<Stat> {
     let mut ids = BTreeMap::new();
     for (group, group_ids) in stat.trade.ids.unwrap_or_default() {
         if LEFT_OUT_GROUPS.contains(&group.as_str()) {
@@ -148,7 +152,7 @@ fn reduce_stat(stat: SourceStat) -> Result<Stat> {
         }
     }
     Ok(Stat {
-        reference: stat.reference,
+        template: stat.reference,
         id: stat.id,
         better: stat.better,
         matchers,
@@ -160,20 +164,25 @@ fn reduce_stat(stat: SourceStat) -> Result<Stat> {
 
 /// Notes the stats of one language only, and those whose trade ids differ between the
 /// languages, to look at after a patch: the application reads each language on its own.
-pub(crate) fn report_differences(
-    english: &BTreeMap<String, BTreeMap<String, Vec<String>>>,
-    french: &BTreeMap<String, BTreeMap<String, Vec<String>>>,
-    report: &mut Report,
-) {
-    let references: BTreeSet<_> = english.keys().chain(french.keys()).collect();
-    for reference in references {
-        match (english.get(reference), french.get(reference)) {
-            (Some(_), None) => report.note("Stats in English only", reference),
-            (None, Some(_)) => report.note("Stats in French only", reference),
+pub(crate) fn report_differences(english: &[Stat], french: &[Stat], report: &mut Report) {
+    let (english, french) = (trade_ids(english), trade_ids(french));
+    let templates: BTreeSet<&str> = english.keys().chain(french.keys()).copied().collect();
+    for template in templates {
+        match (english.get(template), french.get(template)) {
+            (Some(_), None) => report.note("Stats in English only", template),
+            (None, Some(_)) => report.note("Stats in French only", template),
             (Some(english), Some(french)) if english != french => {
-                report.note("Stats with other trade ids in French", reference);
+                report.note("Stats with other trade ids in French", template);
             }
             _ => {}
         }
     }
+}
+
+/// The ids on the trade site of each stat of `stats`, by its template.
+fn trade_ids(stats: &[Stat]) -> BTreeMap<&str, &BTreeMap<String, Vec<String>>> {
+    stats
+        .iter()
+        .map(|stat| (stat.template.as_str(), &stat.ids))
+        .collect()
 }

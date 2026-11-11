@@ -76,6 +76,7 @@ struct SourceItem {
     craftable: Option<SourceCraftable>,
 }
 
+/// What the game crafts of an item: the category of its base.
 #[derive(Deserialize)]
 struct SourceCraftable {
     category: String,
@@ -94,17 +95,61 @@ pub(crate) struct Base {
     tags: Vec<String>,
 }
 
-/// The bases of an `items.ndjson`, of the categories the application searches, each name
-/// once: a base listed in several categories takes the one most of its entries have
-/// (`Runemastered Venerable Defender`, three times a shield and once a buckler), the first in
-/// alphabetical order on a tie. Each takes the domain and the tags of its English name in
-/// `spawns`.
+/// The bases of an `items.ndjson` in `language`, of the categories the application searches,
+/// each name once, in the category most of its entries have ([`main_category`]). Each takes the
+/// domain and the tags of its English name in `spawns`.
 pub(crate) fn reduce(
     source: &str,
     spawns: &modifiers::BaseSpawns,
     language: &str,
     report: &mut Report,
 ) -> Result<Vec<Base>> {
+    let Entries {
+        categories,
+        english_names,
+    } = entries(source)?;
+    let mut bases = Vec::new();
+    for (name, counts) in categories {
+        if counts.len() > 1 {
+            report.note(
+                "Bases in several categories",
+                format!("{language}: {name} {counts:?}"),
+            );
+        }
+        let category = main_category(counts)?;
+        let english = english_names.get(&name).unwrap_or(&name);
+        let (domain, tags) = spawns.get(english).map_or_else(
+            || (modifiers::EQUIPMENT.to_owned(), Vec::new()),
+            |spawn| (spawn.domain.clone(), spawn.tags.clone()),
+        );
+        // The application reads the domains of the modifiers kept only.
+        if !modifiers::is_kept_domain(&domain) {
+            return Err(format!("unknown domain {domain} of {name}").into());
+        }
+        if tags.is_empty() {
+            report.note("Bases without tags", format!("{language}: {name}"));
+        }
+        bases.push(Base {
+            name,
+            category,
+            domain,
+            tags,
+        });
+    }
+    Ok(bases)
+}
+
+/// The entries of the bases of an `items.ndjson`, by their name in its language.
+struct Entries {
+    /// The count of the entries of each base in each of its categories.
+    categories: BTreeMap<String, BTreeMap<String, usize>>,
+    /// The English name of each base.
+    english_names: BTreeMap<String, String>,
+}
+
+/// The entries of the bases of `source`, of the categories the application searches; an error
+/// for a category it doesn't know.
+fn entries(source: &str) -> Result<Entries> {
     let mut categories: BTreeMap<String, BTreeMap<String, usize>> = BTreeMap::new();
     let mut english_names = BTreeMap::new();
     for (index, line) in source.lines().enumerate() {
@@ -132,43 +177,25 @@ pub(crate) fn reduce(
             .entry(craftable.category)
             .or_default() += 1;
     }
-    let mut bases = Vec::new();
-    for (name, counts) in categories {
-        if counts.len() > 1 {
-            report.note(
-                "Bases in several categories",
-                format!("{language}: {name} {counts:?}"),
-            );
-        }
-        let category = counts
-            .into_iter()
-            .max_by(|(first, first_count), (second, second_count)| {
-                first_count
-                    .cmp(second_count)
-                    .then_with(|| second.cmp(first))
-            })
-            .map(|(category, _)| category)
-            .ok_or("a base without category")?;
-        let english = english_names.get(&name).unwrap_or(&name);
-        let (domain, tags) = spawns.get(english).map_or_else(
-            || (modifiers::EQUIPMENT.to_owned(), Vec::new()),
-            |spawn| (spawn.domain.clone(), spawn.tags.clone()),
-        );
-        // The application reads the domains of the modifiers kept only.
-        if !modifiers::is_kept_domain(&domain) {
-            return Err(format!("unknown domain {domain} of {name}").into());
-        }
-        if tags.is_empty() {
-            report.note("Bases without tags", format!("{language}: {name}"));
-        }
-        bases.push(Base {
-            name,
-            category,
-            domain,
-            tags,
-        });
-    }
-    Ok(bases)
+    Ok(Entries {
+        categories,
+        english_names,
+    })
+}
+
+/// The category of a base, of the `counts` of its entries in each: the one most of them have
+/// (`Runemastered Venerable Defender`, three times a shield and once a buckler), the first in
+/// alphabetical order on a tie.
+fn main_category(counts: BTreeMap<String, usize>) -> Result<String> {
+    counts
+        .into_iter()
+        .max_by(|(first, first_count), (second, second_count)| {
+            first_count
+                .cmp(second_count)
+                .then_with(|| second.cmp(first))
+        })
+        .map(|(category, _)| category)
+        .ok_or_else(|| "a base without category".into())
 }
 
 #[cfg(test)]

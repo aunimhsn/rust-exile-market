@@ -17,118 +17,127 @@ mod notice;
 mod report;
 mod stats;
 
-use std::collections::BTreeMap;
 use std::error::Error;
 use std::fs;
 use std::path::{Path, PathBuf};
 
 use serde::Serialize;
 
-use github::{get, latest_commit, raw_url};
+use github::{Commit, GitHub};
 use report::Report;
 
+/// The stats and the items of Exiled Exchange 2, in `renderer/public/data/<language>/`.
 const EXILED_EXCHANGE: &str = "Kvan7/Exiled-Exchange-2";
 /// The data of Path of Exile 2 exported by the RePoE fork, in `data/`.
 const REPOE_DATA: &str = "repoe-fork/poe2";
 /// The code of the RePoE fork, with its license.
 const REPOE_CODE: &str = "repoe-fork/repoe";
+/// The languages of the stats and the bases, English first.
 const LANGUAGES: [&str; 2] = ["en", "fr"];
 
 pub(crate) type Result<T> = std::result::Result<T, Box<dyn Error>>;
 
-fn main() -> Result<()> {
-    let mut arguments = std::env::args().skip(1);
-    let reference = arguments.next().unwrap_or_else(|| "master".to_owned());
-    let repoe_reference = arguments.next().unwrap_or_else(|| "master".to_owned());
-    let repoe_code_reference = arguments.next().unwrap_or_else(|| "master".to_owned());
-    let agent = ureq::Agent::new_with_defaults();
-    let commit = latest_commit(&agent, EXILED_EXCHANGE, &reference)?;
-    println!("Exiled Exchange 2, commit {}", commit.sha);
-    let repoe_commit = latest_commit(&agent, REPOE_DATA, &repoe_reference)?;
-    let repoe_version = get(
-        &agent,
-        &raw_url(REPOE_DATA, &repoe_commit.sha, "exported-version.txt"),
-    )?;
-    println!(
-        "RePoE, commit {}, version {}",
-        repoe_commit.sha,
-        repoe_version.trim()
-    );
+/// What the generator reads of each repository, from its arguments: a branch or a commit,
+/// `master` when it isn't given.
+struct References {
+    exiled_exchange: String,
+    repoe_data: String,
+    repoe_code: String,
+}
 
+impl References {
+    fn from_arguments() -> Self {
+        let mut arguments = std::env::args().skip(1);
+        let mut next = || arguments.next().unwrap_or_else(|| "master".to_owned());
+        Self {
+            exiled_exchange: next(),
+            repoe_data: next(),
+            repoe_code: next(),
+        }
+    }
+}
+
+/// The commits the generated data are read from.
+struct Sources {
+    exiled_exchange: Commit,
+    repoe_data: Commit,
+    /// The version of the game the data of RePoE were exported from.
+    repoe_version: String,
+}
+
+impl Sources {
+    /// The commits of `references`, printed.
+    fn read(github: &GitHub, references: &References) -> Result<Self> {
+        let exiled_exchange = github.commit(EXILED_EXCHANGE, &references.exiled_exchange)?;
+        println!("Exiled Exchange 2, commit {}", exiled_exchange.sha);
+        let repoe_data = github.commit(REPOE_DATA, &references.repoe_data)?;
+        let repoe_version = github
+            .file(REPOE_DATA, &repoe_data.sha, "exported-version.txt")?
+            .trim()
+            .to_owned();
+        println!("RePoE, commit {}, version {repoe_version}", repoe_data.sha);
+        Ok(Self {
+            exiled_exchange,
+            repoe_data,
+            repoe_version,
+        })
+    }
+
+    /// The file `name` of Exiled Exchange 2 in `language`.
+    fn exiled_exchange_file(&self, github: &GitHub, language: &str, name: &str) -> Result<String> {
+        github.file(
+            EXILED_EXCHANGE,
+            &self.exiled_exchange.sha,
+            &format!("renderer/public/data/{language}/{name}"),
+        )
+    }
+}
+
+fn main() -> Result<()> {
+    let references = References::from_arguments();
+    let github = GitHub::new();
+    let sources = Sources::read(&github, &references)?;
     let output = output_directory();
     fs::create_dir_all(&output)?;
     let mut report = Report::default();
-    let mut sources = Vec::new();
-    for language in LANGUAGES {
-        let source = get(
-            &agent,
-            &raw_url(
-                EXILED_EXCHANGE,
-                &commit.sha,
-                &format!("renderer/public/data/{language}/stats.ndjson"),
-            ),
-        )?;
-        sources.push((
-            language,
-            stats::reduce(&source).map_err(|error| format!("{language}: {error}"))?,
-        ));
-    }
-    let english = sources
-        .iter()
-        .find(|(language, _)| *language == "en")
-        .map(|(_, stats)| stats.as_slice())
-        .ok_or("no English stats")?;
+
+    let stats_by_language = LANGUAGES
+        .into_iter()
+        .map(|language| {
+            let source = sources.exiled_exchange_file(&github, language, "stats.ndjson")?;
+            let reduced = stats::reduce(&source).map_err(|error| format!("{language}: {error}"))?;
+            Ok((language, reduced))
+        })
+        .collect::<Result<Vec<_>>>()?;
+    let [(_, english), (_, french)] = stats_by_language.as_slice() else {
+        return Err("the stats of other languages than English and French".into());
+    };
     let (tables, base_spawns) = modifier_tables(
-        &agent,
-        &repoe_commit.sha,
+        &github,
+        &sources.repoe_data.sha,
         &stats::templates(english),
         &mut report,
     )?;
     println!("{} modifier tables", tables.len());
     write_lines(&output.join("modifiers.ndjson"), &tables)?;
 
-    let mut ids_by_language = Vec::new();
-    for (language, stats) in sources {
+    for (language, stats) in &stats_by_language {
         println!("{language}: {} stats", stats.len());
-        ids_by_language.push(
-            stats
-                .iter()
-                .map(|stat| (stat.reference.clone(), stat.ids.clone()))
-                .collect::<BTreeMap<_, _>>(),
-        );
-        write_lines(&output.join(format!("stats-{language}.ndjson")), &stats)?;
-
-        let source = get(
-            &agent,
-            &raw_url(
-                EXILED_EXCHANGE,
-                &commit.sha,
-                &format!("renderer/public/data/{language}/items.ndjson"),
-            ),
-        )?;
+        write_lines(&output.join(format!("stats-{language}.ndjson")), stats)?;
+        let source = sources.exiled_exchange_file(&github, language, "items.ndjson")?;
         let bases = bases::reduce(&source, &base_spawns, language, &mut report)
             .map_err(|error| format!("{language}: {error}"))?;
         println!("{language}: {} bases", bases.len());
         write_lines(&output.join(format!("bases-{language}.ndjson")), &bases)?;
     }
-    if let [english, french] = ids_by_language.as_slice() {
-        stats::report_differences(english, french, &mut report);
-    }
+    stats::report_differences(english, french, &mut report);
 
-    notice::write(
-        &agent,
-        &output,
-        (&commit, &repoe_commit),
-        repoe_version.trim(),
-        &repoe_code_reference,
-    )?;
-    fs::write(
-        output.join("report.md"),
-        report.to_markdown(&format!(
-            "the commit {} of Exiled Exchange 2 and the commit {} of the data of RePoE",
-            commit.sha, repoe_commit.sha
-        )),
-    )?;
+    notice::write(&github, &output, &sources, &references.repoe_code)?;
+    let read_from = format!(
+        "the commit {} of Exiled Exchange 2 and the commit {} of the data of RePoE",
+        sources.exiled_exchange.sha, sources.repoe_data.sha
+    );
+    fs::write(output.join("report.md"), report.to_markdown(&read_from))?;
     println!("Written to {}", output.canonicalize()?.display());
     Ok(())
 }
@@ -136,12 +145,12 @@ fn main() -> Result<()> {
 /// The modifier tables of the commit `commit` of the data of RePoE, and the domain and the tags
 /// of the bases.
 fn modifier_tables(
-    agent: &ureq::Agent,
+    github: &GitHub,
     commit: &str,
     templates: &modifiers::Templates,
     report: &mut Report,
 ) -> Result<(Vec<modifiers::Table>, modifiers::BaseSpawns)> {
-    let file = |path: &str| get(agent, &raw_url(REPOE_DATA, commit, &format!("data/{path}")));
+    let file = |path: &str| github.file(REPOE_DATA, commit, &format!("data/{path}"));
     let files = modifiers::RepoeFiles {
         modifiers: serde_json::from_str(&file("mods.json")?)?,
         bases: serde_json::from_str(&file("base_items.json")?)?,
