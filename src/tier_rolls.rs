@@ -211,13 +211,8 @@ impl ModifierRolls {
                 modifier.lines.first().map_or("", |line| line.text.as_str())
             );
         }
-        let over = Over {
-            tiers: &found.tiers.tiers,
-            tells_tiers: !single,
-            sum: None,
-        };
         Self {
-            lines: found.rolls_over(modifier, &over),
+            lines: found.rolls_over(modifier, &found.tiers.tiers, None),
             hides_number: single && modifier.tier == Some(1),
             currency: None,
         }
@@ -235,42 +230,22 @@ impl ModifierRolls {
         let Some(tier) = found.tiers.tier().filter(unwritten) else {
             return Self::default();
         };
-        let over = Over {
-            tiers: std::slice::from_ref(tier),
-            tells_tiers: false,
-            sum: None,
-        };
         Self {
-            lines: found.rolls_over(modifier, &over),
+            lines: found.rolls_over(modifier, std::slice::from_ref(tier), None),
             hides_number: true,
             currency: found.tiers.currency,
         }
     }
 
     /// The other lines of a hybrid whose part its line `sum` adds up, over the tiers of the
-    /// hybrid `found`; of one tier only, they tell no tiers.
+    /// hybrid `found`.
     fn over_hybrid_tiers(modifier: &Modifier, found: &Found, sum: usize) -> Self {
-        let over = Over {
-            tiers: &found.tiers.tiers,
-            tells_tiers: !found.tiers.single(),
-            sum: Some(sum),
-        };
         Self {
-            lines: found.rolls_over(modifier, &over),
+            lines: found.rolls_over(modifier, &found.tiers.tiers, Some(sum)),
             hides_number: false,
             currency: None,
         }
     }
-}
-
-/// The tiers the lines of a modifier roll over.
-struct Over<'t> {
-    tiers: &'t [Tier],
-    /// Whether its lines tell the tiers of their lowest and highest rolls: not over one tier
-    /// only, where "T1–T1" would tell nothing.
-    tells_tiers: bool,
-    /// The line that adds up two modifiers of its stat, left out: a sum over no tiers.
-    sum: Option<usize>,
 }
 
 /// A modifier found in the modifier tables, on the base of the item.
@@ -293,10 +268,16 @@ impl Found {
         Some(Self { matches, tiers })
     }
 
-    /// The rolls of each line of `modifier` `over` its tiers, with the index of the line: the
-    /// ranges of a tier follow the values of each line match, and the values of a match the
-    /// numbers its stat counts on its lines, in their order.
-    fn rolls_over(&self, modifier: &Modifier, over: &Over<'_>) -> Vec<(usize, LineRolls)> {
+    /// The rolls of each line of `modifier` over `tiers`, but its line `sum` that adds up two
+    /// modifiers of its stat, a sum over no tiers, with the index of the line: the ranges of a
+    /// tier follow the values of each line match, and the values of a match the numbers its
+    /// stat counts on its lines, in their order.
+    fn rolls_over(
+        &self,
+        modifier: &Modifier,
+        tiers: &[Tier],
+        sum: Option<usize>,
+    ) -> Vec<(usize, LineRolls)> {
         let values_of_each_match = self.tiers.counts.iter().scan(0, |start, &count| {
             let first = *start;
             *start += count;
@@ -310,11 +291,12 @@ impl Found {
                 Some(line_match.lines.clone().zip(values))
             })
             .flatten()
-            .filter(|&(line, _)| over.sum != Some(line))
+            .filter(|&(line, _)| sum != Some(line))
             .filter_map(|(line, values)| {
                 let numbers = modifier.lines.get(line).map_or(0, |line| line.rolls.len());
-                let mut rolls = line_rolls(over.tiers, &values, numbers)?;
-                if !over.tells_tiers {
+                let mut rolls = line_rolls(tiers, &values, numbers)?;
+                // Over one tier only, "T1–T1" would tell nothing.
+                if tiers.len() < 2 {
                     rolls.tiers = None;
                 }
                 Some((line, rolls))
