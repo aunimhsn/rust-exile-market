@@ -270,10 +270,10 @@ impl PartRead {
         }
     }
 
-    /// Whether the lines the reading reads otherwise there are in doubt ([`doubts`]): always,
-    /// but a reading that adds up modifiers on a line in more modifiers than the best one, a
-    /// modifier holding a line alone being likelier than two adding up, and one that keeps
-    /// the lines of each modifier, a value in two tiers taking the worst.
+    /// Whether the lines the reading reads otherwise there are in doubt ([`super::doubts`]):
+    /// always, but a reading that adds up modifiers on a line in more modifiers than the best
+    /// one, a modifier holding a line alone being likelier than two adding up, and one that
+    /// keeps the lines of each modifier, a value in two tiers taking the worst.
     pub(super) fn in_doubt(self) -> bool {
         match self {
             Self::BestSplits | Self::ReadsMore | Self::JoinsOtherwise => true,

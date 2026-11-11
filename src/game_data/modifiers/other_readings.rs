@@ -103,7 +103,8 @@ struct Shown {
 /// without value never shared; its modifiers aren't bound to follow each other, the in-game
 /// trade copy sorting its lines by stat, not by modifier, and a modifier written on several
 /// lines may have each read apart. In each part of the item it reads otherwise (the lines a
-/// modifier of either reading joins), it leaves the lines in doubt ([`PartRead::in_doubt`]):
+/// modifier of either reading joins), it leaves the lines in doubt
+/// ([`comparison::PartRead::in_doubt`]):
 ///
 /// - when the best reading splits a line there (the `217% increased Physical Damage` and `+200
 ///   to Accuracy Rating` of a bow with a prefix open: the hybrid T1 and a pure T3, or a pure
