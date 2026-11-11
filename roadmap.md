@@ -7,6 +7,7 @@ Implementation steps of the features described in [specs.md](specs.md). Each ste
 Read only by the steps that need them:
 
 - [Technical choices](docs/technical-choices.md): the libraries, the services and the main designs, with their reasons.
+- [Code quality](docs/code-quality.md): the rules of the code (names, functions, types, ownership, modules, patterns, tests, refactoring), read at the start of each step that changes code.
 - [Releases](docs/releases.md): how to publish a version, and what its archives hold.
 - [Images](docs/images.md): the game images the application may show, and the rules of Grinding Gear Games.
 - [poe2scout usage](docs/poe2scout-usage.md): the limits of the price database and the rules the application follows.
