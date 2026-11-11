@@ -118,6 +118,8 @@ fn a_fixed_value_without_tier_rolls_over_its_tier_only_of_the_genesis_tree_or_an
          +2 to Level of all Minion Skills",
     );
     assert!(belt.single(0));
+    // Of the tree, not a currency's.
+    assert_eq!(belt.currency(0), None);
     let fixed = LineRolls {
         ranges: vec![Some(range(2.0, 2.0))],
         tiers: None,
@@ -132,6 +134,7 @@ fn a_fixed_value_without_tier_rolls_over_its_tier_only_of_the_genesis_tree_or_an
          +2 to Level of all Attack Skills",
     );
     assert!(bow.single(0));
+    assert_eq!(bow.currency(0), Some(Currency::Essence));
     assert_eq!(bow.get(key(0, 0)), Some(&fixed));
     // On a wand, where its value is the ordinary T2 of 4 as well: the essence's, fixed.
     let wand = |header: &str| {
@@ -144,6 +147,7 @@ fn a_fixed_value_without_tier_rolls_over_its_tier_only_of_the_genesis_tree_or_an
     };
     let essence = wand("\"of the Essence\"");
     assert!(essence.single(0));
+    assert_eq!(essence.currency(0), Some(Currency::Essence));
     assert_eq!(
         essence.get(key(0, 0)),
         Some(&LineRolls {
