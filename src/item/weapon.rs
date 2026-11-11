@@ -29,9 +29,9 @@ impl DamageKind {
 /// A damage range of a weapon, e.g. `74-231`.
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct DamageRange {
-    pub kind: DamageKind,
-    pub min: f64,
-    pub max: f64,
+    kind: DamageKind,
+    min: f64,
+    max: f64,
 }
 
 impl DamageRange {

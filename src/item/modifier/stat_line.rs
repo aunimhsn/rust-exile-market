@@ -88,6 +88,7 @@ pub struct StatLine {
     pub text: String,
     pub rolls: Vec<Roll>,
 }
+
 impl StatLine {
     /// Reads the values of a line, and removes their ranges from its text:
     /// `Adds 10(1-16) to 273(239-300) Lightning Damage` gives `Adds 10 to 273 Lightning
@@ -191,6 +192,7 @@ mod tests {
             range: range.map(|(min, max)| Range { min, max }),
         }
     }
+
     #[test]
     fn the_ranges_of_fixed_values_only_are_left_out() {
         let range = |min, max| Range { min, max };
@@ -223,6 +225,7 @@ mod tests {
         assert_eq!(range(1.0, 9.0).spanning(range(3.0, 4.0)), range(1.0, 9.0));
         assert_eq!(range(3.0, 4.0).spanning(range(1.0, 9.0)), range(1.0, 9.0));
     }
+
     #[test]
     fn reads_the_values_and_their_ranges() {
         let line = StatLine::parse("Adds 10(1-16) to 273(239-300) Lightning Damage");

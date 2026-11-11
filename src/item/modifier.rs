@@ -76,6 +76,7 @@ impl Lord {
         }
     }
 }
+
 /// The tier of a modifier for one affix it can be, found from its values on an item copied
 /// from the in-game trade: a prefix of tier 1, 16–19.
 #[derive(Debug, Clone, PartialEq)]
@@ -155,6 +156,7 @@ pub struct Modifier {
     /// What its values leave in doubt about its tier, when it was found from them.
     pub doubt: Option<TierDoubt>,
 }
+
 impl Modifier {
     /// A modifier without header nor line yet.
     fn new(kind: ModifierKind, origin: Option<ModifierOrigin>) -> Self {
@@ -206,6 +208,7 @@ impl Modifier {
         self.lines.push(StatLine::parse(text));
     }
 }
+
 #[cfg(test)]
 mod tests {
     use super::*;

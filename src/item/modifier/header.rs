@@ -96,6 +96,7 @@ mod tests {
             other => panic!("{line}: {other:?}"),
         }
     }
+
     #[test]
     fn reads_the_headers_in_english() {
         let modifier = header(
