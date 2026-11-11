@@ -345,8 +345,8 @@ fn a_string_of_the_game_becomes_the_template_of_exiled_exchange_2() {
 
 #[test]
 fn a_value_per_minute_is_shown_per_second() {
-    let per_second = scale(1386, &["per_minute_to_per_second".to_owned()]).expect("scaled");
-    let permyriad = scale(
+    let per_second = shown_value(1386, &["per_minute_to_per_second".to_owned()]).expect("scaled");
+    let permyriad = shown_value(
         -790,
         &["divide_by_one_hundred".to_owned(), "negate".to_owned()],
     )
@@ -354,7 +354,7 @@ fn a_value_per_minute_is_shown_per_second() {
 
     assert_eq!(serde_json::to_string(&per_second).expect("written"), "23.1");
     assert_eq!(serde_json::to_string(&permyriad).expect("written"), "-7.9");
-    assert!(scale(1, &["new_handler".to_owned()]).is_err());
+    assert!(shown_value(1, &["new_handler".to_owned()]).is_err());
 }
 
 #[test]

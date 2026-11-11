@@ -5,7 +5,7 @@ use std::collections::{BTreeMap, HashMap};
 
 use serde::{Deserialize, Serialize};
 
-use super::{DESECRATED, SourceModifier, SourceStat};
+use super::{DESECRATED, SourceModifier, StatRange};
 use crate::Result;
 
 /// The stats of the waystones that roll while their line writes no value: the game writes
@@ -18,7 +18,7 @@ const UNWRITTEN_ROLLS: [&str; 2] = [
 
 /// Whether `tag` is one of the Time-Lost jewels, whose modifiers the game writes within the
 /// words of [`RADIUS_GRANTS`].
-pub(super) fn radius_jewel(tag: &str) -> bool {
+pub(super) fn is_radius_jewel_tag(tag: &str) -> bool {
     tag == "radius_jewel" || tag.ends_with("_radius_jewel")
 }
 
@@ -91,20 +91,20 @@ fn is_one(value: &i64) -> bool {
 }
 
 /// The range of each value of a line.
-pub(super) type LineRanges = Vec<[Number; 2]>;
+pub(super) type LineRanges = Vec<[ShownValue; 2]>;
 
-/// A number written as an integer when it is one.
+/// A value of a stat as the game shows it, written as an integer when it is one.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub(super) struct Number {
-    /// The number times [`Number::SCALE`], exact for the handlers of the game.
+pub(super) struct ShownValue {
+    /// The number times [`ShownValue::SCALE`], exact for the handlers of the game.
     scaled: i64,
 }
 
-impl Number {
+impl ShownValue {
     const SCALE: i64 = 60_000;
 }
 
-impl Serialize for Number {
+impl Serialize for ShownValue {
     fn serialize<S: serde::Serializer>(
         &self,
         serializer: S,
@@ -217,7 +217,7 @@ fn line(
         // Without template, the line can't be found: written as the game writes it, its string
         // with the most numbers; one of the Time-Lost jewels, which the game writes within the
         // words of the passive skills that grant it, saying so.
-        let jewel = if on_radius_jewel(modifier) {
+        let jewel = if rolls_on_radius_jewel(modifier) {
             " (Time-Lost jewels: not known within the words of the passive skills, with its number)"
         } else {
             ""
@@ -265,7 +265,10 @@ fn line(
             .ok_or_else(|| format!("no stat {index} in {}", general.string))?;
         // A stat the modifier doesn't have is 0, e.g. `local_weapon_no_physical_damage`.
         let (min, max) = stat_of(modifier, id).map_or((0, 0), |stat| (stat.min, stat.max));
-        ranges.push([scale(min, handlers(index))?, scale(max, handlers(index))?]);
+        ranges.push([
+            shown_value(min, handlers(index))?,
+            shown_value(max, handlers(index))?,
+        ]);
     }
     // A string without number of Exiled Exchange 2 gives the value of the stat, e.g. 1000
     // milliseconds for `Inherent Rage loss starts 1 second later`, which the application
@@ -333,7 +336,7 @@ fn known_template<'a>(
                 })
             })
     };
-    if !on_radius_jewel(modifier) {
+    if !rolls_on_radius_jewel(modifier) {
         return Ok(alone());
     }
     let within = |words: &str, string: &String| templates.get(&format!("{words}{string}"));
@@ -386,15 +389,15 @@ impl<'a> Known<'a> {
 }
 
 /// Whether `modifier` rolls on a Time-Lost jewel.
-pub(super) fn on_radius_jewel(modifier: &SourceModifier) -> bool {
+pub(super) fn rolls_on_radius_jewel(modifier: &SourceModifier) -> bool {
     modifier
         .spawn_weights
         .iter()
-        .any(|spawn| spawn.weight > 0 && radius_jewel(&spawn.tag))
+        .any(|spawn| spawn.weight > 0 && is_radius_jewel_tag(&spawn.tag))
 }
 
 /// The stat `id` of `modifier`, if it has it.
-fn stat_of<'a>(modifier: &'a SourceModifier, id: &str) -> Option<&'a SourceStat> {
+fn stat_of<'a>(modifier: &'a SourceModifier, id: &str) -> Option<&'a StatRange> {
     modifier.stats.iter().find(|stat| stat.id == id)
 }
 
@@ -467,13 +470,13 @@ fn divisor_of(handlers: &[String]) -> Result<i64> {
 }
 
 /// A value of a stat as the game shows it with `handlers` ([`divisor_of`]).
-fn scale(value: i64, handlers: &[String]) -> Result<Number> {
+fn shown_value(value: i64, handlers: &[String]) -> Result<ShownValue> {
     let divisor = divisor_of(handlers)?;
-    let scaled = value * Number::SCALE;
+    let scaled = value * ShownValue::SCALE;
     if scaled % divisor != 0 {
         return Err(format!("{value} can't be divided by {divisor}").into());
     }
-    Ok(Number {
+    Ok(ShownValue {
         scaled: scaled / divisor,
     })
 }

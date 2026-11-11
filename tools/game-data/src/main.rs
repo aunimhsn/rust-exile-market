@@ -24,15 +24,12 @@ use std::path::{Path, PathBuf};
 
 use serde::Serialize;
 
-use bases::reduce_bases;
 use github::{get, latest_commit, raw_url};
-use notice::write_notice;
 use report::Report;
-use stats::{reduce, report_differences, templates};
 
-const REPOSITORY: &str = "Kvan7/Exiled-Exchange-2";
+const EXILED_EXCHANGE: &str = "Kvan7/Exiled-Exchange-2";
 /// The data of Path of Exile 2 exported by the RePoE fork, in `data/`.
-const REPOE: &str = "repoe-fork/poe2";
+const REPOE_DATA: &str = "repoe-fork/poe2";
 /// The code of the RePoE fork, with its license.
 const REPOE_CODE: &str = "repoe-fork/repoe";
 const LANGUAGES: [&str; 2] = ["en", "fr"];
@@ -45,12 +42,12 @@ fn main() -> Result<()> {
     let repoe_reference = arguments.next().unwrap_or_else(|| "master".to_owned());
     let repoe_code_reference = arguments.next().unwrap_or_else(|| "master".to_owned());
     let agent = ureq::Agent::new_with_defaults();
-    let commit = latest_commit(&agent, REPOSITORY, &reference)?;
+    let commit = latest_commit(&agent, EXILED_EXCHANGE, &reference)?;
     println!("Exiled Exchange 2, commit {}", commit.sha);
-    let repoe_commit = latest_commit(&agent, REPOE, &repoe_reference)?;
+    let repoe_commit = latest_commit(&agent, REPOE_DATA, &repoe_reference)?;
     let repoe_version = get(
         &agent,
-        &raw_url(REPOE, &repoe_commit.sha, "exported-version.txt"),
+        &raw_url(REPOE_DATA, &repoe_commit.sha, "exported-version.txt"),
     )?;
     println!(
         "RePoE, commit {}, version {}",
@@ -66,14 +63,14 @@ fn main() -> Result<()> {
         let source = get(
             &agent,
             &raw_url(
-                REPOSITORY,
+                EXILED_EXCHANGE,
                 &commit.sha,
                 &format!("renderer/public/data/{language}/stats.ndjson"),
             ),
         )?;
         sources.push((
             language,
-            reduce(&source).map_err(|error| format!("{language}: {error}"))?,
+            stats::reduce(&source).map_err(|error| format!("{language}: {error}"))?,
         ));
     }
     let english = sources
@@ -81,8 +78,12 @@ fn main() -> Result<()> {
         .find(|(language, _)| *language == "en")
         .map(|(_, stats)| stats.as_slice())
         .ok_or("no English stats")?;
-    let (tables, base_tags) =
-        modifier_tables(&agent, &repoe_commit.sha, &templates(english), &mut report)?;
+    let (tables, base_spawns) = modifier_tables(
+        &agent,
+        &repoe_commit.sha,
+        &stats::templates(english),
+        &mut report,
+    )?;
     println!("{} modifier tables", tables.len());
     write_lines(&output.join("modifiers.ndjson"), &tables)?;
 
@@ -100,21 +101,21 @@ fn main() -> Result<()> {
         let source = get(
             &agent,
             &raw_url(
-                REPOSITORY,
+                EXILED_EXCHANGE,
                 &commit.sha,
                 &format!("renderer/public/data/{language}/items.ndjson"),
             ),
         )?;
-        let bases = reduce_bases(&source, &base_tags, language, &mut report)
+        let bases = bases::reduce(&source, &base_spawns, language, &mut report)
             .map_err(|error| format!("{language}: {error}"))?;
         println!("{language}: {} bases", bases.len());
         write_lines(&output.join(format!("bases-{language}.ndjson")), &bases)?;
     }
     if let [english, french] = ids_by_language.as_slice() {
-        report_differences(english, french, &mut report);
+        stats::report_differences(english, french, &mut report);
     }
 
-    write_notice(
+    notice::write(
         &agent,
         &output,
         (&commit, &repoe_commit),
@@ -138,8 +139,8 @@ fn modifier_tables(
     commit: &str,
     templates: &modifiers::Templates,
     report: &mut Report,
-) -> Result<(Vec<modifiers::Modifier>, modifiers::BaseTags)> {
-    let repoe = |path: &str| get(agent, &raw_url(REPOE, commit, &format!("data/{path}")));
+) -> Result<(Vec<modifiers::Table>, modifiers::BaseSpawns)> {
+    let repoe = |path: &str| get(agent, &raw_url(REPOE_DATA, commit, &format!("data/{path}")));
     modifiers::reduce_with_report(
         &serde_json::from_str(&repoe("mods.json")?)?,
         &serde_json::from_str(&repoe("base_items.json")?)?,

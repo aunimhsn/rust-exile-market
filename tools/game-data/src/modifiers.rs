@@ -20,7 +20,9 @@ use crate::report::Report;
 pub use currencies::CURRENCIES;
 use currencies::{CURRENCY_IDS, CurrencyModifier, currency_spawns};
 pub use lines::Templates;
-use lines::{Line, LineRanges, Translation, by_stat, lines, on_radius_jewel, radius_jewel};
+use lines::{
+    Line, LineRanges, Translation, by_stat, is_radius_jewel_tag, lines, rolls_on_radius_jewel,
+};
 
 /// The domain of the modifiers of the equipment, which the application takes when none is
 /// written.
@@ -72,7 +74,7 @@ pub struct SourceModifier {
     kind: String,
     required_level: u32,
     spawn_weights: Vec<SpawnWeight>,
-    stats: Vec<SourceStat>,
+    stats: Vec<StatRange>,
 }
 
 /// The weight of a modifier on the bases with a tag: the first tag of the list a base has
@@ -83,8 +85,9 @@ pub struct SpawnWeight {
     weight: u32,
 }
 
+/// A stat of a modifier and the range of its value.
 #[derive(Deserialize)]
-struct SourceStat {
+struct StatRange {
     id: String,
     min: i64,
     max: i64,
@@ -104,14 +107,14 @@ pub struct SourceBase {
 /// The tiers of a type of modifier that roll on the same bases, as the application reads them
 /// (`src/game_data/modifiers.rs`).
 #[derive(Serialize)]
-pub struct Modifier {
+pub struct Table {
     #[serde(rename = "type")]
     kind: String,
     affix: String,
     /// The domain of the bases it rolls on, written when it isn't `item`: a tag of every base,
     /// `default`, rolls on the bases of its domain only (the charges of the flasks); a
     /// desecrated modifier rolls on the equipment and the jewels.
-    #[serde(skip_serializing_if = "is_item")]
+    #[serde(skip_serializing_if = "is_equipment")]
     domain: String,
     lines: Vec<Line>,
     /// Each tag and its weight, as `["bow", 1]`.
@@ -151,7 +154,7 @@ impl Source {
 }
 
 /// Whether `domain` is one of the bases kept, which the application knows.
-pub fn is_kept(domain: &str) -> bool {
+pub fn is_kept_domain(domain: &str) -> bool {
     DOMAINS.contains(&domain)
 }
 
@@ -163,7 +166,7 @@ fn rolls_on(domain: &str, base_domain: &str) -> bool {
 }
 
 /// Whether `domain` is that of the equipment, left unwritten.
-pub fn is_item(domain: &String) -> bool {
+pub fn is_equipment(domain: &String) -> bool {
     domain == EQUIPMENT
 }
 
@@ -194,7 +197,7 @@ pub struct BaseSpawn {
 }
 
 /// The domain and the tags of each base, by its English name.
-pub type BaseTags = BTreeMap<String, BaseSpawn>;
+pub type BaseSpawns = BTreeMap<String, BaseSpawn>;
 
 /// The modifier tables of `modifiers`, those only a currency of `currencies` adds among them
 /// ([`CURRENCIES`]), the lines of their stats written as the English templates of Exiled
@@ -208,7 +211,7 @@ pub fn reduce(
     tablet_translations: &[Translation],
     templates: &Templates,
     currencies: &[(Source, &[CurrencyModifier])],
-) -> Result<(Vec<Modifier>, BaseTags)> {
+) -> Result<(Vec<Table>, BaseSpawns)> {
     reduce_with_report(
         modifiers,
         bases,
@@ -229,7 +232,7 @@ pub fn reduce_with_report(
     templates: &Templates,
     currencies: &[(Source, &[CurrencyModifier])],
     report: &mut Report,
-) -> Result<(Vec<Modifier>, BaseTags)> {
+) -> Result<(Vec<Table>, BaseSpawns)> {
     let released: Vec<&SourceBase> = bases
         .values()
         .filter(|base| base.release_state == "released")
@@ -287,7 +290,7 @@ pub fn reduce_with_report(
         // tier for the application (`Upgrades Radius to Large` after `to Medium`, both of level
         // 1: its T1, as the game writes it).
         tiers.sort();
-        tables.push(Modifier {
+        tables.push(Table {
             kind,
             affix,
             domain,
@@ -317,8 +320,8 @@ pub fn reduce_with_report(
     // header written without tier, which takes one whose tier the game doesn't write (`find` in
     // the application).
     tables.sort_by_key(|table| (table.domain == DESECRATED, table.source));
-    let base_tags = base_tags(&released, &tables);
-    Ok((tables, base_tags))
+    let base_spawns = base_spawns(&released, &tables);
+    Ok((tables, base_spawns))
 }
 
 /// Notes in `report` a prefix or suffix the tables leave out without an error, which a patch
@@ -336,7 +339,7 @@ fn note_left_out<'a>(
     if !["prefix", "suffix"].contains(&modifier.generation_type.as_str()) {
         return;
     }
-    if !(is_kept(&modifier.domain) || modifier.domain == DESECRATED) {
+    if !(is_kept_domain(&modifier.domain) || modifier.domain == DESECRATED) {
         *other_domains.entry(&modifier.domain).or_default() += 1;
         return;
     }
@@ -368,7 +371,7 @@ fn group_tiers(
         let currency = currencies.get(id.as_str());
         note_left_out(id, modifier, currency.is_some(), &mut other_domains, report);
         let spawn_weights = currency.map_or(&modifier.spawn_weights, |(_, spawn)| spawn);
-        let rolls = (is_kept(&modifier.domain) || modifier.domain == DESECRATED)
+        let rolls = (is_kept_domain(&modifier.domain) || modifier.domain == DESECRATED)
             && ["prefix", "suffix"].contains(&modifier.generation_type.as_str())
             && (currency.is_some() || !modifier.is_essence_only)
             && spawn_weights.iter().any(|spawn| spawn.weight > 0);
@@ -376,11 +379,11 @@ fn group_tiers(
             continue;
         }
         // Its lines would be written within the words of the passive skills on the other bases.
-        if on_radius_jewel(modifier)
+        if rolls_on_radius_jewel(modifier)
             && modifier
                 .spawn_weights
                 .iter()
-                .any(|spawn| spawn.weight > 0 && !radius_jewel(&spawn.tag))
+                .any(|spawn| spawn.weight > 0 && !is_radius_jewel_tag(&spawn.tag))
         {
             return Err(format!(
                 "{id}: a modifier of the Time-Lost jewels that rolls on other bases"
@@ -480,12 +483,12 @@ fn spawn_on_bases(spawn: &[SpawnWeight]) -> (Vec<SpawnWeight>, bool) {
 
 /// The domain of each base among `released` and its tags that tell where a modifier of
 /// `tables` rolls, by its name.
-fn base_tags(released: &[&SourceBase], tables: &[Modifier]) -> BaseTags {
+fn base_spawns(released: &[&SourceBase], tables: &[Table]) -> BaseSpawns {
     let tags_used: BTreeSet<&String> = tables
         .iter()
         .flat_map(|table| table.spawn.iter().map(|(tag, _)| tag))
         .collect();
-    let mut base_tags = BaseTags::new();
+    let mut base_spawns = BaseSpawns::new();
     for base in released {
         let spawn = BaseSpawn {
             domain: base.domain.clone(),
@@ -498,15 +501,15 @@ fn base_tags(released: &[&SourceBase], tables: &[Modifier]) -> BaseTags {
         };
         // A name of several bases, e.g. the "Random Helmet" of each attribute, the
         // application can't tell apart: it gets no tag.
-        match base_tags.get_mut(&base.name) {
+        match base_spawns.get_mut(&base.name) {
             Some(known) if *known != spawn => known.tags.clear(),
             Some(_) => {}
             None => {
-                base_tags.insert(base.name.clone(), spawn);
+                base_spawns.insert(base.name.clone(), spawn);
             }
         }
     }
-    base_tags
+    base_spawns
 }
 
 #[cfg(test)]

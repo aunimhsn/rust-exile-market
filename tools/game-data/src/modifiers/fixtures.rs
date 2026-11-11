@@ -10,7 +10,7 @@ pub(super) fn tables(
     bases: &str,
     translations: &str,
     templates: &[(&str, &str)],
-) -> (serde_json::Value, BaseTags) {
+) -> (serde_json::Value, BaseSpawns) {
     let templates = templates
         .iter()
         .map(|&(string, template)| (string.to_owned(), template.to_owned()))

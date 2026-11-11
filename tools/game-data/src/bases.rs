@@ -88,7 +88,7 @@ pub(crate) struct Base {
     name: String,
     category: String,
     /// The domain of its modifiers, written when it isn't `item`.
-    #[serde(skip_serializing_if = "modifiers::is_item")]
+    #[serde(skip_serializing_if = "modifiers::is_equipment")]
     domain: String,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     tags: Vec<String>,
@@ -99,9 +99,9 @@ pub(crate) struct Base {
 /// (`Runemastered Venerable Defender`, three times a shield and once a buckler), the first in
 /// alphabetical order on a tie. Each takes the domain and the tags of its English name in
 /// `spawns`.
-pub(crate) fn reduce_bases(
+pub(crate) fn reduce(
     source: &str,
-    spawns: &modifiers::BaseTags,
+    spawns: &modifiers::BaseSpawns,
     language: &str,
     report: &mut Report,
 ) -> Result<Vec<Base>> {
@@ -155,7 +155,7 @@ pub(crate) fn reduce_bases(
             |spawn| (spawn.domain.clone(), spawn.tags.clone()),
         );
         // The application reads the domains of the modifiers kept only.
-        if !modifiers::is_kept(&domain) {
+        if !modifiers::is_kept_domain(&domain) {
             return Err(format!("unknown domain {domain} of {name}").into());
         }
         if tags.is_empty() {
@@ -177,7 +177,7 @@ mod tests {
 
     /// The bases of `lines`, as name and category.
     fn bases(lines: &[&str]) -> Result<Vec<(String, String)>> {
-        Ok(reduce_bases(
+        Ok(reduce(
             &lines.join("\n"),
             &BTreeMap::new(),
             "en",
@@ -201,7 +201,7 @@ mod tests {
         let ring =
             r#"{"name": "Gold Ring", "namespace": "ITEM", "craftable": {"category": "Ring"}}"#;
         let reduced = |domain| {
-            reduce_bases(
+            reduce(
                 ring,
                 &BTreeMap::from([("Gold Ring".to_owned(), spawn(domain))]),
                 "en",
