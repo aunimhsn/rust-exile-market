@@ -4,6 +4,7 @@
 use super::*;
 use crate::game_data::bases::BaseSpawn;
 use crate::game_data::lines::modifier_stats;
+use crate::game_data::modifiers::copied::CopiedLine;
 use crate::game_data::modifiers::fixtures::{equipment, modifier, range};
 use crate::game_data::modifiers::tables::read;
 use crate::item::{Currency, ModifierOrigin};

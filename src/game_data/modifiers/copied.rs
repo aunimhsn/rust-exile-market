@@ -74,6 +74,17 @@ impl<'a> Copied<'a> {
         })
     }
 
+    /// How many values each line has, in their order.
+    pub(super) fn counts(&self) -> Vec<usize> {
+        self.lines.iter().map(CopiedLine::count).collect()
+    }
+
+    /// How many values the lines before the line `line` have: where its values start among
+    /// those of every line.
+    pub(super) fn values_before(&self, line: usize) -> usize {
+        self.lines.iter().take(line).map(CopiedLine::count).sum()
+    }
+
     /// Whether the modifier may be one of `table` ([`Table::may_hold`]).
     pub(super) fn may_be(&self, table: &Table) -> bool {
         table.may_hold(self.origin)
