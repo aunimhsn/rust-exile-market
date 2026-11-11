@@ -419,28 +419,38 @@ fn join_written_stats(modifiers: &mut Vec<Modifier>, language: Language, headers
         // text written to look like an item) is then read once, not once per length.
         let most = run.min(game_data::max_stat_lines(language));
         let joined = (2..=most).rev().find_map(|count| {
-            let window = || modifiers.iter().skip(first).take(count);
-            let origin = modifiers.get(first + count - 1)?.origin;
-            // The lines before the last: without marker, or with its own.
-            if window().any(|modifier| modifier.origin.is_some_and(|o| Some(o) != origin)) {
-                return None;
-            }
-            let candidate = Modifier {
-                lines: window()
-                    .flat_map(|modifier| modifier.lines.iter().cloned())
-                    .collect(),
-                origin,
-                ..start.clone()
-            };
-            let stats = game_data::modifier_stats(language, &candidate, None);
-            matches!(stats.as_slice(), [found] if found.stat.is_some())
-                .then_some((count, candidate))
+            let window = modifiers.get(first..first + count)?;
+            Some((count, joined_modifier(window, language)?))
         });
-        if let Some((count, candidate)) = joined {
-            modifiers.splice(first..first + count, [candidate]);
+        if let Some((count, modifier)) = joined {
+            modifiers.splice(first..first + count, [modifier]);
         }
         first += 1;
     }
+}
+
+/// The modifiers of one line of `window` joined into one, of the kind of the first and the origin
+/// of the last, when the game data find one stat on their lines together; none when a line before
+/// the last has the marker of another origin.
+fn joined_modifier(window: &[Modifier], language: Language) -> Option<Modifier> {
+    let origin = window.last()?.origin;
+    // The lines before the last: without marker, or with its own.
+    if window
+        .iter()
+        .any(|modifier| modifier.origin.is_some_and(|o| Some(o) != origin))
+    {
+        return None;
+    }
+    let joined = Modifier {
+        lines: window
+            .iter()
+            .flat_map(|modifier| modifier.lines.iter().cloned())
+            .collect(),
+        origin,
+        ..window.first()?.clone()
+    };
+    let stats = game_data::modifier_stats(language, &joined, None);
+    matches!(stats.as_slice(), [found] if found.stat.is_some()).then_some(joined)
 }
 
 /// The modifiers of a section with headers: each header, then its lines.
