@@ -21,8 +21,11 @@ fn a_part_whose_two_tiers_give_its_line_other_ranges_isnt_read() {
         currency: None,
         lord: None,
     };
-    let read =
-        |tiers: &ModifierTiers| part_tier(Language::English, &rarity, Affix::Prefix, tiers, 0);
+    let rarity = Run {
+        language: Language::English,
+        parts: &rarity,
+    };
+    let read = |tiers: &ModifierTiers| rarity.part_tier(Affix::Prefix, tiers, 0);
 
     assert_eq!(
         read(&tiers(vec![range(12.0, 15.0)])),
@@ -46,8 +49,11 @@ fn a_part_whose_two_tiers_give_its_line_other_ranges_isnt_read() {
         currency: None,
         lord: None,
     };
-    let read_damage =
-        |tiers: &ModifierTiers| part_tier(Language::English, &damage, Affix::Prefix, tiers, 0);
+    let damage = Run {
+        language: Language::English,
+        parts: &damage,
+    };
+    let read_damage = |tiers: &ModifierTiers| damage.part_tier(Affix::Prefix, tiers, 0);
     assert_eq!(
         read_damage(&tiers(1.0, 6.0)),
         Some(part(Affix::Prefix, &[1, 2], &[(1.0, 4.0), (5.0, 12.0)]))
