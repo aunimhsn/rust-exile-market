@@ -18,11 +18,9 @@ use serde::{Deserialize, Serialize};
 use crate::Result;
 use crate::report::Report;
 pub use currencies::CURRENCIES;
-use currencies::{CURRENCY_IDS, CurrencyModifier, currency_spawns};
+use currencies::{CurrencyModifier, CurrencySpawn, currency_spawns};
 pub use lines::Templates;
-use lines::{
-    Line, LineRanges, Translation, by_stat, is_radius_jewel_tag, lines, rolls_on_radius_jewel,
-};
+use lines::{Line, LineRanges, Translation, by_stat, is_radius_jewel_tag, lines};
 
 /// The domain of the modifiers of the equipment, which the application takes when none is
 /// written.
@@ -77,6 +75,31 @@ pub struct SourceModifier {
     stats: Vec<StatRange>,
 }
 
+impl SourceModifier {
+    /// Whether it is a prefix or a suffix, the modifiers the tables hold.
+    fn is_affix(&self) -> bool {
+        ["prefix", "suffix"].contains(&self.generation_type.as_str())
+    }
+
+    /// The tags of the bases it rolls on, by its own spawn weights.
+    fn rolling_tags(&self) -> impl Iterator<Item = &str> {
+        self.spawn_weights
+            .iter()
+            .filter(|spawn| spawn.rolls())
+            .map(|spawn| spawn.tag.as_str())
+    }
+
+    /// Whether it rolls on a Time-Lost jewel.
+    fn rolls_on_radius_jewel(&self) -> bool {
+        self.rolling_tags().any(is_radius_jewel_tag)
+    }
+
+    /// Its stat `id`, if it has it.
+    fn stat(&self, id: &str) -> Option<&StatRange> {
+        self.stats.iter().find(|stat| stat.id == id)
+    }
+}
+
 /// The weight of a modifier on the bases with a tag: the first tag of the list a base has
 /// tells whether the modifier rolls on it (above zero) or not.
 #[derive(Deserialize, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -85,12 +108,31 @@ pub struct SpawnWeight {
     weight: u32,
 }
 
+impl SpawnWeight {
+    /// Whether the modifier rolls on the bases of its tag.
+    fn rolls(&self) -> bool {
+        self.weight > 0
+    }
+}
+
 /// A stat of a modifier and the range of its value.
 #[derive(Deserialize)]
 struct StatRange {
     id: String,
     min: i64,
     max: i64,
+}
+
+impl StatRange {
+    /// Whether its value rolls, from one item to another.
+    fn rolls(&self) -> bool {
+        self.min != self.max
+    }
+
+    /// Whether its value is 0 on every item.
+    fn is_zero(&self) -> bool {
+        self.min == 0 && self.max == 0
+    }
 }
 
 /// A base of `base_items.json`, with the fields the generator reads.
@@ -158,6 +200,12 @@ pub fn is_kept_domain(domain: &str) -> bool {
     DOMAINS.contains(&domain)
 }
 
+/// Whether the tables read the modifiers of `domain`: those of the domains kept, and the
+/// desecrated ones.
+fn is_read_domain(domain: &str) -> bool {
+    is_kept_domain(domain) || domain == DESECRATED
+}
+
 /// Whether a modifier of `domain` rolls on the bases of `base_domain`: those of its domain, the
 /// equipment and the jewels for a desecrated one (`Domain::rolls_on` in
 /// `src/game_data/bases.rs`).
@@ -178,16 +226,18 @@ struct Tier {
     ranges: Vec<LineRanges>,
 }
 
-/// The modifiers of one type and affix, with the same lines, that roll on the same bases, and
-/// where they come from when they aren't ordinary ones.
-type Key = (
-    String,
-    String,
-    String,
-    Vec<Line>,
-    Vec<SpawnWeight>,
-    Option<Source>,
-);
+/// What the tiers of one table share: the modifiers of one type and affix, with the same
+/// lines, that roll on the same bases, and where they come from when they aren't ordinary ones.
+/// The tables are sorted by it, field by field.
+#[derive(PartialEq, Eq, PartialOrd, Ord)]
+struct TableKey {
+    kind: String,
+    affix: String,
+    domain: String,
+    lines: Vec<Line>,
+    spawn: Vec<SpawnWeight>,
+    source: Option<Source>,
+}
 
 /// What tells the modifiers that roll on a base: their domain and the tags of the base.
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -250,10 +300,18 @@ pub fn reduce_with_report(
     let mut tables = Vec::new();
     let mut unknown_lines = BTreeSet::new();
     let mut unsigned_lines = BTreeSet::new();
-    for ((kind, affix, domain, lines, spawn, source), mut tiers) in grouped {
+    for (key, mut tiers) in grouped {
+        let TableKey {
+            kind,
+            affix,
+            domain,
+            lines,
+            spawn,
+            source,
+        } = key;
         let lord = spawn
             .iter()
-            .filter(|weight| weight.weight > 0)
+            .filter(|weight| weight.rolls())
             .find_map(|weight| LORDS.iter().find(|&&(tag, _)| weight.tag == tag))
             .map(|&(_, name)| name.to_owned());
         let tags_of_bases: BTreeSet<&String> = released
@@ -324,66 +382,45 @@ pub fn reduce_with_report(
     Ok((tables, base_spawns))
 }
 
-/// Notes in `report` a prefix or suffix the tables leave out without an error, which a patch
-/// may have brought: one only a currency adds (`is_essence_only`, or named like those of
-/// [`ESSENCES`](currencies::ESSENCES) and [`ALLOYS`](currencies::ALLOYS)) that these lists
-/// don't have, `listed` telling whether they do; and, counted in `other_domains`, one of a
-/// domain the application doesn't read.
-fn note_left_out<'a>(
-    id: &str,
-    modifier: &'a SourceModifier,
-    listed: bool,
-    other_domains: &mut BTreeMap<&'a str, usize>,
-    report: &mut Report,
-) {
-    if !["prefix", "suffix"].contains(&modifier.generation_type.as_str()) {
-        return;
-    }
-    if !(is_kept_domain(&modifier.domain) || modifier.domain == DESECRATED) {
-        *other_domains.entry(&modifier.domain).or_default() += 1;
-        return;
-    }
-    let of_a_currency =
-        modifier.is_essence_only || CURRENCY_IDS.iter().any(|start| id.starts_with(start));
-    if of_a_currency && !listed {
-        report.note(
-            "Modifiers of a currency that ESSENCES and ALLOYS don't list, left out",
-            id,
-        );
-    }
-}
-
-/// The tiers of `modifiers` that roll (with the currency and the spawn weights of `currencies`
-/// for those only a currency adds), grouped by type, affix, domain, lines, bases and source,
-/// their lines written by the translations of `by_stat`, those of the tablets by
-/// `tablet_by_stat`.
+/// The tiers of the prefixes and suffixes of `modifiers` that roll (with the currency and the
+/// spawn weights of `currencies` for those only a currency adds), grouped by table, their lines
+/// written by the translations of `by_stat`, those of the tablets by `tablet_by_stat`. Notes in
+/// `report` those left out without an error, which a patch may have brought: one only a
+/// currency adds that its lists don't have, and those of a domain the application doesn't read.
 fn group_tiers(
     modifiers: &BTreeMap<String, SourceModifier>,
     by_stat: &HashMap<&str, &Translation>,
     tablet_by_stat: &HashMap<&str, &Translation>,
     templates: &Templates,
-    currencies: &HashMap<&str, (Source, Vec<SpawnWeight>)>,
+    currencies: &HashMap<&str, CurrencySpawn>,
     report: &mut Report,
-) -> Result<BTreeMap<Key, Vec<Tier>>> {
-    let mut grouped: BTreeMap<Key, Vec<Tier>> = BTreeMap::new();
+) -> Result<BTreeMap<TableKey, Vec<Tier>>> {
+    let mut grouped: BTreeMap<TableKey, Vec<Tier>> = BTreeMap::new();
     let mut other_domains: BTreeMap<&str, usize> = BTreeMap::new();
     for (id, modifier) in modifiers {
+        if !modifier.is_affix() {
+            continue;
+        }
+        if !is_read_domain(&modifier.domain) {
+            *other_domains.entry(&modifier.domain).or_default() += 1;
+            continue;
+        }
         let currency = currencies.get(id.as_str());
-        note_left_out(id, modifier, currency.is_some(), &mut other_domains, report);
-        let spawn_weights = currency.map_or(&modifier.spawn_weights, |(_, spawn)| spawn);
-        let rolls = (is_kept_domain(&modifier.domain) || modifier.domain == DESECRATED)
-            && ["prefix", "suffix"].contains(&modifier.generation_type.as_str())
-            && (currency.is_some() || !modifier.is_essence_only)
-            && spawn_weights.iter().any(|spawn| spawn.weight > 0);
+        if currency.is_none() && currencies::is_of_a_currency(id, modifier) {
+            report.note(
+                "Modifiers of a currency that ESSENCES and ALLOYS don't list, left out",
+                id,
+            );
+        }
+        let spawn_weights = currency.map_or(&modifier.spawn_weights, |currency| &currency.spawn);
+        let rolls = (currency.is_some() || !modifier.is_essence_only)
+            && spawn_weights.iter().any(SpawnWeight::rolls);
         if !rolls {
             continue;
         }
         // Its lines would be written within the words of the passive skills on the other bases.
-        if rolls_on_radius_jewel(modifier)
-            && modifier
-                .spawn_weights
-                .iter()
-                .any(|spawn| spawn.weight > 0 && !is_radius_jewel_tag(&spawn.tag))
+        if modifier.rolls_on_radius_jewel()
+            && modifier.rolling_tags().any(|tag| !is_radius_jewel_tag(tag))
         {
             return Err(format!(
                 "{id}: a modifier of the Time-Lost jewels that rolls on other bases"
@@ -397,38 +434,22 @@ fn group_tiers(
         };
         let (lines, ranges) =
             lines(modifier, by_stat, templates).map_err(|error| format!("{id}: {error}"))?;
-        // Left out, it would be read as no modifier, without a word.
-        if let Some((source, _)) = currency {
-            if let Some(line) = lines.iter().find(|line| !line.known) {
-                return Err(format!(
-                    "{id}: a modifier of {} with a line without template, {}",
-                    source.currency(),
-                    line.template
-                )
-                .into());
-            }
-            if lines.is_empty() {
-                return Err(format!(
-                    "{id}: a modifier of {} without line, its values all 0",
-                    source.currency()
-                )
-                .into());
-            }
+        if let Some(currency) = currency {
+            currencies::check_lines(id, currency.source, &lines)?;
         }
         let (spawn, genesis) = spawn_on_bases(spawn_weights);
-        let source = match currency {
-            Some(&(source, _)) => Some(source),
-            None => genesis.then_some(Source::Genesis),
-        };
+        let source = currency
+            .map(|currency| currency.source)
+            .or_else(|| genesis.then_some(Source::Genesis));
         grouped
-            .entry((
-                modifier.kind.clone(),
-                modifier.generation_type.clone(),
-                modifier.domain.clone(),
+            .entry(TableKey {
+                kind: modifier.kind.clone(),
+                affix: modifier.generation_type.clone(),
+                domain: modifier.domain.clone(),
                 lines,
                 spawn,
                 source,
-            ))
+            })
             .or_default()
             .push(Tier {
                 // An essence or an alloy adds its modifier whatever the level of the item,

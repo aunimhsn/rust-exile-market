@@ -155,7 +155,7 @@ pub(super) fn lines(
             // A stat the game doesn't write, e.g. `dummy_stat_display_nothing`; one that rolls
             // is written by a translation RePoE doesn't have (`minion_area_of_effect_+%` of a
             // hybrid of the Abyss on the jewels), whose line can't be found.
-            if stat.min != stat.max {
+            if stat.rolls() {
                 lines.push(Line {
                     template: stat.id.clone(),
                     divisor: 1,
@@ -171,8 +171,8 @@ pub(super) fn lines(
         let zero = translation
             .ids
             .iter()
-            .filter_map(|id| stat_of(modifier, id))
-            .all(|stat| stat.min == 0 && stat.max == 0);
+            .filter_map(|id| modifier.stat(id))
+            .all(StatRange::is_zero);
         if translation.hidden == Some(true)
             || zero
             || written
@@ -217,7 +217,7 @@ fn line(
         // Without template, the line can't be found: written as the game writes it, its string
         // with the most numbers; one of the Time-Lost jewels, which the game writes within the
         // words of the passive skills that grant it, saying so.
-        let jewel = if rolls_on_radius_jewel(modifier) {
+        let jewel = if modifier.rolls_on_radius_jewel() {
             " (Time-Lost jewels: not known within the words of the passive skills, with its number)"
         } else {
             ""
@@ -240,7 +240,7 @@ fn line(
                 translation
                     .ids
                     .get(index)
-                    .is_some_and(|id| stat_of(modifier, id).is_some())
+                    .is_some_and(|id| modifier.stat(id).is_some())
             })
             .collect();
     }
@@ -252,7 +252,7 @@ fn line(
     };
     // A stat that rolls is written by a value of its line, or its range would be lost.
     for (index, id) in translation.ids.iter().enumerate() {
-        let rolls = stat_of(modifier, id).is_some_and(|stat| stat.min != stat.max);
+        let rolls = modifier.stat(id).is_some_and(StatRange::rolls);
         if rolls && !indexes.contains(&index) && !UNWRITTEN_ROLLS.contains(&id.as_str()) {
             return Err(format!("{id} rolls but {} doesn't write it", general.string).into());
         }
@@ -264,7 +264,9 @@ fn line(
             .get(index)
             .ok_or_else(|| format!("no stat {index} in {}", general.string))?;
         // A stat the modifier doesn't have is 0, e.g. `local_weapon_no_physical_damage`.
-        let (min, max) = stat_of(modifier, id).map_or((0, 0), |stat| (stat.min, stat.max));
+        let (min, max) = modifier
+            .stat(id)
+            .map_or((0, 0), |stat| (stat.min, stat.max));
         ranges.push([
             shown_value(min, handlers(index))?,
             shown_value(max, handlers(index))?,
@@ -336,7 +338,7 @@ fn known_template<'a>(
                 })
             })
     };
-    if !rolls_on_radius_jewel(modifier) {
+    if !modifier.rolls_on_radius_jewel() {
         return Ok(alone());
     }
     let within = |words: &str, string: &String| templates.get(&format!("{words}{string}"));
@@ -386,19 +388,6 @@ impl<'a> Known<'a> {
             unsigned: None,
         }
     }
-}
-
-/// Whether `modifier` rolls on a Time-Lost jewel.
-pub(super) fn rolls_on_radius_jewel(modifier: &SourceModifier) -> bool {
-    modifier
-        .spawn_weights
-        .iter()
-        .any(|spawn| spawn.weight > 0 && is_radius_jewel_tag(&spawn.tag))
-}
-
-/// The stat `id` of `modifier`, if it has it.
-fn stat_of<'a>(modifier: &'a SourceModifier, id: &str) -> Option<&'a StatRange> {
-    modifier.stats.iter().find(|stat| stat.id == id)
 }
 
 /// The template of a string of the game, as Exiled Exchange 2 writes it: `{0:+d} to

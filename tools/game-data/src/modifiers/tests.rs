@@ -505,27 +505,47 @@ fn a_modifier_of_a_currency_not_listed_and_the_other_domains_are_noted() {
         ))
         .expect("a modifier")
     };
-    let modifiers = [
-        ("EssenceNewOne1", source("item", "prefix", true), false),
-        ("EssenceListed1", source("item", "prefix", true), true),
-        ("AlloyNewOne1", source("item", "suffix", false), false),
-        ("OddlyNamed1", source("delve", "suffix", true), false),
-        ("Ordinary1", source("item", "suffix", false), false),
-        ("Heist1", source("heist", "suffix", false), false),
-        ("Heist2", source("heist", "prefix", false), false),
-        ("Unique1", source("heist", "unique", true), false),
-    ];
+    let modifiers: BTreeMap<String, SourceModifier> = [
+        ("EssenceNewOne1", source("item", "prefix", true)),
+        ("EssenceListed1", source("item", "prefix", true)),
+        ("AlloyNewOne1", source("item", "suffix", false)),
+        ("OddlyNamed1", source("delve", "suffix", true)),
+        ("Ordinary1", source("item", "suffix", false)),
+        ("Heist1", source("heist", "suffix", false)),
+        ("Heist2", source("heist", "prefix", false)),
+        ("Unique1", source("heist", "unique", true)),
+    ]
+    .into_iter()
+    .map(|(id, modifier)| (id.to_owned(), modifier))
+    .collect();
+    let listed = HashMap::from([(
+        "EssenceListed1",
+        CurrencySpawn {
+            source: Source::Essence,
+            spawn: Vec::new(),
+        },
+    )]);
     let mut report = Report::default();
-    let mut other_domains = BTreeMap::new();
 
-    for (id, modifier, listed) in &modifiers {
-        note_left_out(id, modifier, *listed, &mut other_domains, &mut report);
-    }
+    let grouped = group_tiers(
+        &modifiers,
+        &HashMap::new(),
+        &HashMap::new(),
+        &Templates::new(),
+        &listed,
+        &mut report,
+    )
+    .expect("grouped");
 
+    // None of them rolls.
+    assert!(grouped.is_empty());
     let text = report.to_markdown("a commit");
     assert!(
-        text.ends_with("left out\n\n- `AlloyNewOne1`\n- `EssenceNewOne1`\n"),
+        text.contains("don't list, left out\n\n- `AlloyNewOne1`\n- `EssenceNewOne1`\n"),
         "{text}"
     );
-    assert_eq!(other_domains, BTreeMap::from([("delve", 1), ("heist", 2)]));
+    assert!(
+        text.contains("doesn't read, left out\n\n- `delve: 1`\n- `heist: 2`\n"),
+        "{text}"
+    );
 }

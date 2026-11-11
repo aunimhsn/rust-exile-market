@@ -3,6 +3,7 @@
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
+use super::lines::Line;
 use super::{EQUIPMENT, Source, SourceBase, SourceModifier, SpawnWeight};
 use crate::Result;
 
@@ -192,7 +193,18 @@ pub const ALLOYS: &[CurrencyModifier] = &[
 ];
 
 /// The ids of the modifiers only a currency adds start with these words in `mods.json`.
-pub(super) const CURRENCY_IDS: [&str; 2] = ["Essence", "Alloy"];
+const CURRENCY_IDS: [&str; 2] = ["Essence", "Alloy"];
+
+/// The currency that adds a modifier of its lists, and the spawn weights it rolls with.
+pub(super) struct CurrencySpawn {
+    pub(super) source: Source,
+    pub(super) spawn: Vec<SpawnWeight>,
+}
+
+/// Whether the modifier `id` is one only a currency adds, by its flag or by its name.
+pub(super) fn is_of_a_currency(id: &str, modifier: &SourceModifier) -> bool {
+    modifier.is_essence_only || CURRENCY_IDS.iter().any(|start| id.starts_with(start))
+}
 
 /// The currency and the spawn weights of each modifier of `currencies` by its id, `default` at 0
 /// after its own tags. An error when one is written twice, isn't a prefix or a suffix of the
@@ -203,7 +215,7 @@ pub(super) fn currency_spawns(
     modifiers: &BTreeMap<String, SourceModifier>,
     currencies: &[(Source, &[CurrencyModifier])],
     released: &[&SourceBase],
-) -> Result<HashMap<&'static str, (Source, Vec<SpawnWeight>)>> {
+) -> Result<HashMap<&'static str, CurrencySpawn>> {
     let equipment_tags: BTreeSet<&str> = released
         .iter()
         .filter(|base| base.domain == EQUIPMENT)
@@ -222,12 +234,12 @@ pub(super) fn currency_spawns(
             Some("written twice in the list".to_owned())
         } else if modifier.domain != EQUIPMENT {
             Some(format!("of the domain {}", modifier.domain))
-        } else if !["prefix", "suffix"].contains(&modifier.generation_type.as_str()) {
+        } else if !modifier.is_affix() {
             Some(format!(
                 "neither a prefix nor a suffix ({})",
                 modifier.generation_type
             ))
-        } else if modifier.spawn_weights.iter().any(|spawn| spawn.weight > 0) {
+        } else if modifier.spawn_weights.iter().any(SpawnWeight::rolls) {
             Some(format!("rolls without {currency}"))
         } else {
             tags.iter()
@@ -247,9 +259,30 @@ pub(super) fn currency_spawns(
             .all(|&(tag, _)| tag != "default")
             .then_some(("default", 0));
         let spawn = tags.iter().copied().chain(default).map(weight).collect();
-        spawns.insert(id, (source, spawn));
+        spawns.insert(id, CurrencySpawn { source, spawn });
     }
     Ok(spawns)
+}
+
+/// An error when a line of the modifier `id` of `source` has no template, or when it has no
+/// line: left out, it would be read as no modifier, without a word.
+pub(super) fn check_lines(id: &str, source: Source, lines: &[Line]) -> Result<()> {
+    if let Some(line) = lines.iter().find(|line| !line.known) {
+        return Err(format!(
+            "{id}: a modifier of {} with a line without template, {}",
+            source.currency(),
+            line.template
+        )
+        .into());
+    }
+    if lines.is_empty() {
+        return Err(format!(
+            "{id}: a modifier of {} without line, its values all 0",
+            source.currency()
+        )
+        .into());
+    }
+    Ok(())
 }
 
 #[cfg(test)]
