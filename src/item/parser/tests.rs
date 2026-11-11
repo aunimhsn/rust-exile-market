@@ -1788,7 +1788,7 @@ fn a_long_run_of_lines_that_make_no_stat_is_read_at_once() {
         .collect();
     let start = std::time::Instant::now();
 
-    join_written_stats(&mut modifiers, Language::English, true);
+    join_written_stats(&mut modifiers, Language::English, Headers::Written);
 
     assert_eq!(modifiers.len(), 3000);
     assert!(start.elapsed() < std::time::Duration::from_secs(10));

@@ -29,6 +29,23 @@ enum Recognized<'a> {
     Plain(Vec<&'a str>),
 }
 
+/// Whether the copy writes the `{ … }` headers of the modifiers, as the advanced copy does.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Headers {
+    Written,
+    Absent,
+}
+
+impl Headers {
+    /// Whether one of the sections has a `{ … }` header.
+    fn of(recognized: &[Recognized<'_>]) -> Self {
+        let headed = recognized
+            .iter()
+            .any(|r| matches!(r, Recognized::Section(Section::Headed(_))));
+        if headed { Self::Written } else { Self::Absent }
+    }
+}
+
 /// A section of the item, once known.
 #[derive(Debug)]
 enum Section<'a> {
@@ -67,28 +84,31 @@ pub(super) fn parse(copied: &CopiedItem) -> Result<Item, ParseError> {
     let mut item = read_header(&header, copied.language(), labels)?;
 
     let recognized: Vec<Recognized<'_>> = sections.map(|lines| recognize(lines, labels)).collect();
-    let with_headers = is_headed(&recognized);
+    let headers = Headers::of(&recognized);
     for section in resolve_plain_sections(recognized, item.rarity, copied.language()) {
         fill(&mut item, section, labels);
     }
-    join_written_stats(&mut item.modifiers, copied.language(), with_headers);
-    // An item copied from the in-game trade: its explicit lines without header.
-    let explicit = item
+    join_written_stats(&mut item.modifiers, copied.language(), headers);
+    item.rolls = rolls_source(&item, headers);
+    Ok(item)
+}
+
+/// Where the rolls of the modifiers of `item` come from, by its `headers`: an item copied
+/// without them, its explicit lines among its modifiers, was copied from the in-game trade.
+fn rolls_source(item: &Item, headers: Headers) -> RollsSource {
+    let has_explicit = item
         .modifiers
         .iter()
         .any(|modifier| matches!(modifier.kind, ModifierKind::Explicit(_)));
-    item.rolls = if with_headers {
-        RollsSource::Headers
-    } else if explicit {
-        match item.rarity {
+    match headers {
+        Headers::Written => RollsSource::Headers,
+        Headers::Absent if !has_explicit => RollsSource::Nowhere,
+        Headers::Absent => match item.rarity {
             Rarity::Magic | Rarity::Rare => RollsSource::Values,
             Rarity::Unique => RollsSource::Prices,
             Rarity::Normal | Rarity::Currency | Rarity::Gem => RollsSource::Nowhere,
-        }
-    } else {
-        RollsSource::Nowhere
-    };
-    Ok(item)
+        },
+    }
 }
 
 /// The non-empty lines of each section, trimmed: the game writes a space before some names.
@@ -282,13 +302,6 @@ fn resolve_plain_sections(
         .collect()
 }
 
-/// Whether one of the sections has a `{ … }` header.
-fn is_headed(recognized: &[Recognized<'_>]) -> bool {
-    recognized
-        .iter()
-        .any(|r| matches!(r, Recognized::Section(Section::Headed(_))))
-}
-
 /// Whether the states of the item say it is unidentified.
 fn is_unidentified(recognized: &[Recognized<'_>]) -> bool {
     recognized.iter().any(|r| {
@@ -312,7 +325,10 @@ fn explicit_section(
     rarity: Rarity,
     language: Language,
 ) -> Option<usize> {
-    if !rarity.has_explicit_modifiers() || is_headed(recognized) || is_unidentified(recognized) {
+    if !rarity.has_explicit_modifiers()
+        || Headers::of(recognized) == Headers::Written
+        || is_unidentified(recognized)
+    {
         return None;
     }
     let item_level = recognized
@@ -382,13 +398,13 @@ fn fill(item: &mut Item, section: Section<'_>, labels: &Labels) {
 /// copy, when the game data finds that stat on their lines together: consecutive, of the same
 /// kind, with the origin of the last line, whose marker may be the only one of the stat. The
 /// runes and the enchantments never have a header; the implicit and explicit modifiers only in
-/// a copy without any (`with_headers` false).
-fn join_written_stats(modifiers: &mut Vec<Modifier>, language: Language, with_headers: bool) {
+/// a copy without any (`headers` absent).
+fn join_written_stats(modifiers: &mut Vec<Modifier>, language: Language, headers: Headers) {
     let without_header = |modifier: &Modifier| {
         modifier.lines.len() == 1
             && match modifier.kind {
                 ModifierKind::Rune | ModifierKind::Enchant => true,
-                ModifierKind::Implicit | ModifierKind::Explicit(_) => !with_headers,
+                ModifierKind::Implicit | ModifierKind::Explicit(_) => headers == Headers::Absent,
                 ModifierKind::Corruption => false,
             }
     };
