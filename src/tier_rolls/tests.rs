@@ -308,8 +308,6 @@ fn a_line_has_no_rolls_without_its_tier_nor_base() {
 
 #[test]
 fn the_other_line_of_a_hybrid_whose_part_a_line_adds_up_rolls_over_the_tiers_of_the_hybrid() {
-    use crate::item::{Affix, ModifierKind, PartTier, StatLine};
-
     let part = |tiers: Vec<u32>, min, max| PartTier {
         affix: Affix::Prefix,
         tiers,
@@ -319,21 +317,19 @@ fn the_other_line_of_a_hybrid_whose_part_a_line_adds_up_rolls_over_the_tiers_of_
     };
     // 258% is a pure T1 (170–179) and the hybrid T1 (75–79) with the accuracy.
     let split = Modifier {
-        kind: ModifierKind::Explicit(Some(Affix::Prefix)),
-        origin: None,
-        name: None,
-        tier: None,
-        tags: Vec::new(),
-        is_unrevealed: false,
-        lines: vec![
-            StatLine::parse("258% increased Physical Damage"),
-            StatLine::parse("+195(175-200) to Accuracy Rating"),
-        ],
         doubt: Some(TierDoubt::Split {
             line: 0,
             whole: part(vec![1], 75.0, 79.0),
             added: part(vec![1], 170.0, 179.0),
         }),
+        ..modifier(
+            PREFIX,
+            None,
+            &[
+                "258% increased Physical Damage",
+                "+195(175-200) to Accuracy Rating",
+            ],
+        )
     };
 
     let rolls = TierRolls::new(
@@ -371,7 +367,7 @@ fn the_other_line_of_a_hybrid_whose_part_a_line_adds_up_rolls_over_the_tiers_of_
 
 #[test]
 fn the_other_line_of_a_hybrid_of_one_tier_only_whose_part_a_line_adds_up_tells_no_tiers() {
-    use crate::item::{Affix, ModifierKind, ModifierOrigin, PartTier, StatLine};
+    use crate::item::ModifierOrigin;
 
     let part = |min, max| PartTier {
         affix: Affix::Prefix,
@@ -383,21 +379,17 @@ fn the_other_line_of_a_hybrid_of_one_tier_only_whose_part_a_line_adds_up_tells_n
     // The hybrid of Kurgal (110–154, and 15% reduced Attack Speed), desecrated, and a pure
     // T1 (170–179) of a maul.
     let split = Modifier {
-        kind: ModifierKind::Explicit(Some(Affix::Prefix)),
         origin: Some(ModifierOrigin::Desecrated),
-        name: None,
-        tier: None,
-        tags: Vec::new(),
-        is_unrevealed: false,
-        lines: vec![
-            StatLine::parse("300% increased Physical Damage"),
-            StatLine::parse("15% reduced Attack Speed"),
-        ],
         doubt: Some(TierDoubt::Split {
             line: 0,
             whole: part(110.0, 154.0),
             added: part(170.0, 179.0),
         }),
+        ..modifier(
+            PREFIX,
+            None,
+            &["300% increased Physical Damage", "15% reduced Attack Speed"],
+        )
     };
 
     let rolls = TierRolls::new(
@@ -544,7 +536,7 @@ fn modifier(kind: ModifierKind, tier: Option<u32>, lines: &[&str]) -> Modifier {
 
 const PREFIX: ModifierKind = ModifierKind::Explicit(Some(Affix::Prefix));
 
-/// A tier of one value in each of `ranges`.
+/// The tier `number`, whose values roll over `ranges`, one range per value.
 fn tier(number: u32, ranges: &[(f64, f64)]) -> Tier {
     Tier {
         number,
@@ -673,7 +665,7 @@ fn a_modifier_written_with_its_tier_rolls_over_every_tier_of_its_base() {
 }
 
 #[test]
-fn a_modifier_of_one_tier_only_hides_its_number_but_for_another_tier_copied() {
+fn a_modifier_of_one_tier_only_hides_its_number_unless_copied_with_another_tier() {
     let only = || in_tables(1, vec![tier(1, &[(10.0, 15.0)])], 0);
     let over_its_tier = vec![(0, rolled(&[(10.0, 15.0)], None))];
     // "T1" would read as the best, while it is the only one; "T1–T1" would tell nothing.
@@ -699,9 +691,10 @@ fn a_modifier_of_one_tier_only_hides_its_number_but_for_another_tier_copied() {
 }
 
 #[test]
-fn a_fixed_value_rolls_over_its_tier_only_when_the_game_writes_none_of_fixed_values() {
-    let minions = modifier(PREFIX, None, &["+2 to Level of all Minion Skills"]);
-    let of_the_tree = |tiers: Vec<Tier>, tier_unwritten: bool| {
+fn a_fixed_value_rolls_over_its_tier_only_in_an_unwritten_tier_of_fixed_values() {
+    // `of the Essence` on a bow.
+    let attacks = modifier(PREFIX, None, &["+2 to Level of all Attack Skills"]);
+    let of_an_essence = |tiers: Vec<Tier>, tier_unwritten: bool| {
         let mut in_tables = in_tables(1, tiers, 0);
         in_tables.tiers.tier_unwritten = tier_unwritten;
         in_tables.tiers.currency = Some(Currency::Essence);
@@ -709,7 +702,7 @@ fn a_fixed_value_rolls_over_its_tier_only_when_the_game_writes_none_of_fixed_val
     };
     let fixed = || vec![tier(1, &[(2.0, 2.0)]), tier(2, &[(1.0, 1.0)])];
     assert_eq!(
-        ModifierRolls::over_fixed_tier(&minions, &of_the_tree(fixed(), true)),
+        ModifierRolls::over_fixed_tier(&attacks, &of_an_essence(fixed(), true)),
         ModifierRolls {
             lines: vec![(0, rolled(&[(2.0, 2.0)], None))],
             hides_number: true,
@@ -718,11 +711,14 @@ fn a_fixed_value_rolls_over_its_tier_only_when_the_game_writes_none_of_fixed_val
     );
     // Not of a modifier whose tier the game writes, nor in a tier that rolls.
     assert_eq!(
-        ModifierRolls::over_fixed_tier(&minions, &of_the_tree(fixed(), false)),
+        ModifierRolls::over_fixed_tier(&attacks, &of_an_essence(fixed(), false)),
         ModifierRolls::default()
     );
     assert_eq!(
-        ModifierRolls::over_fixed_tier(&minions, &of_the_tree(vec![tier(1, &[(1.0, 3.0)])], true)),
+        ModifierRolls::over_fixed_tier(
+            &attacks,
+            &of_an_essence(vec![tier(1, &[(1.0, 3.0)])], true)
+        ),
         ModifierRolls::default()
     );
 }
@@ -749,7 +745,7 @@ fn the_other_lines_of_a_hybrid_split_from_a_summed_line_roll_over_its_tiers() {
 }
 
 #[test]
-fn a_modifier_the_tables_dont_hold_rolls_only_over_the_ranges_its_copy_writes() {
+fn the_ranges_a_copy_writes_need_no_table_where_the_other_ways_do() {
     let ranged = modifier(
         PREFIX,
         None,
@@ -761,6 +757,18 @@ fn a_modifier_the_tables_dont_hold_rolls_only_over_the_ranges_its_copy_writes() 
             lines: vec![(0, rolled(&[(19.0, 22.0)], None))],
             hides_number: true,
             currency: None,
+        })
+    );
+    // Held by the tables, its copied ranges still, whatever their tiers, and the currency of
+    // the tables.
+    let mut of_an_essence = in_tables(1, vec![tier(1, &[(25.0, 30.0)])], 0);
+    of_an_essence.tiers.currency = Some(Currency::Essence);
+    assert_eq!(
+        Written::RangesWithoutTier.rolls(&ranged, Some(&of_an_essence)),
+        Some(ModifierRolls {
+            lines: vec![(0, rolled(&[(19.0, 22.0)], None))],
+            hides_number: true,
+            currency: Some(Currency::Essence),
         })
     );
     let written = modifier(PREFIX, Some(1), &["+50 to maximum Life"]);
