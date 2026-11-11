@@ -7,7 +7,7 @@ use super::copied::{Copied, CopiedTier};
 use super::lookup::{Tie, find};
 use super::split_lines::{AddedTiers, splits};
 use super::tables::{Table, TableAffix};
-use crate::item::{Affix, Modifier, ModifierOrigin};
+use crate::item::{Affix, ModifierOrigin};
 
 /// Consecutive modifiers of an item copied from the in-game trade read as one, and the affixes
 /// whose tables hold their values; or one of these lines split into two modifiers.
@@ -57,26 +57,27 @@ fn most_lines(tables: &[Table]) -> usize {
         .unwrap_or(1)
 }
 
-/// Every modifier or run of modifiers among `modifiers` whose values `tables` hold, the tier
-/// the worst among those the level of the item allows, `copied` giving the lines of each
-/// modifier to read (none for a modifier that isn't, or whose lines have no stat of the game
-/// data): one modifier, or up to as many as the lines of a hybrid, of the same origin; then
-/// each way one of their lines adds up two modifiers ([`splits`]). The shorter first at each
-/// start.
-pub(super) fn candidates(
-    tables: &ItemTables<'_>,
-    modifiers: &[Modifier],
-    copied: &[Option<Copied<'_>>],
-) -> Vec<Candidate> {
+/// Every modifier or run of modifiers of an item whose values `tables` hold, the tier the
+/// worst among those the level of the item allows, `copied` giving for each modifier of the
+/// item its lines to read (none for a modifier that isn't read, or whose lines have no stat of
+/// the game data): one modifier, or up to as many as the lines of a hybrid, of the same
+/// origin; then each way one of their lines adds up two modifiers ([`splits`]). The shorter
+/// first at each start.
+pub(super) fn candidates(tables: &ItemTables<'_>, copied: &[Option<Copied<'_>>]) -> Vec<Candidate> {
     let most_lines = most_lines(tables.all);
     let mut candidates = Vec::new();
-    for (start, first) in modifiers.iter().enumerate() {
+    for (start, first) in copied.iter().enumerate() {
+        // A run starts at a modifier to read, and goes on while the next ones are of its
+        // origin.
+        let Some(origin) = first.as_ref().map(|first| first.origin) else {
+            continue;
+        };
         let mut lines = Vec::new();
-        // The index among `modifiers` of the modifier of each line.
+        // The index among the modifiers of the item of the modifier of each line.
         let mut owners = Vec::new();
-        let run = modifiers.iter().zip(copied).skip(start).take(most_lines);
-        for (end, (modifier, part)) in (start + 1..).zip(run) {
-            let Some(part) = part.as_ref().filter(|_| modifier.origin == first.origin) else {
+        let run = copied.iter().skip(start).take(most_lines);
+        for (end, part) in (start + 1..).zip(run) {
+            let Some(part) = part.as_ref().filter(|part| part.origin == origin) else {
                 break;
             };
             lines.extend(part.lines.iter().cloned());
@@ -85,7 +86,7 @@ pub(super) fn candidates(
                 lines: lines.clone(),
                 ranges: None,
                 tier: CopiedTier::Unknown,
-                origin: first.origin,
+                origin,
             };
             let affixes: Vec<_> = [
                 (Affix::Prefix, TableAffix::Prefix),
@@ -96,7 +97,7 @@ pub(super) fn candidates(
                 Some((affix, find(tables, table_affix, &joined, Tie::Worst)?))
             })
             .collect();
-            let fractured = first.origin == Some(ModifierOrigin::Fractured);
+            let fractured = origin == Some(ModifierOrigin::Fractured);
             if !affixes.is_empty() {
                 candidates.push(Candidate {
                     modifiers: start..end,

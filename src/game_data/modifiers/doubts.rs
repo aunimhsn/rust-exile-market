@@ -10,7 +10,7 @@ use super::base_tiers::ItemTables;
 use super::best_reading::BestReading;
 use super::candidates::Candidate;
 use super::copied::{Copied, CopiedLine};
-use crate::item::{Affix, Modifier, ModifierOrigin, Range};
+use crate::item::{Affix, ModifierOrigin, Range};
 use comparison::Ground;
 use placements::placements;
 use walk::{Met, State};
@@ -82,9 +82,9 @@ struct Shown {
     ranges: Vec<Range>,
 }
 
-/// The indexes among `modifiers` of the lines that another reading of the item reads otherwise
-/// than the `best` one, and that it leaves in doubt: among `tables`, `copied` giving the lines
-/// of each modifier (those of [`super::trade_tiers`]).
+/// The lines that another reading of the item reads otherwise than the `best` one, and that
+/// it leaves in doubt: among `tables`, `copied` giving for each modifier of the item its lines
+/// to read (those of [`super::trade_tiers`]).
 ///
 /// Another reading reads the lines the best one reads, and maybe lines it leaves without tier,
 /// each within the sum of the ranges of its modifiers, in the room of the item, as many
@@ -123,17 +123,15 @@ struct Shown {
 /// reads it otherwise, whatever it makes of the others.
 pub(super) fn doubts(
     tables: &ItemTables<'_>,
-    modifiers: &[Modifier],
     copied: &[Option<Copied<'_>>],
     best: &BestReading<'_>,
 ) -> Doubts {
-    doubts_within(tables, modifiers, copied, best, MAX_STEPS)
+    doubts_within(tables, copied, best, MAX_STEPS)
 }
 
 /// [`doubts`], in at most `max_steps` steps.
 fn doubts_within(
     tables: &ItemTables<'_>,
-    modifiers: &[Modifier],
     copied: &[Option<Copied<'_>>],
     best: &BestReading<'_>,
     max_steps: usize,
@@ -146,7 +144,7 @@ fn doubts_within(
     };
     let mut lines = Vec::new();
     let mut values = Vec::new();
-    for (index, (modifier, copied)) in modifiers.iter().zip(copied).enumerate() {
+    for (index, copied) in copied.iter().enumerate() {
         let Some(copied) = copied else {
             continue;
         };
@@ -156,7 +154,7 @@ fn doubts_within(
             values.extend(line.written.filter(|_| line.values.is_empty()));
             lines.push(Line {
                 modifier: index,
-                origin: modifier.origin,
+                origin: copied.origin,
                 copied: line.clone(),
                 values: start..values.len(),
                 read_by_best: read_by_best(index),
@@ -170,7 +168,7 @@ fn doubts_within(
         &placements,
         best,
         &chosen,
-        modifiers.len(),
+        copied.len(),
         max_steps,
     );
     let mut state = State::new(&ground);

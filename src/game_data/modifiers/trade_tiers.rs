@@ -235,7 +235,7 @@ fn trade_tiers_in(
     limits: AffixLimits,
 ) -> (Vec<FoundTiers>, Effort) {
     let copied = lines_to_read(language, modifiers);
-    let candidates = candidates(tables, modifiers, &copied);
+    let candidates = candidates(tables, &copied);
     let known = |affix| {
         modifiers
             .iter()
@@ -265,7 +265,7 @@ fn trade_tiers_in(
         };
         return (Vec::new(), effort);
     };
-    let doubts = doubts::doubts(tables, modifiers, &copied, &best);
+    let doubts = doubts::doubts(tables, &copied, &best);
     let effort = Effort {
         readings: best.readings,
         steps: doubts.steps,

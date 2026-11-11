@@ -8,7 +8,7 @@ use crate::game_data::lines::modifier_stats;
 use crate::game_data::modifiers::best_reading::{Room, best_reading};
 use crate::game_data::modifiers::candidates::candidates;
 use crate::game_data::modifiers::tables::TABLES;
-use crate::item::{ModifierKind, StatLine};
+use crate::item::{Modifier, ModifierKind, StatLine};
 use crate::language::Language;
 
 /// The lines `texts` of an item of `base_type` of item level 82, with 3 prefixes and 3
@@ -46,7 +46,7 @@ fn doubts_of(
         base: bases::spawn(Language::English, base_type).expect("a base"),
         item_level: Some(82),
     };
-    let candidates = candidates(&tables, &modifiers, &copied);
+    let candidates = candidates(&tables, &copied);
     let room = Room {
         prefixes: 3,
         suffixes: 3,
@@ -56,7 +56,7 @@ fn doubts_of(
         best.room = room;
         best.fits_room = fits_room;
     }
-    doubts_within(&tables, &modifiers, &copied, &best, max_steps)
+    doubts_within(&tables, &copied, &best, max_steps)
 }
 
 /// The lines of a bow with three prefixes, read one way only.
