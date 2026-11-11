@@ -130,6 +130,10 @@ struct Placement<'a> {
 /// A reading that keeps the lines of each modifier and differs by a tier isn't a doubt: a value
 /// in two tiers takes the worst, and one that differs from the best one only by the tier of a
 /// modifier of a split line, the neighbouring tier the best one gives it too, is the best one.
+///
+/// A best reading that doesn't fit the room of the item isn't a reading of it, and none of the
+/// above holds for it: once another reading fits, a line is in doubt as soon as one of them
+/// reads it otherwise, whatever it makes of the others.
 pub(super) fn doubts(
     tables: &[Table],
     item: &TradeItem<'_>,
@@ -199,16 +203,16 @@ fn doubts_within(
     };
     if outcome == Outcome::Concluded {
         let mut doubts = state.doubts;
-        // Once a reading in the room is met, a line of the best reading keeps its tier only
-        // if one of them reads it the same: the best reading itself when it fits the room,
-        // which confirms every line; otherwise none of a line the readings that fit read
-        // another way, also when they add up more modifiers than the best reading makes.
-        if state.met != Met::Nothing {
-            let unconfirmed = lines.iter().filter(|line| {
-                let confirmed = state.confirmed.get(line.modifier).copied().unwrap_or(false);
-                line.read_by_best && !confirmed
+        // A best reading that doesn't fit the room of the item isn't a reading of it: a line
+        // keeps its tier only if every reading met, which all fit the room, reads it the
+        // same, whatever they make of the others (more modifiers adding up, another tier).
+        // Without any, the tables are out of step with the game, and the tiers stay.
+        if !best.fits_room {
+            let disputed = lines.iter().filter(|line| {
+                let agreed = state.agreed.get(line.modifier).copied().unwrap_or(false);
+                line.read_by_best && !agreed
             });
-            for line in unconfirmed {
+            for line in disputed {
                 if !doubts.contains(&line.modifier) {
                     doubts.push(line.modifier);
                 }
@@ -746,9 +750,9 @@ struct State {
     cut: bool,
     /// The readings met so far.
     met: Met,
-    /// For each modifier of the item, whether a reading met reads its line as the best
+    /// For each modifier of the item, whether every reading met reads its line as the best
     /// reading does.
-    confirmed: Vec<bool>,
+    agreed: Vec<bool>,
     /// Whether a reading that leaves lines in doubt leaves another room than the best one to the
     /// modifiers that can be a prefix or a suffix.
     other_room: bool,
@@ -768,7 +772,7 @@ impl State {
             steps: 0,
             cut: false,
             met: Met::Nothing,
-            confirmed: vec![false; ground.best.len()],
+            agreed: vec![true; ground.best.len()],
             other_room: false,
             doubts: Vec::new(),
         }
@@ -924,8 +928,8 @@ impl State {
             .filter_map(|&index| ground.placements.get(index))
             .collect();
         let otherwise = ground.otherwise(&chosen);
-        for (modifier, confirmed) in self.confirmed.iter_mut().enumerate() {
-            *confirmed |= !otherwise.contains(&modifier);
+        for (modifier, agreed) in self.agreed.iter_mut().enumerate() {
+            *agreed &= !otherwise.contains(&modifier);
         }
         if otherwise.is_empty() {
             self.met = Met::Best;

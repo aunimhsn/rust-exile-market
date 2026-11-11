@@ -1115,11 +1115,23 @@ fn two_hybrids_that_share_a_line_leave_it_without_tier_when_both_follow_it() {
 }
 
 #[test]
-fn a_best_reading_out_of_the_room_keeps_only_the_tiers_a_reading_in_the_room_confirms() {
+fn a_best_reading_out_of_the_room_keeps_only_the_tiers_every_reading_in_the_room_gives() {
     use Affix::Prefix;
-    let tables = written(&[
+    let prefixes = [
         table("LifePrefix", "prefix", &[LIFE], &[(1, &[(40, 60)])]),
         table("ManaPrefix", "prefix", &[MANA], &[(1, &[(25, 35)])]),
+        table("RarityPrefix", "prefix", &[RARITY], &[(1, &[(10, 20)])]),
+    ];
+    let with = |suffixes: &[String]| written(&[prefixes.as_slice(), suffixes].concat());
+    let (life, mana, rarity) = (
+        "+50 to maximum Life",
+        "+30 to maximum Mana",
+        "15% increased Rarity of Items found",
+    );
+    let pure = (1, vec![(Prefix, 1)]);
+
+    // A hybrid suffix and a pure suffix of each stat add up to the life and to the mana.
+    let tables = with(&[
         table(
             "HybridSuffix",
             "suffix",
@@ -1129,13 +1141,11 @@ fn a_best_reading_out_of_the_room_keeps_only_the_tiers_a_reading_in_the_room_con
         table("LifeSuffix", "suffix", &[LIFE], &[(1, &[(20, 29)])]),
         table("ManaSuffix", "suffix", &[MANA], &[(1, &[(10, 19)])]),
     ]);
-    let lines = ["+50 to maximum Life", "+30 to maximum Mana"].map(|text| modifier(None, &[text]));
-    let prefixes = [(1, vec![(Prefix, 1)]), (1, vec![(Prefix, 1)])];
-
-    // Room for both prefixes: the hybrid and two pure suffixes add up to them as well, three
-    // modifiers for two, which a modifier holding its line alone rules out.
+    let lines = [life, mana].map(|text| modifier(None, &[text]));
+    // Room for both prefixes: three suffixes for two prefixes, which a modifier holding its
+    // line alone rules out.
     let ((read, _), effort) = read_modifiers(&tables, 60, &lines, (2, 3));
-    assert_eq!(read, prefixes);
+    assert_eq!(read, [pure.clone(), pure.clone()]);
     assert_eq!(effort.ending, Ending::Vouched);
     // Room for one prefix only: the two prefixes can't be, and the three suffixes, the only
     // reading in the room, read neither line as they do.
@@ -1144,8 +1154,30 @@ fn a_best_reading_out_of_the_room_keeps_only_the_tiers_a_reading_in_the_room_con
     assert_eq!(effort.ending, Ending::OnlyAnotherFits);
     // No room for three suffixes either: no reading fits, and the lines keep their tiers.
     let ((read, _), effort) = read_modifiers(&tables, 60, &lines, (1, 2));
-    assert_eq!(read, prefixes);
+    assert_eq!(read, [pure.clone(), pure.clone()]);
     assert_eq!(effort.ending, Ending::NoneFits);
+    // A rarity every reading in the room reads as the prefix keeps its tier.
+    let lines = [life, mana, rarity].map(|text| modifier(None, &[text]));
+    let ((read, _), effort) = read_modifiers(&tables, 60, &lines, (2, 3));
+    assert_eq!(read, std::slice::from_ref(&pure));
+    assert_eq!(effort.ending, Ending::OnlyAnotherFits);
+
+    // Three pure suffixes of each stat: two readings in the room, each with one of the
+    // prefixes and the suffixes of the other stat. Each prefix has a reading that gives
+    // it, none gives both.
+    let suffix = |kind: &str, template, range| table(kind, "suffix", &[template], &[(1, &[range])]);
+    let tables = with(&[
+        suffix("LifeA", LIFE, (15, 18)),
+        suffix("LifeB", LIFE, (15, 18)),
+        suffix("LifeC", LIFE, (15, 18)),
+        suffix("ManaA", MANA, (9, 11)),
+        suffix("ManaB", MANA, (9, 11)),
+        suffix("ManaC", MANA, (9, 11)),
+    ]);
+    let lines = [life, mana].map(|text| modifier(None, &[text]));
+    let ((read, _), effort) = read_modifiers(&tables, 60, &lines, (1, 3));
+    assert_eq!(read, []);
+    assert_eq!(effort.ending, Ending::OnlyAnotherFits);
 }
 
 #[test]

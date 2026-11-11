@@ -661,9 +661,9 @@ enum Ending {
     /// is read.
     BestNotMet,
     /// The best reading doesn't fit the room of the item while another one does, which the
-    /// candidates don't hold (a hybrid whose lines don't follow each other): the lines no
-    /// reading in the room reads as the best one does stay without tier, the others keep
-    /// every affix.
+    /// candidates don't hold (a hybrid whose lines don't follow each other): a line keeps its
+    /// tier only when every reading in the room reads it as the best one does, with every
+    /// affix.
     OnlyAnotherFits,
     /// No reading fits the room of the item, the tables being out of step with the game: the
     /// lines keep the tiers of the best reading, with every affix.
@@ -701,7 +701,7 @@ impl Ending {
                 "Game data, {base_type} copied from the in-game trade: the other readings of its lines don't hold its best one, its lines left without tier"
             ),
             Self::OnlyAnotherFits => log::debug!(
-                "Game data, {base_type} copied from the in-game trade: its best reading doesn't fit {prefixes} prefixes and {suffixes} suffixes, another one does, the lines it doesn't read the same left without tier"
+                "Game data, {base_type} copied from the in-game trade: its best reading doesn't fit {prefixes} prefixes and {suffixes} suffixes, others do, the lines they don't all read the same left without tier"
             ),
             Self::NoneFits => log::warn!(
                 "Game data, {base_type} copied from the in-game trade: no reading of its lines fits {prefixes} prefixes and {suffixes} suffixes"
