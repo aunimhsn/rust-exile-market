@@ -9,14 +9,14 @@ use crate::Result;
 const MAX_FILE_BYTES: u64 = 64 * 1024 * 1024;
 
 /// The API and the files of GitHub, read through one agent.
-pub(crate) struct GitHub {
+pub struct GitHub {
     agent: ureq::Agent,
 }
 
 /// A commit of a repository, with the fields the generator reads.
 #[derive(Deserialize)]
-pub(crate) struct Commit {
-    pub(crate) sha: String,
+pub struct Commit {
+    pub sha: String,
     commit: CommitDetail,
 }
 
@@ -34,27 +34,27 @@ struct Committer {
 
 impl Commit {
     /// When it was committed.
-    pub(crate) fn date(&self) -> &str {
+    pub fn date(&self) -> &str {
         &self.commit.committer.date
     }
 }
 
 impl GitHub {
     /// A reader through the agent of `ureq` and its defaults.
-    pub(crate) fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             agent: ureq::Agent::new_with_defaults(),
         }
     }
 
     /// The commit `reference` (a branch or a commit) of `repository`.
-    pub(crate) fn commit(&self, repository: &str, reference: &str) -> Result<Commit> {
+    pub fn commit(&self, repository: &str, reference: &str) -> Result<Commit> {
         let url = format!("https://api.github.com/repos/{repository}/commits/{reference}");
         Ok(serde_json::from_str(&self.get(&url)?)?)
     }
 
     /// The file `path` of `repository` at `commit`.
-    pub(crate) fn file(&self, repository: &str, commit: &str, path: &str) -> Result<String> {
+    pub fn file(&self, repository: &str, commit: &str, path: &str) -> Result<String> {
         self.get(&format!(
             "https://raw.githubusercontent.com/{repository}/{commit}/{path}"
         ))

@@ -36,7 +36,7 @@ const REPOE_CODE: &str = "repoe-fork/repoe";
 const LANGUAGES: [&str; 2] = ["en", "fr"];
 
 /// The result of a step of the generator, its error a message that stops it.
-pub(crate) type Result<T> = std::result::Result<T, Box<dyn Error>>;
+pub type Result<T> = std::result::Result<T, Box<dyn Error>>;
 
 /// What the generator reads of each repository, from its arguments: a branch or a commit,
 /// `master` when it isn't given.

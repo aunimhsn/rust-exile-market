@@ -85,7 +85,7 @@ struct SourceCraftable {
 /// A base as the application reads it (`src/game_data/bases.rs`): its name in the language
 /// of the file, its category, and the tags that tell the modifiers it rolls.
 #[derive(Serialize)]
-pub(crate) struct Base {
+pub struct Base {
     name: String,
     category: String,
     /// The domain of its modifiers, written when it isn't `item`.
@@ -98,7 +98,7 @@ pub(crate) struct Base {
 /// The bases of an `items.ndjson` in `language`, of the categories the application searches,
 /// each name once, in the category most of its entries have ([`main_category`]). Each takes the
 /// domain and the tags of its English name in `spawns`.
-pub(crate) fn reduce(
+pub fn reduce(
     source: &str,
     spawns: &modifiers::BaseSpawns,
     language: &str,

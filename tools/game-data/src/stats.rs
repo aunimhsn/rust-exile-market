@@ -60,7 +60,7 @@ struct SourceTrade {
 
 /// A stat as the application reads it (`src/game_data/stats.rs`).
 #[derive(Serialize)]
-pub(crate) struct Stat {
+pub struct Stat {
     /// Its English template, the `ref` of Exiled Exchange 2.
     #[serde(rename = "ref")]
     template: String,
@@ -98,7 +98,7 @@ fn is_false(value: &bool) -> bool {
 
 /// The English templates of `stats`, the English stats of Exiled Exchange 2, by each of their
 /// strings.
-pub(crate) fn templates(stats: &[Stat]) -> modifiers::Templates {
+pub fn templates(stats: &[Stat]) -> modifiers::Templates {
     let mut templates = modifiers::Templates::new();
     for stat in stats {
         templates.insert(stat.template.clone(), stat.template.clone());
@@ -115,7 +115,7 @@ pub(crate) fn templates(stats: &[Stat]) -> modifiers::Templates {
 }
 
 /// The stats of a `stats.ndjson`, with only the fields and the groups the application reads.
-pub(crate) fn reduce(source: &str) -> Result<Vec<Stat>> {
+pub fn reduce(source: &str) -> Result<Vec<Stat>> {
     let mut stats = Vec::new();
     for (index, line) in source.lines().enumerate() {
         if line.trim().is_empty() {
@@ -169,7 +169,7 @@ fn reduce_one(stat: SourceStat) -> Result<Stat> {
 
 /// Notes the stats of one language only, and those whose trade ids differ between the
 /// languages, to look at after a patch: the application reads each language on its own.
-pub(crate) fn report_differences(english: &[Stat], french: &[Stat], report: &mut Report) {
+pub fn report_differences(english: &[Stat], french: &[Stat], report: &mut Report) {
     let (english, french) = (trade_ids(english), trade_ids(french));
     let templates: BTreeSet<&str> = english.keys().chain(french.keys()).copied().collect();
     for template in templates {

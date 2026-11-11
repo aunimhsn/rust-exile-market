@@ -8,7 +8,7 @@ use crate::{Commits, EXILED_EXCHANGE, REPOE_CODE, REPOE_DATA, Result};
 
 /// Writes `NOTICE.md` in `output`: where the data come from (`commits`), and their licenses, that
 /// of RePoE read in its code at `repoe_code_reference`.
-pub(crate) fn write(
+pub fn write(
     github: &GitHub,
     output: &Path,
     commits: &Commits,
