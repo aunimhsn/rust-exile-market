@@ -38,7 +38,8 @@ enum Headers {
 }
 
 impl Headers {
-    /// Whether one of the sections has a `{ … }` header.
+    /// How the sections write the headers of the modifiers: `Written` when one of them has a
+    /// `{ … }` header.
     fn of(recognized: &[Recognized<'_>]) -> Self {
         let headed = recognized
             .iter()
@@ -87,7 +88,7 @@ pub(super) fn parse(copied: &CopiedItem) -> Result<Item, ParseError> {
 
     let recognized: Vec<Recognized<'_>> = sections.map(|lines| recognize(lines, labels)).collect();
     let headers = Headers::of(&recognized);
-    for section in resolve_plain_sections(recognized, item.rarity, copied.language()) {
+    for section in resolve_plain_sections(recognized, item.rarity, copied.language(), headers) {
         fill(&mut item, section, labels);
     }
     join_written_stats(&mut item.modifiers, copied.language(), headers);
@@ -294,8 +295,9 @@ fn resolve_plain_sections(
     recognized: Vec<Recognized<'_>>,
     rarity: Rarity,
     language: Language,
+    headers: Headers,
 ) -> Vec<Section<'_>> {
-    let explicit = explicit_section(&recognized, rarity, language);
+    let explicit = explicit_section(&recognized, rarity, language, headers);
     recognized
         .into_iter()
         .enumerate()
@@ -332,9 +334,10 @@ fn explicit_section(
     recognized: &[Recognized<'_>],
     rarity: Rarity,
     language: Language,
+    headers: Headers,
 ) -> Option<usize> {
     if !rarity.has_explicit_modifiers()
-        || Headers::of(recognized) == Headers::Written
+        || headers == Headers::Written
         || is_unidentified(recognized)
     {
         return None;

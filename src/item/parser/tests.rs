@@ -1370,9 +1370,13 @@ fn an_advanced_copy_never_has_its_explicit_modifiers_found_without_header() {
             .map(|lines| recognize(lines, labels))
             .collect();
         let rarity = item(&text).rarity();
+        let headers = Headers::of(&recognized);
         assert_eq!(
-            explicit_section(&recognized, rarity, copied.language()),
-            None,
+            (
+                headers,
+                explicit_section(&recognized, rarity, copied.language(), headers)
+            ),
+            (Headers::Written, None),
             "{text}"
         );
     }
