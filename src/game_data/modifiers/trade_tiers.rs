@@ -260,7 +260,7 @@ fn trade_tiers_in(
     // A line two readings as good read otherwise, or another reading leaves in doubt, and the
     // other lines of its modifiers: without tier, the others read as the best reading does.
     let in_doubt = |candidate: &Candidate| {
-        let mut lines = best.ambiguous.iter().chain(&doubts.lines);
+        let mut lines = best.ambiguous.iter().chain(&doubts.in_doubt);
         lines.any(|line| candidate.modifiers.contains(line))
     };
     let found = best

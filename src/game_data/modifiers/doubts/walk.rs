@@ -1,10 +1,68 @@
 //! The walk through the other readings: the modifiers chosen line after line, within the
 //! room of the item and the bound of the search, each reading compared with the best one.
 
-use super::comparison::{Ground, PartRead, Parts};
-use super::placements::{Placement, past};
+use super::comparison::{BestShown, Reading};
+use super::placements::{Directions, Placement};
+use super::{ItemLines, Line};
+use crate::game_data::modifiers::best_reading::{BestReading, Room};
+use crate::game_data::modifiers::candidates::Candidate;
 use crate::game_data::modifiers::copied::holds;
 use crate::item::{Affix, Range};
+
+/// What the walk reads from, the same all along.
+pub(super) struct Ground<'s, 'a> {
+    pub(super) lines: &'s [Line<'a>],
+    pub(super) values: &'s [f64],
+    pub(super) placements: &'s [Placement<'a>],
+    /// For each line, the placements whose first line it is.
+    pub(super) starting: Vec<Vec<usize>>,
+    pub(super) room: Room,
+    /// The most fractured modifiers a reading can have: one, or as many as the best reading.
+    pub(super) fractured: usize,
+    pub(super) directions: Directions,
+    /// The best reading, which each reading is compared with.
+    pub(super) best: BestShown,
+    /// The most steps the walk takes.
+    pub(super) max_steps: usize,
+}
+
+impl<'s, 'a> Ground<'s, 'a> {
+    /// The ground of a walk of at most `max_steps` steps through the readings the `placements`
+    /// make of `lines`, each compared with the `best` one.
+    pub(super) fn new(
+        lines: &'s ItemLines<'a>,
+        placements: &'s [Placement<'a>],
+        best: &BestReading<'_>,
+        max_steps: usize,
+    ) -> Self {
+        let mut starting = vec![Vec::new(); lines.all.len()];
+        for (index, placement) in placements.iter().enumerate() {
+            if let Some(starting) = placement
+                .lines
+                .first()
+                .and_then(|&first| starting.get_mut(first))
+            {
+                starting.push(index);
+            }
+        }
+        let fractured: usize = best
+            .candidates()
+            .filter(|candidate| candidate.fractured)
+            .map(Candidate::count)
+            .sum();
+        Self {
+            lines: &lines.all,
+            values: &lines.values,
+            placements,
+            starting,
+            room: best.room,
+            fractured: fractured.max(1),
+            directions: Directions::of(placements, lines.values.len()),
+            best: BestShown::new(best, lines.modifier_count),
+            max_steps,
+        }
+    }
+}
 
 /// The readings of the lines the search met, each of them in the room of the item: the more
 /// it knows the greater.
@@ -41,10 +99,11 @@ pub(super) struct State {
     /// modifiers that can be a prefix or a suffix.
     pub(super) other_room: bool,
     /// The indexes among the modifiers of the item of the lines in doubt.
-    pub(super) doubts: Vec<usize>,
+    pub(super) in_doubt: Vec<usize>,
 }
 
 impl State {
+    /// The start of a walk on `ground`: no modifier chosen, no reading met.
     pub(super) fn new(ground: &Ground<'_, '_>) -> Self {
         Self {
             sums: vec![Range { min: 0.0, max: 0.0 }; ground.values.len()],
@@ -56,9 +115,9 @@ impl State {
             steps: 0,
             cut: false,
             met: Met::Nothing,
-            agreed: vec![true; ground.best.len()],
+            agreed: vec![true; ground.best.modifier_count()],
             other_room: false,
-            doubts: Vec::new(),
+            in_doubt: Vec::new(),
         }
     }
 
@@ -204,56 +263,35 @@ impl State {
         placement.ranges.iter().any(|&(value, _)| {
             self.sums
                 .get(value)
-                .is_none_or(|&sum| past(&ground.rising, &ground.falling, ground.values, value, sum))
+                .is_none_or(|&sum| ground.directions.is_past(ground.values, value, sum))
         })
     }
 
     /// Compares the chosen placements, a reading of every line the best reading reads, with the
-    /// best one: the lines it reads otherwise in each part of the item go in doubt as
-    /// [`PartRead::in_doubt`] says.
+    /// best one ([`BestShown::compare`]), and keeps what it tells.
     fn compare(&mut self, ground: &Ground<'_, '_>) {
-        let chosen: Vec<&Placement<'_>> = self
-            .chosen
-            .iter()
-            .filter_map(|&index| ground.placements.get(index))
-            .collect();
-        let otherwise = ground.otherwise(&chosen);
+        let reading = Reading {
+            lines: ground.lines,
+            chosen: self
+                .chosen
+                .iter()
+                .filter_map(|&index| ground.placements.get(index))
+                .collect(),
+            counts: &self.counts,
+        };
+        let compared = ground.best.compare(&reading);
         for (modifier, agreed) in self.agreed.iter_mut().enumerate() {
-            *agreed &= !otherwise.contains(&modifier);
+            *agreed &= !compared.otherwise.contains(&modifier);
         }
-        if otherwise.is_empty() {
+        if compared.otherwise.is_empty() {
             self.met = Met::Best;
             return;
         }
         self.met = self.met.max(Met::Others);
-        let mut parts = Parts::new(ground.best.len());
-        for placement in &chosen {
-            parts.join(placement.shown.modifiers.iter().copied());
-        }
-        for candidate in &ground.best_candidates {
-            parts.join(candidate.modifiers.clone());
-        }
-        let part_of: Vec<usize> = (0..ground.best.len())
-            .map(|modifier| parts.root(modifier))
-            .collect();
-        let part = |modifier: usize| part_of.get(modifier).copied();
-        let mut roots: Vec<Option<usize>> = otherwise.iter().map(|&line| part(line)).collect();
-        roots.sort_unstable();
-        roots.dedup();
-        for root in roots {
-            let part_read = PartRead::new(ground, &chosen, &self.counts, |modifier| {
-                part(modifier) == root
-            });
-            if !part_read.in_doubt() {
-                continue;
-            }
-            if !ground.same_room(&chosen) {
-                self.other_room = true;
-            }
-            for &line in &otherwise {
-                if part(line) == root && !self.doubts.contains(&line) {
-                    self.doubts.push(line);
-                }
+        self.other_room |= compared.other_room;
+        for line in compared.in_doubt {
+            if !self.in_doubt.contains(&line) {
+                self.in_doubt.push(line);
             }
         }
     }

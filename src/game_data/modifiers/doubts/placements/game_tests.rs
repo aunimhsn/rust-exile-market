@@ -29,17 +29,21 @@ fn only_the_tiers_the_item_level_allows_are_placed() {
         &modifier_stats(Language::English, &modifiers[0], None),
     )
     .expect("a line of the game data");
-    let lines: Vec<Line<'_>> = copied
-        .lines
-        .iter()
-        .map(|copied| Line {
-            modifier: 0,
-            origin: None,
-            copied: copied.clone(),
-            values: 0..1,
-            read_by_best: true,
-        })
-        .collect();
+    let lines = ItemLines {
+        all: copied
+            .lines
+            .iter()
+            .map(|copied| Line {
+                modifier: 0,
+                origin: None,
+                copied: copied.clone(),
+                values: 0..1,
+                read_by_best: true,
+            })
+            .collect(),
+        values: vec![175.0],
+        modifier_count: 1,
+    };
     let base = bases::spawn(Language::English, "Warmonger Bow").expect("a base");
     // The pure T1 `170–179` needs the item level 82.
     let pure_t1 = |item_level| {
@@ -48,7 +52,7 @@ fn only_the_tiers_the_item_level_allows_are_placed() {
             base,
             item_level: Some(item_level),
         };
-        placements(&tables, &lines, &[175.0])
+        placements(&tables, &lines)
             .iter()
             .any(|placement| placement.shown.ranges == [range(170.0, 179.0)])
     };
