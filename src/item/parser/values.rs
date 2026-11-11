@@ -24,8 +24,8 @@ fn read_property(item: &mut Item, line: &str, labels: &Labels) {
         Some(line) => (line, true),
         None => (line, false),
     };
-    if let Some((kind, value)) = quality(line, labels) {
-        fill_quality(item, kind, value);
+    if let Some(quality) = QualityLine::read(line, labels) {
+        fill_quality(item, quality);
     }
     let (name, value) = line.split_once(':').unwrap_or((line, ""));
     let (name, value) = (name.trim(), value.trim());
@@ -48,15 +48,14 @@ fn read_property(item: &mut Item, line: &str, labels: &Labels) {
     });
 }
 
-/// The quality of `item`, of the `kind` and the `value` of its quality line: a warning for a
-/// value that isn't a number, or for the kind of a catalyst not in the labels, kept with the
-/// words of the game.
-fn fill_quality(item: &mut Item, kind: Option<QualityKind>, value: &str) {
-    item.quality = digits(value);
+/// The quality of `item`, from its quality line: a warning for a value that isn't a number, or
+/// for the kind of a catalyst not in the labels, kept with the words of the game.
+fn fill_quality(item: &mut Item, quality: QualityLine<'_>) {
+    item.quality = quality.value.and_then(digits);
     if item.quality.is_none() {
         item.warnings
             .push(ParseWarning::InvalidValue(Field::Quality));
-    } else if let Some(kind) = kind {
+    } else if let Some(kind) = quality.kind {
         if kind.catalyst.is_none() {
             item.warnings.push(ParseWarning::UnknownQualityKind);
         }
@@ -123,26 +122,44 @@ pub(super) fn read_stack(line: &str, labels: &Labels) -> Option<Stack> {
 }
 
 /// The quality line, `Quality: +20%` or the quality of a catalyst, `Quality (Mana Modifiers):
-/// +40%`: the kind of a catalyst, and the text of the value, empty for a quality of a catalyst
-/// whose words don't close.
-fn quality<'a>(line: &'a str, labels: &Labels) -> Option<(Option<QualityKind>, &'a str)> {
-    if let Some(value) = line.strip_prefix(labels.quality) {
-        return Some((None, value));
+/// +40%`.
+struct QualityLine<'a> {
+    /// The kind of a catalyst; none for the quality of the base.
+    kind: Option<QualityKind>,
+    /// The text of the value; none for a quality of a catalyst whose words don't close.
+    value: Option<&'a str>,
+}
+
+impl<'a> QualityLine<'a> {
+    /// The quality `line` in the words of `labels`; none for another line.
+    fn read(line: &'a str, labels: &Labels) -> Option<Self> {
+        if let Some(value) = line.strip_prefix(labels.quality) {
+            return Some(Self {
+                kind: None,
+                value: Some(value),
+            });
+        }
+        let (open, close) = labels.catalyst_quality;
+        let Some((words, value)) = line.strip_prefix(open)?.split_once(close) else {
+            return Some(Self {
+                kind: None,
+                value: None,
+            });
+        };
+        let catalyst = labels
+            .catalysts
+            .iter()
+            .find(|&&(known, _)| known == words)
+            .map(|&(_, catalyst)| catalyst);
+        let kind = QualityKind {
+            catalyst,
+            words: words.to_owned(),
+        };
+        Some(Self {
+            kind: Some(kind),
+            value: Some(value),
+        })
     }
-    let (open, close) = labels.catalyst_quality;
-    let Some((words, value)) = line.strip_prefix(open)?.split_once(close) else {
-        return Some((None, ""));
-    };
-    let catalyst = labels
-        .catalysts
-        .iter()
-        .find(|&&(known, _)| known == words)
-        .map(|&(_, catalyst)| catalyst);
-    let kind = QualityKind {
-        catalyst,
-        words: words.to_owned(),
-    };
-    Some((Some(kind), value))
 }
 
 /// The quality of a property written as the game writes it in `language`, `Quality (Mana
@@ -150,8 +167,8 @@ fn quality<'a>(line: &'a str, labels: &Labels) -> Option<(Option<QualityKind>, &
 /// value, none when it isn't a whole percentage; `None` for another property.
 #[must_use]
 pub fn read_quality(line: &str, language: Language) -> Option<(Option<QualityKind>, Option<u32>)> {
-    let (kind, value) = quality(line, Labels::of(language))?;
-    Some((kind, whole_percent(value)))
+    let quality = QualityLine::read(line, Labels::of(language))?;
+    Some((quality.kind, quality.value.and_then(whole_percent)))
 }
 
 /// A whole percentage written `+20%` or `20%`; `None` for another text, a decimal or a
