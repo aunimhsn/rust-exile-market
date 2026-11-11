@@ -220,12 +220,12 @@ fn a_line_of_the_copied_item_tells_whether_it_is_better_lower() {
     let lines = CopiedLines::new(Language::English, &copied, &LineStats::default(), None);
     let key = |modifier, line| StatKey { modifier, line };
 
-    assert!(lines.better_lower(key(0, 0)));
-    assert!(!lines.better_lower(key(1, 0)));
-    assert!(lines.better_lower(key(1, 1)));
+    assert!(lines.is_better_lower(key(0, 0)));
+    assert!(!lines.is_better_lower(key(1, 0)));
+    assert!(lines.is_better_lower(key(1, 1)));
     // Its better side unknown: searched with a minimum, as any line.
-    assert!(!lines.better_lower(key(2, 0)));
-    assert!(!lines.better_lower(key(3, 0)));
+    assert!(!lines.is_better_lower(key(2, 0)));
+    assert!(!lines.is_better_lower(key(3, 0)));
 }
 
 #[test]

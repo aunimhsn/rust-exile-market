@@ -1633,8 +1633,8 @@ fn a_minion_modifier_of_the_genesis_tree_is_read_as_the_advanced_copy_writes_it(
     // the implicit first.
     let rolls =
         crate::tier_rolls::TierRolls::new(Language::English, &read, Some("Breach Ring"), Some(77));
-    assert!(rolls.single(1));
-    assert!(!rolls.single(2));
+    assert!(rolls.hides_number(1));
+    assert!(!rolls.hides_number(2));
     let key = crate::filters::StatKey {
         modifier: 1,
         line: 0,

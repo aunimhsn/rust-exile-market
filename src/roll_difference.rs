@@ -251,7 +251,7 @@ fn has_word(text: &str, word: &str) -> bool {
 
 /// Whether a modifier of the copied item of `kind` is where the trade site lists the
 /// modifiers of `offer`: the corruption adds enchantments, as the item block shows them.
-fn same_place(offer: OfferKind, kind: ModifierKind) -> bool {
+fn is_same_place(offer: OfferKind, kind: ModifierKind) -> bool {
     match offer {
         OfferKind::Enchant => matches!(kind, ModifierKind::Enchant | ModifierKind::Corruption),
         OfferKind::Rune => kind == ModifierKind::Rune,
@@ -264,8 +264,7 @@ fn same_place(offer: OfferKind, kind: ModifierKind) -> bool {
 #[derive(Debug)]
 struct CopiedLine {
     /// The index of its modifier among the modifiers of the item, and of the line in it.
-    modifier: usize,
-    line: usize,
+    key: StatKey,
     kind: ModifierKind,
     template: String,
     /// The numbers of the line as the item parser read them.
@@ -305,8 +304,7 @@ impl CopiedLines {
                     let template = Template::of(&line.text).text;
                     let words = game_data::english_string(language, &line.text, group, trade);
                     CopiedLine {
-                        modifier: index,
-                        line: line_index,
+                        key,
                         kind: modifier.kind,
                         direction: direction(words.unwrap_or(&template)),
                         template,
@@ -321,12 +319,10 @@ impl CopiedLines {
     /// Whether the line `key` of the copied item is better lower, as "18% reduced Movement
     /// Speed"; not when its better side is unknown.
     #[must_use]
-    pub fn better_lower(&self, key: StatKey) -> bool {
-        self.0.iter().any(|copied| {
-            copied.modifier == key.modifier
-                && copied.line == key.line
-                && copied.direction == Direction::Lower
-        })
+    pub fn is_better_lower(&self, key: StatKey) -> bool {
+        self.0
+            .iter()
+            .any(|copied| copied.key == key && copied.direction == Direction::Lower)
     }
 
     /// The difference of the offer `line`, listed as `kind`, from the same line of the
@@ -336,7 +332,7 @@ impl CopiedLines {
     pub fn difference(&self, line: &str, kind: OfferKind) -> Option<Difference> {
         let offer = Template::of(line);
         let copied = self.0.iter().find(|copied| {
-            same_place(kind, copied.kind)
+            is_same_place(kind, copied.kind)
                 && copied.rolls.len() == offer.numbers.len()
                 && copied.template == offer.text
         })?;

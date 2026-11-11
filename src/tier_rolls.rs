@@ -48,10 +48,10 @@ pub struct LineRolls {
 #[derive(Debug, Default)]
 pub struct TierRolls {
     lines: Vec<(StatKey, LineRolls)>,
-    /// The index of each modifier without tier to tell: of one tier only on the base of the
-    /// item, whose T1 would read as "the best" while it is "the only one", or whose tier the game
-    /// doesn't write (the Genesis tree, an essence, an alloy).
-    single: Vec<usize>,
+    /// The index of each modifier whose tier number isn't shown: of one tier only on the base
+    /// of the item, whose T1 would read as "the best" while it is "the only one", or whose tier
+    /// the game doesn't write (the Genesis tree, an essence, an alloy).
+    without_number: Vec<usize>,
     /// The index of each modifier a currency adds, written without tier, and that currency.
     currencies: Vec<(usize, Currency)>,
 }
@@ -101,7 +101,7 @@ impl TierRolls {
             (key, rolls)
         }));
         if hides_number {
-            self.single.push(index);
+            self.without_number.push(index);
         }
         self.currencies
             .extend(currency.map(|currency| (index, currency)));
@@ -116,11 +116,11 @@ impl TierRolls {
             .map(|(_, rolls)| rolls)
     }
 
-    /// Whether the modifier `index` has no tier to tell: one tier only on the base of the item,
-    /// or a tier the game doesn't write.
+    /// Whether the number of the tier of the modifier `index` isn't shown: one tier only on the
+    /// base of the item, or a tier the game doesn't write.
     #[must_use]
-    pub fn single(&self, index: usize) -> bool {
-        self.single.contains(&index)
+    pub fn hides_number(&self, index: usize) -> bool {
+        self.without_number.contains(&index)
     }
 
     /// The currency that adds the modifier `index`, an essence or an alloy, written without
@@ -263,8 +263,7 @@ impl Written {
 struct ModifierRolls {
     /// The rolls of each line that has them, with the index of the line.
     lines: Vec<(usize, LineRolls)>,
-    /// Whether the number of its tier isn't shown: one tier only on the base, or a tier the game
-    /// doesn't write.
+    /// Whether the number of its tier isn't shown ([`TierRolls::hides_number`]).
     hides_number: bool,
     /// The currency that adds it, an essence or an alloy, written without tier.
     currency: Option<Currency>,

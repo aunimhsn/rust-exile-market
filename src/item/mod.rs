@@ -207,7 +207,7 @@ pub struct Item {
     /// The damage and the speed of a weapon.
     weapon: Option<Weapon>,
     modifiers: Vec<Modifier>,
-    rolls: RollsSource,
+    rolls_source: RollsSource,
     warnings: Vec<ParseWarning>,
 }
 
@@ -233,7 +233,7 @@ impl Item {
     ///
     /// # Errors
     ///
-    /// When the header of the item (rarity, base type) can't be read: the window then shows
+    /// When the first section of the item (rarity, base type) can't be read: the window then shows
     /// the message of an item that can't be read. The other parts that can't be read are
     /// [`Item::warnings`]. An item copied from the trade of the game, without the `{ … }`
     /// headers of the advanced copy, is read with its modifiers, without their affixes, tiers
@@ -442,7 +442,7 @@ impl Item {
     /// trade of the game writes no range at all, the rolls of its numbers unknown.
     #[must_use]
     pub fn is_headed(&self) -> bool {
-        self.rolls == RollsSource::Headers
+        self.rolls_source == RollsSource::Headers
     }
 
     /// A rare or magic item copied from the trade of the game (another player's listing): its
@@ -450,7 +450,7 @@ impl Item {
     /// found from their values in the modifier tables.
     #[must_use]
     pub fn has_tiers_from_values(&self) -> bool {
-        self.rolls == RollsSource::Values
+        self.rolls_source == RollsSource::Values
     }
 
     /// A unique copied from the trade of the game (another player's listing): its implicit and
@@ -458,7 +458,7 @@ impl Item {
     /// the modifiers the price database writes for it.
     #[must_use]
     pub fn has_rolls_from_prices(&self) -> bool {
-        self.rolls == RollsSource::Prices
+        self.rolls_source == RollsSource::Prices
     }
 
     /// The number of desecrated modifiers not revealed yet.

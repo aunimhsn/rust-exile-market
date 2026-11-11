@@ -2,7 +2,7 @@
 //! what the sections without label are, fill the item, then join the lines of one stat
 //! written without header.
 //!
-//! A copied item is a list of sections separated by `--------`: the header (class, rarity,
+//! A copied item is a list of sections separated by `--------`: the first one (class, rarity,
 //! names), the properties, the requirements, the sockets, the item level, the enchantments,
 //! the runes, the implicit modifiers, the granted skills, the explicit modifiers, the states,
 //! and texts that aren't read (flavour text, descriptions, note).
@@ -80,8 +80,8 @@ pub(super) fn parse(copied: &CopiedItem) -> Result<Item, ParseError> {
         .replace(labels.fixed_value, "");
     let mut sections = split_sections(&text);
 
-    let header = sections.next().unwrap_or_default();
-    let mut item = read_header(&header, copied.language(), labels)?;
+    let first = sections.next().unwrap_or_default();
+    let mut item = read_first_section(&first, copied.language(), labels)?;
 
     let recognized: Vec<Recognized<'_>> = sections.map(|lines| recognize(lines, labels)).collect();
     let headers = Headers::of(&recognized);
@@ -89,7 +89,7 @@ pub(super) fn parse(copied: &CopiedItem) -> Result<Item, ParseError> {
         fill(&mut item, section, labels);
     }
     join_written_stats(&mut item.modifiers, copied.language(), headers);
-    item.rolls = rolls_source(&item, headers);
+    item.rolls_source = rolls_source(&item, headers);
     Ok(item)
 }
 
@@ -124,8 +124,12 @@ fn split_sections(text: &str) -> impl Iterator<Item = Vec<&str>> {
         .filter(|lines| !lines.is_empty())
 }
 
-/// The class, the rarity and the names.
-fn read_header(lines: &[&str], language: Language, labels: &Labels) -> Result<Item, ParseError> {
+/// The first section: the class, the rarity and the names.
+fn read_first_section(
+    lines: &[&str],
+    language: Language,
+    labels: &Labels,
+) -> Result<Item, ParseError> {
     let mut lines = lines.iter().copied();
     let class = lines
         .next()
@@ -171,7 +175,7 @@ fn read_header(lines: &[&str], language: Language, labels: &Labels) -> Result<It
         properties: Vec::new(),
         weapon: None,
         modifiers: Vec::new(),
-        rolls: RollsSource::Nowhere,
+        rolls_source: RollsSource::Nowhere,
         warnings: Vec::new(),
     })
 }
@@ -279,7 +283,7 @@ fn state(line: &str, labels: &Labels) -> Option<ItemState> {
     })
 }
 
-/// Phase 2: the first plain section, right after the header, is the properties; the other
+/// Phase 2: the first plain section, right after the first section, is the properties; the other
 /// plain sections (flavour text, descriptions) aren't read, but for the explicit modifiers of
 /// an item copied without any header ([`explicit_section`]).
 fn resolve_plain_sections(

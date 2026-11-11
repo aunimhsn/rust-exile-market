@@ -54,7 +54,7 @@ fn a_modifier_of_one_tier_only_on_its_base_has_no_tier_to_tell() {
          Minions have 12(5-15)% increased maximum Life",
     );
 
-    assert!(rolls.single(0));
+    assert!(rolls.hides_number(0));
     // Over its only tier, without "T1–T1".
     assert_eq!(
         rolls.get(key(0, 0)),
@@ -75,7 +75,7 @@ fn a_modifier_copied_with_another_tier_than_the_only_one_of_the_data_keeps_it() 
          Minions have 12(5-15)% increased maximum Life",
     );
 
-    assert!(!rolls.single(0));
+    assert!(!rolls.hides_number(0));
     // Nor "T1–T1" against its T2.
     assert_eq!(rolls.get(key(0, 0)).map(|rolls| rolls.tiers), Some(None));
 }
@@ -95,7 +95,7 @@ fn a_hybrid_of_one_tier_only_has_no_tier_to_tell() {
         item.item_level(),
     );
 
-    assert!(rolls.single(0));
+    assert!(rolls.hides_number(0));
     // A line without number has no rolls.
     assert_eq!(rolls.get(key(0, 0)), None);
     assert_eq!(
@@ -117,7 +117,7 @@ fn a_fixed_value_without_tier_rolls_over_its_tier_only_of_the_genesis_tree_or_an
          { Suffix Modifier \"of the Despot\" — Minion, Gem }\n\
          +2 to Level of all Minion Skills",
     );
-    assert!(belt.single(0));
+    assert!(belt.hides_number(0));
     // Of the tree, not a currency's.
     assert_eq!(belt.currency(0), None);
     let fixed = LineRolls {
@@ -133,7 +133,7 @@ fn a_fixed_value_without_tier_rolls_over_its_tier_only_of_the_genesis_tree_or_an
          { Suffix Modifier \"of the Essence\" — Attack }\n\
          +2 to Level of all Attack Skills",
     );
-    assert!(bow.single(0));
+    assert!(bow.hides_number(0));
     assert_eq!(bow.currency(0), Some(Currency::Essence));
     assert_eq!(bow.get(key(0, 0)), Some(&fixed));
     // On a wand, where its value is the ordinary T2 of 4 as well: the essence's, fixed.
@@ -146,7 +146,7 @@ fn a_fixed_value_without_tier_rolls_over_its_tier_only_of_the_genesis_tree_or_an
         ))
     };
     let essence = wand("\"of the Essence\"");
-    assert!(essence.single(0));
+    assert!(essence.hides_number(0));
     assert_eq!(essence.currency(0), Some(Currency::Essence));
     assert_eq!(
         essence.get(key(0, 0)),
@@ -155,7 +155,7 @@ fn a_fixed_value_without_tier_rolls_over_its_tier_only_of_the_genesis_tree_or_an
             tiers: None,
         })
     );
-    assert!(!wand("\"of the Magus\" (Tier: 2)").single(0));
+    assert!(!wand("\"of the Magus\" (Tier: 2)").hides_number(0));
 
     // The same without tier on a quiver, a modifier of the tables, of one tier there, but
     // neither of the tree nor of an essence (none adds it): no rolls.
@@ -167,9 +167,9 @@ fn a_fixed_value_without_tier_rolls_over_its_tier_only_of_the_genesis_tree_or_an
              +1 to Level of all Projectile Skills"
         ))
     };
-    assert!(quiver("\"of the Archer\" (Tier: 1)").single(0));
+    assert!(quiver("\"of the Archer\" (Tier: 1)").hides_number(0));
     let essence = quiver("\"of the Essence\"");
-    assert!(!essence.single(0));
+    assert!(!essence.hides_number(0));
     assert_eq!(essence.get(key(0, 0)), None);
 
     // Nor a value of an essence that falls in a tier of the tree that rolls, `Reinforcing`
@@ -180,7 +180,7 @@ fn a_fixed_value_without_tier_rolls_over_its_tier_only_of_the_genesis_tree_or_an
          { Prefix Modifier \"of the Essence\" — Life, Minion }\n\
          Minions have 21% increased maximum Life",
     );
-    assert!(!ring.single(0));
+    assert!(!ring.hides_number(0));
     assert_eq!(ring.get(key(0, 0)), None);
 }
 
@@ -196,7 +196,7 @@ fn a_modifier_written_without_tier_rolls_over_its_copied_range() {
     );
 
     // The Genesis tree, whose tier the game doesn't write: over the copied range.
-    assert!(rolls.single(0));
+    assert!(rolls.hides_number(0));
     assert_eq!(
         rolls.get(key(0, 0)),
         Some(&LineRolls {
@@ -204,7 +204,7 @@ fn a_modifier_written_without_tier_rolls_over_its_copied_range() {
             tiers: None,
         })
     );
-    assert!(!rolls.single(1));
+    assert!(!rolls.hides_number(1));
     assert!(
         rolls
             .get(key(1, 0))
@@ -217,7 +217,7 @@ fn a_modifier_written_without_tier_rolls_over_its_copied_range() {
          Item Level: 77\n--------\n\
          Minions have 21% increased maximum Life",
     );
-    assert!(!rolls.single(0));
+    assert!(!rolls.hides_number(0));
     assert_eq!(rolls.get(key(0, 0)), None);
 
     // In French, and before the base is known (a magic item before the names of the trade
@@ -228,7 +228,7 @@ fn a_modifier_written_without_tier_rolls_over_its_copied_range() {
                   Les Créatures ont 21(19-22)% d'Augmentation de Vie maximale";
     let item = Item::parse(&CopiedItem::from_text(french).expect("an item")).expect("read");
     let rolls = TierRolls::new(item.language(), item.modifiers(), None, None);
-    assert!(rolls.single(0));
+    assert!(rolls.hides_number(0));
     assert_eq!(
         rolls.get(key(0, 0)),
         Some(&LineRolls {
@@ -412,7 +412,7 @@ fn the_other_line_of_a_hybrid_of_one_tier_only_whose_part_a_line_adds_up_tells_n
     let speed = rolls.get(key(0, 1)).expect("the rolls of the Attack Speed");
     assert_eq!(speed.ranges, [Some(range(15.0, 15.0))]);
     assert_eq!(speed.tiers, None);
-    assert!(!rolls.single(0));
+    assert!(!rolls.hides_number(0));
 }
 
 #[test]
