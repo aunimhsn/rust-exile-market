@@ -797,7 +797,7 @@ fn random_items_are_read_within_the_bounds_of_the_search() {
         // Far from the bounds, past which every line of the item is left without tier.
         assert!(counts.most_readings < MAX_READINGS / 4, "{counts:?}");
         assert!(
-            counts.most_steps < summed_readings::MAX_STEPS / 4,
+            counts.most_steps < other_readings::MAX_STEPS / 4,
             "{counts:?}"
         );
         measured.push(counts);

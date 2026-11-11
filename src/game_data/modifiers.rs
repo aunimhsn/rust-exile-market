@@ -15,7 +15,7 @@ use crate::item::{
 };
 use crate::language::Language;
 
-mod summed_readings;
+mod other_readings;
 
 /// How far a copied value can be from a tier: the game rounds the values it scales, e.g. a
 /// regeneration stored per minute shown per second with one decimal.
@@ -591,7 +591,7 @@ pub struct AddedTiers {
 /// room. No line of a `sanctified` item is split: its values can leave their tiers.
 ///
 /// A line stays without tier too, with the other lines of its hybrids, when another reading
-/// fits the item as well ([`summed_readings::doubts`]): lines joined into other modifiers,
+/// fits the item as well ([`other_readings::doubts`]): lines joined into other modifiers,
 /// two pure modifiers or their hybrid (`30% increased Energy Shield` and `+30 to maximum Life`
 /// of a helmet with room for two prefixes: when the application can't tell, it doesn't decide,
 /// owner's rule on 2026-11-10), also a hybrid whose lines don't follow each other, or whose
@@ -648,7 +648,7 @@ pub fn trade_tiers(
 struct Effort {
     /// The readings of its lines looked at, [`MAX_READINGS`] at most.
     readings: usize,
-    /// The steps of the search of the other readings ([`summed_readings::doubts`]).
+    /// The steps of the search of the other readings ([`other_readings::doubts`]).
     steps: usize,
     /// Whether the readings stopped at their bound, some not looked at: no line is read.
     readings_cut: bool,
@@ -728,13 +728,13 @@ fn trade_tiers_in(
         return (Vec::new(), effort);
     };
     let mut ambiguous = search.ambiguous;
-    let best = summed_readings::Best {
+    let best = other_readings::Best {
         candidates: &candidates,
         reading: &reading,
         room,
         fits_room: key.room,
     };
-    let doubts = summed_readings::doubts(tables, item, modifiers, &copied, &best, sanctified);
+    let doubts = other_readings::doubts(tables, item, modifiers, &copied, &best, sanctified);
     doubts.outcome.log(base_type);
     effort.steps = doubts.steps;
     for line in doubts.lines {
@@ -1488,7 +1488,7 @@ struct ReadingKey {
     whole: usize,
     /// How many modifiers the lines make, those without tier counted: the lines alone
     /// first. Where a hybrid holds them too in the room of the item, the other readings
-    /// leave them without tier ([`summed_readings::doubts`]), whichever is read here.
+    /// leave them without tier ([`other_readings::doubts`]), whichever is read here.
     modifiers: usize,
 }
 
