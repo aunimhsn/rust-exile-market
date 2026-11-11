@@ -16,7 +16,7 @@ use self::open_lists::{OpenList, OpenLists};
 use crate::bug_report::{Facts, JoinedItem, LogSession, Report};
 use crate::clipboard::{self, ClipboardEvent, ClipboardWatch};
 use crate::estimate::{self, Estimate, Reference, Worth};
-use crate::filters::{Filters, Window};
+use crate::filters::{Filter, FilterKey, Filters, Window};
 use crate::hotkey::PriceCheckHotkey;
 use crate::i18n::{DOWNLOAD_QUOTE_COUNT, Message, Translator};
 use crate::item::{CopiedItem, Item};
@@ -704,17 +704,18 @@ fn search_filters(
     item: &Item,
     filters: &Filters,
 ) -> SearchFilters {
-    search_filters_and_checks(session, shown, item, filters).0
+    let (_, search) = every_filter(session, shown, item, filters);
+    search
 }
 
-/// The filters of the search of `item`, as [`search_filters`], and whether they compare its
-/// stats, or could.
-fn search_filters_and_checks(
+/// Every filter of `item`, the item `shown`, checked or not, as the player set them or else
+/// by default, and the filters of its search they make ([`search_filters`]).
+fn every_filter(
     session: &Session,
     shown: &ShownItem,
     item: &Item,
     filters: &Filters,
-) -> (SearchFilters, StatChecks) {
+) -> (Vec<(FilterKey, Filter)>, SearchFilters) {
     let stats = Stats::new(
         item,
         shown.lines(),
@@ -727,7 +728,7 @@ fn search_filters_and_checks(
         states: filters.lit_states_of(item).collect(),
         ..shown.stats().search_filters(&all)
     };
-    (search, StatChecks::of(shown.stats(), &all))
+    (all, search)
 }
 
 /// The blocks of the item shown, one under the other: the item with its filters, its price,
@@ -781,7 +782,8 @@ impl ItemView<'_> {
         .stats(stats_open, session.filtered_base_type(item))
         .show(ui);
         // With the filters as the player just left them.
-        let (searched, checks) = search_filters_and_checks(session, shown, item, filters);
+        let (all, searched) = every_filter(session, shown, item, filters);
+        let checks = StatChecks::of(&searched, shown.stats(), &all);
         if action == Some(ItemBlockAction::CheckOnTrade)
             && let Some(url) = session.trade_url(item, searched)
         {

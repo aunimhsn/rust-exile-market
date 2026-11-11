@@ -1234,7 +1234,7 @@ impl Translator {
     }
 
     /// The state of the trade site in the status bar during a long wait before the next
-    /// search, written by [`wait`].
+    /// search, written by [`Self::wait`].
     #[must_use]
     pub fn status_trade_wait(&self, wait: Duration) -> String {
         self.format_wait(STATUS_TRADE_WAIT, wait)

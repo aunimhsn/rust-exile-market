@@ -108,7 +108,7 @@ impl SearchFilters {
     }
 
     /// Something compares the stats of the item with the offers: a filter that rules out items
-    /// of its base ([`RulesOut::OfTheBase`]), a property with a limit too. Without, the offers
+    /// of its base ([`RulesOut::OfTheBase`]), a property only with a limit. Without, the offers
     /// are any items of its base, whose price says nothing of its own.
     #[must_use]
     pub fn compares_stats(&self) -> bool {
@@ -138,7 +138,8 @@ pub enum RulesOut {
     /// Items of the league only: an implicit, a total its implicits reach, the DPS of its
     /// base, its item level…; it narrows a search of any base.
     OfTheLeague,
-    /// Nothing: the count of the unrevealed modifiers, which any item may have.
+    /// No stat, and no item of the league it alone rules out: the count of the unrevealed
+    /// modifiers, which any base may have.
     Nothing,
 }
 

@@ -880,7 +880,13 @@ fn rows<'a>(
         lines,
         stats,
         tiers,
-        dps_filters: !dps.is_empty(),
+        checked_dps: dps
+            .iter()
+            .filter_map(|stat| match (stat.key, stat.filter) {
+                (FilterKey::Property(property), Some(filter)) if filter.checked => Some(property),
+                _ => None,
+            })
+            .collect(),
         pseudo_filters: !pseudo.is_empty(),
         unchecked: unrevealed || item.rarity() == Rarity::Rare || item.is_waystone(),
     };
@@ -1391,8 +1397,8 @@ struct Reading<'r> {
     stats: &'r LineStats,
     /// They tell the rolls of every tier of a line of a prefix or suffix.
     tiers: &'r TierRolls,
-    /// The item has the filters of the DPS of a weapon.
-    dps_filters: bool,
+    /// The DPS of a weapon checked at first, which count its damage and its attack speed.
+    checked_dps: Vec<Property>,
     /// The item has the filters of its pseudo totals.
     pseudo_filters: bool,
     /// Every line starts unchecked: the item has an unrevealed modifier, which can change it,
@@ -1403,11 +1409,14 @@ struct Reading<'r> {
 }
 
 impl Reading<'_> {
-    /// The line `key` starts checked: unchecked when the DPS of the weapon counts it, its
-    /// damage or its attack speed, when a pseudo total adds it up, or on an item whose lines
-    /// all start unchecked (an unrevealed modifier, a rare, a waystone).
+    /// The line `key` starts checked: unchecked when a DPS of the weapon checked at first
+    /// counts it, its damage or its attack speed, when a pseudo total adds it up, or on an
+    /// item whose lines all start unchecked (an unrevealed modifier, a rare, a waystone).
     fn checked(&self, key: StatKey) -> bool {
-        let weapon_damage = self.dps_filters && self.stats.weapon_damage(key);
+        let weapon_damage = self
+            .checked_dps
+            .iter()
+            .any(|&property| self.stats.counts_in(key, property));
         let added_up = self.pseudo_filters && self.stats.added_up(key);
         !weapon_damage && !added_up && !self.unchecked
     }

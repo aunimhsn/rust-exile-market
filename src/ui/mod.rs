@@ -33,6 +33,8 @@ pub use item_block::{ItemBlock, ItemBlockAction};
 pub use item_stats::Stats;
 pub use league_list::{LeagueList, LeagueListAction};
 pub use offers_block::{OffersAction, OffersBlock};
+#[cfg(test)]
+pub(crate) use price_block::estimate_hint;
 pub use price_block::{PriceBlock, StatChecks};
 pub use resize_edges::ResizeEdges;
 pub use settings_panel::{SettingsAction, SettingsPanel};

@@ -892,8 +892,7 @@ const ADVANCED_COPIES: [(&str, Option<&str>); 16] = [
 /// The prefixes and suffixes `item` can have, as the application gives them
 /// (`LineStats::affix_limits`): 2 of each on a rare jewel.
 fn affix_limits(item: &Item) -> AffixLimits {
-    crate::trade::stat_filters::LineStats::new(item.language(), item.modifiers(), None)
-        .affix_limits(item)
+    crate::trade::stat_filters::LineStats::new(item, item.modifiers(), None).affix_limits(item)
 }
 
 /// A modifier of the advanced copy written as the in-game trade writes it.

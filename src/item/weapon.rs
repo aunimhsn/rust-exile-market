@@ -46,9 +46,9 @@ pub struct Dps {
     pub chaos: f64,
 }
 
-/// What the lines of a weapon add to the damage and the speed of its base: its increased
-/// physical damage in percent, its added physical damage (the average of a hit), its
-/// increased attack speed in percent.
+/// What lines of a weapon add to the physical damage and the speed of its base: their
+/// increased physical damage in percent, their added physical damage (the average of a
+/// hit), their increased attack speed in percent.
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct WeaponLines {
     pub increased: f64,
@@ -71,33 +71,39 @@ impl Weapon {
     /// The damage per second of each kind.
     #[must_use]
     pub fn dps(&self) -> Dps {
-        let mut dps = Dps::default();
-        for range in &self.damage {
-            let per_second = range.average() * self.attacks_per_second;
-            match range.kind {
-                DamageKind::Physical => dps.physical += per_second,
-                DamageKind::Elemental => dps.elemental += per_second,
-                DamageKind::Chaos => dps.chaos += per_second,
-            }
+        let per_second = |kind| self.hit(kind) * self.attacks_per_second;
+        Dps {
+            physical: per_second(DamageKind::Physical),
+            elemental: per_second(DamageKind::Elemental),
+            chaos: per_second(DamageKind::Chaos),
         }
-        dps
     }
 
-    /// The physical DPS its base alone reaches, without the `lines` of the weapon, at the
-    /// usual quality or at its own `quality` (in percent) when higher: the properties count the
-    /// quality and the increased physical damage together, the added damage before them, and
-    /// the attack speed apart.
-    #[must_use]
-    pub fn base_physical_dps(&self, quality: f64, lines: WeaponLines) -> f64 {
-        let hit: f64 = self
-            .damage
+    /// The average damage of a hit of `kind`.
+    fn hit(&self, kind: DamageKind) -> f64 {
+        self.damage
             .iter()
-            .filter(|range| range.kind == DamageKind::Physical)
+            .filter(|range| range.kind == kind)
             .map(|range| range.average())
-            .sum();
-        let base = hit / (1.0 + (lines.increased + quality) / 100.0) - lines.added;
-        let speed = self.attacks_per_second / (1.0 + lines.attack_speed / 100.0);
-        base.max(0.0) * (1.0 + quality.max(USUAL_QUALITY) / 100.0) * speed
+            .sum()
+    }
+
+    /// The physical DPS its base reaches with the lines it `keeps` (its runes, which any
+    /// weapon of the base may have), from the weapon at `quality` (in percent) whose `lines`
+    /// (its modifiers and runes) the properties count, at the usual quality or at its own when
+    /// higher. The properties count the added damage first, then the increased physical
+    /// damage of the lines, then the quality apart, which multiplies them, and the attack
+    /// speed apart: the only reading that gives the two copies of one base of the test items,
+    /// with other lines, the same whole damage (`docs/game-data.md`).
+    #[must_use]
+    pub fn base_physical_dps(&self, quality: f64, lines: WeaponLines, keeps: WeaponLines) -> f64 {
+        let percent = |value: f64| 1.0 + value / 100.0;
+        let hit = self.hit(DamageKind::Physical);
+        let base = hit / (percent(lines.increased) * percent(quality)) - lines.added;
+        let kept = (base + keeps.added).max(0.0) * percent(keeps.increased);
+        let speed =
+            self.attacks_per_second / percent(lines.attack_speed) * percent(keeps.attack_speed);
+        kept * percent(quality.max(USUAL_QUALITY)) * speed
     }
 }
 
@@ -125,27 +131,27 @@ pub(super) fn damage_ranges(value: &str) -> Option<Vec<DamageRange>> {
 mod tests {
     use super::*;
 
+    fn range(kind: DamageKind, min: f64, max: f64) -> DamageRange {
+        DamageRange { kind, min, max }
+    }
+
     #[test]
     fn the_physical_dps_of_the_base_leaves_out_the_lines_and_takes_the_usual_quality() {
+        let none = WeaponLines::default();
         // 10-20, a hit of 15, with 20 % increased physical damage and no quality: 12.5 from
-        // the base.
+        // the base, 15 at 20 % quality.
         let weapon = Weapon {
             damage: vec![range(DamageKind::Physical, 10.0, 20.0)],
             attacks_per_second: 1.0,
         };
-        let lines = WeaponLines {
+        let increased = WeaponLines {
             increased: 20.0,
-            ..WeaponLines::default()
+            ..none
         };
-        // At 20 % quality: 15, as much as the weapon.
-        assert!((weapon.base_physical_dps(0.0, lines) - 15.0).abs() < 1e-9);
-        // Its own quality, higher, counted in the properties: 15 / 1.5 = 10, at 30 %: 13.
-        let weapon = Weapon {
-            damage: vec![range(DamageKind::Physical, 10.0, 20.0)],
-            attacks_per_second: 1.0,
-        };
-        assert!((weapon.base_physical_dps(30.0, lines) - 13.0).abs() < 1e-9);
-        // Added damage and attack speed: (40 / 1.0 - 10) * 1.2 * (1.2 / 1.2) = 36.
+        assert!((weapon.base_physical_dps(0.0, increased, none) - 15.0).abs() < 1e-9);
+        // Its own quality, higher, multiplying apart: 15 / (1.2 × 1.3) × 1.3 = 12.5.
+        assert!((weapon.base_physical_dps(30.0, increased, none) - 12.5).abs() < 1e-9);
+        // Added damage and attack speed: (40 - 10) × 1.2 × (1.2 / 1.2) = 36.
         let weapon = Weapon {
             damage: vec![
                 range(DamageKind::Physical, 30.0, 50.0),
@@ -156,13 +162,12 @@ mod tests {
         let lines = WeaponLines {
             added: 10.0,
             attack_speed: 20.0,
-            ..WeaponLines::default()
+            ..none
         };
-        assert!((weapon.base_physical_dps(0.0, lines) - 36.0).abs() < 1e-9);
-    }
-
-    fn range(kind: DamageKind, min: f64, max: f64) -> DamageRange {
-        DamageRange { kind, min, max }
+        assert!((weapon.base_physical_dps(0.0, lines, none) - 36.0).abs() < 1e-9);
+        // A rune kept, which any weapon of the base may have: its 10 added and 20 % more
+        // attack speed stay, (30 + 10) × 1.2 × 1.2 = 57.6.
+        assert!((weapon.base_physical_dps(0.0, lines, lines) - 57.6).abs() < 1e-9);
     }
 
     #[test]

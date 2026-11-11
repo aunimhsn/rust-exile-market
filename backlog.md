@@ -24,6 +24,8 @@ One entry per item: what it is, its kind (the section it sits in), what it depen
 
 ## Edge cases
 
+- The ranges of the implicit modifiers of the bases generated into `assets/game-data` (fourth code review of 17e3f, 2026-11-11): a copy from the in-game trade writes an implicit without range, so that what the base reaches is unknown and a pseudo total adding it up never compares the item (no estimate, "Check a modifier"); with the ranges, it would compare beyond the best roll. Depends on the generator (`tools/game-data`) and on a source of the implicits; to do with the data of Path of Exile 2 1.0.
+
 - The French enchantment `Attribue Parangon` (the `Allocates Paragon` of the owner's tiara, `inputs/13k2c-items.txt`) finds no stat, the French data of Exiled Exchange 2 writing the notable with its English name (`Attribue Paragon`, `mod_granted_passive_hash`): check the other French notables of `Allocates #` against the French trade site and the game, and take their French names from it (found in step 13k2e2; `UNKNOWN_LINES` in `src/game_data/lines.rs`).
 
 - An item copied from the in-game trade whose explicit modifiers start with a `Grants Skill: ` line (a unique that grants a skill by a modifier, if one exists) would have them read as granted skills, `recognize` looking at the first line only (code review of 13k2e2).

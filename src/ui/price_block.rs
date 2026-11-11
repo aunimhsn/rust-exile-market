@@ -20,6 +20,7 @@ use crate::item::{Item, Rarity};
 use crate::prices::{Direction, Price, Rates};
 use crate::pricing::{Candidate, FixedPrice, NoFixedPrice};
 use crate::session::PricesState;
+use crate::trade::query::SearchFilters;
 use crate::trade::stat_filters::LineStats;
 
 /// The space above and under the block.
@@ -94,11 +95,12 @@ pub enum StatChecks {
 }
 
 impl StatChecks {
-    /// The checks of `all` the filters of the item, checked or not, whose lines have the
-    /// `stats`: by the one rule of the estimate ([`SearchFilters::compares_stats`]), on the
-    /// filters as they are, then on all of them checked.
+    /// The checks of `search`, the filters of the search made of `all` the filters of the item,
+    /// checked or not, whose lines have the `stats`: by the one rule of the estimate
+    /// ([`SearchFilters::compares_stats`]), on the filters as they are, then on all of them
+    /// checked.
     #[must_use]
-    pub fn of(stats: &LineStats, all: &[(FilterKey, Filter)]) -> Self {
+    pub fn of(search: &SearchFilters, stats: &LineStats, all: &[(FilterKey, Filter)]) -> Self {
         let everything: Vec<(FilterKey, Filter)> = all
             .iter()
             .map(|(key, filter)| {
@@ -109,7 +111,7 @@ impl StatChecks {
                 (*key, filter)
             })
             .collect();
-        if stats.search_filters(all).compares_stats() {
+        if search.compares_stats() {
             Self::Checked
         } else if stats.search_filters(&everything).compares_stats() {
             Self::Unchecked
@@ -123,7 +125,8 @@ impl StatChecks {
 /// filters: an item `priced_by_stats` ([`Item::priced_by_stats`]) is estimated only from a
 /// search that compares some, so that it asks for one to be checked, and says nothing when
 /// none can be (the offers of any item of its base would say nothing of its price).
-fn estimate_hint(priced_by_stats: bool, checks: StatChecks) -> Option<Message> {
+#[must_use]
+pub(crate) fn estimate_hint(priced_by_stats: bool, checks: StatChecks) -> Option<Message> {
     if !priced_by_stats {
         return Some(Message::SearchToEstimate);
     }

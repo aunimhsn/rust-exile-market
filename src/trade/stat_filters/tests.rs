@@ -5,6 +5,7 @@
 use super::*;
 use crate::filters::Property;
 use crate::item::{CopiedItem, Item, ModifierOrigin, Range};
+use crate::language::Language;
 use crate::trade::pseudo::Pseudo;
 
 fn parse(text: &str) -> Item {
@@ -35,7 +36,7 @@ fn unique(lines: &str) -> Item {
 }
 
 fn line_stats(item: &Item) -> LineStats {
-    LineStats::new(item.language(), item.modifiers(), None)
+    LineStats::new(item, item.modifiers(), None)
 }
 
 fn key(modifier: usize, line: usize) -> StatKey {
@@ -206,7 +207,7 @@ fn a_stat_of_the_trade_site_is_searched_as_its_template_writes_it() {
         "20% reduced Damage per Patch\n\
          Sacrifice up to 10 Chaos Orbs to receive double on Trial completion",
     );
-    let stats = LineStats::new(item.language(), item.modifiers(), Some(&trade));
+    let stats = LineStats::new(&item, item.modifiers(), Some(&trade));
 
     assert_eq!(
         stats.stat_filters(refs(&[
@@ -394,7 +395,11 @@ fn the_damage_and_the_attack_speed_of_a_weapon_are_known_in_every_language() {
     let damage = |item: &Item| {
         let stats = line_stats(item);
         (0..item.modifiers().len())
-            .map(|modifier| stats.weapon_damage(key(modifier, 0)))
+            .map(|modifier| {
+                [Property::PhysicalDps, Property::ElementalDps]
+                    .into_iter()
+                    .any(|property| stats.counts_in(key(modifier, 0), property))
+            })
             .collect::<Vec<_>>()
     };
     // Not the elemental damage of its attacks, which any item gives; nor its chaos
@@ -507,11 +512,16 @@ fn a_pseudo_stat_is_searched_by_its_id_before_the_lines() {
     assert_eq!(
         stats.search_filters(&filters).stats,
         [
-            stat(
-                "pseudo.pseudo_total_elemental_resistance",
-                Some(90.0),
-                Some(120.0)
-            ),
+            // It adds up an implicit written without range, whose best roll is unknown: any
+            // Sapphire Ring may reach it.
+            StatFilter {
+                rules_out: RulesOut::OfTheLeague,
+                ..stat(
+                    "pseudo.pseudo_total_elemental_resistance",
+                    Some(90.0),
+                    Some(120.0)
+                )
+            },
             stat("pseudo.pseudo_total_life", None, None),
             // It narrows the items of the base only: it compares no stat.
             StatFilter {
@@ -571,7 +581,7 @@ fn counts_the_affixes_a_rune_or_an_implicit_allows() {
         include_str!("../../item/test-items/fr-trade-rare-bow-mirrored.txt"),
     ] {
         let bow = parse(text);
-        let stats = LineStats::new(bow.language(), bow.modifiers(), None);
+        let stats = LineStats::new(&bow, bow.modifiers(), None);
         assert_eq!(stats.affixes_allowed(Affix::Suffix), 1);
         assert_eq!(stats.affixes_allowed(Affix::Prefix), 0);
     }
@@ -582,7 +592,7 @@ fn counts_the_affixes_a_rune_or_an_implicit_allows() {
          { Implicit Modifier }\n-1 Prefix Modifier allowed\n\
          --------\n{ Prefix Modifier \"Hale\" (Tier: 9) }\n+12(10-14) to maximum Life",
     );
-    let stats = LineStats::new(amulet.language(), amulet.modifiers(), None);
+    let stats = LineStats::new(&amulet, amulet.modifiers(), None);
     assert_eq!(stats.affixes_allowed(Affix::Prefix), -1);
     assert_eq!(stats.affixes_allowed(Affix::Suffix), 2, "the plural");
 }
@@ -591,7 +601,7 @@ fn counts_the_affixes_a_rune_or_an_implicit_allows() {
 fn a_tablet_and_a_corrupted_waystone_have_their_own_affix_limits() {
     let limits = |text: &str| {
         let item = parse(text);
-        let limits = LineStats::new(item.language(), item.modifiers(), None).affix_limits(&item);
+        let limits = LineStats::new(&item, item.modifiers(), None).affix_limits(&item);
         (limits.prefixes, limits.suffixes, limits.counted_only)
     };
     let waystone = "Item Class: Waystones\nRarity: Rare\nGrim Path\nWaystone (Tier 15)\n\
@@ -637,7 +647,29 @@ fn counts_the_affixes_allowed_by_a_line_the_trade_site_finds() {
     ] {
         let found = game_data::modifier_stats(amulet.language(), &amulet.modifiers()[0], trade);
         assert_eq!(found[0].stat.as_ref().map(|stat| stat.source), Some(source));
-        let stats = LineStats::new(amulet.language(), amulet.modifiers(), trade);
+        let stats = LineStats::new(&amulet, amulet.modifiers(), trade);
         assert_eq!(stats.affixes_allowed(Affix::Prefix), 1);
+    }
+}
+
+#[test]
+fn two_copies_of_one_base_reach_the_physical_dps_of_that_base_with_their_runes() {
+    // Two Warmonger Bows at 30 % quality, of other lines: 56-84 at their base, a hit of 70,
+    // if the quality multiplies apart from the increased physical damage (the only reading
+    // that gives both a whole base); at 30 % and 1.20 attacks per second, 109.2. The English
+    // one keeps its rune, 40 % increased physical damage, which any bow may have: 152.9.
+    for (text, reach) in [
+        (
+            include_str!("../../item/test-items/fr-trade-rare-bow-mirrored.txt"),
+            109.2,
+        ),
+        (
+            include_str!("../../item/test-items/en-owner-trade-rare-bow-mirrored.txt"),
+            152.9,
+        ),
+    ] {
+        let bow = parse(text);
+        let found = line_stats(&bow).physical_reach.expect("a weapon");
+        assert!((found - reach).abs() < 1.0, "{found}");
     }
 }

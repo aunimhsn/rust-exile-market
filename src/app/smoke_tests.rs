@@ -212,11 +212,12 @@ impl Scene {
         let item = self.item();
         let fixed_price = self.session.fixed_price(item);
         let estimate = shown_estimate(&self.offers, item, &fixed_price, self.session.worth());
-        let (_, checks) = search_filters_and_checks(&self.session, shown, item, &self.filters);
+        let (all, searched) = every_filter(&self.session, shown, item, &self.filters);
+        let checks = StatChecks::of(&searched, shown.stats(), &all);
         drawn.with_an_estimate += usize::from(estimate.is_some());
-        drawn.with_a_check_hint += usize::from(
-            estimate.is_none() && item.priced_by_stats() && checks == StatChecks::Unchecked,
-        );
+        let hint = ui::estimate_hint(item.priced_by_stats(), checks);
+        drawn.with_a_check_hint +=
+            usize::from(estimate.is_none() && hint == Some(Message::CheckToEstimate));
         match self.offers.state() {
             OffersState::Items { .. } => drawn.with_offers_of_items += 1,
             OffersState::Exchange { .. } => drawn.with_offers_of_the_exchange += 1,
