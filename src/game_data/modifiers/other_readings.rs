@@ -6,11 +6,13 @@
 //! it too (`30% increased Energy Shield` and `+30 to maximum Life` of a helmet: two pure
 //! modifiers, or their hybrid).
 
-use super::{
-    Affix, AffixSet, BaseSpawn, Candidate, Copied, CopiedLine, CopiedTier, ROUNDING, Range, Room,
-    Table, TradeItem, first_of_its_modifier, holds, tiers_on_base,
-};
-use crate::item::{Modifier, ModifierOrigin};
+use super::base_tiers::tiers_on_base;
+use super::best_reading::Room;
+use super::candidates::{AffixSet, Candidate, TradeItem};
+use super::copied::{Copied, CopiedLine, CopiedTier, ROUNDING, holds};
+use super::tables::{Table, first_of_its_modifier};
+use crate::game_data::bases::BaseSpawn;
+use crate::item::{Affix, Modifier, ModifierOrigin, Range};
 
 /// The most steps the search of the other readings takes: some fifty on a random rare item, a
 /// few hundred on the most tangled ones (1,810 at most on the items drawn at random by

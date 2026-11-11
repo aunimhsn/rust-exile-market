@@ -25,6 +25,13 @@
 //! that don't read the same lines. No item is sanctified, such an item finding no tier.
 
 use super::*;
+use crate::game_data::bases::{self, BaseSpawn, Domain};
+use crate::game_data::modifiers::base_tiers::range_values;
+use crate::game_data::modifiers::best_reading::MAX_READINGS;
+use crate::game_data::modifiers::other_readings;
+use crate::game_data::modifiers::tables::{TableAffix, TableTier, first_of_its_modifier};
+use crate::game_data::stats::Stats;
+use crate::item::{Range, StatLine};
 
 /// The bases the items are drawn on, each with the most prefixes, and suffixes, a rare item of
 /// it can have: weapons, armours of several attributes and jewellery; then a jewel and a
