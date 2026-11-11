@@ -6,7 +6,7 @@
 //! line alone where a hybrid holds it too (`30% increased Energy Shield` and `+30 to maximum
 //! Life` of a helmet: two pure modifiers, or their hybrid).
 
-use super::best_reading::Room;
+use super::best_reading::BestReading;
 use super::candidates::{Candidate, TradeItem};
 use super::copied::{Copied, CopiedLine};
 use super::tables::Table;
@@ -26,17 +26,6 @@ mod walk;
 /// `trade_tiers/game_tests/random_items.rs`, 2026-11-11; up to 2,734 on the draws of
 /// 2026-10-30, whose code wasn't kept).
 pub(super) const MAX_STEPS: usize = 50_000;
-
-/// The best reading of the lines of an item, as [`super::trade_tiers`] found it.
-pub(super) struct Best<'b> {
-    pub(super) candidates: &'b [Candidate],
-    /// The indexes among `candidates` of those it reads.
-    pub(super) reading: &'b [usize],
-    /// How many prefixes and suffixes the lines can add to the item.
-    pub(super) room: Room,
-    /// Whether it fits that room.
-    pub(super) fits_room: bool,
-}
 
 /// What the other readings leave in doubt.
 pub(super) struct Doubts {
@@ -137,7 +126,7 @@ pub(super) fn doubts(
     item: &TradeItem<'_>,
     modifiers: &[Modifier],
     copied: &[Option<Copied<'_>>],
-    best: &Best<'_>,
+    best: &BestReading<'_>,
 ) -> Doubts {
     doubts_within(tables, item, modifiers, copied, best, MAX_STEPS)
 }
@@ -148,14 +137,10 @@ fn doubts_within(
     item: &TradeItem<'_>,
     modifiers: &[Modifier],
     copied: &[Option<Copied<'_>>],
-    best: &Best<'_>,
+    best: &BestReading<'_>,
     max_steps: usize,
 ) -> Doubts {
-    let chosen: Vec<&Candidate> = best
-        .reading
-        .iter()
-        .filter_map(|&index| best.candidates.get(index))
-        .collect();
+    let chosen: Vec<&Candidate> = best.candidates().collect();
     let read_by_best = |modifier: usize| {
         chosen
             .iter()

@@ -2,8 +2,8 @@
 //! reading shows on a line, and how a reading reads each part of the item against the best one.
 
 use super::placements::{Placement, directions};
-use super::{Best, Line, Shown};
-use crate::game_data::modifiers::best_reading::Room;
+use super::{Line, Shown};
+use crate::game_data::modifiers::best_reading::{BestReading, Room};
 use crate::game_data::modifiers::candidates::{AffixSet, Candidate};
 use crate::item::Affix;
 
@@ -33,7 +33,7 @@ impl<'s, 'a> Ground<'s, 'a> {
         lines: &'s [Line<'a>],
         values: &'s [f64],
         placements: &'s [Placement<'a>],
-        best: &Best<'_>,
+        best: &BestReading<'_>,
         chosen: &[&Candidate],
         count: usize,
         max_steps: usize,

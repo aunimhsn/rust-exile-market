@@ -5,6 +5,7 @@
 use super::*;
 use crate::game_data::bases;
 use crate::game_data::lines::modifier_stats;
+use crate::game_data::modifiers::best_reading::{Room, best_reading};
 use crate::game_data::modifiers::tables::TABLES;
 use crate::item::{ModifierKind, StatLine};
 use crate::language::Language;
@@ -46,16 +47,11 @@ fn doubts_of(
         prefixes: 3,
         suffixes: 3,
     };
-    let mut search = super::super::best_reading::Search::new(&candidates, modifiers.len(), room, 0);
-    search.walk(0, &mut Vec::new());
-    let (key, reading) = search.best.expect("a reading");
-    let (room, fits_room) = searched.unwrap_or((room, key.room));
-    let best = Best {
-        candidates: &candidates,
-        reading: &reading,
-        room,
-        fits_room,
-    };
+    let mut best = best_reading(&candidates, modifiers.len(), room, 0).expect("a reading");
+    if let Some((room, fits_room)) = searched {
+        best.room = room;
+        best.fits_room = fits_room;
+    }
     let item = TradeItem {
         language: Language::English,
         base,
