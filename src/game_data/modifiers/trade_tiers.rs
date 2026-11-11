@@ -44,20 +44,20 @@ pub(super) struct FoundTiers {
     /// The indexes among the modifiers of the item of the lines read as one modifier: one
     /// line, or the consecutive lines of a hybrid; for a line that adds up two modifiers, the
     /// lines of the one of `affixes`, the line itself or with the other lines of its hybrid.
-    pub modifiers: std::ops::Range<usize>,
+    pub(super) modifiers: std::ops::Range<usize>,
     /// Each affix the modifier can be, with its tiers on the base, the copied one the worst
     /// that holds its values: a prefix or a suffix, or both when the item has room for either
     /// (the `18% increased Rarity of Items found` of a helmet), the prefix first, as
     /// [`crate::item::TierDoubt::EitherAffix`] reads them. The ranges of a tier, and
     /// `counts`, follow the line matches of [`modifier_stats`] for each of these modifiers in
     /// their order.
-    pub affixes: Vec<(Affix, ModifierTiers)>,
+    pub(super) affixes: Vec<(Affix, ModifierTiers)>,
     /// For a line that adds up two modifiers of its stat, the other one: a pure modifier of
     /// that line (the pure 170–179 of the `258% increased Physical Damage` of a bow, the 75–79
     /// of the hybrid with `+195 to Accuracy Rating` in `affixes`); of two pure modifiers of a
     /// prefix and a suffix, the suffix. One of both may be in two neighbouring tiers
     /// ([`ModifierTiers::neighbour`]).
-    pub added: Option<AddedTiers>,
+    pub(super) added: Option<AddedTiers>,
 }
 
 /// The tiers of the explicit modifiers of a rare or magic item copied from the in-game trade,

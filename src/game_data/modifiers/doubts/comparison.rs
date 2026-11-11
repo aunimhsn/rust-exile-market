@@ -133,7 +133,7 @@ impl<'s, 'a> Ground<'s, 'a> {
 /// for a split line.
 pub(super) struct BestCandidate {
     pub(super) modifiers: std::ops::Range<usize>,
-    pub(super) sets: Vec<AffixSet>,
+    sets: Vec<AffixSet>,
 }
 
 /// For each modifier of the item, the modifiers the `chosen` candidates of the best reading read

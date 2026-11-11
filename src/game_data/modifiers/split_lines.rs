@@ -15,11 +15,11 @@ use crate::language::Language;
 #[derive(Debug, Clone, PartialEq)]
 pub(super) struct AddedTiers {
     /// The index among the modifiers of the item of the line.
-    pub line: usize,
-    pub affix: Affix,
+    pub(super) line: usize,
+    pub(super) affix: Affix,
     /// Its tiers on the base, the copied one that holds its part of the value, the ranges of
     /// a tier following the values of the line.
-    pub tiers: ModifierTiers,
+    pub(super) tiers: ModifierTiers,
 }
 
 /// A way a copied line adds up two modifiers of its stat: the modifier of every copied line,
@@ -28,11 +28,11 @@ pub(super) struct AddedTiers {
 #[derive(Clone)]
 pub(super) struct Split {
     /// The indexes among the tables of both modifiers, the summed one first.
-    pub(super) tables: (usize, usize),
+    tables: (usize, usize),
     pub(super) affix: Affix,
     pub(super) tiers: ModifierTiers,
     pub(super) added: AddedTiers,
-    pub(super) fit: Fit,
+    fit: Fit,
 }
 
 /// Every way the line `summed` of `copied` (the lines of consecutive modifiers), the line of
