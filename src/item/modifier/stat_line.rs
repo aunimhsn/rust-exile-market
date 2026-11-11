@@ -55,7 +55,7 @@ impl Range {
     /// The ranges of `rolls`, values each with its range without sign, as written under a line:
     /// none when each value is fixed, its range of one value being the value (its sign left
     /// out), as the advanced copy most often writes it, without range ("T2", not "T2 2";
-    /// owner's choice on 2026-10-30); a range of one value other than the value stays, `29(30)%`
+    /// Item block in `specs.md`); a range of one value other than the value stays, `29(30)%`
     /// of a sanctified item ("T2 30"). The values compared as they are, not within the rounding
     /// of the game: a fixed tier with decimals read from a rounded value keeps its range, none
     /// met on 2026-10-30.

@@ -11,9 +11,9 @@
 //! The better side of a line is read from its words: those of its English string when the
 //! line is in another language and its stat has one (`#% de Réduction de l'Armure` is read
 //! as `#% reduced Armour`), or else the English template of its stat on the trade site, its
-//! own words otherwise. The words were classified with the owner
-//! on 2026-10-26, on every string of the stats; the `better` value of Exiled Exchange 2 isn't
-//! used, wrong on lines such as `Lose # Life when you use a Skill`.
+//! own words otherwise. The words are classified on every string of the stats, rather than
+//! taken from the `better` value of the game data, wrong on lines such as `Lose # Life when you
+//! use a Skill` ("The better side" in `docs/game-data.md`).
 
 use crate::filters::StatKey;
 use crate::game_data::{self, TradeGroup, TradeStats};
@@ -98,8 +98,8 @@ const OTHER_SUBJECTS: &[&str] = &[
 const PLAYER_TARGETS: &[&str] = &["enemy monster", "enemy monsters"];
 /// The rewards of the monsters of a map, in lowercase: more is better, though the line is
 /// about monsters (`#% increased number of Monster Packs`, `Map has #% increased Monster
-/// Rarity` of the tablets; owner's choice on 2026-10-31: more monsters make a map harder at
-/// first, but they are a bonus in the end).
+/// Rarity` of the tablets): more monsters make a map harder at first, but they are a bonus in
+/// the end.
 const REWARDS: &[&str] = &[
     "monster packs",
     "pack of monsters",
