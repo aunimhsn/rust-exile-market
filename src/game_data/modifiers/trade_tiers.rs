@@ -39,7 +39,7 @@ impl AffixLimits {
 
 /// The tiers of a modifier copied from the in-game trade, found from its values.
 #[derive(Debug, Clone, PartialEq)]
-pub struct FoundTiers {
+pub(super) struct FoundTiers {
     /// The indexes among the modifiers of the item of the lines read as one modifier: one
     /// line, or the consecutive lines of a hybrid; for a line that adds up two modifiers, the
     /// lines of the one of `affixes`, the line itself or with the other lines of its hybrid.
@@ -110,7 +110,7 @@ pub struct FoundTiers {
 /// `80–89`, falls in the T6): nothing in such a copy tells which did (owner's choice on
 /// 2026-11-11).
 #[must_use]
-pub fn trade_tiers(
+pub(super) fn trade_tiers(
     language: Language,
     base_type: &str,
     item_level: Option<u32>,

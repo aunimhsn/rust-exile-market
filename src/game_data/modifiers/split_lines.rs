@@ -13,7 +13,7 @@ use crate::language::Language;
 /// The other modifier of a line copied from the in-game trade that adds up two modifiers of
 /// its stat, a pure one, found from the value of that line.
 #[derive(Debug, Clone, PartialEq)]
-pub struct AddedTiers {
+pub(super) struct AddedTiers {
     /// The index among the modifiers of the item of the line.
     pub line: usize,
     pub affix: Affix,
