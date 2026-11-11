@@ -24,9 +24,10 @@ mod tables;
 mod trade_modifiers;
 mod trade_tiers;
 
+pub use base_tiers::ItemBase;
 pub use lookup::{lacks_table, modifier_tiers};
 pub use trade_modifiers::with_trade_tiers;
-pub use trade_tiers::AffixLimits;
+pub use trade_tiers::{AffixLimits, TradeItem};
 
 /// A tier of a modifier on a base.
 #[derive(Debug, Clone, PartialEq)]

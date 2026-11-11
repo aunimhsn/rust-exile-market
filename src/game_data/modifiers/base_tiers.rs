@@ -9,6 +9,17 @@ use crate::game_data::bases::{self, BaseSpawn};
 use crate::item::Range;
 use crate::language::Language;
 
+/// The item whose modifiers are looked up in the tables.
+#[derive(Debug, Clone, Copy)]
+pub struct ItemBase<'a> {
+    /// The language of the item, which its base type is written in.
+    pub language: Language,
+    /// Its base type, the name its search looks for.
+    pub base_type: &'a str,
+    /// Its level; none when the copy doesn't write it.
+    pub item_level: Option<u32>,
+}
+
 /// The modifier tables as an item sees them: on its base, among the tiers its level allows.
 #[derive(Clone, Copy)]
 pub(super) struct ItemTables<'a> {
@@ -20,17 +31,13 @@ pub(super) struct ItemTables<'a> {
 }
 
 impl ItemTables<'static> {
-    /// The tables of the game for an item of `item_level` whose base type is `base_type` in
-    /// `language`; none for a base the data don't know, or don't know the tags of.
-    pub(super) fn of_game(
-        language: Language,
-        base_type: &str,
-        item_level: Option<u32>,
-    ) -> Option<Self> {
+    /// The tables of the game as the item of `base` sees them; none for a base type the data
+    /// don't know, or don't know the tags of.
+    pub(super) fn of_game(base: ItemBase<'_>) -> Option<Self> {
         Some(Self {
             all: &TABLES,
-            base: bases::spawn(language, base_type)?,
-            item_level,
+            base: bases::spawn(base.language, base.base_type)?,
+            item_level: base.item_level,
         })
     }
 }

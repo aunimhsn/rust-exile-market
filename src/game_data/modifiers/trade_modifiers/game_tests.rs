@@ -4,10 +4,11 @@
 
 use super::*;
 use crate::game_data::modifiers::fixtures::{
-    ADVANCED_COPIES, BOW_EN, TIARA_EN, affix_limits, as_in_game_trade, desecrated, modifier, parse,
-    part, range, tiers, trade_lines,
+    ADVANCED_COPIES, BOW_EN, TIARA_EN, affix_limits, as_in_game_trade, desecrated, english_item,
+    modifier, parse, part, range, tiers, trade_item, trade_lines,
 };
-use crate::item::{ItemState, Lord, ModifierOrigin, StatLine};
+use crate::game_data::modifiers::trade_tiers::AffixLimits;
+use crate::item::{Lord, ModifierOrigin, StatLine};
 
 /// The texts of the lines of `modifier`.
 fn texts(modifier: &Modifier) -> Vec<String> {
@@ -56,14 +57,7 @@ fn the_lines_read_again_from_their_values_are_the_modifiers_of_the_advanced_copy
         let limits = affix_limits(&item);
         let (modifiers, written) = as_in_game_trade(&item, base_type);
 
-        let read = with_trade_tiers(
-            item.language(),
-            base_type,
-            item.item_level(),
-            &modifiers,
-            limits,
-            item.has_state(ItemState::Sanctified),
-        );
+        let read = with_trade_tiers(&trade_item(&item, base_type, limits), &modifiers);
 
         let advanced = item.modifiers().iter().filter(|modifier| {
             matches!(modifier.kind, ModifierKind::Explicit(Some(_))) && !modifier.is_unrevealed
@@ -104,14 +98,7 @@ fn the_lines_of_a_tiara_read_again_join_its_hybrid_and_keep_an_unknown_affix() {
     let item = parse(TIARA_EN);
     let read = |modifiers: &[Modifier]| {
         let limits = AffixLimits::new(3, 3);
-        with_trade_tiers(
-            item.language(),
-            item.base_type(),
-            item.item_level(),
-            modifiers,
-            limits,
-            false,
-        )
+        with_trade_tiers(&trade_item(&item, item.base_type(), limits), modifiers)
     };
     let explicit = |modifiers: Vec<Modifier>| -> Vec<(Vec<String>, ModifierKind, Option<u32>)> {
         modifiers
@@ -178,14 +165,7 @@ fn the_lines_of_a_tiara_read_again_keep_the_tiers_of_the_affix_in_doubt() {
     let item = parse(TIARA_EN);
     let limits = AffixLimits::new(3, 3);
     let read = |modifiers: &[Modifier]| {
-        with_trade_tiers(
-            item.language(),
-            item.base_type(),
-            item.item_level(),
-            modifiers,
-            limits,
-            false,
-        )
+        with_trade_tiers(&trade_item(&item, item.base_type(), limits), modifiers)
     };
     let find = |modifiers: &[Modifier], words: &str| {
         modifiers
@@ -243,14 +223,7 @@ fn read_again(
     (prefixes, suffixes): (u32, u32),
 ) -> Vec<Modifier> {
     let limits = AffixLimits::new(prefixes, suffixes);
-    with_trade_tiers(
-        Language::English,
-        base_type,
-        Some(item_level),
-        modifiers,
-        limits,
-        false,
-    )
+    with_trade_tiers(&english_item(base_type, item_level, limits), modifiers)
 }
 
 /// The modifier of `read` with a split line.
@@ -266,12 +239,8 @@ fn a_split_line_is_read_with_the_other_lines_of_its_hybrid_and_the_tiers_of_each
     let limits = AffixLimits::new(3, 4);
 
     let read = with_trade_tiers(
-        item.language(),
-        item.base_type(),
-        item.item_level(),
+        &trade_item(&item, item.base_type(), limits),
         item.modifiers(),
-        limits,
-        false,
     );
 
     // The hybrid T1 with the accuracy, and the pure T1: a prefix, two modifiers, without

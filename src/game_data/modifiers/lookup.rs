@@ -3,25 +3,23 @@
 //! then the tiers of a modifier as the advanced copy writes it (`modifier_tiers`,
 //! `lacks_table`).
 
-use super::base_tiers::ItemTables;
+use super::base_tiers::{ItemBase, ItemTables};
 use super::copied::{Copied, CopiedLine, CopiedTier, Fit};
 use super::split_lines::split_tiers;
 use super::tables::{Table, TableAffix, first_of_its_modifier};
 use super::{ModifierTiers, Tier};
 use crate::game_data::lines::LineMatch;
 use crate::item::{Affix, Lord, Modifier, ModifierKind, TierDoubt};
-use crate::language::Language;
 
-/// Every tier of `modifier`, a prefix or suffix of an item of `item_level` (none when the copy
-/// doesn't write it) whose base type is `base_type` in `language` (the name its search looks
-/// for), its lines matched with their stats in `matches` ([`crate::game_data::modifier_stats`]).
+/// Every tier of `modifier`, a prefix or suffix of the item of `base`, its lines matched with
+/// their stats in `matches` ([`crate::game_data::modifier_stats`]).
 ///
 /// None for a modifier the tables don't hold: an implicit, a rune, an enchantment, a modifier
 /// whose header doesn't tell its affix, a line without stat, a base without tags; or whose
 /// ranges are in no tier, e.g. a line copied before a patch changed them.
 ///
 /// For a line that adds up two modifiers ([`TierDoubt::Split`]), the tiers of the modifier of
-/// every line ([`split_tiers`]), among those `item_level` allows.
+/// every line ([`split_tiers`]), among those the level of the item allows.
 ///
 /// With the ranges of the advanced copy, only a tier with those ranges: the tier that holds the
 /// copied values first, then the one that holds them give or take the rounding of the game, then
@@ -35,13 +33,11 @@ use crate::language::Language;
 /// desecrated one.
 #[must_use]
 pub fn modifier_tiers(
-    language: Language,
-    base_type: &str,
-    item_level: Option<u32>,
+    base: ItemBase<'_>,
     modifier: &Modifier,
     matches: &[LineMatch<'_>],
 ) -> Option<ModifierTiers> {
-    let tables = ItemTables::of_game(language, base_type, item_level)?;
+    let tables = ItemTables::of_game(base)?;
     if let Some(TierDoubt::Split { line, whole, .. }) = &modifier.doubt {
         return split_tiers(&tables, modifier, matches, (*line, whole));
     }
@@ -67,22 +63,18 @@ fn searched<'a>(
     Some((affix, Copied::of(modifier, matches)?))
 }
 
-/// Whether the tables should hold `modifier` and don't: a prefix or suffix the advanced copy
-/// writes with its tier, on a base the data know, each of its lines with its stat, and no
+/// Whether the tables should hold `modifier`, of the item of `base`, and don't: a prefix or
+/// suffix the advanced copy writes with its tier, on a base the data know, each of its lines
+/// with its stat, and no
 /// table with these ranges. The advanced copy tells the truth: either the data are behind the
 /// game, after a patch, or the item kept the ranges of an older patch (in Standard), which this
 /// can't tell apart; worth a line in the log ([`modifier_tiers`] gives nothing).
 #[must_use]
-pub fn lacks_table(
-    language: Language,
-    base_type: &str,
-    modifier: &Modifier,
-    matches: &[LineMatch<'_>],
-) -> bool {
+pub fn lacks_table(base: ItemBase<'_>, modifier: &Modifier, matches: &[LineMatch<'_>]) -> bool {
     if modifier.tier.is_none() || modifier.doubt.is_some() {
         return false;
     }
-    let Some(tables) = ItemTables::of_game(language, base_type, None) else {
+    let Some(tables) = ItemTables::of_game(base) else {
         return false;
     };
     searched(modifier, matches)

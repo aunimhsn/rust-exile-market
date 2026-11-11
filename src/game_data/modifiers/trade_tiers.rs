@@ -3,7 +3,7 @@
 //! and how the search ended.
 
 use super::ModifierTiers;
-use super::base_tiers::ItemTables;
+use super::base_tiers::{ItemBase, ItemTables};
 use super::best_reading::{Cut, Room, best_reading};
 use super::candidates::{AffixSet, Candidate, candidates};
 use super::copied::Copied;
@@ -37,6 +37,17 @@ impl AffixLimits {
     }
 }
 
+/// An item copied from the in-game trade, as the tiers of its modifiers are found from their
+/// values.
+#[derive(Debug, Clone, Copy)]
+pub struct TradeItem<'a> {
+    pub base: ItemBase<'a>,
+    /// How many prefixes and suffixes it can have.
+    pub limits: AffixLimits,
+    /// Whether it is sanctified: each of its values can have left its tier, and none is found.
+    pub is_sanctified: bool,
+}
+
 /// The tiers of a modifier copied from the in-game trade, found from its values.
 #[derive(Debug, Clone, PartialEq)]
 pub(super) struct FoundTiers {
@@ -59,9 +70,9 @@ pub(super) struct FoundTiers {
     pub(super) added: Option<AddedTiers>,
 }
 
-/// The tiers of the explicit modifiers of a rare or magic item copied from the in-game trade,
-/// found from their values in the tables of its base (`base_type` in `language`) among the
-/// tiers its `item_level` allows; the other modifiers count as the affix their header tells. A
+/// The tiers of the explicit `modifiers` of `item`, rare or magic, copied from the in-game
+/// trade, found from their values in the tables of its base among the tiers its level allows;
+/// the other modifiers count as the affix their header tells. A
 /// modifier no tier holds isn't in the list, nor counted as a prefix or a suffix: a stat the
 /// tables don't know; nor a line adding up two modifiers of the same stat in more than one way
 /// (two ways in two neighbouring tiers of one of them being one), with the other lines of its
@@ -70,7 +81,7 @@ pub(super) struct FoundTiers {
 /// Only the explicit modifiers without header are read, one line each, as the parser reads
 /// such a copy: a modifier whose header the parser doesn't know isn't a line of the in-game
 /// trade, the caller leaves it out. Each line is read alone, unless a line has no tier that
-/// way, or the item more prefixes or suffixes than `limits`, or two fractured modifiers (a
+/// way, or the item more prefixes or suffixes than its limits, or two fractured modifiers (a
 /// Fracturing Orb fractures one modifier of an item not fractured yet): the consecutive lines
 /// of one origin are then read as one modifier when they fit a hybrid of the tables (the
 /// fractured `41% increased Energy Shield` and `+34 to maximum Mana` of a tiara). An affix the
@@ -105,32 +116,30 @@ pub(super) struct FoundTiers {
 /// being read on consecutive lines ([`FoundTiers::modifiers`]): its lines stay without tier,
 /// also when the room of the item leaves no other reading.
 ///
-/// No tier is found on a `sanctified` item, whose values can each have left their tier, for
+/// No tier is found on a sanctified item, whose values can each have left their tier, for
 /// the one next to it as well (the `+74 to maximum Mana` of the owner's sceptre, a T5
 /// `80–89`, falls in the T6): nothing in such a copy tells which did (owner's choice on
 /// 2026-11-11).
 #[must_use]
-pub(super) fn trade_tiers(
-    language: Language,
-    base_type: &str,
-    item_level: Option<u32>,
-    modifiers: &[Modifier],
-    limits: AffixLimits,
-    sanctified: bool,
-) -> Vec<FoundTiers> {
-    if sanctified {
+pub(super) fn trade_tiers(item: &TradeItem<'_>, modifiers: &[Modifier]) -> Vec<FoundTiers> {
+    if item.is_sanctified {
         return Vec::new();
     }
-    let Some(tables) = ItemTables::of_game(language, base_type, item_level) else {
+    let Some(tables) = ItemTables::of_game(item.base) else {
         return Vec::new();
     };
-    let (found, effort) = trade_tiers_in(&tables, language, modifiers, limits);
+    let ItemBase {
+        language,
+        base_type,
+        ..
+    } = item.base;
+    let (found, effort) = trade_tiers_in(&tables, language, modifiers, item.limits);
     log::debug!(
         "Game data, {base_type} copied from the in-game trade: read in {} readings and {} steps",
         effort.readings,
         effort.steps
     );
-    effort.ending.log(base_type, limits);
+    effort.ending.log(base_type, item.limits);
     found
 }
 

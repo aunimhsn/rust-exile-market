@@ -473,7 +473,12 @@ fn a_tier_the_copy_writes_and_no_table_holds_is_told_apart() {
         let item = Item::parse(&CopiedItem::from_text(&maul).expect("an item")).expect("read");
         let modifier = &item.modifiers()[0];
         let matches = game_data::modifier_stats(item.language(), modifier, None);
-        game_data::lacks_table(item.language(), "Temple Maul", modifier, &matches)
+        let base = game_data::ItemBase {
+            language: item.language(),
+            base_type: "Temple Maul",
+            item_level: item.item_level(),
+        };
+        game_data::lacks_table(base, modifier, &matches)
     };
 
     // The tier of the data.

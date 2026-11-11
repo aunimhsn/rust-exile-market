@@ -216,14 +216,16 @@ fn tier_text(tier: &ModifierTier) -> String {
 /// as the session does.
 fn read_again(mut item: Item) -> Item {
     let stats = LineStats::new(&item, item.modifiers(), None);
-    let modifiers = crate::game_data::with_trade_tiers(
-        item.language(),
-        item.base_type(),
-        item.item_level(),
-        item.modifiers(),
-        stats.affix_limits(&item),
-        item.has_state(crate::item::ItemState::Sanctified),
-    );
+    let trade_item = crate::game_data::TradeItem {
+        base: crate::game_data::ItemBase {
+            language: item.language(),
+            base_type: item.base_type(),
+            item_level: item.item_level(),
+        },
+        limits: stats.affix_limits(&item),
+        is_sanctified: item.has_state(crate::item::ItemState::Sanctified),
+    };
+    let modifiers = crate::game_data::with_trade_tiers(&trade_item, item.modifiers());
     item.set_modifiers(modifiers);
     item
 }

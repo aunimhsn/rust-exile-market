@@ -34,7 +34,8 @@ pub use lines::{
     LineMatch, StatMatch, StatSource, english_string, line_template, max_stat_lines, modifier_stats,
 };
 pub use modifiers::{
-    AffixLimits, ModifierTiers, Tier, lacks_table, modifier_tiers, with_trade_tiers,
+    AffixLimits, ItemBase, ModifierTiers, Tier, TradeItem, lacks_table, modifier_tiers,
+    with_trade_tiers,
 };
 pub use stats::TradeGroup;
 pub use trade_site::TradeStats;

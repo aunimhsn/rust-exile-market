@@ -6,10 +6,12 @@
 use crate::game_data::bases::{BaseSpawn, Domain};
 use crate::game_data::lines::modifier_stats;
 use crate::game_data::modifiers::ModifierTiers;
+use crate::game_data::modifiers::base_tiers::ItemBase;
 use crate::game_data::modifiers::lookup::modifier_tiers;
-use crate::game_data::modifiers::trade_tiers::{AffixLimits, FoundTiers};
+use crate::game_data::modifiers::trade_tiers::{AffixLimits, FoundTiers, TradeItem};
 use crate::item::{
-    Affix, CopiedItem, Item, Modifier, ModifierKind, ModifierOrigin, PartTier, Range, StatLine,
+    Affix, CopiedItem, Item, ItemState, Modifier, ModifierKind, ModifierOrigin, PartTier, Range,
+    StatLine,
 };
 use crate::language::Language;
 
@@ -139,7 +141,12 @@ pub(super) fn summary(modifiers: &[Modifier], found: &[FoundTiers]) -> Vec<(usiz
 /// The tiers of `modifier` on `base_type`, in English.
 pub(super) fn tiers(base_type: &str, modifier: &Modifier) -> Option<ModifierTiers> {
     let matches = modifier_stats(Language::English, modifier, None);
-    modifier_tiers(Language::English, base_type, None, modifier, &matches)
+    let base = ItemBase {
+        language: Language::English,
+        base_type,
+        item_level: None,
+    };
+    modifier_tiers(base, modifier, &matches)
 }
 
 /// The tiara and the bow copied by the owner from the in-game trade, English and French.
@@ -225,6 +232,38 @@ pub(super) const ADVANCED_COPIES: [(&str, Option<&str>); 16] = [
     ),
 ];
 
+/// An item of `base_type` and `item_level` written in English, copied from the in-game trade
+/// with at most `limits`, not sanctified.
+pub(super) fn english_item(base_type: &str, item_level: u32, limits: AffixLimits) -> TradeItem<'_> {
+    TradeItem {
+        base: ItemBase {
+            language: Language::English,
+            base_type,
+            item_level: Some(item_level),
+        },
+        limits,
+        is_sanctified: false,
+    }
+}
+
+/// The test item `item` as copied from the in-game trade, of `base_type` (its own, or the one
+/// the names of the trade site tell for a magic item), with at most `limits`.
+pub(super) fn trade_item<'a>(
+    item: &'a Item,
+    base_type: &'a str,
+    limits: AffixLimits,
+) -> TradeItem<'a> {
+    TradeItem {
+        base: ItemBase {
+            language: item.language(),
+            base_type,
+            item_level: item.item_level(),
+        },
+        limits,
+        is_sanctified: item.has_state(ItemState::Sanctified),
+    }
+}
+
 /// The prefixes and suffixes `item` can have, as the application gives them
 /// (`LineStats::affix_limits`): 2 of each on a rare jewel.
 pub(super) fn affix_limits(item: &Item) -> AffixLimits {
@@ -255,8 +294,13 @@ pub(super) fn as_in_game_trade(item: &Item, base_type: &str) -> (Vec<Modifier>, 
             continue;
         }
         let matches = modifier_stats(item.language(), modifier, None);
-        let tier = modifier_tiers(item.language(), base_type, None, modifier, &matches)
-            .and_then(|tiers| Some(tiers.tier()?.number));
+        let base = ItemBase {
+            language: item.language(),
+            base_type,
+            item_level: None,
+        };
+        let tier =
+            modifier_tiers(base, modifier, &matches).and_then(|tiers| Some(tiers.tier()?.number));
         let start = modifiers.len();
         for line_match in &matches {
             let mut lines = modifier.lines[line_match.lines.clone()].to_vec();

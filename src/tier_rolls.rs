@@ -18,7 +18,7 @@ use std::collections::BTreeSet;
 use std::sync::{Mutex, PoisonError};
 
 use crate::filters::StatKey;
-use crate::game_data::{self, LineMatch, ModifierTiers, Tier};
+use crate::game_data::{self, ItemBase, LineMatch, ModifierTiers, Tier};
 use crate::item::{Currency, Modifier, ModifierKind, Range, TierDoubt};
 use crate::language::Language;
 use crate::logging;
@@ -62,20 +62,23 @@ impl TierRolls {
         base_type: Option<&str>,
         item_level: Option<u32>,
     ) -> Self {
+        let base = base_type.map(|base_type| ItemBase {
+            language,
+            base_type,
+            item_level,
+        });
         let modifiers = modifiers
             .iter()
             .map(|modifier| {
                 let Some(written) = Written::of(modifier) else {
                     return ModifierRolls::default();
                 };
-                let in_tables = base_type.and_then(|base_type| {
-                    ModifierInTables::of(language, base_type, item_level, modifier)
-                });
+                let in_tables = base.and_then(|base| ModifierInTables::of(base, modifier));
                 written
                     .rolls(modifier, in_tables.as_ref())
                     .unwrap_or_else(|| {
-                        if let Some(base_type) = base_type {
-                            warn_of_a_missing_table(language, base_type, modifier);
+                        if let Some(base) = base {
+                            warn_of_a_missing_table(base, modifier);
                         }
                         ModifierRolls::default()
                     })
@@ -267,16 +270,10 @@ struct ModifierInTables {
 }
 
 impl ModifierInTables {
-    /// `modifier`, written in `language`, in the tables of the base `base_type` of an item of
-    /// `item_level`; none when no table holds it.
-    fn of(
-        language: Language,
-        base_type: &str,
-        item_level: Option<u32>,
-        modifier: &Modifier,
-    ) -> Option<Self> {
-        let matches = game_data::modifier_stats(language, modifier, None);
-        let tiers = game_data::modifier_tiers(language, base_type, item_level, modifier, &matches)?;
+    /// `modifier` in the tables, on the item of `base`; none when no table holds it.
+    fn of(base: ItemBase<'_>, modifier: &Modifier) -> Option<Self> {
+        let matches = game_data::modifier_stats(base.language, modifier, None);
+        let tiers = game_data::modifier_tiers(base, modifier, &matches)?;
         Some(Self { matches, tiers })
     }
 
@@ -317,16 +314,16 @@ impl ModifierInTables {
     }
 }
 
-/// Writes to the log that no table holds `modifier`, when one should
+/// Writes to the log that no table holds `modifier`, of the item of `base`, when one should
 /// ([`game_data::lacks_table`]): the first sign that the game changed its modifiers, and the
 /// list of those to generate again, in the log a bug report carries.
-fn warn_of_a_missing_table(language: Language, base_type: &str, modifier: &Modifier) {
+fn warn_of_a_missing_table(base: ItemBase<'_>, modifier: &Modifier) {
     /// What was already told: an item is read again at each copy, and when the names of the
     /// trade site arrive.
     static TOLD: Mutex<BTreeSet<String>> = Mutex::new(BTreeSet::new());
 
-    let matches = game_data::modifier_stats(language, modifier, None);
-    if !game_data::lacks_table(language, base_type, modifier, &matches) {
+    let matches = game_data::modifier_stats(base.language, modifier, None);
+    if !game_data::lacks_table(base, modifier, &matches) {
         return;
     }
     // Its name, not its line: the same modifier rolled otherwise is the same missing table.
@@ -334,7 +331,7 @@ fn warn_of_a_missing_table(language: Language, base_type: &str, modifier: &Modif
         "\"{}\" as tier {:?} on {}",
         logging::plain(modifier.name.as_deref().unwrap_or_default()),
         modifier.tier,
-        logging::plain(base_type),
+        logging::plain(base.base_type),
     );
     let mut told = TOLD.lock().unwrap_or_else(PoisonError::into_inner);
     if first_told(&mut told, &key) {

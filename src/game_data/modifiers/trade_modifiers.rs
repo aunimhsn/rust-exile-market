@@ -2,32 +2,24 @@
 //! writes them, with the tiers found from their values.
 
 use super::split_lines::AddedTiers;
-use super::trade_tiers::{AffixLimits, FoundTiers, trade_tiers};
+use super::trade_tiers::{FoundTiers, TradeItem, trade_tiers};
 use super::{ModifierTiers, Tier};
 use crate::game_data::lines::modifier_stats;
 use crate::item::{Affix, AffixTier, Modifier, ModifierKind, PartTier, Range, TierDoubt};
 use crate::language::Language;
 
-/// The modifiers of a rare or magic item copied from the in-game trade read again with the
-/// tiers found from their values ([`trade_tiers`], with the same arguments), as the advanced
-/// copy writes them: the lines of a hybrid made one modifier, a prefix or a suffix, its tier,
+/// The `modifiers` of `item`, rare or magic, copied from the in-game trade, read again with
+/// the tiers found from their values ([`trade_tiers`]), as the advanced copy writes them: the
+/// lines of a hybrid made one modifier, a prefix or a suffix, its tier,
 /// and on each value its stat counts the range of that tier. A modifier that can be a prefix
 /// or a suffix stays explicit, without affix nor tier, with the tier of each
 /// ([`TierDoubt::EitherAffix`]); a line that adds up two modifiers is one modifier with the
 /// other lines of its hybrid, without tier, with the tiers of each part
 /// ([`TierDoubt::Split`]); one that no tier holds stays as it was.
 #[must_use]
-pub fn with_trade_tiers(
-    language: Language,
-    base_type: &str,
-    item_level: Option<u32>,
-    modifiers: &[Modifier],
-    limits: AffixLimits,
-    sanctified: bool,
-) -> Vec<Modifier> {
-    let found = trade_tiers(
-        language, base_type, item_level, modifiers, limits, sanctified,
-    );
+pub fn with_trade_tiers(item: &TradeItem<'_>, modifiers: &[Modifier]) -> Vec<Modifier> {
+    let found = trade_tiers(item, modifiers);
+    let (language, base_type) = (item.base.language, item.base.base_type);
     let mut read = Vec::with_capacity(modifiers.len());
     let mut next = 0;
     while let Some(modifier) = modifiers.get(next) {
