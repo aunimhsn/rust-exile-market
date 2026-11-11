@@ -4,8 +4,8 @@
 
 use super::*;
 use crate::game_data::lines::modifier_stats;
-use crate::game_data::modifiers::fixtures::{desecrated, modifier, range, tiers};
-use crate::item::{CopiedItem, Currency, Item, ModifierOrigin, Range};
+use crate::game_data::modifiers::fixtures::{desecrated, modifier, parse, range, tiers};
+use crate::item::{Currency, ModifierOrigin, Range};
 
 /// A tier number and the ranges of its values, as the game writes them.
 type TierRanges = (u32, Vec<Range>);
@@ -14,7 +14,7 @@ type TierRanges = (u32, Vec<Range>);
 /// advanced copy writes, with its ranges: (found, written). A magic item gives its
 /// `base_type`, found among the names of the trade site in the application.
 fn tiers_of(text: &str, base_type: Option<&str>) -> Vec<(Option<TierRanges>, TierRanges)> {
-    let item = Item::parse(&CopiedItem::from_text(text).expect("an item")).expect("read");
+    let item = parse(text);
     let base_type = base_type.unwrap_or(item.base_type());
     item.modifiers()
         .iter()
