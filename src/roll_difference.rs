@@ -179,21 +179,11 @@ struct Template {
 
 impl Template {
     /// `line` read as its template and its numbers, as the strings of the stats and the copied
-    /// lines read them ([`game_data::numbers`]): `#` in place of each number, its sign with it.
+    /// lines read them ([`game_data::line_template`]).
     fn of(line: &str) -> Self {
-        let numbers = game_data::numbers(line);
-        let mut text = String::with_capacity(line.len());
-        let mut copied = 0;
-        for number in &numbers {
-            text.push_str(line.get(copied..number.start).unwrap_or_default());
-            text.push('#');
-            copied = number.end;
-        }
-        text.push_str(line.get(copied..).unwrap_or_default());
-        Self {
-            text,
-            numbers: numbers.iter().map(game_data::Number::value).collect(),
-        }
+        let (text, numbers) =
+            game_data::line_template(line).unwrap_or_else(|| (line.to_owned(), Vec::new()));
+        Self { text, numbers }
     }
 }
 

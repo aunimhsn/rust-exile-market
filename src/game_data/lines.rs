@@ -202,19 +202,19 @@ fn first_with_id<T>(items: impl Iterator<Item = T>, has_id: impl Fn(&T) -> bool)
 
 /// A number of a line, with its sign when it has one.
 #[derive(Debug, PartialEq)]
-pub struct Number {
+struct Number {
     /// Where it starts, at its sign or else at its first digit.
-    pub start: usize,
+    start: usize,
     digits: usize,
     /// Where it ends, after its last digit.
-    pub end: usize,
+    end: usize,
     magnitude: f64,
     negative: bool,
 }
 
 impl Number {
     /// Its value, with its sign.
-    pub fn value(&self) -> f64 {
+    fn value(&self) -> f64 {
         if self.negative {
             -self.magnitude
         } else {
@@ -227,7 +227,7 @@ impl Number {
 /// `the_parser_and_the_strings_read_the_same_numbers`). A sign right before a number is its
 /// own, unless it ends a word (`X-10`); a point is in a number only between two digits (`2.5`,
 /// not `2 times.`).
-pub fn numbers(text: &str) -> Vec<Number> {
+fn numbers(text: &str) -> Vec<Number> {
     let bytes = text.as_bytes();
     let mut numbers = Vec::new();
     let mut index = 0;
@@ -287,6 +287,17 @@ struct Template {
     counted: Vec<bool>,
 }
 
+/// `line` with `#` in place of each of its numbers, its sign with it (`+15% to Fire Resistance`
+/// is `#% to Fire Resistance`), and the values of the `#`, in their order: the first string the
+/// line is looked up by, and how a line of an offer is compared with the same line of the
+/// copied item. None when a number lies outside the line, which `numbers` never gives.
+#[must_use]
+pub fn line_template(line: &str) -> Option<(String, Vec<f64>)> {
+    let numbers = numbers(line);
+    let template = write(line, &numbers, &vec![Written::Hash; numbers.len()])?;
+    Some((template.string, template.values))
+}
+
 /// The strings `text` can match, those with the most `#` first, then those without the
 /// signs.
 fn templates<'a>(text: &'a str, numbers: &'a [Number]) -> impl Iterator<Item = Template> + 'a {
@@ -321,6 +332,8 @@ fn templates<'a>(text: &'a str, numbers: &'a [Number]) -> impl Iterator<Item = T
         .filter_map(move |choice| write(text, numbers, &choice))
 }
 
+/// `text` with each of its `numbers` written the way `choice` says, in their order; none when a
+/// number lies outside `text`.
 fn write(text: &str, numbers: &[Number], choice: &[Written]) -> Option<Template> {
     let mut string = String::with_capacity(text.len());
     let mut values = Vec::new();
@@ -789,6 +802,7 @@ mod tests {
     /// value in `de 2.5.`, which a French string of the stats can write.
     #[test]
     fn the_parser_and_the_strings_read_the_same_numbers() {
+        // The lines of an offer are read the same, by `line_template`.
         let same = |line: &str| {
             let parsed = StatLine::parse(line);
             let rolls: Vec<f64> = parsed.rolls.iter().map(|roll| roll.value).collect();
