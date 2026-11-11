@@ -12,7 +12,9 @@ use std::fmt;
 use super::labels::{Labels, marker};
 use super::modifier::{Header, Marker, Modifier, ModifierKind, StatLine};
 use super::weapon::{self, DamageKind, Weapon};
-use super::{CopiedItem, Item, ItemState, Property, QualityKind, Rarity, Requirements, Stack};
+use super::{
+    CopiedItem, Item, ItemState, Property, QualityKind, Rarity, Requirements, RollsSource, Stack,
+};
 use super::{gem, waystone};
 use crate::game_data;
 use crate::language::Language;
@@ -155,9 +157,17 @@ pub(super) fn parse(copied: &CopiedItem) -> Result<Item, ParseError> {
         .modifiers
         .iter()
         .any(|modifier| matches!(modifier.kind, ModifierKind::Explicit(_)));
-    item.tiers_from_values =
-        !with_headers && explicit && matches!(item.rarity, Rarity::Magic | Rarity::Rare);
-    item.rolls_from_prices = !with_headers && explicit && item.rarity == Rarity::Unique;
+    item.rolls = if with_headers {
+        RollsSource::Headers
+    } else if explicit {
+        match item.rarity {
+            Rarity::Magic | Rarity::Rare => RollsSource::Values,
+            Rarity::Unique => RollsSource::Prices,
+            Rarity::Normal | Rarity::Currency | Rarity::Gem => RollsSource::Nowhere,
+        }
+    } else {
+        RollsSource::Nowhere
+    };
     Ok(item)
 }
 
@@ -221,8 +231,7 @@ fn read_header(lines: &[&str], language: Language, labels: &Labels) -> Result<It
         properties: Vec::new(),
         weapon: None,
         modifiers: Vec::new(),
-        tiers_from_values: false,
-        rolls_from_prices: false,
+        rolls: RollsSource::Nowhere,
         warnings: Vec::new(),
     })
 }

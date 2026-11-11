@@ -392,20 +392,33 @@ fn the_damage_and_the_attack_speed_of_a_weapon_are_known_in_every_language() {
         "152% d'Augmentation des Dégâts Physiques\nAjoute 21 à 38 Dégâts Physiques",
     );
 
+    // For each modifier, whether the physical DPS counts it, then the elemental one.
     let damage = |item: &Item| {
         let stats = line_stats(item);
+        let counted =
+            |modifier, property| stats.counts_in(key(modifier, 0), FilterKey::Property(property));
         (0..item.modifiers().len())
             .map(|modifier| {
-                [Property::PhysicalDps, Property::ElementalDps]
-                    .into_iter()
-                    .any(|property| stats.counts_in(key(modifier, 0), property))
+                (
+                    counted(modifier, Property::PhysicalDps),
+                    counted(modifier, Property::ElementalDps),
+                )
             })
             .collect::<Vec<_>>()
     };
-    // Not the elemental damage of its attacks, which any item gives; nor its chaos
-    // damage, which neither DPS filter counts.
-    assert_eq!(damage(&english), [true, true, true, false, false]);
-    assert_eq!(damage(&french), [true, true]);
+    // The attack speed counts in both. Not the elemental damage of its attacks, which any
+    // item gives; nor its chaos damage, which neither DPS filter counts.
+    assert_eq!(
+        damage(&english),
+        [
+            (true, false),
+            (false, true),
+            (true, true),
+            (false, false),
+            (false, false)
+        ]
+    );
+    assert_eq!(damage(&french), [(true, false), (true, false)]);
 }
 
 /// A rare ring with resistances, life and strength in several groups, in `language`.
@@ -457,8 +470,13 @@ fn the_pseudo_totals_add_up_the_lines_of_every_group_in_every_language() {
             ],
             "{language:?}"
         );
+        // Each of its lines counts in one of them.
         for modifier in 0..item.modifiers().len() {
-            assert!(stats.added_up(key(modifier, 0)), "{language:?} {modifier}");
+            let counted = stats
+                .pseudo_totals()
+                .iter()
+                .any(|total| stats.counts_in(key(modifier, 0), FilterKey::Pseudo(total.pseudo)));
+            assert!(counted, "{language:?} {modifier}");
         }
     }
 }
@@ -512,16 +530,13 @@ fn a_pseudo_stat_is_searched_by_its_id_before_the_lines() {
     assert_eq!(
         stats.search_filters(&filters).stats,
         [
-            // It adds up an implicit written without range, whose best roll is unknown: any
-            // Sapphire Ring may reach it.
-            StatFilter {
-                rules_out: RulesOut::OfTheLeague,
-                ..stat(
-                    "pseudo.pseudo_total_elemental_resistance",
-                    Some(90.0),
-                    Some(120.0)
-                )
-            },
+            // Beyond what its base reaches: its implicit, fixed in the advanced copy, with a
+            // catalyst (26.4), and its rune (10).
+            stat(
+                "pseudo.pseudo_total_elemental_resistance",
+                Some(90.0),
+                Some(120.0)
+            ),
             stat("pseudo.pseudo_total_life", None, None),
             // It narrows the items of the base only: it compares no stat.
             StatFilter {
@@ -560,7 +575,7 @@ fn the_filters_of_a_search_are_those_checked_and_any_base_when_it_is_unchecked()
             property: Property::PhysicalDps,
             minimum: Some(220.0),
             maximum: None,
-            // No line of damage nor of attack speed: the DPS of its base.
+            // Not a weapon: no DPS of its base to go beyond, items of the league only.
             rules_out: RulesOut::OfTheLeague,
         }]
     );
@@ -669,7 +684,62 @@ fn two_copies_of_one_base_reach_the_physical_dps_of_that_base_with_their_runes()
         ),
     ] {
         let bow = parse(text);
-        let found = line_stats(&bow).physical_reach.expect("a weapon");
+        let found = line_stats(&bow).dps_reach.expect("a weapon").physical;
         assert!((found - reach).abs() < 1.0, "{found}");
     }
+}
+
+#[test]
+fn what_a_corruption_added_compares_the_item_not_what_any_item_of_its_base_may_have() {
+    // The first line of the modifier of `kind` of `item`, as a filter without limit.
+    let rules_out = |item: &Item, kind: ModifierKind| {
+        let modifier = item
+            .modifiers()
+            .iter()
+            .position(|modifier| modifier.kind == kind)
+            .expect("a modifier of that kind");
+        line_stats(item).rules_out(FilterKey::Stat(key(modifier, 0)), None)
+    };
+    let ring = parse(include_str!(
+        "../../item/test-items/en-owner-rare-ring-catalyst.txt"
+    ));
+    // Rolled by its corruption: no other Prismatic Ring has its Dexterity.
+    assert_eq!(
+        rules_out(&ring, ModifierKind::Corruption),
+        RulesOut::OfTheBase
+    );
+    assert_eq!(
+        rules_out(&ring, ModifierKind::Implicit),
+        RulesOut::OfTheLeague
+    );
+    // An enchantment and a rune go on any item of the base.
+    let amulet = parse(include_str!(
+        "../../item/test-items/en-owner-rare-amulet-catalyst.txt"
+    ));
+    assert_eq!(
+        rules_out(&amulet, ModifierKind::Enchant),
+        RulesOut::OfTheLeague
+    );
+    let bow = parse(include_str!(
+        "../../item/test-items/en-owner-trade-rare-bow-mirrored.txt"
+    ));
+    assert_eq!(rules_out(&bow, ModifierKind::Rune), RulesOut::OfTheLeague);
+}
+
+#[test]
+fn the_dexterity_a_corruption_added_isnt_what_the_base_reaches() {
+    // 14 from its corruption and 28 from a suffix: a total of 42, which no line of its base
+    // gives; its minimum compares the ring.
+    let ring = parse(include_str!(
+        "../../item/test-items/en-owner-rare-ring-catalyst.txt"
+    ));
+    let stats = line_stats(&ring);
+    let dexterity = FilterKey::Pseudo(Pseudo::Dexterity);
+    assert_eq!(stats.rules_out(dexterity, Some(1.0)), RulesOut::OfTheBase);
+    // Its elemental resistance is its implicit alone, +10(7-10)% to all, with its catalyst.
+    let elemental = FilterKey::Pseudo(Pseudo::ElementalResistance);
+    assert_eq!(
+        stats.rules_out(elemental, Some(27.0)),
+        RulesOut::OfTheLeague
+    );
 }

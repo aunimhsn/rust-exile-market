@@ -12,7 +12,10 @@ use super::pseudo::{self, CountedLine, Pseudo, PseudoTotal};
 use super::query::{PropertyFilter, RulesOut, SearchFilters, StatFilter};
 use crate::filters::{Filter, FilterKey, Property, StatKey};
 use crate::game_data::{self, AffixLimits, TradeGroup, TradeStats};
-use crate::item::{Affix, Item, Modifier, Range, Rarity, StatLine, WeaponLines};
+use crate::item::{
+    Affix, BaseDps, Item, Modifier, ModifierKind, Range, Rarity, StatLine, USUAL_QUALITY,
+    WeaponLines,
+};
 
 /// The stats of the game of the lines of a weapon its DPS counts: its increased physical
 /// damage, its added physical damage, its attack speed; its added elemental damage.
@@ -164,52 +167,94 @@ fn trade_value(
     })
 }
 
-/// The physical DPS the base of `item`, a weapon, reaches with the `lines` of the item that
-/// any item of the base may have (its runes), at the usual quality
-/// ([`Weapon::base_physical_dps`](crate::item::Weapon::base_physical_dps)); none for another
-/// item.
-fn physical_reach(item: &Item, lines: &[Line]) -> Option<f64> {
+/// The DPS the base of `item`, a weapon, reaches with the `lines` of the item that any item
+/// of the base may have (its runes), the physical one at the usual quality
+/// ([`Weapon::base_dps`](crate::item::Weapon::base_dps)); none for another item.
+fn dps_reach(item: &Item, lines: &[Line]) -> Option<BaseDps> {
     let weapon = item.weapon()?;
-    // The physical lines but those of its base (an implicit, counted in the properties of
-    // the base), whose `source` is one of `sources`.
+    // What the lines from one of `sources` add; never those of an implicit, which the
+    // properties count as the base's.
     let sum = |sources: &[Source]| {
-        let of = |id: &str| -> f64 {
+        let of = |ids: &[&str]| -> f64 {
             lines
                 .iter()
-                .filter(|line| sources.contains(&line.source) && line.is_one_of(&[id]))
+                .filter(|line| sources.contains(&line.source) && line.is_one_of(ids))
                 .filter_map(|line| Some(line.trade_value()?.trade))
                 .sum()
         };
         WeaponLines {
-            increased: of(INCREASED_PHYSICAL),
-            added: of(ADDED_PHYSICAL),
-            attack_speed: of(ATTACK_SPEED),
+            increased_physical: of(&[INCREASED_PHYSICAL]),
+            added_physical: of(&[ADDED_PHYSICAL]),
+            added_elemental: of(&ADDED_ELEMENTAL),
+            attack_speed: of(&[ATTACK_SPEED]),
         }
     };
     let quality = f64::from(item.quality().unwrap_or(0));
-    Some(weapon.base_physical_dps(
+    Some(weapon.base_dps(
         quality,
         sum(&[Source::Modifier, Source::Added]),
         sum(&[Source::Added]),
     ))
 }
 
-/// The value on the trade site of `line`, of the trade `value`, at its best roll: the end of
-/// the ranges of the `numbers` it counts that gives the most; none when one of them has no
-/// range (a copy from the in-game trade writes none), the best roll then unknown.
-fn best_roll(value: TradeValue, line: &StatLine, numbers: &[usize]) -> Option<f64> {
-    let ranges: Vec<&Range> = numbers
-        .iter()
-        .map(|&number| line.rolls.get(number)?.range.as_ref())
-        .collect::<Option<_>>()?;
-    #[expect(clippy::cast_precision_loss, reason = "a few numbers in a line")]
-    let count = ranges.len().max(1) as f64;
-    let field = |end: fn(&Range) -> f64| ranges.iter().copied().map(end).sum::<f64>() / count;
-    Some(
-        value
-            .of(field(|range| range.max))
-            .max(value.of(field(|range| range.min))),
-    )
+/// What the quality of a catalyst may multiply an implicit of `item` by, on any item of its
+/// base: the usual quality, or its own when higher, on a ring, an amulet or a jewel, whose
+/// quality is a catalyst's, which raises the modifiers of its kind, an implicit too (the
+/// advanced copy writes the range of the implicit without it: `+10(7-10)%` at 20 %); as much
+/// on a base the game data doesn't know, which may be one, a magic item among them, whose
+/// name doesn't tell its base alone; nothing on another item.
+fn catalyst_factor(item: &Item) -> f64 {
+    let category = game_data::category(item.language(), item.base_type());
+    if category.is_none_or(game_data::Category::takes_catalysts) {
+        1.0 + f64::from(item.quality().unwrap_or(0).max(USUAL_QUALITY)) / 100.0
+    } else {
+        1.0
+    }
+}
+
+/// What a line from `source` gives on the trade site to any item of the base
+/// ([`Line::reach`]): `value` is its value there, read from the `numbers` its `line` counts;
+/// `headed` and `catalyst` tell the best roll of an implicit ([`best_roll`],
+/// [`catalyst_factor`]).
+fn reach(
+    source: Source,
+    value: TradeValue,
+    line: &StatLine,
+    numbers: &[usize],
+    headed: bool,
+    catalyst: f64,
+) -> f64 {
+    match source {
+        Source::Modifier => 0.0,
+        Source::Added => value.trade,
+        // A catalyst raises it away from zero: no higher when it counts against a total.
+        Source::Implicit => best_roll(value, line, numbers, headed)
+            .map_or(f64::INFINITY, |best| best.max(best * catalyst)),
+    }
+}
+
+/// The value on the trade site of `line`, of the trade `value` read from the `numbers` it
+/// counts, at its best roll: the end of their ranges that gives the most. A number written
+/// without range is a fixed value in the advanced copy (`headed`); in a copy from the in-game
+/// trade, which writes no range, its best roll is unknown: none.
+fn best_roll(value: TradeValue, line: &StatLine, numbers: &[usize], headed: bool) -> Option<f64> {
+    let field = |end: fn(&Range) -> f64| -> Option<f64> {
+        let ends: Vec<f64> = numbers
+            .iter()
+            .map(|&number| {
+                let roll = line.rolls.get(number)?;
+                match &roll.range {
+                    Some(range) => Some(end(range)),
+                    None => headed.then_some(roll.value),
+                }
+            })
+            .collect::<Option<_>>()?;
+        #[expect(clippy::cast_precision_loss, reason = "a few numbers in a line")]
+        let count = ends.len() as f64;
+        Some(ends.iter().sum::<f64>() / count)
+    };
+    let (highest, lowest) = (field(|range| range.max)?, field(|range| range.min)?);
+    Some(value.of(highest).max(value.of(lowest)))
 }
 
 /// For each line of `found`, a line of `modifier`, the indexes of its numbers the stat counts;
@@ -272,8 +317,8 @@ struct Line {
     source: Source,
     /// What the line gives on the trade site to any item of the base, which a filter must go
     /// beyond to compare the item: nothing for a line of a modifier; for an implicit, its best
-    /// roll, infinite when unknown (a copy from the in-game trade); for a rune or an
-    /// enchantment, its value.
+    /// roll, raised by a catalyst on a jewel, infinite when unknown (a copy from the in-game
+    /// trade); for a rune or an enchantment, its value.
     reach: f64,
 }
 
@@ -296,7 +341,8 @@ impl Line {
 /// its base.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Source {
-    /// A modifier of the item: prefix, suffix, fractured, desecrated, crafted.
+    /// A modifier rolled on this item, which no other item of its base has: a prefix, a
+    /// suffix (fractured, desecrated, crafted too), or what its corruption added.
     Modifier,
     /// An implicit modifier, which comes with the base.
     Implicit,
@@ -305,16 +351,13 @@ enum Source {
 }
 
 impl Source {
-    fn of(group: TradeGroup) -> Self {
-        match group {
-            TradeGroup::Implicit => Self::Implicit,
-            TradeGroup::Rune | TradeGroup::Enchant => Self::Added,
-            TradeGroup::Explicit
-            | TradeGroup::Fractured
-            | TradeGroup::Desecrated
-            | TradeGroup::Crafted
-            | TradeGroup::Pseudo
-            | TradeGroup::Skill => Self::Modifier,
+    /// The source of the lines of a modifier of `kind`: by its kind on the item, not by its
+    /// group on the trade site, which lists what a corruption added with the enchantments.
+    fn of(kind: ModifierKind) -> Self {
+        match kind {
+            ModifierKind::Explicit(_) | ModifierKind::Corruption => Self::Modifier,
+            ModifierKind::Implicit => Self::Implicit,
+            ModifierKind::Rune | ModifierKind::Enchant => Self::Added,
         }
     }
 }
@@ -327,8 +370,8 @@ pub struct LineStats {
     /// What each pseudo total reaches with the lines of the item that any item of its base may
     /// have ([`Line::reach`]), the others left out.
     pseudo_reach: Vec<(Pseudo, f64)>,
-    /// The physical DPS the base of a weapon reaches with them, at the usual quality.
-    physical_reach: Option<f64>,
+    /// The DPS the base of a weapon reaches with them, the physical one at the usual quality.
+    dps_reach: Option<BaseDps>,
     /// The prefixes the lines of [`AFFIXES_ALLOWED`] add, negative when they take some away.
     prefixes_allowed: i32,
     /// The suffixes they add.
@@ -341,10 +384,13 @@ impl LineStats {
     #[must_use]
     pub fn new(item: &Item, modifiers: &[Modifier], trade: Option<&TradeStats>) -> Self {
         let language = item.language();
+        // What tells the best roll of an implicit on any item of the base.
+        let (headed, catalyst) = (item.is_headed(), catalyst_factor(item));
         let mut lines = Vec::new();
         let (mut prefixes_allowed, mut suffixes_allowed) = (0.0, 0.0);
         for (index, modifier) in modifiers.iter().enumerate() {
             let group = TradeGroup::of(modifier);
+            let source = Source::of(modifier.kind);
             for found in game_data::modifier_stats(language, modifier, trade) {
                 let numbers = counted_numbers(&found, modifier);
                 // The first line with a number of the stat holds its filter: `Life that would
@@ -355,26 +401,21 @@ impl LineStats {
                     .position(|line| !line.is_empty())
                     .unwrap_or(0);
                 let searched = found.lines.start + offset;
+                let searched_line = modifier.lines.get(searched);
+                let counted = numbers.get(offset).map_or(&[][..], Vec::as_slice);
                 let stat = found
                     .stat
                     .as_ref()
-                    .zip(modifier.lines.get(searched))
-                    .and_then(|(stat, line)| {
-                        let counted = numbers.get(offset).map_or(&[][..], Vec::as_slice);
-                        TradeStat::new(stat, group, line, counted)
+                    .zip(searched_line)
+                    .and_then(|(stat, line)| TradeStat::new(stat, group, line, counted));
+                // A line without number gives a total nothing.
+                let reach = stat
+                    .as_ref()
+                    .and_then(|stat| stat.value)
+                    .zip(searched_line)
+                    .map_or(0.0, |(value, line)| {
+                        reach(source, value, line, counted, headed, catalyst)
                     });
-                let source = Source::of(group);
-                let value = stat.as_ref().and_then(|stat| stat.value);
-                let reach = match (source, value, modifier.lines.get(searched)) {
-                    (Source::Modifier, _, _) | (_, None, _) => 0.0,
-                    (Source::Added, Some(value), _) => value.trade,
-                    (Source::Implicit, Some(value), line) => line
-                        .and_then(|line| {
-                            let counted = numbers.get(offset).map_or(&[][..], Vec::as_slice);
-                            best_roll(value, line, counted)
-                        })
-                        .unwrap_or(f64::INFINITY),
-                };
                 let known = found.stat.is_some();
                 let game_id = found.stat.as_ref().and_then(|found| found.stat.id.clone());
                 if let Some(stat) = &found.stat
@@ -429,12 +470,12 @@ impl LineStats {
             .into_iter()
             .map(|total| (total.pseudo, total.value))
             .collect();
-        let physical_reach = physical_reach(item, &lines);
+        let dps_reach = dps_reach(item, &lines);
         Self {
             lines,
             pseudo,
             pseudo_reach,
-            physical_reach,
+            dps_reach,
             prefixes_allowed: affixes(prefixes_allowed),
             suffixes_allowed: affixes(suffixes_allowed),
         }
@@ -453,21 +494,30 @@ impl LineStats {
         self.line(key)?.numbers.as_deref()
     }
 
-    /// The DPS `property` of a weapon counts the line `key`: its damage, its attack speed.
+    /// The filter `sum` counts the line `key`: a DPS of a weapon, its damage and its attack
+    /// speed; a pseudo total, the lines it adds up, also on an item that doesn't show it.
     #[must_use]
-    pub fn counts_in(&self, key: StatKey, property: Property) -> bool {
-        let ids: &[&str] = match property {
-            Property::PhysicalDps => &PHYSICAL_DPS,
-            Property::ElementalDps => &ELEMENTAL_DPS,
-            Property::ItemLevel
-            | Property::Sockets
-            | Property::Quality
-            | Property::RequiredLevel
-            | Property::Waystone(_)
-            | Property::GemLevel
-            | Property::GemSockets => return false,
-        };
-        self.line(key).is_some_and(|line| line.is_one_of(ids))
+    pub fn counts_in(&self, key: StatKey, sum: FilterKey) -> bool {
+        let has = |ids: &[&str]| self.line(key).is_some_and(|line| line.is_one_of(ids));
+        match sum {
+            FilterKey::Property(Property::PhysicalDps) => has(&PHYSICAL_DPS),
+            FilterKey::Property(Property::ElementalDps) => has(&ELEMENTAL_DPS),
+            FilterKey::Pseudo(pseudo) => self
+                .pseudo
+                .iter()
+                .any(|total| total.pseudo == pseudo && total.lines.contains(&key)),
+            FilterKey::Property(
+                Property::ItemLevel
+                | Property::Sockets
+                | Property::Quality
+                | Property::RequiredLevel
+                | Property::Waystone(_)
+                | Property::GemLevel
+                | Property::GemSockets,
+            )
+            | FilterKey::Stat(_)
+            | FilterKey::BaseType => false,
+        }
     }
 
     /// The pseudo totals of the item that are filters, for any item: the stats show them for
@@ -475,12 +525,6 @@ impl LineStats {
     #[must_use]
     pub fn pseudo_totals(&self) -> &[PseudoTotal] {
         &self.pseudo
-    }
-
-    /// The line `key` is added up by a pseudo total, also on an item that doesn't show them.
-    #[must_use]
-    pub fn added_up(&self, key: StatKey) -> bool {
-        self.pseudo.iter().any(|total| total.lines.contains(&key))
     }
 
     /// The prefixes or suffixes (`affix`) the lines of the item add to those it can have,
@@ -538,11 +582,13 @@ impl LineStats {
     /// the item when it compares a stat of the item, the rule of the estimate of a rare or
     /// magic item, which needs one, and of the filters checked by default. A line of a
     /// modifier, not of the base (an implicit, a rune, an enchantment); a pseudo total that
-    /// adds up such a line, with a minimum beyond what the lines of the base reach; a physical
-    /// DPS with a minimum beyond what the base reaches with them, at the usual quality; an
-    /// elemental DPS that a modifier adds; a property of a waystone or of a gem. The others
-    /// rule out items of the league only (an implicit, the item level…), and the count of the
-    /// unrevealed modifiers no item of the league it alone would: any base may have one.
+    /// adds up such a line, with a minimum beyond what the lines of the base reach; a DPS
+    /// with a minimum beyond what the base reaches with them, the physical one at the usual
+    /// quality; a property of a waystone or of a gem. The others rule out items of the league
+    /// only (an implicit, the item level…), and the count of the unrevealed modifiers no item
+    /// of the league it alone would: any base may have one. The base is that of the item,
+    /// also when its base type is unchecked and the search spans its category, whose other
+    /// bases may reach more: the damage of the bases isn't in the game data.
     #[must_use]
     pub fn rules_out(&self, key: FilterKey, minimum: Option<f64>) -> RulesOut {
         let of_a_modifier = |key: &StatKey| {
@@ -576,23 +622,28 @@ impl LineStats {
                     .is_some_and(|total| total.lines.iter().any(of_a_modifier));
                 of_the_base_if(adds_a_modifier && beyond(reach))
             }
-            FilterKey::Property(property) => match property {
-                Property::PhysicalDps => of_the_base_if(
-                    self.physical_reach
+            FilterKey::Property(property) => {
+                // A DPS beyond what the base reaches; without a minimum, any weapon passes.
+                let beyond_the_base = |reach: fn(BaseDps) -> f64| {
+                    self.dps_reach
+                        .map(reach)
                         .zip(minimum)
-                        .is_some_and(|(reach, minimum)| minimum > reach),
-                ),
-                Property::ElementalDps => of_the_base_if(self.lines.iter().any(|line| {
-                    line.source == Source::Modifier && line.is_one_of(&ADDED_ELEMENTAL)
-                })),
-                Property::Waystone(_) | Property::GemLevel | Property::GemSockets => {
-                    RulesOut::OfTheBase
+                        .is_some_and(|(reach, minimum)| minimum > reach)
+                };
+                match property {
+                    Property::PhysicalDps => of_the_base_if(beyond_the_base(|base| base.physical)),
+                    Property::ElementalDps => {
+                        of_the_base_if(beyond_the_base(|base| base.elemental))
+                    }
+                    Property::Waystone(_) | Property::GemLevel | Property::GemSockets => {
+                        RulesOut::OfTheBase
+                    }
+                    Property::ItemLevel
+                    | Property::Sockets
+                    | Property::Quality
+                    | Property::RequiredLevel => RulesOut::OfTheLeague,
                 }
-                Property::ItemLevel
-                | Property::Sockets
-                | Property::Quality
-                | Property::RequiredLevel => RulesOut::OfTheLeague,
-            },
+            }
         }
     }
 

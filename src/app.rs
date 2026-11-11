@@ -790,10 +790,7 @@ impl ItemView<'_> {
             ui.ctx().open_url(OpenUrl::new_tab(url));
         }
         let league = session.league().map(League::name);
-        PriceBlock::new(item, fixed_price, prices, league, i18n)
-            .estimate(estimate)
-            .stat_checks(checks)
-            .show(ui);
+        PriceBlock::new(item, fixed_price, estimate, checks, prices, league, i18n).show(ui);
         let offers_action = if let Some(kind) = kind {
             OffersBlock::new(offers, kind, reference, item, shown.lines(), i18n)
                 .bug_report(bug_report)

@@ -1491,20 +1491,77 @@ fn a_weapon_mostly_elemental_is_searched_by_its_elemental_dps_too() {
 }
 
 #[test]
-fn the_damage_lines_of_a_magic_weapon_are_checked_when_its_dps_is_not() {
+fn a_line_of_a_magic_item_starts_unchecked_only_when_a_checked_dps_or_total_counts_it() {
+    // The rows of `item` that start with one of `starts`, in their order.
+    let rows = |item: &Item, starts: &[&str]| -> Vec<String> {
+        texts(item)
+            .into_iter()
+            .filter(|row| starts.iter().any(|start| row[4..].starts_with(start)))
+            .collect()
+    };
+    let maul = |damage: &str, lines: &str| {
+        parse(&format!(
+            "Item Class: Two Hand Maces\nRarity: Magic\nHeavy Temple Maul\n--------\n\
+             {damage}\nAttacks per Second: 1.00\n--------\nItem Level: 80\n--------\n{lines}"
+        ))
+    };
     // Its DPS, which its base reaches at 20 % quality, compares nothing: the line it would
     // count is checked in its place, as the other modifiers of a magic item.
-    let maul = parse(
-        "Item Class: Two Hand Maces\nRarity: Magic\nHeavy Temple Maul\n--------\n\
-         Physical Damage: 10-20 (augmented)\nAttacks per Second: 1.00\n--------\n\
-         Item Level: 80\n--------\n25% increased Physical Damage",
+    let weak = maul(
+        "Physical Damage: 10-20 (augmented)",
+        "25% increased Physical Damage",
     );
-    let rows = texts_from(&maul, "Weapon");
-    assert_eq!(rows[1], "□ PhysicalDps: 15 ≥13");
-    assert!(
-        rows.iter()
-            .any(|row| row.starts_with("■ 25% increased Physical Damage")),
-        "{rows:?}"
+    assert_eq!(
+        rows(&weak, &["PhysicalDps", "25%"]),
+        [
+            "□ PhysicalDps: 15 ≥13",
+            "■ 25% increased Physical Damage ≥23"
+        ]
+    );
+    // Its physical DPS checked counts its physical damage; its elemental DPS, smaller, starts
+    // unchecked, so that nothing counts its lightning damage: checked.
+    let strong = maul(
+        "Physical Damage: 20-40 (augmented)\nLightning Damage: 1-4 (lightning)",
+        "100% increased Physical Damage\nAdds 1 to 4 Lightning Damage",
+    );
+    assert_eq!(
+        rows(&strong, &["PhysicalDps", "ElementalDps", "100%", "Adds"]),
+        [
+            "■ PhysicalDps: 30 ≥27",
+            "□ ElementalDps: 3 ≥2",
+            "□ 100% increased Physical Damage ≥90",
+            "■ Adds 1 to 4 Lightning Damage ≥2",
+        ]
+    );
+
+    // A Prismatic Ring: its total elemental resistance, 30 with its implicit, which any
+    // Prismatic Ring reaches, starts unchecked, so that nothing counts its cold resistance nor
+    // its implicit: checked. Its total of Life checked counts its line of Life.
+    let ring = |lines: &str| {
+        parse(&format!(
+            "Item Class: Rings\nRarity: Magic\nHale Prismatic Ring of the Seal\n--------\n\
+             Item Level: 80\n--------\n+8(7-10)% to all Elemental Resistances (implicit)\n\
+             --------\n{lines}"
+        ))
+    };
+    let both = ring("+30 to maximum Life\n+6% to Cold Resistance");
+    assert_eq!(
+        rows(
+            &both,
+            &["ElementalResistance", "Life:", "+8%", "+30", "+6%"]
+        ),
+        [
+            "□ ElementalResistance: 30 ≥27",
+            "■ Life: 30 ≥27",
+            "■ +8% to all Elemental Resistances ≥7 [7–10 0.33]",
+            "□ +30 to maximum Life ≥27",
+            "■ +6% to Cold Resistance ≥5",
+        ]
+    );
+    // Its cold resistance alone compares the ring.
+    assert_eq!(
+        default_checks(&ring("+6% to Cold Resistance")),
+        crate::ui::StatChecks::Checked
     );
 }
 
@@ -3995,105 +4052,143 @@ fn the_filters_of_an_item_by_default_compare_its_stats_or_ask_for_one() {
     }
 }
 
-#[test]
-fn a_filter_that_the_base_of_the_item_reaches_compares_nothing() {
-    use crate::ui::StatChecks::{Checked, NoneToCheck, Unchecked};
+/// A rare item of `base`, of the item `class`, as the in-game trade copies it: `top`, its
+/// properties, then its modifier `lines`.
+fn rare_item(base: &str, class: &str, top: &str, lines: &str) -> Item {
+    parse(&format!(
+        "Item Class: {class}\nRarity: Rare\nGale Coil\n{base}\n--------\n{top}\
+         Item Level: 80\n--------\n{lines}"
+    ))
+}
 
-    let rare = |base: &str, class: &str, top: &str, lines: &str| {
-        parse(&format!(
-            "Item Class: {class}\nRarity: Rare\nGale Coil\n{base}\n--------\n{top}\
-             Item Level: 80\n--------\n{lines}"
-        ))
-    };
-    // Its resistance from its implicit only, which every Prismatic Ring has: its explicit
-    // lines can be checked.
-    let ring = rare(
-        "Prismatic Ring",
-        "Rings",
-        "",
-        "+8(7-10)% to all Elemental Resistances (implicit)\n--------\n\
-         +125 to Evasion Rating\n16% increased Rarity of Items found",
-    );
-    assert_eq!(default_checks(&ring), Unchecked);
-    // A small explicit resistance on top: 32, its minimum of 29 within the 30 its implicit
-    // reaches at its best roll, which every Prismatic Ring may.
-    let small = rare(
-        "Prismatic Ring",
-        "Rings",
-        "",
-        "+8(7-10)% to all Elemental Resistances (implicit)\n--------\n\
-         +8% to Cold Resistance\n16% increased Rarity of Items found",
-    );
-    assert_eq!(default_checks(&small), Unchecked);
-    let large = rare(
-        "Prismatic Ring",
-        "Rings",
-        "",
-        "+8(7-10)% to all Elemental Resistances (implicit)\n--------\n\
-         +40% to Cold Resistance",
-    );
-    assert_eq!(default_checks(&large), Checked);
-    // A small line of physical damage: its base reaches the minimum at 20 % quality.
-    let maul = |lines: &str| {
-        rare(
-            "Temple Maul",
-            "Two Hand Maces",
-            "Physical Damage: 10-20 (augmented)\nAttacks per Second: 1.00\n--------\n",
-            lines,
+/// A line no pseudo total nor DPS counts, to check on a rare.
+const RARITY: &str = "16% increased Rarity of Items found";
+
+#[test]
+fn a_total_that_the_lines_of_the_base_reach_compares_nothing() {
+    use crate::ui::StatChecks::{Checked, Unchecked};
+
+    // A Prismatic Ring, its implicit +8(7-10)% to all Elemental Resistances, with `lines`.
+    let ring = |lines: &str| {
+        rare_item(
+            "Prismatic Ring",
+            "Rings",
+            "",
+            &format!("+8(7-10)% to all Elemental Resistances (implicit)\n--------\n{lines}"),
         )
     };
-    let rarity = "16% increased Rarity of Items found";
-    assert_eq!(
-        default_checks(&maul(&format!("20% increased Physical Damage\n{rarity}"))),
-        Unchecked
-    );
-    // An attack speed of its base, implicit: every Temple Maul has it. Its DPS reaches
-    // 20 × 1.2 × 1.10 = 26.4, beyond the minimum of 25 (24 with its implicit left out).
-    let fast = rare(
-        "Temple Maul",
-        "Two Hand Maces",
-        "Physical Damage: 20-32 (augmented)\nAttacks per Second: 1.10 (augmented)\n--------\n",
-        &format!(
-            "10% increased Attack Speed (implicit)\n--------\n\
-             30% increased Physical Damage\n{rarity}"
-        ),
-    );
-    assert_eq!(default_checks(&fast), Unchecked);
+    // Its resistance from its implicit only, which every Prismatic Ring has.
+    let alone = ring(&format!("+125 to Evasion Rating\n{RARITY}"));
+    assert_eq!(default_checks(&alone), Unchecked);
+    // A small resistance on top, 32 in all: its minimum of 29 within the 30 of the best roll
+    // of the implicit.
+    let small = ring(&format!("+8% to Cold Resistance\n{RARITY}"));
+    assert_eq!(default_checks(&small), Unchecked);
+    // 34 in all: its minimum of 31 beyond the best roll, within the 36 it gives with the
+    // usual quality of a catalyst, which any Prismatic Ring may have.
+    let catalysed = ring(&format!("+10% to Cold Resistance\n{RARITY}"));
+    assert_eq!(default_checks(&catalysed), Unchecked);
+    assert_eq!(default_checks(&ring("+40% to Cold Resistance")), Checked);
     // Copied from the in-game trade, its implicit without range: its best roll unknown, so
-    // that a small resistance on top never compares it.
-    let traded = rare(
+    // that no resistance on top compares it.
+    let traded = rare_item(
         "Prismatic Ring",
         "Rings",
         "",
         &format!(
-            "+8% to all Elemental Resistances (implicit)\n--------\n+6% to Cold Resistance\n{rarity}"
+            "+8% to all Elemental Resistances (implicit)\n--------\n+40% to Cold Resistance\n{RARITY}"
         ),
     );
     assert_eq!(default_checks(&traded), Unchecked);
-    // A rune goes on any item of the base: a total or a DPS it alone gives compares nothing.
-    let helmet = rare(
+    // In the advanced copy, a number without range is a fixed value, its best roll: 10 of
+    // Strength, 12 with a catalyst, under the minimum of 20 of its total of 22.
+    let fixed = parse(
+        "Item Class: Rings\nRarity: Rare\nGale Coil\nPrismatic Ring\n--------\n\
+         Item Level: 80\n--------\n{ Implicit Modifier — Attribute }\n+10 to Strength\n\
+         --------\n{ Suffix Modifier \"of the Bear\" (Tier: 7) — Attribute }\n\
+         +12(9-12) to Strength",
+    );
+    assert_eq!(default_checks(&fixed), Checked);
+    // The quality of an armour raises its defences, not its implicit: 80 of Life at its best
+    // roll, under the minimum of 87 of its total of 97 (96 with a catalyst).
+    let armour = rare_item(
+        "Ancestral Mail",
+        "Body Armours",
+        "",
+        "+65(60-80) to maximum Life (implicit)\n--------\n+32 to maximum Life",
+    );
+    assert_eq!(default_checks(&armour), Checked);
+    // A rune goes on any item of the base: a total it alone gives compares nothing.
+    let helmet = rare_item(
         "Hunter Hood",
         "Helmets",
         "",
-        &format!("+12% to Fire Resistance (rune)\n--------\n{rarity}"),
+        &format!("+12% to Fire Resistance (rune)\n--------\n{RARITY}"),
     );
     assert_eq!(default_checks(&helmet), Unchecked);
-    let runed = rare(
-        "Gemini Bow",
-        "Bows",
-        "Physical Damage: 40-90\nFire Damage: 5-10 (fire)\nAttacks per Second: 1.20\n--------\n",
-        "Adds 5 to 10 Fire Damage (rune)\n--------\n+3 to Level of all Projectile Skills",
+}
+
+#[test]
+fn a_dps_that_the_base_of_a_weapon_reaches_compares_nothing() {
+    use crate::ui::StatChecks::{Checked, Unchecked};
+
+    let maul = |top: &str, lines: &str| {
+        rare_item(
+            "Temple Maul",
+            "Two Hand Maces",
+            &format!("{top}\n--------\n"),
+            lines,
+        )
+    };
+    // A small line of physical damage: its base reaches the minimum at 20 % quality.
+    let small = maul(
+        "Physical Damage: 10-20 (augmented)\nAttacks per Second: 1.00",
+        &format!("20% increased Physical Damage\n{RARITY}"),
+    );
+    assert_eq!(default_checks(&small), Unchecked);
+    // An attack speed of its base, implicit: every Temple Maul has it. Its DPS reaches
+    // 20 × 1.2 × 1.10 = 26.4, beyond the minimum of 25 (24 with its implicit left out).
+    let fast = maul(
+        "Physical Damage: 20-32 (augmented)\nAttacks per Second: 1.10 (augmented)",
+        &format!(
+            "10% increased Attack Speed (implicit)\n--------\n\
+             30% increased Physical Damage\n{RARITY}"
+        ),
+    );
+    assert_eq!(default_checks(&fast), Unchecked);
+
+    let projectiles = "+3 to Level of all Projectile Skills";
+    let bow = |top: &str, lines: &str| {
+        let top = format!("Physical Damage: 40-90\n{top}Attacks per Second: 1.20\n--------\n");
+        rare_item("Gemini Bow", "Bows", &top, lines)
+    };
+    // Without a line of damage nor of attack speed: the DPS of its base.
+    assert_eq!(default_checks(&bow("", projectiles)), Unchecked);
+    // A rune goes on any bow: the elemental DPS it alone gives compares nothing.
+    let runed = bow(
+        "Fire Damage: 5-10 (fire)\n",
+        &format!("Adds 5 to 10 Fire Damage (rune)\n--------\n{projectiles}"),
     );
     assert_eq!(default_checks(&runed), Unchecked);
-    // A bow without a line of damage nor of attack speed: the DPS of its base.
-    let bow = rare(
-        "Gemini Bow",
-        "Bows",
-        "Physical Damage: 40-90\nAttacks per Second: 1.20\n--------\n",
-        "+3 to Level of all Projectile Skills",
+    // A strong rune and a small modifier: 31 of elemental damage a hit, 37.2 a second, its
+    // minimum of 33 within the 34.8 the bow reaches with its rune alone.
+    let strong_rune = bow(
+        "Fire Damage: 26-32 (fire)\nCold Damage: 1-3 (cold)\n",
+        &format!(
+            "Adds 26 to 32 Fire Damage (rune)\n--------\nAdds 1 to 3 Cold Damage\n{projectiles}"
+        ),
     );
-    assert_eq!(default_checks(&bow), Unchecked);
-    // Lines the trade site can't search: nothing to check.
-    let unknown = rare("Ruby", "Jewels", "", "Strange words of a later patch");
-    assert_eq!(default_checks(&unknown), NoneToCheck);
+    assert_eq!(default_checks(&strong_rune), Unchecked);
+    // As much from a modifier as from the rune: 58 a hit, its minimum of 62 beyond 34.8.
+    let strong_modifier = bow(
+        "Fire Damage: 26-32 (fire)\nCold Damage: 26-32 (cold)\n",
+        "Adds 26 to 32 Fire Damage (rune)\n--------\nAdds 26 to 32 Cold Damage",
+    );
+    assert_eq!(default_checks(&strong_modifier), Checked);
+}
+
+#[test]
+fn an_item_whose_lines_the_trade_site_cant_search_has_nothing_to_check() {
+    let unknown = rare_item("Ruby", "Jewels", "", "Strange words of a later patch");
+    assert_eq!(default_checks(&unknown), crate::ui::StatChecks::NoneToCheck);
 }

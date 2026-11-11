@@ -46,9 +46,13 @@ pub use waystone::{
     MAX_WAYSTONE_TIER, WaystoneProperty, WaystoneValue, base_and_tier, waystone_property,
     without_tier,
 };
-pub use weapon::{DamageKind, Weapon, WeaponLines};
+pub use weapon::{BaseDps, DamageKind, Weapon, WeaponLines};
 
 use crate::language::Language;
+
+/// The quality an item usually reaches, in percent: beyond, an exceptional base, a corruption
+/// or a modifier of the maximum quality. Any item of a base may have it.
+pub const USUAL_QUALITY: u32 = 20;
 
 /// The rarity of an item, which also tells currencies and gems apart.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -203,13 +207,25 @@ pub struct Item {
     /// The damage and the speed of a weapon.
     weapon: Option<Weapon>,
     modifiers: Vec<Modifier>,
-    /// A rare or magic item copied from the trade of the game (another player's listing): its
-    /// explicit modifiers without the `{ … }` headers of the advanced copy.
-    tiers_from_values: bool,
-    /// A unique copied from the trade of the game: its implicit and explicit modifiers without
-    /// the `{ … }` headers, hence without ranges, which come from the price database.
-    rolls_from_prices: bool,
+    rolls: RollsSource,
     warnings: Vec<ParseWarning>,
+}
+
+/// Where the rolls of the modifiers of an item come from, by the way it was copied.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RollsSource {
+    /// The advanced copy: the `{ … }` header of each modifier gives its affix, its tier and
+    /// its ranges.
+    Headers,
+    /// A rare or magic item copied from the trade of the game (another player's listing): its
+    /// explicit modifiers without the headers, found from their values in the modifier tables.
+    Values,
+    /// A unique copied from the trade of the game: its implicit and explicit modifiers without
+    /// the headers, hence without ranges, which come from the price database.
+    Prices,
+    /// No header, and no explicit modifier whose rolls to find: an unidentified item, or one
+    /// without modifiers.
+    Nowhere,
 }
 
 impl Item {
@@ -423,12 +439,20 @@ impl Item {
         self.modifiers = modifiers;
     }
 
+    /// The item was read from the advanced copy, whose `{ … }` headers give the modifiers
+    /// their ranges: a number written without range there is a fixed value. A copy from the
+    /// trade of the game writes no range at all, the rolls of its numbers unknown.
+    #[must_use]
+    pub fn is_headed(&self) -> bool {
+        self.rolls == RollsSource::Headers
+    }
+
     /// A rare or magic item copied from the trade of the game (another player's listing): its
     /// explicit modifiers have no `{ … }` header, hence no affix, tier nor range, which are
     /// found from their values in the modifier tables.
     #[must_use]
     pub fn has_tiers_from_values(&self) -> bool {
-        self.tiers_from_values
+        self.rolls == RollsSource::Values
     }
 
     /// A unique copied from the trade of the game (another player's listing): its implicit and
@@ -436,7 +460,7 @@ impl Item {
     /// the modifiers the price database writes for it.
     #[must_use]
     pub fn has_rolls_from_prices(&self) -> bool {
-        self.rolls_from_prices
+        self.rolls == RollsSource::Prices
     }
 
     /// The number of desecrated modifiers not revealed yet.

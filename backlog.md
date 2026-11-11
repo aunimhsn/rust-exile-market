@@ -24,6 +24,8 @@ One entry per item: what it is, its kind (the section it sits in), what it depen
 
 ## Edge cases
 
+- A second advanced copy of a ring or an amulet under a catalyst (fifth code review of 17e3f, 2026-11-11), to confirm that the range of its implicit is written without the quality (`+10(7-10)%` at 20 % on the one copy known): an implicit whose value is beyond its range would. The implicits of the jewellery are counted with the usual quality of a catalyst until then, by prudence (`docs/game-data.md`, "What a base reaches"). Depends on a copy from the owner; with the copies of Path of Exile 2 1.0.
+
 - The ranges of the implicit modifiers of the bases generated into `assets/game-data` (fourth code review of 17e3f, 2026-11-11): a copy from the in-game trade writes an implicit without range, so that what the base reaches is unknown and a pseudo total adding it up never compares the item (no estimate, "Check a modifier"); with the ranges, it would compare beyond the best roll. Depends on the generator (`tools/game-data`) and on a source of the implicits; to do with the data of Path of Exile 2 1.0.
 
 - The French enchantment `Attribue Parangon` (the `Allocates Paragon` of the owner's tiara, `inputs/13k2c-items.txt`) finds no stat, the French data of Exiled Exchange 2 writing the notable with its English name (`Attribue Paragon`, `mod_granted_passive_hash`): check the other French notables of `Allocates #` against the French trade site and the game, and take their French names from it (found in step 13k2e2; `UNKNOWN_LINES` in `src/game_data/lines.rs`).

@@ -125,8 +125,7 @@ impl StatChecks {
 /// filters: an item `priced_by_stats` ([`Item::priced_by_stats`]) is estimated only from a
 /// search that compares some, so that it asks for one to be checked, and says nothing when
 /// none can be (the offers of any item of its base would say nothing of its price).
-#[must_use]
-pub(crate) fn estimate_hint(priced_by_stats: bool, checks: StatChecks) -> Option<Message> {
+fn estimate_hint(priced_by_stats: bool, checks: StatChecks) -> Option<Message> {
     if !priced_by_stats {
         return Some(Message::SearchToEstimate);
     }
@@ -202,6 +201,7 @@ fn view<'a>(
 pub struct PriceBlock<'a> {
     item: &'a Item,
     price: Result<(FixedPrice<'a>, Rates), NoFixedPrice>,
+    /// The estimated price of an item without a fixed price, from its similar offers.
     estimate: Option<Estimate<'a>>,
     /// Whether the filters of the item compare its stats.
     checks: StatChecks,
@@ -212,11 +212,15 @@ pub struct PriceBlock<'a> {
 
 impl<'a> PriceBlock<'a> {
     /// The block of `item`: its fixed `price` with the rates of its prices, or why it has
-    /// none, given the state of the `prices` of the `league` shown.
+    /// none, given the state of the `prices` of the `league` shown; for an item without a
+    /// fixed price, its `estimate` from its similar offers, or else, by the `checks` of its
+    /// filters as the player left them, what to do to get one.
     #[must_use]
     pub fn new(
         item: &'a Item,
         price: Result<(FixedPrice<'a>, Rates), NoFixedPrice>,
+        estimate: Option<Estimate<'a>>,
+        checks: StatChecks,
         prices: PricesState,
         league: Option<&'a str>,
         i18n: &'a Translator,
@@ -224,27 +228,12 @@ impl<'a> PriceBlock<'a> {
         Self {
             item,
             price,
-            estimate: None,
-            checks: StatChecks::Checked,
+            estimate,
+            checks,
             prices,
             league,
             i18n,
         }
-    }
-
-    /// The estimated price of an item without a fixed price, from its similar offers.
-    #[must_use]
-    pub fn estimate(mut self, estimate: Option<Estimate<'a>>) -> Self {
-        self.estimate = estimate;
-        self
-    }
-
-    /// Whether the filters of the item, as the player left them, compare its stats: without, a
-    /// rare or magic item without estimate asks for a modifier to be checked.
-    #[must_use]
-    pub fn stat_checks(mut self, checks: StatChecks) -> Self {
-        self.checks = checks;
-        self
     }
 
     /// Draws the block, the whole width of `ui`.

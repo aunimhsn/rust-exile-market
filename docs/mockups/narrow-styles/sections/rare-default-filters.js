@@ -38,7 +38,9 @@ const ruleWin = (it, rows, withRule, offersBlock) => {
   const fr = it.fr;
   const stats = ruled(rows, withRule);
   const count = stats.filter(row => row.check).length;
-  const block = !statChecked(stats) ? NO_STAT[fr ? "fr" : "en"] : fr ? BEFORE_FR : RARE_ESTIMATE_BEFORE;
+  const rare = !statChecked(stats) ? NO_STAT[fr ? "fr" : "en"] : fr ? BEFORE_FR : RARE_ESTIMATE_BEFORE;
+  // The first line names the rarity of the item.
+  const block = it.rarity === "magic" ? { lines: [rare.lines[0].replace("rare items", "magic items"), rare.lines[1]] } : rare;
   return win(topBar(), item({ ...it, filters: fr ? `${count} filtre${count > 1 ? "s" : ""}` : `${count} filter${count > 1 ? "s" : ""}`, stats }, true),
     price(block, fr ? "fr" : "en"), ...(offersBlock ? [offersBlock] : []),
     foot(fr ? "poe2scout il y a 12min · GGG trade il y a 2min" : undefined));
@@ -183,6 +185,24 @@ const plainBowRows = [
   { mod: "+28% to Critical Damage Bonus", check: false, min: 25, tier: 2, range: "25–29", over: { share: .8 } },
   { mod: "+28 to Dexterity", check: false, min: 25, tier: 2, range: "28–30", over: { share: .82 } },
 ];
+// A magic ring whose total elemental resistance its implicit reaches (fifth code review of 17e3f): the total
+// starts unchecked, so that nothing counts its cold resistance nor its implicit, checked as the other modifiers
+// of a magic item; its total of Life, checked, still counts its line of Life.
+const MAGIC_RING = { rarity: "magic", name: "Hale Prismatic Ring of the Seal", cls: "Rings", tags: ["ilvl 80"], req: "Requires Level 60", statsLabel: "Stats (3)" };
+const magicRingRows = [
+  { group: "Item", min: true },
+  { mod: "Base: Prismatic Ring", check: true },
+  { mod: "Item level: 80", check: false, min: 80 },
+  { group: "Pseudo" },
+  { mod: "+30% total Elemental Resistance", check: false, min: 27 },
+  { mod: "+30 total maximum Life", check: true, min: 27 },
+  { group: "Implicit" },
+  { mod: "+8% to all Elemental Resistances", check: true, min: 7, range: "7–10", share: .33 },
+  { group: "Prefixes", fill: "1 of 1" },
+  { mod: "+30 to maximum Life", check: false, min: 27, tier: 9, range: "30–39", noBar: true },
+  { group: "Suffixes", fill: "1 of 1" },
+  { mod: "+6% to Cold Resistance", check: true, min: 5, tier: 8, range: "6–10", noBar: true },
+];
 // The jewel in French.
 const JEWEL_FR = { ...JEWEL, fr: true, name: "Braise de la couvée", base: "Rubis", cls: "Joyaux", tags: ["niv. 81"], statsLabel: "Statistiques (4)",
   tradeLabel: "Voir sur l'échange", tradeTitle: "Ouvrir la recherche sur le site d'échange" };
@@ -214,6 +234,7 @@ SECTIONS.unshift(["Filters checked on a rare (17e3f): option 1, every modifier u
   ["A jewel · Rule · en français", ruleWin(JEWEL_FR, ruleJewelRowsFr, true, offers({ state: "idle" }, "fr"))],
   ["A ring whose resistance is its implicit only (or a small one on top) · Rule · that total unchecked: any Prismatic Ring may reach it", ruleWin(IMPLICIT_RING, implicitRingRows, false, offers({ state: "idle" }))],
   ["A bow without a line of damage (or a small one) · Rule · its DPS unchecked: its base reaches it at 20 % quality", ruleWin(PLAIN_BOW, plainBowRows, false, offers({ state: "idle" }))],
+  ["A magic ring whose total its implicit reaches · Rule · that total unchecked, its cold resistance and its implicit checked in its place", ruleWin(MAGIC_RING, magicRingRows, false, offers({ state: "idle" }))],
   ["An unidentified jewel · Rule · nothing to check: no second line", win(topBar(),
     item({ ...UNIDENTIFIED_JEWEL, filters: "1 filter", stats: [{ group: "Item", min: true }, { mod: "Base: Emerald", check: true }, { mod: "Item level: 75", check: false, min: 75 }] }, true),
     price({ lines: ["No market price for magic items."] }), offers({ state: "idle" }), foot())],
