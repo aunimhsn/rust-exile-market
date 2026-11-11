@@ -1,5 +1,6 @@
 //! The candidates of the reading of an item copied from the in-game trade: each line, and each
-//! run of consecutive lines, that a modifier of the tables holds, or that adds up two.
+//! run of consecutive lines, that a modifier of the tables holds, or that adds up two; and the
+//! item they are read on (`TradeItem`), which the files after this one read too.
 
 use super::ModifierTiers;
 use super::copied::{Copied, CopiedTier};

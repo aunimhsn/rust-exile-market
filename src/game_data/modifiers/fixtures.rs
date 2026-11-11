@@ -1,5 +1,7 @@
-//! What the tests of the modifier tables share: the modifiers, the tables and the items they
-//! are written with, and the readers of what the search found.
+//! What the tests of the modifier tables share, in three parts: the modifiers and the bases
+//! written by hand; the readers of what the search found; then what reads the test items and
+//! the tables of the game, for the `game_tests.rs` only: a `tests.rs` takes none of it, so
+//! that it passes whatever the patch of the game.
 
 use crate::game_data::bases::{BaseSpawn, Domain};
 use crate::game_data::lines::modifier_stats;
@@ -10,6 +12,8 @@ use crate::item::{
     Affix, CopiedItem, Item, Modifier, ModifierKind, ModifierOrigin, PartTier, Range, StatLine,
 };
 use crate::language::Language;
+
+// Written by hand.
 
 /// The range from `min` to `max`.
 pub(super) fn range(min: f64, max: f64) -> Range {
@@ -45,12 +49,6 @@ pub(super) fn modifier(affix: Option<Affix>, lines: &[&str]) -> Modifier {
     }
 }
 
-/// The tiers of `modifier` on `base_type`, in English.
-pub(super) fn tiers(base_type: &str, modifier: &Modifier) -> Option<ModifierTiers> {
-    let matches = modifier_stats(Language::English, modifier, None);
-    modifier_tiers(Language::English, base_type, None, modifier, &matches)
-}
-
 /// A modifier of `affix` with `lines`, the game marking it desecrated.
 pub(super) fn desecrated(affix: Affix, lines: &[&str]) -> Modifier {
     Modifier {
@@ -70,15 +68,18 @@ pub(super) fn trade_lines(lines: &[&str]) -> Vec<Modifier> {
         .collect()
 }
 
-/// The tiara and the bow copied by the owner from the in-game trade, English and French.
-pub(super) const TIARA_EN: &str =
-    include_str!("../../item/test-items/en-owner-trade-rare-helmet-fractured.txt");
-pub(super) const TIARA_FR: &str =
-    include_str!("../../item/test-items/fr-trade-rare-helmet-fractured.txt");
-pub(super) const BOW_EN: &str =
-    include_str!("../../item/test-items/en-owner-trade-rare-bow-mirrored.txt");
-pub(super) const BOW_FR: &str =
-    include_str!("../../item/test-items/fr-trade-rare-bow-mirrored.txt");
+/// A part of a split line of `affix`, in `tiers`, over `ranges`.
+pub(super) fn part(affix: Affix, tiers: &[u32], ranges: &[(f64, f64)]) -> PartTier {
+    PartTier {
+        affix,
+        tiers: tiers.to_vec(),
+        hides_number: false,
+        ranges: ranges.iter().map(|&(min, max)| range(min, max)).collect(),
+        currency: None,
+    }
+}
+
+// The readers of what the search found.
 
 /// The tier number of each affix a modifier can be.
 pub(super) type AffixTiers = Vec<(Affix, u32)>;
@@ -89,11 +90,6 @@ pub(super) type LinesRead = Vec<(Vec<String>, AffixTiers)>;
 
 /// The text of each line split, and the affix and tier number of its pure modifier.
 pub(super) type Added = Vec<(String, Affix, u32)>;
-
-/// The item copied as `text`, as the parser reads it.
-pub(super) fn parse(text: &str) -> Item {
-    Item::parse(&CopiedItem::from_text(text).expect("an item")).expect("read")
-}
 
 /// For each modifier read from its values, the texts of its lines and the tier number of
 /// each affix it can be.
@@ -136,6 +132,29 @@ pub(super) fn summary(modifiers: &[Modifier], found: &[FoundTiers]) -> Vec<(usiz
         .into_iter()
         .map(|(lines, affixes)| (lines.len(), affixes))
         .collect()
+}
+
+// What reads the test items and the tables of the game: for the `game_tests.rs` only.
+
+/// The tiers of `modifier` on `base_type`, in English.
+pub(super) fn tiers(base_type: &str, modifier: &Modifier) -> Option<ModifierTiers> {
+    let matches = modifier_stats(Language::English, modifier, None);
+    modifier_tiers(Language::English, base_type, None, modifier, &matches)
+}
+
+/// The tiara and the bow copied by the owner from the in-game trade, English and French.
+pub(super) const TIARA_EN: &str =
+    include_str!("../../item/test-items/en-owner-trade-rare-helmet-fractured.txt");
+pub(super) const TIARA_FR: &str =
+    include_str!("../../item/test-items/fr-trade-rare-helmet-fractured.txt");
+pub(super) const BOW_EN: &str =
+    include_str!("../../item/test-items/en-owner-trade-rare-bow-mirrored.txt");
+pub(super) const BOW_FR: &str =
+    include_str!("../../item/test-items/fr-trade-rare-bow-mirrored.txt");
+
+/// The item copied as `text`, as the parser reads it.
+pub(super) fn parse(text: &str) -> Item {
+    Item::parse(&CopiedItem::from_text(text).expect("an item")).expect("read")
 }
 
 /// The rare and magic items of the advanced copy, with the base type of a magic one.
@@ -262,15 +281,4 @@ pub(super) fn as_in_game_trade(item: &Item, base_type: &str) -> (Vec<Modifier>, 
         });
     }
     (modifiers, written)
-}
-
-/// A part of a split line of `affix`, in `tiers`, over `ranges`.
-pub(super) fn part(affix: Affix, tiers: &[u32], ranges: &[(f64, f64)]) -> PartTier {
-    PartTier {
-        affix,
-        tiers: tiers.to_vec(),
-        hides_number: false,
-        ranges: ranges.iter().map(|&(min, max)| range(min, max)).collect(),
-        currency: None,
-    }
 }

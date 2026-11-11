@@ -1,5 +1,7 @@
-//! The tiers of a modifier as the advanced copy writes it, looked up in the tables: the
-//! modifier with its lines that holds it best, and the tier taken when several hold it.
+//! The lookup of a copied modifier in the tables: the modifier with its lines that holds it
+//! best, and the tier taken when several hold it (`find`, for a modifier of either copy);
+//! then the tiers of a modifier as the advanced copy writes it (`modifier_tiers`,
+//! `lacks_table`).
 
 use super::base_tiers::tiers_on_base;
 use super::copied::{Copied, CopiedLine, CopiedTier, Fit};
