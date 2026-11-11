@@ -36,26 +36,48 @@ pub(super) struct Doubts {
     /// can be a prefix or a suffix: an affix the full prefixes or suffixes seemed to rule out
     /// may then be the one.
     pub(super) other_room: bool,
-    /// How the search ended; unless it concluded, every line read is in doubt.
+    /// How the search ended, which tells what it can vouch for.
     pub(super) outcome: Outcome,
-    /// Whether the search met a reading of the lines, which all fit the room of the item: the
-    /// best one, or another one when the best one doesn't fit it.
-    pub(super) fits: bool,
     /// The steps it took, [`MAX_STEPS`] at most.
     pub(super) steps: usize,
 }
 
-/// How the search of the other readings ended.
+/// How the search of the other readings ended, each of the readings it met fitting the room
+/// of the item.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum Outcome {
-    /// Every other reading looked at, the best one met among them (or the best one doesn't fit
-    /// the room, which every other reading does).
-    Concluded,
-    /// Stopped at the most steps, some readings not looked at.
+    /// Every reading looked at, the best one, which fits the room, met among them: the lines
+    /// in doubt are those the other readings tell.
+    BestMet,
+    /// Every reading looked at, the best one not fitting the room while another does, which
+    /// the candidates don't hold (a hybrid whose lines don't follow each other): a line keeps
+    /// its tier only when every reading met reads it as the best one does.
+    OnlyAnotherFits,
+    /// Every reading looked at, none fitting the room, the tables being out of step with the
+    /// game: no line is in doubt, the lines keep the tiers of the best reading.
+    NoneFits,
+    /// Stopped at the most steps, some readings not looked at: every line read is in doubt.
     Cut,
-    /// Every reading looked at, none the same as the best one: a line the search can't read,
-    /// or a best reading the game can't roll (two modifiers of one type).
+    /// Every reading looked at, none the same as the best one, which fits the room: a line
+    /// the search can't read, or a best reading the game can't roll (two modifiers of one
+    /// type). Every line read is in doubt.
     BestNotMet,
+}
+
+impl Outcome {
+    /// How a search ended that met the readings `met`, none when it stopped at the most steps,
+    /// the best reading fitting the room of the item or not.
+    fn of(met: Option<Met>, best_fits_room: bool) -> Self {
+        match (met, best_fits_room) {
+            (None, _) => Self::Cut,
+            (Some(Met::Best), true) => Self::BestMet,
+            (Some(Met::Nothing | Met::Others), true) => Self::BestNotMet,
+            // A reading met fits the room: the best one isn't among them, but by a way to
+            // tell two readings the same that the search of the best one doesn't know.
+            (Some(Met::Others | Met::Best), false) => Self::OnlyAnotherFits,
+            (Some(Met::Nothing), false) => Self::NoneFits,
+        }
+    }
 }
 
 /// A line of the item copied from the in-game trade, with its stat of the game data.
@@ -173,50 +195,44 @@ fn doubts_within(
     );
     let mut state = State::new(&ground);
     state.walk(&ground, 0);
-    let outcome = if state.cut {
-        Outcome::Cut
-    } else if state.met == Met::Best || !best.fits_room {
-        Outcome::Concluded
-    } else {
-        Outcome::BestNotMet
-    };
-    if outcome == Outcome::Concluded {
-        let mut doubts = state.doubts;
+    let outcome = Outcome::of(state.met(), best.fits_room);
+    let (in_doubt, other_room) = match outcome {
+        Outcome::BestMet => (state.doubts, state.other_room),
         // A best reading that doesn't fit the room of the item isn't a reading of it: a line
         // keeps its tier only if every reading met, which all fit the room, reads it the
         // same, whatever they make of the others (more modifiers adding up, another tier).
         // Without any, the tables are out of step with the game, and the tiers stay.
-        if !best.fits_room {
+        Outcome::OnlyAnotherFits | Outcome::NoneFits => {
+            let mut in_doubt = state.doubts;
             let disputed = lines.iter().filter(|line| {
                 let agreed = state.agreed.get(line.modifier).copied().unwrap_or(false);
                 line.read_by_best && !agreed
             });
             for line in disputed {
-                if !doubts.contains(&line.modifier) {
-                    doubts.push(line.modifier);
+                if !in_doubt.contains(&line.modifier) {
+                    in_doubt.push(line.modifier);
                 }
             }
+            (in_doubt, state.other_room)
         }
-        return Doubts {
-            lines: doubts,
-            other_room: state.other_room,
-            outcome,
-            fits: state.met != Met::Nothing,
-            steps: state.steps,
-        };
-    }
-    // Without every reading, or without the best one among them: no line keeps a tier the
-    // search couldn't vouch for.
-    let mut every: Vec<usize> = lines.iter().map(|line| line.modifier).collect();
-    every.dedup();
+        // Without every reading, or without the best one among them: no line keeps a tier the
+        // search couldn't vouch for.
+        Outcome::Cut | Outcome::BestNotMet => {
+            let mut every: Vec<usize> = lines.iter().map(|line| line.modifier).collect();
+            every.dedup();
+            (every, true)
+        }
+    };
     Doubts {
-        lines: every,
-        other_room: true,
+        lines: in_doubt,
+        other_room,
         outcome,
-        fits: state.met != Met::Nothing,
         steps: state.steps,
     }
 }
+
+#[cfg(test)]
+mod tests;
 
 #[cfg(test)]
 mod game_tests;

@@ -70,7 +70,7 @@ const BOW: [&str; 3] = [
 fn a_search_that_cant_look_at_every_reading_leaves_every_line_in_doubt() {
     // Every reading looked at: the best one is the only one, three prefixes.
     let doubts = doubts_of("Warmonger Bow", &BOW, MAX_STEPS, None);
-    assert_eq!(doubts.outcome, Outcome::Concluded);
+    assert_eq!(doubts.outcome, Outcome::BestMet);
     assert_eq!(doubts.lines, [] as [usize; 0]);
     assert!(!doubts.other_room);
 
@@ -95,6 +95,6 @@ fn a_search_that_doesnt_meet_the_best_reading_leaves_every_line_in_doubt() {
 
     // A best reading that doesn't fit the room isn't among those of the search, which fit it.
     let doubts = doubts_of("Warmonger Bow", &BOW, MAX_STEPS, Some((two, false)));
-    assert_eq!(doubts.outcome, Outcome::Concluded);
+    assert_eq!(doubts.outcome, Outcome::NoneFits);
     assert_eq!(doubts.lines, [] as [usize; 0]);
 }

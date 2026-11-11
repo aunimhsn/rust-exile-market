@@ -31,9 +31,9 @@ pub(super) struct State {
     fractured: usize,
     pub(super) steps: usize,
     /// Whether the search stopped at the most steps, some readings not looked at.
-    pub(super) cut: bool,
+    cut: bool,
     /// The readings met so far.
-    pub(super) met: Met,
+    met: Met,
     /// For each modifier of the item, whether every reading met reads its line as the best
     /// reading does.
     pub(super) agreed: Vec<bool>,
@@ -60,6 +60,12 @@ impl State {
             other_room: false,
             doubts: Vec::new(),
         }
+    }
+
+    /// The readings met, once every reading is looked at: none for a search that stopped at
+    /// the most steps, which can't tell what the others would have been.
+    pub(super) fn met(&self) -> Option<Met> {
+        (!self.cut).then_some(self.met)
     }
 
     /// Every reading from the line `line` on, the chosen modifiers kept, each compared with the

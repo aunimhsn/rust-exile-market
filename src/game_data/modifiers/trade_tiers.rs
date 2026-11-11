@@ -7,7 +7,7 @@ use super::base_tiers::ItemTables;
 use super::best_reading::{Cut, Room, best_reading};
 use super::candidates::{AffixSet, Candidate, candidates};
 use super::copied::Copied;
-use super::doubts::{self, Doubts, Outcome};
+use super::doubts::{self, Outcome};
 use super::split_lines::AddedTiers;
 use crate::game_data::lines::modifier_stats;
 use crate::item::{Affix, Modifier, ModifierKind, ModifierOrigin};
@@ -148,40 +148,15 @@ struct Effort {
 /// How the search of the tiers of an item copied from the in-game trade ended.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Ending {
-    /// With a reading in the room of the item, every other reading compared with it.
-    Vouched,
     /// The readings stopped at [`super::best_reading::MAX_READINGS`], some not looked at: no
-    /// line is read.
+    /// line is read, and the other readings aren't searched.
     ReadingsCut,
-    /// The other readings stopped at their bound, some not looked at: no line is read.
-    OtherReadingsCut,
-    /// None of the other readings is the best one, a line the search of the other readings
-    /// can't read, or a best reading the game can't roll (two modifiers of one type): no line
-    /// is read.
-    BestNotMet,
-    /// The best reading doesn't fit the room of the item while another one does, which the
-    /// candidates don't hold (a hybrid whose lines don't follow each other): a line keeps its
-    /// tier only when every reading in the room reads it as the best one does, with every
-    /// affix.
-    OnlyAnotherFits,
-    /// No reading fits the room of the item, the tables being out of step with the game: the
-    /// lines keep the tiers of the best reading, with every affix.
-    NoneFits,
+    /// With a best reading, then as the search of the other readings ended: a line keeps
+    /// its tier as that end tells, and with every affix unless the best reading was met.
+    Doubts(Outcome),
 }
 
 impl Ending {
-    /// How the search ended after the other readings, whose `doubts` these are, the best
-    /// reading fitting the room of the item (`fits_room`) or not.
-    fn after(doubts: &Doubts, fits_room: bool) -> Self {
-        match doubts.outcome {
-            Outcome::Cut => Self::OtherReadingsCut,
-            Outcome::BestNotMet => Self::BestNotMet,
-            Outcome::Concluded if fits_room => Self::Vouched,
-            Outcome::Concluded if doubts.fits => Self::OnlyAnotherFits,
-            Outcome::Concluded => Self::NoneFits,
-        }
-    }
-
     /// Logs what the search couldn't vouch for on an item of `base_type`, which can have
     /// `limits` prefixes and suffixes.
     fn log(self, base_type: &str, limits: AffixLimits) {
@@ -189,20 +164,20 @@ impl Ending {
             prefixes, suffixes, ..
         } = limits;
         match self {
-            Self::Vouched => {}
+            Self::Doubts(Outcome::BestMet) => {}
             Self::ReadingsCut => log::warn!(
                 "Game data, {base_type} copied from the in-game trade: the readings of its lines couldn't all be looked at, its lines left without tier"
             ),
-            Self::OtherReadingsCut => log::warn!(
+            Self::Doubts(Outcome::Cut) => log::warn!(
                 "Game data, {base_type} copied from the in-game trade: the other readings of its lines couldn't all be looked at, its lines left without tier"
             ),
-            Self::BestNotMet => log::warn!(
+            Self::Doubts(Outcome::BestNotMet) => log::warn!(
                 "Game data, {base_type} copied from the in-game trade: the other readings of its lines don't hold its best one, its lines left without tier"
             ),
-            Self::OnlyAnotherFits => log::debug!(
+            Self::Doubts(Outcome::OnlyAnotherFits) => log::debug!(
                 "Game data, {base_type} copied from the in-game trade: its best reading doesn't fit {prefixes} prefixes and {suffixes} suffixes, others do, the lines they don't all read the same left without tier"
             ),
-            Self::NoneFits => log::warn!(
+            Self::Doubts(Outcome::NoneFits) => log::warn!(
                 "Game data, {base_type} copied from the in-game trade: no reading of its lines fits {prefixes} prefixes and {suffixes} suffixes"
             ),
         }
@@ -272,7 +247,7 @@ fn trade_tiers_in(
     let effort = Effort {
         readings: best.readings,
         steps: doubts.steps,
-        ending: Ending::after(&doubts, best.fits_room),
+        ending: Ending::Doubts(doubts.outcome),
     };
     // A modifier that can be both keeps the affixes the others leave room for ([`Room::both`],
     // both when the reading doesn't fit the room): both too when a reading as good, or one in
