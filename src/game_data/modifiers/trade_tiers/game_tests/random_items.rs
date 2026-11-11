@@ -25,6 +25,13 @@
 //! that don't read the same lines. No item is sanctified, such an item finding no tier.
 
 use super::*;
+use crate::game_data::bases::{self, BaseSpawn, Domain};
+use crate::game_data::modifiers::base_tiers::range_values;
+use crate::game_data::modifiers::best_reading::MAX_READINGS;
+use crate::game_data::modifiers::doubts;
+use crate::game_data::modifiers::tables::{TableAffix, TableTier, first_of_its_modifier};
+use crate::game_data::stats::Stats;
+use crate::item::{Range, StatLine};
 
 /// The bases the items are drawn on, each with the most prefixes, and suffixes, a rare item of
 /// it can have: weapons, armours of several attributes and jewellery; then a jewel and a
@@ -798,10 +805,7 @@ fn random_items_are_read_within_the_bounds_of_the_search() {
         println!("Not drawn, a line no string writes back: {left_out:?}");
         // Far from the bounds, past which every line of the item is left without tier.
         assert!(counts.most_readings < MAX_READINGS / 4, "{counts:?}");
-        assert!(
-            counts.most_steps < other_readings::MAX_STEPS / 4,
-            "{counts:?}"
-        );
+        assert!(counts.most_steps < doubts::MAX_STEPS / 4, "{counts:?}");
         measured.push(counts);
     }
 

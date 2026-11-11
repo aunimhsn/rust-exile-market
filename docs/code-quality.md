@@ -9,6 +9,7 @@ Read it at the start of each step that changes code; `code-reviewer` reviews aga
 The name comes first: a reader who sees only the name should know what the thing is for.
 
 - A name says what a thing is or does, in the words of the domain (the game, the trade site, poe2scout), not how it is computed: `affix_limits`, not `counts`; `copied_lines`, not `list`.
+- A module or a type is named by what it gives, not by its place next to another one: no module `other_…`, `misc`, `utils` nor `common` (the module that tells the lines in doubt is `doubts`, not `other_readings`). `other` stays the word for the second of a pair (`other_fit`, `other_room`).
 - Whole words. No abbreviation but those of the domain and of Rust: `id`, `dps`, `ui`, `ctx`, `i18n`. A single letter only for an index or a closure parameter of a line or two.
 - One notion, one word, across the whole code: a tier is always a `tier`. Two notions never share a word: when one word means two things (`currency` names four), one of them is renamed.
 - Types are nouns (`ModifierTiers`). A function that computes a value is named by what it returns (`trade_tiers`, `possible`); a function that acts, by a verb (`save`, `send_copy`).
@@ -86,7 +87,7 @@ The name comes first: a reader who sees only the name should know what the thing
 ## Tests
 
 - A test reads as an example of its rule: its name says the behavior, its body the case, built by a small helper rather than fifty lines of set-up.
-- Each rule is tested on data written by hand. The tests on the real data of the game are kept for what a patch of the game changes.
+- Each rule is tested on data written by hand, in the `tests.rs` of its file. The tests on the real data of the game are kept for what a patch of the game changes, in a `game_tests.rs` next to it: the ones to look at, and to record again, when the game data are generated again, while the `tests.rs` must still pass as they are. What the tests of several files share (the builders of their data, the readers of a result) lives in the `fixtures.rs` of their module.
 - An assertion compares the whole value (a list, a section, a struct); a part (`contains`, `starts_with`) only when the rest doesn't matter. An expected exception is a named list, compared whole.
 - Several cases of one behavior may share a test; two behaviors are two tests.
 
