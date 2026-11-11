@@ -856,7 +856,7 @@ fn the_lines_another_reading_adds_up_in_as_many_modifiers_have_no_tier() {
 }
 
 #[test]
-fn the_search_tells_when_the_readings_stop_at_their_bound() {
+fn a_search_whose_readings_stop_at_their_bound_reads_no_line() {
     let tables = pure_and_hybrid_tables();
     let lines = |count: usize| -> Vec<Modifier> {
         ["25% increased Energy Shield", "+25 to maximum Life"]
@@ -867,11 +867,15 @@ fn the_search_tells_when_the_readings_stop_at_their_bound() {
             .collect()
     };
 
-    let (_, effort) = read_modifiers(&tables, 60, &lines(2), (3, 3), false);
+    let ((read, _), effort) = read_modifiers(&tables, 60, &lines(2), (3, 3), false);
     assert_eq!(effort.readings, 2);
     assert!(!effort.readings_cut);
-    // Each line a hybrid with the one before or after: more readings than the bound.
-    let (_, effort) = read_modifiers(&tables, 60, &lines(24), (3, 3), false);
+    assert_eq!(read.len(), 2);
+    // Each line a hybrid with the one before or after: more readings than the bound, and no
+    // line read, the best of those looked at being maybe not the best of all.
+    let ((read, split), effort) = read_modifiers(&tables, 60, &lines(24), (3, 3), false);
     assert_eq!(effort.readings, MAX_READINGS);
     assert!(effort.readings_cut);
+    assert_eq!(read, []);
+    assert_eq!(split, []);
 }

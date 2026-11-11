@@ -1981,31 +1981,6 @@ fn a_base_the_data_doesnt_know_has_no_tiers_found() {
     assert_eq!(found, []);
 }
 
-#[test]
-fn many_lines_that_pair_as_hybrids_are_read_within_a_bound() {
-    let item = parse(TIARA_EN);
-    // Each line makes a hybrid with the one before and the one after: more readings than
-    // the bound.
-    let modifiers: Vec<_> = (0..20)
-        .map(|index| {
-            let line = if index % 2 == 0 {
-                "41% increased Energy Shield"
-            } else {
-                "+34 to maximum Mana"
-            };
-            modifier(None, &[line])
-        })
-        .collect();
-
-    let found = found_tiers(&item, &modifiers, (10, 0));
-
-    // The readings that fit, ten hybrids, are past the bound: the lines are read alone,
-    // the pure energy shield T6 and mana T8, every affix kept.
-    let alone = [(1, vec![(Affix::Prefix, 6)]), (1, vec![(Affix::Prefix, 8)])];
-    let expected: Vec<_> = alone.iter().cycle().take(20).cloned().collect();
-    assert_eq!(summary(&modifiers, &found), expected);
-}
-
 /// The lines of two pure prefixes of a helmet that also fit the hybrid of both, T3
 /// (`27–32 · 26–32`).
 fn energy_shield_and_life() -> Vec<Modifier> {

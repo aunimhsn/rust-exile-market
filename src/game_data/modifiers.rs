@@ -23,7 +23,8 @@ const ROUNDING: f64 = 0.051;
 
 /// The most ways to read the lines of an item copied from the in-game trade that are looked
 /// at: a handful on a real item, each hybrid the lines may be doubling them (24 at most on
-/// the items drawn at random by `tests/random_items.rs`, 2026-11-10).
+/// the items drawn at random by `tests/random_items.rs`, 2026-11-10). Past them, no line is
+/// read: the best of the readings looked at may not be the best of all.
 const MAX_READINGS: usize = 4096;
 
 /// The tiers of a type of modifier that roll on the same bases, as the generator writes them.
@@ -596,8 +597,11 @@ pub struct AddedTiers {
 /// one with `+23 à l'Armure` and `+19 au Score d'Évasion`, the other with the life; a line split
 /// with its neighbour may be summed with another line's hybrid, the copy sorting its lines by
 /// stat, not by modifier. Such a reading
-/// that leaves another room to a line that can be a prefix or a suffix keeps both its affixes;
-/// a search that can't conclude leaves every line it reads without tier.
+/// that leaves another room to a line that can be a prefix or a suffix keeps both its affixes.
+///
+/// A search that stops at one of its bounds ([`MAX_READINGS`], `MAX_STEPS`) leaves every line
+/// it reads without tier, as does one that doesn't meet its best reading among the others: it
+/// can't vouch for the reading it would show.
 ///
 /// A hybrid whose other line is read on its own (a sanctified value out of its tier, or two
 /// lines apart) counts twice and may rule out an affix wrongly: a rare case, left as it is.
@@ -627,7 +631,7 @@ pub fn trade_tiers(
     );
     if effort.readings_cut {
         log::warn!(
-            "Game data, {base_type} copied from the in-game trade: the readings of its lines couldn't all be looked at, the best of the first {MAX_READINGS} kept"
+            "Game data, {base_type} copied from the in-game trade: the readings of its lines couldn't all be looked at, its lines left without tier"
         );
     }
     found
@@ -641,8 +645,7 @@ struct Effort {
     readings: usize,
     /// The steps of the search of the other readings ([`summed_readings::doubts`]).
     steps: usize,
-    /// Whether the readings stopped at their bound, some not looked at: the best of those
-    /// looked at is kept, the lines alone first.
+    /// Whether the readings stopped at their bound, some not looked at: no line is read.
     readings_cut: bool,
 }
 
@@ -714,7 +717,9 @@ fn trade_tiers_in(
         steps: 0,
         readings_cut: search.cut,
     };
-    let Some((key, reading)) = search.best else {
+    // Past the bound, a reading not looked at may be as good as the best of the others, or
+    // better: no line keeps a tier the search can't vouch for.
+    let Some((key, reading)) = search.best.filter(|_| !effort.readings_cut) else {
         return (Vec::new(), effort);
     };
     let mut ambiguous = search.ambiguous;
