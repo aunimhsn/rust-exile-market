@@ -196,4 +196,7 @@ fn ranges_in_order(tier: &TableTier, order: &[usize], copied: &Copied<'_>) -> Op
 }
 
 #[cfg(test)]
+mod tests;
+
+#[cfg(test)]
 mod game_tests;
