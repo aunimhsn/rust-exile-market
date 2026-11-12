@@ -19,7 +19,19 @@ use crate::language::Language;
 #[must_use]
 pub fn with_trade_tiers(item: &TradeItem<'_>, modifiers: &[Modifier]) -> Vec<Modifier> {
     let found = trade_tiers(item, modifiers);
-    let (language, base_type) = (item.base.language, item.base.base_type);
+    with_found_tiers(item.base.language, item.base.base_type, modifiers, &found)
+}
+
+/// `modifiers`, their lines written in `language` on an item of `base_type`, written again
+/// with the tiers `found` from their values, as [`with_trade_tiers`] tells: the modifiers of
+/// each of `found` made one modifier in their place; a modifier none of `found` starts at,
+/// or whose tiers can't be written, stays as it was.
+fn with_found_tiers(
+    language: Language,
+    base_type: &str,
+    modifiers: &[Modifier],
+    found: &[FoundTiers],
+) -> Vec<Modifier> {
     let mut read = Vec::with_capacity(modifiers.len());
     let mut next = 0;
     while let Some(modifier) = modifiers.get(next) {
