@@ -3,10 +3,13 @@
 //! patch of the game.
 
 use super::*;
+use crate::game_data::bases::Domain;
 use crate::game_data::modifiers::copied::{CopiedLine, CopiedTier};
 use crate::game_data::modifiers::fixtures::{
-    ENERGY_SHIELD, LIFE, equipment, range, table, written,
+    ENERGY_SHIELD, LIFE, MANA, equipment, range, table, written,
 };
+use crate::game_data::modifiers::tables::{TableLord, TableSource};
+use crate::item::{Currency, ModifierOrigin};
 
 /// The table `text` writes ([`table`]): on the helmets.
 fn one(text: String) -> Table {
@@ -209,4 +212,234 @@ fn an_item_can_roll_the_tiers_of_its_level_at_most_and_any_tier_without_its_leve
     assert!(!allows(Some(50), 51));
     // A copy that doesn't write the level of its item.
     assert!(allows(None, 100));
+}
+
+/// What a lookup gave of each modifier: the index of its first table, the number and the
+/// level of each of its tiers, and the copied values.
+type HeldModifiers = Vec<(usize, Vec<(u32, u32)>, Vec<f64>)>;
+
+/// What `held` gave, to compare whole.
+fn modifiers<'a>(held: impl Iterator<Item = Held<'a>>) -> HeldModifiers {
+    held.map(|held| {
+        let tiers = held
+            .tiers
+            .iter()
+            .map(|tier| (tier.number, tier.level))
+            .collect();
+        (held.index, tiers, held.values)
+    })
+    .collect()
+}
+
+/// The tables of the lookups: the life of two tiers on the helmets, then a table each check
+/// of a lookup rules out, and those another origin or another affix give.
+fn lookup_tables() -> Vec<Table> {
+    let life_tiers: &[(u32, &[(u32, u32)])] = &[(1, &[(1, 30)]), (40, &[(31, 60)])];
+    let life_as = |kind: &str, affix: &str| one(table(kind, affix, &[LIFE], life_tiers));
+    let two_ranges = TableTier {
+        level: 1,
+        ranges: vec![vec![[1.0, 30.0], [31.0, 60.0]]],
+    };
+    vec![
+        life(life_tiers),
+        // Other lines.
+        one(table("Mana", "prefix", &[MANA], life_tiers)),
+        // The life again, on the rings: not the first table of its modifier.
+        on("ring", life(&[(60, &[(61, 90)])])),
+        // A tier with two ranges for the one value of the line: its tiers can't be read.
+        Table {
+            tiers: vec![two_ranges],
+            ..life_as("TwoValues", "prefix")
+        },
+        life_as("LifeSuffix", "suffix"),
+        // An alloy's, which only a marked line may be.
+        Table {
+            source: Some(TableSource::Alloy),
+            ..life_as("AlloyLife", "prefix")
+        },
+        // A lord's, which only a desecrated line may be.
+        Table {
+            domain: Domain::Desecrated,
+            lord: Some(TableLord::Kurgal),
+            ..life_as("LordLife", "prefix")
+        },
+        // A modifier that rolls on the rings only.
+        on("ring", life_as("RingLife", "prefix")),
+    ]
+}
+
+#[test]
+fn the_modifiers_that_have_the_lines_of_a_copied_one_are_given_once_in_the_order_of_the_file() {
+    let tables = lookup_tables();
+    let helmet = equipment(&["helmet"]);
+    // An item of level 1: the tiers above its level are given too.
+    let tables = ItemTables {
+        all: &tables,
+        base: &helmet,
+        item_level: Some(1),
+    };
+    let holding = |origin| {
+        let copied = Copied {
+            origin,
+            ..copied(&[(LIFE, 25.0)])
+        };
+        modifiers(tables.holding(&copied))
+    };
+    let two_tiers = vec![(1, 40), (2, 1)];
+    let life = (0, two_tiers.clone(), vec![25.0]);
+    let suffix = (4, two_tiers.clone(), vec![25.0]);
+    let alloy = (5, two_tiers.clone(), vec![25.0]);
+    let lord = (6, two_tiers, vec![25.0]);
+    // A modifier that doesn't roll on the base is given too, without tier.
+    let on_the_rings = (7, Vec::new(), vec![25.0]);
+
+    assert_eq!(
+        holding(None),
+        [life.clone(), suffix.clone(), on_the_rings.clone()]
+    );
+    assert_eq!(
+        holding(Some(ModifierOrigin::Crafted)),
+        [life.clone(), suffix.clone(), alloy, on_the_rings.clone()]
+    );
+    assert_eq!(
+        holding(Some(ModifierOrigin::Desecrated)),
+        [life, suffix, lord, on_the_rings]
+    );
+}
+
+#[test]
+fn the_modifiers_of_an_affix_are_those_of_its_tables_alone() {
+    let tables = lookup_tables();
+    let helmet = equipment(&["helmet"]);
+    let tables = ItemTables {
+        all: &tables,
+        base: &helmet,
+        item_level: None,
+    };
+    let copied = copied(&[(LIFE, 25.0)]);
+    let indexes = |affix| -> Vec<usize> {
+        tables
+            .holding_as(&copied, affix)
+            .map(|held| held.index)
+            .collect()
+    };
+
+    assert_eq!(indexes(TableAffix::Prefix), [0, 7]);
+    assert_eq!(indexes(TableAffix::Suffix), [4]);
+}
+
+#[test]
+fn the_lines_of_a_hybrid_copied_in_another_order_give_its_values_and_ranges_in_that_order() {
+    let hybrid = one(table(
+        "Hybrid",
+        "prefix",
+        &[ENERGY_SHIELD, LIFE],
+        &[(1, &[(10, 19), (20, 29)])],
+    ));
+    let helmet = equipment(&["helmet"]);
+    let tables = ItemTables {
+        all: std::slice::from_ref(&hybrid),
+        base: &helmet,
+        item_level: None,
+    };
+    let copied = copied(&[(LIFE, 25.0), (ENERGY_SHIELD, 15.0)]);
+
+    let held: Vec<(Vec<Tier>, Vec<f64>)> = tables
+        .holding(&copied)
+        .map(|held| (held.tiers, held.values))
+        .collect();
+
+    assert_eq!(
+        held,
+        [(
+            vec![tier(1, 1, &[(20.0, 29.0), (10.0, 19.0)])],
+            vec![25.0, 15.0]
+        )]
+    );
+}
+
+#[test]
+fn a_line_without_number_copied_in_another_order_is_divided_as_its_own_line_shows_it() {
+    const RAGE: &str = "Inherent Rage loss starts 1 second later";
+    // Shown in seconds, stored in milliseconds.
+    let mut timed = one(table(
+        "Timed",
+        "prefix",
+        &[RAGE, LIFE],
+        &[(1, &[(1, 3), (20, 29)])],
+    ));
+    timed.lines[0].divisor = 1000.0;
+    let helmet = equipment(&["helmet"]);
+    let tables = ItemTables {
+        all: std::slice::from_ref(&timed),
+        base: &helmet,
+        item_level: None,
+    };
+    // The life copied first, then the line whose string gives 2000 milliseconds.
+    let mut copied = copied(&[(LIFE, 25.0), (RAGE, 0.0)]);
+    copied.lines[1].values = Vec::new();
+    copied.lines[1].written = Some(2000.0);
+
+    let values: Vec<Vec<f64>> = tables.holding(&copied).map(|held| held.values).collect();
+
+    assert_eq!(values, [[25.0, 2.0]]);
+}
+
+#[test]
+fn the_tiers_of_a_modifier_held_tell_what_its_table_tells_of_the_copied_one() {
+    let life_as = |kind: &str| one(table(kind, "prefix", &[LIFE], &[(1, &[(1, 30)])]));
+    let tables = [
+        Table {
+            source: Some(TableSource::Essence),
+            ..life_as("EssenceLife")
+        },
+        Table {
+            domain: Domain::Desecrated,
+            lord: Some(TableLord::Amanamu),
+            ..life_as("LordLife")
+        },
+    ];
+    let helmet = equipment(&["helmet"]);
+    let tables = ItemTables {
+        all: &tables,
+        base: &helmet,
+        item_level: None,
+    };
+    let desecrated = Copied {
+        origin: Some(ModifierOrigin::Desecrated),
+        ..copied(&[(LIFE, 25.0)])
+    };
+    // Found in the tier of the index given, whatever its tiers.
+    let tiers_of = |copied: &Copied<'_>, found| -> Vec<ModifierTiers> {
+        tables
+            .holding(copied)
+            .map(|held| held.into_tiers(found, copied))
+            .collect()
+    };
+    let one_tier = vec![tier(1, 1, &[(1.0, 30.0)])];
+
+    assert_eq!(
+        tiers_of(&copied(&[(LIFE, 25.0)]), 0),
+        [ModifierTiers {
+            tiers: one_tier.clone(),
+            found: 0,
+            neighbour: None,
+            counts: vec![1],
+            tier_unwritten: true,
+            currency: Some(Currency::Essence),
+            lord: None,
+        }]
+    );
+    assert_eq!(
+        tiers_of(&desecrated, 3),
+        [ModifierTiers {
+            tiers: one_tier,
+            found: 3,
+            neighbour: None,
+            counts: vec![1],
+            tier_unwritten: false,
+            currency: None,
+            lord: Some(Lord::Amanamu),
+        }]
+    );
 }
