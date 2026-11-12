@@ -4,8 +4,10 @@
 
 use super::*;
 use crate::game_data::bases::Domain;
-use crate::game_data::modifiers::copied::{CopiedLine, CopiedTier};
-use crate::game_data::modifiers::fixtures::{ENERGY_SHIELD, LIFE, MANA, equipment, range, table};
+use crate::game_data::modifiers::copied::CopiedLine;
+use crate::game_data::modifiers::fixtures::{
+    ENERGY_SHIELD, LIFE, MANA, copied, equipment, table, tier,
+};
 use crate::game_data::modifiers::tables::{TableLord, TableSource};
 use crate::item::{Currency, ModifierOrigin};
 
@@ -19,33 +21,6 @@ fn on(tag: &str, table: Table) -> Table {
     Table {
         spawn: vec![(tag.to_owned(), 1)],
         ..table
-    }
-}
-
-/// A copied modifier of `lines`, the template and the value of each, without header: no
-/// range, no tier, no origin.
-fn copied(lines: &[(&'static str, f64)]) -> Copied<'static> {
-    Copied {
-        lines: lines
-            .iter()
-            .map(|&(template, value)| CopiedLine {
-                templates: vec![template],
-                values: vec![value],
-                written: None,
-            })
-            .collect(),
-        ranges: None,
-        tier: CopiedTier::Unknown,
-        origin: None,
-    }
-}
-
-/// The tier `number` of `level` over `ranges`.
-fn tier(number: u32, level: u32, ranges: &[(f64, f64)]) -> Tier {
-    Tier {
-        number,
-        level,
-        ranges: ranges.iter().map(|&(min, max)| range(min, max)).collect(),
     }
 }
 

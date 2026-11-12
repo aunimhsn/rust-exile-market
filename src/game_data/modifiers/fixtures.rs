@@ -5,11 +5,12 @@
 
 use crate::game_data::bases::{BaseSpawn, Domain};
 use crate::game_data::lines::modifier_stats;
-use crate::game_data::modifiers::ModifierTiers;
+use crate::game_data::modifiers::copied::{Copied, CopiedLine, CopiedTier};
 use crate::game_data::modifiers::item_tables::ItemBase;
 use crate::game_data::modifiers::lookup::modifier_tiers;
 use crate::game_data::modifiers::tables::{Table, read};
 use crate::game_data::modifiers::trade_tiers::{AffixLimits, FoundTiers, TradeItem};
+use crate::game_data::modifiers::{ModifierTiers, Tier};
 use crate::item::{
     Affix, CopiedItem, Item, ItemState, Modifier, ModifierKind, ModifierOrigin, PartTier, Range,
     StatLine,
@@ -79,6 +80,33 @@ pub(super) fn part(affix: Affix, tiers: &[u32], ranges: &[(f64, f64)]) -> PartTi
         hides_number: false,
         ranges: ranges.iter().map(|&(min, max)| range(min, max)).collect(),
         currency: None,
+    }
+}
+
+/// The tier `number` of `level` over `ranges`.
+pub(super) fn tier(number: u32, level: u32, ranges: &[(f64, f64)]) -> Tier {
+    Tier {
+        number,
+        level,
+        ranges: ranges.iter().map(|&(min, max)| range(min, max)).collect(),
+    }
+}
+
+/// A copied modifier of `lines`, the template and the value of each, without header: no
+/// range, no tier, no origin.
+pub(super) fn copied(lines: &[(&'static str, f64)]) -> Copied<'static> {
+    Copied {
+        lines: lines
+            .iter()
+            .map(|&(template, value)| CopiedLine {
+                templates: vec![template],
+                values: vec![value],
+                written: None,
+            })
+            .collect(),
+        ranges: None,
+        tier: CopiedTier::Unknown,
+        origin: None,
     }
 }
 
