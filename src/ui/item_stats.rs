@@ -184,12 +184,7 @@ fn rows<'a>(
         copied_lines,
         line_stats,
         tier_rolls,
-        checked_totals: dps
-            .iter()
-            .chain(&pseudo)
-            .filter(|stat| stat.filter.is_some_and(|filter| filter.checked))
-            .map(|stat| stat.key)
-            .collect(),
+        checked_totals: checked_keys(dps.iter().chain(&pseudo)),
         starts_unchecked: has_unrevealed || item.rarity() == Rarity::Rare || item.is_waystone(),
     };
     push_group(&mut rows, Group::Weapon, dps);
@@ -199,23 +194,54 @@ fn rows<'a>(
     } else {
         rows.extend(affix_rows(item, &context));
     }
-    for row in &mut rows {
+    remove_unsearchable_filters(&mut rows, line_stats);
+    let mut rows = join_stat_lines(item, line_stats, rows);
+    rows.extend(notes(item));
+    rows
+}
+
+/// The keys of the `stats` checked at first.
+fn checked_keys<'s>(stats: impl Iterator<Item = &'s Stat<'s>>) -> Vec<FilterKey> {
+    stats
+        .filter(|stat| stat.filter.is_some_and(|filter| filter.checked))
+        .map(|stat| stat.key)
+        .collect()
+}
+
+/// Takes the filter away from each stat of the `rows` that the trade site can't search as its
+/// line ([`remove_unsearchable_filter`]).
+fn remove_unsearchable_filters(rows: &mut [Row<'_>], line_stats: &LineStats) {
+    for row in rows {
         if let Row::Stat(stat) = row
             && let FilterKey::Stat(key) = stat.key
         {
             remove_unsearchable_filter(stat, line_stats.get(key));
         }
     }
-    let mut rows = join_stat_lines(item, line_stats, rows);
-    if has_unrevealed {
-        rows.push(Row::UnrevealedNote);
-    }
-    // Once a tier is found, also for a line that can be a prefix or a suffix, or that adds up
-    // two modifiers, or one of the Genesis tree, read with the ranges of its tier but without
-    // its number, which the game doesn't write: none before the names of the trade site tell
-    // the base of a magic item, nor on a base the game data doesn't know, nor on a sanctified
-    // item, whose values find no tier.
-    let has_tier_found = item.modifiers().iter().any(|modifier| {
+}
+
+/// The notes under the stats of `item`: its modifiers not revealed yet; its tiers found from
+/// its values, once one is ([`has_tier_found`]); its ranges from the prices, once one comes:
+/// none before they arrive.
+fn notes(item: &Item) -> Vec<Row<'static>> {
+    let unrevealed = (item.unrevealed_modifiers() > 0).then_some(Row::UnrevealedNote);
+    let trade_copy =
+        (item.has_tiers_from_values() && has_tier_found(item)).then_some(Row::TradeCopyNote);
+    let unique_rolls =
+        (item.has_rolls_from_prices() && has_range(item)).then_some(Row::UniqueRollsNote);
+    [unrevealed, trade_copy, unique_rolls]
+        .into_iter()
+        .flatten()
+        .collect()
+}
+
+/// A tier is found on `item`, also for a line that can be a prefix or a suffix, or that adds up
+/// two modifiers, or one of the Genesis tree, read with the ranges of its tier but without its
+/// number, which the game doesn't write: none before the names of the trade site tell the base
+/// of a magic item, nor on a base the game data doesn't know, nor on a sanctified item, whose
+/// values find no tier.
+fn has_tier_found(item: &Item) -> bool {
+    item.modifiers().iter().any(|modifier| {
         let ranged = modifier
             .lines
             .iter()
@@ -225,28 +251,22 @@ fn rows<'a>(
             && (modifier.tier.is_some() || ranged);
         let in_doubt = modifier.doubt.is_some();
         read || in_doubt
-    });
-    if item.has_tiers_from_values() && has_tier_found {
-        rows.push(Row::TradeCopyNote);
-    }
-    // Once a range comes from the prices: none before they arrive.
-    let has_range = || {
-        item.modifiers()
-            .iter()
-            .filter(|modifier| {
-                matches!(
-                    modifier.kind,
-                    ModifierKind::Implicit | ModifierKind::Explicit(_)
-                )
-            })
-            .flat_map(|modifier| &modifier.lines)
-            .flat_map(|line| &line.rolls)
-            .any(|roll| roll.range.is_some())
-    };
-    if item.has_rolls_from_prices() && has_range() {
-        rows.push(Row::UniqueRollsNote);
-    }
-    rows
+    })
+}
+
+/// A value of an implicit or explicit modifier of `item` has a range.
+fn has_range(item: &Item) -> bool {
+    item.modifiers()
+        .iter()
+        .filter(|modifier| {
+            matches!(
+                modifier.kind,
+                ModifierKind::Implicit | ModifierKind::Explicit(_)
+            )
+        })
+        .flat_map(|modifier| &modifier.lines)
+        .flat_map(|line| &line.rolls)
+        .any(|roll| roll.range.is_some())
 }
 
 /// Takes the filter away from `stat` when the trade site can't search it as its `line`:

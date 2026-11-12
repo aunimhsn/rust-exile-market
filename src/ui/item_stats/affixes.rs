@@ -103,6 +103,19 @@ fn affix_stats<'a>(
     affix: Option<Affix>,
     context: &LineContext<'_>,
 ) -> Vec<Stat<'a>> {
+    sorted_modifiers(item, affix, context)
+        .into_iter()
+        .flat_map(|(index, modifier)| modifier_stats(index, modifier, context))
+        .collect()
+}
+
+/// The explicit modifiers of `affix` with their indexes, those with a line that varies first
+/// and those not revealed yet last.
+fn sorted_modifiers<'a>(
+    item: &'a Item,
+    affix: Option<Affix>,
+    context: &LineContext<'_>,
+) -> Vec<(usize, &'a Modifier)> {
     let mut modifiers: Vec<(usize, &Modifier)> = item
         .modifiers()
         .iter()
@@ -123,85 +136,112 @@ fn affix_stats<'a>(
         (modifier.is_unrevealed, fixed)
     });
     modifiers
+}
+
+/// The stats of the lines of the prefix or suffix `index`, `modifier`: its tier under its last
+/// line, or the tier of the hybrid under the last of its other lines for a line that adds up
+/// two modifiers, whose origin goes under the tiers of that line; the tiers of each affix or
+/// of each part in place of the roll of their line; one stat for a modifier not revealed yet.
+fn modifier_stats<'a>(
+    index: usize,
+    modifier: &'a Modifier,
+    context: &LineContext<'_>,
+) -> Vec<Stat<'a>> {
+    if modifier.is_unrevealed
+        && let ModifierKind::Explicit(Some(affix)) = modifier.kind
+    {
+        return vec![unrevealed_stat(index, affix)];
+    }
+    let last = modifier.lines.len().saturating_sub(1);
+    let origin = Origin::of_modifier(modifier, context.tier_rolls.currency(index));
+    let (origin_line, tier_line) = match &modifier.doubt {
+        Some(TierDoubt::Split { line, .. }) => (
+            *line,
+            other_lines(modifier, *line)
+                .next_back()
+                .map(|(index, _)| index),
+        ),
+        _ => (last, Some(last)),
+    };
+    modifier
+        .lines
         .iter()
-        .flat_map(|&(index, modifier)| -> Vec<Stat<'a>> {
-            if modifier.is_unrevealed
-                && let ModifierKind::Explicit(Some(affix)) = modifier.kind
-            {
-                // No line yet: the key of its first one, which no filter has.
-                return vec![Stat {
-                    key: FilterKey::Stat(StatKey {
-                        modifier: index,
-                        line: 0,
-                    }),
-                    text: StatText::Unrevealed(affix),
-                    filter: None,
-                    is_unsearchable: false,
-                    roll: None,
-                }];
-            }
-            let last = modifier.lines.len().saturating_sub(1);
-            let origin = Origin::of_modifier(modifier, context.tier_rolls.currency(index));
-            // The origin under the tiers of a line that adds up two modifiers, the tier of the
-            // hybrid under the last of its other lines.
-            let (origin_line, tier_line) = match &modifier.doubt {
-                Some(TierDoubt::Split { line, .. }) => (
-                    *line,
-                    other_lines(modifier, *line)
-                        .next_back()
-                        .map(|(index, _)| index),
-                ),
-                _ => (last, Some(last)),
+        .enumerate()
+        .map(|(line_index, line)| {
+            let key = StatKey {
+                modifier: index,
+                line: line_index,
             };
-            modifier
-                .lines
-                .iter()
-                .enumerate()
-                .map(move |(line_index, line)| {
-                    let key = StatKey {
-                        modifier: index,
-                        line: line_index,
-                    };
-                    let tier = match &modifier.doubt {
-                        _ if tier_line != Some(line_index) => None,
-                        Some(TierDoubt::Split {
-                            line, whole, added, ..
-                        }) => hybrid_tier_row(modifier, *line, whole, added),
-                        _ => {
-                            // A modifier of one tier only: the ranges of that tier without its
-                            // number, also when the copy writes no tier; nothing when its
-                            // value is fixed.
-                            let hides_number = context.tier_rolls.hides_number(index);
-                            let number = modifier.tier.filter(|_| !hides_number);
-                            let ranges = tier_ranges(modifier);
-                            (number.is_some() || (hides_number && !ranges.is_empty()))
-                                .then(|| TierRow::plain(ModifierTier { number, ranges }))
-                        }
-                    };
-                    let origin = origin.filter(|_| line_index == origin_line);
-                    let mut stat = affix_stat(key, line, tier, origin, context);
-                    let rows = match &modifier.doubt {
-                        Some(TierDoubt::EitherAffix { prefix, suffix }) if line_index == last => {
-                            Some(vec![TierRow::affix(prefix), TierRow::affix(suffix)])
-                        }
-                        Some(TierDoubt::Split {
-                            line, whole, added, ..
-                        }) if line_index == *line => {
-                            let others: Vec<&str> = other_lines(modifier, *line)
-                                .map(|(_, other)| other.text.as_str())
-                                .collect();
-                            Some(split_tier_rows(whole, added, &others))
-                        }
-                        _ => None,
-                    };
-                    if let Some(rows) = rows {
-                        stat.roll = Some(StatRoll::Tiers { rows, origin });
-                    }
-                    stat
-                })
-                .collect()
+            let tier = (tier_line == Some(line_index))
+                .then(|| modifier_tier_row(index, modifier, context))
+                .flatten();
+            let origin = origin.filter(|_| line_index == origin_line);
+            let mut stat = affix_stat(key, line, tier, origin, context);
+            if let Some(rows) = doubt_tier_rows(modifier, line_index) {
+                stat.roll = Some(StatRoll::Tiers { rows, origin });
+            }
+            stat
         })
         .collect()
+}
+
+/// A modifier of `affix` not revealed yet, the modifier `index`: no line yet, so the key of its
+/// first one, which no filter has.
+fn unrevealed_stat<'a>(index: usize, affix: Affix) -> Stat<'a> {
+    Stat {
+        key: FilterKey::Stat(StatKey {
+            modifier: index,
+            line: 0,
+        }),
+        text: StatText::Unrevealed(affix),
+        filter: None,
+        is_unsearchable: false,
+        roll: None,
+    }
+}
+
+/// The tier under the line of the prefix or suffix `index`, `modifier`, that holds it: the tier
+/// of the hybrid of a line that adds up two modifiers; else its tier and the ranges of that
+/// tier, or of a modifier of one tier only the ranges without its number, also when the copy
+/// writes no tier; nothing when its value is fixed.
+fn modifier_tier_row<'a>(
+    index: usize,
+    modifier: &'a Modifier,
+    context: &LineContext<'_>,
+) -> Option<TierRow<'a>> {
+    if let Some(TierDoubt::Split {
+        line, whole, added, ..
+    }) = &modifier.doubt
+    {
+        return hybrid_tier_row(modifier, *line, whole, added);
+    }
+    let hides_number = context.tier_rolls.hides_number(index);
+    let number = modifier.tier.filter(|_| !hides_number);
+    let ranges = tier_ranges(modifier);
+    (number.is_some() || (hides_number && !ranges.is_empty()))
+        .then(|| TierRow::plain(ModifierTier { number, ranges }))
+}
+
+/// The tiers in place of the roll of the line `line_index` of `modifier`, when its tier is in
+/// doubt: the tier of each affix under the last line of a modifier copied from the in-game
+/// trade that can be either, the tier of each part under a line that adds up two modifiers.
+fn doubt_tier_rows(modifier: &Modifier, line_index: usize) -> Option<Vec<TierRow<'_>>> {
+    match &modifier.doubt {
+        Some(TierDoubt::EitherAffix { prefix, suffix })
+            if line_index + 1 == modifier.lines.len() =>
+        {
+            Some(vec![TierRow::affix(prefix), TierRow::affix(suffix)])
+        }
+        Some(TierDoubt::Split {
+            line, whole, added, ..
+        }) if line_index == *line => {
+            let others: Vec<&str> = other_lines(modifier, *line)
+                .map(|(_, other)| other.text.as_str())
+                .collect();
+            Some(split_tier_rows(whole, added, &others))
+        }
+        _ => None,
+    }
 }
 
 /// The line `key` of a prefix or suffix, `line`: a filter that stays within the rolls of every
