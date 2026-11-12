@@ -2,7 +2,9 @@
 //! tables of the game. The lines still find their stat in the embedded stats of the game.
 
 use super::*;
-use crate::game_data::modifiers::fixtures::{advanced, part, range, tier, trade_lines};
+use crate::game_data::modifiers::fixtures::{
+    advanced, affix_tier, first_doubt, part, tier, trade_lines,
+};
 use crate::item::{Currency, Lord, ModifierOrigin};
 
 /// `modifiers`, their lines written in English, written again with the tiers `found`.
@@ -84,17 +86,6 @@ fn modifier_of_lines(lines: &[&str]) -> Modifier {
 fn assert_left_as_they_were(lines: &[Modifier], found: FoundTiers) {
     let found = [found];
     assert_eq!(written_again(lines, &found), lines, "{found:?}");
-}
-
-/// The tier `tier` of a modifier as `affix`, over `ranges`: its number written, no lord's.
-fn affix_tier(affix: Affix, tier: u32, ranges: &[(f64, f64)]) -> AffixTier {
-    AffixTier {
-        affix,
-        tier,
-        hides_number: false,
-        ranges: ranges.iter().map(|&(min, max)| range(min, max)).collect(),
-        lord: None,
-    }
 }
 
 #[test]
@@ -506,7 +497,7 @@ fn the_tier_of_an_affix_has_the_ranges_written_on_the_values() {
     // Without their sign, and none for the 40.
     let written = written_again(&lines, &[found]);
     assert_eq!(
-        written.first().and_then(|modifier| modifier.doubt.clone()),
+        first_doubt(&written),
         Some(TierDoubt::EitherAffix {
             prefix: affix_tier(Affix::Prefix, 1, &[(10.0, 19.0), (10.0, 15.0)]),
             suffix: affix_tier(Affix::Suffix, 2, &[(14.0, 29.0), (11.0, 13.0)]),
@@ -533,7 +524,7 @@ fn the_tier_of_an_affix_hides_its_number_and_names_its_lord_as_its_tiers_tell() 
             (Affix::Suffix, suffix.clone()),
         ];
         let written = written_again(&grenades, &[found_either(0..1, affixes)]);
-        written.first().and_then(|modifier| modifier.doubt.clone())
+        first_doubt(&written)
     };
     let only_tier = |affix, lord| AffixTier {
         hides_number: true,
@@ -752,7 +743,7 @@ fn a_part_in_two_neighbouring_tiers_has_both_the_best_first_over_the_range_of_bo
         let whole = found(0..1, Affix::Prefix, whole.clone());
         let found = split(whole, 0, Affix::Suffix, added.clone());
         let written = written_again(lines, &[found]);
-        written.first().and_then(|modifier| modifier.doubt.clone())
+        first_doubt(&written)
     };
     let sure_part = |affix| part(affix, &[2], &[(3.0, 4.0)]);
     let either_part = |affix| part(affix, &[2, 3], &[(12.0, 19.0)]);
@@ -807,7 +798,7 @@ fn a_part_has_no_range_for_a_number_the_string_of_its_stat_writes() {
     // One range for each part, in one tier or over two.
     let written = written_again(&glory, &[found]);
     assert_eq!(
-        written.first().and_then(|modifier| modifier.doubt.clone()),
+        first_doubt(&written),
         Some(TierDoubt::Split {
             line: 0,
             whole: part(Affix::Prefix, &[2], &[(10.0, 15.0)]),
@@ -911,7 +902,7 @@ fn a_part_hides_the_number_of_its_tiers_and_names_its_currency_as_its_tiers_tell
         let whole = found(0..1, Affix::Prefix, whole.clone());
         let found = split(whole, 0, Affix::Suffix, added.clone());
         let written = written_again(&rarity, &[found]);
-        written.first().and_then(|modifier| modifier.doubt.clone())
+        first_doubt(&written)
     };
     let ordinary_part = |affix| part(affix, &[2], &[(12.0, 15.0)]);
     let hidden = |affix, tier, range: (f64, f64), currency| PartTier {

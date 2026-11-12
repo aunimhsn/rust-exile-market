@@ -12,8 +12,8 @@ use crate::game_data::modifiers::tables::{Table, read};
 use crate::game_data::modifiers::trade_tiers::{AffixLimits, FoundTiers, TradeItem};
 use crate::game_data::modifiers::{ModifierTiers, Tier};
 use crate::item::{
-    Affix, CopiedItem, Item, ItemState, Modifier, ModifierKind, ModifierOrigin, PartTier, Range,
-    StatLine,
+    Affix, AffixTier, CopiedItem, Item, ItemState, Modifier, ModifierKind, ModifierOrigin,
+    PartTier, Range, StatLine, TierDoubt,
 };
 use crate::language::Language;
 
@@ -90,6 +90,17 @@ pub(super) fn part(affix: Affix, tiers: &[u32], ranges: &[(f64, f64)]) -> PartTi
         hides_number: false,
         ranges: ranges.iter().map(|&(min, max)| range(min, max)).collect(),
         currency: None,
+    }
+}
+
+/// The tier `tier` of a modifier as `affix`, over `ranges`: its number written, no lord's.
+pub(super) fn affix_tier(affix: Affix, tier: u32, ranges: &[(f64, f64)]) -> AffixTier {
+    AffixTier {
+        affix,
+        tier,
+        hides_number: false,
+        ranges: ranges.iter().map(|&(min, max)| range(min, max)).collect(),
+        lord: None,
     }
 }
 
@@ -244,6 +255,11 @@ pub(super) fn added(modifiers: &[Modifier], found: &[FoundTiers]) -> Added {
             Some((text, added.affix, added.tiers.tier()?.number))
         })
         .collect()
+}
+
+/// The doubt on the tier of the first of `modifiers`, written again.
+pub(super) fn first_doubt(modifiers: &[Modifier]) -> Option<TierDoubt> {
+    modifiers.first()?.doubt.clone()
 }
 
 /// For each modifier read from its values, how many lines it has and the tier number of

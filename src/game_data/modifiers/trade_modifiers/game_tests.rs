@@ -4,8 +4,8 @@
 
 use super::*;
 use crate::game_data::modifiers::fixtures::{
-    ADVANCED_COPIES, BOW_EN, TIARA_EN, as_in_game_trade, desecrated, english_item, modifier, parse,
-    part, range, tiers, trade_item, trade_lines,
+    ADVANCED_COPIES, BOW_EN, TIARA_EN, affix_tier, as_in_game_trade, desecrated, english_item,
+    first_doubt, modifier, parse, part, range, tiers, trade_item, trade_lines,
 };
 use crate::game_data::modifiers::trade_tiers::AffixLimits;
 use crate::item::{Lord, ModifierOrigin, StatLine};
@@ -173,13 +173,7 @@ fn the_lines_of_a_tiara_read_again_keep_the_tiers_of_the_affix_in_doubt() {
             .cloned()
             .expect(words)
     };
-    let tier = |affix, min, max| AffixTier {
-        affix,
-        tier: 1,
-        hides_number: false,
-        ranges: vec![range(min, max)],
-        lord: None,
-    };
+    let tier = |affix, min, max| affix_tier(affix, 1, &[(min, max)]);
     let desecrated = item.modifiers().len() - 1;
     // A third resistance in place of the desecrated `+69 to maximum Energy Shield`: the
     // suffixes full, a prefix open.
@@ -402,19 +396,18 @@ fn a_desecrated_line_of_a_lord_and_of_an_ordinary_suffix_keeps_the_tier_of_each(
 
     let read = read_again("Trarthan Cannon", 82, &grenades, (3, 3));
 
-    // A fixed value: no range, as under any modifier; the prefix of Amanamu named.
-    let tier = |affix, tier, hides_number, lord| AffixTier {
-        affix,
-        tier,
-        hides_number,
-        ranges: Vec::new(),
-        lord,
+    // A fixed value: no range, as under any modifier; the prefix of Amanamu named, its
+    // number hidden.
+    let of_amanamu = AffixTier {
+        hides_number: true,
+        lord: Some(Lord::Amanamu),
+        ..affix_tier(Affix::Prefix, 1, &[])
     };
     assert_eq!(
-        read.first().and_then(|modifier| modifier.doubt.clone()),
+        first_doubt(&read),
         Some(TierDoubt::EitherAffix {
-            prefix: tier(Affix::Prefix, 1, true, Some(Lord::Amanamu)),
-            suffix: tier(Affix::Suffix, 2, false, None),
+            prefix: of_amanamu,
+            suffix: affix_tier(Affix::Suffix, 2, &[]),
         })
     );
     // Not marked, the line is no lord's: the T2 of the suffix.
