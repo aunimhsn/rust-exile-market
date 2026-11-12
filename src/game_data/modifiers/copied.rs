@@ -12,6 +12,7 @@ use crate::item::{Modifier, ModifierKind, ModifierOrigin, Range};
 pub(super) const ROUNDING: f64 = 0.051;
 
 /// The lines of a copied modifier, and the ranges of its tier when the advanced copy gave them.
+#[cfg_attr(test, derive(Debug, PartialEq))]
 pub(super) struct Copied<'a> {
     pub(super) lines: Vec<CopiedLine<'a>>,
     /// The ranges the advanced copy gave for each value of the lines, in their order, as the
@@ -163,6 +164,7 @@ pub(super) enum CopiedTier {
 
 /// A copied line of a modifier, the lines of a stat written on several lines counting as one.
 #[derive(Clone)]
+#[cfg_attr(test, derive(Debug, PartialEq))]
 pub(super) struct CopiedLine<'a> {
     /// The English templates of its stat ([`Stats::english_references`]): one, but for a line
     /// of another language that is the line of two English stats.
@@ -219,3 +221,6 @@ pub(super) fn holds(values: &[f64], ranges: &[Range]) -> Option<Fit> {
         None
     }
 }
+
+#[cfg(test)]
+mod tests;
