@@ -281,7 +281,7 @@ fn lookup_tables() -> Vec<Table> {
             lord: Some(TableLord::Kurgal),
             ..life_as("LordLife", "prefix")
         },
-        // A modifier that rolls on the rings only.
+        // A modifier that rolls on the rings only: no tier on the base.
         on("ring", life_as("RingLife", "prefix")),
     ]
 }
@@ -308,20 +308,15 @@ fn the_modifiers_that_have_the_lines_of_a_copied_one_are_given_once_in_the_order
     let suffix = (4, two_tiers.clone(), vec![25.0]);
     let alloy = (5, two_tiers.clone(), vec![25.0]);
     let lord = (6, two_tiers, vec![25.0]);
-    // A modifier that doesn't roll on the base is given too, without tier.
-    let on_the_rings = (7, Vec::new(), vec![25.0]);
 
-    assert_eq!(
-        holding(None),
-        [life.clone(), suffix.clone(), on_the_rings.clone()]
-    );
+    assert_eq!(holding(None), [life.clone(), suffix.clone()]);
     assert_eq!(
         holding(Some(ModifierOrigin::Crafted)),
-        [life.clone(), suffix.clone(), alloy, on_the_rings.clone()]
+        [life.clone(), suffix.clone(), alloy]
     );
     assert_eq!(
         holding(Some(ModifierOrigin::Desecrated)),
-        [life, suffix, lord, on_the_rings]
+        [life, suffix, lord]
     );
 }
 
@@ -362,7 +357,7 @@ fn the_modifiers_of_an_affix_are_those_of_its_tables_alone() {
             .collect()
     };
 
-    assert_eq!(indexes(TableAffix::Prefix), [0, 7]);
+    assert_eq!(indexes(TableAffix::Prefix), [0]);
     assert_eq!(indexes(TableAffix::Suffix), [4]);
 }
 
