@@ -76,21 +76,18 @@ impl<'a> ItemTables<'a> {
     /// of its origin ([`Copied::may_be`]), its lines in any order, looked at once, at its first
     /// table, with its tiers on the base whatever the level of the item. Whether one of these
     /// tiers holds the copied values is left to the caller.
-    pub(super) fn holding<'c>(
-        &'c self,
-        copied: &'c Copied<'_>,
-    ) -> impl Iterator<Item = Held<'a>> + 'c {
+    pub(super) fn holding(&self, copied: &Copied<'_>) -> impl Iterator<Item = Held<'a>> {
         let tables = self.all.iter().enumerate();
         tables.filter_map(move |(index, table)| self.held(index, table, copied))
     }
 
     /// The modifiers of `affix` among those that have the lines of `copied`
     /// ([`Self::holding`]).
-    pub(super) fn holding_as<'c>(
-        &'c self,
-        copied: &'c Copied<'_>,
+    pub(super) fn holding_as(
+        &self,
+        copied: &Copied<'_>,
         affix: TableAffix,
-    ) -> impl Iterator<Item = Held<'a>> + 'c {
+    ) -> impl Iterator<Item = Held<'a>> {
         // The affix first, the cheapest to tell: a table of the other one is looked at no
         // further.
         let tables = self.all.iter().enumerate();
