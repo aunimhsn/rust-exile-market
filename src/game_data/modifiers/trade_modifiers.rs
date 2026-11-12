@@ -32,13 +32,13 @@ fn with_found_tiers(
     modifiers: &[Modifier],
     found: &[FoundTiers],
 ) -> Vec<Modifier> {
-    let mut read = Vec::with_capacity(modifiers.len());
+    let mut written = Vec::with_capacity(modifiers.len());
     let mut next = 0;
     while let Some(modifier) = modifiers.get(next) {
         let joined = found
             .iter()
-            .filter(|found| found.modifiers.start == next)
-            .find_map(|found| {
+            .find(|found| found.modifiers.start == next)
+            .and_then(|found| {
                 let run = Run {
                     language,
                     modifiers: modifiers.get(found.modifiers.clone())?,
@@ -46,14 +46,14 @@ fn with_found_tiers(
                 Some((found.modifiers.end, run.read(base_type, found)?))
             });
         if let Some((end, joined)) = joined {
-            read.push(joined);
+            written.push(joined);
             next = end;
         } else {
-            read.push(modifier.clone());
+            written.push(modifier.clone());
             next += 1;
         }
     }
-    read
+    written
 }
 
 /// Consecutive modifiers of an item copied from the in-game trade, one line each, read as one
@@ -142,7 +142,6 @@ impl Run<'_> {
         }
         Some(Modifier {
             kind: ModifierKind::Explicit((affix == added.affix).then_some(affix)),
-            tier: None,
             doubt: Some(TierDoubt::Split {
                 line,
                 whole: self.part_tier(affix, whole, line)?,
