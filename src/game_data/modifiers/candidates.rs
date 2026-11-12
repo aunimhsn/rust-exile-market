@@ -123,11 +123,11 @@ fn run_candidates(
         added: None,
     });
     // A modifier of one line only may be split: the line the game writes for both.
-    let alone = |owner: usize| owners.iter().filter(|&&other| other == owner).count() == 1;
+    let has_one_line = |owner: usize| owners.iter().filter(|&&other| other == owner).count() == 1;
     let split = owners
         .iter()
         .enumerate()
-        .filter(|&(_, &owner)| alone(owner))
+        .filter(|&(_, &owner)| has_one_line(owner))
         .flat_map(|(summed, &owner)| splits(tables, joined, (summed, owner)))
         .map(|split| Candidate {
             modifiers: modifiers.clone(),

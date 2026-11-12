@@ -99,13 +99,13 @@ pub(super) struct TableLine {
     /// be written without number: its value is then that of the stat (1000 for `Inherent Rage
     /// loss starts 1 second later`, shown in seconds; no such line rolls on a base on
     /// 2026-10-28, the generator writes the divisor when one does).
-    #[serde(default = "one")]
+    #[serde(default = "default_divisor")]
     pub(super) divisor: f64,
 }
 
 /// The divisor of a line the generator writes without one ([`TableLine::divisor`]): its value
 /// is shown as the stat stores it.
-fn one() -> f64 {
+fn default_divisor() -> f64 {
     1.0
 }
 
