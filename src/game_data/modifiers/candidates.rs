@@ -77,6 +77,8 @@ pub(super) fn candidates(tables: &ItemTables<'_>, copied: &[Option<Copied<'_>>])
         let mut lines = Vec::new();
         // The index among the modifiers of the item of the modifier of each line.
         let mut owners = Vec::new();
+        // A bound of the work only: a longer run has more lines than any modifier of the
+        // tables, and makes no candidate.
         let run = copied.iter().skip(start).take(most_lines);
         for (end, part) in (start + 1..).zip(run) {
             let Some(part) = part.as_ref().filter(|part| part.origin == origin) else {

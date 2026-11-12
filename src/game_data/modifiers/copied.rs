@@ -123,8 +123,10 @@ impl<'a> Copied<'a> {
         values
     }
 
-    /// How well `tier` holds the copied `values`; none when its ranges aren't those the advanced
-    /// copy gave, or when it doesn't hold them and the copy gave no range.
+    /// How well `tier` holds the copied `values`; none when it hasn't a range for each value,
+    /// when its ranges aren't those the advanced copy gave (those of a tier across zero never
+    /// are: the copy writes a range without its sign), or when it doesn't hold the values and
+    /// the copy gave no range.
     pub(super) fn fit(&self, values: &[f64], tier: &Tier) -> Option<Fit> {
         if values.len() != tier.ranges.len() {
             return None;
