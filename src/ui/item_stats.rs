@@ -161,25 +161,29 @@ fn rows<'a>(
     base_type: Option<&'a str>,
 ) -> Vec<Row<'a>> {
     let mut rows = Vec::new();
-    // An unrevealed modifier can change the item: its other stats start unchecked.
-    let has_unrevealed = item.unrevealed_modifiers() > 0;
-    let dps = if item.rarity().has_item_filters() {
+    let mut dps = if item.rarity().has_item_filters() {
         push_group(&mut rows, Group::Item, item_filters(item, base_type));
         push_group(&mut rows, Group::Waystone, waystone_filters(item));
-        dps_filters(item, line_stats, !has_unrevealed)
+        dps_filters(item, line_stats)
     } else {
         push_group(&mut rows, Group::Gem, gem_filters(item));
         Vec::new()
     };
-    let pseudo = if matches!(item.rarity(), Rarity::Magic | Rarity::Rare) {
+    let mut pseudo = if matches!(item.rarity(), Rarity::Magic | Rarity::Rare) {
         line_stats
             .pseudo_totals()
             .iter()
-            .map(|total| pseudo_filter(total, line_stats, !has_unrevealed))
+            .map(|total| pseudo_filter(total, line_stats))
             .collect()
     } else {
         Vec::new()
     };
+    // An unrevealed modifier can change the item: its other stats start unchecked.
+    let has_unrevealed = item.unrevealed_modifiers() > 0;
+    if has_unrevealed {
+        uncheck(&mut dps);
+        uncheck(&mut pseudo);
+    }
     let context = LineContext {
         copied_lines,
         line_stats,
@@ -198,6 +202,13 @@ fn rows<'a>(
     let mut rows = join_stat_lines(item, line_stats, rows);
     rows.extend(notes(item));
     rows
+}
+
+/// Unchecks the filters of the `stats`.
+fn uncheck(stats: &mut [Stat<'_>]) {
+    for filter in stats.iter_mut().filter_map(|stat| stat.filter.as_mut()) {
+        filter.checked = false;
+    }
 }
 
 /// The keys of the `stats` checked at first.

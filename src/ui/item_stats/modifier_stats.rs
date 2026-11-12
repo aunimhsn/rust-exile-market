@@ -95,23 +95,14 @@ pub(super) fn added_stat<'a>(
     }
 }
 
-/// A filter of a rare, magic or normal item, when the line `varies` with a minimum at 90 % of
-/// the copied value, or a maximum at 110 % when `half` is the maximum.
-pub(super) fn comparable_filter(
-    line: &StatLine,
-    bounds: Option<Range>,
-    varies: bool,
-    half: Half,
-    checked: bool,
-) -> StatFilter {
-    StatFilter {
-        checked,
-        limit: varies.then(|| searched_value(line)).flatten().map(|value| {
-            let written = line.rolls.iter().map(|roll| decimals(roll.value)).max();
-            let limit = comparable_limit(value, written.unwrap_or(0), half);
-            Limit::new(limit, half, bounds, value, line)
-        }),
-    }
+/// The limit of a filter of a line of a rare, magic or normal item that varies, `line`: a
+/// minimum at 90 % of the copied value, or a maximum at 110 % when `half` is the maximum,
+/// within its `bounds`; none for a line without a number the trade site searches.
+pub(super) fn limit_of_line(line: &StatLine, bounds: Option<Range>, half: Half) -> Option<Limit> {
+    let value = searched_value(line)?;
+    let written = line.rolls.iter().map(|roll| decimals(roll.value)).max();
+    let limit = comparable_limit(value, written.unwrap_or(0), half);
+    Some(Limit::new(limit, half, bounds, value, line))
 }
 
 /// The stats of the modifiers of `item` whose kind passes `keep`, made by `stat`: the

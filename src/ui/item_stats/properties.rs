@@ -267,15 +267,11 @@ fn required_level_filter(item: &Item) -> Option<Stat<'static>> {
 }
 
 /// The filters of the DPS of a weapon, each kind it deals, with a minimum at 90 % of its
-/// DPS, rounded down so that the weapon passes it: when `checkable`, the physical one checked,
-/// the elemental one when it is at least the physical one, so that a weapon mostly elemental is
+/// DPS, rounded down so that the weapon passes it: the physical one checked, the elemental one
+/// when it is at least the physical one, so that a weapon mostly elemental is
 /// compared with elemental ones, or in its place. On a rare or magic item, a DPS whose minimum
 /// any weapon of its base reaches compares nothing ([`LineStats::rules_out`]): unchecked.
-pub(super) fn dps_filters(
-    item: &Item,
-    line_stats: &LineStats,
-    checkable: bool,
-) -> Vec<Stat<'static>> {
+pub(super) fn dps_filters(item: &Item, line_stats: &LineStats) -> Vec<Stat<'static>> {
     let Some(weapon) = item.weapon() else {
         return Vec::new();
     };
@@ -297,14 +293,8 @@ pub(super) fn dps_filters(
     .filter_map(|(property, dps, checked)| {
         // As the item block shows it.
         let shown = dps.round();
-        (shown >= 1.0).then(|| {
-            property_filter(
-                property,
-                shown,
-                Limit::minimum(minimum(dps)),
-                checkable && checked,
-            )
-        })
+        (shown >= 1.0)
+            .then(|| property_filter(property, shown, Limit::minimum(minimum(dps)), checked))
     })
     .collect()
 }
@@ -323,22 +313,18 @@ fn property_filter(property: Property, value: f64, limit: Limit, checked: bool) 
     }
 }
 
-/// The filter of a pseudo total, with a minimum at 90 % of its value; when `checkable`,
-/// checked if it compares the item ([`LineStats::rules_out`]): not when the lines of its base
+/// The filter of a pseudo total, with a minimum at 90 % of its value, checked if it compares
+/// the item ([`LineStats::rules_out`]): not when the lines of its base
 /// (its implicits at their best roll, its runes, its enchantments) reach its minimum, which
 /// any item of its base may then pass.
-pub(super) fn pseudo_filter(
-    total: &PseudoTotal,
-    line_stats: &LineStats,
-    checkable: bool,
-) -> Stat<'static> {
+pub(super) fn pseudo_filter(total: &PseudoTotal, line_stats: &LineStats) -> Stat<'static> {
     let minimum = comparable_limit(total.value, decimals(total.value), Half::Minimum);
     let compares = line_stats.compares(FilterKey::Pseudo(total.pseudo), minimum);
     Stat {
         key: FilterKey::Pseudo(total.pseudo),
         text: StatText::Pseudo(total.pseudo, total.value),
         filter: Some(StatFilter {
-            checked: checkable && compares,
+            checked: compares,
             limit: Some(Limit::minimum(minimum)),
         }),
         is_unsearchable: false,

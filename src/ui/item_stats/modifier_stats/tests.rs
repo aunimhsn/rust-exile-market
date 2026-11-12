@@ -243,9 +243,9 @@ fn a_line_of_two_decimal_rolls_gets_a_limit_of_their_decimals() {
             },
         ],
     };
-    let filter = comparable_filter(&line, None, true, Half::Minimum, true);
+    let limit = limit_of_line(&line, None, Half::Minimum);
     // 90 % of their average, 3.4: 3.06, written with one decimal.
-    assert!((filter.limit.unwrap().value - 3.1).abs() < 1e-9);
+    assert!((limit.unwrap().value - 3.1).abs() < 1e-9);
     // Two whole rolls averaged to 37.5 get a whole minimum: 34, not 33.75.
     let whole = StatLine {
         rolls: vec![
@@ -260,6 +260,6 @@ fn a_line_of_two_decimal_rolls_gets_a_limit_of_their_decimals() {
         ],
         ..line
     };
-    let filter = comparable_filter(&whole, None, true, Half::Minimum, true);
-    assert!((filter.limit.unwrap().value - 34.0).abs() < 1e-9);
+    let limit = limit_of_line(&whole, None, Half::Minimum);
+    assert!((limit.unwrap().value - 34.0).abs() < 1e-9);
 }

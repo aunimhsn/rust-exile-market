@@ -28,6 +28,9 @@ const ROW_GAP: f32 = 6.0;
 /// The space added above a small title, after the first.
 const GROUP_GAP: f32 = 6.0;
 
+/// The space between a small title and the fill of its prefixes or suffixes.
+const TITLE_GAP: f32 = 6.0;
+
 /// The column on the left of a filter, for its checkbox.
 const CHECKBOX_COLUMN: f32 = 20.0;
 
@@ -123,7 +126,13 @@ impl Stats<'_> {
             }
             match row {
                 Row::Group(group) => {
-                    group_title(ui, group, std::mem::take(&mut shows_range_title), i18n);
+                    let shows_range = std::mem::take(&mut shows_range_title);
+                    ui.horizontal(|ui| {
+                        group_title(ui, group, i18n);
+                        if shows_range {
+                            range_title(ui, i18n);
+                        }
+                    });
                 }
                 Row::Stat(stat) => stat_row(ui, &stat, filters, i18n),
                 Row::UnrevealedNote => note(ui, i18n.text(Message::UnrevealedNote)),
@@ -139,9 +148,9 @@ fn note(ui: &mut Ui, words: String) {
     ui.label(RichText::new(words).font(text::note()).color(color::FAINT));
 }
 
-/// A small title, with the fill of the prefixes and suffixes: lighter while one is open, the count
-/// alone without most; and "min – max" on its right, above the range fields of the filters.
-fn group_title(ui: &mut Ui, group: Group, range: bool, i18n: &Translator) {
+/// A small title, in a row, with the fill of the prefixes and suffixes: lighter while one is
+/// open, the count alone without most.
+fn group_title(ui: &mut Ui, group: Group, i18n: &Translator) {
     let (message, fill) = match group {
         Group::Item => (Message::GroupItem, None),
         Group::Weapon => (Message::GroupWeapon, None),
@@ -156,33 +165,35 @@ fn group_title(ui: &mut Ui, group: Group, range: bool, i18n: &Translator) {
         Group::Explicit => (Message::GroupExplicit, None),
         Group::Unique => (Message::GroupUnique, None),
     };
-    let small_title = |ui: &mut Ui, message: Message| {
-        let title = widgets::spaced_line(
-            ui,
-            i18n.text(message).to_uppercase(),
-            text::label(),
-            text::LABEL_LETTER_SPACING,
-        );
-        let (rect, _) = ui.allocate_exact_size(title.size(), Sense::hover());
-        ui.painter().galley(rect.min, title, color::FAINT);
-    };
-    ui.horizontal(|ui| {
-        ui.spacing_mut().item_spacing.x = 6.0;
-        small_title(ui, message);
-        if let Some((filled, max)) = fill {
-            let (words, tint) = match max {
-                Some(max) if filled < max => (i18n.affix_fill(filled, max), color::ACCENT),
-                Some(max) => (i18n.affix_fill(filled, max), color::WEAK),
-                None => (filled.to_string(), color::WEAK),
-            };
-            ui.label(RichText::new(words).font(text::label()).color(tint));
-        }
-        if range {
-            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                small_title(ui, Message::FilterRange);
-            });
-        }
+    ui.spacing_mut().item_spacing.x = TITLE_GAP;
+    small_title(ui, message, i18n);
+    if let Some((filled, max)) = fill {
+        let (words, tint) = match max {
+            Some(max) if filled < max => (i18n.affix_fill(filled, max), color::ACCENT),
+            Some(max) => (i18n.affix_fill(filled, max), color::WEAK),
+            None => (filled.to_string(), color::WEAK),
+        };
+        ui.label(RichText::new(words).font(text::label()).color(tint));
+    }
+}
+
+/// "min – max" on the right of the row of a title, above the range fields of the filters.
+fn range_title(ui: &mut Ui, i18n: &Translator) {
+    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+        small_title(ui, Message::FilterRange, i18n);
     });
+}
+
+/// The words of `message` in capitals, spaced, faint.
+fn small_title(ui: &mut Ui, message: Message, i18n: &Translator) {
+    let title = widgets::spaced_line(
+        ui,
+        i18n.text(message).to_uppercase(),
+        text::label(),
+        text::LABEL_LETTER_SPACING,
+    );
+    let (rect, _) = ui.allocate_exact_size(title.size(), Sense::hover());
+    ui.painter().galley(rect.min, title, color::FAINT);
 }
 
 /// A stat in the color of the modifiers, on four lines at most, and its roll under it; a

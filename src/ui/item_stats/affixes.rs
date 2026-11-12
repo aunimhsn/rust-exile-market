@@ -2,10 +2,11 @@
 //! prefixes and suffixes with a bar over every tier of their modifier on the base, their tier
 //! and the ranges of that tier.
 
-use super::model::{Group, ModifierTier, Origin, Row, Stat, StatRoll, StatText, TierRow};
+use super::model::{
+    Group, Limit, ModifierTier, Origin, Row, Stat, StatFilter, StatRoll, StatText, TierRow,
+};
 use super::modifier_stats::{
-    LineContext, added_stat, comparable_filter, is_enchant, is_implicit, is_rune, stats_of_kind,
-    varies,
+    LineContext, added_stat, is_enchant, is_implicit, is_rune, limit_of_line, stats_of_kind, varies,
 };
 use super::push_group;
 use super::rolls::{bar, copied_ranges, magnitudes, value_bounds, varying_share};
@@ -256,27 +257,29 @@ fn affix_stat<'a>(
 ) -> Stat<'a> {
     let counted = context.counted(key, line);
     let over = rolls_over_tiers(key, context);
-    let mut filter = comparable_filter(
-        &counted,
-        over.as_ref()
-            .and_then(|over| value_bounds(&counted, &over.ranges)),
-        affix_varies(&counted, over.as_ref()),
-        context.half(key),
-        context.starts_checked(key),
-    );
-    if let Some(limit) = &mut filter.limit {
-        limit.tiers = over
-            .as_ref()
-            .and_then(|over| over.tiers)
-            .filter(|_| limit.rolls.is_some());
-    }
+    let bounds = over
+        .as_ref()
+        .and_then(|over| value_bounds(&counted, &over.ranges));
+    let limit = affix_varies(&counted, over.as_ref())
+        .then(|| limit_of_line(&counted, bounds, context.half(key)))
+        .flatten()
+        .map(|limit| Limit {
+            tiers: over
+                .as_ref()
+                .and_then(|over| over.tiers)
+                .filter(|_| limit.rolls.is_some()),
+            ..limit
+        });
     let share = over
         .as_ref()
         .and_then(|over| varying_share(&magnitudes(&counted, &over.ranges)));
     Stat {
         key: FilterKey::Stat(key),
         text: StatText::line(&line.text),
-        filter: Some(filter),
+        filter: Some(StatFilter {
+            checked: context.starts_checked(key),
+            limit,
+        }),
         is_unsearchable: false,
         roll: (share.is_some() || tier.is_some() || origin.is_some()).then_some(StatRoll::Affix {
             share,
@@ -294,13 +297,14 @@ fn implicit_stat<'a>(key: StatKey, line: &'a StatLine, context: &LineContext<'_>
     Stat {
         key: FilterKey::Stat(key),
         text: StatText::line(&line.text),
-        filter: Some(comparable_filter(
-            &counted,
-            value_bounds(&counted, &ranges),
-            varies(&counted),
-            context.half(key),
-            context.starts_checked(key),
-        )),
+        filter: Some(StatFilter {
+            checked: context.starts_checked(key),
+            limit: varies(&counted)
+                .then(|| {
+                    limit_of_line(&counted, value_bounds(&counted, &ranges), context.half(key))
+                })
+                .flatten(),
+        }),
         is_unsearchable: false,
         roll: bar(magnitudes(&counted, &ranges), None),
     }
