@@ -33,7 +33,7 @@ impl<'a> Copied<'a> {
     /// which has no template of the tables.
     pub(super) fn of(modifier: &Modifier, matches: &[LineMatch<'a>]) -> Option<Self> {
         let mut lines = Vec::new();
-        let mut ranges = Some(Vec::new());
+        let mut ranges = Vec::new();
         for line_match in matches {
             let stat = line_match.stat.as_ref()?;
             // A line the trade site only knows has no template of Exiled Exchange 2.
@@ -50,20 +50,14 @@ impl<'a> Copied<'a> {
                 .get(line_match.lines.clone())?
                 .iter()
                 .flat_map(|line| &line.rolls);
-            for range in stat.counted(rolls).map(|roll| roll.range) {
-                match (&mut ranges, range) {
-                    (Some(ranges), Some(range)) => ranges.push(range),
-                    _ => ranges = None,
-                }
-            }
+            ranges.extend(stat.counted(rolls).filter_map(|roll| roll.range));
         }
-        // The advanced copy writes no range for a line without number (`Loads an additional
-        // bolt`): the modifier is then found by its values only, as it is when a range is
-        // missing.
+        // A range for each value, or none: the modifier is then found by its values only. A
+        // value without its range leaves fewer ranges than values, and so does a line without
+        // number (`Loads an additional bolt`), for which the advanced copy writes none: it
+        // counts the value its string gives.
         let count: usize = lines.iter().map(CopiedLine::count).sum();
-        let ranges = ranges.filter(|ranges| {
-            lines.iter().all(|line| line.written.is_none()) && ranges.len() == count
-        });
+        let ranges = (ranges.len() == count).then_some(ranges);
         Some(Self {
             lines,
             ranges,
