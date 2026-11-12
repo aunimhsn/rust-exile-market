@@ -12,7 +12,7 @@ use crate::item::{Affix, Modifier, PartTier, Range, StatLine};
 /// "Suffix" saying they are added up, which a line that can be either doesn't have. A hybrid
 /// `whole`, of the `others` lines, says "Hybrid" instead ([`hybrid_word`]), its tooltip naming
 /// them.
-pub(super) fn split_rows<'a>(
+pub(super) fn split_tier_rows<'a>(
     whole: &PartTier,
     added: &PartTier,
     others: &[&'a str],
@@ -67,7 +67,7 @@ pub(super) fn other_lines(
 /// The tier of the hybrid `whole` of `modifier`, whose line `summed` adds up its part with
 /// `added`, under the last of its other lines: the ranges of these lines over its tiers,
 /// "Hybrid" after them ([`hybrid_word`]), its tooltip naming that part and the line.
-pub(super) fn hybrid_row<'a>(
+pub(super) fn hybrid_tier_row<'a>(
     modifier: &'a Modifier,
     summed: usize,
     whole: &PartTier,

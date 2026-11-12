@@ -6,36 +6,36 @@ use crate::ui::item_stats::model::Limit;
 
 #[test]
 fn a_rare_limit_leaves_10_percent_on_the_worse_side_also_for_a_negative_value() {
-    let whole = |value, half| comparable(value, 0, half);
+    let whole = |value, half| comparable_limit(value, 0, half);
 
     assert!((whole(12.0, Half::Minimum) - 11.0).abs() < 1e-9);
     assert!((whole(18.0, Half::Maximum) - 20.0).abs() < 1e-9);
     // The item passes its own filter.
     assert!((whole(-15.0, Half::Minimum) - -17.0).abs() < 1e-9);
     assert!((whole(-15.0, Half::Maximum) - -14.0).abs() < 1e-9);
-    assert!((comparable(-7.5, 1, Half::Minimum) - -8.3).abs() < 1e-9);
+    assert!((comparable_limit(-7.5, 1, Half::Minimum) - -8.3).abs() < 1e-9);
 }
 
 #[test]
 fn a_rare_limit_keeps_the_decimals_of_the_copied_value_so_that_it_fits_in_its_field() {
     // 12.2 life regenerated per second, the owner's Demon Garb: 10.98 overflowed the field.
-    assert!((comparable(12.2, 1, Half::Minimum) - 11.0).abs() < 1e-9);
+    assert!((comparable_limit(12.2, 1, Half::Minimum) - 11.0).abs() < 1e-9);
     assert_eq!(
-        filters::limit_text(comparable(12.2, 1, Half::Minimum)),
+        filters::limit_text(comparable_limit(12.2, 1, Half::Minimum)),
         "11"
     );
-    assert!((comparable(12.5, 1, Half::Minimum) - 11.3).abs() < 1e-9);
-    assert!((comparable(1.55, 2, Half::Minimum) - 1.4).abs() < 1e-9);
-    assert!((comparable(0.3, 1, Half::Minimum) - 0.3).abs() < 1e-9);
-    assert!((comparable(2.4, 1, Half::Maximum) - 2.6).abs() < 1e-9);
-    assert!((comparable(-12.2, 1, Half::Minimum) - -13.4).abs() < 1e-9);
+    assert!((comparable_limit(12.5, 1, Half::Minimum) - 11.3).abs() < 1e-9);
+    assert!((comparable_limit(1.55, 2, Half::Minimum) - 1.4).abs() < 1e-9);
+    assert!((comparable_limit(0.3, 1, Half::Minimum) - 0.3).abs() < 1e-9);
+    assert!((comparable_limit(2.4, 1, Half::Maximum) - 2.6).abs() < 1e-9);
+    assert!((comparable_limit(-12.2, 1, Half::Minimum) - -13.4).abs() < 1e-9);
 }
 
 #[test]
 fn a_rare_item_always_passes_its_own_filter() {
     let passes = |value: f64, decimals: u8| {
-        comparable(value, decimals, Half::Minimum) <= value
-            && comparable(value, decimals, Half::Maximum) >= value
+        comparable_limit(value, decimals, Half::Minimum) <= value
+            && comparable_limit(value, decimals, Half::Maximum) >= value
     };
     // Every value written with 0, 1 or 2 decimals, positive or negative.
     for decimals in 0..=2 {
@@ -47,9 +47,9 @@ fn a_rare_item_always_passes_its_own_filter() {
     }
     // The rounding would cross the value: the average of three whole rolls, and a value with
     // more decimals than the numbers are written with.
-    assert!((comparable(4.0 / 3.0, 0, Half::Maximum) - 4.0 / 3.0).abs() < 1e-9);
-    assert!((comparable(5.0 / 3.0, 0, Half::Minimum) - 5.0 / 3.0).abs() < 1e-9);
-    assert!((comparable(0.019, 2, Half::Minimum) - 0.019).abs() < 1e-9);
+    assert!((comparable_limit(4.0 / 3.0, 0, Half::Maximum) - 4.0 / 3.0).abs() < 1e-9);
+    assert!((comparable_limit(5.0 / 3.0, 0, Half::Minimum) - 5.0 / 3.0).abs() < 1e-9);
+    assert!((comparable_limit(0.019, 2, Half::Minimum) - 0.019).abs() < 1e-9);
 }
 
 #[test]
@@ -71,7 +71,7 @@ fn the_decimals_of_a_value_are_two_at_most() {
 fn a_negative_stat_takes_a_minus_sign() {
     let line = StatLine::parse("-15% to Fire Resistance");
     let negative =
-        |value, bounds| Limit::new(value, Half::Minimum, bounds, value, &line).negative();
+        |value, bounds| Limit::new(value, Half::Minimum, bounds, value, &line).allows_minus_sign();
 
     assert!(negative(-15.0, None));
     assert!(!negative(15.0, None));

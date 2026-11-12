@@ -1,28 +1,30 @@
 //! The rows of a unique: its lines with a bar of where each value falls in its range, or fixed.
 
-use super::model::{Group, Limit, Origin, Roll, Row, Stat, StatFilter, StatText};
-use super::modifier_stats::{Reading, added, is_enchant, is_implicit, is_rune, stats};
+use super::model::{Group, Limit, Origin, Row, Stat, StatFilter, StatRoll, StatText};
+use super::modifier_stats::{
+    LineContext, added_stat, is_enchant, is_implicit, is_rune, stats_of_kind,
+};
 use super::push_group;
-use super::rolls::{bar, bounds, copied_ranges, magnitudes, value};
+use super::rolls::{bar, copied_ranges, magnitudes, searched_value, value_bounds};
 use crate::filters::{FilterKey, StatKey};
 use crate::item::{Item, ModifierKind, ModifierOrigin, StatLine};
 
 /// The rows of a unique: its enchantments, its runes, the implicit modifiers of its base,
 /// then its own modifiers.
-pub(super) fn unique_rows<'a>(item: &'a Item, reading: &Reading<'_>) -> Vec<Row<'a>> {
+pub(super) fn unique_rows<'a>(item: &'a Item, context: &LineContext<'_>) -> Vec<Row<'a>> {
     // A stat of a unique varies when it is a filter.
     let varies = |_: &StatLine, stat: &Stat<'_>| stat.filter.is_some();
     let mut rows = Vec::new();
-    let added_stat = |key, line| added(key, line, reading);
+    let added_line = |key, line| added_stat(key, line, context);
     push_group(
         &mut rows,
         Group::Enchant,
-        stats(item, is_enchant, added_stat, varies),
+        stats_of_kind(item, is_enchant, added_line, varies),
     );
     push_group(
         &mut rows,
         Group::Runes,
-        stats(item, is_rune, added_stat, varies),
+        stats_of_kind(item, is_rune, added_line, varies),
     );
     // The origin of a modifier under its last line.
     let line_stat = |key: StatKey, line| {
@@ -31,17 +33,17 @@ pub(super) fn unique_rows<'a>(item: &'a Item, reading: &Reading<'_>) -> Vec<Row<
             .get(key.modifier)
             .filter(|modifier| key.line + 1 == modifier.lines.len())
             .and_then(|modifier| modifier.origin);
-        unique_stat(key, line, origin, item.has_rolls_from_prices(), reading)
+        unique_stat(key, line, origin, item.has_rolls_from_prices(), context)
     };
     push_group(
         &mut rows,
         Group::Implicit,
-        stats(item, is_implicit, line_stat, varies),
+        stats_of_kind(item, is_implicit, line_stat, varies),
     );
     push_group(
         &mut rows,
         Group::Unique,
-        stats(
+        stats_of_kind(
             item,
             |kind| matches!(kind, ModifierKind::Explicit(_)),
             line_stat,
@@ -62,30 +64,30 @@ fn unique_stat<'a>(
     whole: &'a StatLine,
     origin: Option<ModifierOrigin>,
     rolls_from_prices: bool,
-    reading: &Reading<'_>,
+    context: &LineContext<'_>,
 ) -> Stat<'a> {
-    let line = &reading.counted(key, whole);
+    let line = &context.counted(key, whole);
     let ranges = copied_ranges(line);
     let origin = origin.map(Origin::Written);
     let fixed = Stat {
         key: FilterKey::Stat(key),
         text: StatText::line(&whole.text),
         filter: None,
-        unsearchable: false,
-        roll: origin.map(|origin| Roll::Affix {
+        is_unsearchable: false,
+        roll: origin.map(|origin| StatRoll::Affix {
             share: None,
             tier: None,
             origin: Some(origin),
         }),
     };
     if rolls_from_prices && ranges.iter().all(Option::is_none) {
-        let Some(value) = value(line) else {
+        let Some(value) = searched_value(line) else {
             return fixed;
         };
         return Stat {
             filter: Some(StatFilter {
                 checked: false,
-                limit: Some(Limit::new(value, reading.half(key), None, value, line)),
+                limit: Some(Limit::new(value, context.half(key), None, value, line)),
             }),
             ..fixed
         };
@@ -94,7 +96,7 @@ fn unique_stat<'a>(
     let Some(roll) = bar(magnitudes(line, &ranges), origin) else {
         return fixed;
     };
-    let Some(value) = value(line) else {
+    let Some(value) = searched_value(line) else {
         return fixed;
     };
     Stat {
@@ -103,8 +105,8 @@ fn unique_stat<'a>(
             // A legacy unique keeps its value, out of the range of today.
             limit: Some(Limit::new(
                 value,
-                reading.half(key),
-                bounds(line, &ranges),
+                context.half(key),
+                value_bounds(line, &ranges),
                 value,
                 line,
             )),

@@ -2,51 +2,52 @@
 //! prefixes and suffixes with a bar over every tier of their modifier on the base, their tier
 //! and the ranges of that tier.
 
-use super::model::{Group, ModifierTier, Origin, Roll, Row, Stat, StatText, TierRow};
+use super::model::{Group, ModifierTier, Origin, Row, Stat, StatRoll, StatText, TierRow};
 use super::modifier_stats::{
-    Reading, added, comparable_filter, is_enchant, is_implicit, is_rune, stats, varies,
+    LineContext, added_stat, comparable_filter, is_enchant, is_implicit, is_rune, stats_of_kind,
+    varies,
 };
 use super::push_group;
-use super::rolls::{bar, bounds, copied_ranges, magnitudes, varying_share};
-use super::split_lines::{hybrid_row, other_lines, split_rows};
+use super::rolls::{bar, copied_ranges, magnitudes, value_bounds, varying_share};
+use super::split_lines::{hybrid_tier_row, other_lines, split_tier_rows};
 use crate::filters::{FilterKey, StatKey};
 use crate::item::{Affix, Item, Modifier, ModifierKind, Range, StatLine, TierDoubt};
 use crate::tier_rolls::LineRolls;
 
 /// The rows of a rare, magic or normal item: its enchantments, its runes, its implicit
 /// modifiers, then its prefixes and suffixes.
-pub(super) fn affix_rows<'a>(item: &'a Item, reading: &Reading<'_>) -> Vec<Row<'a>> {
+pub(super) fn affix_rows<'a>(item: &'a Item, context: &LineContext<'_>) -> Vec<Row<'a>> {
     // A rune or an implicit can add affixes or take some away (`+1 Suffix Modifier allowed`).
-    let limits = reading.stats.affix_limits(item);
+    let limits = context.line_stats.affix_limits(item);
     let max = |limit: u32| (!limits.counted_only).then_some(limit);
     let line_varies = |line: &StatLine, _: &Stat<'_>| varies(line);
-    let prefixes = affix_stats(item, Some(Affix::Prefix), reading);
-    let suffixes = affix_stats(item, Some(Affix::Suffix), reading);
+    let prefixes = affix_stats(item, Some(Affix::Prefix), context);
+    let suffixes = affix_stats(item, Some(Affix::Suffix), context);
     let filled = |affix| {
         item.modifiers()
             .iter()
             .map(|modifier| affix_count(modifier, affix))
             .sum()
     };
-    let added_stat = |key, line| added(key, line, reading);
+    let added_line = |key, line| added_stat(key, line, context);
     let mut rows = Vec::new();
     push_group(
         &mut rows,
         Group::Enchant,
-        stats(item, is_enchant, added_stat, line_varies),
+        stats_of_kind(item, is_enchant, added_line, line_varies),
     );
     push_group(
         &mut rows,
         Group::Runes,
-        stats(item, is_rune, added_stat, line_varies),
+        stats_of_kind(item, is_rune, added_line, line_varies),
     );
     push_group(
         &mut rows,
         Group::Implicit,
-        stats(
+        stats_of_kind(
             item,
             is_implicit,
-            |key, line| implicit_stat(key, line, reading),
+            |key, line| implicit_stat(key, line, context),
             line_varies,
         ),
     );
@@ -66,7 +67,7 @@ pub(super) fn affix_rows<'a>(item: &'a Item, reading: &Reading<'_>) -> Vec<Row<'
         },
         suffixes,
     );
-    push_group(&mut rows, Group::Explicit, affix_stats(item, None, reading));
+    push_group(&mut rows, Group::Explicit, affix_stats(item, None, context));
     rows
 }
 
@@ -88,7 +89,11 @@ fn affix_count(modifier: &Modifier, affix: Affix) -> u32 {
 /// tier of its modifier, and its tier and the ranges of that tier under its last line; the
 /// tier of each affix for a modifier copied from the in-game trade that can be either, and
 /// the tier of each part under a line that adds up two modifiers.
-fn affix_stats<'a>(item: &'a Item, affix: Option<Affix>, reading: &Reading<'_>) -> Vec<Stat<'a>> {
+fn affix_stats<'a>(
+    item: &'a Item,
+    affix: Option<Affix>,
+    context: &LineContext<'_>,
+) -> Vec<Stat<'a>> {
     let mut modifiers: Vec<(usize, &Modifier)> = item
         .modifiers()
         .iter()
@@ -97,8 +102,8 @@ fn affix_stats<'a>(item: &'a Item, affix: Option<Affix>, reading: &Reading<'_>) 
         .collect();
     let line_varies = |modifier: usize, (line, text): (usize, &StatLine)| {
         let key = StatKey { modifier, line };
-        let counted = reading.counted(key, text);
-        affix_varies(&counted, over_tiers(key, reading).as_ref())
+        let counted = context.counted(key, text);
+        affix_varies(&counted, rolls_over_tiers(key, context).as_ref())
     };
     modifiers.sort_by_key(|&(index, modifier)| {
         let fixed = !modifier
@@ -122,12 +127,12 @@ fn affix_stats<'a>(item: &'a Item, affix: Option<Affix>, reading: &Reading<'_>) 
                     }),
                     text: StatText::Unrevealed(affix),
                     filter: None,
-                    unsearchable: false,
+                    is_unsearchable: false,
                     roll: None,
                 }];
             }
             let last = modifier.lines.len().saturating_sub(1);
-            let origin = Origin::of_modifier(modifier, reading.tiers.currency(index));
+            let origin = Origin::of_modifier(modifier, context.tier_rolls.currency(index));
             // The origin under the tiers of a line that adds up two modifiers, the tier of the
             // hybrid under the last of its other lines.
             let (origin_line, tier_line) = match &modifier.doubt {
@@ -152,12 +157,12 @@ fn affix_stats<'a>(item: &'a Item, affix: Option<Affix>, reading: &Reading<'_>) 
                         _ if tier_line != Some(line_index) => None,
                         Some(TierDoubt::Split {
                             line, whole, added, ..
-                        }) => hybrid_row(modifier, *line, whole, added),
+                        }) => hybrid_tier_row(modifier, *line, whole, added),
                         _ => {
                             // A modifier of one tier only: the ranges of that tier without its
                             // number, also when the copy writes no tier; nothing when its
                             // value is fixed.
-                            let hides_number = reading.tiers.hides_number(index);
+                            let hides_number = context.tier_rolls.hides_number(index);
                             let number = modifier.tier.filter(|_| !hides_number);
                             let ranges = tier_ranges(modifier);
                             (number.is_some() || (hides_number && !ranges.is_empty()))
@@ -165,7 +170,7 @@ fn affix_stats<'a>(item: &'a Item, affix: Option<Affix>, reading: &Reading<'_>) 
                         }
                     };
                     let origin = origin.filter(|_| line_index == origin_line);
-                    let mut stat = affix_stat(key, line, tier, origin, reading);
+                    let mut stat = affix_stat(key, line, tier, origin, context);
                     let rows = match &modifier.doubt {
                         Some(TierDoubt::EitherAffix { prefix, suffix }) if line_index == last => {
                             Some(vec![TierRow::affix(prefix), TierRow::affix(suffix)])
@@ -176,12 +181,12 @@ fn affix_stats<'a>(item: &'a Item, affix: Option<Affix>, reading: &Reading<'_>) 
                             let others: Vec<&str> = other_lines(modifier, *line)
                                 .map(|(_, other)| other.text.as_str())
                                 .collect();
-                            Some(split_rows(whole, added, &others))
+                            Some(split_tier_rows(whole, added, &others))
                         }
                         _ => None,
                     };
                     if let Some(rows) = rows {
-                        stat.roll = Some(Roll::Tiers { rows, origin });
+                        stat.roll = Some(StatRoll::Tiers { rows, origin });
                     }
                     stat
                 })
@@ -198,17 +203,17 @@ fn affix_stat<'a>(
     line: &'a StatLine,
     tier: Option<TierRow<'a>>,
     origin: Option<Origin>,
-    reading: &Reading<'_>,
+    context: &LineContext<'_>,
 ) -> Stat<'a> {
-    let counted = reading.counted(key, line);
-    let over = over_tiers(key, reading);
+    let counted = context.counted(key, line);
+    let over = rolls_over_tiers(key, context);
     let mut filter = comparable_filter(
         &counted,
         over.as_ref()
-            .and_then(|over| bounds(&counted, &over.ranges)),
+            .and_then(|over| value_bounds(&counted, &over.ranges)),
         affix_varies(&counted, over.as_ref()),
-        reading.half(key),
-        reading.checked(key),
+        context.half(key),
+        context.starts_checked(key),
     );
     if let Some(limit) = &mut filter.limit {
         limit.tiers = over
@@ -223,8 +228,8 @@ fn affix_stat<'a>(
         key: FilterKey::Stat(key),
         text: StatText::line(&line.text),
         filter: Some(filter),
-        unsearchable: false,
-        roll: (share.is_some() || tier.is_some() || origin.is_some()).then_some(Roll::Affix {
+        is_unsearchable: false,
+        roll: (share.is_some() || tier.is_some() || origin.is_some()).then_some(StatRoll::Affix {
             share,
             tier: tier.map(Box::new),
             origin,
@@ -234,29 +239,29 @@ fn affix_stat<'a>(
 
 /// A line of an implicit modifier of a rare, magic or normal item: a filter, rolled in the
 /// range its base gives it.
-fn implicit_stat<'a>(key: StatKey, line: &'a StatLine, reading: &Reading<'_>) -> Stat<'a> {
-    let counted = reading.counted(key, line);
+fn implicit_stat<'a>(key: StatKey, line: &'a StatLine, context: &LineContext<'_>) -> Stat<'a> {
+    let counted = context.counted(key, line);
     let ranges = copied_ranges(&counted);
     Stat {
         key: FilterKey::Stat(key),
         text: StatText::line(&line.text),
         filter: Some(comparable_filter(
             &counted,
-            bounds(&counted, &ranges),
+            value_bounds(&counted, &ranges),
             varies(&counted),
-            reading.half(key),
-            reading.checked(key),
+            context.half(key),
+            context.starts_checked(key),
         )),
-        unsearchable: false,
+        is_unsearchable: false,
         roll: bar(magnitudes(&counted, &ranges), None),
     }
 }
 
 /// The rolls over every tier of the line `key`, for the numbers its stat counts; none when
 /// the modifier tables don't know them.
-fn over_tiers(key: StatKey, reading: &Reading<'_>) -> Option<LineRolls> {
-    let rolls = reading.tiers.get(key)?;
-    let ranges = reading.pick(key, &rolls.ranges);
+fn rolls_over_tiers(key: StatKey, context: &LineContext<'_>) -> Option<LineRolls> {
+    let rolls = context.tier_rolls.get(key)?;
+    let ranges = context.counted_numbers(key, &rolls.ranges);
     ranges.iter().any(Option::is_some).then_some(LineRolls {
         ranges,
         tiers: rolls.tiers,

@@ -102,7 +102,7 @@ impl std::fmt::Debug for Origin {
 
 /// The roll of a stat, the lines its tooltips name borrowed from the item.
 #[derive(Debug, Clone, PartialEq)]
-pub(super) enum Roll<'a> {
+pub(super) enum StatRoll<'a> {
     /// Where its value falls in its ranges, from 0 to 1, and the ranges; then, under the last
     /// line of a Vaal modifier of a unique, its origin.
     Bar {
@@ -263,7 +263,7 @@ impl<'a> TierRow<'a> {
 /// modifier it is ("Amanamu Prefix"); after its tier written as they are ("T2 Suffix") under a
 /// line in doubt without range (a fixed value), so that it reads as one with them (owner's choice
 /// on 2026-10-30).
-pub(super) fn row_word(row: &TierRow, i18n: &Translator) -> Option<String> {
+pub(super) fn tier_word(row: &TierRow, i18n: &Translator) -> Option<String> {
     let word = row.word?;
     let text = match (row.lord, word) {
         (Some(lord), Message::AffixPrefix) => i18n.lord_affix(Affix::Prefix, lord),
@@ -361,12 +361,12 @@ impl Limit {
     }
 
     /// The minus sign is allowed in the field.
-    pub(super) fn negative(self) -> bool {
+    pub(super) fn allows_minus_sign(self) -> bool {
         self.value < 0.0 || self.bounds.is_some_and(|bounds| bounds.min < 0.0)
     }
 
     /// The halves of the field hold four characters: a number of its stat reaches them.
-    pub(super) fn wide(self) -> bool {
+    pub(super) fn is_wide(self) -> bool {
         let reaches = |value: f64| filters::limit_text(value).chars().count() >= WIDE_CHARACTERS;
         reaches(self.value)
             || self
@@ -534,8 +534,8 @@ pub(super) struct Stat<'a> {
     pub(super) filter: Option<StatFilter>,
     /// A line the trade site can't search, which would be a filter: the "not allowed" sign in
     /// place of its checkbox.
-    pub(super) unsearchable: bool,
-    pub(super) roll: Option<Roll<'a>>,
+    pub(super) is_unsearchable: bool,
+    pub(super) roll: Option<StatRoll<'a>>,
 }
 
 /// A row of the stats.

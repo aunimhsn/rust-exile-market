@@ -3,8 +3,8 @@
 //! totals, and the count of its unrevealed modifiers; with the values of the game they stay
 //! within.
 
-use super::model::{Limit, Roll, Stat, StatFilter, StatText};
-use super::rolls::{COMPARABLE_MARGIN, comparable, decimals};
+use super::model::{Limit, Stat, StatFilter, StatRoll, StatText};
+use super::rolls::{COMPARABLE_MARGIN, comparable_limit, decimals};
 use crate::filters::{FilterKey, Half, Property};
 use crate::game_data::{self, Category};
 use crate::item::{
@@ -80,8 +80,8 @@ pub(super) fn item_filters<'a>(item: &'a Item, base_type: Option<&'a str>) -> Ve
                 checked: true,
                 limit: None,
             }),
-            unsearchable: false,
-            roll: waystone.map(|(_, tier)| Roll::WaystoneTier(tier)),
+            is_unsearchable: false,
+            roll: waystone.map(|(_, tier)| StatRoll::WaystoneTier(tier)),
         }
     });
     let item_level = item.item_level().map(|level| {
@@ -186,7 +186,7 @@ fn unrevealed_filter(item: &Item) -> Option<Stat<'static>> {
                 checked: true,
                 limit: Some(Limit::minimum(count).within(UNREVEALED_MODIFIERS)),
             }),
-            unsearchable: false,
+            is_unsearchable: false,
             roll: None,
         }
     })
@@ -230,7 +230,7 @@ fn quality_filter(item: &Item, category: Option<Category>) -> Option<Stat<'_>> {
                 checked: false,
                 limit: Some(limit),
             }),
-            unsearchable: false,
+            is_unsearchable: false,
             roll: None,
         });
     }
@@ -313,7 +313,7 @@ fn property_filter(property: Property, value: f64, limit: Limit, checked: bool) 
             checked,
             limit: Some(limit),
         }),
-        unsearchable: false,
+        is_unsearchable: false,
         roll: None,
     }
 }
@@ -327,7 +327,7 @@ pub(super) fn pseudo_filter(
     stats: &LineStats,
     checkable: bool,
 ) -> Stat<'static> {
-    let minimum = comparable(total.value, decimals(total.value), Half::Minimum);
+    let minimum = comparable_limit(total.value, decimals(total.value), Half::Minimum);
     let compares = stats.compares(FilterKey::Pseudo(total.pseudo), minimum);
     Stat {
         key: FilterKey::Pseudo(total.pseudo),
@@ -336,7 +336,7 @@ pub(super) fn pseudo_filter(
             checked: checkable && compares,
             limit: Some(Limit::minimum(minimum)),
         }),
-        unsearchable: false,
+        is_unsearchable: false,
         roll: None,
     }
 }

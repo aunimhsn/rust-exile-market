@@ -152,7 +152,7 @@ fn the_words_of_a_tier_name_the_lord_and_take_a_tier_without_range() {
     };
     let english = Translator::new(Language::English);
     let french = Translator::new(Language::French);
-    let words = |row: &TierRow, i18n: &Translator| row_word(row, i18n);
+    let words = |row: &TierRow, i18n: &Translator| tier_word(row, i18n);
     let amanamu = row(None, Vec::new(), Affix::Prefix, Some(Lord::Amanamu));
     let kurgal = row(None, Vec::new(), Affix::Suffix, Some(Lord::Kurgal));
     let t2 = row(Some(2), Vec::new(), Affix::Suffix, None);
@@ -189,7 +189,7 @@ fn the_words_of_a_tier_name_the_lord_and_take_a_tier_without_range() {
 fn a_range_field_holds_four_characters_a_side_when_its_stat_reaches_them() {
     let line = StatLine::parse("+2250 Armour if you've Blocked Recently");
     let wide = |value, min, max| {
-        Limit::new(value, Half::Minimum, Some(Range { min, max }), value, &line).wide()
+        Limit::new(value, Half::Minimum, Some(Range { min, max }), value, &line).is_wide()
     };
 
     assert!(!wide(245.0, 200.0, 320.0));
@@ -199,6 +199,6 @@ fn a_range_field_holds_four_characters_a_side_when_its_stat_reaches_them() {
     assert!(wide(16.3, 15.0, 20.0));
     assert!(wide(-20.5, -25.0, -10.0));
     // Without a range, e.g. a rare at 90 % before the modifier tables: its value.
-    assert!(Limit::new(6.83, Half::Minimum, None, 7.59, &line).wide());
-    assert!(!Limit::new(163.0, Half::Minimum, None, 181.0, &line).wide());
+    assert!(Limit::new(6.83, Half::Minimum, None, 7.59, &line).is_wide());
+    assert!(!Limit::new(163.0, Half::Minimum, None, 181.0, &line).is_wide());
 }

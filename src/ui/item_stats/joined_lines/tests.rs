@@ -111,19 +111,19 @@ fn the_rolls_of_the_lines_of_a_stat_are_joined_when_one_text_can_tell_them() {
             ranges: ranges(),
         })))
     };
-    let affix = |share, tier, origin| Roll::Affix {
+    let affix = |share, tier, origin| StatRoll::Affix {
         share,
         tier,
         origin,
     };
-    let bar = |origin| Roll::Bar {
+    let bar = |origin| StatRoll::Bar {
         share: 0.5,
         ranges: ranges(),
         origin,
     };
     let desecrated = Some(Origin::Written(ModifierOrigin::Desecrated));
     let vaal = Some(Origin::Written(ModifierOrigin::Vaal));
-    let tiers = Roll::Tiers {
+    let tiers = StatRoll::Tiers {
         rows: Vec::new(),
         origin: desecrated,
     };

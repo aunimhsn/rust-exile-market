@@ -9,8 +9,8 @@ use egui::{
 
 use super::Stats;
 use super::model::{
-    Group, Limit, ModifierTier, Origin, RadiusSkills, Roll, Row, Stat, StatFilter, StatText,
-    TierRow, WordTip, row_word,
+    Group, Limit, ModifierTier, Origin, RadiusSkills, Row, Stat, StatFilter, StatRoll, StatText,
+    TierRow, WordTip, tier_word,
 };
 use super::rolls::ranges_text;
 use crate::filters::{Filter, FilterKey, Filters, Half, Window};
@@ -29,10 +29,10 @@ const ROW_GAP: f32 = 6.0;
 const GROUP_GAP: f32 = 6.0;
 
 /// The column on the left of a filter, for its checkbox.
-const GUTTER: f32 = 20.0;
+const CHECKBOX_COLUMN: f32 = 20.0;
 
-/// The space between the columns of a stat, and between a bar and its range.
-const GAP: f32 = 8.0;
+/// The space between the columns of a stat, and between the parts of its roll.
+const COLUMN_GAP: f32 = 8.0;
 
 /// The column on the right of a filter, for its range field: the text never runs under it.
 const RANGE_COLUMN: f32 = 62.0;
@@ -116,7 +116,7 @@ impl Stats<'_> {
 
 fn show(ui: &mut Ui, rows: Vec<Row<'_>>, filters: &mut Filters, i18n: &Translator, bar: RollBar) {
     // "min – max" on the right of the first title, above the range fields.
-    let mut range_title = rows.iter().any(|row| {
+    let mut shows_range_title = rows.iter().any(|row| {
         matches!(
             row,
             Row::Stat(Stat {
@@ -136,7 +136,7 @@ fn show(ui: &mut Ui, rows: Vec<Row<'_>>, filters: &mut Filters, i18n: &Translato
         }
         match row {
             Row::Group(group) => {
-                group_title(ui, group, std::mem::take(&mut range_title), i18n);
+                group_title(ui, group, std::mem::take(&mut shows_range_title), i18n);
             }
             Row::Stat(stat) => stat_row(ui, &stat, filters, i18n, bar),
             Row::UnrevealedNote => note(ui, i18n.text(Message::UnrevealedNote)),
@@ -212,17 +212,17 @@ fn stat_row(ui: &mut Ui, stat: &Stat<'_>, filters: &mut Filters, i18n: &Translat
     ui.horizontal_top(|ui| {
         let width = ui.available_width();
         let line_height = ui.fonts_mut(|fonts| fonts.row_height(&text::body()));
-        if stat.unsearchable {
-            let sign = widgets::not_allowed_sign(ui, vec2(GUTTER, line_height));
+        if stat.is_unsearchable {
+            let sign = widgets::not_allowed_sign(ui, vec2(CHECKBOX_COLUMN, line_height));
             if sign.hovered() {
                 unsearchable_tooltip(ui, stat.key, sign.rect, i18n);
             }
-            ui.add_space(GAP);
+            ui.add_space(COLUMN_GAP);
             stat_text(
                 ui,
                 stat,
                 None,
-                (width - GUTTER - GAP - GAP - RANGE_COLUMN).max(0.0),
+                (width - CHECKBOX_COLUMN - COLUMN_GAP - COLUMN_GAP - RANGE_COLUMN).max(0.0),
                 bar,
                 i18n,
             );
@@ -236,11 +236,18 @@ fn stat_row(ui: &mut Ui, stat: &Stat<'_>, filters: &mut Filters, i18n: &Translat
         let before = choice.clone();
         // The checkbox on the first line of the text.
         let label = stat.text.label(i18n);
-        if widgets::check_box(ui, choice.checked, vec2(GUTTER, line_height), &label).clicked() {
+        if widgets::check_box(
+            ui,
+            choice.checked,
+            vec2(CHECKBOX_COLUMN, line_height),
+            &label,
+        )
+        .clicked()
+        {
             choice.checked = !choice.checked;
         }
-        ui.add_space(GAP);
-        let column = if filter.limit.is_some_and(Limit::wide) {
+        ui.add_space(COLUMN_GAP);
+        let column = if filter.limit.is_some_and(Limit::is_wide) {
             WIDE_RANGE_COLUMN
         } else {
             RANGE_COLUMN
@@ -255,11 +262,11 @@ fn stat_row(ui: &mut Ui, stat: &Stat<'_>, filters: &mut Filters, i18n: &Translat
             ui,
             stat,
             note.as_deref(),
-            (width - GUTTER - GAP - GAP - column).max(0.0),
+            (width - CHECKBOX_COLUMN - COLUMN_GAP - COLUMN_GAP - column).max(0.0),
             bar,
             i18n,
         );
-        ui.add_space(GAP);
+        ui.add_space(COLUMN_GAP);
         let edited = filter
             .limit
             .and_then(|limit| range_field(ui, stat.key, &mut choice, limit, i18n));
@@ -345,17 +352,17 @@ fn range_field(
     let halves = [Half::Minimum, Half::Maximum];
     let ids = halves.map(|half| ui.make_persistent_id(("stat-range", key, half)));
     let focused = ui.memory(|memory| ids.iter().any(|&id| memory.has_focus(id)));
-    let line = if focused {
+    let line_color = if focused {
         color::WEAK
     } else {
         color::CONTROL_LINE
     };
-    let (column, half_width) = if limit.wide() {
+    let (column, half_width) = if limit.is_wide() {
         (WIDE_RANGE_COLUMN, WIDE_HALF_WIDTH)
     } else {
         (RANGE_COLUMN, HALF_WIDTH)
     };
-    let stroke = Stroke::new(1.0, line);
+    let stroke = Stroke::new(1.0, line_color);
     let mut edited = None;
     let dash_width =
         column - 2.0 * (f32::from(RANGE_PADDING.left) + stroke.width) - 2.0 * half_width;
@@ -380,7 +387,7 @@ fn range_field(
                 }
                 let mut text = NumberField {
                     text: choice.text_mut(half),
-                    negative: limit.negative(),
+                    negative: limit.allows_minus_sign(),
                 };
                 let response = ui.add(
                     TextEdit::singleline(&mut text)
@@ -416,7 +423,7 @@ fn range_field(
 struct TooltipLine {
     text: String,
     tint: Color32,
-    small: bool,
+    is_small: bool,
 }
 
 impl TooltipLine {
@@ -424,7 +431,7 @@ impl TooltipLine {
         Self {
             text,
             tint,
-            small: false,
+            is_small: false,
         }
     }
 }
@@ -442,7 +449,7 @@ fn tooltip_lines(limit: Limit, i18n: &Translator) -> Vec<TooltipLine> {
     let tiers = limit.rolls.and(limit.tiers).map(|tiers| TooltipLine {
         text: format!("T{}–T{}", tiers.lowest, tiers.highest),
         tint: color::FAINT,
-        small: true,
+        is_small: true,
     });
     let lower = (limit.half == Half::Maximum)
         .then(|| TooltipLine::new(i18n.text(Message::FilterLowerBetter), color::WEAK));
@@ -512,14 +519,14 @@ fn tooltip(ui: &Ui, id: Id, at: Pos2, pivot: Align2, lines: Vec<TooltipLine>) {
                     ui.spacing_mut().item_spacing = Vec2::ZERO;
                     for (index, line) in lines.into_iter().enumerate() {
                         if index > 0 {
-                            let gap = if line.small {
+                            let gap = if line.is_small {
                                 TOOLTIP_SMALL_LINE_GAP
                             } else {
                                 TOOLTIP_LINE_GAP
                             };
                             ui.add_space(gap);
                         }
-                        let font = if line.small {
+                        let font = if line.is_small {
                             text::roll()
                         } else {
                             text::note()
@@ -551,7 +558,7 @@ fn clamped(text: &str) -> LayoutJob {
 /// passive `skills` of the radius of a line of a Time-Lost jewel.
 fn roll_line(
     ui: &mut Ui,
-    roll: &Roll,
+    roll: &StatRoll,
     skills: Option<RadiusSkills>,
     bar: RollBar,
     i18n: &Translator,
@@ -566,7 +573,7 @@ fn roll_line(
         }
     };
     match roll {
-        Roll::Bar {
+        StatRoll::Bar {
             share,
             ranges,
             origin,
@@ -575,7 +582,7 @@ fn roll_line(
             range_label(ui, ranges);
             ending(ui, *origin);
         }),
-        Roll::Affix {
+        StatRoll::Affix {
             share,
             tier,
             origin,
@@ -588,7 +595,7 @@ fn roll_line(
             }
             ending(ui, *origin);
         }),
-        Roll::Tiers { rows, origin } => {
+        StatRoll::Tiers { rows, origin } => {
             ui.vertical(|ui| {
                 ui.spacing_mut().item_spacing.y = TIER_ROW_GAP;
                 for row in rows {
@@ -600,7 +607,7 @@ fn roll_line(
                 }
             });
         }
-        Roll::WaystoneTier(tier) => roll_row(ui, |ui| {
+        StatRoll::WaystoneTier(tier) => roll_row(ui, |ui| {
             let tint = waystone_tier_color(*tier);
             roll_bar(ui, waystone_tier_share(*tier), bar, tint);
             ui.label(
@@ -623,7 +630,7 @@ fn waystone_tier_share(tier: u32) -> f32 {
 /// A tier and its ranges ([`tier_label`]), then the word after them in gray, with its
 /// tooltip wrapped past [`WORD_TIP_WIDTH`].
 fn tier_row(ui: &mut Ui, row: &TierRow, i18n: &Translator) {
-    let word = row_word(row, i18n);
+    let word = tier_word(row, i18n);
     if !row.quiet_tier() {
         tier_label(ui, &row.tier, row.better);
     }
@@ -648,10 +655,10 @@ fn tier_row(ui: &mut Ui, row: &TierRow, i18n: &Translator) {
     }
 }
 
-/// One row of a roll, its parts `GAP` apart.
+/// One row of a roll, its parts `COLUMN_GAP` apart.
 fn roll_row(ui: &mut Ui, parts: impl FnOnce(&mut Ui)) {
     ui.horizontal(|ui| {
-        ui.spacing_mut().item_spacing.x = GAP;
+        ui.spacing_mut().item_spacing.x = COLUMN_GAP;
         parts(ui);
     });
 }
@@ -691,9 +698,9 @@ fn small_word(ui: &mut Ui, word: String, tint: Color32) -> Response {
 }
 
 /// The tag of the passive `skills` a line of a Time-Lost jewel is granted to, small, gray on a
-/// block: "Small", `GAP` after what comes before it.
+/// block: "Small", `COLUMN_GAP` after what comes before it.
 fn radius_tag(ui: &mut Ui, skills: RadiusSkills, i18n: &Translator) {
-    space_before(ui, GAP);
+    space_before(ui, COLUMN_GAP);
     let galley = widgets::text_line(ui, i18n.text(skills.message()), text::origin());
     let (rect, _) =
         ui.allocate_exact_size(galley.size() + 2.0 * RADIUS_TAG_PADDING, Sense::hover());
