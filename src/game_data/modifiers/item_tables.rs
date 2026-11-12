@@ -1,6 +1,6 @@
-//! The modifier tables as an item sees them, on its base and at its level; and the tiers of
-//! a modifier on that base: those of every table of the modifier that rolls on it, numbered
-//! from the best.
+//! The modifier tables as an item sees them, on its base and at its level: the modifiers that
+//! have the lines of a copied one (`holding`), and the tiers of a modifier on that base, those
+//! of every table of the modifier that rolls on it, numbered from the best.
 
 use super::copied::Copied;
 use super::tables::{TABLES, Table, TableAffix, TableTier, first_of_its_modifier};
@@ -72,9 +72,10 @@ impl Held<'_> {
 }
 
 impl<'a> ItemTables<'a> {
-    /// Each modifier of the tables that may be `copied`, in the order of the file: of its
-    /// origin ([`Copied::may_be`]), with its lines in any order, looked at once, at its first
-    /// table, with its tiers on the base whatever the level of the item.
+    /// Each modifier of the tables that has the lines of `copied`, in the order of the file:
+    /// of its origin ([`Copied::may_be`]), its lines in any order, looked at once, at its first
+    /// table, with its tiers on the base whatever the level of the item. Whether one of these
+    /// tiers holds the copied values is left to the caller.
     pub(super) fn holding<'c>(
         &'c self,
         copied: &'c Copied<'_>,
@@ -83,7 +84,8 @@ impl<'a> ItemTables<'a> {
         tables.filter_map(move |(index, table)| self.held(index, table, copied))
     }
 
-    /// The modifiers of `affix` among those that may be `copied` ([`Self::holding`]).
+    /// The modifiers of `affix` among those that have the lines of `copied`
+    /// ([`Self::holding`]).
     pub(super) fn holding_as<'c>(
         &'c self,
         copied: &'c Copied<'_>,
@@ -97,8 +99,8 @@ impl<'a> ItemTables<'a> {
             .filter_map(move |(index, table)| self.held(index, table, copied))
     }
 
-    /// The modifier of `table`, the table of `index`, when it may be `copied` and `table` is
-    /// its first table.
+    /// The modifier of `table`, the table of `index`; none unless `table` is of the origin of
+    /// `copied`, has its lines, is the first table of its modifier and has tiers on the base.
     #[expect(
         clippy::inline_always,
         reason = "run for each table at each lookup: left to the compiler, which doesn't inline \

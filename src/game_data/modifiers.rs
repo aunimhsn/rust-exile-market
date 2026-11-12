@@ -3,12 +3,12 @@
 //! values alone for an item copied from the in-game trade.
 //!
 //! One file per rule, each depending only on those named before it. The `tables` as the
-//! generator writes them, the lines of a `copied` modifier, the tables as an item sees them
-//! and the tiers of a modifier on its base (`item_tables`), a line that adds up two modifiers
-//! (`split_lines`), and the `lookup` of a copied modifier in the tables. Then the reading of
-//! an item copied from the in-game trade: its `candidates`, its `best_reading` and its
-//! `doubts`, put together by `trade_tiers`, and its modifiers written again as the advanced
-//! copy writes them (`trade_modifiers`).
+//! generator writes them, the lines of a `copied` modifier, the tables as an item sees them,
+//! with the modifiers that have the lines of a copied one and their tiers on its base
+//! (`item_tables`), a line that adds up two modifiers (`split_lines`), and the `lookup` of a
+//! copied modifier in the tables. Then the reading of an item copied from the in-game trade:
+//! its `candidates`, its `best_reading` and its `doubts`, put together by `trade_tiers`, and
+//! its modifiers written again as the advanced copy writes them (`trade_modifiers`).
 
 use crate::item::{Currency, Lord, Range};
 
