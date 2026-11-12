@@ -2,7 +2,6 @@
 
 use super::*;
 use crate::filters;
-use crate::ui::item_stats::model::Limit;
 
 #[test]
 fn a_rare_limit_leaves_10_percent_on_the_worse_side_also_for_a_negative_value() {
@@ -68,21 +67,7 @@ fn the_decimals_of_a_value_are_two_at_most() {
 }
 
 #[test]
-fn a_negative_stat_takes_a_minus_sign() {
-    let line = StatLine::parse("-15% to Fire Resistance");
-    let negative =
-        |value, bounds| Limit::new(value, Half::Minimum, bounds, value, &line).allows_minus_sign();
-
-    assert!(negative(-15.0, None));
-    assert!(!negative(15.0, None));
-    // A range across zero.
-    assert!(negative(
-        2.0,
-        Some(Range {
-            min: -5.0,
-            max: 10.0
-        })
-    ));
+fn the_range_of_a_negative_value_takes_its_sign() {
     // The game writes a negative range without its sign.
     assert_eq!(
         signed(

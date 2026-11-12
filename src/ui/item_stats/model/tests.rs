@@ -1,5 +1,6 @@
 //! The text of the stats and the words of the tiers: the word of the origin of a modifier, the
-//! lines of a Time-Lost jewel, the word after the ranges of a tier, the width of a range field.
+//! lines of a Time-Lost jewel, the word after the ranges of a tier, the width of a range field
+//! and its minus sign.
 
 use super::*;
 use crate::language::Language;
@@ -183,6 +184,24 @@ fn the_words_of_a_tier_name_the_lord_and_take_a_tier_without_range() {
     assert!(t2.is_tier_in_word);
     assert_eq!(words(&ranged, &english).as_deref(), Some("Prefix"));
     assert!(!ranged.is_tier_in_word);
+}
+
+#[test]
+fn a_range_field_takes_a_minus_sign_when_its_value_or_its_range_is_negative() {
+    let line = StatLine::parse("-15% to Fire Resistance");
+    let allows_minus_sign =
+        |value, bounds| Limit::new(value, Half::Minimum, bounds, value, &line).allows_minus_sign();
+
+    assert!(allows_minus_sign(-15.0, None));
+    assert!(!allows_minus_sign(15.0, None));
+    // A range across zero.
+    assert!(allows_minus_sign(
+        2.0,
+        Some(Range {
+            min: -5.0,
+            max: 10.0
+        })
+    ));
 }
 
 #[test]
