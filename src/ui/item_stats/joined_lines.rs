@@ -15,11 +15,11 @@ use crate::trade::stat_filters::LineStats;
 /// or a line of a Time-Lost jewel.
 pub(super) fn join_stat_lines<'a>(
     item: &'a Item,
-    stats: &LineStats,
+    line_stats: &LineStats,
     rows: Vec<Row<'a>>,
 ) -> Vec<Row<'a>> {
     // The line of the modifier that searches the stat of `key`, which its rows share.
-    let searched_line = |key: StatKey| stats.searched_line(key);
+    let searched_line = |key: StatKey| line_stats.searched_line(key);
     let mut joined = Vec::with_capacity(rows.len());
     let mut group: Vec<(StatKey, Stat<'a>)> = Vec::new();
     for row in rows {

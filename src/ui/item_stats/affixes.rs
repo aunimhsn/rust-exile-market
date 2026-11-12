@@ -29,17 +29,26 @@ pub(super) fn affix_rows<'a>(item: &'a Item, context: &LineContext<'_>) -> Vec<R
             .map(|modifier| affix_count(modifier, affix))
             .sum()
     };
-    let added_line = |key, line| added_stat(key, line, context);
     let mut rows = Vec::new();
     push_group(
         &mut rows,
         Group::Enchant,
-        stats_of_kind(item, is_enchant, added_line, line_varies),
+        stats_of_kind(
+            item,
+            is_enchant,
+            |key, line| added_stat(key, line, context),
+            line_varies,
+        ),
     );
     push_group(
         &mut rows,
         Group::Runes,
-        stats_of_kind(item, is_rune, added_line, line_varies),
+        stats_of_kind(
+            item,
+            is_rune,
+            |key, line| added_stat(key, line, context),
+            line_varies,
+        ),
     );
     push_group(
         &mut rows,

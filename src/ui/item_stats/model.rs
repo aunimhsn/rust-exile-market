@@ -385,13 +385,12 @@ impl StatFilter {
     }
 }
 
-impl RadiusSkills {
-    /// Its tag, after the range of the line: "Small", "Notable".
-    pub(super) fn message(self) -> Message {
-        match self {
-            Self::Small => Message::RadiusSmall,
-            Self::Notable => Message::RadiusNotable,
-        }
+/// The tag of the passive `skills` a line of a Time-Lost jewel is granted to, after the range
+/// of the line: "Small", "Notable".
+pub(super) fn radius_word(skills: RadiusSkills) -> Message {
+    match skills {
+        RadiusSkills::Small => Message::RadiusSmall,
+        RadiusSkills::Notable => Message::RadiusNotable,
     }
 }
 

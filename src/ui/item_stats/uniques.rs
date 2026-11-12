@@ -15,16 +15,25 @@ pub(super) fn unique_rows<'a>(item: &'a Item, context: &LineContext<'_>) -> Vec<
     // A stat of a unique varies when it is a filter.
     let varies = |_: &StatLine, stat: &Stat<'_>| stat.filter.is_some();
     let mut rows = Vec::new();
-    let added_line = |key, line| added_stat(key, line, context);
     push_group(
         &mut rows,
         Group::Enchant,
-        stats_of_kind(item, is_enchant, added_line, varies),
+        stats_of_kind(
+            item,
+            is_enchant,
+            |key, line| added_stat(key, line, context),
+            varies,
+        ),
     );
     push_group(
         &mut rows,
         Group::Runes,
-        stats_of_kind(item, is_rune, added_line, varies),
+        stats_of_kind(
+            item,
+            is_rune,
+            |key, line| added_stat(key, line, context),
+            varies,
+        ),
     );
     // The origin of a modifier under its last line.
     let line_stat = |key: StatKey, line| {
@@ -55,7 +64,7 @@ pub(super) fn unique_rows<'a>(item: &'a Item, context: &LineContext<'_>) -> Vec<
 
 /// A line of a unique: a filter checked with its value filling its half and its bar when it
 /// varies, a fixed line otherwise; a line without a range in the advanced copy never varies.
-/// For a unique copied without ranges, whose `rolls_from_prices`, a line with a number none
+/// For a unique copied without ranges, which `has_rolls_from_prices`, a line with a number none
 /// of whose values got a range from the prices may vary: a filter unchecked at its value,
 /// without bar nor range. The `origin` of its modifier (Vaal) follows its range, or stands
 /// alone under a line without bar.
@@ -63,7 +72,7 @@ fn unique_stat<'a>(
     key: StatKey,
     whole: &'a StatLine,
     origin: Option<ModifierOrigin>,
-    rolls_from_prices: bool,
+    has_rolls_from_prices: bool,
     context: &LineContext<'_>,
 ) -> Stat<'a> {
     let line = &context.counted(key, whole);
@@ -80,7 +89,7 @@ fn unique_stat<'a>(
             origin: Some(origin),
         }),
     };
-    if rolls_from_prices && ranges.iter().all(Option::is_none) {
+    if has_rolls_from_prices && ranges.iter().all(Option::is_none) {
         let Some(value) = searched_value(line) else {
             return fixed;
         };

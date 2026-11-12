@@ -10,7 +10,7 @@ use egui::{
 use super::Stats;
 use super::model::{
     Group, Limit, ModifierTier, Origin, Row, Stat, StatFilter, StatRoll, StatText, TierRow,
-    WordTip, tier_word,
+    WordTip, radius_word, tier_word,
 };
 use super::rolls::ranges_text;
 use crate::filters::{Filter, FilterKey, Filters, Half, Window};
@@ -533,8 +533,8 @@ fn clamped(text: &str) -> LayoutJob {
 /// The bar of a roll and its ranges; for a line of a prefix or suffix, its bar over every
 /// tier, then under the last line of its modifier its tier, the ranges of that tier and its
 /// origin; or the tiers of a line that can be a prefix or a suffix, one under the other, then
-/// its origin on a row of its own. Last, the tag of the
-/// passive `skills` of the radius of a line of a Time-Lost jewel.
+/// its origin on a row of its own. Last, the tag of the passive `skills` of the radius of a line
+/// of a Time-Lost jewel.
 fn roll_line(ui: &mut Ui, roll: &StatRoll, skills: Option<RadiusSkills>, i18n: &Translator) {
     // What ends the roll: its origin, then the tag.
     let ending = |ui: &mut Ui, origin: Option<Origin>| {
@@ -674,7 +674,7 @@ fn small_word(ui: &mut Ui, word: String, tint: Color32) -> Response {
 /// block: "Small", `COLUMN_GAP` after what comes before it.
 fn radius_tag(ui: &mut Ui, skills: RadiusSkills, i18n: &Translator) {
     space_before(ui, COLUMN_GAP);
-    let galley = widgets::text_line(ui, i18n.text(skills.message()), text::origin());
+    let galley = widgets::text_line(ui, i18n.text(radius_word(skills)), text::origin());
     let (rect, _) =
         ui.allocate_exact_size(galley.size() + 2.0 * RADIUS_TAG_PADDING, Sense::hover());
     let painter = ui.painter();
