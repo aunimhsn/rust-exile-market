@@ -9,14 +9,14 @@ use egui::{
 
 use super::Stats;
 use super::model::{
-    Group, Limit, ModifierTier, Origin, RadiusSkills, Row, Stat, StatFilter, StatRoll, StatText,
-    TierRow, WordTip, tier_word,
+    Group, Limit, ModifierTier, Origin, Row, Stat, StatFilter, StatRoll, StatText, TierRow,
+    WordTip, tier_word,
 };
 use super::rolls::ranges_text;
 use crate::filters::{Filter, FilterKey, Filters, Half, Window};
 use crate::format;
 use crate::i18n::{Message, Translator};
-use crate::item::{Currency, MAX_WAYSTONE_TIER, ModifierOrigin, Range};
+use crate::item::{Currency, MAX_WAYSTONE_TIER, ModifierOrigin, RadiusSkills, Range};
 use crate::ui::item_block::waystone_tier_color;
 use crate::ui::number_field::NumberField;
 use crate::ui::theme::{self, color, size, text};

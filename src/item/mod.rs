@@ -38,8 +38,8 @@ pub use gem::{
 #[cfg(test)]
 pub use modifier::Roll;
 pub use modifier::{
-    Affix, AffixTier, Currency, Lord, Modifier, ModifierKind, ModifierOrigin, PartTier, Range,
-    StatLine, TierDoubt,
+    Affix, AffixTier, Currency, Lord, Modifier, ModifierKind, ModifierOrigin, PartTier,
+    RadiusSkills, Range, StatLine, TierDoubt, radius_line,
 };
 pub use parser::{ParseError, ParseWarning, read_quality, whole_percent};
 pub use waystone::{

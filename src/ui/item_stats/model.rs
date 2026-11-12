@@ -8,8 +8,8 @@ use crate::filters::{self, Filter, FilterKey, Half, Property};
 use crate::format;
 use crate::i18n::{Message, Translator};
 use crate::item::{
-    Affix, AffixTier, Currency, Lord, Modifier, ModifierOrigin, PartTier, QualityKind, Range,
-    StatLine, TierDoubt,
+    self, Affix, AffixTier, Currency, Lord, Modifier, ModifierOrigin, PartTier, QualityKind,
+    RadiusSkills, Range, StatLine, TierDoubt,
 };
 use crate::tier_rolls::TierSpan;
 use crate::trade::pseudo::Pseudo;
@@ -385,14 +385,6 @@ impl StatFilter {
     }
 }
 
-/// The passive skills in the radius of a Time-Lost jewel that a line of it is granted to; not
-/// the radius of the jewel itself (`Radius: Small`).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum RadiusSkills {
-    Small,
-    Notable,
-}
-
 impl RadiusSkills {
     /// Its tag, after the range of the line: "Small", "Notable".
     pub(super) fn message(self) -> Message {
@@ -402,27 +394,6 @@ impl RadiusSkills {
         }
     }
 }
-
-/// The words a Time-Lost jewel writes before each of its lines, in each language of the game,
-/// and the passive skills they name.
-const RADIUS_WORDS: [(&str, RadiusSkills); 4] = [
-    (
-        "Small Passive Skills in Radius also grant ",
-        RadiusSkills::Small,
-    ),
-    (
-        "Notable Passive Skills in Radius also grant ",
-        RadiusSkills::Notable,
-    ),
-    (
-        "Les Talents Mineurs dans le Rayon octroient également ",
-        RadiusSkills::Small,
-    ),
-    (
-        "Les Talents éminents dans le Rayon octroient également ",
-        RadiusSkills::Notable,
-    ),
-];
 
 /// The text of a stat.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -457,17 +428,14 @@ pub(super) enum StatText<'a> {
 impl<'a> StatText<'a> {
     /// A line of a modifier, without the words of its radius for a line of a Time-Lost jewel.
     pub(super) fn line(text: &'a str) -> Self {
-        RADIUS_WORDS
-            .iter()
-            .find_map(|&(words, skills)| {
-                let line = text.strip_prefix(words)?;
-                Some(Self::RadiusLine {
-                    skills,
-                    line,
-                    whole: text,
-                })
-            })
-            .unwrap_or(Self::Line(text))
+        match item::radius_line(text) {
+            Some((skills, line)) => Self::RadiusLine {
+                skills,
+                line,
+                whole: text,
+            },
+            None => Self::Line(text),
+        }
     }
 
     /// The passive skills a line of a Time-Lost jewel is granted to.
