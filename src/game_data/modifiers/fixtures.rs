@@ -6,7 +6,7 @@
 use crate::game_data::bases::{BaseSpawn, Domain};
 use crate::game_data::lines::modifier_stats;
 use crate::game_data::modifiers::ModifierTiers;
-use crate::game_data::modifiers::base_tiers::ItemBase;
+use crate::game_data::modifiers::item_tables::ItemBase;
 use crate::game_data::modifiers::lookup::modifier_tiers;
 use crate::game_data::modifiers::trade_tiers::{AffixLimits, FoundTiers, TradeItem};
 use crate::item::{

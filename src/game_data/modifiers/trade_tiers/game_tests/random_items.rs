@@ -26,9 +26,9 @@
 
 use super::*;
 use crate::game_data::bases::{self, BaseSpawn, Domain};
-use crate::game_data::modifiers::base_tiers::range_values;
 use crate::game_data::modifiers::best_reading::MAX_READINGS;
 use crate::game_data::modifiers::doubts;
+use crate::game_data::modifiers::item_tables::range_values;
 use crate::game_data::modifiers::tables::{
     TABLES, Table, TableAffix, TableTier, first_of_its_modifier,
 };

@@ -3,8 +3,8 @@
 //! then the tiers of a modifier as the advanced copy writes it (`modifier_tiers`,
 //! `lacks_table`).
 
-use super::base_tiers::{ItemBase, ItemTables};
 use super::copied::{Copied, CopiedTier, Fit};
+use super::item_tables::{ItemBase, ItemTables};
 use super::split_lines::split_tiers;
 use super::tables::{Table, TableAffix};
 use super::{ModifierTiers, Tier};

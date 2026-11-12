@@ -4,7 +4,7 @@
 //!
 //! One file per rule, each depending only on those named before it. The `tables` as the
 //! generator writes them, the lines of a `copied` modifier, the tables as an item sees them
-//! and the tiers of a modifier on its base (`base_tiers`), a line that adds up two modifiers
+//! and the tiers of a modifier on its base (`item_tables`), a line that adds up two modifiers
 //! (`split_lines`), and the `lookup` of a copied modifier in the tables. Then the reading of
 //! an item copied from the in-game trade: its `candidates`, its `best_reading` and its
 //! `doubts`, put together by `trade_tiers`, and its modifiers written again as the advanced
@@ -12,20 +12,20 @@
 
 use crate::item::{Currency, Lord, Range};
 
-mod base_tiers;
 mod best_reading;
 mod candidates;
 mod copied;
 mod doubts;
 #[cfg(test)]
 mod fixtures;
+mod item_tables;
 mod lookup;
 mod split_lines;
 mod tables;
 mod trade_modifiers;
 mod trade_tiers;
 
-pub use base_tiers::ItemBase;
+pub use item_tables::ItemBase;
 pub use lookup::{lacks_table, modifier_tiers};
 pub use trade_modifiers::with_trade_tiers;
 pub use trade_tiers::{AffixLimits, TradeItem};

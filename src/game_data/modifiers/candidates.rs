@@ -2,8 +2,8 @@
 //! run of consecutive lines, that a modifier of the tables holds, or that adds up two.
 
 use super::ModifierTiers;
-use super::base_tiers::ItemTables;
 use super::copied::{Copied, CopiedTier};
+use super::item_tables::ItemTables;
 use super::lookup::{Tie, find};
 use super::split_lines::{AddedTiers, splits};
 use super::tables::{Table, TableAffix};

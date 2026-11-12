@@ -1,8 +1,8 @@
 //! A line that adds up two modifiers of its stat, which the game writes as one: the ways a
 //! line copied from the in-game trade splits, and the tiers of the modifier of a line read so.
 
-use super::base_tiers::{Held, ItemTables};
 use super::copied::{Copied, CopiedTier, Fit, holds};
+use super::item_tables::{Held, ItemTables};
 use super::tables::TableAffix;
 use super::{ModifierTiers, Tier};
 use crate::game_data::lines::LineMatch;

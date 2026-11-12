@@ -2,8 +2,8 @@
 //! the lines it can sit on, without those whose values no sum can hold.
 
 use super::{ItemLines, Line, Shown};
-use crate::game_data::modifiers::base_tiers::ItemTables;
 use crate::game_data::modifiers::copied::{Copied, CopiedTier, ROUNDING};
+use crate::game_data::modifiers::item_tables::ItemTables;
 use crate::game_data::modifiers::tables::{Table, first_of_its_modifier};
 use crate::item::{ModifierOrigin, Range};
 

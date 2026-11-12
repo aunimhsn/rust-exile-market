@@ -3,11 +3,11 @@
 //! and how the search ended.
 
 use super::ModifierTiers;
-use super::base_tiers::{ItemBase, ItemTables};
 use super::best_reading::{BestReading, Cut, OpenAffixes, Room, best_reading};
 use super::candidates::{AffixSet, Candidate, candidates};
 use super::copied::Copied;
 use super::doubts::{self, Doubts, Outcome};
+use super::item_tables::{ItemBase, ItemTables};
 use super::split_lines::AddedTiers;
 use crate::game_data::lines::modifier_stats;
 use crate::item::{Affix, Modifier, ModifierKind, ModifierOrigin};
