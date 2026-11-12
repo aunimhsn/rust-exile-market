@@ -7,12 +7,12 @@ use super::*;
 use crate::game_data::bases::Domain;
 use crate::game_data::lines::modifier_stats;
 use crate::game_data::modifiers::fixtures::{
-    ENERGY_SHIELD, LIFE, MANA, RARITY, copied, copied_line, copied_line_without_number,
+    ENERGY_SHIELD, LIFE, MANA, RARITY, advanced, copied, copied_line, copied_line_without_number,
     copied_lines, desecrated, modifier, range, table, tier,
 };
 use crate::game_data::modifiers::tables::TableLord;
 use crate::game_data::trade_stats;
-use crate::item::{Affix, StatLine};
+use crate::item::Affix;
 use crate::language::Language;
 
 /// The template of the added lightning damage, a line of two values.
@@ -25,12 +25,8 @@ const RAGE: &str = "Inherent Rage loss starts 1 second later";
 
 /// A prefix as the advanced copy writes it: `tier` in its header, and each of `lines` with the
 /// ranges of its values (`+25(20-29) to maximum Life`).
-fn advanced(tier: u32, lines: &[&str]) -> Modifier {
-    Modifier {
-        tier: Some(tier),
-        lines: lines.iter().map(|line| StatLine::parse(line)).collect(),
-        ..modifier(Some(Affix::Prefix), &[])
-    }
+fn advanced_prefix(tier: u32, lines: &[&str]) -> Modifier {
+    advanced(Some(Affix::Prefix), Some(tier), lines)
 }
 
 /// The lines of `modifier`, written in English, as the tables are searched with them.
@@ -40,7 +36,7 @@ fn copied_of(modifier: &Modifier) -> Option<Copied<'static>> {
 
 #[test]
 fn the_lines_of_an_advanced_copy_give_their_templates_their_values_and_the_ranges_of_their_tier() {
-    let hybrid = advanced(
+    let hybrid = advanced_prefix(
         2,
         &[
             "Adds 10(1-16) to 273(239-300) Lightning Damage",
@@ -69,7 +65,7 @@ fn the_lines_of_an_advanced_copy_give_their_templates_their_values_and_the_range
 
 #[test]
 fn the_values_have_the_sign_of_their_stat_and_the_ranges_none_as_the_game_writes_them() {
-    let reduced = advanced(1, &["15(10-19)% reduced Rarity of Items found"]);
+    let reduced = advanced_prefix(1, &["15(10-19)% reduced Rarity of Items found"]);
 
     assert_eq!(
         copied_of(&reduced),
@@ -83,7 +79,7 @@ fn the_values_have_the_sign_of_their_stat_and_the_ranges_none_as_the_game_writes
 
 #[test]
 fn a_value_without_its_range_leaves_the_modifier_without_ranges() {
-    let lightning = |text| copied_of(&advanced(1, &[text]));
+    let lightning = |text| copied_of(&advanced_prefix(1, &[text]));
     let without_ranges = || {
         Some(Copied {
             tier: CopiedTier::Written(1),
@@ -110,7 +106,7 @@ fn a_value_without_its_range_leaves_the_modifier_without_ranges() {
 #[test]
 fn a_number_the_string_of_a_stat_writes_is_no_value_and_takes_no_range() {
     // The 40 is written by the string of the stat, and has no range in the advanced copy.
-    let glory = advanced(
+    let glory = advanced_prefix(
         1,
         &["12(10-15)% chance for Skills to retain 40% of Glory on use"],
     );
@@ -125,7 +121,7 @@ fn a_number_the_string_of_a_stat_writes_is_no_value_and_takes_no_range() {
     );
     // Nor is a range next to such a number the range of a value (a case the game isn't known
     // to write): the second of the rage is written by its string, a line without number.
-    let rage = advanced(1, &["Inherent Rage loss starts 1(1-3) second later"]);
+    let rage = advanced_prefix(1, &["Inherent Rage loss starts 1(1-3) second later"]);
     assert_eq!(
         copied_of(&rage),
         Some(Copied {
@@ -139,7 +135,7 @@ fn a_number_the_string_of_a_stat_writes_is_no_value_and_takes_no_range() {
 fn a_stat_written_on_several_lines_is_one_line_with_the_values_of_them_all() {
     const ANAEMIA: &str = "Inflict Anaemia on Hit\nAnaemia allows # Corrupted Blood debuffs to be inflicted on enemies";
     // The value of the stat on its second line, then a line of another stat.
-    let anaemia = advanced(
+    let anaemia = advanced_prefix(
         1,
         &[
             "Inflict Anaemia on Hit",
@@ -161,7 +157,7 @@ fn a_stat_written_on_several_lines_is_one_line_with_the_values_of_them_all() {
 
 #[test]
 fn a_line_without_number_gives_the_value_its_string_writes_as_the_stat_stores_it() {
-    let lines = |text| copied_of(&advanced(1, &[text])).map(|copied| copied.lines);
+    let lines = |text| copied_of(&advanced_prefix(1, &[text])).map(|copied| copied.lines);
 
     assert_eq!(
         lines("Loads an additional bolt"),
@@ -197,7 +193,7 @@ fn a_line_with_a_number_takes_no_value_from_its_string() {
 #[test]
 fn a_line_without_number_leaves_the_modifier_without_ranges() {
     // The advanced copy writes a range for the life, none for the bolt.
-    let hybrid = advanced(
+    let hybrid = advanced_prefix(
         1,
         &["+25(20-29) to maximum Life", "Loads an additional bolt"],
     );

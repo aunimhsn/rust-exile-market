@@ -72,6 +72,16 @@ pub(super) fn trade_lines(lines: &[&str]) -> Vec<Modifier> {
         .collect()
 }
 
+/// A modifier of `affix` and `tier` as the advanced copy writes it, each of `lines` with the
+/// range of a value after it (`+85(80-89) to maximum Life`).
+pub(super) fn advanced(affix: Option<Affix>, tier: Option<u32>, lines: &[&str]) -> Modifier {
+    Modifier {
+        tier,
+        lines: lines.iter().map(|line| StatLine::parse(line)).collect(),
+        ..modifier(affix, &[])
+    }
+}
+
 /// A part of a split line of `affix`, in `tiers`, over `ranges`.
 pub(super) fn part(affix: Affix, tiers: &[u32], ranges: &[(f64, f64)]) -> PartTier {
     PartTier {
