@@ -553,7 +553,7 @@ fn a_best_reading_out_of_the_room_keeps_only_the_tiers_every_reading_in_the_room
     let pure = (1, vec![(Prefix, 1)]);
 
     // A hybrid suffix and a pure suffix of each stat add up to the life and to the mana.
-    let tables = with(&[
+    let adding_up = [
         table(
             "HybridSuffix",
             "suffix",
@@ -562,7 +562,8 @@ fn a_best_reading_out_of_the_room_keeps_only_the_tiers_every_reading_in_the_room
         ),
         table("LifeSuffix", "suffix", &[LIFE], &[(1, &[(20, 29)])]),
         table("ManaSuffix", "suffix", &[MANA], &[(1, &[(10, 19)])]),
-    ]);
+    ];
+    let tables = with(&adding_up);
     let lines = [life, mana].map(|text| modifier(None, &[text]));
     // Room for both prefixes: three suffixes for two prefixes, which a modifier holding its
     // line alone rules out.
@@ -582,6 +583,24 @@ fn a_best_reading_out_of_the_room_keeps_only_the_tiers_every_reading_in_the_room
     let lines = [life, mana, rarity].map(|text| modifier(None, &[text]));
     let ((read, _), effort) = read_modifiers(&tables, 60, &lines, (2, 3));
     assert_eq!(read, std::slice::from_ref(&pure));
+    assert_eq!(effort.ending, Ending::Doubts(Outcome::OnlyAnotherFits));
+    // A rarity that two tiers of its prefix hold takes the worst one while the best reading
+    // fits the room, a reading a tier apart being no doubt.
+    let mut two_tiers = prefixes.clone();
+    two_tiers[2] = table(
+        "RarityPrefix",
+        "prefix",
+        &[RARITY],
+        &[(1, &[(10, 16)]), (1, &[(14, 20)])],
+    );
+    let tables = written(&[two_tiers.as_slice(), &adding_up].concat());
+    let ((read, _), effort) = read_modifiers(&tables, 60, &lines, (3, 3));
+    assert_eq!(read, [pure.clone(), pure.clone(), (1, vec![(Prefix, 2)])]);
+    assert_eq!(effort.ending, Ending::Doubts(Outcome::BestMet));
+    // Out of the room, it has none: of the readings in the room, one reads it in the worst
+    // tier, as the best reading does, and one in the other, so that they don't all give it.
+    let ((read, _), effort) = read_modifiers(&tables, 60, &lines, (2, 3));
+    assert_eq!(read, []);
     assert_eq!(effort.ending, Ending::Doubts(Outcome::OnlyAnotherFits));
 
     // Three pure suffixes of each stat: two readings in the room, each with one of the
