@@ -101,7 +101,8 @@ impl<'a> ItemTables<'a> {
     #[expect(
         clippy::inline_always,
         reason = "run for each table at each lookup: left to the compiler, which doesn't inline \
-                  it, the draw of `random_items.rs` takes 11.0 s in place of 9.8 (2026-11-11)"
+                  it, the draw of `random_items.rs` takes 11.0 s in place of 9.8 (2026-11-11), \
+                  and 11.1 s with `#[inline]` alone (2026-11-12)"
     )]
     #[inline(always)]
     fn held(&self, index: usize, table: &'a Table, copied: &Copied<'_>) -> Option<Held<'a>> {
