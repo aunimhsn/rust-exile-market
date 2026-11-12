@@ -1,5 +1,5 @@
-//! How the search of the other readings ends, and what each end leaves in doubt, on readings
-//! and tables written by hand.
+//! How the search of the other readings ends, what each end leaves in doubt and what the
+//! search takes from the best reading, on readings and tables written by hand.
 
 use super::*;
 use crate::game_data::modifiers::best_reading::{Room, best_reading};
@@ -100,8 +100,15 @@ fn a_search_that_doesnt_meet_the_best_reading_leaves_every_line_read_in_doubt() 
 }
 
 #[test]
-fn a_search_reads_as_many_fractured_modifiers_as_the_best_reading() {
+fn a_search_reads_as_many_fractured_modifiers_as_the_best_reading_or_one() {
     use ModifierOrigin::Fractured;
+    let room = Room {
+        prefixes: 3,
+        suffixes: 3,
+    };
+
+    // Two fractured lines no hybrid holds: the best reading takes each for a pure modifier,
+    // two fractured ones, where the game fractures one.
     let tables = [
         table(
             "EnergyShield",
@@ -111,20 +118,33 @@ fn a_search_reads_as_many_fractured_modifiers_as_the_best_reading() {
         ),
         table("Life", "prefix", &[LIFE], &[(1, &[(21, 30)])]),
     ];
-    // Two fractured lines no hybrid holds: the best reading takes each for a pure modifier,
-    // two fractured ones, where the game fractures one.
     let lines = [
         Some(marked(Fractured, ENERGY_SHIELD, 25.0)),
         Some(marked(Fractured, LIFE, 25.0)),
     ];
-    let room = Room {
-        prefixes: 3,
-        suffixes: 3,
-    };
-
     // The search reads two as well, and meets the best reading.
     let doubts = doubts_in(&tables, &lines, room, MAX_STEPS);
     assert_eq!(ended(&doubts), (Outcome::BestMet, vec![], false));
+
+    // The fractured lines of a hybrid apart, which no candidate reads, and no pure modifier:
+    // the best reading reads the rarity alone, no fractured modifier.
+    let tables = [
+        table(
+            "Hybrid",
+            "prefix",
+            &[ENERGY_SHIELD, LIFE],
+            &[(1, &[(20, 29), (10, 19)])],
+        ),
+        table("Rarity", "suffix", &[RARITY], &[(1, &[(10, 20)])]),
+    ];
+    let lines = [
+        Some(marked(Fractured, ENERGY_SHIELD, 25.0)),
+        Some(copied(&[(RARITY, 15.0)])),
+        Some(marked(Fractured, LIFE, 15.0)),
+    ];
+    // The search still reads one, the hybrid: its lines are told, with the prefix it takes.
+    let doubts = doubts_in(&tables, &lines, room, MAX_STEPS);
+    assert_eq!(ended(&doubts), (Outcome::BestMet, vec![0, 2], true));
 }
 
 #[test]
@@ -155,7 +175,7 @@ fn a_search_that_meets_no_reading_in_the_room_leaves_no_line_in_doubt() {
 
 #[test]
 fn a_best_reading_out_of_the_room_leaves_in_doubt_what_a_reading_in_the_room_reads_otherwise() {
-    // No pure life, and a hybrid that is a suffix.
+    // No pure life, a hybrid that is a suffix, and a mana whose two tiers both hold 22.
     let tables = [
         table(
             "EnergyShield",
@@ -170,6 +190,12 @@ fn a_best_reading_out_of_the_room_leaves_in_doubt_what_a_reading_in_the_room_rea
             &[(1, &[(20, 29), (10, 19)])],
         ),
         table("Rarity", "suffix", &[RARITY], &[(1, &[(10, 20)])]),
+        table(
+            "Mana",
+            "suffix",
+            &[MANA],
+            &[(1, &[(10, 25)]), (30, &[(20, 40)])],
+        ),
     ];
     // The rarity between the lines of the hybrid, which no candidate reads then: the best
     // reading takes the energy shield for the pure prefix and leaves the life without tier.
@@ -177,17 +203,23 @@ fn a_best_reading_out_of_the_room_leaves_in_doubt_what_a_reading_in_the_room_rea
         Some(copied(&[(ENERGY_SHIELD, 25.0)])),
         Some(copied(&[(RARITY, 15.0)])),
         Some(copied(&[(LIFE, 15.0)])),
+        Some(copied(&[(MANA, 22.0)])),
     ];
     let room = Room {
         prefixes: 0,
-        suffixes: 2,
+        suffixes: 3,
     };
 
-    // No room for a prefix: the hybrid and the rarity are the only reading in the room. The
-    // energy shield is in doubt, and the life, which has no tier to lose; the rarity, read the
-    // same, isn't. A prefix fewer and a suffix more: another room.
+    // No room for a prefix: the readings in the room are the hybrid, the rarity and the mana,
+    // in either of its tiers. The energy shield is in doubt, and the life, which has no tier
+    // to lose; the mana too, one of them reading it in its other tier, which is no doubt for
+    // a best reading in the room; the rarity, read the same, isn't. A prefix fewer and a
+    // suffix more: another room.
     let doubts = doubts_in(&tables, &lines, room, MAX_STEPS);
-    assert_eq!(ended(&doubts), (Outcome::OnlyAnotherFits, vec![0, 2], true));
+    assert_eq!(
+        ended(&doubts),
+        (Outcome::OnlyAnotherFits, vec![0, 2, 3], true)
+    );
 }
 
 #[test]

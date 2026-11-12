@@ -536,6 +536,39 @@ fn two_hybrids_that_share_a_line_leave_it_without_tier_when_both_follow_it() {
 }
 
 #[test]
+fn a_line_split_in_two_ways_as_good_has_no_tier_and_keeps_its_room() {
+    use Affix::Prefix;
+    // The rarity, 30, adds up a prefix and a suffix in two ways: T1 and T2, or T2 and T1.
+    let rarity = |kind, affix| {
+        table_json(
+            kind,
+            affix,
+            &[RARITY],
+            &[(1, &[(10, 14)]), (30, &[(16, 20)])],
+        )
+    };
+    let mut tables = pure_and_hybrid_tables();
+    tables.extend(read_tables(&[
+        rarity("RarityPrefix", "prefix"),
+        rarity("RaritySuffix", "suffix"),
+    ]));
+    let lines = [
+        "30% increased Rarity of Items found",
+        "25% increased Energy Shield",
+        "+25 to maximum Life",
+    ];
+
+    // Two prefixes: the rarity, without tier, still takes one, so that the other lines are
+    // their hybrid, where two pure prefixes would be as likely without it.
+    let (read, split) = read_in(&tables, 60, &lines, (2, 1));
+    assert_eq!(read, [(2, vec![(Prefix, 1)])]);
+    assert_eq!(split, []);
+    // A third prefix: two pure prefixes fit too, and nothing tells which rolled.
+    let (read, _) = read_in(&tables, 60, &lines, (3, 1));
+    assert_eq!(read, []);
+}
+
+#[test]
 fn a_best_reading_out_of_the_room_keeps_only_the_tiers_every_reading_in_the_room_gives() {
     use Affix::Prefix;
     let prefixes = [

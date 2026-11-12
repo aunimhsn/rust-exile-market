@@ -94,16 +94,36 @@ fn candidate(modifiers: std::ops::Range<usize>, affixes: &[Affix], fractured: bo
     }
 }
 
+/// The candidates the best reading reads among `candidates`, on an item of `count` modifiers,
+/// `fractured` of them fractured, with `room`.
+fn chosen(candidates: &[Candidate], count: usize, room: Room, fractured: usize) -> Vec<usize> {
+    let best = best_reading(candidates, count, room, fractured);
+    best.expect("every reading looked at").chosen
+}
+
+#[test]
+fn a_fractured_line_isnt_split_into_two_fractured_modifiers() {
+    use Affix::Prefix;
+    let room = Room {
+        prefixes: 3,
+        suffixes: 3,
+    };
+
+    // The only way to read the line: left without tier, rather than two fractured modifiers.
+    let fractured = Candidate {
+        fractured: true,
+        ..split(0..1, Prefix, Prefix, 0)
+    };
+    assert_eq!(chosen(&[fractured], 1, room, 1), [0; 0]);
+    // Not marked, the line is split.
+    let unmarked = split(0..1, Prefix, Prefix, 0);
+    assert_eq!(chosen(&[unmarked], 1, room, 0), [0]);
+}
+
 #[test]
 fn readings_are_ranked_by_fractured_modifiers_then_room_then_lines_read_then_whole_then_alone() {
     use Affix::{Prefix, Suffix};
     let room = |prefixes, suffixes| Room { prefixes, suffixes };
-    // The candidates the best reading reads, among `candidates`, of an item of `count`
-    // modifiers, `fractured` of them fractured.
-    let chosen = |candidates: &[Candidate], count, room, fractured| {
-        let best = best_reading(candidates, count, room, fractured);
-        best.expect("every reading looked at").chosen
-    };
 
     // One fractured modifier at most, before the room: two fractured lines are their hybrid,
     // a suffix the item has no room for, not two prefixes it has room for.
@@ -113,14 +133,6 @@ fn readings_are_ranked_by_fractured_modifiers_then_room_then_lines_read_then_who
         candidate(1..2, &[Prefix], true),
     ];
     assert_eq!(chosen(&candidates, 2, room(2, 0), 2), [1]);
-    // A fractured line split would be two fractured modifiers: left without tier.
-    let fractured = Candidate {
-        fractured: true,
-        ..split(0..1, Prefix, Prefix, 0)
-    };
-    assert_eq!(chosen(&[fractured], 1, room(3, 3), 1), [0; 0]);
-    let unmarked = split(0..1, Prefix, Prefix, 0);
-    assert_eq!(chosen(&[unmarked], 1, room(3, 3), 0), [0]);
 
     // The room, before the lines read: a hybrid the item has no room for leaves its lines
     // without tier.
