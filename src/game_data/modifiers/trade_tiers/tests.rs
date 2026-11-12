@@ -309,6 +309,37 @@ fn a_line_a_prefix_and_a_suffix_hold_keeps_the_affix_the_room_leaves() {
     );
 }
 
+#[test]
+fn a_modifier_whose_header_tells_its_affix_isnt_read_and_takes_its_room() {
+    use Affix::{Prefix, Suffix};
+    let tables = read_tables(&[
+        table_json("Life", "prefix", &[LIFE], &[(1, &[(21, 30)])]),
+        table_json("RarityPrefix", "prefix", &[RARITY], &[(1, &[(10, 20)])]),
+        table_json("RaritySuffix", "suffix", &[RARITY], &[(1, &[(10, 20)])]),
+    ]);
+    // What is read next to `other` on an item with room for one prefix and one suffix.
+    let read_with = |other: Modifier| {
+        let rarity = modifier(None, &["15% increased Rarity of Items found"]);
+        read_modifiers(&tables, 60, &[other, rarity], (1, 1)).0.0
+    };
+    let life = "+25 to maximum Life";
+    let either = [(1, vec![(Prefix, 1), (Suffix, 1)])];
+
+    // A prefix by its header: no line to read, though the life of the tables holds it, and
+    // the only prefix of the item, which leaves the rarity the suffix.
+    let prefix = modifier(Some(Prefix), &[life]);
+    assert_eq!(read_with(prefix), [(1, vec![(Suffix, 1)])]);
+    // An implicit isn't read either, and is neither a prefix nor a suffix.
+    let implicit = Modifier {
+        kind: ModifierKind::Implicit,
+        ..modifier(None, &[life])
+    };
+    assert_eq!(read_with(implicit), either);
+    // Nor does a line no tier holds take the room of one.
+    let unheld = modifier(None, &["+35 to maximum Life"]);
+    assert_eq!(read_with(unheld), either);
+}
+
 /// Two pure prefixes of one tier, `21–30`, and their hybrid of two tiers, `10–19` and
 /// `20–29` on each line.
 fn pure_and_hybrid_tables() -> Vec<Table> {

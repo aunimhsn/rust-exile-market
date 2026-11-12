@@ -5,7 +5,7 @@ use super::*;
 use crate::game_data::modifiers::best_reading::{Room, best_reading};
 use crate::game_data::modifiers::candidates::candidates;
 use crate::game_data::modifiers::fixtures::{
-    ENERGY_SHIELD, LIFE, MANA, RARITY, copied, equipment, table,
+    ENERGY_SHIELD, LIFE, MANA, RARITY, copied, equipment, marked, table,
 };
 use crate::game_data::modifiers::tables::Table;
 
@@ -84,12 +84,8 @@ fn a_search_that_doesnt_meet_the_best_reading_leaves_every_line_read_in_doubt() 
     ];
     // Two lines of one stat written apart, one fractured: the best reading takes each for the
     // pure life, two modifiers of one type, which the search never makes.
-    let fractured = Copied {
-        origin: Some(ModifierOrigin::Fractured),
-        ..copied(&[(LIFE, 25.0)])
-    };
     let lines = [
-        Some(fractured),
+        Some(marked(ModifierOrigin::Fractured, LIFE, 25.0)),
         Some(copied(&[(LIFE, 26.0)])),
         Some(copied(&[(RARITY, 15.0)])),
     ];
@@ -101,6 +97,34 @@ fn a_search_that_doesnt_meet_the_best_reading_leaves_every_line_read_in_doubt() 
     // The rarity too, which no reading of the search gets to.
     let doubts = doubts_in(&tables, &lines, room, MAX_STEPS);
     assert_eq!(ended(&doubts), (Outcome::BestNotMet, vec![0, 1, 2], true));
+}
+
+#[test]
+fn a_search_reads_as_many_fractured_modifiers_as_the_best_reading() {
+    use ModifierOrigin::Fractured;
+    let tables = [
+        table(
+            "EnergyShield",
+            "prefix",
+            &[ENERGY_SHIELD],
+            &[(1, &[(21, 30)])],
+        ),
+        table("Life", "prefix", &[LIFE], &[(1, &[(21, 30)])]),
+    ];
+    // Two fractured lines no hybrid holds: the best reading takes each for a pure modifier,
+    // two fractured ones, where the game fractures one.
+    let lines = [
+        Some(marked(Fractured, ENERGY_SHIELD, 25.0)),
+        Some(marked(Fractured, LIFE, 25.0)),
+    ];
+    let room = Room {
+        prefixes: 3,
+        suffixes: 3,
+    };
+
+    // The search reads two as well, and meets the best reading.
+    let doubts = doubts_in(&tables, &lines, room, MAX_STEPS);
+    assert_eq!(ended(&doubts), (Outcome::BestMet, vec![], false));
 }
 
 #[test]

@@ -2,7 +2,9 @@
 //! hand: what they do whatever the patch of the game.
 
 use super::*;
-use crate::game_data::modifiers::fixtures::{copied, equipment, part, range, tier};
+use crate::game_data::modifiers::fixtures::{
+    ENERGY_SHIELD, LIFE, copied, equipment, part, range, table, tier,
+};
 use crate::game_data::modifiers::tables::read;
 
 #[test]
@@ -76,6 +78,35 @@ fn two_hybrids_of_the_same_lines_that_split_a_line_are_two_ways() {
     // candidates split it (`the_lines_split_in_two_ways_as_good_keep_their_room`).
     let pairs: Vec<_> = ways.iter().map(|way| way.tables).collect();
     assert_eq!(pairs, [(0, 2), (1, 2)]);
+}
+
+#[test]
+fn a_line_adds_up_two_modifiers_of_two_types_only() {
+    // The tables of each way the life, 60, adds up a hybrid, `20–29`, and a pure life of the
+    // type `kind`, `30–39`.
+    let pairs = |kind: &str| {
+        let tables = [
+            table(
+                "LifeAndShield",
+                "prefix",
+                &[ENERGY_SHIELD, LIFE],
+                &[(1, &[(10, 19), (20, 29)])],
+            ),
+            table(kind, "prefix", &[LIFE], &[(1, &[(30, 39)])]),
+        ];
+        let tables = ItemTables {
+            all: &tables,
+            base: &equipment(&["helmet"]),
+            item_level: None,
+        };
+        let copied = copied(&[(ENERGY_SHIELD, 15.0), (LIFE, 60.0)]);
+        let ways = splits(&tables, &copied, (1, 1));
+        ways.iter().map(|way| way.tables).collect::<Vec<_>>()
+    };
+
+    assert_eq!(pairs("Life"), [(0, 1)]);
+    // Of the type of the hybrid: an item has one modifier of a type at most.
+    assert_eq!(pairs("LifeAndShield"), []);
 }
 
 #[test]

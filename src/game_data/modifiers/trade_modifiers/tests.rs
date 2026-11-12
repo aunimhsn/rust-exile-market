@@ -126,15 +126,12 @@ fn a_modifier_the_game_writes_without_tier_gets_its_ranges_and_no_tier() {
 
 #[test]
 fn the_lines_of_a_hybrid_become_one_modifier_each_line_with_its_range() {
-    // Three lines, as the longest modifier of the game, each marked fractured.
-    let mut lines = trade_lines(&[
+    // Three lines, as the longest modifier of the game.
+    let lines = trade_lines(&[
         "+50 to Armour",
         "+41 to Evasion Rating",
         "115% increased Armour and Evasion",
     ]);
-    for line in &mut lines {
-        line.origin = Some(ModifierOrigin::Fractured);
-    }
     let hybrid = tiers(
         &[1, 1, 1],
         0,
@@ -143,17 +140,61 @@ fn the_lines_of_a_hybrid_become_one_modifier_each_line_with_its_range() {
 
     assert_eq!(
         written_again(&lines, &[found(0..3, Affix::Prefix, hybrid)]),
+        [advanced(
+            Some(Affix::Prefix),
+            Some(1),
+            &[
+                "+50(42-52) to Armour",
+                "+41(40-50) to Evasion Rating",
+                "115(110-120)% increased Armour and Evasion",
+            ]
+        )]
+    );
+}
+
+#[test]
+fn a_modifier_written_again_keeps_the_origin_of_its_lines() {
+    // The lines of a hybrid, each marked fractured: the lines read as one modifier are of
+    // one origin.
+    let mut lines = trade_lines(&["25% increased Energy Shield", "+25 to maximum Life"]);
+    for line in &mut lines {
+        line.origin = Some(ModifierOrigin::Fractured);
+    }
+    let hybrid = tiers(&[1, 1], 0, &[&[(20.0, 29.0), (21.0, 30.0)]]);
+    assert_eq!(
+        written_again(&lines, &[found(0..2, Affix::Prefix, hybrid)]),
         [Modifier {
             origin: Some(ModifierOrigin::Fractured),
             ..advanced(
                 Some(Affix::Prefix),
                 Some(1),
                 &[
-                    "+50(42-52) to Armour",
-                    "+41(40-50) to Evasion Rating",
-                    "115(110-120)% increased Armour and Evasion",
+                    "25(20-29)% increased Energy Shield",
+                    "+25(21-30) to maximum Life",
                 ]
             )
+        }]
+    );
+
+    // A line that adds up two modifiers, marked desecrated.
+    let mut rarity = trade_lines(&["37% increased Rarity of Items found"]);
+    rarity[0].origin = Some(ModifierOrigin::Desecrated);
+    let whole = found(
+        0..1,
+        Affix::Prefix,
+        line_tiers(0, &[(16.0, 19.0), (12.0, 15.0)]),
+    );
+    let added = line_tiers(1, &[(19.0, 21.0), (15.0, 18.0)]);
+    assert_eq!(
+        written_again(&rarity, &[split(whole, 0, Affix::Suffix, added)]),
+        [Modifier {
+            origin: Some(ModifierOrigin::Desecrated),
+            doubt: Some(TierDoubt::Split {
+                line: 0,
+                whole: part(Affix::Prefix, &[1], &[(16.0, 19.0)]),
+                added: part(Affix::Suffix, &[2], &[(15.0, 18.0)])
+            }),
+            ..advanced(None, None, &["37% increased Rarity of Items found"])
         }]
     );
 }
@@ -617,9 +658,7 @@ fn a_line_that_adds_up_two_modifiers_of_one_affix_is_of_that_affix_with_the_tier
 
 #[test]
 fn a_line_that_adds_up_a_prefix_and_a_suffix_is_explicit_without_affix() {
-    // Marked desecrated, which the modifier written again stays.
-    let mut rarity = trade_lines(&["37% increased Rarity of Items found"]);
-    rarity[0].origin = Some(ModifierOrigin::Desecrated);
+    let rarity = trade_lines(&["37% increased Rarity of Items found"]);
     let whole = line_tiers(0, &[(16.0, 19.0), (12.0, 15.0)]);
     let added = line_tiers(1, &[(19.0, 21.0), (15.0, 18.0)]);
 
@@ -633,7 +672,6 @@ fn a_line_that_adds_up_a_prefix_and_a_suffix_is_explicit_without_affix() {
         assert_eq!(
             written_again(&rarity, &[found]),
             [Modifier {
-                origin: Some(ModifierOrigin::Desecrated),
                 doubt: Some(TierDoubt::Split {
                     line: 0,
                     whole: part(affix, &[1], &[(16.0, 19.0)]),

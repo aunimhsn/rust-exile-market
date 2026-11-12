@@ -154,6 +154,18 @@ pub(super) fn copied(lines: &[(&'static str, f64)]) -> Copied<'static> {
     )
 }
 
+/// A copied modifier of one line of `template` with `value`, which the game marks of `origin`.
+pub(super) fn marked(
+    origin: ModifierOrigin,
+    template: &'static str,
+    value: f64,
+) -> Copied<'static> {
+    Copied {
+        origin: Some(origin),
+        ..copied(&[(template, value)])
+    }
+}
+
 /// The line of the file of a table that rolls on the helmets: its type, its affix, the
 /// template of each of its lines, and for each tier its level and the range of each line.
 pub(super) fn table_json(
