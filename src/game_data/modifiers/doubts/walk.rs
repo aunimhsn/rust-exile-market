@@ -98,7 +98,8 @@ pub(super) struct State {
     /// Whether a reading that leaves lines in doubt leaves another room than the best one to the
     /// modifiers that can be a prefix or a suffix.
     pub(super) other_room: bool,
-    /// The indexes among the modifiers of the item of the lines in doubt.
+    /// The modifiers of the item whose line a reading met leaves in doubt
+    /// ([`super::comparison::Compared::in_doubt`]), all of them among [`State::disputed`].
     pub(super) in_doubt: Vec<usize>,
 }
 
