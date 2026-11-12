@@ -219,19 +219,7 @@ fn doubts_within(
         // keeps its tier only if every reading met, which all fit the room, reads it the
         // same, whatever they make of the others (more modifiers adding up, another tier).
         // Without any, the tables are out of step with the game, and the tiers stay.
-        Outcome::OnlyAnotherFits | Outcome::NoneFits => {
-            let mut in_doubt = state.in_doubt;
-            let disputed = lines.all.iter().filter(|line| {
-                let agreed = state.agreed.get(line.modifier).copied().unwrap_or(false);
-                line.read_by_best && !agreed
-            });
-            for line in disputed {
-                if !in_doubt.contains(&line.modifier) {
-                    in_doubt.push(line.modifier);
-                }
-            }
-            (in_doubt, state.other_room)
-        }
+        Outcome::OnlyAnotherFits | Outcome::NoneFits => (state.disputed(), state.other_room),
         // Without every reading, or without the best one among them: no line keeps a tier the
         // search couldn't vouch for.
         Outcome::Cut | Outcome::BestNotMet => (lines.modifiers(), true),

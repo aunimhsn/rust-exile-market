@@ -94,7 +94,7 @@ pub(super) struct State {
     met: Met,
     /// For each modifier of the item, whether every reading met reads its line as the best
     /// reading does.
-    pub(super) agreed: Vec<bool>,
+    agreed: Vec<bool>,
     /// Whether a reading that leaves lines in doubt leaves another room than the best one to the
     /// modifiers that can be a prefix or a suffix.
     pub(super) other_room: bool,
@@ -125,6 +125,17 @@ impl State {
     /// the most steps, which can't tell what the others would have been.
     pub(super) fn met(&self) -> Option<Met> {
         (!self.cut).then_some(self.met)
+    }
+
+    /// The modifiers of the item whose line a reading met reads otherwise than the best one,
+    /// those it leaves in doubt among them.
+    pub(super) fn disputed(&self) -> Vec<usize> {
+        let disputed = self
+            .agreed
+            .iter()
+            .enumerate()
+            .filter(|&(_, &agreed)| !agreed);
+        disputed.map(|(modifier, _)| modifier).collect()
     }
 
     /// Every reading from the line `line` on, the chosen modifiers kept, each compared with the
