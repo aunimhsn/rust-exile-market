@@ -1,5 +1,5 @@
-//! What the tests of the modifier tables share, in three parts: the modifiers and the bases
-//! written by hand; the readers of what the search found; then what reads the test items and
+//! What the tests of the modifier tables share, in three parts: the modifiers, the bases and
+//! the tables written by hand; the readers of what the search found; then what reads the test items and
 //! the tables of the game, for the `game_tests.rs` only: a `tests.rs` takes none of it, so
 //! that it passes whatever the patch of the game.
 
@@ -129,9 +129,15 @@ pub(super) fn table(
     read_tables(&[table_json(kind, affix, templates, tiers)]).remove(0)
 }
 
+/// The template of the life, as the tables write it. The templates of the tables written by
+/// hand stay among those of the embedded stats of the game, which the lines of a test find
+/// their stat in.
 pub(super) const LIFE: &str = "# to maximum Life";
+/// The template of the mana.
 pub(super) const MANA: &str = "# to maximum Mana";
+/// The template of the energy shield.
 pub(super) const ENERGY_SHIELD: &str = "#% increased Energy Shield";
+/// The template of the rarity of the items found.
 pub(super) const RARITY: &str = "#% increased Rarity of Items found";
 
 // The readers of what the search found.

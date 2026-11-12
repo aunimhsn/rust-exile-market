@@ -118,31 +118,25 @@ fn tiers_are_numbered_by_their_level_before_their_ranges() {
 #[test]
 fn tiers_of_one_level_are_numbered_by_their_ranges_the_higher_the_better() {
     let helmet = equipment(&["helmet", "armour"]);
-    let ranges = |tables: &[Table], copied: &Copied<'_>, order: &[usize]| {
+    let tiers = |tables: &[Table], copied: &Copied<'_>, order: &[usize]| {
         let tables = ItemTables {
             all: tables,
             base: &helmet,
             item_level: None,
         };
-        let tiers = tables.tiers_of(&tables.all[0], order, copied)?;
-        Some(
-            tiers
-                .into_iter()
-                .map(|tier| (tier.number, tier.ranges))
-                .collect::<Vec<_>>(),
-        )
+        tables.tiers_of(&tables.all[0], order, copied)
     };
     let life_copied = copied(&[(LIFE, 30.0)]);
     let numbered = Some(vec![
-        (1, vec![range(39.0, 47.0)]),
-        (2, vec![range(26.0, 31.0)]),
+        tier(1, 1, &[(39.0, 47.0)]),
+        tier(2, 1, &[(26.0, 31.0)]),
     ]);
 
     // Two tables of the modifier with a tier of the same level, in either order of the file.
     let lower = || life(&[(1, &[(26, 31)])]);
     let higher = || on("armour", life(&[(1, &[(39, 47)])]));
-    assert_eq!(ranges(&[lower(), higher()], &life_copied, &[0]), numbered);
-    assert_eq!(ranges(&[higher(), lower()], &life_copied, &[0]), numbered);
+    assert_eq!(tiers(&[lower(), higher()], &life_copied, &[0]), numbered);
+    assert_eq!(tiers(&[higher(), lower()], &life_copied, &[0]), numbered);
 
     // Two tiers that differ by their second line only.
     let hybrid = table(
@@ -153,10 +147,10 @@ fn tiers_of_one_level_are_numbered_by_their_ranges_the_higher_the_better() {
     );
     let hybrid_copied = copied(&[(ENERGY_SHIELD, 15.0), (LIFE, 3.0)]);
     assert_eq!(
-        ranges(&[hybrid], &hybrid_copied, &[0, 1]),
+        tiers(&[hybrid], &hybrid_copied, &[0, 1]),
         Some(vec![
-            (1, vec![range(10.0, 19.0), range(5.0, 9.0)]),
-            (2, vec![range(10.0, 19.0), range(1.0, 4.0)]),
+            tier(1, 1, &[(10.0, 19.0), (5.0, 9.0)]),
+            tier(2, 1, &[(10.0, 19.0), (1.0, 4.0)]),
         ])
     );
 }
@@ -259,29 +253,31 @@ fn lookup_tables() -> Vec<Table> {
         ranges: vec![vec![[1.0, 30.0], [31.0, 60.0]]],
     };
     vec![
+        // 0: the life, of two tiers.
         life(life_tiers),
-        // Other lines.
+        // 1: other lines.
         table("Mana", "prefix", &[MANA], life_tiers),
-        // The life again, on the rings: not the first table of its modifier.
+        // 2: the life again, on the rings: not the first table of its modifier.
         on("ring", life(&[(60, &[(61, 90)])])),
-        // A tier with two ranges for the one value of the line: its tiers can't be read.
+        // 3: a tier with two ranges for the one value of the line: its tiers can't be read.
         Table {
             tiers: vec![two_ranges],
             ..life_as("TwoValues", "prefix")
         },
+        // 4: the life as a suffix.
         life_as("LifeSuffix", "suffix"),
-        // An alloy's, which only a marked line may be.
+        // 5: an alloy's, which only a marked line may be.
         Table {
             source: Some(TableSource::Alloy),
             ..life_as("AlloyLife", "prefix")
         },
-        // A lord's, which only a desecrated line may be.
+        // 6: a lord's, which only a desecrated line may be.
         Table {
             domain: Domain::Desecrated,
             lord: Some(TableLord::Kurgal),
             ..life_as("LordLife", "prefix")
         },
-        // A modifier that rolls on the rings only: no tier on the base.
+        // 7: a modifier that rolls on the rings only: no tier on the base.
         on("ring", life_as("RingLife", "prefix")),
     ]
 }
@@ -419,17 +415,21 @@ fn a_line_without_number_copied_in_another_order_is_divided_as_its_own_line_show
 }
 
 #[test]
-fn the_tiers_of_a_modifier_held_tell_what_its_table_tells_of_the_copied_one() {
-    let life_as = |kind: &str| table(kind, "prefix", &[LIFE], &[(1, &[(1, 30)])]);
+fn the_tiers_of_a_modifier_held_carry_the_currency_the_lord_and_the_unwritten_tier_of_its_table() {
     let tables = [
         Table {
             source: Some(TableSource::Essence),
-            ..life_as("EssenceLife")
+            ..table(
+                "EssenceLife",
+                "prefix",
+                &[LIFE],
+                &[(1, &[(1, 30)]), (40, &[(31, 60)])],
+            )
         },
         Table {
             domain: Domain::Desecrated,
             lord: Some(TableLord::Amanamu),
-            ..life_as("LordLife")
+            ..table("LordLife", "prefix", &[LIFE], &[(1, &[(1, 30)])])
         },
     ];
     let helmet = equipment(&["helmet"]);
@@ -442,20 +442,20 @@ fn the_tiers_of_a_modifier_held_tell_what_its_table_tells_of_the_copied_one() {
         origin: Some(ModifierOrigin::Desecrated),
         ..copied(&[(LIFE, 25.0)])
     };
-    // Found in the tier of the index given, whatever its tiers.
+    // The tiers of each modifier held, the copied one in the tier of index `found`.
     let tiers_of = |copied: &Copied<'_>, found| -> Vec<ModifierTiers> {
         tables
             .holding(copied)
             .map(|held| held.into_tiers(found, copied))
             .collect()
     };
-    let one_tier = vec![tier(1, 1, &[(1.0, 30.0)])];
 
+    // An unmarked line: the essence's, in its second tier.
     assert_eq!(
-        tiers_of(&copied(&[(LIFE, 25.0)]), 0),
+        tiers_of(&copied(&[(LIFE, 25.0)]), 1),
         [ModifierTiers {
-            tiers: one_tier.clone(),
-            found: 0,
+            tiers: vec![tier(1, 40, &[(31.0, 60.0)]), tier(2, 1, &[(1.0, 30.0)])],
+            found: 1,
             neighbour: None,
             counts: vec![1],
             tier_unwritten: true,
@@ -463,11 +463,12 @@ fn the_tiers_of_a_modifier_held_tell_what_its_table_tells_of_the_copied_one() {
             lord: None,
         }]
     );
+    // A desecrated one: the lord's, of one tier.
     assert_eq!(
-        tiers_of(&desecrated, 3),
+        tiers_of(&desecrated, 0),
         [ModifierTiers {
-            tiers: one_tier,
-            found: 3,
+            tiers: vec![tier(1, 1, &[(1.0, 30.0)])],
+            found: 0,
             neighbour: None,
             counts: vec![1],
             tier_unwritten: false,

@@ -167,8 +167,10 @@ impl Table {
         }
     }
 
-    /// Whether the table holds tiers of the same modifier as `other`, maybe on other bases. A
-    /// desecrated table is a modifier of its own, its one tier "the only one": two of them
+    /// Whether the table holds tiers of the same modifier as `other`, maybe on other bases: of
+    /// its source, its type, its affix and its lines, in the same order, since the ranges of
+    /// every table of a modifier are read in the order of the lines of one
+    /// (`ItemTables::tiers_of`). A desecrated table is a modifier of its own, its one tier "the only one": two of them
     /// may roll the same lines on one base, a lord's own (the flask charges of Ulaman,
     /// `10–18`, and of Kurgal, `10–15`, on the belts), or the same range written twice (the
     /// cost efficiency of attacks of Kurgal on the maces), which merged would read as a T1 and
