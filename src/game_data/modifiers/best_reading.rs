@@ -111,7 +111,10 @@ impl BestReading<'_> {
 
 /// The search of the best reading stopped at [`MAX_READINGS`], some readings not looked at.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) struct Cut;
+pub(super) struct Cut {
+    /// The readings it looked at before it stopped.
+    pub(super) readings: usize,
+}
 
 /// The best reading of the `count` modifiers of an item among `candidates`, within `room`,
 /// `fractured` of the modifiers being fractured. Past [`MAX_READINGS`], none: a reading not
@@ -134,9 +137,11 @@ pub(super) fn best_reading(
             room_in_doubt: search.room_in_doubt,
             readings: search.readings,
         }),
-        // The search keeps a reading unless it is cut: the one of no line for an item without
-        // any.
-        Some(_) | None => Err(Cut),
+        // Cut, the search holds the best of the readings it looked at only, which it doesn't
+        // give. Not cut, it always holds one: the reading of no line for an item without any.
+        Some(_) | None => Err(Cut {
+            readings: search.readings,
+        }),
     }
 }
 

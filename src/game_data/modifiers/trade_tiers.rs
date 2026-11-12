@@ -4,7 +4,7 @@
 
 use super::ModifierTiers;
 use super::base_tiers::ItemTables;
-use super::best_reading::{MAX_READINGS, Room, best_reading};
+use super::best_reading::{Cut, Room, best_reading};
 use super::candidates::{AffixSet, Candidate, candidates};
 use super::copied::Copied;
 use super::doubts::{self, Doubts, Outcome};
@@ -255,15 +255,18 @@ fn trade_tiers_in(
         .iter()
         .filter(|modifier| modifier.origin == Some(ModifierOrigin::Fractured))
         .count();
-    // Cut at the bound of its readings, the search has no best reading: no line keeps a tier
-    // it can't vouch for.
-    let Ok(best) = best_reading(&candidates, modifiers.len(), room, fractured) else {
-        let effort = Effort {
-            readings: MAX_READINGS,
-            steps: 0,
-            ending: Ending::ReadingsCut,
-        };
-        return (Vec::new(), effort);
+    let best = match best_reading(&candidates, modifiers.len(), room, fractured) {
+        Ok(best) => best,
+        // Cut at the bound of its readings, the search has no best reading: no line keeps a
+        // tier it can't vouch for.
+        Err(Cut { readings }) => {
+            let effort = Effort {
+                readings,
+                steps: 0,
+                ending: Ending::ReadingsCut,
+            };
+            return (Vec::new(), effort);
+        }
     };
     let doubts = doubts::doubts(tables, &copied, &best);
     let effort = Effort {

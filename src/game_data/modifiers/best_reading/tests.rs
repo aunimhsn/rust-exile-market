@@ -204,7 +204,11 @@ fn the_readings_looked_at_are_bounded() {
 
     let best = best_reading(&candidates, count, room, 0);
 
-    assert_eq!(best.err(), Some(Cut));
+    // More than a million readings of these lines: the search stops at the bound.
+    let cut = Cut {
+        readings: MAX_READINGS,
+    };
+    assert_eq!(best.err(), Some(cut));
 }
 
 #[test]
