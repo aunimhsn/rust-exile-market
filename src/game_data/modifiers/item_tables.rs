@@ -57,7 +57,10 @@ pub(super) struct Held<'a> {
 }
 
 impl Held<'_> {
-    /// Its tiers as those of `copied`, found in the tier of index `found`.
+    /// Its tiers as those of `copied`, found in the tier of index `found`. Consumed: a lookup
+    /// moves the tiers of the modifier it found, which a borrow would clone at each lookup (the
+    /// draw of `random_items.rs` takes 9.96 s in place of 9.77, 2026-11-12); `splits`, which
+    /// reads a modifier in several ways, clones it for each.
     pub(super) fn into_tiers(self, found: usize, copied: &Copied<'_>) -> ModifierTiers {
         ModifierTiers {
             tiers: self.tiers,
