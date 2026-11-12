@@ -92,22 +92,45 @@ pub(super) fn tier(number: u32, level: u32, ranges: &[(f64, f64)]) -> Tier {
     }
 }
 
-/// A copied modifier of `lines`, the template and the value of each, without header: no
-/// range, no tier, no origin.
-pub(super) fn copied(lines: &[(&'static str, f64)]) -> Copied<'static> {
+/// A copied line of `template` with `values`, one for each `#` of its string.
+pub(super) fn copied_line(template: &'static str, values: &[f64]) -> CopiedLine<'static> {
+    CopiedLine {
+        templates: vec![template],
+        values: values.to_vec(),
+        written: None,
+    }
+}
+
+/// A copied line of `template` without number, whose string gives `value`.
+pub(super) fn copied_line_without_number(
+    template: &'static str,
+    value: f64,
+) -> CopiedLine<'static> {
+    CopiedLine {
+        templates: vec![template],
+        values: Vec::new(),
+        written: Some(value),
+    }
+}
+
+/// A copied modifier of `lines`, without header: no range, no tier, no origin.
+pub(super) fn copied_lines(lines: Vec<CopiedLine<'static>>) -> Copied<'static> {
     Copied {
-        lines: lines
-            .iter()
-            .map(|&(template, value)| CopiedLine {
-                templates: vec![template],
-                values: vec![value],
-                written: None,
-            })
-            .collect(),
+        lines,
         ranges: None,
         tier: CopiedTier::Unknown,
         origin: None,
     }
+}
+
+/// A copied modifier of `lines`, the template and the value of each, without header.
+pub(super) fn copied(lines: &[(&'static str, f64)]) -> Copied<'static> {
+    copied_lines(
+        lines
+            .iter()
+            .map(|&(template, value)| copied_line(template, &[value]))
+            .collect(),
+    )
 }
 
 /// The line of the file of a table that rolls on the helmets: its type, its affix, the

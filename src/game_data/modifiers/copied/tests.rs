@@ -7,7 +7,8 @@ use super::*;
 use crate::game_data::bases::Domain;
 use crate::game_data::lines::modifier_stats;
 use crate::game_data::modifiers::fixtures::{
-    ENERGY_SHIELD, LIFE, MANA, RARITY, copied, desecrated, modifier, range, table, tier,
+    ENERGY_SHIELD, LIFE, MANA, RARITY, copied, copied_line, copied_line_without_number,
+    copied_lines, desecrated, modifier, range, table, tier,
 };
 use crate::game_data::modifiers::tables::TableLord;
 use crate::game_data::trade_stats;
@@ -37,24 +38,6 @@ fn copied_of(modifier: &Modifier) -> Option<Copied<'static>> {
     Copied::of(modifier, &modifier_stats(Language::English, modifier, None))
 }
 
-/// A copied line of `template` with `values`, one for each `#` of its string.
-fn line(template: &'static str, values: &[f64]) -> CopiedLine<'static> {
-    CopiedLine {
-        templates: vec![template],
-        values: values.to_vec(),
-        written: None,
-    }
-}
-
-/// A copied line of `template` without number, whose string gives `value`.
-fn line_without_number(template: &'static str, value: f64) -> CopiedLine<'static> {
-    CopiedLine {
-        templates: vec![template],
-        values: Vec::new(),
-        written: Some(value),
-    }
-}
-
 #[test]
 fn the_lines_of_an_advanced_copy_give_their_templates_their_values_and_the_ranges_of_their_tier() {
     let hybrid = advanced(
@@ -68,7 +51,10 @@ fn the_lines_of_an_advanced_copy_give_their_templates_their_values_and_the_range
     assert_eq!(
         copied_of(&hybrid),
         Some(Copied {
-            lines: vec![line(LIGHTNING, &[10.0, 273.0]), line(LIFE, &[25.0])],
+            lines: vec![
+                copied_line(LIGHTNING, &[10.0, 273.0]),
+                copied_line(LIFE, &[25.0])
+            ],
             // A range for each value of the lines, in their order.
             ranges: Some(vec![
                 range(1.0, 16.0),
@@ -100,9 +86,8 @@ fn a_value_without_its_range_leaves_the_modifier_without_ranges() {
     let lightning = |text| copied_of(&advanced(1, &[text]));
     let without_ranges = || {
         Some(Copied {
-            lines: vec![line(LIGHTNING, &[10.0, 273.0])],
             tier: CopiedTier::Written(1),
-            ..copied(&[])
+            ..copied_lines(vec![copied_line(LIGHTNING, &[10.0, 273.0])])
         })
     };
 
@@ -156,7 +141,7 @@ fn a_stat_written_on_several_lines_is_one_line_with_the_values_of_them_all() {
     assert_eq!(
         copied_of(&anaemia),
         Some(Copied {
-            lines: vec![line(ANAEMIA, &[3.0]), line(LIFE, &[25.0])],
+            lines: vec![copied_line(ANAEMIA, &[3.0]), copied_line(LIFE, &[25.0])],
             ranges: Some(vec![range(2.0, 4.0), range(20.0, 29.0)]),
             tier: CopiedTier::Written(1),
             origin: None,
@@ -170,21 +155,21 @@ fn a_line_without_number_gives_the_value_its_string_writes_as_the_stat_stores_it
 
     assert_eq!(
         lines("Loads an additional bolt"),
-        Some(vec![line_without_number(BOLT, 1.0)])
+        Some(vec![copied_line_without_number(BOLT, 1.0)])
     );
     // A second, stored in milliseconds: its `1` is written by the string.
     assert_eq!(
         lines("Inherent Rage loss starts 1 second later"),
-        Some(vec![line_without_number(RAGE, 1000.0)])
+        Some(vec![copied_line_without_number(RAGE, 1000.0)])
     );
     // The same stats with their number: lines as any other.
     assert_eq!(
         lines("Loads 2(2-3) additional bolts"),
-        Some(vec![line(BOLT, &[2.0])])
+        Some(vec![copied_line(BOLT, &[2.0])])
     );
     assert_eq!(
         lines("Inherent Rage loss starts 2.5(2-3) seconds later"),
-        Some(vec![line(RAGE, &[2.5])])
+        Some(vec![copied_line(RAGE, &[2.5])])
     );
 }
 
@@ -195,7 +180,7 @@ fn a_line_with_a_number_takes_no_value_from_its_string() {
 
     assert_eq!(
         copied_of(&slot).map(|copied| copied.lines),
-        Some(vec![line("# Charm Slot", &[1.0])])
+        Some(vec![copied_line("# Charm Slot", &[1.0])])
     );
 }
 
@@ -210,7 +195,10 @@ fn a_line_without_number_leaves_the_modifier_without_ranges() {
     assert_eq!(
         copied_of(&hybrid),
         Some(Copied {
-            lines: vec![line(LIFE, &[25.0]), line_without_number(BOLT, 1.0)],
+            lines: vec![
+                copied_line(LIFE, &[25.0]),
+                copied_line_without_number(BOLT, 1.0)
+            ],
             ranges: None,
             tier: CopiedTier::Written(1),
             origin: None,
@@ -292,16 +280,13 @@ fn the_tier_and_the_origin_are_those_the_header_of_the_modifier_writes() {
 
 #[test]
 fn a_line_counts_its_values_or_the_one_its_string_writes() {
-    let lines = Copied {
-        lines: vec![
-            line(LIGHTNING, &[10.0, 273.0]),
-            line_without_number(BOLT, 1.0),
-            // A line without number whose string gives no value.
-            line("Trigger Lightning Bolt Skill on Critical Hit", &[]),
-            line(LIFE, &[25.0]),
-        ],
-        ..copied(&[])
-    };
+    let lines = copied_lines(vec![
+        copied_line(LIGHTNING, &[10.0, 273.0]),
+        copied_line_without_number(BOLT, 1.0),
+        // A line without number whose string gives no value.
+        copied_line("Trigger Lightning Bolt Skill on Critical Hit", &[]),
+        copied_line(LIFE, &[25.0]),
+    ]);
     let values_before: Vec<usize> = (0..=4).map(|line| lines.values_before(line)).collect();
 
     assert_eq!(lines.counts(), [2, 1, 0, 1]);
@@ -373,26 +358,23 @@ fn a_line_of_two_english_templates_is_the_line_of_a_table_of_either() {
     // As a line of another language that two English stats write.
     let either = CopiedLine {
         templates: vec![LIFE, MANA],
-        ..line(LIFE, &[25.0])
+        ..copied_line(LIFE, &[25.0])
     };
     assert!(either.is(LIFE));
     assert!(either.is(MANA));
     assert!(!either.is(ENERGY_SHIELD));
 
-    let copied = Copied {
-        lines: vec![either],
-        ..copied(&[])
-    };
+    let copied = copied_lines(vec![either]);
     assert_eq!(copied.order(&table_lines(&[MANA])), Some(vec![0]));
     assert_eq!(copied.order(&table_lines(&[ENERGY_SHIELD])), None);
 }
 
 #[test]
 fn the_values_of_the_copied_lines_are_given_in_their_order() {
-    let copied = Copied {
-        lines: vec![line(LIFE, &[25.0]), line(LIGHTNING, &[10.0, 273.0])],
-        ..copied(&[])
-    };
+    let copied = copied_lines(vec![
+        copied_line(LIFE, &[25.0]),
+        copied_line(LIGHTNING, &[10.0, 273.0]),
+    ]);
     // The table writes the lightning damage first.
     let lines = table_lines(&[LIGHTNING, LIFE]);
 
@@ -413,17 +395,17 @@ fn the_value_of_a_line_without_number_is_divided_as_its_own_line_of_the_table_sh
         },
     ];
     let values = |rage| {
-        let copied = Copied {
-            lines: vec![line(LIFE, &[25.0]), rage],
-            ..copied(&[])
-        };
+        let copied = copied_lines(vec![copied_line(LIFE, &[25.0]), rage]);
         copied.values(&lines, &[1, 0])
     };
 
     // One second, which its string gives as 1000 milliseconds.
-    assert_eq!(values(line_without_number(RAGE, 1000.0)), [25.0, 1.0]);
+    assert_eq!(
+        values(copied_line_without_number(RAGE, 1000.0)),
+        [25.0, 1.0]
+    );
     // Written with its number, the line reads as the table shows it: not divided.
-    assert_eq!(values(line(RAGE, &[2.5])), [25.0, 2.5]);
+    assert_eq!(values(copied_line(RAGE, &[2.5])), [25.0, 2.5]);
 }
 
 #[test]

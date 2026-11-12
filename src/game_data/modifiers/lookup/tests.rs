@@ -4,8 +4,9 @@
 use super::*;
 use crate::game_data::bases::BaseSpawn;
 use crate::game_data::lines::modifier_stats;
-use crate::game_data::modifiers::copied::CopiedLine;
-use crate::game_data::modifiers::fixtures::{copied, equipment, modifier, range};
+use crate::game_data::modifiers::fixtures::{
+    copied, copied_line_without_number, copied_lines, equipment, modifier, range,
+};
 use crate::game_data::modifiers::tables::read;
 use crate::item::{Currency, ModifierOrigin};
 use crate::language::Language;
@@ -21,18 +22,11 @@ fn any_level<'a>(tables: &'a [Table], base: &'a BaseSpawn) -> ItemTables<'a> {
 
 #[test]
 fn the_value_of_a_line_without_number_is_divided_as_its_table_shows_it() {
+    const RAGE: &str = "Inherent Rage loss starts 1 second later";
     let tables = read(concat!(
         r#"{"type": "Rage", "affix": "suffix", "lines": [{"template": "Inherent Rage loss starts 1 second later", "divisor": 1000}], "#,
         r#""spawn": [["weapon", 1]], "tiers": [{"level": 1, "ranges": [[[1, 1]]]}, {"level": 50, "ranges": [[[2, 3]]]}]}"#
     ));
-    let copied = |values: Vec<f64>, written| Copied {
-        lines: vec![CopiedLine {
-            templates: vec!["Inherent Rage loss starts 1 second later"],
-            values,
-            written,
-        }],
-        ..copied(&[])
-    };
     let number = |copied| {
         find(
             &any_level(&tables, &equipment(&["weapon"])),
@@ -44,8 +38,9 @@ fn the_value_of_a_line_without_number_is_divided_as_its_table_shows_it() {
     };
 
     // `Inherent Rage loss starts 1 second later` gives the 1000 milliseconds of the stat.
-    assert_eq!(number(copied(Vec::new(), Some(1000.0))), Some(2));
-    assert_eq!(number(copied(vec![2.5], None)), Some(1));
+    let one_second = copied_lines(vec![copied_line_without_number(RAGE, 1000.0)]);
+    assert_eq!(number(one_second), Some(2));
+    assert_eq!(number(copied(&[(RAGE, 2.5)])), Some(1));
 }
 
 #[test]

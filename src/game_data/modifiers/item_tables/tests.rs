@@ -4,9 +4,9 @@
 
 use super::*;
 use crate::game_data::bases::Domain;
-use crate::game_data::modifiers::copied::CopiedLine;
 use crate::game_data::modifiers::fixtures::{
-    ENERGY_SHIELD, LIFE, MANA, copied, equipment, table, tier,
+    ENERGY_SHIELD, LIFE, MANA, copied, copied_line, copied_line_without_number, copied_lines,
+    equipment, table, tier,
 };
 use crate::game_data::modifiers::tables::{TableLord, TableSource};
 use crate::item::{Currency, ModifierOrigin};
@@ -168,14 +168,7 @@ fn a_tier_without_a_range_for_each_value_of_the_copied_lines_gives_no_tiers() {
 
     assert!(tiers(&[0], &copied(&[(LIFE, 5.0)])).is_some());
     // A copied line of two values, the tiers with one range for it.
-    let two_values = Copied {
-        lines: vec![CopiedLine {
-            templates: vec![LIFE],
-            values: vec![3.0, 9.0],
-            written: None,
-        }],
-        ..copied(&[])
-    };
+    let two_values = copied_lines(vec![copied_line(LIFE, &[3.0, 9.0])]);
     assert_eq!(tiers(&[0], &two_values), None);
     // A second copied line, the tiers without ranges for it.
     let two_lines = copied(&[(LIFE, 5.0), (ENERGY_SHIELD, 15.0)]);
@@ -380,9 +373,10 @@ fn a_line_without_number_copied_in_another_order_is_divided_as_its_own_line_show
         item_level: None,
     };
     // The life copied first, then the line whose string gives 2000 milliseconds.
-    let mut copied = copied(&[(LIFE, 25.0), (RAGE, 0.0)]);
-    copied.lines[1].values = Vec::new();
-    copied.lines[1].written = Some(2000.0);
+    let copied = copied_lines(vec![
+        copied_line(LIFE, &[25.0]),
+        copied_line_without_number(RAGE, 2000.0),
+    ]);
 
     let values: Vec<Vec<f64>> = tables.holding(&copied).map(|held| held.values).collect();
 
