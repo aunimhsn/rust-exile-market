@@ -29,7 +29,7 @@ pub fn with_trade_tiers(item: &TradeItem<'_>, modifiers: &[Modifier]) -> Vec<Mod
             .find_map(|found| {
                 let run = Run {
                     language,
-                    parts: modifiers.get(found.modifiers.clone())?,
+                    modifiers: modifiers.get(found.modifiers.clone())?,
                 };
                 Some((found.modifiers.end, run.read(base_type, found)?))
             });
@@ -50,7 +50,7 @@ pub fn with_trade_tiers(item: &TradeItem<'_>, modifiers: &[Modifier]) -> Vec<Mod
 struct Run<'a> {
     /// The language of their lines.
     language: Language,
-    parts: &'a [Modifier],
+    modifiers: &'a [Modifier],
 }
 
 impl Run<'_> {
@@ -67,9 +67,9 @@ impl Run<'_> {
             if split.is_none() {
                 // Counted as two affixes by the reading, but left without tier.
                 let lines: Vec<&str> = self
-                    .parts
+                    .modifiers
                     .iter()
-                    .flat_map(|part| &part.lines)
+                    .flat_map(|modifier| &modifier.lines)
                     .map(|line| line.text.as_str())
                     .collect();
                 log::warn!(
@@ -106,13 +106,13 @@ impl Run<'_> {
         // The index of that line among the lines of the run: each modifier has one line, as
         // the in-game trade writes them, but the lines are counted.
         let line: usize = self
-            .parts
+            .modifiers
             .iter()
             .take(summed)
-            .map(|part| part.lines.len())
+            .map(|modifier| modifier.lines.len())
             .sum();
         let alone = Self {
-            parts: self.parts.get(summed..=summed)?,
+            modifiers: self.modifiers.get(summed..=summed)?,
             ..self
         };
         let mut joined = self.joined()?;
@@ -193,11 +193,11 @@ impl Run<'_> {
     fn joined(self) -> Option<Modifier> {
         Some(Modifier {
             lines: self
-                .parts
+                .modifiers
                 .iter()
-                .flat_map(|part| part.lines.iter().cloned())
+                .flat_map(|modifier| modifier.lines.iter().cloned())
                 .collect(),
-            ..self.parts.first()?.clone()
+            ..self.modifiers.first()?.clone()
         })
     }
 
@@ -240,12 +240,12 @@ impl Run<'_> {
     /// value) keeps them without range, as does a range across zero, which needs its sign.
     fn with_ranges(self, tier: &Tier, counts: &[usize]) -> Option<Modifier> {
         let mut joined = self.joined()?;
-        // The ranges and `counts` follow the line matches of each part, in their order.
+        // The ranges and `counts` follow the line matches of each modifier, in their order.
         let mut ranges = tier.ranges.iter();
         let mut counts = counts.iter();
         let mut offset = 0;
-        for part in self.parts {
-            for line_match in modifier_stats(self.language, part, None) {
+        for modifier in self.modifiers {
+            for line_match in modifier_stats(self.language, modifier, None) {
                 let count = *counts.next()?;
                 let taken: Vec<Range> = ranges.by_ref().take(count).copied().collect();
                 let stat = line_match.stat.as_ref()?;
@@ -261,7 +261,7 @@ impl Run<'_> {
                     }
                 }
             }
-            offset += part.lines.len();
+            offset += modifier.lines.len();
         }
         Some(joined)
     }

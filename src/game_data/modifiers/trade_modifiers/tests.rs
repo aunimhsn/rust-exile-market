@@ -23,7 +23,7 @@ fn a_part_whose_two_tiers_give_its_line_other_ranges_isnt_read() {
     };
     let rarity = Run {
         language: Language::English,
-        parts: &rarity,
+        modifiers: &rarity,
     };
     let read = |tiers: &ModifierTiers| rarity.part_tier(Affix::Prefix, tiers, 0);
 
@@ -51,7 +51,7 @@ fn a_part_whose_two_tiers_give_its_line_other_ranges_isnt_read() {
     };
     let damage = Run {
         language: Language::English,
-        parts: &damage,
+        modifiers: &damage,
     };
     let read_damage = |tiers: &ModifierTiers| damage.part_tier(Affix::Prefix, tiers, 0);
     assert_eq!(
