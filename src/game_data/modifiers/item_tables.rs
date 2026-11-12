@@ -182,7 +182,7 @@ impl ItemTables<'_> {
 }
 
 /// The bounds of every range of `tier`, in the order of its lines.
-pub(super) fn range_values(tier: &TableTier) -> impl Iterator<Item = f64> + '_ {
+fn range_values(tier: &TableTier) -> impl Iterator<Item = f64> + '_ {
     tier.ranges.iter().flatten().flatten().copied()
 }
 

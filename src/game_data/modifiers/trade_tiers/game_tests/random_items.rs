@@ -28,7 +28,6 @@ use super::*;
 use crate::game_data::bases::{self, BaseSpawn, Domain};
 use crate::game_data::modifiers::best_reading::MAX_READINGS;
 use crate::game_data::modifiers::doubts;
-use crate::game_data::modifiers::item_tables::range_values;
 use crate::game_data::modifiers::tables::{
     TABLES, Table, TableAffix, TableTier, first_of_its_modifier,
 };
@@ -269,7 +268,7 @@ impl Draw {
 }
 
 /// A modifier of the tables on a base: its first table, and its tiers on the base, the best
-/// first, numbered as [`ItemTables::tiers_of`] numbers them.
+/// first, numbered as [`ItemTables::tiers_of`] numbers them, by a sort of its own ([`rolled`]).
 struct Rolled<'a> {
     table: &'a Table,
     tiers: Vec<&'a TableTier>,
@@ -297,12 +296,14 @@ fn rolled<'a>(
             .filter(|other| other.same_modifier(table) && other.rolls_on(base))
             .flat_map(|other| &other.tiers)
             .collect();
+        // The numbering of the tiers written a second time, on purpose: the draw tells the
+        // tier a line rolled without the code it measures (`ItemTables::tiers_of`), so that
+        // a slip of either numbering shows in the counts, as lines read in another tier.
+        let bounds = |tier: &'a TableTier| tier.ranges.iter().flatten().flatten().copied();
         tiers.sort_by(|tier, other| {
-            tier.level.cmp(&other.level).then_with(|| {
-                range_values(tier)
-                    .partial_cmp(range_values(other))
-                    .expect("no NaN")
-            })
+            tier.level
+                .cmp(&other.level)
+                .then_with(|| bounds(tier).partial_cmp(bounds(other)).expect("no NaN"))
         });
         tiers.reverse();
         let Some(worst) = tiers.last().filter(|tier| tier.level <= item_level) else {
