@@ -3,7 +3,7 @@
 
 use super::*;
 use crate::game_data::modifiers::fixtures::{modifier, part, range, tier, trade_lines};
-use crate::item::{ModifierOrigin, StatLine};
+use crate::item::{Lord, ModifierOrigin, StatLine};
 
 /// `modifiers`, their lines written in English, written again with the tiers `found`.
 fn written_again(modifiers: &[Modifier], found: &[FoundTiers]) -> Vec<Modifier> {
@@ -15,6 +15,19 @@ fn found(modifiers: std::ops::Range<usize>, affix: Affix, tiers: ModifierTiers) 
     FoundTiers {
         modifiers,
         affixes: vec![(affix, tiers)],
+        added: None,
+    }
+}
+
+/// The modifiers `modifiers` of an item read as one modifier that can be each of `affixes`,
+/// with its tiers as that affix.
+fn found_either(
+    modifiers: std::ops::Range<usize>,
+    affixes: [(Affix, ModifierTiers); 2],
+) -> FoundTiers {
+    FoundTiers {
+        modifiers,
+        affixes: affixes.into(),
         added: None,
     }
 }
@@ -52,6 +65,17 @@ fn advanced(affix: Option<Affix>, tier: Option<u32>, lines: &[&str]) -> Modifier
         tier,
         lines: lines.iter().map(|line| StatLine::parse(line)).collect(),
         ..modifier(affix, &[])
+    }
+}
+
+/// The tier `tier` of a modifier as `affix`, over `ranges`: its number written, no lord's.
+fn affix_tier(affix: Affix, tier: u32, ranges: &[(f64, f64)]) -> AffixTier {
+    AffixTier {
+        affix,
+        tier,
+        hides_number: false,
+        ranges: ranges.iter().map(|&(min, max)| range(min, max)).collect(),
+        lord: None,
     }
 }
 
@@ -371,6 +395,194 @@ fn the_lines_find_their_stat_in_the_language_of_the_item() {
     );
     // No English stat writes the line: as it was.
     assert_eq!(written(Language::English), mana);
+}
+
+#[test]
+fn a_line_that_can_be_a_prefix_or_a_suffix_stays_as_it_was_with_the_tier_of_each() {
+    let rarity = trade_lines(&["18% increased Rarity of Items found"]);
+    // The best of two tiers as a prefix, the second of three as a suffix.
+    let prefix = line_tiers(0, &[(16.0, 19.0), (12.0, 15.0)]);
+    let suffix = line_tiers(1, &[(19.0, 21.0), (15.0, 18.0), (11.0, 14.0)]);
+    let found = found_either(0..1, [(Affix::Prefix, prefix), (Affix::Suffix, suffix)]);
+
+    // Explicit without affix nor tier, its value without range.
+    assert_eq!(
+        written_again(&rarity, &[found]),
+        [Modifier {
+            doubt: Some(TierDoubt::EitherAffix {
+                prefix: affix_tier(Affix::Prefix, 1, &[(16.0, 19.0)]),
+                suffix: affix_tier(Affix::Suffix, 2, &[(15.0, 18.0)]),
+            }),
+            ..rarity[0].clone()
+        }]
+    );
+}
+
+#[test]
+fn the_lines_of_a_hybrid_that_can_be_a_prefix_or_a_suffix_become_one_modifier() {
+    let lines = trade_lines(&["+50 to Armour", "+41 to Evasion Rating"]);
+    // The best of two tiers as a prefix, the second of two as a suffix.
+    let prefix = tiers(
+        &[1, 1],
+        0,
+        &[&[(42.0, 52.0), (40.0, 50.0)], &[(30.0, 41.0), (30.0, 39.0)]],
+    );
+    let suffix = tiers(
+        &[1, 1],
+        1,
+        &[&[(60.0, 70.0), (55.0, 65.0)], &[(45.0, 55.0), (35.0, 45.0)]],
+    );
+    let found = found_either(0..2, [(Affix::Prefix, prefix), (Affix::Suffix, suffix)]);
+
+    // The tier of each affix with the range of each line, in their order.
+    assert_eq!(
+        written_again(&lines, &[found]),
+        [Modifier {
+            doubt: Some(TierDoubt::EitherAffix {
+                prefix: affix_tier(Affix::Prefix, 1, &[(42.0, 52.0), (40.0, 50.0)]),
+                suffix: affix_tier(Affix::Suffix, 2, &[(45.0, 55.0), (35.0, 45.0)]),
+            }),
+            ..advanced(None, None, &["+50 to Armour", "+41 to Evasion Rating"])
+        }]
+    );
+}
+
+#[test]
+fn the_tier_of_an_affix_has_no_range_when_its_values_are_fixed() {
+    let grenades = trade_lines(&["Grenade Skills have +1 Cooldown Use"]);
+    // As a prefix, one cooldown use only in its tier; as a suffix, one or two.
+    let prefix = line_tiers(1, &[(2.0, 2.0), (1.0, 1.0)]);
+    let suffix = line_tiers(1, &[(3.0, 4.0), (1.0, 2.0)]);
+    let found = found_either(0..1, [(Affix::Prefix, prefix), (Affix::Suffix, suffix)]);
+
+    assert_eq!(
+        written_again(&grenades, &[found]),
+        [Modifier {
+            doubt: Some(TierDoubt::EitherAffix {
+                prefix: affix_tier(Affix::Prefix, 2, &[]),
+                suffix: affix_tier(Affix::Suffix, 2, &[(1.0, 2.0)]),
+            }),
+            ..grenades[0].clone()
+        }]
+    );
+}
+
+#[test]
+fn the_tier_of_an_affix_has_the_ranges_written_on_the_values() {
+    let lines = trade_lines(&[
+        "15% reduced Rarity of Items found",
+        "12% chance for Skills to retain 40% of Glory on use",
+    ]);
+    // The rarity rolls negative values; the 40 of the glory is written by its string.
+    let prefix = tiers(
+        &[1, 1],
+        0,
+        &[&[(-19.0, -10.0), (10.0, 15.0)], &[(-9.0, -5.0), (5.0, 9.0)]],
+    );
+    let suffix = tiers(
+        &[1, 1],
+        1,
+        &[
+            &[(-39.0, -30.0), (14.0, 16.0)],
+            &[(-29.0, -14.0), (11.0, 13.0)],
+        ],
+    );
+    let found = found_either(0..2, [(Affix::Prefix, prefix), (Affix::Suffix, suffix)]);
+
+    // Without their sign, and none for the 40.
+    let written = written_again(&lines, &[found]);
+    assert_eq!(
+        written.first().and_then(|modifier| modifier.doubt.clone()),
+        Some(TierDoubt::EitherAffix {
+            prefix: affix_tier(Affix::Prefix, 1, &[(10.0, 19.0), (10.0, 15.0)]),
+            suffix: affix_tier(Affix::Suffix, 2, &[(14.0, 29.0), (11.0, 13.0)]),
+        })
+    );
+}
+
+#[test]
+fn the_tier_of_an_affix_hides_its_number_and_names_its_lord_as_its_tiers_tell() {
+    let grenades = trade_lines(&["Grenade Skills have +1 Cooldown Use"]);
+    // The only tier of the prefix of a lord, the second of two tiers of an ordinary suffix.
+    let of_a_lord = ModifierTiers {
+        lord: Some(Lord::Amanamu),
+        ..line_tiers(0, &[(1.0, 2.0)])
+    };
+    let ordinary = line_tiers(1, &[(3.0, 4.0), (1.0, 2.0)]);
+    let unwritten = ModifierTiers {
+        tier_unwritten: true,
+        ..ordinary.clone()
+    };
+    let doubt = |prefix: &ModifierTiers, suffix: &ModifierTiers| {
+        let affixes = [
+            (Affix::Prefix, prefix.clone()),
+            (Affix::Suffix, suffix.clone()),
+        ];
+        let written = written_again(&grenades, &[found_either(0..1, affixes)]);
+        written.first().and_then(|modifier| modifier.doubt.clone())
+    };
+    let only_tier = |affix, lord| AffixTier {
+        hides_number: true,
+        lord,
+        ..affix_tier(affix, 1, &[(1.0, 2.0)])
+    };
+    let second_tier = |affix, hides_number| AffixTier {
+        hides_number,
+        ..affix_tier(affix, 2, &[(1.0, 2.0)])
+    };
+
+    assert_eq!(
+        doubt(&of_a_lord, &ordinary),
+        Some(TierDoubt::EitherAffix {
+            prefix: only_tier(Affix::Prefix, Some(Lord::Amanamu)),
+            suffix: second_tier(Affix::Suffix, false),
+        })
+    );
+    // The other way round, and a tier the game doesn't write.
+    assert_eq!(
+        doubt(&unwritten, &of_a_lord),
+        Some(TierDoubt::EitherAffix {
+            prefix: second_tier(Affix::Prefix, true),
+            suffix: only_tier(Affix::Suffix, Some(Lord::Amanamu)),
+        })
+    );
+}
+
+#[test]
+fn modifiers_whose_two_affixes_cant_be_written_stay_as_they_were() {
+    let lines = trade_lines(&["+50 to Armour", "+41 to Evasion Rating"]);
+    let hybrid = || tiers(&[1, 1], 0, &[&[(42.0, 52.0), (40.0, 50.0)]]);
+    let beyond = || ModifierTiers {
+        found: 1,
+        ..hybrid()
+    };
+    let unwritten = |affixes: Vec<(Affix, ModifierTiers)>| {
+        let found = [FoundTiers {
+            modifiers: 0..2,
+            affixes,
+            added: None,
+        }];
+        assert_eq!(written_again(&lines, &found), lines, "{found:?}");
+    };
+
+    // Written again as they are, but for what each case changes.
+    let either = [found_either(
+        0..2,
+        [(Affix::Prefix, hybrid()), (Affix::Suffix, hybrid())],
+    )];
+    assert_ne!(written_again(&lines, &either), lines);
+    // The tier found as a prefix, then as a suffix, isn't among its tiers.
+    unwritten(vec![(Affix::Prefix, beyond()), (Affix::Suffix, hybrid())]);
+    unwritten(vec![(Affix::Prefix, hybrid()), (Affix::Suffix, beyond())]);
+    // The suffix first; an affix twice; a third affix.
+    unwritten(vec![(Affix::Suffix, hybrid()), (Affix::Prefix, hybrid())]);
+    unwritten(vec![(Affix::Prefix, hybrid()), (Affix::Prefix, hybrid())]);
+    unwritten(vec![(Affix::Suffix, hybrid()), (Affix::Suffix, hybrid())]);
+    unwritten(vec![
+        (Affix::Prefix, hybrid()),
+        (Affix::Suffix, hybrid()),
+        (Affix::Suffix, hybrid()),
+    ]);
 }
 
 #[test]
