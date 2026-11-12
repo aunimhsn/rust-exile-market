@@ -77,8 +77,9 @@ impl Held<'_> {
 impl<'a> ItemTables<'a> {
     /// Each modifier of the tables that has the lines of `copied`, in the order of the file:
     /// of its origin ([`Copied::may_be`]), its lines in any order, looked at once, at its first
-    /// table, with its tiers on the base whatever the level of the item. Whether one of these
-    /// tiers holds the copied values is left to the caller.
+    /// table, with its tiers on the base whatever the level of the item: none for a modifier
+    /// that doesn't roll on the base, which is given too. Whether one of these tiers holds the
+    /// copied values is left to the caller.
     pub(super) fn holding(&self, copied: &Copied<'_>) -> impl Iterator<Item = Held<'a>> {
         let tables = self.all.iter().enumerate();
         tables.filter_map(move |(index, table)| self.held(index, table, copied))
@@ -100,7 +101,8 @@ impl<'a> ItemTables<'a> {
     }
 
     /// The modifier of `table`, the table of `index`; none unless `table` is of the origin of
-    /// `copied`, has its lines, is the first table of its modifier and has tiers on the base.
+    /// `copied`, has its lines, is the first table of its modifier, and the tiers of the
+    /// modifier on the base have a range for each copied value ([`Self::tiers_of`]).
     #[expect(
         clippy::inline_always,
         reason = "run for each table at each lookup: left to the compiler, which doesn't inline \
