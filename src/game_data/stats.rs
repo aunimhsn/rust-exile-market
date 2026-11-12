@@ -258,15 +258,18 @@ impl Stats {
     /// modifier tables write them, the first the most likely: an English stat its own; a stat
     /// of another language its own when an English stat has it with the same game id, else
     /// that of the English stat of its game id; then those of the English stats that share an
-    /// id of `group` of the trade site with it, which searches them as one, a line its
-    /// language writes the same. Four French stats on 2026-10-31
-    /// (`the_french_stats_with_other_english_templates`): `#% to all Maximum Resistances` of
-    /// the waystones (`#% maximum Player Resistances` in English); `#% increased Rarity of
-    /// Items found in Map` of the tablets, which the English data reads as the rarity of an
-    /// item (`#% increased Rarity of Items found`); the mana recovery of the flasks, also `#%
-    /// increased Mana Recovery from Flasks` of the jewels; the bleeding, also `#% chance to
+    /// explicit id of the trade site with it, which searches them as one, a line its language
+    /// writes the same. The explicit ids whatever the game marks the line: the tables know no
+    /// group of the trade site, and a stat has ids only in the groups the trade site lists it
+    /// in (none of these French stats has a crafted one on 2026-11-12: read in the group of its
+    /// mark, a crafted line would lose the template of its table). Four French stats on
+    /// 2026-10-31 (`the_french_stats_with_other_english_templates`): `#% to all Maximum
+    /// Resistances` of the waystones (`#% maximum Player Resistances` in English); `#% increased
+    /// Rarity of Items found in Map` of the tablets, which the English data reads as the rarity
+    /// of an item (`#% increased Rarity of Items found`); the mana recovery of the flasks, also
+    /// `#% increased Mana Recovery from Flasks` of the jewels; the bleeding, also `#% chance to
     /// cause Bleeding on Hit`.
-    pub fn english_references(stat: &Stat, group: TradeGroup) -> Vec<&str> {
+    pub fn english_references(stat: &Stat) -> Vec<&str> {
         let english = Self::of(Language::English);
         if english
             .list
@@ -291,11 +294,14 @@ impl Stats {
                 .find(|other| stat.id.is_some() && other.id == stat.id)
                 .map(|other| other.reference.as_str())
         };
-        let ids = stat.trade_ids(group);
+        let ids = stat.trade_ids(TradeGroup::Explicit);
         let shared = english
             .list
             .iter()
-            .filter(|other| other.trade_ids(group).iter().any(|id| ids.contains(id)))
+            .filter(|other| {
+                let other_ids = other.trade_ids(TradeGroup::Explicit);
+                other_ids.iter().any(|id| ids.contains(id))
+            })
             .map(|other| other.reference.as_str());
         let mut references: Vec<&str> = Vec::new();
         for reference in own.into_iter().chain(shared) {
@@ -404,7 +410,7 @@ mod tests {
             .collect();
         let mut others = Vec::new();
         for stat in Stats::of(Language::French).all() {
-            let references = Stats::english_references(stat, TradeGroup::Explicit);
+            let references = Stats::english_references(stat);
             assert!(
                 references
                     .iter()
@@ -449,10 +455,7 @@ mod tests {
         let life = Stats::of(Language::English)
             .by_id("base_maximum_life")
             .expect("a stat");
-        assert_eq!(
-            Stats::english_references(life, TradeGroup::Explicit),
-            ["# to maximum Life"]
-        );
+        assert_eq!(Stats::english_references(life), ["# to maximum Life"]);
     }
 
     /// When two stats write the same string, each with an id in the group of the line, the

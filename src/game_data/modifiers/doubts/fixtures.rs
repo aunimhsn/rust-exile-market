@@ -2,11 +2,11 @@
 //! the walk they are written with.
 
 use crate::game_data::modifiers::best_reading::Room;
-use crate::game_data::modifiers::copied::CopiedLine;
 use crate::game_data::modifiers::doubts::comparison::BestShown;
 use crate::game_data::modifiers::doubts::placements::{Directions, Placement};
 use crate::game_data::modifiers::doubts::walk::Ground;
 use crate::game_data::modifiers::doubts::{Line, MAX_STEPS, Shown};
+use crate::game_data::modifiers::fixtures::copied_line;
 use crate::item::{Affix, ModifierOrigin, Range};
 
 /// A line of the modifier `modifier` of the item, of `template`, its values at `values` among
@@ -20,11 +20,7 @@ pub(super) fn line(
     Line {
         modifier,
         origin,
-        copied: CopiedLine {
-            templates: vec![template],
-            values: Vec::new(),
-            written: None,
-        },
+        copied: copied_line(template, &[]),
         values,
         read_by_best: true,
     }

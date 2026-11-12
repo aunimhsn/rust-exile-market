@@ -4,7 +4,7 @@
 use super::Tier;
 use super::tables::{Table, TableLine};
 use crate::game_data::lines::{LineMatch, StatSource};
-use crate::game_data::stats::{Stats, TradeGroup};
+use crate::game_data::stats::Stats;
 use crate::item::{Modifier, ModifierKind, ModifierOrigin, Range};
 
 /// How far a copied value can be from a tier: the game rounds the values it scales, e.g. a
@@ -12,6 +12,7 @@ use crate::item::{Modifier, ModifierKind, ModifierOrigin, Range};
 pub(super) const ROUNDING: f64 = 0.051;
 
 /// The lines of a copied modifier, and the ranges of its tier when the advanced copy gave them.
+#[cfg_attr(test, derive(Debug, PartialEq))]
 pub(super) struct Copied<'a> {
     pub(super) lines: Vec<CopiedLine<'a>>,
     /// The ranges the advanced copy gave for each value of the lines, in their order, as the
@@ -32,7 +33,7 @@ impl<'a> Copied<'a> {
     /// which has no template of the tables.
     pub(super) fn of(modifier: &Modifier, matches: &[LineMatch<'a>]) -> Option<Self> {
         let mut lines = Vec::new();
-        let mut ranges = Some(Vec::new());
+        let mut ranges = Vec::new();
         for line_match in matches {
             let stat = line_match.stat.as_ref()?;
             // A line the trade site only knows has no template of Exiled Exchange 2.
@@ -40,7 +41,7 @@ impl<'a> Copied<'a> {
                 return None;
             }
             lines.push(CopiedLine {
-                templates: Stats::english_references(stat.stat, TradeGroup::of(modifier)),
+                templates: Stats::english_references(stat.stat),
                 values: stat.values.clone(),
                 written: stat.matcher_value.filter(|_| stat.values.is_empty()),
             });
@@ -49,20 +50,14 @@ impl<'a> Copied<'a> {
                 .get(line_match.lines.clone())?
                 .iter()
                 .flat_map(|line| &line.rolls);
-            for range in stat.counted(rolls).map(|roll| roll.range) {
-                match (&mut ranges, range) {
-                    (Some(ranges), Some(range)) => ranges.push(range),
-                    _ => ranges = None,
-                }
-            }
+            ranges.extend(stat.counted(rolls).filter_map(|roll| roll.range));
         }
-        // The advanced copy writes no range for a line without number (`Loads an additional
-        // bolt`): the modifier is then found by its values only, as it is when a range is
-        // missing.
+        // A range for each value, or none: the modifier is then found by its values only. A
+        // value without its range leaves fewer ranges than values, and so does a line without
+        // number (`Loads an additional bolt`), for which the advanced copy writes none: it
+        // counts the value its string gives.
         let count: usize = lines.iter().map(CopiedLine::count).sum();
-        let ranges = ranges.filter(|ranges| {
-            lines.iter().all(|line| line.written.is_none()) && ranges.len() == count
-        });
+        let ranges = (ranges.len() == count).then_some(ranges);
         Some(Self {
             lines,
             ranges,
@@ -128,8 +123,10 @@ impl<'a> Copied<'a> {
         values
     }
 
-    /// How well `tier` holds the copied `values`; none when its ranges aren't those the advanced
-    /// copy gave, or when it doesn't hold them and the copy gave no range.
+    /// How well `tier` holds the copied `values`; none when it hasn't a range for each value,
+    /// when its ranges aren't those the advanced copy gave (those of a tier across zero never
+    /// are: the copy writes a range without its sign), or when it doesn't hold the values and
+    /// the copy gave no range.
     pub(super) fn fit(&self, values: &[f64], tier: &Tier) -> Option<Fit> {
         if values.len() != tier.ranges.len() {
             return None;
@@ -163,6 +160,7 @@ pub(super) enum CopiedTier {
 
 /// A copied line of a modifier, the lines of a stat written on several lines counting as one.
 #[derive(Clone)]
+#[cfg_attr(test, derive(Debug, PartialEq))]
 pub(super) struct CopiedLine<'a> {
     /// The English templates of its stat ([`Stats::english_references`]): one, but for a line
     /// of another language that is the line of two English stats.
@@ -219,3 +217,9 @@ pub(super) fn holds(values: &[f64], ranges: &[Range]) -> Option<Fit> {
         None
     }
 }
+
+#[cfg(test)]
+mod tests;
+
+#[cfg(test)]
+mod game_tests;

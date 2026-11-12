@@ -4,8 +4,10 @@
 
 use super::*;
 use crate::game_data::bases::Domain;
-use crate::game_data::modifiers::copied::{CopiedLine, CopiedTier};
-use crate::game_data::modifiers::fixtures::{ENERGY_SHIELD, LIFE, MANA, equipment, range, table};
+use crate::game_data::modifiers::fixtures::{
+    ENERGY_SHIELD, LIFE, MANA, copied, copied_line, copied_line_without_number, copied_lines,
+    equipment, table, tier,
+};
 use crate::game_data::modifiers::tables::{TableLord, TableSource};
 use crate::item::{Currency, ModifierOrigin};
 
@@ -19,33 +21,6 @@ fn on(tag: &str, table: Table) -> Table {
     Table {
         spawn: vec![(tag.to_owned(), 1)],
         ..table
-    }
-}
-
-/// A copied modifier of `lines`, the template and the value of each, without header: no
-/// range, no tier, no origin.
-fn copied(lines: &[(&'static str, f64)]) -> Copied<'static> {
-    Copied {
-        lines: lines
-            .iter()
-            .map(|&(template, value)| CopiedLine {
-                templates: vec![template],
-                values: vec![value],
-                written: None,
-            })
-            .collect(),
-        ranges: None,
-        tier: CopiedTier::Unknown,
-        origin: None,
-    }
-}
-
-/// The tier `number` of `level` over `ranges`.
-fn tier(number: u32, level: u32, ranges: &[(f64, f64)]) -> Tier {
-    Tier {
-        number,
-        level,
-        ranges: ranges.iter().map(|&(min, max)| range(min, max)).collect(),
     }
 }
 
@@ -193,14 +168,7 @@ fn a_tier_without_a_range_for_each_value_of_the_copied_lines_gives_no_tiers() {
 
     assert!(tiers(&[0], &copied(&[(LIFE, 5.0)])).is_some());
     // A copied line of two values, the tiers with one range for it.
-    let two_values = Copied {
-        lines: vec![CopiedLine {
-            templates: vec![LIFE],
-            values: vec![3.0, 9.0],
-            written: None,
-        }],
-        ..copied(&[])
-    };
+    let two_values = copied_lines(vec![copied_line(LIFE, &[3.0, 9.0])]);
     assert_eq!(tiers(&[0], &two_values), None);
     // A second copied line, the tiers without ranges for it.
     let two_lines = copied(&[(LIFE, 5.0), (ENERGY_SHIELD, 15.0)]);
@@ -405,9 +373,10 @@ fn a_line_without_number_copied_in_another_order_is_divided_as_its_own_line_show
         item_level: None,
     };
     // The life copied first, then the line whose string gives 2000 milliseconds.
-    let mut copied = copied(&[(LIFE, 25.0), (RAGE, 0.0)]);
-    copied.lines[1].values = Vec::new();
-    copied.lines[1].written = Some(2000.0);
+    let copied = copied_lines(vec![
+        copied_line(LIFE, &[25.0]),
+        copied_line_without_number(RAGE, 2000.0),
+    ]);
 
     let values: Vec<Vec<f64>> = tables.holding(&copied).map(|held| held.values).collect();
 

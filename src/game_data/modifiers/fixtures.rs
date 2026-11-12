@@ -5,11 +5,12 @@
 
 use crate::game_data::bases::{BaseSpawn, Domain};
 use crate::game_data::lines::modifier_stats;
-use crate::game_data::modifiers::ModifierTiers;
+use crate::game_data::modifiers::copied::{Copied, CopiedLine, CopiedTier};
 use crate::game_data::modifiers::item_tables::ItemBase;
 use crate::game_data::modifiers::lookup::modifier_tiers;
 use crate::game_data::modifiers::tables::{Table, read};
 use crate::game_data::modifiers::trade_tiers::{AffixLimits, FoundTiers, TradeItem};
+use crate::game_data::modifiers::{ModifierTiers, Tier};
 use crate::item::{
     Affix, CopiedItem, Item, ItemState, Modifier, ModifierKind, ModifierOrigin, PartTier, Range,
     StatLine,
@@ -82,9 +83,58 @@ pub(super) fn part(affix: Affix, tiers: &[u32], ranges: &[(f64, f64)]) -> PartTi
     }
 }
 
-/// The line of the file of a table of one or two lines that rolls on the helmets: its type,
-/// its affix, the template of each line, and for each tier its level and the range of each
-/// line.
+/// The tier `number` of `level` over `ranges`.
+pub(super) fn tier(number: u32, level: u32, ranges: &[(f64, f64)]) -> Tier {
+    Tier {
+        number,
+        level,
+        ranges: ranges.iter().map(|&(min, max)| range(min, max)).collect(),
+    }
+}
+
+/// A copied line of `template` with `values`, one for each `#` of its string.
+pub(super) fn copied_line(template: &'static str, values: &[f64]) -> CopiedLine<'static> {
+    CopiedLine {
+        templates: vec![template],
+        values: values.to_vec(),
+        written: None,
+    }
+}
+
+/// A copied line of `template` without number, whose string gives `value`.
+pub(super) fn copied_line_without_number(
+    template: &'static str,
+    value: f64,
+) -> CopiedLine<'static> {
+    CopiedLine {
+        templates: vec![template],
+        values: Vec::new(),
+        written: Some(value),
+    }
+}
+
+/// A copied modifier of `lines`, without header: no range, no tier, no origin.
+pub(super) fn copied_lines(lines: Vec<CopiedLine<'static>>) -> Copied<'static> {
+    Copied {
+        lines,
+        ranges: None,
+        tier: CopiedTier::Unknown,
+        origin: None,
+    }
+}
+
+/// A copied modifier of `lines`, the template and the value of each, without header.
+pub(super) fn copied(lines: &[(&'static str, f64)]) -> Copied<'static> {
+    copied_lines(
+        lines
+            .iter()
+            .map(|&(template, value)| copied_line(template, &[value]))
+            .collect(),
+    )
+}
+
+/// The line of the file of a table that rolls on the helmets: its type, its affix, the
+/// template of each of its lines, and for each tier its level and the range of each line.
 pub(super) fn table_json(
     kind: &str,
     affix: &str,

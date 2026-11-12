@@ -4,8 +4,9 @@
 use super::*;
 use crate::game_data::bases::BaseSpawn;
 use crate::game_data::lines::modifier_stats;
-use crate::game_data::modifiers::copied::CopiedLine;
-use crate::game_data::modifiers::fixtures::{equipment, modifier, range};
+use crate::game_data::modifiers::fixtures::{
+    copied, copied_line_without_number, copied_lines, equipment, modifier, range,
+};
 use crate::game_data::modifiers::tables::read;
 use crate::item::{Currency, ModifierOrigin};
 use crate::language::Language;
@@ -21,20 +22,11 @@ fn any_level<'a>(tables: &'a [Table], base: &'a BaseSpawn) -> ItemTables<'a> {
 
 #[test]
 fn the_value_of_a_line_without_number_is_divided_as_its_table_shows_it() {
+    const RAGE: &str = "Inherent Rage loss starts 1 second later";
     let tables = read(concat!(
         r#"{"type": "Rage", "affix": "suffix", "lines": [{"template": "Inherent Rage loss starts 1 second later", "divisor": 1000}], "#,
         r#""spawn": [["weapon", 1]], "tiers": [{"level": 1, "ranges": [[[1, 1]]]}, {"level": 50, "ranges": [[[2, 3]]]}]}"#
     ));
-    let copied = |values: Vec<f64>, written| Copied {
-        lines: vec![CopiedLine {
-            templates: vec!["Inherent Rage loss starts 1 second later"],
-            values,
-            written,
-        }],
-        ranges: None,
-        tier: CopiedTier::Unknown,
-        origin: None,
-    };
     let number = |copied| {
         find(
             &any_level(&tables, &equipment(&["weapon"])),
@@ -46,8 +38,9 @@ fn the_value_of_a_line_without_number_is_divided_as_its_table_shows_it() {
     };
 
     // `Inherent Rage loss starts 1 second later` gives the 1000 milliseconds of the stat.
-    assert_eq!(number(copied(Vec::new(), Some(1000.0))), Some(2));
-    assert_eq!(number(copied(vec![2.5], None)), Some(1));
+    let one_second = copied_lines(vec![copied_line_without_number(RAGE, 1000.0)]);
+    assert_eq!(number(one_second), Some(2));
+    assert_eq!(number(copied(&[(RAGE, 2.5)])), Some(1));
 }
 
 #[test]
@@ -61,15 +54,11 @@ fn of_two_tiers_as_good_the_one_the_advanced_copy_wrote_is_taken() {
         r#""spawn": [["helmet", 1]], "tiers": [{"level": 1, "ranges": [[[10, 20]]]}, {"level": 30, "ranges": [[[21, 30]]]}, {"level": 60, "ranges": [[[31, 40]]]}]}"#
     ));
     let copied = |tier: Option<u32>| Copied {
-        lines: vec![CopiedLine {
-            templates: vec!["# to maximum Life"],
-            values: vec![15.0],
-            written: None,
-        }],
         ranges: Some(vec![range(10.0, 20.0)]),
         tier: tier.map_or(CopiedTier::Unknown, CopiedTier::Written),
         // A desecrated line: an ordinary modifier, or a lord's.
         origin: Some(ModifierOrigin::Desecrated),
+        ..copied(&[("# to maximum Life", 15.0)])
     };
     let found = |tier| {
         find(
@@ -103,23 +92,7 @@ fn two_tables_with_the_same_lines_in_another_order_are_two_modifiers() {
         ]
         .join("\n"),
     );
-    let copied = Copied {
-        lines: vec![
-            CopiedLine {
-                templates: vec!["B #"],
-                values: vec![15.0],
-                written: None,
-            },
-            CopiedLine {
-                templates: vec!["A #"],
-                values: vec![3.0],
-                written: None,
-            },
-        ],
-        ranges: None,
-        tier: CopiedTier::Unknown,
-        origin: None,
-    };
+    let copied = copied(&[("B #", 15.0), ("A #", 3.0)]);
 
     let tiers = find(
         &any_level(&tables, &equipment(&["weapon"])),
@@ -145,16 +118,7 @@ fn a_value_in_several_tiers_takes_the_worst_without_the_ranges_of_the_copy() {
         r##"{"type": "Life", "affix": "prefix", "lines": [{"template": "# to maximum Life"}], "##,
         r#""spawn": [["helmet", 1]], "tiers": [{"level": 1, "ranges": [[[1, 10]]]}, {"level": 50, "ranges": [[[5, 15]]]}]}"#
     ));
-    let copied = Copied {
-        lines: vec![CopiedLine {
-            templates: vec!["# to maximum Life"],
-            values: vec![7.0],
-            written: None,
-        }],
-        ranges: None,
-        tier: CopiedTier::Unknown,
-        origin: None,
-    };
+    let copied = copied(&[("# to maximum Life", 7.0)]);
     let number = |tie| {
         find(
             &any_level(&tables, &equipment(&["helmet"])),
@@ -176,16 +140,7 @@ fn only_the_worst_tie_is_bound_by_the_level_of_the_item() {
         r##"{"type": "Life", "affix": "prefix", "lines": [{"template": "# to maximum Life"}], "##,
         r#""spawn": [["helmet", 1]], "tiers": [{"level": 1, "ranges": [[[1, 10]]]}, {"level": 50, "ranges": [[[5, 15]]]}]}"#
     ));
-    let copied = Copied {
-        lines: vec![CopiedLine {
-            templates: vec!["# to maximum Life"],
-            values: vec![12.0],
-            written: None,
-        }],
-        ranges: None,
-        tier: CopiedTier::Unknown,
-        origin: None,
-    };
+    let copied = copied(&[("# to maximum Life", 12.0)]);
     // The number of the tier found, then the number and the level of every tier.
     let found = |tie, item_level| {
         let tables = ItemTables {

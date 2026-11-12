@@ -2,8 +2,7 @@
 //! hand: what they do whatever the patch of the game.
 
 use super::*;
-use crate::game_data::modifiers::copied::CopiedLine;
-use crate::game_data::modifiers::fixtures::{equipment, part, range};
+use crate::game_data::modifiers::fixtures::{copied, equipment, part, range, tier};
 use crate::game_data::modifiers::tables::read;
 
 #[test]
@@ -15,23 +14,6 @@ fn the_hybrid_of_a_split_is_the_first_table_whose_tiers_of_its_part_the_item_lev
             r##"{{"type": "{kind}", "affix": "prefix", "lines": [{{"template": "#% increased Armour"}}, {{"template": "# to Stun Threshold"}}], "spawn": [["shield", 1]], "tiers": [{{"level": {level}, "ranges": [[[20, {armour}]], [[{stun}, 39]]]}}]}}"##
         )
     };
-    let copied = || Copied {
-        lines: vec![
-            CopiedLine {
-                templates: vec!["#% increased Armour"],
-                values: vec![25.0],
-                written: None,
-            },
-            CopiedLine {
-                templates: vec!["# to Stun Threshold"],
-                values: vec![100.0],
-                written: None,
-            },
-        ],
-        ranges: None,
-        tier: CopiedTier::Unknown,
-        origin: None,
-    };
     let whole = part(Affix::Prefix, &[1], &[(30.0, 39.0)]);
     // The range of the Armour of the tier found, which tells the table.
     let armour = |tables: &[String], item_level| {
@@ -40,7 +22,11 @@ fn the_hybrid_of_a_split_is_the_first_table_whose_tiers_of_its_part_the_item_lev
             base: &equipment(&["shield"]),
             item_level,
         };
-        hybrid_tiers(&tables, copied(), (1, &whole))
+        let copied = copied(&[
+            ("#% increased Armour", 25.0),
+            ("# to Stun Threshold", 100.0),
+        ]);
+        hybrid_tiers(&tables, copied, (1, &whole))
             .and_then(|tiers| tiers.tier()?.ranges.first().copied())
     };
     let high = [table("First", 80, 35, 30), table("Second", 1, 30, 30)];
@@ -73,23 +59,10 @@ fn two_hybrids_of_the_same_lines_that_split_a_line_are_two_ways() {
     };
     let pure = r##"{"type": "Stun", "affix": "suffix", "lines": [{"template": "# to Stun Threshold"}], "spawn": [["shield", 1]], "tiers": [{"level": 1, "ranges": [[[50, 70]]]}]}"##;
     let tables = read(&[hybrid("First", 30), hybrid("Second", 40), pure.to_owned()].join("\n"));
-    let copied = Copied {
-        lines: vec![
-            CopiedLine {
-                templates: vec!["#% increased Armour"],
-                values: vec![25.0],
-                written: None,
-            },
-            CopiedLine {
-                templates: vec!["# to Stun Threshold"],
-                values: vec![100.0],
-                written: None,
-            },
-        ],
-        ranges: None,
-        tier: CopiedTier::Unknown,
-        origin: None,
-    };
+    let copied = copied(&[
+        ("#% increased Armour", 25.0),
+        ("# to Stun Threshold", 100.0),
+    ]);
 
     let tables = ItemTables {
         all: &tables,
@@ -107,14 +80,9 @@ fn two_hybrids_of_the_same_lines_that_split_a_line_are_two_ways() {
 
 #[test]
 fn a_split_holds_its_value_give_or_take_the_rounding() {
-    let tier = |ranges: &[(f64, f64)]| Tier {
-        number: 1,
-        level: 1,
-        ranges: ranges.iter().map(|&(min, max)| range(min, max)).collect(),
-    };
     // A hybrid of two values, the second one summed with a pure 1–2.
-    let whole = tier(&[(10.0, 20.0), (4.41, 5.0)]);
-    let added = tier(&[(1.0, 2.0)]);
+    let whole = tier(1, 1, &[(10.0, 20.0), (4.41, 5.0)]);
+    let added = tier(1, 1, &[(1.0, 2.0)]);
     let fit = |summed| split_fit(&[15.0, summed], &whole, &added, &(1..2));
 
     assert_eq!(fit(7.0), Some(Fit::Within));
@@ -212,23 +180,6 @@ fn the_tiers_of_the_hybrid_of_a_split_are_those_of_its_part() {
         r##"{"type": "ArmourAndStun", "affix": "prefix", "lines": [{"template": "#% increased Armour"}, {"template": "# to Stun Threshold"}], "##,
         r#""spawn": [["shield", 1]], "tiers": [{"level": 1, "ranges": [[[10, 20]], [[20, 29]]]}, {"level": 50, "ranges": [[[20, 29]], [[30, 39]]]}]}"#
     ));
-    let copied = |armour: f64| Copied {
-        lines: vec![
-            CopiedLine {
-                templates: vec!["#% increased Armour"],
-                values: vec![armour],
-                written: None,
-            },
-            CopiedLine {
-                templates: vec!["# to Stun Threshold"],
-                values: vec![100.0],
-                written: None,
-            },
-        ],
-        ranges: None,
-        tier: CopiedTier::Unknown,
-        origin: None,
-    };
     let tables = ItemTables {
         all: &tables,
         base: &equipment(&["shield"]),
@@ -236,7 +187,11 @@ fn the_tiers_of_the_hybrid_of_a_split_are_those_of_its_part() {
     };
     // The tier and its neighbour found, by their numbers.
     let tiers = |armour, whole: PartTier| {
-        hybrid_tiers(&tables, copied(armour), (1, &whole)).map(|tiers| {
+        let copied = copied(&[
+            ("#% increased Armour", armour),
+            ("# to Stun Threshold", 100.0),
+        ]);
+        hybrid_tiers(&tables, copied, (1, &whole)).map(|tiers| {
             let number = |index: usize| tiers.tiers.get(index).map(|tier| tier.number);
             (number(tiers.found), tiers.neighbour.and_then(number))
         })
