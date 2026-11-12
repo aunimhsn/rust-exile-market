@@ -8,7 +8,7 @@ use crate::game_data::lines::modifier_stats;
 use crate::item::{Affix, AffixTier, Modifier, ModifierKind, PartTier, Range, TierDoubt};
 use crate::language::Language;
 
-/// The `modifiers` of `item`, rare or magic, copied from the in-game trade, read again with
+/// The `modifiers` of `item`, rare or magic, copied from the in-game trade, written again with
 /// the tiers found from their values ([`trade_tiers`]), as the advanced copy writes them: the
 /// lines of a hybrid made one modifier, a prefix or a suffix, its tier,
 /// and on each value its stat counts the range of that tier. A modifier that can be a prefix
@@ -22,10 +22,11 @@ pub fn with_trade_tiers(item: &TradeItem<'_>, modifiers: &[Modifier]) -> Vec<Mod
     with_found_tiers(item.base.language, item.base.base_type, modifiers, &found)
 }
 
-/// `modifiers`, their lines written in `language` on an item of `base_type`, written again
-/// with the tiers `found` from their values, as [`with_trade_tiers`] tells: the modifiers of
-/// each of `found` made one modifier in their place; a modifier none of `found` starts at,
-/// or whose tiers can't be written, stays as it was.
+/// `modifiers`, their lines written in `language`, written again with the tiers `found` from
+/// their values, as [`with_trade_tiers`] tells: the modifiers of each of `found` made one
+/// modifier in their place; a modifier none of `found` starts at, or whose tiers can't be
+/// written, stays as it was. `base_type` only names the item in the log of a split that can't
+/// be written.
 fn with_found_tiers(
     language: Language,
     base_type: &str,
@@ -200,7 +201,8 @@ impl Run<'_> {
         ranges
     }
 
-    /// Its modifiers made one, with the lines of each in their order.
+    /// Its modifiers made one, with the lines of each in their order, under the header of the
+    /// first: the modifiers of a run are of one origin ([`super::candidates`]).
     fn joined(self) -> Option<Modifier> {
         Some(Modifier {
             lines: self
