@@ -174,7 +174,7 @@ fn a_run_has_as_many_lines_as_the_longest_hybrid_of_the_tables() {
 
 #[test]
 fn a_run_is_of_lines_of_one_origin() {
-    use ModifierOrigin::Fractured;
+    use ModifierOrigin::{Crafted, Desecrated, Fractured};
     // A run looks at three modifiers, past the one of another origin.
     let mut tables = shield_life_and_hybrid();
     tables.push(triple());
@@ -211,6 +211,14 @@ fn a_run_is_of_lines_of_one_origin() {
     assert_eq!(
         runs(&[fractured_shield(), life(), fractured_life()]),
         [(0..1, true), (1..2, false), (2..3, true)]
+    );
+    // Nor are two marked lines of two origins, neither fractured.
+    assert_eq!(
+        runs(&[
+            Some(marked(Crafted, ENERGY_SHIELD, 15.0)),
+            Some(marked(Desecrated, LIFE, 25.0)),
+        ]),
+        [(0..1, false), (1..2, false)]
     );
 }
 
@@ -369,7 +377,8 @@ fn a_line_of_a_run_that_adds_up_two_modifiers_is_named_among_the_modifiers_of_th
 }
 
 #[test]
-fn a_line_of_a_modifier_of_several_lines_is_never_split() {
+fn only_the_line_of_a_modifier_of_one_line_is_split() {
+    use Affix::Prefix;
     let tables = [
         table(
             "Hybrid",
@@ -389,42 +398,62 @@ fn a_line_of_a_modifier_of_several_lines_is_never_split() {
     // The life, 60, is 20–29 of the hybrid and 30–39 of the life alone.
     assert_eq!(
         read_in(&tables, &as_two_modifiers),
-        [(0..2, vec![(Affix::Prefix, 1)], Some((1, Affix::Prefix, 1)))]
+        [(0..2, vec![(Prefix, 1)], Some((1, Prefix, 1)))]
     );
     // The game writes the line that adds up two modifiers alone: not one of these lines.
     assert_eq!(read_in(&tables, &as_one_modifier), []);
+
+    // In one run, a modifier of two lines then one of one line, the mana: 75 is 30–39 of the
+    // modifier of three lines and 40–49 of the mana alone.
+    let tables = [
+        triple(),
+        table("Mana", "prefix", &[MANA], &[(1, &[(40, 49)])]),
+    ];
+    let two_lines_then_one = [
+        Some(copied(&[(ENERGY_SHIELD, 15.0), (LIFE, 25.0)])),
+        Some(one_line(MANA, 75.0)),
+    ];
+    assert_eq!(
+        read_in(&tables, &two_lines_then_one),
+        [(0..2, vec![(Prefix, 1)], Some((1, Prefix, 1)))]
+    );
 }
 
 #[test]
 fn a_candidate_tells_the_affixes_each_of_its_modifiers_can_be() {
     use Affix::{Prefix, Suffix};
     let tables = rarity_as_both_affixes();
-    // The affixes of the modifier of every line, those of each modifier, and how many it makes.
-    let sets = |rarity| -> Vec<(AffixSet, Vec<AffixSet>, usize)> {
+    // The affixes of the modifier of every line, then those of each modifier.
+    let sets = |rarity| -> Vec<(AffixSet, Vec<AffixSet>)> {
         candidates_in(&tables, None, &[Some(one_line(RARITY, rarity))])
             .iter()
-            .map(|candidate| {
-                (
-                    candidate.set(),
-                    candidate.sets().collect(),
-                    candidate.count(),
-                )
-            })
+            .map(|candidate| (candidate.set(), candidate.sets().collect()))
             .collect()
     };
 
     // A prefix or a suffix.
-    assert_eq!(sets(12.0), [(AffixSet::Both, vec![AffixSet::Both], 1)]);
+    assert_eq!(sets(12.0), [(AffixSet::Both, vec![AffixSet::Both])]);
     // A suffix; or a prefix, with a suffix added.
     assert_eq!(
         sets(22.0),
         [
-            (AffixSet::Only(Suffix), vec![AffixSet::Only(Suffix)], 1),
+            (AffixSet::Only(Suffix), vec![AffixSet::Only(Suffix)]),
             (
                 AffixSet::Only(Prefix),
-                vec![AffixSet::Only(Prefix), AffixSet::Only(Suffix)],
-                2
+                vec![AffixSet::Only(Prefix), AffixSet::Only(Suffix)]
             ),
         ]
     );
+}
+
+#[test]
+fn a_candidate_makes_one_modifier_or_two_when_its_line_adds_up_two() {
+    let tables = rarity_as_both_affixes();
+    let counts: Vec<usize> = candidates_in(&tables, None, &[Some(one_line(RARITY, 22.0))])
+        .iter()
+        .map(Candidate::count)
+        .collect();
+
+    // 22 is a suffix, or a prefix and a suffix.
+    assert_eq!(counts, [1, 2]);
 }

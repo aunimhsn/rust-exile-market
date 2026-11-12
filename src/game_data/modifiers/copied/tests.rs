@@ -123,6 +123,16 @@ fn a_number_the_string_of_a_stat_writes_is_no_value_and_takes_no_range() {
             ..copied(&[("#% chance for Skills to retain 40% of Glory on use", 12.0)])
         })
     );
+    // Nor is a range next to such a number the range of a value (a case the game isn't known
+    // to write): the second of the rage is written by its string, a line without number.
+    let rage = advanced(1, &["Inherent Rage loss starts 1(1-3) second later"]);
+    assert_eq!(
+        copied_of(&rage),
+        Some(Copied {
+            tier: CopiedTier::Written(1),
+            ..copied_lines(vec![copied_line_without_number(RAGE, 1000.0)])
+        })
+    );
 }
 
 #[test]
@@ -239,7 +249,31 @@ fn a_line_without_a_stat_of_the_game_data_gives_no_copied_modifier() {
 }
 
 #[test]
-fn the_tier_and_the_origin_are_those_the_header_of_the_modifier_writes() {
+fn the_tier_is_written_or_not_by_a_header_and_unknown_without_header() {
+    let life = &["+25 to maximum Life"];
+    let read = |tier| {
+        Some(Copied {
+            tier,
+            ..copied(&[(LIFE, 25.0)])
+        })
+    };
+    let third = Modifier {
+        tier: Some(3),
+        ..modifier(Some(Affix::Prefix), life)
+    };
+
+    assert_eq!(copied_of(&third), read(CopiedTier::Written(3)));
+    // A header without tier, as the one of an essence.
+    assert_eq!(
+        copied_of(&modifier(Some(Affix::Suffix), life)),
+        read(CopiedTier::Unwritten)
+    );
+    // No header: a line of the in-game trade.
+    assert_eq!(copied_of(&modifier(None, life)), read(CopiedTier::Unknown));
+}
+
+#[test]
+fn the_origin_is_the_one_the_game_marks() {
     let life = &["+25 to maximum Life"];
     let read = |tier, origin| {
         Some(Copied {
@@ -248,29 +282,15 @@ fn the_tier_and_the_origin_are_those_the_header_of_the_modifier_writes() {
             ..copied(&[(LIFE, 25.0)])
         })
     };
-    let third = Modifier {
-        tier: Some(3),
-        ..modifier(Some(Affix::Prefix), life)
-    };
     let fractured = Modifier {
         origin: Some(ModifierOrigin::Fractured),
         ..modifier(None, life)
     };
 
-    assert_eq!(copied_of(&third), read(CopiedTier::Written(3), None));
-    // A header without tier, as the one of an essence.
-    assert_eq!(
-        copied_of(&modifier(Some(Affix::Suffix), life)),
-        read(CopiedTier::Unwritten, None)
-    );
+    // In the header of an advanced copy, or by the marker of a line of the in-game trade.
     assert_eq!(
         copied_of(&desecrated(Affix::Prefix, life)),
         read(CopiedTier::Unwritten, Some(ModifierOrigin::Desecrated))
-    );
-    // No header: a line of the in-game trade, with its marker or without.
-    assert_eq!(
-        copied_of(&modifier(None, life)),
-        read(CopiedTier::Unknown, None)
     );
     assert_eq!(
         copied_of(&fractured),
@@ -278,18 +298,27 @@ fn the_tier_and_the_origin_are_those_the_header_of_the_modifier_writes() {
     );
 }
 
-#[test]
-fn a_line_counts_its_values_or_the_one_its_string_writes() {
-    let lines = copied_lines(vec![
+/// Lines of two values, of the one its string writes, of none and of one.
+fn lines_of_each_count() -> Copied<'static> {
+    copied_lines(vec![
         copied_line(LIGHTNING, &[10.0, 273.0]),
         copied_line_without_number(BOLT, 1.0),
         // A line without number whose string gives no value.
         copied_line("Trigger Lightning Bolt Skill on Critical Hit", &[]),
         copied_line(LIFE, &[25.0]),
-    ]);
+    ])
+}
+
+#[test]
+fn a_line_counts_its_values_or_the_one_its_string_writes() {
+    assert_eq!(lines_of_each_count().counts(), [2, 1, 0, 1]);
+}
+
+#[test]
+fn the_values_of_a_line_start_after_those_of_the_lines_before_it() {
+    let lines = lines_of_each_count();
     let values_before: Vec<usize> = (0..=4).map(|line| lines.values_before(line)).collect();
 
-    assert_eq!(lines.counts(), [2, 1, 0, 1]);
     assert_eq!(values_before, [0, 2, 3, 3, 4]);
 }
 
