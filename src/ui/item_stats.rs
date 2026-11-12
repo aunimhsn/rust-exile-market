@@ -43,7 +43,7 @@
 use affixes::affix_rows;
 use joined_lines::join_stat_lines;
 use model::{Group, Row, Stat};
-use modifier_stats::Reading;
+use modifier_stats::LineContext;
 use properties::{dps_filters, gem_filters, item_filters, pseudo_filter, waystone_filters};
 use uniques::unique_rows;
 
@@ -69,7 +69,7 @@ mod view;
 /// The number of stats of `item`, for the pill that unfolds them.
 #[must_use]
 pub fn count(item: &Item) -> u32 {
-    len(item.modifiers())
+    count_of(item.modifiers())
 }
 
 /// The stats and filters of an item, decided once for a frame.
@@ -79,20 +79,20 @@ pub struct Stats<'a> {
 }
 
 impl<'a> Stats<'a> {
-    /// The stats of `item`, whose modifier `lines` tell which are better lower, their
-    /// `stats` which the trade site can search, and their `tiers` the rolls of every tier of
-    /// a prefix or suffix; `base_type` is the base type its search looks for, a filter.
+    /// The stats of `item`, whose `copied_lines` tell which are better lower, their
+    /// `line_stats` which the trade site can search, and their `tier_rolls` the rolls of every
+    /// tier of a prefix or suffix; `base_type` is the base type its search looks for, a filter.
     #[must_use]
     pub fn new(
         item: &'a Item,
-        lines: &CopiedLines,
-        stats: &LineStats,
-        tiers: &TierRolls,
+        copied_lines: &CopiedLines,
+        line_stats: &LineStats,
+        tier_rolls: &TierRolls,
         base_type: Option<&'a str>,
     ) -> Self {
         Self {
             item,
-            rows: rows(item, lines, stats, tiers, base_type),
+            rows: rows(item, copied_lines, line_stats, tier_rolls, base_type),
         }
     }
 
@@ -107,7 +107,7 @@ impl<'a> Stats<'a> {
     #[must_use]
     pub fn active_filters(&self, filters: &Filters) -> u32 {
         let lit: Vec<_> = filters.lit_states_of(self.item).collect();
-        len(&self.checked(filters)).saturating_add(len(&lit))
+        count_of(&self.checked(filters)).saturating_add(count_of(&lit))
     }
 
     /// The filters of the search, checked or not, as the player set them or else by default.
@@ -135,7 +135,7 @@ impl<'a> Stats<'a> {
     }
 }
 
-fn len<T>(list: &[T]) -> u32 {
+fn count_of<T>(list: &[T]) -> u32 {
     u32::try_from(list.len()).unwrap_or(u32::MAX)
 }
 
@@ -150,64 +150,64 @@ pub(super) fn property_value(property: Property, value: f64) -> String {
     }
 }
 
-/// The rows of the stats of `item`, whose modifier `lines` tell which are better lower, their
-/// `stats` which the trade site can search, and their `tiers` the rolls of every tier of a
-/// prefix or suffix; `base_type` is the base type its search looks for, a filter.
+/// The rows of the stats of `item`, whose `copied_lines` tell which are better lower, their
+/// `line_stats` which the trade site can search, and their `tier_rolls` the rolls of every tier
+/// of a prefix or suffix; `base_type` is the base type its search looks for, a filter.
 fn rows<'a>(
     item: &'a Item,
-    lines: &CopiedLines,
-    stats: &LineStats,
-    tiers: &TierRolls,
+    copied_lines: &CopiedLines,
+    line_stats: &LineStats,
+    tier_rolls: &TierRolls,
     base_type: Option<&'a str>,
 ) -> Vec<Row<'a>> {
     let mut rows = Vec::new();
     // An unrevealed modifier can change the item: its other stats start unchecked.
-    let unrevealed = item.unrevealed_modifiers() > 0;
+    let has_unrevealed = item.unrevealed_modifiers() > 0;
     let dps = if item.rarity().has_item_filters() {
         push_group(&mut rows, Group::Item, item_filters(item, base_type));
         push_group(&mut rows, Group::Waystone, waystone_filters(item));
-        dps_filters(item, stats, !unrevealed)
+        dps_filters(item, line_stats, !has_unrevealed)
     } else {
         push_group(&mut rows, Group::Gem, gem_filters(item));
         Vec::new()
     };
     let pseudo = if matches!(item.rarity(), Rarity::Magic | Rarity::Rare) {
-        stats
+        line_stats
             .pseudo_totals()
             .iter()
-            .map(|total| pseudo_filter(total, stats, !unrevealed))
+            .map(|total| pseudo_filter(total, line_stats, !has_unrevealed))
             .collect()
     } else {
         Vec::new()
     };
-    let reading = Reading {
-        lines,
-        stats,
-        tiers,
-        checked_sums: dps
+    let context = LineContext {
+        copied_lines,
+        line_stats,
+        tier_rolls,
+        checked_totals: dps
             .iter()
             .chain(&pseudo)
             .filter(|stat| stat.filter.is_some_and(|filter| filter.checked))
             .map(|stat| stat.key)
             .collect(),
-        unchecked: unrevealed || item.rarity() == Rarity::Rare || item.is_waystone(),
+        starts_unchecked: has_unrevealed || item.rarity() == Rarity::Rare || item.is_waystone(),
     };
     push_group(&mut rows, Group::Weapon, dps);
     push_group(&mut rows, Group::Pseudo, pseudo);
     if item.rarity() == Rarity::Unique {
-        rows.extend(unique_rows(item, &reading));
+        rows.extend(unique_rows(item, &context));
     } else {
-        rows.extend(affix_rows(item, &reading));
+        rows.extend(affix_rows(item, &context));
     }
     for row in &mut rows {
         if let Row::Stat(stat) = row
             && let FilterKey::Stat(key) = stat.key
         {
-            searchable(stat, stats.get(key));
+            remove_unsearchable_filter(stat, line_stats.get(key));
         }
     }
-    let mut rows = join_stat_lines(item, stats, rows);
-    if unrevealed {
+    let mut rows = join_stat_lines(item, line_stats, rows);
+    if has_unrevealed {
         rows.push(Row::UnrevealedNote);
     }
     // Once a tier is found, also for a line that can be a prefix or a suffix, or that adds up
@@ -215,7 +215,7 @@ fn rows<'a>(
     // its number, which the game doesn't write: none before the names of the trade site tell
     // the base of a magic item, nor on a base the game data doesn't know, nor on a sanctified
     // item, whose values find no tier.
-    let found = item.modifiers().iter().any(|modifier| {
+    let has_tier_found = item.modifiers().iter().any(|modifier| {
         let ranged = modifier
             .lines
             .iter()
@@ -226,11 +226,11 @@ fn rows<'a>(
         let in_doubt = modifier.doubt.is_some();
         read || in_doubt
     });
-    if item.has_tiers_from_values() && found {
+    if item.has_tiers_from_values() && has_tier_found {
         rows.push(Row::TradeCopyNote);
     }
     // Once a range comes from the prices: none before they arrive.
-    let with_range = || {
+    let has_range = || {
         item.modifiers()
             .iter()
             .filter(|modifier| {
@@ -243,7 +243,7 @@ fn rows<'a>(
             .flat_map(|line| &line.rolls)
             .any(|roll| roll.range.is_some())
     };
-    if item.has_rolls_from_prices() && with_range() {
+    if item.has_rolls_from_prices() && has_range() {
         rows.push(Row::UniqueRollsNote);
     }
     rows
@@ -252,11 +252,11 @@ fn rows<'a>(
 /// Takes the filter away from `stat` when the trade site can't search it as its `line`:
 /// a line it can't search shows the "not allowed" sign instead, and another line of a stat
 /// written on several lines is searched by its first line with a number of the stat.
-fn searchable(stat: &mut Stat<'_>, line: Option<&LineStat>) {
+fn remove_unsearchable_filter(stat: &mut Stat<'_>, line: Option<&LineStat>) {
     match line {
         Some(LineStat::Searched(_)) => {}
         Some(LineStat::Continued) => stat.filter = None,
-        Some(LineStat::Unsearchable) | None => stat.unsearchable = stat.filter.take().is_some(),
+        Some(LineStat::Unsearchable) | None => stat.is_unsearchable = stat.filter.take().is_some(),
     }
 }
 

@@ -116,7 +116,7 @@ One entry per item: what it is, its kind (the section it sits in), what it depen
 
 - Turning the pseudo stats on or off among the filters of the rare items (their default to decide then).
 
-- The roll bar of the stats drawn as the zone searched, for the players coming from Exiled Exchange 2 (the zone between the minimum and the maximum colored, a tick at the roll, the lowest value on the left), instead of the position of the roll, the default (mock-up first: this variant was drawn and compared on 2026-10-27, in step 13e).
+- The roll bar of the stats drawn as the zone searched, for the players coming from Exiled Exchange 2 (the zone between the minimum and the maximum colored, a tick at the roll, the lowest value on the left), instead of the position of the roll, the default (mock-up first: this variant was drawn and compared on 2026-10-27, in step 13e; the style value `RollBar`, which waited for it, was removed in 17e3d5b, the setting to bring the form it needs).
 
 - For the rare and magic modifiers, two other bars over every tier, drawn and compared on 2026-10-28 in step 13j2 and found interesting by the owner: one segment per tier, the worst on the left, those below its tier full and its own filled to the roll within it; or filled to the roll over the zone of its tier, faint.
 

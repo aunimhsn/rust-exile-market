@@ -246,8 +246,8 @@ fn a_legacy_unique_keeps_its_value_out_of_the_range_of_today() {
                     tiers: None,
                 }),
             }),
-            unsearchable: false,
-            roll: Some(Roll::Bar {
+            is_unsearchable: false,
+            roll: Some(StatRoll::Bar {
                 share: 1.0,
                 ranges: vec![Range {
                     min: 40.0,

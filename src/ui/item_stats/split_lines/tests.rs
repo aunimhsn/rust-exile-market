@@ -250,7 +250,7 @@ fn a_line_that_adds_up_the_middle_line_of_a_hybrid_has_its_tier_under_the_last_o
 /// The rows of the parts `whole` and `added` of a split line: the tier, the word and its
 /// tooltip of each, the ranges left out.
 fn split_texts(whole: Affix, added: Affix) -> Vec<String> {
-    split_rows(&part(whole), &part(added), &[])
+    split_tier_rows(&part(whole), &part(added), &[])
         .iter()
         .map(|row| {
             format!(
@@ -276,7 +276,7 @@ fn the_parts_of_a_split_line_show_the_prefix_first_then_the_pure_one() {
     // A pure prefix with a hybrid suffix: "Hybrid suffix" in place of "Suffix", its tooltip
     // naming the other line.
     let others = ["+10% to Light Radius"];
-    let rows = split_rows(&part(Affix::Suffix), &part(Affix::Prefix), &others);
+    let rows = split_tier_rows(&part(Affix::Suffix), &part(Affix::Prefix), &others);
     let words: Vec<_> = rows.iter().map(|row| (row.word, row.tip.clone())).collect();
     assert_eq!(
         words,
@@ -291,7 +291,7 @@ fn the_parts_of_a_split_line_show_the_prefix_first_then_the_pure_one() {
     let mut added = part(Affix::Suffix);
     added.tiers = vec![2];
     // Two suffixes: the pure part (`added`) first, though of a worse tier, without words.
-    let rows = split_rows(&part(Affix::Suffix), &added, &[]);
+    let rows = split_tier_rows(&part(Affix::Suffix), &added, &[]);
     let tiers: Vec<_> = rows.iter().map(|row| (row.tier.number, row.word)).collect();
     assert_eq!(tiers, [(Some(2), None), (Some(1), None)]);
 }

@@ -4,7 +4,7 @@
 //! modifier, the ones that vary first.
 
 use super::model::{Limit, Stat, StatFilter, StatText};
-use super::rolls::{comparable, decimals, value};
+use super::rolls::{comparable_limit, decimals, searched_value};
 use crate::filters::{FilterKey, Half, StatKey};
 use crate::item::{Item, ModifierKind, Range, StatLine};
 use crate::roll_difference::CopiedLines;
@@ -12,39 +12,39 @@ use crate::tier_rolls::TierRolls;
 use crate::trade::stat_filters::LineStats;
 
 /// How the stats read the modifier lines of the item, beyond their text.
-pub(super) struct Reading<'r> {
+pub(super) struct LineContext<'r> {
     /// They tell the lines better lower.
-    pub(super) lines: &'r CopiedLines,
+    pub(super) copied_lines: &'r CopiedLines,
     /// They tell the numbers of each line its stat counts, and the lines a DPS or a pseudo
     /// total counts.
-    pub(super) stats: &'r LineStats,
+    pub(super) line_stats: &'r LineStats,
     /// They tell the rolls of every tier of a line of a prefix or suffix.
-    pub(super) tiers: &'r TierRolls,
+    pub(super) tier_rolls: &'r TierRolls,
     /// The DPS and the pseudo totals checked at first, which count lines of the item.
-    pub(super) checked_sums: Vec<FilterKey>,
+    pub(super) checked_totals: Vec<FilterKey>,
     /// Every line starts unchecked: the item has an unrevealed modifier, which can change it,
     /// or is a rare, whose value lies in the few modifiers its buyer needs, or a waystone of any
     /// rarity, whose buyer pays for its properties, not for its monsters (both like Exiled
     /// Exchange 2).
-    pub(super) unchecked: bool,
+    pub(super) starts_unchecked: bool,
 }
 
-impl Reading<'_> {
+impl LineContext<'_> {
     /// The line `key` starts checked: unchecked when a DPS or a pseudo total checked at first
     /// counts it already (the damage and the attack speed of a weapon, a line a total adds
     /// up), or on an item whose lines all start unchecked (an unrevealed modifier, a rare, a
     /// waystone).
-    pub(super) fn checked(&self, key: StatKey) -> bool {
+    pub(super) fn starts_checked(&self, key: StatKey) -> bool {
         let counted = self
-            .checked_sums
+            .checked_totals
             .iter()
-            .any(|&sum| self.stats.counts_in(key, sum));
-        !counted && !self.unchecked
+            .any(|&total| self.line_stats.counts_in(key, total));
+        !counted && !self.starts_unchecked
     }
 
     /// The half of the range field the stat `key` fills: the maximum for a line better lower.
     pub(super) fn half(&self, key: StatKey) -> Half {
-        if self.lines.is_better_lower(key) {
+        if self.copied_lines.is_better_lower(key) {
             Half::Maximum
         } else {
             Half::Minimum
@@ -56,14 +56,14 @@ impl Reading<'_> {
     pub(super) fn counted(&self, key: StatKey, line: &StatLine) -> StatLine {
         StatLine {
             text: line.text.clone(),
-            rolls: self.pick(key, &line.rolls),
+            rolls: self.counted_numbers(key, &line.rolls),
         }
     }
 
     /// Among `items`, one for each number of the line `key`, those of the numbers its stat
     /// counts; all of them when its stat isn't known.
-    pub(super) fn pick<T: Clone>(&self, key: StatKey, items: &[T]) -> Vec<T> {
-        let picked = self.stats.numbers(key).and_then(|numbers| {
+    pub(super) fn counted_numbers<T: Clone>(&self, key: StatKey, items: &[T]) -> Vec<T> {
+        let picked = self.line_stats.numbers(key).and_then(|numbers| {
             numbers
                 .iter()
                 .map(|&number| items.get(number).cloned())
@@ -75,17 +75,22 @@ impl Reading<'_> {
 
 /// A line of an enchantment or a rune: a filter, since the trade site searches them, without
 /// a roll; unchecked, a rune being easy to change.
-pub(super) fn added<'a>(key: StatKey, line: &'a StatLine, reading: &Reading<'_>) -> Stat<'a> {
-    let half = reading.half(key);
-    let counted = reading.counted(key, line);
+pub(super) fn added_stat<'a>(
+    key: StatKey,
+    line: &'a StatLine,
+    context: &LineContext<'_>,
+) -> Stat<'a> {
+    let half = context.half(key);
+    let counted = context.counted(key, line);
     Stat {
         key: FilterKey::Stat(key),
         text: StatText::line(&line.text),
         filter: Some(StatFilter {
             checked: false,
-            limit: value(&counted).map(|value| Limit::new(value, half, None, value, &counted)),
+            limit: searched_value(&counted)
+                .map(|value| Limit::new(value, half, None, value, &counted)),
         }),
-        unsearchable: false,
+        is_unsearchable: false,
         roll: None,
     }
 }
@@ -101,9 +106,9 @@ pub(super) fn comparable_filter(
 ) -> StatFilter {
     StatFilter {
         checked,
-        limit: varies.then(|| value(line)).flatten().map(|value| {
+        limit: varies.then(|| searched_value(line)).flatten().map(|value| {
             let written = line.rolls.iter().map(|roll| decimals(roll.value)).max();
-            let limit = comparable(value, written.unwrap_or(0), half);
+            let limit = comparable_limit(value, written.unwrap_or(0), half);
             Limit::new(limit, half, bounds, value, line)
         }),
     }
@@ -111,7 +116,7 @@ pub(super) fn comparable_filter(
 
 /// The stats of the modifiers of `item` whose kind passes `keep`, made by `stat`: the
 /// modifiers with a stat that `varies` first, each with its lines together.
-pub(super) fn stats<'a>(
+pub(super) fn stats_of_kind<'a>(
     item: &'a Item,
     keep: impl Fn(ModifierKind) -> bool,
     stat: impl Fn(StatKey, &'a StatLine) -> Stat<'a>,

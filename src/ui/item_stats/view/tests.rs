@@ -47,7 +47,7 @@ fn the_tooltip_of_a_range_field_tells_its_rolls_and_its_better_side() {
     let tiers = TooltipLine {
         text: "T5–T1".to_owned(),
         tint: color::FAINT,
-        small: true,
+        is_small: true,
     };
     assert_eq!(
         tooltip(

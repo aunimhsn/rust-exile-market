@@ -3,7 +3,7 @@
 
 use super::Stats;
 use super::model::{
-    Group, Limit, ModifierTier, Roll, Row, Stat, StatFilter, StatText, TierRow, WordTip,
+    Group, Limit, ModifierTier, Row, Stat, StatFilter, StatRoll, StatText, TierRow, WordTip,
 };
 use super::rolls::ranges_text;
 use crate::filters::{Filters, Half};
@@ -88,12 +88,12 @@ pub(super) fn row_texts<'a>(rows: impl IntoIterator<Item = Row<'a>>) -> Vec<Stri
             Row::Stat(Stat {
                 text,
                 filter,
-                unsearchable,
+                is_unsearchable,
                 roll,
                 ..
             }) => {
                 let check = match filter {
-                    _ if unsearchable => "⊘ ",
+                    _ if is_unsearchable => "⊘ ",
                     Some(StatFilter { checked: true, .. }) => "■ ",
                     Some(StatFilter { checked: false, .. }) => "□ ",
                     None => "",
@@ -110,7 +110,7 @@ pub(super) fn row_texts<'a>(rows: impl IntoIterator<Item = Row<'a>>) -> Vec<Stri
                     .unwrap_or_default();
                 let roll = match roll {
                     None => String::new(),
-                    Some(Roll::Bar {
+                    Some(StatRoll::Bar {
                         share,
                         ranges,
                         origin,
@@ -120,7 +120,7 @@ pub(super) fn row_texts<'a>(rows: impl IntoIterator<Item = Row<'a>>) -> Vec<Stri
                             .unwrap_or_default();
                         format!(" [{} {share:.2}{origin}]", ranges_text(&ranges))
                     }
-                    Some(Roll::Affix {
+                    Some(StatRoll::Affix {
                         share,
                         tier,
                         origin,
@@ -132,7 +132,7 @@ pub(super) fn row_texts<'a>(rows: impl IntoIterator<Item = Row<'a>>) -> Vec<Stri
                             [share, tier, origin].into_iter().flatten().collect();
                         format!(" [{}]", parts.join(" "))
                     }
-                    Some(Roll::Tiers { rows, origin }) => {
+                    Some(StatRoll::Tiers { rows, origin }) => {
                         // The origin on a line of its own, after the tiers.
                         let rows: Vec<String> = rows
                             .iter()
@@ -141,7 +141,7 @@ pub(super) fn row_texts<'a>(rows: impl IntoIterator<Item = Row<'a>>) -> Vec<Stri
                             .collect();
                         format!(" [{}]", rows.join(" / "))
                     }
-                    Some(Roll::WaystoneTier(tier)) => format!(" [Waystone T{tier}]"),
+                    Some(StatRoll::WaystoneTier(tier)) => format!(" [Waystone T{tier}]"),
                 };
                 let radius = text
                     .radius_skills()
@@ -200,7 +200,7 @@ fn tier_row_text(row: &TierRow) -> String {
         .collect::<Vec<_>>()
         .join(" ");
     // A tier written in the style of its word, between braces.
-    if row.quiet_tier() {
+    if row.is_tier_in_word {
         format!("{{{text}}}")
     } else {
         text

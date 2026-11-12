@@ -15,6 +15,7 @@ pub use stat_line::Roll;
 pub use stat_line::{Range, StatLine};
 
 use super::labels::Labels;
+use crate::language::Language;
 
 /// Where a modifier comes from on the item.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -75,6 +76,27 @@ impl Lord {
             Self::Ulaman => "Ulaman",
         }
     }
+}
+
+/// The passive skills in the radius of a Time-Lost jewel that a line of it is granted to; not
+/// the radius of the jewel itself (`Radius: Small`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RadiusSkills {
+    Small,
+    Notable,
+}
+
+/// A line of a Time-Lost jewel, `text`, in any language of the game: the passive skills in the
+/// radius its words name, and the line without them (`+5% to Fire Resistance` of `Small Passive
+/// Skills in Radius also grant +5% to Fire Resistance`); none for any other line.
+#[must_use]
+pub fn radius_line(text: &str) -> Option<(RadiusSkills, &str)> {
+    Language::ALL.into_iter().find_map(|language| {
+        Labels::of(language)
+            .radius_skills
+            .iter()
+            .find_map(|&(words, skills)| Some((skills, text.strip_prefix(words)?)))
+    })
 }
 
 /// The tier of a modifier for one affix it can be, found from its values on an item copied
@@ -212,7 +234,6 @@ impl Modifier {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::language::Language;
 
     #[test]
     fn a_marked_line_is_read_without_its_marker() {
@@ -277,5 +298,25 @@ mod tests {
                 Some("Desecrated Prefix")
             );
         }
+    }
+
+    #[test]
+    fn a_line_of_a_time_lost_jewel_is_read_without_the_words_of_its_radius_in_both_languages() {
+        assert_eq!(
+            radius_line("Small Passive Skills in Radius also grant 5% increased Attack Speed"),
+            Some((RadiusSkills::Small, "5% increased Attack Speed"))
+        );
+        assert_eq!(
+            radius_line(
+                "Les Talents éminents dans le Rayon octroient également 5% d'Accélération d'attaque"
+            ),
+            Some((RadiusSkills::Notable, "5% d'Accélération d'attaque"))
+        );
+        // The words alone at the start: any other line has none.
+        assert_eq!(radius_line("5% increased Attack Speed"), None);
+        assert_eq!(
+            radius_line("+5 to Strength. Small Passive Skills in Radius also grant"),
+            None
+        );
     }
 }

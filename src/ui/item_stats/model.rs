@@ -8,8 +8,8 @@ use crate::filters::{self, Filter, FilterKey, Half, Property};
 use crate::format;
 use crate::i18n::{Message, Translator};
 use crate::item::{
-    Affix, AffixTier, Currency, Lord, Modifier, ModifierOrigin, PartTier, QualityKind, Range,
-    StatLine, TierDoubt,
+    self, Affix, AffixTier, Currency, Lord, Modifier, ModifierOrigin, PartTier, QualityKind,
+    RadiusSkills, Range, StatLine, TierDoubt,
 };
 use crate::tier_rolls::TierSpan;
 use crate::trade::pseudo::Pseudo;
@@ -102,7 +102,7 @@ impl std::fmt::Debug for Origin {
 
 /// The roll of a stat, the lines its tooltips name borrowed from the item.
 #[derive(Debug, Clone, PartialEq)]
-pub(super) enum Roll<'a> {
+pub(super) enum StatRoll<'a> {
     /// Where its value falls in its ranges, from 0 to 1, and the ranges; then, under the last
     /// line of a Vaal modifier of a unique, its origin.
     Bar {
@@ -158,9 +158,11 @@ pub(super) struct TierRow<'a> {
     pub(super) word: Option<Message>,
     /// The lord of the Abyss named before the affix: "Amanamu Prefix".
     pub(super) lord: Option<Lord>,
-    /// Whether its tier, an affix of a line in doubt without range (a fixed value), is written
-    /// in the style of its word: "T2 Suffix".
-    quiet: bool,
+    /// Whether its tier is written in the style of its word, "T2 Suffix": only for an affix of a
+    /// line in doubt without range (a fixed value), set by [`Self::affix`]; the other rows keep
+    /// the color of their tier ("T1 Hybrid suffix" under the other line of a hybrid split from a
+    /// summed line, whose T1 the summed line writes too).
+    pub(super) is_tier_in_word: bool,
     /// The tooltip of that word.
     pub(super) tip: Option<WordTip<'a>>,
     /// The currency that adds the part of a line that adds up two modifiers, an essence or an
@@ -182,14 +184,6 @@ pub(super) enum WordTip<'a> {
 }
 
 impl<'a> TierRow<'a> {
-    /// Whether its tier, without range, is written as its word: "T2 Suffix"; only under a line
-    /// in doubt, the other rows keeping the color of their tier ("T1 Hybrid suffix" under the
-    /// other line of a hybrid split from a summed line, whose T1 the summed line writes too).
-    pub(super) fn quiet_tier(&self) -> bool {
-        // Set by `TierRow::affix` only: a word, no ranges, one tier.
-        self.quiet
-    }
-
     /// The tier `tier` of a modifier, without word.
     pub(super) fn plain(tier: ModifierTier) -> Self {
         Self {
@@ -197,7 +191,7 @@ impl<'a> TierRow<'a> {
             better: None,
             word: None,
             lord: None,
-            quiet: false,
+            is_tier_in_word: false,
             tip: None,
             currency: None,
         }
@@ -214,7 +208,7 @@ impl<'a> TierRow<'a> {
             better: None,
             word: Some(affix_word(found.affix)),
             lord: found.lord,
-            quiet: found.ranges.is_empty(),
+            is_tier_in_word: found.ranges.is_empty(),
             tip: None,
             currency: None,
         }
@@ -252,7 +246,7 @@ impl<'a> TierRow<'a> {
                 .filter(|&better| better != worse),
             word,
             lord: None,
-            quiet: false,
+            is_tier_in_word: false,
             tip,
             currency: part.currency,
         })
@@ -263,14 +257,14 @@ impl<'a> TierRow<'a> {
 /// modifier it is ("Amanamu Prefix"); after its tier written as they are ("T2 Suffix") under a
 /// line in doubt without range (a fixed value), so that it reads as one with them (owner's choice
 /// on 2026-10-30).
-pub(super) fn row_word(row: &TierRow, i18n: &Translator) -> Option<String> {
+pub(super) fn tier_word(row: &TierRow, i18n: &Translator) -> Option<String> {
     let word = row.word?;
     let text = match (row.lord, word) {
         (Some(lord), Message::AffixPrefix) => i18n.lord_affix(Affix::Prefix, lord),
         (Some(lord), Message::AffixSuffix) => i18n.lord_affix(Affix::Suffix, lord),
         _ => i18n.text(word),
     };
-    Some(match row.tier.number.filter(|_| row.quiet_tier()) {
+    Some(match row.tier.number.filter(|_| row.is_tier_in_word) {
         Some(number) => format!("T{number} {text}"),
         None => text,
     })
@@ -361,12 +355,12 @@ impl Limit {
     }
 
     /// The minus sign is allowed in the field.
-    pub(super) fn negative(self) -> bool {
+    pub(super) fn allows_minus_sign(self) -> bool {
         self.value < 0.0 || self.bounds.is_some_and(|bounds| bounds.min < 0.0)
     }
 
     /// The halves of the field hold four characters: a number of its stat reaches them.
-    pub(super) fn wide(self) -> bool {
+    pub(super) fn is_wide(self) -> bool {
         let reaches = |value: f64| filters::limit_text(value).chars().count() >= WIDE_CHARACTERS;
         reaches(self.value)
             || self
@@ -391,44 +385,14 @@ impl StatFilter {
     }
 }
 
-/// The passive skills in the radius of a Time-Lost jewel that a line of it is granted to; not
-/// the radius of the jewel itself (`Radius: Small`).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum RadiusSkills {
-    Small,
-    Notable,
-}
-
-impl RadiusSkills {
-    /// Its tag, after the range of the line: "Small", "Notable".
-    pub(super) fn message(self) -> Message {
-        match self {
-            Self::Small => Message::RadiusSmall,
-            Self::Notable => Message::RadiusNotable,
-        }
+/// The tag of the passive `skills` a line of a Time-Lost jewel is granted to, after the range
+/// of the line: "Small", "Notable".
+pub(super) fn radius_word(skills: RadiusSkills) -> Message {
+    match skills {
+        RadiusSkills::Small => Message::RadiusSmall,
+        RadiusSkills::Notable => Message::RadiusNotable,
     }
 }
-
-/// The words a Time-Lost jewel writes before each of its lines, in each language of the game,
-/// and the passive skills they name.
-const RADIUS_WORDS: [(&str, RadiusSkills); 4] = [
-    (
-        "Small Passive Skills in Radius also grant ",
-        RadiusSkills::Small,
-    ),
-    (
-        "Notable Passive Skills in Radius also grant ",
-        RadiusSkills::Notable,
-    ),
-    (
-        "Les Talents Mineurs dans le Rayon octroient également ",
-        RadiusSkills::Small,
-    ),
-    (
-        "Les Talents éminents dans le Rayon octroient également ",
-        RadiusSkills::Notable,
-    ),
-];
 
 /// The text of a stat.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -463,17 +427,14 @@ pub(super) enum StatText<'a> {
 impl<'a> StatText<'a> {
     /// A line of a modifier, without the words of its radius for a line of a Time-Lost jewel.
     pub(super) fn line(text: &'a str) -> Self {
-        RADIUS_WORDS
-            .iter()
-            .find_map(|&(words, skills)| {
-                let line = text.strip_prefix(words)?;
-                Some(Self::RadiusLine {
-                    skills,
-                    line,
-                    whole: text,
-                })
-            })
-            .unwrap_or(Self::Line(text))
+        match item::radius_line(text) {
+            Some((skills, line)) => Self::RadiusLine {
+                skills,
+                line,
+                whole: text,
+            },
+            None => Self::Line(text),
+        }
     }
 
     /// The passive skills a line of a Time-Lost jewel is granted to.
@@ -534,8 +495,8 @@ pub(super) struct Stat<'a> {
     pub(super) filter: Option<StatFilter>,
     /// A line the trade site can't search, which would be a filter: the "not allowed" sign in
     /// place of its checkbox.
-    pub(super) unsearchable: bool,
-    pub(super) roll: Option<Roll<'a>>,
+    pub(super) is_unsearchable: bool,
+    pub(super) roll: Option<StatRoll<'a>>,
 }
 
 /// A row of the stats.

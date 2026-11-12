@@ -4,7 +4,10 @@
 //! here. The markers at the end of the lines (`(augmented)`, `(rune)`, `(implicit)`…) are in
 //! English in every language.
 
-use super::{Affix, Catalyst, ItemState, ModifierKind, ModifierOrigin, Rarity, WaystoneProperty};
+use super::{
+    Affix, Catalyst, ItemState, ModifierKind, ModifierOrigin, RadiusSkills, Rarity,
+    WaystoneProperty,
+};
 use crate::language::Language;
 
 /// The words of one language. The labels of the `Label: value` lines end with their
@@ -75,6 +78,9 @@ pub(super) struct Labels {
     /// The only line of a desecrated modifier not revealed yet, for each affix, under its
     /// header without tier (`{ Prefix Modifier "Veiled" }`).
     pub unrevealed: &'static [(&'static str, Affix)],
+    /// The words a Time-Lost jewel writes before each of its lines, and the passive skills in
+    /// its radius they name.
+    pub radius_skills: &'static [(&'static str, RadiusSkills)],
 }
 
 /// The kind of a modifier header, e.g. `Prefix Modifier`.
@@ -244,6 +250,16 @@ static ENGLISH: Labels = Labels {
         ("Desecrated Prefix", Affix::Prefix),
         ("Desecrated Suffix", Affix::Suffix),
     ],
+    radius_skills: &[
+        (
+            "Small Passive Skills in Radius also grant ",
+            RadiusSkills::Small,
+        ),
+        (
+            "Notable Passive Skills in Radius also grant ",
+            RadiusSkills::Notable,
+        ),
+    ],
 };
 
 /// The words of the French game client.
@@ -350,6 +366,16 @@ static FRENCH: Labels = Labels {
     unrevealed: &[
         ("Préfixe profané", Affix::Prefix),
         ("Suffixe profané", Affix::Suffix),
+    ],
+    radius_skills: &[
+        (
+            "Les Talents Mineurs dans le Rayon octroient également ",
+            RadiusSkills::Small,
+        ),
+        (
+            "Les Talents éminents dans le Rayon octroient également ",
+            RadiusSkills::Notable,
+        ),
     ],
 };
 

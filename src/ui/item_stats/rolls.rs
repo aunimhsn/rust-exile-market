@@ -1,7 +1,7 @@
 //! The arithmetic of the rolls: where a value falls in its ranges, the bounds of a field, the
 //! limit of a filter that finds comparable items, and the ranges written as text.
 
-use super::model::{Origin, Roll};
+use super::model::{Origin, StatRoll};
 use crate::filters::Half;
 use crate::format;
 use crate::item::{Range, StatLine};
@@ -17,7 +17,7 @@ pub(super) const COMPARABLE_MARGIN: f64 = 0.1;
 /// as them (`12.2` gets `11`, not `10.98`). Never beyond `value`, so that the item always
 /// passes its own filter, also when the rounding would cross it: the average of three rolls
 /// (`1.333` written whole) or a value with more decimals than the numbers are written with.
-pub(super) fn comparable(value: f64, decimals: u8, half: Half) -> f64 {
+pub(super) fn comparable_limit(value: f64, decimals: u8, half: Half) -> f64 {
     let margin = value.abs() * COMPARABLE_MARGIN;
     match half {
         Half::Minimum => format::rounded(value - margin, decimals).min(value),
@@ -49,13 +49,13 @@ pub(super) fn magnitudes(line: &StatLine, ranges: &[Option<Range>]) -> Vec<(f64,
 
 /// The value a line is searched by: the average of its numbers, as the trade site does for
 /// `Adds # to # Physical Damage`; none for a line without number.
-pub(super) fn value(line: &StatLine) -> Option<f64> {
+pub(super) fn searched_value(line: &StatLine) -> Option<f64> {
     average(line.rolls.iter().map(|roll| roll.value))
 }
 
-/// The range of the value of a line ([`value`]), given the range of each of its numbers: a
-/// number without range is fixed. None when no number has a range.
-pub(super) fn bounds(line: &StatLine, ranges: &[Option<Range>]) -> Option<Range> {
+/// The range of the value of a line ([`searched_value`]), given the range of each of its
+/// numbers: a number without range is fixed. None when no number has a range.
+pub(super) fn value_bounds(line: &StatLine, ranges: &[Option<Range>]) -> Option<Range> {
     if ranges.iter().all(Option::is_none) {
         return None;
     }
@@ -103,9 +103,9 @@ fn average(values: impl Iterator<Item = f64>) -> Option<f64> {
 
 /// The bar of `rolls`, those whose range is wider than one value ([`varying_share`]), their
 /// ranges and the `origin` of their modifier; none when no roll varies.
-pub(super) fn bar<'a>(rolls: Vec<(f64, Range)>, origin: Option<Origin>) -> Option<Roll<'a>> {
+pub(super) fn bar<'a>(rolls: Vec<(f64, Range)>, origin: Option<Origin>) -> Option<StatRoll<'a>> {
     let share = varying_share(&rolls)?;
-    Some(Roll::Bar {
+    Some(StatRoll::Bar {
         share,
         ranges: rolls
             .into_iter()
