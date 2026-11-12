@@ -34,8 +34,8 @@ use crate::trade::search::{OfferSearch, Search};
 use crate::trade::{ItemNamesWatch, Refusal};
 use crate::ui::{
     self, Bubble, BubbleAction, BugReportAction, BugReportPanel, EmptyState, ItemBlock,
-    ItemBlockAction, LeagueList, LeagueListAction, OffersAction, OffersBlock, PriceBlock,
-    PriceDownload, ResizeEdges, SettingsPanel, StatChecks, Stats, StatusBar, TitleBar,
+    ItemBlockAction, LeagueList, LeagueListAction, LineFacts, OffersAction, OffersBlock,
+    PriceBlock, PriceDownload, ResizeEdges, SettingsPanel, StatChecks, Stats, StatusBar, TitleBar,
     TitleBarAction, TradeStatus, UnreadableItem, WarningBand,
 };
 use crate::update::{LeagueOfTheMoment, Release, UpdateCheck};
@@ -708,6 +708,15 @@ fn search_filters(
     search
 }
 
+/// What the application knows of the modifier lines of the item `shown`.
+fn line_facts(shown: &ShownItem) -> LineFacts<'_> {
+    LineFacts {
+        copied_lines: shown.lines(),
+        line_stats: shown.stats(),
+        tier_rolls: shown.tiers(),
+    }
+}
+
 /// Every filter of `item`, the item `shown`, checked or not, as the player set them or else
 /// by default, and the filters of its search they make ([`search_filters`]).
 fn every_filter(
@@ -716,13 +725,7 @@ fn every_filter(
     item: &Item,
     filters: &Filters,
 ) -> (Vec<(FilterKey, Filter)>, SearchFilters) {
-    let stats = Stats::new(
-        item,
-        shown.lines(),
-        shown.stats(),
-        shown.tiers(),
-        session.filtered_base_type(item),
-    );
+    let stats = Stats::new(item, line_facts(shown), session.filtered_base_type(item));
     let all = stats.filters(filters);
     let search = SearchFilters {
         states: filters.lit_states_of(item).collect(),
@@ -769,18 +772,11 @@ impl ItemView<'_> {
         // Without a fixed price, the estimate tells the suspicious offers.
         let reference =
             reference(&fixed_price, worth).or(estimate.map(|estimate| estimate.reference));
-        let action = ItemBlock::new(
-            item,
-            shown.lines(),
-            shown.stats(),
-            shown.tiers(),
-            filters,
-            i18n,
-        )
-        // The pill shows only when its link can be opened: the league and the search known.
-        .tradable(session.tradable(item))
-        .stats(stats_open, session.filtered_base_type(item))
-        .show(ui);
+        let action = ItemBlock::new(item, line_facts(shown), filters, i18n)
+            // The pill shows only when its link can be opened: the league and the search known.
+            .tradable(session.tradable(item))
+            .stats(stats_open, session.filtered_base_type(item))
+            .show(ui);
         // With the filters as the player just left them.
         let (all, searched) = every_filter(session, shown, item, filters);
         let checks = StatChecks::of(&searched, shown.stats(), &all);

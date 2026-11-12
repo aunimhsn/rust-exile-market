@@ -250,9 +250,11 @@ fn a_corrupted_item_has_no_note_and_a_lit_state_tag_counts_among_the_active_filt
     let stats = |item| {
         Stats::new(
             item,
-            &CopiedLines::default(),
-            &LineStats::default(),
-            &TierRolls::default(),
+            LineFacts {
+                copied_lines: &CopiedLines::default(),
+                line_stats: &LineStats::default(),
+                tier_rolls: &TierRolls::default(),
+            },
             base_type(item),
         )
     };
@@ -302,7 +304,15 @@ fn a_line_the_trade_site_cant_search_isnt_a_filter() {
         None,
     );
     let line_stats = LineStats::new(&unique, unique.modifiers(), None);
-    let stats = Stats::new(&unique, &lines, &line_stats, &TierRolls::default(), None);
+    let stats = Stats::new(
+        &unique,
+        LineFacts {
+            copied_lines: &lines,
+            line_stats: &line_stats,
+            tier_rolls: &TierRolls::default(),
+        },
+        None,
+    );
 
     assert_eq!(
         texts(&unique),
@@ -351,7 +361,15 @@ fn the_active_filters_count_the_choices_of_the_player() {
         base_type(&crossbow),
         crossbow.item_level(),
     );
-    let stats = Stats::new(&crossbow, &lines, &line_stats, &tiers, base_type(&crossbow));
+    let stats = Stats::new(
+        &crossbow,
+        LineFacts {
+            copied_lines: &lines,
+            line_stats: &line_stats,
+            tier_rolls: &tiers,
+        },
+        base_type(&crossbow),
+    );
     let keys: Vec<FilterKey> = stats
         .rows
         .iter()

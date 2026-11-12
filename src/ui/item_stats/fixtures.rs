@@ -1,11 +1,11 @@
 //! What the tests of the stats share: the items they parse, the rows they decide, and the
 //! texts these rows are compared with.
 
-use super::Stats;
 use super::model::{
     Group, Limit, ModifierTier, Row, Stat, StatFilter, StatRoll, StatText, TierRow, WordTip,
 };
 use super::rolls::ranges_text;
+use super::{LineFacts, Stats};
 use crate::filters::{Filters, Half};
 use crate::item::{Affix, CopiedItem, Item, PartTier, Range, Rarity, StatLine};
 use crate::roll_difference::CopiedLines;
@@ -44,7 +44,15 @@ pub(super) fn rows_of<'a>(item: &'a Item, base_type: Option<&'a str>) -> Vec<Row
         base_type,
         item.item_level(),
     );
-    super::rows(item, &lines, &stats, &tiers, base_type)
+    super::rows(
+        item,
+        LineFacts {
+            copied_lines: &lines,
+            line_stats: &stats,
+            tier_rolls: &tiers,
+        },
+        base_type,
+    )
 }
 
 /// The base type the search of `item` looks for, among its filters: none for a unique.
@@ -319,7 +327,15 @@ pub(super) fn default_checks(item: &Item) -> crate::ui::StatChecks {
     );
     let line_stats = LineStats::new(item, item.modifiers(), None);
     let tiers = TierRolls::new(item.language(), item.modifiers(), base, item.item_level());
-    let stats = Stats::new(item, &lines, &line_stats, &tiers, base);
+    let stats = Stats::new(
+        item,
+        LineFacts {
+            copied_lines: &lines,
+            line_stats: &line_stats,
+            tier_rolls: &tiers,
+        },
+        base,
+    );
     let all = stats.filters(&Filters::default());
     crate::ui::StatChecks::of(&line_stats.search_filters(&all), &line_stats, &all)
 }

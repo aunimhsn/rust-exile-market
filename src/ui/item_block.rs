@@ -12,7 +12,7 @@ use egui::{
     Role, Sense, Ui, Vec2, WidgetInfo, vec2,
 };
 
-use super::item_stats::{self, Stats};
+use super::item_stats::{self, LineFacts, Stats};
 use super::theme::{color, size, text};
 use super::widgets;
 use crate::filters::Filters;
@@ -21,9 +21,6 @@ use crate::item::{
     self, DamageKind, Item, ItemState, MAX_GEM_SOCKETS, Rarity, Requirements, TOP_GEM_LEVEL,
     TOP_GEM_QUALITY, WaystoneProperty,
 };
-use crate::roll_difference::CopiedLines;
-use crate::tier_rolls::TierRolls;
-use crate::trade::stat_filters::LineStats;
 
 /// The space above and under the block.
 const PADDING_Y: f32 = 12.0;
@@ -228,12 +225,8 @@ enum Fact {
 
 pub struct ItemBlock<'a> {
     item: &'a Item,
-    /// Its modifier lines, which tell the stats better lower.
-    lines: &'a CopiedLines,
-    /// The stats of its modifier lines, which tell those the trade site can search.
-    stats: &'a LineStats,
-    /// The rolls of every tier of a line of a prefix or suffix.
-    tiers: &'a TierRolls,
+    /// What the application knows of its modifier lines.
+    facts: LineFacts<'a>,
     i18n: &'a Translator,
     /// The trade site has a search for this item.
     tradable: bool,
@@ -249,17 +242,13 @@ impl<'a> ItemBlock<'a> {
     #[must_use]
     pub fn new(
         item: &'a Item,
-        lines: &'a CopiedLines,
-        stats: &'a LineStats,
-        tiers: &'a TierRolls,
+        facts: LineFacts<'a>,
         filters: &'a mut Filters,
         i18n: &'a Translator,
     ) -> Self {
         Self {
             item,
-            lines,
-            stats,
-            tiers,
+            facts,
             i18n,
             tradable: false,
             stats_open: false,
@@ -513,13 +502,7 @@ impl<'a> ItemBlock<'a> {
     /// The pill of the stats and the number of active filters, and the stats once unfolded;
     /// "Show filters" for an item without modifiers, nothing when it has no filter either.
     fn stats_section(&mut self, ui: &mut Ui) -> Option<ItemBlockAction> {
-        let stats = Stats::new(
-            self.item,
-            self.lines,
-            self.stats,
-            self.tiers,
-            self.base_type,
-        );
+        let stats = Stats::new(self.item, self.facts, self.base_type);
         if stats.is_empty() {
             return None;
         }
@@ -781,6 +764,9 @@ mod tests {
     use super::*;
     use crate::item::CopiedItem;
     use crate::language::Language;
+    use crate::roll_difference::CopiedLines;
+    use crate::tier_rolls::TierRolls;
+    use crate::trade::stat_filters::LineStats;
 
     /// The texts of the block of the item copied as `text`, with the interface in `language`.
     struct Texts {
@@ -798,7 +784,16 @@ mod tests {
         let lines = CopiedLines::default();
         let stats = LineStats::default();
         let tiers = TierRolls::default();
-        let block = ItemBlock::new(&item, &lines, &stats, &tiers, &mut filters, &i18n);
+        let block = ItemBlock::new(
+            &item,
+            LineFacts {
+                copied_lines: &lines,
+                line_stats: &stats,
+                tier_rolls: &tiers,
+            },
+            &mut filters,
+            &i18n,
+        );
         Texts {
             base_line: block.base_line().map(str::to_owned),
             tags: block.tags().into_iter().map(|(label, _)| label).collect(),
@@ -828,8 +823,17 @@ mod tests {
         let lines = CopiedLines::default();
         let stats = LineStats::default();
         let tiers = TierRolls::default();
-        let block = ItemBlock::new(&item, &lines, &stats, &tiers, &mut filters, &i18n)
-            .stats(false, Some(base_type));
+        let block = ItemBlock::new(
+            &item,
+            LineFacts {
+                copied_lines: &lines,
+                line_stats: &stats,
+                tier_rolls: &tiers,
+            },
+            &mut filters,
+            &i18n,
+        )
+        .stats(false, Some(base_type));
         let values = block
             .base_values()
             .into_iter()
@@ -961,8 +965,17 @@ mod tests {
             LineStats::default(),
             TierRolls::default(),
         );
-        let block =
-            ItemBlock::new(&item, &lines, &stats, &tiers, &mut filters, &i18n).stats(false, None);
+        let block = ItemBlock::new(
+            &item,
+            LineFacts {
+                copied_lines: &lines,
+                line_stats: &stats,
+                tier_rolls: &tiers,
+            },
+            &mut filters,
+            &i18n,
+        )
+        .stats(false, None);
 
         assert_eq!(block.title(), "Burning Waystone (Tier 15)");
         assert_eq!(block.base_and_class().text, "Waystones");
@@ -1106,7 +1119,16 @@ mod tests {
             LineStats::default(),
             TierRolls::default(),
         );
-        let block = ItemBlock::new(&ring, &lines, &line_stats, &tiers, &mut filters, &i18n);
+        let block = ItemBlock::new(
+            &ring,
+            LineFacts {
+                copied_lines: &lines,
+                line_stats: &line_stats,
+                tier_rolls: &tiers,
+            },
+            &mut filters,
+            &i18n,
+        );
 
         let kinds: Vec<(String, Option<ItemState>)> = block
             .tags()
@@ -1173,8 +1195,17 @@ mod tests {
             LineStats::default(),
             TierRolls::default(),
         );
-        let block =
-            ItemBlock::new(&item, &lines, &stats, &tiers, &mut filters, &i18n).stats(false, None);
+        let block = ItemBlock::new(
+            &item,
+            LineFacts {
+                copied_lines: &lines,
+                line_stats: &stats,
+                tier_rolls: &tiers,
+            },
+            &mut filters,
+            &i18n,
+        )
+        .stats(false, None);
         (block.base_and_class(), block.tags())
     }
 

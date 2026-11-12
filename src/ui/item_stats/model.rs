@@ -325,23 +325,24 @@ impl Limit {
         }
     }
 
-    /// A limit of `value` filling `half`, for `line` copied with the value `copied`, which
-    /// rolls in `range`: its bounds are `range`, widened to hold `copied` for a legacy unique,
-    /// rolled in a range that changed since.
-    pub(super) fn new(
-        value: f64,
-        half: Half,
-        range: Option<Range>,
-        copied: f64,
-        line: &StatLine,
-    ) -> Self {
-        let bounds = range.map(|range| range.holding(copied));
+    /// A limit at the value `copied` of `line` filling `half`, which rolls in `range`: its
+    /// bounds are `range`, widened to hold `copied` for a legacy unique, rolled in a range
+    /// that changed since.
+    pub(super) fn new(copied: f64, half: Half, range: Option<Range>, line: &StatLine) -> Self {
         Self {
-            value: bounds.map_or(value, |bounds| bounds.clamp(value)),
+            value: copied,
             half,
-            bounds,
+            bounds: range.map(|range| range.holding(copied)),
             rolls: range.filter(|_| line.rolls.len() == 1),
             tiers: None,
+        }
+    }
+
+    /// The limit at `value`, brought back within its bounds.
+    pub(super) fn at(self, value: f64) -> Self {
+        Self {
+            value: self.bounds.map_or(value, |bounds| bounds.clamp(value)),
+            ..self
         }
     }
 

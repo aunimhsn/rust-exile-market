@@ -9,6 +9,7 @@ use crate::item::AffixTier;
 use crate::roll_difference::CopiedLines;
 use crate::tier_rolls::{TierRolls, TierSpan};
 use crate::trade::stat_filters::LineStats;
+use crate::ui::item_stats::LineFacts;
 use crate::ui::item_stats::fixtures::{
     explicit_rows, limit, parse, part, read_again, row_texts, rows, rows_of, texts,
 };
@@ -120,7 +121,13 @@ fn a_modifier_of_one_tier_only_shows_its_ranges_without_tier() {
         flask.item_level(),
     );
     let flask = row_texts(crate::ui::item_stats::rows(
-        &flask, &lines, &stats, &tiers, base,
+        &flask,
+        LineFacts {
+            copied_lines: &lines,
+            line_stats: &stats,
+            tier_rolls: &tiers,
+        },
+        base,
     ));
     assert_eq!(
         flask[flask.len() - 2..],
