@@ -168,6 +168,40 @@ fn a_value_in_several_tiers_takes_the_worst_without_the_ranges_of_the_copy() {
 }
 
 #[test]
+fn only_the_worst_tie_is_bound_by_the_level_of_the_item() {
+    // The T1 `5–15` needs the item level 50.
+    let tables = read(concat!(
+        r##"{"type": "Life", "affix": "prefix", "lines": [{"template": "# to maximum Life"}], "##,
+        r#""spawn": [["helmet", 1]], "tiers": [{"level": 1, "ranges": [[[1, 10]]]}, {"level": 50, "ranges": [[[5, 15]]]}]}"#
+    ));
+    let copied = Copied {
+        lines: vec![CopiedLine {
+            templates: vec!["# to maximum Life"],
+            values: vec![12.0],
+            written: None,
+        }],
+        ranges: None,
+        tier: CopiedTier::Unknown,
+        origin: None,
+    };
+    let number = |tie, item_level| {
+        let tables = ItemTables {
+            all: &tables,
+            base: &equipment(&["helmet"]),
+            item_level,
+        };
+        find(&tables, TableAffix::Prefix, &copied, tie).and_then(|tiers| Some(tiers.tier()?.number))
+    };
+
+    // The advanced copy wrote the tier: found whatever the level of the item.
+    assert_eq!(number(Tie::Best, Some(10)), Some(1));
+    // From its values alone, a tier the item can't roll isn't one of its own.
+    assert_eq!(number(Tie::Worst, Some(10)), None);
+    assert_eq!(number(Tie::Worst, Some(50)), Some(1));
+    assert_eq!(number(Tie::Worst, None), Some(1));
+}
+
+#[test]
 fn a_line_an_essence_and_an_alloy_hold_as_well_names_no_currency() {
     let table = |source: &str| {
         format!(
