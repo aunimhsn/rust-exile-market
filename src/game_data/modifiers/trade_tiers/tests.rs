@@ -5,9 +5,10 @@
 use super::*;
 use crate::game_data::modifiers::best_reading::MAX_READINGS;
 use crate::game_data::modifiers::fixtures::{
-    Added, AffixTiers, added, equipment, modifier, summary,
+    Added, AffixTiers, ENERGY_SHIELD, LIFE, MANA, RARITY, added, equipment, modifier, read_tables,
+    summary, table_json,
 };
-use crate::game_data::modifiers::tables::{Table, read};
+use crate::game_data::modifiers::tables::Table;
 
 /// What [`read_in`] gives: for each modifier read, how many lines it has and the tier number
 /// of each affix it can be; and the text of each line split with the affix and tier number of
@@ -43,46 +44,10 @@ fn read_modifiers(
     )
 }
 
-/// A table of one or two lines that rolls on the helmets: its type, its affix, the template
-/// of each line, and for each tier its level and the range of each line.
-fn table(kind: &str, affix: &str, templates: &[&str], tiers: &[(u32, &[(u32, u32)])]) -> String {
-    let lines: Vec<String> = templates
-        .iter()
-        .map(|template| format!(r#"{{"template": "{template}"}}"#))
-        .collect();
-    let tiers: Vec<String> = tiers
-        .iter()
-        .map(|(level, ranges)| {
-            let ranges: Vec<String> = ranges
-                .iter()
-                .map(|(min, max)| format!("[[{min}, {max}]]"))
-                .collect();
-            format!(r#"{{"level": {level}, "ranges": [{}]}}"#, ranges.join(", "))
-        })
-        .collect();
-    format!(
-        r#"{{"type": "{kind}", "affix": "{affix}", "lines": [{}], "spawn": [["helmet", 1]], "tiers": [{}]}}"#,
-        lines.join(", "),
-        tiers.join(", ")
-    )
-}
-
-/// The tables written line by line in `lines` ([`table`]), every one of them read.
-fn written(lines: &[String]) -> Vec<Table> {
-    let tables = read(&lines.join("\n"));
-    assert_eq!(tables.len(), lines.len());
-    tables
-}
-
-const LIFE: &str = "# to maximum Life";
-const MANA: &str = "# to maximum Mana";
-const ENERGY_SHIELD: &str = "#% increased Energy Shield";
-const RARITY: &str = "#% increased Rarity of Items found";
-
 #[test]
 fn a_line_copied_from_the_in_game_trade_takes_the_worst_tier_its_item_level_allows() {
     use Affix::Prefix;
-    let tables = written(&[table(
+    let tables = read_tables(&[table_json(
         "Life",
         "prefix",
         &[LIFE],
@@ -135,7 +100,7 @@ fn lines_pure_modifiers_and_their_hybrid_hold_have_no_tier_while_the_item_has_ro
 /// The tables of [`pure_and_hybrid_tables`], with a rarity that rolls as a suffix.
 fn pure_hybrid_and_rarity_tables() -> Vec<Table> {
     let mut tables = pure_and_hybrid_tables();
-    tables.extend(written(&[table(
+    tables.extend(read_tables(&[table_json(
         "Rarity",
         "suffix",
         &[RARITY],
@@ -178,20 +143,20 @@ fn the_lines_of_a_hybrid_apart_are_in_doubt_too() {
 fn a_line_read_alone_is_in_doubt_when_its_hybrid_reads_a_line_left_without_tier() {
     use Affix::{Prefix, Suffix};
     // No pure life: its line has no tier alone.
-    let tables = written(&[
-        table(
+    let tables = read_tables(&[
+        table_json(
             "EnergyShield",
             "prefix",
             &[ENERGY_SHIELD],
             &[(1, &[(21, 30)])],
         ),
-        table(
+        table_json(
             "Hybrid",
             "prefix",
             &[ENERGY_SHIELD, LIFE],
             &[(1, &[(20, 29), (10, 19)])],
         ),
-        table("Rarity", "suffix", &[RARITY], &[(1, &[(10, 20)])]),
+        table_json("Rarity", "suffix", &[RARITY], &[(1, &[(10, 20)])]),
     ]);
     let (shield, rarity, life) = (
         "25% increased Energy Shield",
@@ -242,7 +207,7 @@ fn a_line_read_alone_is_in_doubt_when_its_hybrid_adds_up_on_a_line_left_without_
 fn a_hybrid_in_doubt_leaves_its_room_to_a_line_that_can_be_a_prefix_or_a_suffix() {
     use Affix::{Prefix, Suffix};
     let mut tables = pure_hybrid_and_rarity_tables();
-    tables.extend(written(&[table(
+    tables.extend(read_tables(&[table_json(
         "RarityPrefix",
         "prefix",
         &[RARITY],
@@ -277,14 +242,14 @@ fn a_hybrid_in_doubt_leaves_its_room_to_a_line_that_can_be_a_prefix_or_a_suffix(
 #[test]
 fn a_line_no_tier_holds_alone_adds_up_a_pure_modifier_and_its_hybrid() {
     use Affix::Prefix;
-    let tables = written(&[
-        table(
+    let tables = read_tables(&[
+        table_json(
             "EnergyShield",
             "prefix",
             &[ENERGY_SHIELD],
             &[(1, &[(10, 20)]), (30, &[(21, 30)])],
         ),
-        table(
+        table_json(
             "Hybrid",
             "prefix",
             &[ENERGY_SHIELD, LIFE],
@@ -312,10 +277,10 @@ fn a_line_no_tier_holds_alone_adds_up_a_pure_modifier_and_its_hybrid() {
 #[test]
 fn a_line_a_prefix_and_a_suffix_hold_keeps_the_affix_the_room_leaves() {
     use Affix::{Prefix, Suffix};
-    let tables = written(&[
-        table("Life", "prefix", &[LIFE], &[(1, &[(1, 30)])]),
-        table("RarityPrefix", "prefix", &[RARITY], &[(1, &[(10, 20)])]),
-        table(
+    let tables = read_tables(&[
+        table_json("Life", "prefix", &[LIFE], &[(1, &[(1, 30)])]),
+        table_json("RarityPrefix", "prefix", &[RARITY], &[(1, &[(10, 20)])]),
+        table_json(
             "RaritySuffix",
             "suffix",
             &[RARITY],
@@ -347,15 +312,15 @@ fn a_line_a_prefix_and_a_suffix_hold_keeps_the_affix_the_room_leaves() {
 /// Two pure prefixes of one tier, `21–30`, and their hybrid of two tiers, `10–19` and
 /// `20–29` on each line.
 fn pure_and_hybrid_tables() -> Vec<Table> {
-    written(&[
-        table("Life", "prefix", &[LIFE], &[(1, &[(21, 30)])]),
-        table(
+    read_tables(&[
+        table_json("Life", "prefix", &[LIFE], &[(1, &[(21, 30)])]),
+        table_json(
             "EnergyShield",
             "prefix",
             &[ENERGY_SHIELD],
             &[(1, &[(21, 30)])],
         ),
-        table(
+        table_json(
             "Hybrid",
             "prefix",
             &[ENERGY_SHIELD, LIFE],
@@ -397,21 +362,21 @@ fn the_lines_another_reading_adds_up_in_as_many_modifiers_have_no_tier() {
     use Affix::{Prefix, Suffix};
     // Two pure prefixes from 1: with the life of the hybrid, `10–19`, the pure life adds up
     // to 25 as well, two modifiers as the two pure ones; the hybrid alone doesn't hold 25.
-    let tables = written(&[
-        table("Life", "prefix", &[LIFE], &[(1, &[(1, 30)])]),
-        table(
+    let tables = read_tables(&[
+        table_json("Life", "prefix", &[LIFE], &[(1, &[(1, 30)])]),
+        table_json(
             "EnergyShield",
             "prefix",
             &[ENERGY_SHIELD],
             &[(1, &[(1, 30)])],
         ),
-        table(
+        table_json(
             "Hybrid",
             "prefix",
             &[ENERGY_SHIELD, LIFE],
             &[(1, &[(20, 29), (10, 19)])],
         ),
-        table("Rarity", "suffix", &[RARITY], &[(1, &[(10, 20)])]),
+        table_json("Rarity", "suffix", &[RARITY], &[(1, &[(10, 20)])]),
     ]);
     let rarity = "15% increased Rarity of Items found";
 
@@ -437,20 +402,20 @@ fn the_lines_another_reading_adds_up_in_as_many_modifiers_have_no_tier() {
 #[test]
 fn another_reading_of_a_split_line_leaves_it_without_tier_whatever_it_makes() {
     use Affix::Prefix;
-    let tables = written(&[
-        table(
+    let tables = read_tables(&[
+        table_json(
             "EnergyShield",
             "prefix",
             &[ENERGY_SHIELD],
             &[(1, &[(10, 20)]), (30, &[(21, 30)])],
         ),
-        table(
+        table_json(
             "Hybrid",
             "prefix",
             &[ENERGY_SHIELD, LIFE],
             &[(1, &[(10, 19), (1, 9)]), (30, &[(15, 24), (20, 29)])],
         ),
-        table("Life", "prefix", &[LIFE], &[(1, &[(10, 24)])]),
+        table_json("Life", "prefix", &[LIFE], &[(1, &[(10, 24)])]),
     ]);
     let lines = ["45% increased Energy Shield", "+25 to maximum Life"];
 
@@ -473,7 +438,7 @@ fn another_reading_of_a_split_line_leaves_it_without_tier_whatever_it_makes() {
 fn a_doubt_stays_in_the_part_of_the_item_it_is_about() {
     use Affix::Prefix;
     let mut tables = pure_and_hybrid_tables();
-    tables.extend(written(&[table(
+    tables.extend(read_tables(&[table_json(
         "Mana",
         "prefix",
         &[MANA],
@@ -495,7 +460,7 @@ fn a_doubt_stays_in_the_part_of_the_item_it_is_about() {
 fn two_hybrids_that_share_a_line_leave_it_without_tier_when_both_follow_it() {
     use Affix::{Prefix, Suffix};
     let hybrid = |kind, affix, other| {
-        table(
+        table_json(
             kind,
             affix,
             &[ENERGY_SHIELD, other],
@@ -504,7 +469,7 @@ fn two_hybrids_that_share_a_line_leave_it_without_tier_when_both_follow_it() {
     };
     // No pure modifier: the energy shield is a hybrid with the life or with the mana, the
     // other line then without tier.
-    let tables = written(&[
+    let tables = read_tables(&[
         hybrid("HybridLife", "prefix", LIFE),
         hybrid("HybridMana", "prefix", MANA),
     ]);
@@ -525,11 +490,11 @@ fn two_hybrids_that_share_a_line_leave_it_without_tier_when_both_follow_it() {
     assert_eq!(read, [(2, vec![(Prefix, 1)])]);
     // The hybrid with the mana a suffix: a rarity that rolls as both keeps both affixes,
     // each reading leaving it another one.
-    let tables = written(&[
+    let tables = read_tables(&[
         hybrid("HybridLife", "prefix", LIFE),
         hybrid("HybridMana", "suffix", MANA),
-        table("RarityPrefix", "prefix", &[RARITY], &[(1, &[(10, 20)])]),
-        table("RaritySuffix", "suffix", &[RARITY], &[(1, &[(10, 20)])]),
+        table_json("RarityPrefix", "prefix", &[RARITY], &[(1, &[(10, 20)])]),
+        table_json("RaritySuffix", "suffix", &[RARITY], &[(1, &[(10, 20)])]),
     ]);
     let rarity = "15% increased Rarity of Items found";
     let both = [(1, vec![(Prefix, 1), (Suffix, 1)])];
@@ -543,11 +508,11 @@ fn two_hybrids_that_share_a_line_leave_it_without_tier_when_both_follow_it() {
 fn a_best_reading_out_of_the_room_keeps_only_the_tiers_every_reading_in_the_room_gives() {
     use Affix::Prefix;
     let prefixes = [
-        table("LifePrefix", "prefix", &[LIFE], &[(1, &[(40, 60)])]),
-        table("ManaPrefix", "prefix", &[MANA], &[(1, &[(25, 35)])]),
-        table("RarityPrefix", "prefix", &[RARITY], &[(1, &[(10, 20)])]),
+        table_json("LifePrefix", "prefix", &[LIFE], &[(1, &[(40, 60)])]),
+        table_json("ManaPrefix", "prefix", &[MANA], &[(1, &[(25, 35)])]),
+        table_json("RarityPrefix", "prefix", &[RARITY], &[(1, &[(10, 20)])]),
     ];
-    let with = |suffixes: &[String]| written(&[prefixes.as_slice(), suffixes].concat());
+    let with = |suffixes: &[String]| read_tables(&[prefixes.as_slice(), suffixes].concat());
     let (life, mana, rarity) = (
         "+50 to maximum Life",
         "+30 to maximum Mana",
@@ -557,14 +522,14 @@ fn a_best_reading_out_of_the_room_keeps_only_the_tiers_every_reading_in_the_room
 
     // A hybrid suffix and a pure suffix of each stat add up to the life and to the mana.
     let adding_up = [
-        table(
+        table_json(
             "HybridSuffix",
             "suffix",
             &[LIFE, MANA],
             &[(1, &[(20, 29), (10, 19)])],
         ),
-        table("LifeSuffix", "suffix", &[LIFE], &[(1, &[(20, 29)])]),
-        table("ManaSuffix", "suffix", &[MANA], &[(1, &[(10, 19)])]),
+        table_json("LifeSuffix", "suffix", &[LIFE], &[(1, &[(20, 29)])]),
+        table_json("ManaSuffix", "suffix", &[MANA], &[(1, &[(10, 19)])]),
     ];
     let tables = with(&adding_up);
     let lines = [life, mana].map(|text| modifier(None, &[text]));
@@ -596,13 +561,13 @@ fn a_best_reading_out_of_the_room_keeps_only_the_tiers_every_reading_in_the_room
     // A rarity that two tiers of its prefix hold takes the worst one while the best reading
     // fits the room, a reading a tier apart being no doubt.
     let mut two_tiers = prefixes.clone();
-    two_tiers[2] = table(
+    two_tiers[2] = table_json(
         "RarityPrefix",
         "prefix",
         &[RARITY],
         &[(1, &[(10, 16)]), (1, &[(14, 20)])],
     );
-    let tables = written(&[two_tiers.as_slice(), &adding_up].concat());
+    let tables = read_tables(&[two_tiers.as_slice(), &adding_up].concat());
     let ((read, _), effort) = read_modifiers(&tables, 60, &lines, (3, 3));
     assert_eq!(read, [pure.clone(), pure.clone(), (1, vec![(Prefix, 2)])]);
     assert_eq!(effort.ending, Ending::OtherReadings(Outcome::BestMet));
@@ -618,7 +583,8 @@ fn a_best_reading_out_of_the_room_keeps_only_the_tiers_every_reading_in_the_room
     // Three pure suffixes of each stat: two readings in the room, each with one of the
     // prefixes and the suffixes of the other stat. Each prefix has a reading that gives
     // it, none gives both.
-    let suffix = |kind: &str, template, range| table(kind, "suffix", &[template], &[(1, &[range])]);
+    let suffix =
+        |kind: &str, template, range| table_json(kind, "suffix", &[template], &[(1, &[range])]);
     let tables = with(&[
         suffix("LifeA", LIFE, (15, 18)),
         suffix("LifeB", LIFE, (15, 18)),
@@ -638,9 +604,9 @@ fn a_best_reading_out_of_the_room_keeps_only_the_tiers_every_reading_in_the_room
 
 #[test]
 fn a_best_reading_the_other_readings_dont_meet_leaves_every_line_without_tier() {
-    let tables = written(&[
-        table("Life", "prefix", &[LIFE], &[(1, &[(21, 30)])]),
-        table("Rarity", "suffix", &[RARITY], &[(1, &[(10, 20)])]),
+    let tables = read_tables(&[
+        table_json("Life", "prefix", &[LIFE], &[(1, &[(21, 30)])]),
+        table_json("Rarity", "suffix", &[RARITY], &[(1, &[(10, 20)])]),
     ]);
     // Two lines of one stat written apart, one fractured: the best reading takes each for
     // the pure life, two modifiers of one type, which the game can't roll and the other
