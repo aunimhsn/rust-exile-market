@@ -250,9 +250,9 @@ impl Run<'_> {
                 let taken: Vec<Range> = ranges.by_ref().take(count).copied().collect();
                 let stat = line_match.stat.as_ref()?;
                 let lines = offset + line_match.lines.start..offset + line_match.lines.end;
-                let numbers = joined.lines.get_mut(lines)?.iter_mut();
+                let joined_lines = joined.lines.get_mut(lines)?.iter_mut();
                 let rolls: Vec<_> = stat
-                    .counted(numbers.flat_map(|line| &mut line.rolls))
+                    .counted(joined_lines.flat_map(|line| &mut line.rolls))
                     .collect();
                 if rolls.len() == taken.len() {
                     for (roll, range) in rolls.into_iter().zip(taken) {

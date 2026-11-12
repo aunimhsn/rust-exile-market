@@ -41,13 +41,13 @@ pub fn modifier_tiers(
     if let Some(TierDoubt::Split { line, whole, .. }) = &modifier.doubt {
         return split_tiers(&tables, modifier, matches, (*line, whole));
     }
-    let (affix, copied) = searched(modifier, matches)?;
+    let (affix, copied) = affix_and_copied(modifier, matches)?;
     find(&tables, affix, &copied, Tie::Best)
 }
 
 /// What the tables are searched with for `modifier`: its affix, and its lines as copied; none
 /// for a modifier that isn't a prefix or suffix, or a line without its stat.
-fn searched<'a>(
+fn affix_and_copied<'a>(
     modifier: &'a Modifier,
     matches: &'a [LineMatch<'_>],
 ) -> Option<(TableAffix, Copied<'a>)> {
@@ -77,7 +77,7 @@ pub fn lacks_table(base: ItemBase<'_>, modifier: &Modifier, matches: &[LineMatch
     let Some(tables) = ItemTables::of_game(base) else {
         return false;
     };
-    searched(modifier, matches)
+    affix_and_copied(modifier, matches)
         .is_some_and(|(affix, copied)| find(&tables, affix, &copied, Tie::Best).is_none())
 }
 
