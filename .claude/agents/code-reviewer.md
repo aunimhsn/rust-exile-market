@@ -17,6 +17,8 @@ Before reviewing, read:
 
 Run `date +%H:%M` when you start and when you finish: the length of a review is a criterion of the split of a step, written in your review.
 
+Write at the top of your review the model you run on, as your own instructions name it: the model of a review is chosen when it is launched, by what it reads (`roadmap.md`, Models), and your notes are where the owner sees which one wrote them. If you can't tell, write so.
+
 The project owner is an experienced software engineer, newer to Rust. Explain each recommendation clearly enough to understand the Rust concept behind it.
 
 ## Scope
@@ -72,6 +74,7 @@ Use this structure:
 # Code review: <branch>
 
 - **Date**: <YYYY-MM-DD>
+- **Model**: <the model you run on>
 - **Commits**: <short list>
 - **Clippy**: <result>
 - **Tests**: <result>
