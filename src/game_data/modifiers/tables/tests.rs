@@ -107,7 +107,11 @@ fn a_table_may_hold_a_modifier_by_the_origin_the_game_marks() {
     // desecrated one.
     assert_eq!(holding(None), ["ordinary", "genesis", "essence"]);
     // A marked one may be of any table but a desecrated one.
-    for marked in [ModifierOrigin::Crafted, ModifierOrigin::Fractured] {
+    for marked in [
+        ModifierOrigin::Crafted,
+        ModifierOrigin::Fractured,
+        ModifierOrigin::Vaal,
+    ] {
         assert_eq!(
             holding(Some(marked)),
             ["ordinary", "genesis", "essence", "alloy"]

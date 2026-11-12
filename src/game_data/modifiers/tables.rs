@@ -137,11 +137,14 @@ impl Table {
     /// only a marked one, the game marking it crafted (`(crafted)` from the in-game trade,
     /// checked by the owner on 2026-10-30), or fractured since: an unmarked line read in a
     /// hybrid of an alloy (`+1 to Level of all Spell Skills` and the mana of a wand) would put
-    /// the ordinary modifiers of every such item in doubt.
+    /// the ordinary modifiers of every such item in doubt. A Vaal line, the mark of a corrupted
+    /// unique, whose modifiers the tables don't hold, is read as the other marked ones.
     pub(super) fn may_hold(&self, origin: Option<ModifierOrigin>) -> bool {
         match origin {
             Some(ModifierOrigin::Desecrated) => self.currency().is_none(),
-            Some(_) => self.domain != Domain::Desecrated,
+            Some(ModifierOrigin::Crafted | ModifierOrigin::Fractured | ModifierOrigin::Vaal) => {
+                self.domain != Domain::Desecrated
+            }
             None => self.domain != Domain::Desecrated && self.source != Some(TableSource::Alloy),
         }
     }
