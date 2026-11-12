@@ -69,8 +69,8 @@ fn a_search_cut_at_its_bound_leaves_every_line_read_in_doubt() {
     // The same within the steps it took.
     let within = doubts_in(&tables, &lines, room, whole.steps);
     assert_eq!(ended(&within), (Outcome::BestMet, vec![], false));
-    // One step short, some readings not looked at: no line read keeps its tier, nor loses an
-    // affix to the room.
+    // One step short, some readings not looked at: no line read keeps its tier. The other
+    // room comes with them by convention: no line is left with a tier to read it.
     let cut = doubts_in(&tables, &lines, room, whole.steps - 1);
     assert_eq!(ended(&cut), (Outcome::Cut, vec![0, 2], true));
     assert_eq!(cut.steps, whole.steps - 1);

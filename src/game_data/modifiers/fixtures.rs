@@ -313,12 +313,13 @@ pub(super) fn parse(text: &str) -> Item {
 
 /// The prefixes and suffixes a rare item can have. Written by hand for the test items, as
 /// those of a jewel and of a magic item are: the application counts them above the game data
-/// (`LineStats::affix_limits`).
-const RARE: AffixLimits = AffixLimits::new(3, 3);
+/// (`LineStats::affix_limits`). None of these items has a line that allows more or fewer
+/// (`+1 Suffix Modifier allowed`), which would need limits of its own.
+const RARE_LIMITS: AffixLimits = AffixLimits::new(3, 3);
 /// The prefixes and suffixes a rare jewel can have.
-const RARE_JEWEL: AffixLimits = AffixLimits::new(2, 2);
+const JEWEL_LIMITS: AffixLimits = AffixLimits::new(2, 2);
 /// The prefixes and suffixes a magic item can have.
-const MAGIC: AffixLimits = AffixLimits::new(1, 1);
+const MAGIC_LIMITS: AffixLimits = AffixLimits::new(1, 1);
 
 /// The rare and magic items of the advanced copy, each with the base type of a magic one and
 /// the prefixes and suffixes it can have.
@@ -326,82 +327,82 @@ pub(super) const ADVANCED_COPIES: [(&str, Option<&str>, AffixLimits); 16] = [
     (
         include_str!("../../item/test-items/en-rare-crossbow-all-modifiers.txt"),
         None,
-        RARE,
+        RARE_LIMITS,
     ),
     (
         include_str!("../../item/test-items/en-rare-bow-fractured.txt"),
         None,
-        RARE,
+        RARE_LIMITS,
     ),
     (
         include_str!("../../item/test-items/en-magic-mace.txt"),
         Some("Temple Maul"),
-        MAGIC,
+        MAGIC_LIMITS,
     ),
     (
         include_str!("../../item/test-items/fr-rare-staff.txt"),
         None,
-        RARE,
+        RARE_LIMITS,
     ),
     (
         include_str!("../../item/test-items/fr-rare-body-armour.txt"),
         None,
-        RARE,
+        RARE_LIMITS,
     ),
     (
         include_str!("../../item/test-items/en-owner-rare-sceptre-sanctified.txt"),
         None,
-        RARE,
+        RARE_LIMITS,
     ),
     (
         include_str!("../../item/test-items/fr-rare-sceptre-sanctified.txt"),
         None,
-        RARE,
+        RARE_LIMITS,
     ),
     (
         include_str!("../../item/test-items/en-owner-rare-helmet-runeforged.txt"),
         None,
-        RARE,
+        RARE_LIMITS,
     ),
     (
         include_str!("../../item/test-items/fr-rare-helmet-runeforged.txt"),
         None,
-        RARE,
+        RARE_LIMITS,
     ),
     (
         include_str!("../../item/test-items/en-owner-rare-focus-unrevealed.txt"),
         None,
-        RARE,
+        RARE_LIMITS,
     ),
     (
         include_str!("../../item/test-items/fr-rare-focus-unrevealed.txt"),
         None,
-        RARE,
+        RARE_LIMITS,
     ),
     (
         include_str!("../../item/test-items/en-owner-rare-ring-breach.txt"),
         None,
-        RARE,
+        RARE_LIMITS,
     ),
     (
         include_str!("../../item/test-items/fr-rare-ring-breach.txt"),
         None,
-        RARE,
+        RARE_LIMITS,
     ),
     (
         include_str!("../../item/test-items/en-owner-rare-jewel-time-lost.txt"),
         None,
-        RARE_JEWEL,
+        JEWEL_LIMITS,
     ),
     (
         include_str!("../../item/test-items/fr-rare-jewel-time-lost.txt"),
         None,
-        RARE_JEWEL,
+        JEWEL_LIMITS,
     ),
     (
         include_str!("../../item/test-items/fr-rare-jewel-time-lost-large.txt"),
         None,
-        RARE_JEWEL,
+        JEWEL_LIMITS,
     ),
 ];
 

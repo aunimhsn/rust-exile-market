@@ -296,9 +296,11 @@ fn rolled<'a>(
             .filter(|other| other.same_modifier(table) && other.rolls_on(base))
             .flat_map(|other| &other.tiers)
             .collect();
-        // The numbering of the tiers written a second time, on purpose: the draw tells the
-        // tier a line rolled without the code it measures (`ItemTables::tiers_of`), so that
-        // a slip of either numbering shows in the counts, as lines read in another tier.
+        // The order of the tiers (by level, then by bounds) and their numbering written a
+        // second time, on purpose: the draw tells the tier a line rolled without the sort it
+        // measures (`ItemTables::tiers_of`), so that a slip of either shows in the counts, as
+        // lines read in another tier. The tiers themselves are gathered by the same
+        // `same_modifier` and `rolls_on`: a slip there moves both numberings alike, unseen.
         let bounds = |tier: &'a TableTier| tier.ranges.iter().flatten().flatten().copied();
         tiers.sort_by(|tier, other| {
             tier.level

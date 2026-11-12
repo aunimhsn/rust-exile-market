@@ -24,7 +24,7 @@ fn only_the_tiers_the_item_level_allows_are_placed() {
         modifier_count: 1,
     };
     // The number and the range of each tier placed.
-    let placed = |item_level| {
+    let tiers_placed = |item_level| {
         let tables = ItemTables {
             all: &tables,
             base: &equipment(&["helmet"]),
@@ -38,10 +38,10 @@ fn only_the_tiers_the_item_level_allows_are_placed() {
     };
     let (best, worst) = ((1, vec![range(5.0, 20.0)]), (2, vec![range(1.0, 15.0)]));
 
-    assert_eq!(placed(Some(50)), [best.clone(), worst.clone()]);
-    assert_eq!(placed(Some(49)), std::slice::from_ref(&worst));
+    assert_eq!(tiers_placed(Some(50)), [best.clone(), worst.clone()]);
+    assert_eq!(tiers_placed(Some(49)), std::slice::from_ref(&worst));
     // A copy that doesn't write its level: an item of any level.
-    assert_eq!(placed(None), [best, worst]);
+    assert_eq!(tiers_placed(None), [best, worst]);
 }
 
 #[test]
