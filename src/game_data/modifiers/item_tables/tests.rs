@@ -5,20 +5,13 @@
 use super::*;
 use crate::game_data::bases::Domain;
 use crate::game_data::modifiers::copied::{CopiedLine, CopiedTier};
-use crate::game_data::modifiers::fixtures::{
-    ENERGY_SHIELD, LIFE, MANA, equipment, range, table, written,
-};
+use crate::game_data::modifiers::fixtures::{ENERGY_SHIELD, LIFE, MANA, equipment, range, table};
 use crate::game_data::modifiers::tables::{TableLord, TableSource};
 use crate::item::{Currency, ModifierOrigin};
 
-/// The table `text` writes ([`table`]): on the helmets.
-fn one(text: String) -> Table {
-    written(&[text]).remove(0)
-}
-
 /// The life as a prefix on the helmets, with `tiers`: the level and the range of each.
 fn life(tiers: &[(u32, &[(u32, u32)])]) -> Table {
-    one(table("Life", "prefix", &[LIFE], tiers))
+    table("Life", "prefix", &[LIFE], tiers)
 }
 
 /// `table` on the bases of `tag`, in place of the helmets.
@@ -64,7 +57,7 @@ fn the_tiers_of_a_modifier_on_a_base_are_those_of_its_tables_that_roll_on_it_the
         on("ring", life(&[(1, &[(1, 5)]), (60, &[(21, 30)])])),
         on("armour", life(&[(45, &[(15, 25)])])),
         // Another modifier with its line.
-        one(table("Vigour", "prefix", &[LIFE], &[(80, &[(31, 40)])])),
+        table("Vigour", "prefix", &[LIFE], &[(80, &[(31, 40)])]),
     ];
     let tiers = |table: usize, tags: &[&str], item_level| {
         let tables = ItemTables {
@@ -127,12 +120,12 @@ fn tiers_of_one_level_are_numbered_by_their_ranges_the_higher_the_better() {
     assert_eq!(ranges(&[higher(), lower()], &life_copied, &[0]), numbered);
 
     // Two tiers that differ by their second line only.
-    let hybrid = one(table(
+    let hybrid = table(
         "Hybrid",
         "prefix",
         &[ENERGY_SHIELD, LIFE],
         &[(1, &[(10, 19), (5, 9)]), (1, &[(10, 19), (1, 4)])],
-    ));
+    );
     let hybrid_copied = copied(&[(ENERGY_SHIELD, 15.0), (LIFE, 3.0)]);
     assert_eq!(
         ranges(&[hybrid], &hybrid_copied, &[0, 1]),
@@ -147,12 +140,12 @@ fn tiers_of_one_level_are_numbered_by_their_ranges_the_higher_the_better() {
 fn the_ranges_of_a_tier_follow_the_copied_lines_each_from_its_lower_bound() {
     // The range of the life written from its higher bound, as the one of a stat that rolls
     // negative values.
-    let hybrid = one(table(
+    let hybrid = table(
         "Hybrid",
         "prefix",
         &[ENERGY_SHIELD, LIFE],
         &[(1, &[(10, 19), (29, 20)])],
-    ));
+    );
     let helmet = equipment(&["helmet"]);
     let tables = ItemTables {
         all: std::slice::from_ref(&hybrid),
@@ -235,7 +228,7 @@ fn modifiers<'a>(held: impl Iterator<Item = Held<'a>>) -> HeldModifiers {
 /// of a lookup rules out, and those another origin or another affix give.
 fn lookup_tables() -> Vec<Table> {
     let life_tiers: &[(u32, &[(u32, u32)])] = &[(1, &[(1, 30)]), (40, &[(31, 60)])];
-    let life_as = |kind: &str, affix: &str| one(table(kind, affix, &[LIFE], life_tiers));
+    let life_as = |kind: &str, affix: &str| table(kind, affix, &[LIFE], life_tiers);
     let two_ranges = TableTier {
         level: 1,
         ranges: vec![vec![[1.0, 30.0], [31.0, 60.0]]],
@@ -243,7 +236,7 @@ fn lookup_tables() -> Vec<Table> {
     vec![
         life(life_tiers),
         // Other lines.
-        one(table("Mana", "prefix", &[MANA], life_tiers)),
+        table("Mana", "prefix", &[MANA], life_tiers),
         // The life again, on the rings: not the first table of its modifier.
         on("ring", life(&[(60, &[(61, 90)])])),
         // A tier with two ranges for the one value of the line: its tiers can't be read.
@@ -330,12 +323,12 @@ fn the_modifiers_of_an_affix_are_those_of_its_tables_alone() {
 
 #[test]
 fn the_lines_of_a_hybrid_copied_in_another_order_give_its_values_and_ranges_in_that_order() {
-    let hybrid = one(table(
+    let hybrid = table(
         "Hybrid",
         "prefix",
         &[ENERGY_SHIELD, LIFE],
         &[(1, &[(10, 19), (20, 29)])],
-    ));
+    );
     let helmet = equipment(&["helmet"]);
     let tables = ItemTables {
         all: std::slice::from_ref(&hybrid),
@@ -362,12 +355,12 @@ fn the_lines_of_a_hybrid_copied_in_another_order_give_its_values_and_ranges_in_t
 fn a_line_without_number_copied_in_another_order_is_divided_as_its_own_line_shows_it() {
     const RAGE: &str = "Inherent Rage loss starts 1 second later";
     // Shown in seconds, stored in milliseconds.
-    let mut timed = one(table(
+    let mut timed = table(
         "Timed",
         "prefix",
         &[RAGE, LIFE],
         &[(1, &[(1, 3), (20, 29)])],
-    ));
+    );
     timed.lines[0].divisor = 1000.0;
     let helmet = equipment(&["helmet"]);
     let tables = ItemTables {
@@ -387,7 +380,7 @@ fn a_line_without_number_copied_in_another_order_is_divided_as_its_own_line_show
 
 #[test]
 fn the_tiers_of_a_modifier_held_tell_what_its_table_tells_of_the_copied_one() {
-    let life_as = |kind: &str| one(table(kind, "prefix", &[LIFE], &[(1, &[(1, 30)])]));
+    let life_as = |kind: &str| table(kind, "prefix", &[LIFE], &[(1, &[(1, 30)])]);
     let tables = [
         Table {
             source: Some(TableSource::Essence),

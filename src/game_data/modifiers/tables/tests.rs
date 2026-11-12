@@ -2,11 +2,11 @@
 //! which tables are one modifier and what of a file is read, whatever the patch of the game.
 
 use super::*;
-use crate::game_data::modifiers::fixtures::{LIFE, MANA, equipment, table, written};
+use crate::game_data::modifiers::fixtures::{LIFE, MANA, equipment, table, table_json};
 
 /// The life as a prefix, in one tier: an ordinary table, which rolls on the helmets.
 fn life() -> Table {
-    written(&[table("Life", "prefix", &[LIFE], &[(1, &[(1, 10)])])]).remove(0)
+    table("Life", "prefix", &[LIFE], &[(1, &[(1, 10)])])
 }
 
 /// A table of the same type, affix and lines as [`life`], desecrated: a lord's.
@@ -242,8 +242,8 @@ fn a_table_written_with_its_type_affix_lines_tags_and_tiers_alone_is_an_ordinary
 
 #[test]
 fn a_line_of_the_file_that_cant_be_read_is_left_out() {
-    let life = table("Life", "prefix", &[LIFE], &[(1, &[(1, 10)])]);
-    let mana = table("Mana", "prefix", &[MANA], &[(1, &[(1, 10)])]);
+    let life = table_json("Life", "prefix", &[LIFE], &[(1, &[(1, 10)])]);
+    let mana = table_json("Mana", "prefix", &[MANA], &[(1, &[(1, 10)])]);
     // A field the application doesn't know, in the table, in a line and in a tier: the
     // generator and the application would no longer describe the same file.
     let renamed = [

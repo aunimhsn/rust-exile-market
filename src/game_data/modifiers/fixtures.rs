@@ -82,9 +82,10 @@ pub(super) fn part(affix: Affix, tiers: &[u32], ranges: &[(f64, f64)]) -> PartTi
     }
 }
 
-/// A table of one or two lines that rolls on the helmets: its type, its affix, the template
-/// of each line, and for each tier its level and the range of each line.
-pub(super) fn table(
+/// The line of the file of a table of one or two lines that rolls on the helmets: its type,
+/// its affix, the template of each line, and for each tier its level and the range of each
+/// line.
+pub(super) fn table_json(
     kind: &str,
     affix: &str,
     templates: &[&str],
@@ -111,11 +112,21 @@ pub(super) fn table(
     )
 }
 
-/// The tables written line by line in `lines` ([`table`]), every one of them read.
-pub(super) fn written(lines: &[String]) -> Vec<Table> {
+/// The tables of `lines`, each the line of a table ([`table_json`]), every one of them read.
+pub(super) fn read_tables(lines: &[String]) -> Vec<Table> {
     let tables = read(&lines.join("\n"));
     assert_eq!(tables.len(), lines.len());
     tables
+}
+
+/// The table of the line [`table_json`] writes with `kind`, `affix`, `templates` and `tiers`.
+pub(super) fn table(
+    kind: &str,
+    affix: &str,
+    templates: &[&str],
+    tiers: &[(u32, &[(u32, u32)])],
+) -> Table {
+    read_tables(&[table_json(kind, affix, templates, tiers)]).remove(0)
 }
 
 pub(super) const LIFE: &str = "# to maximum Life";
