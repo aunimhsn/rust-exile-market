@@ -190,7 +190,7 @@ fn the_words_of_a_tier_name_the_lord_and_take_a_tier_without_range() {
 fn a_range_field_takes_a_minus_sign_when_its_value_or_its_range_is_negative() {
     let line = StatLine::parse("-15% to Fire Resistance");
     let allows_minus_sign =
-        |value, bounds| Limit::new(value, Half::Minimum, bounds, value, &line).allows_minus_sign();
+        |value, bounds| Limit::new(value, Half::Minimum, bounds, &line).allows_minus_sign();
 
     assert!(allows_minus_sign(-15.0, None));
     assert!(!allows_minus_sign(15.0, None));
@@ -208,7 +208,7 @@ fn a_range_field_takes_a_minus_sign_when_its_value_or_its_range_is_negative() {
 fn a_range_field_holds_four_characters_a_side_when_its_stat_reaches_them() {
     let line = StatLine::parse("+2250 Armour if you've Blocked Recently");
     let wide = |value, min, max| {
-        Limit::new(value, Half::Minimum, Some(Range { min, max }), value, &line).is_wide()
+        Limit::new(value, Half::Minimum, Some(Range { min, max }), &line).is_wide()
     };
 
     assert!(!wide(245.0, 200.0, 320.0));
@@ -218,6 +218,14 @@ fn a_range_field_holds_four_characters_a_side_when_its_stat_reaches_them() {
     assert!(wide(16.3, 15.0, 20.0));
     assert!(wide(-20.5, -25.0, -10.0));
     // Without a range, e.g. a rare at 90 % before the modifier tables: its value.
-    assert!(Limit::new(6.83, Half::Minimum, None, 7.59, &line).is_wide());
-    assert!(!Limit::new(163.0, Half::Minimum, None, 181.0, &line).is_wide());
+    assert!(
+        Limit::new(7.59, Half::Minimum, None, &line)
+            .at(6.83)
+            .is_wide()
+    );
+    assert!(
+        !Limit::new(181.0, Half::Minimum, None, &line)
+            .at(163.0)
+            .is_wide()
+    );
 }

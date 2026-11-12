@@ -44,7 +44,7 @@ pub(super) fn unique_rows<'a>(item: &'a Item, context: &LineContext<'_>) -> Vec<
             .and_then(|modifier| modifier.origin)
             .map(Origin::Written);
         if item.has_rolls_from_prices() && has_no_range(&context.counted(key, line)) {
-            unpriced_stat(key, line, origin, context)
+            unranged_stat(key, line, origin, context)
         } else {
             unique_stat(key, line, origin, context)
         }
@@ -95,7 +95,6 @@ fn unique_stat<'a>(
                 value,
                 context.half(key),
                 value_bounds(line, &ranges),
-                value,
                 line,
             )),
         }),
@@ -113,7 +112,7 @@ fn has_no_range(line: &StatLine) -> bool {
 /// A line of a unique copied without ranges none of whose values got a range from the prices:
 /// with a number, it may vary, a filter unchecked at its value, without bar nor range; fixed
 /// otherwise. The `origin` of its modifier (Vaal) stands alone under it.
-fn unpriced_stat<'a>(
+fn unranged_stat<'a>(
     key: StatKey,
     whole: &'a StatLine,
     origin: Option<Origin>,
@@ -127,7 +126,7 @@ fn unpriced_stat<'a>(
     Stat {
         filter: Some(StatFilter {
             checked: false,
-            limit: Some(Limit::new(value, context.half(key), None, value, line)),
+            limit: Some(Limit::new(value, context.half(key), None, line)),
         }),
         ..fixed
     }

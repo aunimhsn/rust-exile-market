@@ -7,9 +7,9 @@ use crate::item::{ModifierOrigin, Range};
 use crate::language::Language;
 use crate::roll_difference::CopiedLines;
 use crate::tier_rolls::TierRolls;
-use crate::ui::item_stats::Stats;
 use crate::ui::item_stats::fixtures::{parse, rows, texts};
 use crate::ui::item_stats::model::{ModifierTier, Origin, TierRow};
+use crate::ui::item_stats::{LineFacts, Stats};
 
 #[test]
 fn the_lines_of_a_stat_with_a_number_on_two_of_them_stay_apart() {
@@ -52,7 +52,15 @@ fn the_stats_of_one_modifier_are_joined_each_on_its_own_lines() {
         None,
     );
     let line_stats = LineStats::new(&unique, unique.modifiers(), None);
-    let stats = Stats::new(&unique, &lines, &line_stats, &TierRolls::default(), None);
+    let stats = Stats::new(
+        &unique,
+        LineFacts {
+            copied_lines: &lines,
+            line_stats: &line_stats,
+            tier_rolls: &TierRolls::default(),
+        },
+        None,
+    );
 
     assert_eq!(
         texts(&unique),

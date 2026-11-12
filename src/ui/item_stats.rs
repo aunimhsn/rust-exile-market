@@ -72,6 +72,16 @@ pub fn count(item: &Item) -> u32 {
     count_of(item.modifiers())
 }
 
+/// What the application knows of the modifier lines of an item: its `copied_lines` tell which
+/// are better lower, its `line_stats` which the trade site can search, and its `tier_rolls` the
+/// rolls of every tier of a prefix or suffix.
+#[derive(Clone, Copy)]
+pub struct LineFacts<'r> {
+    pub copied_lines: &'r CopiedLines,
+    pub line_stats: &'r LineStats,
+    pub tier_rolls: &'r TierRolls,
+}
+
 /// The stats and filters of an item, decided once for a frame.
 pub struct Stats<'a> {
     item: &'a Item,
@@ -79,20 +89,13 @@ pub struct Stats<'a> {
 }
 
 impl<'a> Stats<'a> {
-    /// The stats of `item`, whose `copied_lines` tell which are better lower, their
-    /// `line_stats` which the trade site can search, and their `tier_rolls` the rolls of every
-    /// tier of a prefix or suffix; `base_type` is the base type its search looks for, a filter.
+    /// The stats of `item`, of whose lines the application knows the `facts`; `base_type` is
+    /// the base type its search looks for, a filter.
     #[must_use]
-    pub fn new(
-        item: &'a Item,
-        copied_lines: &CopiedLines,
-        line_stats: &LineStats,
-        tier_rolls: &TierRolls,
-        base_type: Option<&'a str>,
-    ) -> Self {
+    pub fn new(item: &'a Item, facts: LineFacts<'_>, base_type: Option<&'a str>) -> Self {
         Self {
             item,
-            rows: rows(item, copied_lines, line_stats, tier_rolls, base_type),
+            rows: rows(item, facts, base_type),
         }
     }
 
@@ -150,16 +153,14 @@ pub(super) fn property_value(property: Property, value: f64) -> String {
     }
 }
 
-/// The rows of the stats of `item`, whose `copied_lines` tell which are better lower, their
-/// `line_stats` which the trade site can search, and their `tier_rolls` the rolls of every tier
-/// of a prefix or suffix; `base_type` is the base type its search looks for, a filter.
-fn rows<'a>(
-    item: &'a Item,
-    copied_lines: &CopiedLines,
-    line_stats: &LineStats,
-    tier_rolls: &TierRolls,
-    base_type: Option<&'a str>,
-) -> Vec<Row<'a>> {
+/// The rows of the stats of `item`, of whose lines the application knows the `facts`;
+/// `base_type` is the base type its search looks for, a filter.
+fn rows<'a>(item: &'a Item, facts: LineFacts<'_>, base_type: Option<&'a str>) -> Vec<Row<'a>> {
+    let LineFacts {
+        copied_lines,
+        line_stats,
+        tier_rolls,
+    } = facts;
     let mut rows = Vec::new();
     let mut dps = if item.rarity().has_item_filters() {
         push_group(&mut rows, Group::Item, item_filters(item, base_type));
@@ -179,7 +180,7 @@ fn rows<'a>(
         Vec::new()
     };
     // An unrevealed modifier can change the item: its other stats start unchecked.
-    let has_unrevealed = item.unrevealed_modifiers() > 0;
+    let has_unrevealed = item.has_unrevealed_modifiers();
     if has_unrevealed {
         uncheck(&mut dps);
         uncheck(&mut pseudo);
@@ -235,7 +236,9 @@ fn remove_unsearchable_filters(rows: &mut [Row<'_>], line_stats: &LineStats) {
 /// its values, once one is ([`has_tier_found`]); its ranges from the prices, once one comes:
 /// none before they arrive.
 fn notes(item: &Item) -> Vec<Row<'static>> {
-    let unrevealed = (item.unrevealed_modifiers() > 0).then_some(Row::UnrevealedNote);
+    let unrevealed = item
+        .has_unrevealed_modifiers()
+        .then_some(Row::UnrevealedNote);
     let trade_copy =
         (item.has_tiers_from_values() && has_tier_found(item)).then_some(Row::TradeCopyNote);
     let unique_rolls =

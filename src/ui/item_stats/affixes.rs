@@ -106,7 +106,7 @@ fn affix_stats<'a>(
 ) -> Vec<Stat<'a>> {
     sorted_modifiers(item, affix, context)
         .into_iter()
-        .flat_map(|(index, modifier)| modifier_stats(index, modifier, context))
+        .flat_map(|(index, modifier)| stats_of_modifier(index, modifier, context))
         .collect()
 }
 
@@ -143,7 +143,7 @@ fn sorted_modifiers<'a>(
 /// line, or the tier of the hybrid under the last of its other lines for a line that adds up
 /// two modifiers, whose origin goes under the tiers of that line; the tiers of each affix or
 /// of each part in place of the roll of their line; one stat for a modifier not revealed yet.
-fn modifier_stats<'a>(
+fn stats_of_modifier<'a>(
     index: usize,
     modifier: &'a Modifier,
     context: &LineContext<'_>,
@@ -173,11 +173,14 @@ fn modifier_stats<'a>(
                 modifier: index,
                 line: line_index,
             };
-            let tier = (tier_line == Some(line_index))
-                .then(|| modifier_tier_row(index, modifier, context))
-                .flatten();
-            let origin = origin.filter(|_| line_index == origin_line);
-            let mut stat = affix_stat(key, line, tier, origin, context);
+            let under = UnderLine {
+                tier: (tier_line == Some(line_index))
+                    .then(|| modifier_tier_row(index, modifier, context))
+                    .flatten(),
+                origin: origin.filter(|_| line_index == origin_line),
+            };
+            let origin = under.origin;
+            let mut stat = affix_stat(key, line, under, context);
             if let Some(rows) = doubt_tier_rows(modifier, line_index) {
                 stat.roll = Some(StatRoll::Tiers { rows, origin });
             }
@@ -245,16 +248,22 @@ fn doubt_tier_rows(modifier: &Modifier, line_index: usize) -> Option<Vec<TierRow
     }
 }
 
+/// What a line of a prefix or suffix shows after its bar: the tier of its modifier and the
+/// ranges of that tier, then its origin, under the line that holds them.
+struct UnderLine<'a> {
+    tier: Option<TierRow<'a>>,
+    origin: Option<Origin>,
+}
+
 /// The line `key` of a prefix or suffix, `line`: a filter that stays within the rolls of every
-/// tier of its modifier, its bar over them, and under its last line the tier of the modifier
-/// and the ranges of that tier, then its origin.
+/// tier of its modifier, its bar over them, then what it shows `under` it.
 fn affix_stat<'a>(
     key: StatKey,
     line: &'a StatLine,
-    tier: Option<TierRow<'a>>,
-    origin: Option<Origin>,
+    under: UnderLine<'a>,
     context: &LineContext<'_>,
 ) -> Stat<'a> {
+    let UnderLine { tier, origin } = under;
     let counted = context.counted(key, line);
     let over = rolls_over_tiers(key, context);
     let bounds = over

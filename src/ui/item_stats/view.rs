@@ -3,8 +3,8 @@
 
 use egui::text::{LayoutJob, TextFormat};
 use egui::{
-    Align, Align2, Area, Color32, CornerRadius, Frame, Id, Label, Layout, Margin, Order, Pos2,
-    Rect, Response, RichText, Sense, Stroke, TextEdit, Ui, Vec2, ViewportId, pos2, vec2,
+    Align, Align2, Area, Color32, CornerRadius, Frame, Id, Label, Layout, Margin, Order, Rect,
+    Response, RichText, Sense, Stroke, TextEdit, Ui, Vec2, ViewportId, pos2, vec2,
 };
 
 use super::Stats;
@@ -231,7 +231,9 @@ fn unsearchable_row(ui: &mut Ui, stat: &Stat<'_>, i18n: &Translator) {
     }
     ui.add_space(COLUMN_GAP);
     let (column, _) = range_widths(None);
-    stat_text(ui, stat, None, text_width(width, column), i18n);
+    text_column(ui, text_width(width, column), |ui| {
+        stat_text(ui, stat, i18n);
+    });
 }
 
 /// A stat with its filter, the checkbox on the first line of its text, and its range field,
@@ -240,7 +242,7 @@ fn unsearchable_row(ui: &mut Ui, stat: &Stat<'_>, i18n: &Translator) {
 fn filter_row(ui: &mut Ui, stat: &Stat<'_>, filters: &mut Filters, i18n: &Translator) {
     let width = ui.available_width();
     let Some(filter) = stat.filter else {
-        stat_text(ui, stat, None, width, i18n);
+        text_column(ui, width, |ui| stat_text(ui, stat, i18n));
         return;
     };
     let mut choice = filters.get(stat.key, || filter.default_choice());
@@ -264,11 +266,21 @@ fn filter_row(ui: &mut Ui, stat: &Stat<'_>, filters: &mut Filters, i18n: &Transl
         _ => None,
     };
     let (column, _) = range_widths(filter.limit);
-    stat_text(ui, stat, note.as_deref(), text_width(width, column), i18n);
+    let column_width = text_width(width, column);
+    text_column(ui, column_width, |ui| {
+        stat_text(ui, stat, i18n);
+        if let Some(note) = &note {
+            faint_note(ui, note, column_width);
+        }
+    });
     ui.add_space(COLUMN_GAP);
-    let edited = filter
-        .limit
-        .and_then(|limit| range_field(ui, stat.key, &mut choice, limit, i18n));
+    let edited = filter.limit.and_then(|limit| {
+        let field = range_field(ui, stat.key, &mut choice, limit);
+        if ui.rect_contains_pointer(field.rect) {
+            field_tooltip(ui, stat.key, field.rect, tooltip_lines(limit, i18n));
+        }
+        field.edited
+    });
     if choice != before {
         filters.set(stat.key, choice);
     }
@@ -326,45 +338,45 @@ fn unrevealed_row(ui: &mut Ui, words: &str) {
         });
 }
 
-/// The text of a stat and its roll, the tag of the passive skills of its radius after it (alone
-/// under a line without roll), or a `note` in faint text under it, `width` across.
-fn stat_text(ui: &mut Ui, stat: &Stat, note: Option<&str>, width: f32, i18n: &Translator) {
+/// The column of the text of a stat, `width` across, its `contents` one under the other.
+fn text_column(ui: &mut Ui, width: f32, contents: impl FnOnce(&mut Ui)) {
     ui.allocate_ui_with_layout(vec2(width, 0.0), Layout::top_down(Align::Min), |ui| {
         ui.set_width(width);
-        let response = ui.add(Label::new(clamped(&stat.text.text(i18n))).wrap());
-        if let Some(tip) = stat.text.tip() {
-            response.on_hover_ui(|ui| {
-                ui.set_max_width(WORD_TIP_WIDTH);
-                ui.add(Label::new(i18n.text(tip)).wrap());
-            });
-        }
-        let skills = stat.text.radius_skills();
-        if let Some(roll) = &stat.roll {
-            ui.add_space(ROLL_GAP);
-            roll_line(ui, roll, skills, i18n);
-        } else if let Some(skills) = skills {
-            ui.add_space(ROLL_GAP);
-            roll_row(ui, |ui| radius_tag(ui, skills, i18n));
-        }
-        if let Some(note) = note {
-            ui.add_space(ROLL_GAP);
-            let galley = widgets::truncated_line(ui, note, text::roll(), width);
-            let (rect, _) = ui.allocate_exact_size(galley.size(), Sense::hover());
-            ui.painter().galley(rect.min, galley, color::FAINT);
-        }
+        contents(ui);
     });
 }
 
+/// The text of a stat and its roll, the tag of the passive skills of its radius after it (alone
+/// under a line without roll).
+fn stat_text(ui: &mut Ui, stat: &Stat, i18n: &Translator) {
+    let response = ui.add(Label::new(clamped(&stat.text.text(i18n))).wrap());
+    if let Some(tip) = stat.text.tip() {
+        response.on_hover_ui(|ui| {
+            ui.set_max_width(WORD_TIP_WIDTH);
+            ui.add(Label::new(i18n.text(tip)).wrap());
+        });
+    }
+    let skills = stat.text.radius_skills();
+    if let Some(roll) = &stat.roll {
+        ui.add_space(ROLL_GAP);
+        roll_line(ui, roll, skills, i18n);
+    } else if let Some(skills) = skills {
+        ui.add_space(ROLL_GAP);
+        roll_row(ui, |ui| radius_tag(ui, skills, i18n));
+    }
+}
+
+/// A `note` in faint text under the text of a stat, on one line `width` across.
+fn faint_note(ui: &mut Ui, note: &str, width: f32) {
+    ui.add_space(ROLL_GAP);
+    let galley = widgets::truncated_line(ui, note, text::roll(), width);
+    let (rect, _) = ui.allocate_exact_size(galley.size(), Sense::hover());
+    ui.painter().galley(rect.min, galley, color::FAINT);
+}
+
 /// The range field of a filter, in its column: its minimum, a dash, its maximum, each half a
-/// number only, brought back within the range of the stat when the player leaves it; its
-/// tooltip under the pointer; the half the player is in, if any.
-fn range_field(
-    ui: &mut Ui,
-    key: FilterKey,
-    choice: &mut Filter,
-    limit: Limit,
-    i18n: &Translator,
-) -> Option<Half> {
+/// number only, brought back within the range of the stat when the player leaves it.
+fn range_field(ui: &mut Ui, key: FilterKey, choice: &mut Filter, limit: Limit) -> DrawnField {
     let halves = [Half::Minimum, Half::Maximum];
     let ids = halves.map(|half| ui.make_persistent_id(("stat-range", key, half)));
     let focused = ui.memory(|memory| ids.iter().any(|&id| memory.has_focus(id)));
@@ -407,12 +419,17 @@ fn range_field(
                 }
             }
         });
-    // The field as it is drawn, without the margin that raises it.
-    let rect = field.response.rect - RANGE_RAISE;
-    if ui.rect_contains_pointer(rect) {
-        field_tooltip(ui, key, rect, limit, i18n);
+    DrawnField {
+        edited,
+        // Without the margin that raises it.
+        rect: field.response.rect - RANGE_RAISE,
     }
-    edited
+}
+
+/// A range field as it is drawn: the half the player is in, if any, and where it is.
+struct DrawnField {
+    edited: Option<Half>,
+    rect: Rect,
 }
 
 /// The dash between the halves of a range field, faint, in the middle of its `size`.
@@ -485,22 +502,17 @@ fn tier_color(tier: u32) -> Color32 {
     }
 }
 
-/// The tooltip of a range field in `field`: the rolls it accepts, then "Lower is better" in
-/// gray for a line better lower; none when it has nothing to say. Under the field, their
-/// right edges together, so that it stays in the window.
-fn field_tooltip(ui: &Ui, key: FilterKey, field: Rect, limit: Limit, i18n: &Translator) {
-    let lines = tooltip_lines(limit, i18n);
+/// The tooltip of the range field of the filter `key` in `field`, its `lines` ([`tooltip_lines`]);
+/// none when it has nothing to say. Under the field, their right edges together, so that it
+/// stays in the window.
+fn field_tooltip(ui: &Ui, key: FilterKey, field: Rect, lines: Vec<TooltipLine>) {
     if lines.is_empty() {
         return;
     }
-    let at = pos2(field.right(), field.bottom() + TOOLTIP_GAP);
-    tooltip(
-        ui,
-        Id::NULL.with(("stat-range-tooltip", key)),
-        at,
-        Align2::RIGHT_TOP,
-        lines,
-    );
+    let place = Area::new(Id::NULL.with(("stat-range-tooltip", key)))
+        .pivot(Align2::RIGHT_TOP)
+        .fixed_pos(pos2(field.right(), field.bottom() + TOOLTIP_GAP));
+    tooltip(ui, place, lines);
 }
 
 /// The tooltip of the "not allowed" sign of a line the trade site can't search, in `sign`:
@@ -509,26 +521,21 @@ fn field_tooltip(ui: &Ui, key: FilterKey, field: Rect, limit: Limit, i18n: &Tran
 fn unsearchable_tooltip(ui: &Ui, key: FilterKey, sign: Rect, i18n: &Translator) {
     let lines = [Message::FilterUnsearchable, Message::FilterUnsearchableHint]
         .map(|message| TooltipLine::new(i18n.text(message), color::TEXT));
-    let at = pos2(
-        sign.left() - UNSEARCHABLE_TOOLTIP_SHIFT,
-        sign.bottom() + TOOLTIP_GAP,
-    );
-    tooltip(
-        ui,
-        Id::NULL.with(("unsearchable-tooltip", key)),
-        at,
-        Align2::LEFT_TOP,
-        lines.into(),
-    );
+    let place = Area::new(Id::NULL.with(("unsearchable-tooltip", key)))
+        .pivot(Align2::LEFT_TOP)
+        .fixed_pos(pos2(
+            sign.left() - UNSEARCHABLE_TOOLTIP_SHIFT,
+            sign.bottom() + TOOLTIP_GAP,
+        ));
+    tooltip(ui, place, lines.into());
 }
 
-/// A tooltip of `lines` in their colors, its corner `pivot` at `at`.
-fn tooltip(ui: &Ui, id: Id, at: Pos2, pivot: Align2, lines: Vec<TooltipLine>) {
-    Area::new(id)
+/// A tooltip of `lines` in their colors, in the area `place`, which sets its id and where it
+/// is.
+fn tooltip(ui: &Ui, place: Area, lines: Vec<TooltipLine>) {
+    place
         .order(Order::Tooltip)
         .interactable(false)
-        .pivot(pivot)
-        .fixed_pos(at)
         .show(ui.ctx(), |ui| {
             Frame::NONE
                 .fill(color::BUBBLE)

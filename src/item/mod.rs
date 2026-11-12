@@ -484,6 +484,12 @@ impl Item {
             .count();
         u32::try_from(count).unwrap_or(u32::MAX)
     }
+
+    /// The item has a desecrated modifier not revealed yet.
+    #[must_use]
+    pub fn has_unrevealed_modifiers(&self) -> bool {
+        self.modifiers.iter().any(|modifier| modifier.is_unrevealed)
+    }
 }
 
 /// The number at the start of a property value, e.g. 26 in `26%`.

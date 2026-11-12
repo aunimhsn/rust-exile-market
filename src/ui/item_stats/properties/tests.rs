@@ -7,11 +7,11 @@ use crate::i18n::{Message, Translator};
 use crate::language::Language;
 use crate::roll_difference::CopiedLines;
 use crate::tier_rolls::TierRolls;
-use crate::ui::item_stats::Stats;
 use crate::ui::item_stats::fixtures::{
     base_type, default_checks, parse, rare_item, row_texts, rows, texts,
 };
 use crate::ui::item_stats::model::{Group, Row};
+use crate::ui::item_stats::{LineFacts, Stats};
 
 #[test]
 fn a_weapon_mostly_elemental_is_searched_by_its_elemental_dps_too() {
@@ -96,7 +96,15 @@ fn item_group(item: &Item) -> Vec<String> {
 fn item_group_of<'a>(item: &'a Item, base_type: Option<&'a str>) -> Vec<String> {
     let lines = CopiedLines::default();
     let stats = LineStats::new(item, item.modifiers(), None);
-    let rows = crate::ui::item_stats::rows(item, &lines, &stats, &TierRolls::default(), base_type);
+    let rows = crate::ui::item_stats::rows(
+        item,
+        LineFacts {
+            copied_lines: &lines,
+            line_stats: &stats,
+            tier_rolls: &TierRolls::default(),
+        },
+        base_type,
+    );
     row_texts(
         rows.into_iter()
             .skip_while(|row| *row != Row::Group(Group::Item))
@@ -153,15 +161,23 @@ fn the_base_type_tells_the_item_class_searched_when_it_is_unchecked() {
         let lines = CopiedLines::default();
         let stats = LineStats::new(item, item.modifiers(), None);
         let tiers = TierRolls::default();
-        crate::ui::item_stats::rows(item, &lines, &stats, &tiers, Some(base_type))
-            .into_iter()
-            .find_map(|row| match row {
-                Row::Stat(Stat {
-                    text: StatText::BaseType { class, .. },
-                    ..
-                }) => Some(class.map(str::to_owned)),
-                _ => None,
-            })
+        crate::ui::item_stats::rows(
+            item,
+            LineFacts {
+                copied_lines: &lines,
+                line_stats: &stats,
+                tier_rolls: &tiers,
+            },
+            Some(base_type),
+        )
+        .into_iter()
+        .find_map(|row| match row {
+            Row::Stat(Stat {
+                text: StatText::BaseType { class, .. },
+                ..
+            }) => Some(class.map(str::to_owned)),
+            _ => None,
+        })
     };
 
     // The item class of the copied text, in its language.
@@ -591,7 +607,15 @@ fn a_waystone_searches_its_base_and_its_checked_properties() {
             Some(base_type),
             item.item_level(),
         );
-        let stats = Stats::new(&item, &lines, &line_stats, &tiers, Some(base_type));
+        let stats = Stats::new(
+            &item,
+            LineFacts {
+                copied_lines: &lines,
+                line_stats: &line_stats,
+                tier_rolls: &tiers,
+            },
+            Some(base_type),
+        );
         let target = link::target(&item, None, None).expect("a target");
         let query = |filters: &Filters| match link::query(
             &item,
@@ -755,7 +779,15 @@ fn the_search_of_a_skill_gem_sends_its_name_and_its_checked_properties() {
         let tiers = TierRolls::default();
         let target = link::target(&item, None, None).expect("a target");
         assert_eq!(target, link::TradeTarget::Base { base_type: name });
-        let stats = Stats::new(&item, &lines, &line_stats, &tiers, target.base_type());
+        let stats = Stats::new(
+            &item,
+            LineFacts {
+                copied_lines: &lines,
+                line_stats: &line_stats,
+                tier_rolls: &tiers,
+            },
+            target.base_type(),
+        );
         let crate::trade::query::Query::Items(query) = link::query(
             &item,
             &target,

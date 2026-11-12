@@ -87,8 +87,7 @@ pub(super) fn added_stat<'a>(
         text: StatText::line(&line.text),
         filter: Some(StatFilter {
             checked: false,
-            limit: searched_value(&counted)
-                .map(|value| Limit::new(value, half, None, value, &counted)),
+            limit: searched_value(&counted).map(|value| Limit::new(value, half, None, &counted)),
         }),
         is_unsearchable: false,
         roll: None,
@@ -102,7 +101,7 @@ pub(super) fn limit_of_line(line: &StatLine, bounds: Option<Range>, half: Half) 
     let value = searched_value(line)?;
     let written = line.rolls.iter().map(|roll| decimals(roll.value)).max();
     let limit = comparable_limit(value, written.unwrap_or(0), half);
-    Some(Limit::new(limit, half, bounds, value, line))
+    Some(Limit::new(value, half, bounds, line).at(limit))
 }
 
 /// The stats of the modifiers of `item` whose kind passes `keep`, made by `stat`: the
