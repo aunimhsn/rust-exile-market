@@ -3,7 +3,7 @@
 
 use super::*;
 use crate::game_data::bases;
-use crate::game_data::stats::{Stats, TradeGroup};
+use crate::game_data::stats::Stats;
 use crate::language::Language;
 
 #[test]
@@ -138,31 +138,17 @@ fn a_line_with_a_divisor_has_one_value() {
 
 #[test]
 fn every_template_of_the_tables_is_reached_by_a_french_stat() {
-    // A table no French line reaches would leave that line of a French copy without tier. A
-    // line is read with the ids of its group ([`TradeGroup::of`]): crafted for an alloy,
-    // explicit for the others, also desecrated or fractured.
-    let reached = |group| -> std::collections::BTreeSet<&str> {
-        Stats::of(Language::French)
-            .all()
-            .flat_map(|stat| Stats::english_references(stat, group))
-            .collect()
-    };
-    let explicit = reached(TradeGroup::Explicit);
-    let crafted = reached(TradeGroup::Crafted);
+    // A table no French line reaches would leave that line of a French copy without tier,
+    // whatever the game marks it: its English templates don't depend on its mark.
+    let reached: std::collections::BTreeSet<&str> = Stats::of(Language::French)
+        .all()
+        .flat_map(Stats::english_references)
+        .collect();
     let missed: std::collections::BTreeSet<&str> = TABLES
         .iter()
-        .flat_map(|table| {
-            let reached = if table.source == Some(TableSource::Alloy) {
-                &crafted
-            } else {
-                &explicit
-            };
-            table
-                .lines
-                .iter()
-                .map(|line| line.template.as_str())
-                .filter(|template| !reached.contains(template))
-        })
+        .flat_map(|table| &table.lines)
+        .map(|line| line.template.as_str())
+        .filter(|template| !reached.contains(template))
         .collect();
 
     assert!(missed.is_empty(), "{missed:?}");

@@ -4,7 +4,7 @@
 use super::Tier;
 use super::tables::{Table, TableLine};
 use crate::game_data::lines::{LineMatch, StatSource};
-use crate::game_data::stats::{Stats, TradeGroup};
+use crate::game_data::stats::Stats;
 use crate::item::{Modifier, ModifierKind, ModifierOrigin, Range};
 
 /// How far a copied value can be from a tier: the game rounds the values it scales, e.g. a
@@ -41,7 +41,7 @@ impl<'a> Copied<'a> {
                 return None;
             }
             lines.push(CopiedLine {
-                templates: Stats::english_references(stat.stat, TradeGroup::of(modifier)),
+                templates: Stats::english_references(stat.stat),
                 values: stat.values.clone(),
                 written: stat.matcher_value.filter(|_| stat.values.is_empty()),
             });
@@ -218,3 +218,6 @@ pub(super) fn holds(values: &[f64], ranges: &[Range]) -> Option<Fit> {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod game_tests;
