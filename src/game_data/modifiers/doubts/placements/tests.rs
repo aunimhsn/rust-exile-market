@@ -1,12 +1,48 @@
-//! The ways a modifier sits on the lines and the pruning of a tier past its value, on lines
-//! and tables written by hand.
+//! The ways a modifier sits on the lines, the tiers the level of the item allows and the
+//! pruning of a tier past its value, on lines and tables written by hand.
 
 use super::*;
-use crate::game_data::bases::Domain;
 use crate::game_data::modifiers::doubts::fixtures::{line, placement};
-use crate::game_data::modifiers::fixtures::range;
-use crate::game_data::modifiers::tables::{TableAffix, TableLine};
+use crate::game_data::modifiers::fixtures::{LIFE, copied_line, equipment, range, table};
 use crate::item::Affix;
+
+#[test]
+fn only_the_tiers_the_item_level_allows_are_placed() {
+    // Two tiers that both hold 12, the best one from the level 50.
+    let tables = [table(
+        "Life",
+        "prefix",
+        &[LIFE],
+        &[(1, &[(1, 15)]), (50, &[(5, 20)])],
+    )];
+    let lines = ItemLines {
+        all: vec![Line {
+            copied: copied_line(LIFE, &[12.0]),
+            ..line(0, LIFE, 0..1, None)
+        }],
+        values: vec![12.0],
+        modifier_count: 1,
+    };
+    // The number and the range of each tier placed.
+    let tiers_placed = |item_level| {
+        let tables = ItemTables {
+            all: &tables,
+            base: &equipment(&["helmet"]),
+            item_level,
+        };
+        let placements = placements(&tables, &lines);
+        let tiers = placements.iter().map(|placement| &placement.shown);
+        tiers
+            .map(|shown| (shown.tier, shown.ranges.clone()))
+            .collect::<Vec<_>>()
+    };
+    let (best, worst) = ((1, vec![range(5.0, 20.0)]), (2, vec![range(1.0, 15.0)]));
+
+    assert_eq!(tiers_placed(Some(50)), [best.clone(), worst.clone()]);
+    assert_eq!(tiers_placed(Some(49)), std::slice::from_ref(&worst));
+    // A copy that doesn't write its level: an item of any level.
+    assert_eq!(tiers_placed(None), [best, worst]);
+}
 
 #[test]
 fn a_tier_past_its_value_is_left_out_only_when_every_range_rises_or_falls() {
@@ -53,22 +89,7 @@ fn a_tier_past_its_value_is_left_out_only_when_every_range_rises_or_falls() {
 
 #[test]
 fn a_modifier_sits_on_lines_of_its_templates_of_one_origin() {
-    let table = |templates: &[&str]| Table {
-        kind: "Kind".to_owned(),
-        affix: TableAffix::Prefix,
-        domain: Domain::Item,
-        lines: templates
-            .iter()
-            .map(|template| TableLine {
-                template: (*template).to_owned(),
-                divisor: 1.0,
-            })
-            .collect(),
-        spawn: Vec::new(),
-        source: None,
-        lord: None,
-        tiers: Vec::new(),
-    };
+    let table_of = |templates: &[&str]| table("Kind", "prefix", templates, &[]);
     let fractured = Some(ModifierOrigin::Fractured);
     let lines = [
         line(0, "+# to Armour", 0..1, None),
@@ -78,14 +99,14 @@ fn a_modifier_sits_on_lines_of_its_templates_of_one_origin() {
     ];
 
     // Each pair of lines of one origin, the lines in their order.
-    let hybrid = table(&["#% increased Armour", "+# to Armour"]);
+    let hybrid = table_of(&["#% increased Armour", "+# to Armour"]);
     assert_eq!(mappings(&hybrid, &lines), [vec![0, 1], vec![2, 3]]);
     // A pure modifier on each line of its template.
-    let pure = table(&["+# to Armour"]);
+    let pure = table_of(&["+# to Armour"]);
     assert_eq!(mappings(&pure, &lines), [vec![0], vec![2]]);
     // A template the item doesn't have.
     assert_eq!(
-        mappings(&table(&["+# to maximum Life"]), &lines),
+        mappings(&table_of(&["+# to maximum Life"]), &lines),
         [] as [Vec<usize>; 0]
     );
 }

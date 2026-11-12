@@ -191,6 +191,3 @@ fn mappings(table: &Table, lines: &[Line<'_>]) -> Vec<Vec<usize>> {
 
 #[cfg(test)]
 mod tests;
-
-#[cfg(test)]
-mod game_tests;

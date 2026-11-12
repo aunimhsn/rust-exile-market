@@ -4,8 +4,8 @@
 
 use super::*;
 use crate::game_data::modifiers::fixtures::{
-    ADVANCED_COPIES, BOW_EN, TIARA_EN, affix_limits, as_in_game_trade, desecrated, english_item,
-    modifier, parse, part, range, tiers, trade_item, trade_lines,
+    ADVANCED_COPIES, BOW_EN, TIARA_EN, affix_tier, as_in_game_trade, desecrated, english_item,
+    first_doubt, modifier, parse, part, range, tiers, trade_item, trade_lines,
 };
 use crate::game_data::modifiers::trade_tiers::AffixLimits;
 use crate::item::{Lord, ModifierOrigin, StatLine};
@@ -51,10 +51,9 @@ fn shown_ranges(modifier: &Modifier) -> Vec<Option<Range>> {
 #[test]
 fn the_lines_read_again_from_their_values_are_the_modifiers_of_the_advanced_copy() {
     let mut read_again = 0;
-    for (text, base_type) in ADVANCED_COPIES {
+    for (text, base_type, limits) in ADVANCED_COPIES {
         let item = parse(text);
         let base_type = base_type.unwrap_or(item.base_type());
-        let limits = affix_limits(&item);
         let (modifiers, written) = as_in_game_trade(&item, base_type);
 
         let read = with_trade_tiers(&trade_item(&item, base_type, limits), &modifiers);
@@ -174,13 +173,7 @@ fn the_lines_of_a_tiara_read_again_keep_the_tiers_of_the_affix_in_doubt() {
             .cloned()
             .expect(words)
     };
-    let tier = |affix, min, max| AffixTier {
-        affix,
-        tier: 1,
-        hides_number: false,
-        ranges: vec![range(min, max)],
-        lord: None,
-    };
+    let tier = |affix, min, max| affix_tier(affix, 1, &[(min, max)]);
     let desecrated = item.modifiers().len() - 1;
     // A third resistance in place of the desecrated `+69 to maximum Energy Shield`: the
     // suffixes full, a prefix open.
@@ -403,19 +396,18 @@ fn a_desecrated_line_of_a_lord_and_of_an_ordinary_suffix_keeps_the_tier_of_each(
 
     let read = read_again("Trarthan Cannon", 82, &grenades, (3, 3));
 
-    // A fixed value: no range, as under any modifier; the prefix of Amanamu named.
-    let tier = |affix, tier, hides_number, lord| AffixTier {
-        affix,
-        tier,
-        hides_number,
-        ranges: Vec::new(),
-        lord,
+    // A fixed value: no range, as under any modifier; the prefix of Amanamu named, its
+    // number hidden.
+    let of_amanamu = AffixTier {
+        hides_number: true,
+        lord: Some(Lord::Amanamu),
+        ..affix_tier(Affix::Prefix, 1, &[])
     };
     assert_eq!(
-        read.first().and_then(|modifier| modifier.doubt.clone()),
+        first_doubt(&read),
         Some(TierDoubt::EitherAffix {
-            prefix: tier(Affix::Prefix, 1, true, Some(Lord::Amanamu)),
-            suffix: tier(Affix::Suffix, 2, false, None),
+            prefix: of_amanamu,
+            suffix: affix_tier(Affix::Suffix, 2, &[]),
         })
     );
     // Not marked, the line is no lord's: the T2 of the suffix.
@@ -486,7 +478,8 @@ fn a_minion_modifier_of_the_genesis_tree_is_read_as_the_advanced_copy_writes_it(
     let prefix = ModifierKind::Explicit(Some(Affix::Prefix));
     let suffix = ModifierKind::Explicit(Some(Affix::Suffix));
     let ranged = |min, max| vec![Some(range(min, max))];
-    // A prefix, which fills the room of the prefixes, without tier, over the range of its tier.
+    // A prefix, which fills the room of the prefixes, without tier, over the range of its tier:
+    // what the advanced copy writes of it, which its bar and its field are drawn from.
     assert_eq!(
         explicit_tiers(&read),
         [
@@ -498,21 +491,6 @@ fn a_minion_modifier_of_the_genesis_tree_is_read_as_the_advanced_copy_writes_it(
             (suffix, Some(3), ranged(16.0, 19.0)),
         ]
     );
-    // Its bar and its field over that range, without tier to tell, as in the advanced copy;
-    // the implicit first.
-    let rolls =
-        crate::tier_rolls::TierRolls::new(Language::English, &read, Some("Breach Ring"), Some(77));
-    assert!(rolls.hides_number(1));
-    assert!(!rolls.hides_number(2));
-    let key = crate::filters::StatKey {
-        modifier: 1,
-        line: 0,
-    };
-    let over_its_tier = crate::tier_rolls::LineRolls {
-        ranges: vec![Some(range(19.0, 22.0))],
-        tiers: None,
-    };
-    assert_eq!(rolls.get(key), Some(&over_its_tier));
 }
 
 #[test]

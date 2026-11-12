@@ -28,7 +28,7 @@ impl AffixLimits {
     /// At most `prefixes` prefixes and `suffixes` suffixes, a fill with its most.
     #[cfg(test)]
     #[must_use]
-    pub fn new(prefixes: u32, suffixes: u32) -> Self {
+    pub const fn new(prefixes: u32, suffixes: u32) -> Self {
         Self {
             prefixes,
             suffixes,

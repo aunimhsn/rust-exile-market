@@ -12,8 +12,8 @@ use crate::game_data::modifiers::tables::{Table, read};
 use crate::game_data::modifiers::trade_tiers::{AffixLimits, FoundTiers, TradeItem};
 use crate::game_data::modifiers::{ModifierTiers, Tier};
 use crate::item::{
-    Affix, CopiedItem, Item, ItemState, Modifier, ModifierKind, ModifierOrigin, PartTier, Range,
-    StatLine,
+    Affix, AffixTier, CopiedItem, Item, ItemState, Modifier, ModifierKind, ModifierOrigin,
+    PartTier, Range, StatLine, TierDoubt,
 };
 use crate::language::Language;
 
@@ -93,6 +93,17 @@ pub(super) fn part(affix: Affix, tiers: &[u32], ranges: &[(f64, f64)]) -> PartTi
     }
 }
 
+/// The tier `tier` of a modifier as `affix`, over `ranges`: its number written, no lord's.
+pub(super) fn affix_tier(affix: Affix, tier: u32, ranges: &[(f64, f64)]) -> AffixTier {
+    AffixTier {
+        affix,
+        tier,
+        hides_number: false,
+        ranges: ranges.iter().map(|&(min, max)| range(min, max)).collect(),
+        lord: None,
+    }
+}
+
 /// The tier `number` of `level` over `ranges`.
 pub(super) fn tier(number: u32, level: u32, ranges: &[(f64, f64)]) -> Tier {
     Tier {
@@ -141,6 +152,18 @@ pub(super) fn copied(lines: &[(&'static str, f64)]) -> Copied<'static> {
             .map(|&(template, value)| copied_line(template, &[value]))
             .collect(),
     )
+}
+
+/// A copied modifier of one line of `template` with `value`, which the game marks of `origin`.
+pub(super) fn marked(
+    origin: ModifierOrigin,
+    template: &'static str,
+    value: f64,
+) -> Copied<'static> {
+    Copied {
+        origin: Some(origin),
+        ..copied(&[(template, value)])
+    }
 }
 
 /// The line of the file of a table that rolls on the helmets: its type, its affix, the
@@ -246,6 +269,11 @@ pub(super) fn added(modifiers: &[Modifier], found: &[FoundTiers]) -> Added {
         .collect()
 }
 
+/// The doubt on the tier of the first of `modifiers`, written again.
+pub(super) fn first_doubt(modifiers: &[Modifier]) -> Option<TierDoubt> {
+    modifiers.first()?.doubt.clone()
+}
+
 /// For each modifier read from its values, how many lines it has and the tier number of
 /// each affix it can be: the same in every language.
 pub(super) fn summary(modifiers: &[Modifier], found: &[FoundTiers]) -> Vec<(usize, AffixTiers)> {
@@ -283,71 +311,98 @@ pub(super) fn parse(text: &str) -> Item {
     Item::parse(&CopiedItem::from_text(text).expect("an item")).expect("read")
 }
 
-/// The rare and magic items of the advanced copy, with the base type of a magic one.
-pub(super) const ADVANCED_COPIES: [(&str, Option<&str>); 16] = [
+/// The prefixes and suffixes a rare item can have. Written by hand for the test items, as
+/// those of a jewel and of a magic item are: the application counts them above the game data
+/// (`LineStats::affix_limits`). None of these items has a line that allows more or fewer
+/// (`+1 Suffix Modifier allowed`), which would need limits of its own.
+const RARE_LIMITS: AffixLimits = AffixLimits::new(3, 3);
+/// The prefixes and suffixes a rare jewel can have.
+const JEWEL_LIMITS: AffixLimits = AffixLimits::new(2, 2);
+/// The prefixes and suffixes a magic item can have.
+const MAGIC_LIMITS: AffixLimits = AffixLimits::new(1, 1);
+
+/// The rare and magic items of the advanced copy, each with the base type of a magic one and
+/// the prefixes and suffixes it can have.
+pub(super) const ADVANCED_COPIES: [(&str, Option<&str>, AffixLimits); 16] = [
     (
         include_str!("../../item/test-items/en-rare-crossbow-all-modifiers.txt"),
         None,
+        RARE_LIMITS,
     ),
     (
         include_str!("../../item/test-items/en-rare-bow-fractured.txt"),
         None,
+        RARE_LIMITS,
     ),
     (
         include_str!("../../item/test-items/en-magic-mace.txt"),
         Some("Temple Maul"),
+        MAGIC_LIMITS,
     ),
     (
         include_str!("../../item/test-items/fr-rare-staff.txt"),
         None,
+        RARE_LIMITS,
     ),
     (
         include_str!("../../item/test-items/fr-rare-body-armour.txt"),
         None,
+        RARE_LIMITS,
     ),
     (
         include_str!("../../item/test-items/en-owner-rare-sceptre-sanctified.txt"),
         None,
+        RARE_LIMITS,
     ),
     (
         include_str!("../../item/test-items/fr-rare-sceptre-sanctified.txt"),
         None,
+        RARE_LIMITS,
     ),
     (
         include_str!("../../item/test-items/en-owner-rare-helmet-runeforged.txt"),
         None,
+        RARE_LIMITS,
     ),
     (
         include_str!("../../item/test-items/fr-rare-helmet-runeforged.txt"),
         None,
+        RARE_LIMITS,
     ),
     (
         include_str!("../../item/test-items/en-owner-rare-focus-unrevealed.txt"),
         None,
+        RARE_LIMITS,
     ),
     (
         include_str!("../../item/test-items/fr-rare-focus-unrevealed.txt"),
         None,
+        RARE_LIMITS,
     ),
     (
         include_str!("../../item/test-items/en-owner-rare-ring-breach.txt"),
         None,
+        RARE_LIMITS,
     ),
     (
         include_str!("../../item/test-items/fr-rare-ring-breach.txt"),
         None,
+        RARE_LIMITS,
     ),
     (
         include_str!("../../item/test-items/en-owner-rare-jewel-time-lost.txt"),
         None,
+        JEWEL_LIMITS,
     ),
     (
         include_str!("../../item/test-items/fr-rare-jewel-time-lost.txt"),
         None,
+        JEWEL_LIMITS,
     ),
     (
         include_str!("../../item/test-items/fr-rare-jewel-time-lost-large.txt"),
         None,
+        JEWEL_LIMITS,
     ),
 ];
 
@@ -381,12 +436,6 @@ pub(super) fn trade_item<'a>(
         limits,
         is_sanctified: item.has_state(ItemState::Sanctified),
     }
-}
-
-/// The prefixes and suffixes `item` can have, as the application gives them
-/// (`LineStats::affix_limits`): 2 of each on a rare jewel.
-pub(super) fn affix_limits(item: &Item) -> AffixLimits {
-    crate::trade::stat_filters::LineStats::new(item, item.modifiers(), None).affix_limits(item)
 }
 
 /// A modifier of the advanced copy written as the in-game trade writes it.

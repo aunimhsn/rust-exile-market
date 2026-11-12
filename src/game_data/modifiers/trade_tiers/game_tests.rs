@@ -6,8 +6,7 @@
 use super::*;
 use crate::game_data::modifiers::fixtures::{
     ADVANCED_COPIES, Added, BOW_EN, BOW_FR, LinesRead, TIARA_EN, TIARA_FR, Written, added,
-    affix_limits, as_in_game_trade, english_item, lines_read, modifier, parse, range, summary,
-    trade_item,
+    as_in_game_trade, english_item, lines_read, modifier, parse, range, summary, trade_item,
 };
 use crate::item::{Item, ItemState};
 
@@ -248,10 +247,9 @@ fn the_tiers_found_from_the_values_alone_are_those_of_the_advanced_copy() {
     let mut sanctified = 0;
     let mut without_tier = Vec::new();
     let mut unknown_affix = Vec::new();
-    for (text, base_type) in ADVANCED_COPIES {
+    for (text, base_type, limits) in ADVANCED_COPIES {
         let item = parse(text);
         let base_type = base_type.unwrap_or(item.base_type());
-        let limits = affix_limits(&item);
         let (modifiers, written) = as_in_game_trade(&item, base_type);
 
         let read = trade_tiers(&trade_item(&item, base_type, limits), &modifiers);

@@ -309,6 +309,37 @@ fn a_line_a_prefix_and_a_suffix_hold_keeps_the_affix_the_room_leaves() {
     );
 }
 
+#[test]
+fn a_modifier_whose_header_tells_its_affix_isnt_read_and_takes_its_room() {
+    use Affix::{Prefix, Suffix};
+    let tables = read_tables(&[
+        table_json("Life", "prefix", &[LIFE], &[(1, &[(21, 30)])]),
+        table_json("RarityPrefix", "prefix", &[RARITY], &[(1, &[(10, 20)])]),
+        table_json("RaritySuffix", "suffix", &[RARITY], &[(1, &[(10, 20)])]),
+    ]);
+    // What is read next to `other` on an item with room for one prefix and one suffix.
+    let read_with = |other: Modifier| {
+        let rarity = modifier(None, &["15% increased Rarity of Items found"]);
+        read_modifiers(&tables, 60, &[other, rarity], (1, 1)).0.0
+    };
+    let life = "+25 to maximum Life";
+    let either = [(1, vec![(Prefix, 1), (Suffix, 1)])];
+
+    // A prefix by its header: no line to read, though the life of the tables holds it, and
+    // the only prefix of the item, which leaves the rarity the suffix.
+    let prefix = modifier(Some(Prefix), &[life]);
+    assert_eq!(read_with(prefix), [(1, vec![(Suffix, 1)])]);
+    // An implicit isn't read either, and is neither a prefix nor a suffix.
+    let implicit = Modifier {
+        kind: ModifierKind::Implicit,
+        ..modifier(None, &[life])
+    };
+    assert_eq!(read_with(implicit), either);
+    // Nor does a line no tier holds take the room of one.
+    let unheld = modifier(None, &["+35 to maximum Life"]);
+    assert_eq!(read_with(unheld), either);
+}
+
 /// Two pure prefixes of one tier, `21–30`, and their hybrid of two tiers, `10–19` and
 /// `20–29` on each line.
 fn pure_and_hybrid_tables() -> Vec<Table> {
@@ -505,6 +536,39 @@ fn two_hybrids_that_share_a_line_leave_it_without_tier_when_both_follow_it() {
 }
 
 #[test]
+fn a_line_split_in_two_ways_as_good_has_no_tier_and_keeps_its_room() {
+    use Affix::Prefix;
+    // The rarity, 30, adds up a prefix and a suffix in two ways: T1 and T2, or T2 and T1.
+    let rarity = |kind, affix| {
+        table_json(
+            kind,
+            affix,
+            &[RARITY],
+            &[(1, &[(10, 14)]), (30, &[(16, 20)])],
+        )
+    };
+    let mut tables = pure_and_hybrid_tables();
+    tables.extend(read_tables(&[
+        rarity("RarityPrefix", "prefix"),
+        rarity("RaritySuffix", "suffix"),
+    ]));
+    let lines = [
+        "30% increased Rarity of Items found",
+        "25% increased Energy Shield",
+        "+25 to maximum Life",
+    ];
+
+    // Two prefixes: the rarity, without tier, still takes one, so that the other lines are
+    // their hybrid, where two pure prefixes would be as likely without it.
+    let (read, split) = read_in(&tables, 60, &lines, (2, 1));
+    assert_eq!(read, [(2, vec![(Prefix, 1)])]);
+    assert_eq!(split, []);
+    // A third prefix: two pure prefixes fit too, and nothing tells which rolled.
+    let (read, _) = read_in(&tables, 60, &lines, (3, 1));
+    assert_eq!(read, []);
+}
+
+#[test]
 fn a_best_reading_out_of_the_room_keeps_only_the_tiers_every_reading_in_the_room_gives() {
     use Affix::Prefix;
     let prefixes = [
@@ -596,6 +660,46 @@ fn a_best_reading_out_of_the_room_keeps_only_the_tiers_every_reading_in_the_room
     let lines = [life, mana].map(|text| modifier(None, &[text]));
     let ((read, _), effort) = read_modifiers(&tables, 60, &lines, (1, 3));
     assert_eq!(read, []);
+    assert_eq!(
+        effort.ending,
+        Ending::OtherReadings(Outcome::OnlyAnotherFits)
+    );
+}
+
+#[test]
+fn a_line_only_a_reading_in_the_room_reads_changes_no_tier_but_those_of_its_modifier() {
+    use Affix::Suffix;
+    // No pure life, and a hybrid that is a suffix.
+    let tables = read_tables(&[
+        table_json(
+            "EnergyShield",
+            "prefix",
+            &[ENERGY_SHIELD],
+            &[(1, &[(21, 30)])],
+        ),
+        table_json(
+            "Hybrid",
+            "suffix",
+            &[ENERGY_SHIELD, LIFE],
+            &[(1, &[(20, 29), (10, 19)])],
+        ),
+        table_json("Rarity", "suffix", &[RARITY], &[(1, &[(10, 20)])]),
+    ]);
+    // The rarity between the lines of the hybrid, which no candidate reads then: the best
+    // reading takes the energy shield for the pure prefix and leaves the life without tier.
+    let lines = [
+        "25% increased Energy Shield",
+        "15% increased Rarity of Items found",
+        "+15 to maximum Life",
+    ]
+    .map(|text| modifier(None, &[text]));
+
+    // No room for a prefix: the hybrid and the rarity are the only reading in the room. The
+    // life it reads, which had no tier to lose, leaves without tier the energy shield, the
+    // other line of its hybrid, and no other line: the rarity, read the same, keeps its own.
+    let ((read, split), effort) = read_modifiers(&tables, 60, &lines, (0, 2));
+    assert_eq!(read, [(1, vec![(Suffix, 1)])]);
+    assert_eq!(split, []);
     assert_eq!(
         effort.ending,
         Ending::OtherReadings(Outcome::OnlyAnotherFits)

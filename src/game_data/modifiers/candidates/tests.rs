@@ -5,7 +5,7 @@
 use super::*;
 use crate::game_data::bases::Domain;
 use crate::game_data::modifiers::fixtures::{
-    AffixTiers, ENERGY_SHIELD, LIFE, MANA, RARITY, copied, equipment, table,
+    AffixTiers, ENERGY_SHIELD, LIFE, MANA, RARITY, copied, equipment, marked, table,
 };
 use crate::game_data::modifiers::tables::TableLord;
 
@@ -61,14 +61,6 @@ fn read_in(tables: &[Table], copied: &[Option<Copied<'_>>]) -> Vec<Read> {
 /// A modifier of one line of `template` with `value`.
 fn one_line(template: &'static str, value: f64) -> Copied<'static> {
     copied(&[(template, value)])
-}
-
-/// A modifier of one line, which the game marks of `origin`.
-fn marked(origin: ModifierOrigin, template: &'static str, value: f64) -> Copied<'static> {
-    Copied {
-        origin: Some(origin),
-        ..copied(&[(template, value)])
-    }
 }
 
 /// The energy shield in its one tier, the life in its second and their hybrid in its third:
