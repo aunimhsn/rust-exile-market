@@ -3,11 +3,11 @@
 //! and how the search ended.
 
 use super::ModifierTiers;
-use super::base_tiers::ItemTables;
+use super::base_tiers::{ItemBase, ItemTables};
 use super::best_reading::{Cut, Room, best_reading};
 use super::candidates::{AffixSet, Candidate, candidates};
 use super::copied::Copied;
-use super::doubts::{self, Doubts, Outcome};
+use super::doubts::{self, Outcome};
 use super::split_lines::AddedTiers;
 use crate::game_data::lines::modifier_stats;
 use crate::item::{Affix, Modifier, ModifierKind, ModifierOrigin};
@@ -37,6 +37,17 @@ impl AffixLimits {
     }
 }
 
+/// An item copied from the in-game trade, as the tiers of its modifiers are found from their
+/// values.
+#[derive(Debug, Clone, Copy)]
+pub struct TradeItem<'a> {
+    pub base: ItemBase<'a>,
+    /// How many prefixes and suffixes it can have.
+    pub limits: AffixLimits,
+    /// Whether it is sanctified: each of its values can have left its tier, and none is found.
+    pub is_sanctified: bool,
+}
+
 /// The tiers of a modifier copied from the in-game trade, found from its values.
 #[derive(Debug, Clone, PartialEq)]
 pub(super) struct FoundTiers {
@@ -59,9 +70,9 @@ pub(super) struct FoundTiers {
     pub(super) added: Option<AddedTiers>,
 }
 
-/// The tiers of the explicit modifiers of a rare or magic item copied from the in-game trade,
-/// found from their values in the tables of its base (`base_type` in `language`) among the
-/// tiers its `item_level` allows; the other modifiers count as the affix their header tells. A
+/// The tiers of the explicit `modifiers` of `item`, rare or magic, copied from the in-game
+/// trade, found from their values in the tables of its base among the tiers its level allows;
+/// the other modifiers count as the affix their header tells. A
 /// modifier no tier holds isn't in the list, nor counted as a prefix or a suffix: a stat the
 /// tables don't know; nor a line adding up two modifiers of the same stat in more than one way
 /// (two ways in two neighbouring tiers of one of them being one), with the other lines of its
@@ -70,7 +81,7 @@ pub(super) struct FoundTiers {
 /// Only the explicit modifiers without header are read, one line each, as the parser reads
 /// such a copy: a modifier whose header the parser doesn't know isn't a line of the in-game
 /// trade, the caller leaves it out. Each line is read alone, unless a line has no tier that
-/// way, or the item more prefixes or suffixes than `limits`, or two fractured modifiers (a
+/// way, or the item more prefixes or suffixes than its limits, or two fractured modifiers (a
 /// Fracturing Orb fractures one modifier of an item not fractured yet): the consecutive lines
 /// of one origin are then read as one modifier when they fit a hybrid of the tables (the
 /// fractured `41% increased Energy Shield` and `+34 to maximum Mana` of a tiara). An affix the
@@ -105,32 +116,30 @@ pub(super) struct FoundTiers {
 /// being read on consecutive lines ([`FoundTiers::modifiers`]): its lines stay without tier,
 /// also when the room of the item leaves no other reading.
 ///
-/// No tier is found on a `sanctified` item, whose values can each have left their tier, for
+/// No tier is found on a sanctified item, whose values can each have left their tier, for
 /// the one next to it as well (the `+74 to maximum Mana` of the owner's sceptre, a T5
 /// `80–89`, falls in the T6): nothing in such a copy tells which did (owner's choice on
 /// 2026-11-11).
 #[must_use]
-pub(super) fn trade_tiers(
-    language: Language,
-    base_type: &str,
-    item_level: Option<u32>,
-    modifiers: &[Modifier],
-    limits: AffixLimits,
-    sanctified: bool,
-) -> Vec<FoundTiers> {
-    if sanctified {
+pub(super) fn trade_tiers(item: &TradeItem<'_>, modifiers: &[Modifier]) -> Vec<FoundTiers> {
+    if item.is_sanctified {
         return Vec::new();
     }
-    let Some(tables) = ItemTables::of_game(language, base_type, item_level) else {
+    let Some(tables) = ItemTables::of_game(item.base) else {
         return Vec::new();
     };
-    let (found, effort) = trade_tiers_in(&tables, language, modifiers, limits);
+    let ItemBase {
+        language,
+        base_type,
+        ..
+    } = item.base;
+    let (found, effort) = trade_tiers_in(&tables, language, modifiers, item.limits);
     log::debug!(
         "Game data, {base_type} copied from the in-game trade: read in {} readings and {} steps",
         effort.readings,
         effort.steps
     );
-    effort.ending.log(base_type, limits);
+    effort.ending.log(base_type, item.limits);
     found
 }
 
@@ -148,40 +157,15 @@ struct Effort {
 /// How the search of the tiers of an item copied from the in-game trade ended.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Ending {
-    /// With a reading in the room of the item, every other reading compared with it.
-    Vouched,
     /// The readings stopped at [`super::best_reading::MAX_READINGS`], some not looked at: no
-    /// line is read.
+    /// line is read, and the other readings aren't searched.
     ReadingsCut,
-    /// The other readings stopped at their bound, some not looked at: no line is read.
-    OtherReadingsCut,
-    /// None of the other readings is the best one, a line the search of the other readings
-    /// can't read, or a best reading the game can't roll (two modifiers of one type): no line
-    /// is read.
-    BestNotMet,
-    /// The best reading doesn't fit the room of the item while another one does, which the
-    /// candidates don't hold (a hybrid whose lines don't follow each other): a line keeps its
-    /// tier only when every reading in the room reads it as the best one does, with every
-    /// affix.
-    OnlyAnotherFits,
-    /// No reading fits the room of the item, the tables being out of step with the game: the
-    /// lines keep the tiers of the best reading, with every affix.
-    NoneFits,
+    /// With a best reading, then as the search of the other readings ended: a line keeps
+    /// its tier as that end tells, and with every affix unless the best reading was met.
+    OtherReadings(Outcome),
 }
 
 impl Ending {
-    /// How the search ended after the other readings, whose `doubts` these are, the best
-    /// reading fitting the room of the item (`fits_room`) or not.
-    fn after(doubts: &Doubts, fits_room: bool) -> Self {
-        match doubts.outcome {
-            Outcome::Cut => Self::OtherReadingsCut,
-            Outcome::BestNotMet => Self::BestNotMet,
-            Outcome::Concluded if fits_room => Self::Vouched,
-            Outcome::Concluded if doubts.fits => Self::OnlyAnotherFits,
-            Outcome::Concluded => Self::NoneFits,
-        }
-    }
-
     /// Logs what the search couldn't vouch for on an item of `base_type`, which can have
     /// `limits` prefixes and suffixes.
     fn log(self, base_type: &str, limits: AffixLimits) {
@@ -189,20 +173,20 @@ impl Ending {
             prefixes, suffixes, ..
         } = limits;
         match self {
-            Self::Vouched => {}
+            Self::OtherReadings(Outcome::BestMet) => {}
             Self::ReadingsCut => log::warn!(
                 "Game data, {base_type} copied from the in-game trade: the readings of its lines couldn't all be looked at, its lines left without tier"
             ),
-            Self::OtherReadingsCut => log::warn!(
+            Self::OtherReadings(Outcome::Cut) => log::warn!(
                 "Game data, {base_type} copied from the in-game trade: the other readings of its lines couldn't all be looked at, its lines left without tier"
             ),
-            Self::BestNotMet => log::warn!(
+            Self::OtherReadings(Outcome::BestNotMet) => log::warn!(
                 "Game data, {base_type} copied from the in-game trade: the other readings of its lines don't hold its best one, its lines left without tier"
             ),
-            Self::OnlyAnotherFits => log::debug!(
+            Self::OtherReadings(Outcome::OnlyAnotherFits) => log::debug!(
                 "Game data, {base_type} copied from the in-game trade: its best reading doesn't fit {prefixes} prefixes and {suffixes} suffixes, others do, the lines they don't all read the same left without tier"
             ),
-            Self::NoneFits => log::warn!(
+            Self::OtherReadings(Outcome::NoneFits) => log::warn!(
                 "Game data, {base_type} copied from the in-game trade: no reading of its lines fits {prefixes} prefixes and {suffixes} suffixes"
             ),
         }
@@ -272,7 +256,7 @@ fn trade_tiers_in(
     let effort = Effort {
         readings: best.readings,
         steps: doubts.steps,
-        ending: Ending::after(&doubts, best.fits_room),
+        ending: Ending::OtherReadings(doubts.outcome),
     };
     // A modifier that can be both keeps the affixes the others leave room for ([`Room::both`],
     // both when the reading doesn't fit the room): both too when a reading as good, or one in
@@ -285,7 +269,7 @@ fn trade_tiers_in(
     // A line two readings as good read otherwise, or another reading leaves in doubt, and the
     // other lines of its modifiers: without tier, the others read as the best reading does.
     let in_doubt = |candidate: &Candidate| {
-        let mut lines = best.ambiguous.iter().chain(&doubts.lines);
+        let mut lines = best.ambiguous.iter().chain(&doubts.in_doubt);
         lines.any(|line| candidate.modifiers.contains(line))
     };
     let found = best

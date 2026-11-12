@@ -2,7 +2,7 @@
 //! same, the parts of the item, the lines in doubt and the room left to a prefix or suffix.
 
 use super::*;
-use crate::game_data::modifiers::doubts::fixtures::{ground, line, placement};
+use crate::game_data::modifiers::doubts::fixtures::placement;
 use crate::game_data::modifiers::fixtures::range;
 use crate::game_data::modifiers::split_lines::AddedTiers;
 use crate::game_data::modifiers::{ModifierTiers, Tier};
@@ -105,34 +105,30 @@ fn the_parts_of_the_item_are_the_lines_a_modifier_joins() {
 fn lines_are_in_doubt_where_another_reading_is_as_likely_as_the_best_one() {
     // The best reading splits a line of the part, or leaves without tier a line the other
     // reading reads: in doubt, whatever the other reading makes.
-    assert!(PartRead::BestSplits.in_doubt());
-    assert!(PartRead::ReadsMore.in_doubt());
+    assert!(PartRead::BestSplits.leaves_in_doubt());
+    assert!(PartRead::ReadsMore.leaves_in_doubt());
     // A reading adding up modifiers on a line: with no more of them than the best one.
     let sums = |made, best_made| PartRead::Sums { made, best_made };
-    assert!(sums(2, 3).in_doubt());
-    assert!(sums(3, 3).in_doubt());
-    assert!(!sums(4, 3).in_doubt());
+    assert!(sums(2, 3).leaves_in_doubt());
+    assert!(sums(3, 3).leaves_in_doubt());
+    assert!(!sums(4, 3).leaves_in_doubt());
     // A hybrid in place of two pure modifiers, or the reverse, no line adding up: nothing
     // tells which rolled.
-    assert!(PartRead::JoinsOtherwise.in_doubt());
+    assert!(PartRead::JoinsOtherwise.leaves_in_doubt());
     // A reading that only takes another tier of the modifiers of the best one.
-    assert!(!PartRead::SameLines.in_doubt());
+    assert!(!PartRead::SameLines.leaves_in_doubt());
 }
 
 #[test]
 fn a_reading_leaves_the_same_room_to_a_prefix_or_suffix_with_as_many_of_each_elsewhere() {
     use Affix::{Prefix, Suffix};
-    let lines = [
-        line(0, "#% increased Rarity of Items found", 0..1, None),
-        line(1, "+# to maximum Life", 1..2, None),
-        line(2, "+# to Accuracy Rating", 2..3, None),
-    ];
-    let values = [16.0, 50.0, 50.0];
     let on =
         |line: usize, affix| placement("Kind", affix, &[line], &[(line, range(1.0, 100.0))], false);
-    let ground = Ground {
+    // Three lines: a rarity, a life and an accuracy.
+    let best = BestShown {
+        lines: Vec::new(),
         // The rarity a prefix or a suffix, the life a prefix, the accuracy a suffix.
-        best_candidates: vec![
+        candidates: vec![
             BestCandidate {
                 modifiers: 0..1,
                 sets: vec![AffixSet::Both],
@@ -146,10 +142,9 @@ fn a_reading_leaves_the_same_room_to_a_prefix_or_suffix_with_as_many_of_each_els
                 sets: vec![AffixSet::Only(Suffix)],
             },
         ],
-        ..ground(&lines, &values, &[])
     };
     let same =
-        |placements: &[Placement<'_>]| ground.same_room(&placements.iter().collect::<Vec<_>>());
+        |placements: &[Placement<'_>]| best.same_room(&placements.iter().collect::<Vec<_>>());
 
     // The rarity either affix, the others as the best reading.
     assert!(same(&[on(0, Prefix), on(1, Prefix), on(2, Suffix)]));

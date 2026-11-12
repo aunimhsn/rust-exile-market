@@ -41,7 +41,7 @@ One sub-section per rule. Each gives the rule of today first, then, where it has
 | [The best reading](#the-best-reading) | `best_reading.rs` |
 | [The split lines](#the-split-lines) | `split_lines.rs` |
 | [The other readings and their doubts](#the-other-readings-and-their-doubts) | `doubts.rs`, `doubts/` |
-| [The bounds and the end of the search](#the-bounds-and-the-end-of-the-search) | `best_reading.rs` (`MAX_READINGS`), `doubts.rs` (`MAX_STEPS`), `trade_tiers.rs` (`Ending`) |
+| [The bounds and the end of the search](#the-bounds-and-the-end-of-the-search) | `best_reading.rs` (`MAX_READINGS`), `doubts.rs` (`MAX_STEPS`, `Outcome`), `trade_tiers.rs` (`Ending`) |
 | [The sanctified item](#the-sanctified-item) | `trade_tiers.rs` |
 | [The desecrated lines](#the-desecrated-lines) | `tables.rs` (`Table::may_hold`) |
 | [The order of the lines](#the-order-of-the-lines) | what the game does, behind the rules above |
@@ -138,13 +138,13 @@ The candidates only split a line into a pure modifier and another whose lines ar
 
 ### The bounds and the end of the search
 
-How the search ends (`Ending` in `trade_tiers.rs`):
+How the search ends: the cut of its readings (`Ending::ReadingsCut` in `trade_tiers.rs`), or the end of the search of the other readings (`Outcome` in `doubts.rs`, decided once by `Outcome::of`):
 
 - **Past the readings** (`Ending::ReadingsCut`: at most 4,096 readings of the candidates are looked at), as past the steps, every line is left without tier, and the log says so.
-- **When the search of the other readings is cut at its bound** (`Ending::OtherReadingsCut`: 50,000 steps at most), **or doesn't meet the best reading among the others** (`Ending::BestNotMet`: a line it can't read, a table out of step with the candidates, a best reading with two modifiers of one type, which the candidates don't rule out), every line read is left without tier, and the log tells which.
-- **When no reading fits** (`Ending::NoneFits`), every affix is kept, and the log says so (a warning).
-- **A hybrid whose lines don't follow each other** is never read as one modifier, a modifier being read on consecutive lines (`FoundTiers::modifiers`, a range): when the room of the item leaves no other reading (the lines read alone overflow it), its lines stay without tier, the other lines keep every affix, and the log tells it apart from the case above (`Ending::OnlyAnotherFits`, a debug line: another reading fits).
-- **A best reading that overflows the room** isn't a reading of the item: once another reading fits, a line keeps its tier only if every reading in the room reads it as the best one does, whatever they make of the other lines, more modifiers adding up or another tier (`+50 to maximum Life` and `+30 to maximum Mana` read as two prefixes with room for one, while a hybrid suffix and two pure suffixes add up to them, or each prefix with three suffixes of the other stat: no tier). On the draw, 18 lines lose their tier by it, 11 with the tier they rolled and 7 in another tier of their modifier; on the draw, 16 of 6,400 items in the order of the modifiers and 159 with the lines shuffled (2.5 %; [backlog.md](../backlog.md)).
+- **When the search of the other readings is cut at its bound** (`Outcome::Cut`: 50,000 steps at most), **or doesn't meet the best reading among the others** (`Outcome::BestNotMet`: a line it can't read, a table out of step with the candidates, a best reading with two modifiers of one type, which the candidates don't rule out), every line read is left without tier, and the log tells which.
+- **When no reading fits** (`Outcome::NoneFits`), every affix is kept, and the log says so (a warning).
+- **A hybrid whose lines don't follow each other** is never read as one modifier, a modifier being read on consecutive lines (`FoundTiers::modifiers`, a range): when the room of the item leaves no other reading (the lines read alone overflow it), its lines stay without tier, the other lines keep every affix, and the log tells it apart from the case above (`Outcome::OnlyAnotherFits`, a debug line: another reading fits).
+- **A best reading that overflows the room** isn't a reading of the item: once another reading fits, a line keeps its tier only if every reading in the room reads it as the best one does, whatever they make of the other lines, more modifiers adding up or another tier (`+50 to maximum Life` and `+30 to maximum Mana` read as two prefixes with room for one, while a hybrid suffix and two pure suffixes add up to them, or each prefix with three suffixes of the other stat: no tier). As the best one does means in its tier too: a value that two tiers of its modifier hold has no tier then, a reading in the room reading it in the worst tier, as the best one does, and another in the other, where it takes the worst while the best reading fits the room (`15% increased Rarity of Items found` on a prefix whose tiers `10–16` and `14–20` both hold it). On the draw, 18 lines lose their tier by it, 11 with the tier they rolled and 7 in another tier of their modifier; on the draw, 16 of 6,400 items in the order of the modifiers and 159 with the lines shuffled (2.5 %; [backlog.md](../backlog.md)).
 
 What the search takes against these bounds is measured on the draws ([The measures of the draw](#the-measures-of-the-draw)).
 
@@ -153,6 +153,7 @@ What the search takes against these bounds is measured on the draws ([The measur
 - Past the readings, every line without tier: step 17e3e; the best of the readings looked at was kept until then, shown as sure.
 - Every line read left without tier when the other readings are cut or don't meet the best one: code reviews of 13k2e4b2a.
 - A best reading that overflows the room: code reviews of 17e3e, a rule that kept a line one reading confirmed having let two tiers through that no reading held together; its count on the draw, code review of 17e3e.
+- A value two tiers hold, without tier when the best reading overflows the room: what the rule does since 17e3e, seen and pinned by a test in the code review of 17e3d4a2 (2026-11-12), and left as it is, the careful side (owner, 2026-11-12); whether it may keep its worst tier is in [backlog.md](../backlog.md).
 
 ### The sanctified item
 

@@ -162,13 +162,16 @@ fn the_lines_of_a_hybrid_apart_are_in_doubt_too() {
     let ((read, split), effort) = read_modifiers(&tables, 60, &modifiers, (2, 1));
     assert_eq!(read, [(1, vec![(Suffix, 1)])]);
     assert_eq!(split, []);
-    assert_eq!(effort.ending, Ending::Vouched);
+    assert_eq!(effort.ending, Ending::OtherReadings(Outcome::BestMet));
     // One prefix only: the hybrid is the only reading that fits, which the lines apart
     // don't let read, a modifier being read on consecutive lines; no tier rather than two
     // pure prefixes the item has no room for.
     let ((read, _), effort) = read_modifiers(&tables, 60, &modifiers, (1, 1));
     assert_eq!(read, [(1, vec![(Suffix, 1)])]);
-    assert_eq!(effort.ending, Ending::OnlyAnotherFits);
+    assert_eq!(
+        effort.ending,
+        Ending::OtherReadings(Outcome::OnlyAnotherFits)
+    );
 }
 
 #[test]
@@ -377,7 +380,7 @@ fn two_fractured_lines_are_one_hybrid_whatever_the_room() {
     // An item has one fractured modifier: not two pure ones, even with room for them.
     let ((read, _), effort) = read_modifiers(&tables, 60, &lines, (3, 3));
     assert_eq!(read, [(2, vec![(Prefix, 1)])]);
-    assert_eq!(effort.ending, Ending::Vouched);
+    assert_eq!(effort.ending, Ending::OtherReadings(Outcome::BestMet));
     // A fractured line and another aren't the lines of one modifier, even when the item has
     // room for one prefix only: no reading fits, and both stay pure.
     let lines = [
@@ -386,7 +389,7 @@ fn two_fractured_lines_are_one_hybrid_whatever_the_room() {
     ];
     let ((read, _), effort) = read_modifiers(&tables, 60, &lines, (1, 3));
     assert_eq!(read, [(1, vec![(Prefix, 1)]), (1, vec![(Prefix, 1)])]);
-    assert_eq!(effort.ending, Ending::NoneFits);
+    assert_eq!(effort.ending, Ending::OtherReadings(Outcome::NoneFits));
 }
 
 #[test]
@@ -553,7 +556,7 @@ fn a_best_reading_out_of_the_room_keeps_only_the_tiers_every_reading_in_the_room
     let pure = (1, vec![(Prefix, 1)]);
 
     // A hybrid suffix and a pure suffix of each stat add up to the life and to the mana.
-    let tables = with(&[
+    let adding_up = [
         table(
             "HybridSuffix",
             "suffix",
@@ -562,27 +565,55 @@ fn a_best_reading_out_of_the_room_keeps_only_the_tiers_every_reading_in_the_room
         ),
         table("LifeSuffix", "suffix", &[LIFE], &[(1, &[(20, 29)])]),
         table("ManaSuffix", "suffix", &[MANA], &[(1, &[(10, 19)])]),
-    ]);
+    ];
+    let tables = with(&adding_up);
     let lines = [life, mana].map(|text| modifier(None, &[text]));
     // Room for both prefixes: three suffixes for two prefixes, which a modifier holding its
     // line alone rules out.
     let ((read, _), effort) = read_modifiers(&tables, 60, &lines, (2, 3));
     assert_eq!(read, [pure.clone(), pure.clone()]);
-    assert_eq!(effort.ending, Ending::Vouched);
+    assert_eq!(effort.ending, Ending::OtherReadings(Outcome::BestMet));
     // Room for one prefix only: the two prefixes can't be, and the three suffixes, the only
     // reading in the room, read neither line as they do.
     let ((read, _), effort) = read_modifiers(&tables, 60, &lines, (1, 3));
     assert_eq!(read, []);
-    assert_eq!(effort.ending, Ending::OnlyAnotherFits);
+    assert_eq!(
+        effort.ending,
+        Ending::OtherReadings(Outcome::OnlyAnotherFits)
+    );
     // No room for three suffixes either: no reading fits, and the lines keep their tiers.
     let ((read, _), effort) = read_modifiers(&tables, 60, &lines, (1, 2));
     assert_eq!(read, [pure.clone(), pure.clone()]);
-    assert_eq!(effort.ending, Ending::NoneFits);
+    assert_eq!(effort.ending, Ending::OtherReadings(Outcome::NoneFits));
     // A rarity every reading in the room reads as the prefix keeps its tier.
     let lines = [life, mana, rarity].map(|text| modifier(None, &[text]));
     let ((read, _), effort) = read_modifiers(&tables, 60, &lines, (2, 3));
     assert_eq!(read, std::slice::from_ref(&pure));
-    assert_eq!(effort.ending, Ending::OnlyAnotherFits);
+    assert_eq!(
+        effort.ending,
+        Ending::OtherReadings(Outcome::OnlyAnotherFits)
+    );
+    // A rarity that two tiers of its prefix hold takes the worst one while the best reading
+    // fits the room, a reading a tier apart being no doubt.
+    let mut two_tiers = prefixes.clone();
+    two_tiers[2] = table(
+        "RarityPrefix",
+        "prefix",
+        &[RARITY],
+        &[(1, &[(10, 16)]), (1, &[(14, 20)])],
+    );
+    let tables = written(&[two_tiers.as_slice(), &adding_up].concat());
+    let ((read, _), effort) = read_modifiers(&tables, 60, &lines, (3, 3));
+    assert_eq!(read, [pure.clone(), pure.clone(), (1, vec![(Prefix, 2)])]);
+    assert_eq!(effort.ending, Ending::OtherReadings(Outcome::BestMet));
+    // Out of the room, it has none: of the readings in the room, one reads it in the worst
+    // tier, as the best reading does, and one in the other, so that they don't all give it.
+    let ((read, _), effort) = read_modifiers(&tables, 60, &lines, (2, 3));
+    assert_eq!(read, []);
+    assert_eq!(
+        effort.ending,
+        Ending::OtherReadings(Outcome::OnlyAnotherFits)
+    );
 
     // Three pure suffixes of each stat: two readings in the room, each with one of the
     // prefixes and the suffixes of the other stat. Each prefix has a reading that gives
@@ -599,39 +630,10 @@ fn a_best_reading_out_of_the_room_keeps_only_the_tiers_every_reading_in_the_room
     let lines = [life, mana].map(|text| modifier(None, &[text]));
     let ((read, _), effort) = read_modifiers(&tables, 60, &lines, (1, 3));
     assert_eq!(read, []);
-    assert_eq!(effort.ending, Ending::OnlyAnotherFits);
-}
-
-#[test]
-fn the_search_ends_as_the_other_readings_and_the_room_tell() {
-    let after = |outcome, fits, fits_room| {
-        let doubts = Doubts {
-            lines: Vec::new(),
-            other_room: false,
-            outcome,
-            fits,
-            steps: 0,
-        };
-        Ending::after(&doubts, fits_room)
-    };
-
-    // Without every other reading, or without the best one among them, the room says nothing.
-    for fits_room in [true, false] {
-        assert_eq!(
-            after(Outcome::Cut, true, fits_room),
-            Ending::OtherReadingsCut
-        );
-        assert_eq!(
-            after(Outcome::BestNotMet, true, fits_room),
-            Ending::BestNotMet
-        );
-    }
-    assert_eq!(after(Outcome::Concluded, true, true), Ending::Vouched);
     assert_eq!(
-        after(Outcome::Concluded, true, false),
-        Ending::OnlyAnotherFits
+        effort.ending,
+        Ending::OtherReadings(Outcome::OnlyAnotherFits)
     );
-    assert_eq!(after(Outcome::Concluded, false, false), Ending::NoneFits);
 }
 
 #[test]
@@ -656,7 +658,7 @@ fn a_best_reading_the_other_readings_dont_meet_leaves_every_line_without_tier() 
     let ((read, split), effort) = read_modifiers(&tables, 60, &lines, (3, 3));
     assert_eq!(read, []);
     assert_eq!(split, []);
-    assert_eq!(effort.ending, Ending::BestNotMet);
+    assert_eq!(effort.ending, Ending::OtherReadings(Outcome::BestNotMet));
 
     // Other readings met, a hybrid with either life, none of them the best one: the same.
     let lines = [
@@ -667,7 +669,7 @@ fn a_best_reading_the_other_readings_dont_meet_leaves_every_line_without_tier() 
     .map(|text| modifier(None, &[text]));
     let ((read, _), effort) = read_modifiers(&pure_and_hybrid_tables(), 60, &lines, (3, 3));
     assert_eq!(read, []);
-    assert_eq!(effort.ending, Ending::BestNotMet);
+    assert_eq!(effort.ending, Ending::OtherReadings(Outcome::BestNotMet));
 }
 
 #[test]
@@ -685,7 +687,7 @@ fn a_search_whose_readings_stop_at_their_bound_reads_no_line() {
     // Two lines, alone or their hybrid, the only reading that fits one prefix.
     let ((read, _), effort) = read_modifiers(&tables, 60, &lines(2), (1, 0));
     assert_eq!(effort.readings, 2);
-    assert_eq!(effort.ending, Ending::Vouched);
+    assert_eq!(effort.ending, Ending::OtherReadings(Outcome::BestMet));
     assert_eq!(read, [(2, vec![(Affix::Prefix, 1)])]);
     // Each line a hybrid with the one before or after: more readings than the bound, and no
     // line read, the best of those looked at being maybe not the best of all (twelve hybrids

@@ -1,10 +1,11 @@
-//! What the tests of the other readings share: the lines, the placements and the ground they
-//! are written with.
+//! What the tests of the other readings share: the lines, the placements and the ground of
+//! the walk they are written with.
 
 use crate::game_data::modifiers::best_reading::Room;
 use crate::game_data::modifiers::copied::CopiedLine;
-use crate::game_data::modifiers::doubts::comparison::Ground;
-use crate::game_data::modifiers::doubts::placements::Placement;
+use crate::game_data::modifiers::doubts::comparison::BestShown;
+use crate::game_data::modifiers::doubts::placements::{Directions, Placement};
+use crate::game_data::modifiers::doubts::walk::Ground;
 use crate::game_data::modifiers::doubts::{Line, MAX_STEPS, Shown};
 use crate::item::{Affix, ModifierOrigin, Range};
 
@@ -68,10 +69,14 @@ pub(super) fn ground<'s>(
             suffixes: 3,
         },
         fractured: 1,
-        rising: vec![true; values.len()],
-        falling: vec![false; values.len()],
-        best: Vec::new(),
-        best_candidates: Vec::new(),
+        directions: Directions {
+            rising: vec![true; values.len()],
+            falling: vec![false; values.len()],
+        },
+        best: BestShown {
+            lines: Vec::new(),
+            candidates: Vec::new(),
+        },
         max_steps: MAX_STEPS,
     }
 }

@@ -5,7 +5,7 @@ use std::time::{Duration, SystemTime};
 
 use crate::clipboard::ClipboardEvent;
 use crate::estimate::Worth;
-use crate::game_data::{self, StatSource, TradeGroup, TradeStats};
+use crate::game_data::{self, ItemBase, StatSource, TradeGroup, TradeItem, TradeStats};
 use crate::item::{CopiedItem, Item, ItemState, Modifier, ParseError, Rarity, RollsSource};
 use crate::item_names::ItemNames;
 use crate::league::{League, Leagues};
@@ -120,14 +120,16 @@ impl ShownItem {
                 (TradeCopy::Values(copied), Some(base_type)) => {
                     // The runes and the implicits, which tell the room, are never read again.
                     let stats = LineStats::new(item, copied, trade);
-                    game_data::with_trade_tiers(
-                        item.language(),
-                        base_type,
-                        item.item_level(),
-                        copied,
-                        stats.affix_limits(item),
-                        item.has_state(ItemState::Sanctified),
-                    )
+                    let trade_item = TradeItem {
+                        base: ItemBase {
+                            language: item.language(),
+                            base_type,
+                            item_level: item.item_level(),
+                        },
+                        limits: stats.affix_limits(item),
+                        is_sanctified: item.has_state(ItemState::Sanctified),
+                    };
+                    game_data::with_trade_tiers(&trade_item, copied)
                 }
                 // A magic item before the names of the trade site tell its base.
                 (TradeCopy::Values(copied), None) => copied.clone(),

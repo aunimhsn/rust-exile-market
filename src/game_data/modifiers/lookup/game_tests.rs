@@ -15,7 +15,11 @@ type TierRanges = (u32, Vec<Range>);
 /// `base_type`, found among the names of the trade site in the application.
 fn tiers_of(text: &str, base_type: Option<&str>) -> Vec<(Option<TierRanges>, TierRanges)> {
     let item = parse(text);
-    let base_type = base_type.unwrap_or(item.base_type());
+    let base = ItemBase {
+        language: item.language(),
+        base_type: base_type.unwrap_or(item.base_type()),
+        item_level: None,
+    };
     item.modifiers()
         .iter()
         .filter(|modifier| {
@@ -23,17 +27,16 @@ fn tiers_of(text: &str, base_type: Option<&str>) -> Vec<(Option<TierRanges>, Tie
         })
         .map(|modifier| {
             let matches = modifier_stats(item.language(), modifier, None);
-            let found = modifier_tiers(item.language(), base_type, None, modifier, &matches)
-                .and_then(|tiers| {
-                    let tier = tiers.tier()?;
-                    Some((
-                        tier.number,
-                        tier.ranges
-                            .iter()
-                            .filter_map(|range| range.magnitude())
-                            .collect(),
-                    ))
-                });
+            let found = modifier_tiers(base, modifier, &matches).and_then(|tiers| {
+                let tier = tiers.tier()?;
+                Some((
+                    tier.number,
+                    tier.ranges
+                        .iter()
+                        .filter_map(|range| range.magnitude())
+                        .collect(),
+                ))
+            });
             let written = (
                 modifier.tier.expect("a tier"),
                 modifier

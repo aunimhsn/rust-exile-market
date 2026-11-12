@@ -33,12 +33,12 @@ fn a_tier_past_its_value_is_left_out_only_when_every_range_rises_or_falls() {
             false,
         ),
     ];
-    let (rising, falling) = directions(&placements, 3);
-    assert_eq!(rising, [true, false, false]);
-    assert_eq!(falling, [false, false, true]);
+    let directions = Directions::of(&placements, 3);
+    assert_eq!(directions.rising, [true, false, false]);
+    assert_eq!(directions.falling, [false, false, true]);
 
     let values = [15.0, 0.0, -15.0];
-    let is_past = |index, sum| past(&rising, &falling, &values, index, sum);
+    let is_past = |index, sum| directions.is_past(&values, index, sum);
     // A sum that only rises, already above its value.
     assert!(is_past(0, range(16.0, 30.0)));
     assert!(!is_past(0, range(15.03, 30.0)));

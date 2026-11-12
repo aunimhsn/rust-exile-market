@@ -1,7 +1,7 @@
 //! The modifiers of the tables placed on the lines of an item: each tier of each modifier on
 //! the lines it can sit on, without those whose values no sum can hold.
 
-use super::{Line, Shown};
+use super::{ItemLines, Line, Shown};
 use crate::game_data::modifiers::base_tiers::ItemTables;
 use crate::game_data::modifiers::copied::{Copied, CopiedTier, ROUNDING};
 use crate::game_data::modifiers::tables::{Table, first_of_its_modifier};
@@ -20,13 +20,12 @@ pub(super) struct Placement<'a> {
 }
 
 /// Every tier of every modifier of `tables`, among those the level of the item allows, whose
-/// lines are among `lines`, of one origin; without a tier that can't hold the `values`
+/// lines are among `lines`, of one origin; without a tier that can't hold their values
 /// whatever adds up with it.
-pub(super) fn placements<'a>(
-    tables: &ItemTables<'a>,
-    lines: &[Line<'a>],
-    values: &[f64],
-) -> Vec<Placement<'a>> {
+pub(super) fn placements<'a>(tables: &ItemTables<'a>, lines: &ItemLines<'a>) -> Vec<Placement<'a>> {
+    let ItemLines {
+        all: lines, values, ..
+    } = lines;
     let mut placements = Vec::new();
     for (index, table) in tables.all.iter().enumerate() {
         for mapped in mappings(table, lines) {
@@ -106,47 +105,50 @@ pub(super) fn placements<'a>(
         }
     }
     // A value whose ranges only add up one way: a tier past it can't be among those of its line.
-    let (rising, falling) = directions(&placements, values.len());
+    let directions = Directions::of(&placements, values.len());
     placements.retain(|placement| {
         placement
             .ranges
             .iter()
-            .all(|&(index, range)| !past(&rising, &falling, values, index, range))
+            .all(|&(index, range)| !directions.is_past(values, index, range))
     });
     placements
 }
 
-/// Whether the sum `sum` of the ranges on the value of `index` among `values` is past it,
-/// whatever other ranges add up with it: only when they all rise (`rising`) or all fall.
-pub(super) fn past(
-    rising: &[bool],
-    falling: &[bool],
-    values: &[f64],
-    index: usize,
-    sum: Range,
-) -> bool {
-    let Some(&value) = values.get(index) else {
-        return true;
-    };
-    let rises = rising.get(index).copied().unwrap_or(false);
-    let falls = falling.get(index).copied().unwrap_or(false);
-    rises && sum.min > value + ROUNDING || falls && sum.max < value - ROUNDING
+/// For each value of the lines, which way its sum goes as modifiers are added.
+pub(super) struct Directions {
+    /// Whether every range a modifier adds to the value is above zero: its sum only rises.
+    pub(super) rising: Vec<bool>,
+    /// Whether every one is below zero: its sum only falls.
+    pub(super) falling: Vec<bool>,
 }
 
-/// For each value, whether every range a modifier adds to it is above zero (the sum only rises
-/// as modifiers are added), and whether every one is below zero.
-pub(super) fn directions(placements: &[Placement<'_>], count: usize) -> (Vec<bool>, Vec<bool>) {
-    let mut rising = vec![true; count];
-    let mut falling = vec![true; count];
-    for &(index, range) in placements.iter().flat_map(|placement| &placement.ranges) {
-        if let Some(rises) = rising.get_mut(index) {
-            *rises &= range.min >= 0.0;
+impl Directions {
+    /// Those of `count` values, as the ranges of `placements` tell.
+    pub(super) fn of(placements: &[Placement<'_>], count: usize) -> Self {
+        let mut rising = vec![true; count];
+        let mut falling = vec![true; count];
+        for &(index, range) in placements.iter().flat_map(|placement| &placement.ranges) {
+            if let Some(rises) = rising.get_mut(index) {
+                *rises &= range.min >= 0.0;
+            }
+            if let Some(falls) = falling.get_mut(index) {
+                *falls &= range.max <= 0.0;
+            }
         }
-        if let Some(falls) = falling.get_mut(index) {
-            *falls &= range.max <= 0.0;
-        }
+        Self { rising, falling }
     }
-    (rising, falling)
+
+    /// Whether the sum `sum` of the ranges on the value of `index` among `values` is past it,
+    /// whatever other ranges add up with it: only when they all rise or all fall.
+    pub(super) fn is_past(&self, values: &[f64], index: usize, sum: Range) -> bool {
+        let Some(&value) = values.get(index) else {
+            return true;
+        };
+        let rises = self.rising.get(index).copied().unwrap_or(false);
+        let falls = self.falling.get(index).copied().unwrap_or(false);
+        rises && sum.min > value + ROUNDING || falls && sum.max < value - ROUNDING
+    }
 }
 
 /// Each way the lines of `table` are lines of the item among `lines`, each its own, of one

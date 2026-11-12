@@ -70,14 +70,14 @@ const BOW: [&str; 3] = [
 fn a_search_that_cant_look_at_every_reading_leaves_every_line_in_doubt() {
     // Every reading looked at: the best one is the only one, three prefixes.
     let doubts = doubts_of("Warmonger Bow", &BOW, MAX_STEPS, None);
-    assert_eq!(doubts.outcome, Outcome::Concluded);
-    assert_eq!(doubts.lines, [] as [usize; 0]);
+    assert_eq!(doubts.outcome, Outcome::BestMet);
+    assert_eq!(doubts.in_doubt, [] as [usize; 0]);
     assert!(!doubts.other_room);
 
     // Cut short, the best reading not met: no line keeps its tier.
     let doubts = doubts_of("Warmonger Bow", &BOW, 1, None);
     assert_eq!(doubts.outcome, Outcome::Cut);
-    assert_eq!(doubts.lines, [0, 1, 2]);
+    assert_eq!(doubts.in_doubt, [0, 1, 2]);
     assert!(doubts.other_room);
 }
 
@@ -91,10 +91,10 @@ fn a_search_that_doesnt_meet_the_best_reading_leaves_every_line_in_doubt() {
     // The best reading said to fit two prefixes, which no reading of the search does.
     let doubts = doubts_of("Warmonger Bow", &BOW, MAX_STEPS, Some((two, true)));
     assert_eq!(doubts.outcome, Outcome::BestNotMet);
-    assert_eq!(doubts.lines, [0, 1, 2]);
+    assert_eq!(doubts.in_doubt, [0, 1, 2]);
 
     // A best reading that doesn't fit the room isn't among those of the search, which fit it.
     let doubts = doubts_of("Warmonger Bow", &BOW, MAX_STEPS, Some((two, false)));
-    assert_eq!(doubts.outcome, Outcome::Concluded);
-    assert_eq!(doubts.lines, [] as [usize; 0]);
+    assert_eq!(doubts.outcome, Outcome::NoneFits);
+    assert_eq!(doubts.in_doubt, [] as [usize; 0]);
 }

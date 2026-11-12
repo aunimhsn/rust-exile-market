@@ -7,6 +7,7 @@ use crate::game_data::lines::modifier_stats;
 use crate::game_data::modifiers::fixtures::{equipment, modifier, range};
 use crate::game_data::modifiers::tables::read;
 use crate::item::{Currency, ModifierOrigin};
+use crate::language::Language;
 
 /// `tables` as an item of any level sees them on `base`.
 fn any_level<'a>(tables: &'a [Table], base: &'a BaseSpawn) -> ItemTables<'a> {
