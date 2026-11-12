@@ -603,6 +603,46 @@ fn a_best_reading_out_of_the_room_keeps_only_the_tiers_every_reading_in_the_room
 }
 
 #[test]
+fn a_line_only_a_reading_in_the_room_reads_changes_no_tier_but_those_of_its_modifier() {
+    use Affix::Suffix;
+    // No pure life, and a hybrid that is a suffix.
+    let tables = read_tables(&[
+        table_json(
+            "EnergyShield",
+            "prefix",
+            &[ENERGY_SHIELD],
+            &[(1, &[(21, 30)])],
+        ),
+        table_json(
+            "Hybrid",
+            "suffix",
+            &[ENERGY_SHIELD, LIFE],
+            &[(1, &[(20, 29), (10, 19)])],
+        ),
+        table_json("Rarity", "suffix", &[RARITY], &[(1, &[(10, 20)])]),
+    ]);
+    // The rarity between the lines of the hybrid, which no candidate reads then: the best
+    // reading takes the energy shield for the pure prefix and leaves the life without tier.
+    let lines = [
+        "25% increased Energy Shield",
+        "15% increased Rarity of Items found",
+        "+15 to maximum Life",
+    ]
+    .map(|text| modifier(None, &[text]));
+
+    // No room for a prefix: the hybrid and the rarity are the only reading in the room. The
+    // life it reads, which had no tier to lose, leaves without tier the energy shield, the
+    // other line of its hybrid, and no other line: the rarity, read the same, keeps its own.
+    let ((read, split), effort) = read_modifiers(&tables, 60, &lines, (0, 2));
+    assert_eq!(read, [(1, vec![(Suffix, 1)])]);
+    assert_eq!(split, []);
+    assert_eq!(
+        effort.ending,
+        Ending::OtherReadings(Outcome::OnlyAnotherFits)
+    );
+}
+
+#[test]
 fn a_best_reading_the_other_readings_dont_meet_leaves_every_line_without_tier() {
     let tables = read_tables(&[
         table_json("Life", "prefix", &[LIFE], &[(1, &[(21, 30)])]),
