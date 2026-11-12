@@ -32,8 +32,11 @@ fn the_first_tag_of_its_list_a_base_has_tells_whether_a_table_rolls_on_it() {
     };
     let rolls_on = |tags: &[&str]| table.rolls_on(&equipment(tags));
 
+    // The first of the list of the table, whatever the order of the tags of the base: `armour`
+    // before `default`, and `ring` before `armour`.
     assert!(rolls_on(&["armour", "default"]));
-    // The first of the list of the table, whatever the order of the tags of the base.
+    assert!(rolls_on(&["default", "armour"]));
+    assert!(!rolls_on(&["armour", "ring"]));
     assert!(!rolls_on(&["default", "armour", "ring"]));
     assert!(!rolls_on(&["default"]));
     // No tag of the list.
@@ -157,26 +160,50 @@ fn tables_of_one_source_type_affix_and_lines_are_tiers_of_one_modifier() {
     assert_eq!(same(&life(), &on_the_rings), (true, true));
 
     let others = [
-        Table {
-            kind: "Mana".to_owned(),
-            ..life()
-        },
-        Table {
-            affix: TableAffix::Suffix,
-            ..life()
-        },
-        Table {
-            source: Some(TableSource::Essence),
-            ..life()
-        },
-        Table {
-            lines: vec![line(MANA)],
-            ..life()
-        },
-        hybrid([LIFE, MANA]),
+        (
+            "type",
+            Table {
+                kind: "Mana".to_owned(),
+                ..life()
+            },
+        ),
+        (
+            "affix",
+            Table {
+                affix: TableAffix::Suffix,
+                ..life()
+            },
+        ),
+        (
+            "source",
+            Table {
+                source: Some(TableSource::Essence),
+                ..life()
+            },
+        ),
+        (
+            "line",
+            Table {
+                lines: vec![line(MANA)],
+                ..life()
+            },
+        ),
+        // Its line shown in another unit: the copied values are divided as the lines of the
+        // first table of a modifier tell.
+        (
+            "divisor",
+            Table {
+                lines: vec![TableLine {
+                    divisor: 1000.0,
+                    ..line(LIFE)
+                }],
+                ..life()
+            },
+        ),
+        ("lines", hybrid([LIFE, MANA])),
     ];
-    for other in &others {
-        assert_eq!(same(&life(), other), (false, false), "{}", other.kind);
+    for (difference, other) in &others {
+        assert_eq!(same(&life(), other), (false, false), "{difference}");
     }
     // The same lines in another order are another modifier.
     assert_eq!(
@@ -238,6 +265,68 @@ fn a_table_written_with_its_type_affix_lines_tags_and_tiers_alone_is_an_ordinary
     // Its values shown as the stat stores them.
     let divisors: Vec<f64> = table.lines.iter().map(|line| line.divisor).collect();
     assert_eq!(divisors, [1.0]);
+}
+
+#[test]
+fn a_table_written_with_its_domain_source_lord_and_divisor_is_read_with_them() {
+    let line_with = |domain: &str, source: &str, lord: &str| {
+        format!(
+            r#"{{"type": "Lord", "affix": "suffix", "domain": "{domain}", "lines": [{{"template": "{LIFE}", "divisor": 1000}}], "spawn": [["helmet", 1]], "source": "{source}", "lord": "{lord}", "tiers": [{{"level": 65, "ranges": [[[1, 2]]]}}]}}"#
+        )
+    };
+    let text = [
+        line_with("desecrated", "genesis", "Amanamu"),
+        line_with("flask", "essence", "Kurgal"),
+        line_with("misc", "alloy", "Ulaman"),
+    ]
+    .join("\n");
+
+    let read: Vec<_> = read(&text)
+        .iter()
+        .map(|table| {
+            let divisors: Vec<f64> = table.lines.iter().map(|line| line.divisor).collect();
+            (table.domain, table.source, table.lord, divisors)
+        })
+        .collect();
+
+    let thousand = vec![1000.0];
+    assert_eq!(
+        read,
+        [
+            (
+                Domain::Desecrated,
+                Some(TableSource::Genesis),
+                Some(TableLord::Amanamu),
+                thousand.clone()
+            ),
+            (
+                Domain::Flask,
+                Some(TableSource::Essence),
+                Some(TableLord::Kurgal),
+                thousand.clone()
+            ),
+            (
+                Domain::Misc,
+                Some(TableSource::Alloy),
+                Some(TableLord::Ulaman),
+                thousand
+            ),
+        ]
+    );
+}
+
+#[test]
+fn a_table_names_its_affix_and_its_lord_as_an_item_does_the_prefix_first() {
+    assert_eq!(
+        [TableAffix::Prefix, TableAffix::Suffix].map(Affix::from),
+        [Affix::Prefix, Affix::Suffix]
+    );
+    assert_eq!(
+        [TableLord::Amanamu, TableLord::Kurgal, TableLord::Ulaman].map(Lord::from),
+        [Lord::Amanamu, Lord::Kurgal, Lord::Ulaman]
+    );
+    // The order the two pure modifiers of a split line are read in.
+    assert!(TableAffix::Prefix < TableAffix::Suffix);
 }
 
 #[test]
