@@ -5,8 +5,10 @@
 use super::*;
 use crate::game_data::bases;
 use crate::game_data::lines::modifier_stats;
+use crate::game_data::modifiers::best_reading::{Room, best_reading};
+use crate::game_data::modifiers::candidates::candidates;
 use crate::game_data::modifiers::tables::TABLES;
-use crate::item::{ModifierKind, StatLine};
+use crate::item::{Modifier, ModifierKind, StatLine};
 use crate::language::Language;
 
 /// The lines `texts` of an item of `base_type` of item level 82, with 3 prefixes and 3
@@ -39,29 +41,22 @@ fn doubts_of(
         .iter()
         .map(|modifier| Copied::of(modifier, &modifier_stats(Language::English, modifier, None)))
         .collect();
-    let base = bases::spawn(Language::English, base_type).expect("a base");
-    let candidates =
-        super::super::candidates::candidates(&TABLES, &modifiers, &copied, base, Some(82));
+    let tables = ItemTables {
+        all: &TABLES,
+        base: bases::spawn(Language::English, base_type).expect("a base"),
+        item_level: Some(82),
+    };
+    let candidates = candidates(&tables, &copied);
     let room = Room {
         prefixes: 3,
         suffixes: 3,
     };
-    let mut search = super::super::best_reading::Search::new(&candidates, modifiers.len(), room, 0);
-    search.walk(0, &mut Vec::new());
-    let (key, reading) = search.best.expect("a reading");
-    let (room, fits_room) = searched.unwrap_or((room, key.room));
-    let best = Best {
-        candidates: &candidates,
-        reading: &reading,
-        room,
-        fits_room,
-    };
-    let item = TradeItem {
-        language: Language::English,
-        base,
-        item_level: Some(82),
-    };
-    doubts_within(&TABLES, &item, &modifiers, &copied, &best, max_steps)
+    let mut best = best_reading(&candidates, modifiers.len(), room, 0).expect("a reading");
+    if let Some((room, fits_room)) = searched {
+        best.room = room;
+        best.fits_room = fits_room;
+    }
+    doubts_within(&tables, &copied, &best, max_steps)
 }
 
 /// The lines of a bow with three prefixes, read one way only.

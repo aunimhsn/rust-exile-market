@@ -34,15 +34,13 @@ fn the_hybrid_of_a_split_is_the_first_table_whose_tiers_of_its_part_the_item_lev
     let whole = part(Affix::Prefix, &[1], &[(30.0, 39.0)]);
     // The range of the Armour of the tier found, which tells the table.
     let armour = |tables: &[String], item_level| {
-        let tables = read(&tables.join("\n"));
-        hybrid_tiers(
-            &tables,
-            &equipment(&["shield"]),
-            copied(),
-            (1, &whole),
+        let tables = ItemTables {
+            all: &read(&tables.join("\n")),
+            base: &equipment(&["shield"]),
             item_level,
-        )
-        .and_then(|tiers| tiers.tier()?.ranges.first().copied())
+        };
+        hybrid_tiers(&tables, copied(), (1, &whole))
+            .and_then(|tiers| tiers.tier()?.ranges.first().copied())
     };
     let high = [table("First", 80, 35, 30), table("Second", 1, 30, 30)];
     let other = [table("First", 1, 35, 31), table("Second", 1, 30, 30)];
@@ -92,7 +90,13 @@ fn two_hybrids_of_the_same_lines_that_split_a_line_are_two_ways() {
         origin: None,
     };
 
-    let ways = splits(&tables, &equipment(&["shield"]), &copied, (1, 1), Some(82));
+    let tables = ItemTables {
+        all: &tables,
+        base: &equipment(&["shield"]),
+        item_level: Some(82),
+    };
+
+    let ways = splits(&tables, &copied, (1, 1));
 
     // Two ways as good, of two tables: the line is left without tier by the search, as two
     // candidates split it (`the_lines_split_in_two_ways_as_good_keep_their_room`).
@@ -224,10 +228,14 @@ fn the_tiers_of_the_hybrid_of_a_split_are_those_of_its_part() {
         tier: CopiedTier::Unknown,
         origin: None,
     };
-    let base = equipment(&["shield"]);
+    let tables = ItemTables {
+        all: &tables,
+        base: &equipment(&["shield"]),
+        item_level: None,
+    };
     // The tier and its neighbour found, by their numbers.
     let tiers = |armour, whole: PartTier| {
-        hybrid_tiers(&tables, &base, copied(armour), (1, &whole), None).map(|tiers| {
+        hybrid_tiers(&tables, copied(armour), (1, &whole)).map(|tiers| {
             let number = |index: usize| tiers.tiers.get(index).map(|tier| tier.number);
             (number(tiers.found), tiers.neighbour.and_then(number))
         })

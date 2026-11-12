@@ -3,12 +3,11 @@
 //! then the tiers of a modifier as the advanced copy writes it (`modifier_tiers`,
 //! `lacks_table`).
 
-use super::base_tiers::tiers_on_base;
+use super::base_tiers::ItemTables;
 use super::copied::{Copied, CopiedLine, CopiedTier, Fit};
 use super::split_lines::split_tiers;
-use super::tables::{TABLES, Table, TableAffix, first_of_its_modifier};
+use super::tables::{Table, TableAffix, first_of_its_modifier};
 use super::{ModifierTiers, Tier};
-use crate::game_data::bases::{self, BaseSpawn};
 use crate::game_data::lines::LineMatch;
 use crate::item::{Affix, Lord, Modifier, ModifierKind, TierDoubt};
 use crate::language::Language;
@@ -42,30 +41,30 @@ pub fn modifier_tiers(
     modifier: &Modifier,
     matches: &[LineMatch<'_>],
 ) -> Option<ModifierTiers> {
+    let tables = ItemTables::of_game(language, base_type, item_level)?;
     if let Some(TierDoubt::Split { line, whole, .. }) = &modifier.doubt {
-        let summed = (*line, whole);
-        return split_tiers(language, base_type, item_level, modifier, matches, summed);
+        return split_tiers(&tables, modifier, matches, (*line, whole));
     }
-    let (affix, base, copied) = copied_on_base(language, base_type, modifier, matches)?;
-    find(&TABLES, affix, base, &copied, Tie::Best)
+    let (affix, copied) = searched(modifier, matches)?;
+    find(&tables, affix, &copied, Tie::Best)
 }
 
-/// What the tables are searched with for `modifier`: its affix, the base, and its lines as
-/// copied; none for a modifier that isn't a prefix or suffix, a base the data don't know, or a
-/// line without its stat.
-fn copied_on_base<'a>(
-    language: Language,
-    base_type: &str,
+/// What the tables are searched with for `modifier`: its affix, and its lines as copied; none
+/// for a modifier that isn't a prefix or suffix, or a line without its stat.
+fn searched<'a>(
     modifier: &'a Modifier,
     matches: &'a [LineMatch<'_>],
-) -> Option<(TableAffix, &'static BaseSpawn, Copied<'a>)> {
+) -> Option<(TableAffix, Copied<'a>)> {
     let affix = match modifier.kind {
         ModifierKind::Explicit(Some(Affix::Prefix)) => TableAffix::Prefix,
         ModifierKind::Explicit(Some(Affix::Suffix)) => TableAffix::Suffix,
-        _ => return None,
+        ModifierKind::Explicit(None)
+        | ModifierKind::Implicit
+        | ModifierKind::Enchant
+        | ModifierKind::Rune
+        | ModifierKind::Corruption => return None,
     };
-    let base = bases::spawn(language, base_type)?;
-    Some((affix, base, Copied::of(modifier, matches)?))
+    Some((affix, Copied::of(modifier, matches)?))
 }
 
 /// Whether the tables should hold `modifier` and don't: a prefix or suffix the advanced copy
@@ -83,22 +82,25 @@ pub fn lacks_table(
     if modifier.tier.is_none() || modifier.doubt.is_some() {
         return false;
     }
-    copied_on_base(language, base_type, modifier, matches).is_some_and(|(affix, base, copied)| {
-        find(&TABLES, affix, base, &copied, Tie::Best).is_none()
-    })
+    let Some(tables) = ItemTables::of_game(language, base_type, None) else {
+        return false;
+    };
+    searched(modifier, matches)
+        .is_some_and(|(affix, copied)| find(&tables, affix, &copied, Tie::Best).is_none())
 }
 
 /// Which tier is taken when the copied values are in several tiers of a modifier.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum Tie {
-    /// The best: the advanced copy wrote the ranges of the tier, which tell it.
+    /// The best, whatever the level of the item: the advanced copy wrote the ranges of the
+    /// tier, which tell it.
     Best,
-    /// Without the ranges of the copy, the worst tier that could have rolled the values on an
-    /// item of `item_level` (any level when the copy doesn't write it).
-    Worst { item_level: Option<u32> },
+    /// Without the ranges of the copy, the worst tier that could have rolled the values,
+    /// among those the level of the item allows ([`ItemTables::allows`]).
+    Worst,
 }
 
-/// The tiers of `copied` among `tables`, on `base`: those of the modifier of
+/// The tiers of `copied` among `tables`, on the base of the item: those of the modifier of
 /// `affix` that holds it best, the tier taken on a `tie`. Of two tiers that hold it as well,
 /// the one of the number the advanced copy wrote, maybe of another modifier: a modifier of one
 /// tier only, a lord's, can't hide a T3 of an ordinary one with the same lines and ranges;
@@ -106,9 +108,8 @@ pub(super) enum Tie {
 /// to Level of all Spell Skills` of an essence on a wand isn't the ordinary T2 of the same
 /// value.
 pub(super) fn find(
-    tables: &[Table],
+    tables: &ItemTables<'_>,
     affix: TableAffix,
-    base: &BaseSpawn,
     copied: &Copied<'_>,
     tie: Tie,
 ) -> Option<ModifierTiers> {
@@ -119,17 +120,17 @@ pub(super) fn find(
         CopiedTier::Unknown => false,
     };
     let mut best: Option<((Fit, bool), ModifierTiers)> = None;
-    for (index, table) in tables.iter().enumerate() {
+    for (index, table) in tables.all.iter().enumerate() {
         if table.affix != affix || !copied.may_be(table) {
             continue;
         }
         let Some(order) = copied.order(&table.lines) else {
             continue;
         };
-        if !first_of_its_modifier(tables, index) {
+        if !first_of_its_modifier(tables.all, index) {
             continue;
         }
-        let Some(tiers) = tiers_on_base(tables, table, base, &order, copied) else {
+        let Some(tiers) = tables.tiers_of(table, &order, copied) else {
             continue;
         };
         let values = copied.values(&table.lines, &order);
@@ -137,10 +138,8 @@ pub(super) fn find(
             .iter()
             .enumerate()
             .filter(|(_, tier)| match tie {
-                Tie::Best | Tie::Worst { item_level: None } => true,
-                Tie::Worst {
-                    item_level: Some(item_level),
-                } => tier.level <= item_level,
+                Tie::Best => true,
+                Tie::Worst => tables.allows(tier),
             })
             .filter_map(|(index, tier)| {
                 Some((
@@ -151,7 +150,7 @@ pub(super) fn find(
             .min_by(|&(fit, index), &(other_fit, other)| {
                 let tier = match tie {
                     Tie::Best => index.cmp(&other),
-                    Tie::Worst { .. } => other.cmp(&index),
+                    Tie::Worst => other.cmp(&index),
                 };
                 fit.cmp(&other_fit).then(tier)
             });

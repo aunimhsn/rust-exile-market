@@ -3,13 +3,12 @@
 //! and how the search ended.
 
 use super::ModifierTiers;
-use super::best_reading::{Room, Search};
-use super::candidates::{AffixSet, TradeItem, candidates};
+use super::base_tiers::ItemTables;
+use super::best_reading::{Cut, Room, best_reading};
+use super::candidates::{AffixSet, Candidate, candidates};
 use super::copied::Copied;
-use super::doubts::{self, Best, Doubts, Outcome};
+use super::doubts::{self, Doubts, Outcome};
 use super::split_lines::AddedTiers;
-use super::tables::{TABLES, Table};
-use crate::game_data::bases;
 use crate::game_data::lines::modifier_stats;
 use crate::item::{Affix, Modifier, ModifierKind, ModifierOrigin};
 use crate::language::Language;
@@ -122,15 +121,10 @@ pub(super) fn trade_tiers(
     if sanctified {
         return Vec::new();
     }
-    let Some(base) = bases::spawn(language, base_type) else {
+    let Some(tables) = ItemTables::of_game(language, base_type, item_level) else {
         return Vec::new();
     };
-    let item = TradeItem {
-        language,
-        base,
-        item_level,
-    };
-    let (found, effort) = trade_tiers_in(&TABLES, &item, modifiers, limits);
+    let (found, effort) = trade_tiers_in(&tables, language, modifiers, limits);
     log::debug!(
         "Game data, {base_type} copied from the in-game trade: read in {} readings and {} steps",
         effort.readings,
@@ -231,21 +225,17 @@ fn lines_to_read(language: Language, modifiers: &[Modifier]) -> Vec<Option<Copie
         .collect()
 }
 
-/// [`trade_tiers`] among `tables`: those of the game, or those of a test, so that the search
-/// is tested on tables a patch of the game doesn't change; with what the search took.
+/// [`trade_tiers`] among `tables`, for lines written in `language`: those of the game, or
+/// those of a test, so that the search is tested on tables a patch of the game doesn't change;
+/// with what the search took.
 fn trade_tiers_in(
-    tables: &[Table],
-    item: &TradeItem<'_>,
+    tables: &ItemTables<'_>,
+    language: Language,
     modifiers: &[Modifier],
     limits: AffixLimits,
 ) -> (Vec<FoundTiers>, Effort) {
-    let &TradeItem {
-        language,
-        base,
-        item_level,
-    } = item;
     let copied = lines_to_read(language, modifiers);
-    let candidates = candidates(tables, modifiers, &copied, base, item_level);
+    let candidates = candidates(tables, &copied);
     let known = |affix| {
         modifiers
             .iter()
@@ -265,59 +255,49 @@ fn trade_tiers_in(
         .iter()
         .filter(|modifier| modifier.origin == Some(ModifierOrigin::Fractured))
         .count();
-    let mut search = Search::new(&candidates, modifiers.len(), room, fractured);
-    search.walk(0, &mut Vec::new());
-    let readings = search.readings;
-    let effort_with = |steps, ending| Effort {
-        readings,
-        steps,
-        ending,
+    let best = match best_reading(&candidates, modifiers.len(), room, fractured) {
+        Ok(best) => best,
+        // Cut at the bound of its readings, the search has no best reading: no line keeps a
+        // tier it can't vouch for.
+        Err(Cut { readings }) => {
+            let effort = Effort {
+                readings,
+                steps: 0,
+                ending: Ending::ReadingsCut,
+            };
+            return (Vec::new(), effort);
+        }
     };
-    // Past the bound, a reading not looked at may be as good as the best of the others, or
-    // better: no line keeps a tier the search can't vouch for. The search keeps a reading
-    // otherwise, the one of no line for an item without any.
-    let (Some((key, reading)), false) = (search.best, search.cut) else {
-        return (Vec::new(), effort_with(0, Ending::ReadingsCut));
+    let doubts = doubts::doubts(tables, &copied, &best);
+    let effort = Effort {
+        readings: best.readings,
+        steps: doubts.steps,
+        ending: Ending::after(&doubts, best.fits_room),
     };
-    let best = Best {
-        candidates: &candidates,
-        reading: &reading,
-        room,
-        fits_room: key.room,
-    };
-    let doubts = doubts::doubts(tables, item, modifiers, &copied, &best);
-    let effort = effort_with(doubts.steps, Ending::after(&doubts, key.room));
     // A modifier that can be both keeps the affixes the others leave room for ([`Room::both`],
     // both when the reading doesn't fit the room): both too when a reading as good, or one in
     // doubt, leaves another room.
-    let both = if search.room_in_doubt || doubts.other_room {
+    let both = if best.room_in_doubt || doubts.other_room {
         (true, true)
     } else {
-        room.both(&reading, &candidates)
+        best.both()
     };
-    let mut ambiguous = search.ambiguous;
-    for line in doubts.lines {
-        if !ambiguous.contains(&line) {
-            ambiguous.push(line);
-        }
-    }
-    let found = reading
-        .iter()
-        .filter_map(|&index| {
-            // A line two readings as good read otherwise, or another reading leaves in doubt,
-            // and the other lines of its modifiers: without tier, the others read as the best
-            // reading does.
-            let candidate = candidates.get(index).filter(|candidate| {
-                !ambiguous
-                    .iter()
-                    .any(|line| candidate.modifiers.contains(line))
-            })?;
+    // A line two readings as good read otherwise, or another reading leaves in doubt, and the
+    // other lines of its modifiers: without tier, the others read as the best reading does.
+    let in_doubt = |candidate: &Candidate| {
+        let mut lines = best.ambiguous.iter().chain(&doubts.lines);
+        lines.any(|line| candidate.modifiers.contains(line))
+    };
+    let found = best
+        .candidates()
+        .filter(|candidate| !in_doubt(candidate))
+        .map(|candidate| {
             let kept = |affix| match (candidate.set(), affix) {
                 (AffixSet::Only(_), _) => true,
                 (AffixSet::Both, Affix::Prefix) => both.0,
                 (AffixSet::Both, Affix::Suffix) => both.1,
             };
-            Some(FoundTiers {
+            FoundTiers {
                 modifiers: candidate.modifiers.clone(),
                 // Without the affix the item has no room for, whose tables hold the values
                 // too: a prefix, the prefixes being full.
@@ -328,7 +308,7 @@ fn trade_tiers_in(
                     .cloned()
                     .collect(),
                 added: candidate.added.clone(),
-            })
+            }
         })
         .collect();
     (found, effort)

@@ -6,11 +6,11 @@
 //! line alone where a hybrid holds it too (`30% increased Energy Shield` and `+30 to maximum
 //! Life` of a helmet: two pure modifiers, or their hybrid).
 
-use super::best_reading::Room;
-use super::candidates::{Candidate, TradeItem};
+use super::base_tiers::ItemTables;
+use super::best_reading::BestReading;
+use super::candidates::Candidate;
 use super::copied::{Copied, CopiedLine};
-use super::tables::Table;
-use crate::item::{Affix, Modifier, ModifierOrigin, Range};
+use crate::item::{Affix, ModifierOrigin, Range};
 use comparison::Ground;
 use placements::placements;
 use walk::{Met, State};
@@ -26,17 +26,6 @@ mod walk;
 /// `trade_tiers/game_tests/random_items.rs`, 2026-11-11; up to 2,734 on the draws of
 /// 2026-10-30, whose code wasn't kept).
 pub(super) const MAX_STEPS: usize = 50_000;
-
-/// The best reading of the lines of an item, as [`super::trade_tiers`] found it.
-pub(super) struct Best<'b> {
-    pub(super) candidates: &'b [Candidate],
-    /// The indexes among `candidates` of those it reads.
-    pub(super) reading: &'b [usize],
-    /// How many prefixes and suffixes the lines can add to the item.
-    pub(super) room: Room,
-    /// Whether it fits that room.
-    pub(super) fits_room: bool,
-}
 
 /// What the other readings leave in doubt.
 pub(super) struct Doubts {
@@ -93,9 +82,9 @@ struct Shown {
     ranges: Vec<Range>,
 }
 
-/// The indexes among `modifiers` of the lines that another reading of the item reads otherwise
-/// than the `best` one, and that it leaves in doubt: on the base of `item`, among the tiers its
-/// level allows, `copied` giving the lines of each modifier (those of [`super::trade_tiers`]).
+/// The lines that another reading of the item reads otherwise than the `best` one, and that
+/// it leaves in doubt: among `tables`, `copied` giving for each modifier of the item its lines
+/// to read (those of [`super::trade_tiers`]).
 ///
 /// Another reading reads the lines the best one reads, and maybe lines it leaves without tier,
 /// each within the sum of the ranges of its modifiers, in the room of the item, as many
@@ -133,29 +122,21 @@ struct Shown {
 /// above holds for it: once another reading fits, a line is in doubt as soon as one of them
 /// reads it otherwise, whatever it makes of the others.
 pub(super) fn doubts(
-    tables: &[Table],
-    item: &TradeItem<'_>,
-    modifiers: &[Modifier],
+    tables: &ItemTables<'_>,
     copied: &[Option<Copied<'_>>],
-    best: &Best<'_>,
+    best: &BestReading<'_>,
 ) -> Doubts {
-    doubts_within(tables, item, modifiers, copied, best, MAX_STEPS)
+    doubts_within(tables, copied, best, MAX_STEPS)
 }
 
 /// [`doubts`], in at most `max_steps` steps.
 fn doubts_within(
-    tables: &[Table],
-    item: &TradeItem<'_>,
-    modifiers: &[Modifier],
+    tables: &ItemTables<'_>,
     copied: &[Option<Copied<'_>>],
-    best: &Best<'_>,
+    best: &BestReading<'_>,
     max_steps: usize,
 ) -> Doubts {
-    let chosen: Vec<&Candidate> = best
-        .reading
-        .iter()
-        .filter_map(|&index| best.candidates.get(index))
-        .collect();
+    let chosen: Vec<&Candidate> = best.candidates().collect();
     let read_by_best = |modifier: usize| {
         chosen
             .iter()
@@ -163,7 +144,7 @@ fn doubts_within(
     };
     let mut lines = Vec::new();
     let mut values = Vec::new();
-    for (index, (modifier, copied)) in modifiers.iter().zip(copied).enumerate() {
+    for (index, copied) in copied.iter().enumerate() {
         let Some(copied) = copied else {
             continue;
         };
@@ -173,21 +154,21 @@ fn doubts_within(
             values.extend(line.written.filter(|_| line.values.is_empty()));
             lines.push(Line {
                 modifier: index,
-                origin: modifier.origin,
+                origin: copied.origin,
                 copied: line.clone(),
                 values: start..values.len(),
                 read_by_best: read_by_best(index),
             });
         }
     }
-    let placements = placements(tables, item.base, item.item_level, &lines, &values);
+    let placements = placements(tables, &lines, &values);
     let ground = Ground::new(
         &lines,
         &values,
         &placements,
         best,
         &chosen,
-        modifiers.len(),
+        copied.len(),
         max_steps,
     );
     let mut state = State::new(&ground);

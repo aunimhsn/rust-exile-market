@@ -25,10 +25,8 @@ fn the_lines_two_readings_as_good_read_otherwise_are_ambiguous() {
     use Affix::{Prefix, Suffix};
     let room = |prefixes, suffixes| Room { prefixes, suffixes };
     let search = |candidates: &[Candidate], room| {
-        let mut search = Search::new(candidates, 2, room, 0);
-        search.walk(0, &mut Vec::new());
-        let best = search.best.map(|(_, reading)| reading);
-        (best, search.ambiguous)
+        let best = best_reading(candidates, 2, room, 0).expect("every reading looked at");
+        (Some(best.chosen), best.ambiguous)
     };
     // The line 1 split into two prefixes, or a prefix and a suffix; the line 0 alone.
     let candidates = [
@@ -137,16 +135,15 @@ fn of_two_readings_as_good_the_first_is_kept_and_their_lines_are_ambiguous() {
         prefixes: 2,
         suffixes: 0,
     };
-    let mut search = Search::new(&candidates, 3, room, 0);
 
-    search.walk(0, &mut Vec::new());
+    let best = best_reading(&candidates, 3, room, 0).expect("every reading looked at");
 
     // The three lines alone make three prefixes; then `A, BC` and `AB, C`, as good: the
     // first one looked at kept, every line of the candidates they don't share ambiguous.
-    assert_eq!(search.readings, 3);
-    assert_eq!(search.best.map(|(_, reading)| reading), Some(vec![0, 3]));
-    assert_eq!(search.ambiguous, [0, 1, 2]);
-    assert!(!search.room_in_doubt);
+    assert_eq!(best.readings, 3);
+    assert_eq!(best.chosen, [0, 3]);
+    assert_eq!(best.ambiguous, [0, 1, 2]);
+    assert!(!best.room_in_doubt);
 }
 
 #[test]
@@ -164,15 +161,14 @@ fn two_readings_as_good_that_read_other_lines_leave_them_and_their_room_in_doubt
         prefixes: 1,
         suffixes: 1,
     };
-    let mut search = Search::new(&candidates, 4, room, 0);
 
-    search.walk(0, &mut Vec::new());
+    let best = best_reading(&candidates, 4, room, 0).expect("every reading looked at");
 
     // The order of the lines made one the first: the lines of both hybrids are ambiguous,
     // and the room of the line 3 too, a suffix after one and a prefix after the other.
-    assert_eq!(search.best.map(|(_, reading)| reading), Some(vec![1, 2]));
-    assert_eq!(search.ambiguous, [1, 2, 0]);
-    assert!(search.room_in_doubt);
+    assert_eq!(best.chosen, [1, 2]);
+    assert_eq!(best.ambiguous, [1, 2, 0]);
+    assert!(best.room_in_doubt);
 
     // A hybrid of the three lines, looked at after them, reads one line more: the doubts
     // of the readings it beats go with them.
@@ -182,13 +178,12 @@ fn two_readings_as_good_that_read_other_lines_leave_them_and_their_room_in_doubt
         candidate(1..3, &[Suffix], false),
         candidate(3..4, &[Prefix, Suffix], false),
     ];
-    let mut search = Search::new(&candidates, 4, room, 0);
 
-    search.walk(0, &mut Vec::new());
+    let best = best_reading(&candidates, 4, room, 0).expect("every reading looked at");
 
-    assert_eq!(search.best.map(|(_, reading)| reading), Some(vec![1, 3]));
-    assert_eq!(search.ambiguous, [] as [usize; 0]);
-    assert!(!search.room_in_doubt);
+    assert_eq!(best.chosen, [1, 3]);
+    assert_eq!(best.ambiguous, [] as [usize; 0]);
+    assert!(!best.room_in_doubt);
 }
 
 #[test]
@@ -206,14 +201,14 @@ fn the_readings_looked_at_are_bounded() {
         prefixes: 0,
         suffixes: 0,
     };
-    let mut search = Search::new(&candidates, count, room, 0);
 
-    search.walk(0, &mut Vec::new());
+    let best = best_reading(&candidates, count, room, 0);
 
-    assert_eq!(search.readings, MAX_READINGS);
-    assert!(search.cut);
-    // The lines alone, looked at first.
-    assert_eq!(search.best.map(|(key, _)| key.modifiers), Some(count));
+    // More than a million readings of these lines: the search stops at the bound.
+    let cut = Cut {
+        readings: MAX_READINGS,
+    };
+    assert_eq!(best.err(), Some(cut));
 }
 
 #[test]
@@ -231,10 +226,8 @@ fn as_many_readings_as_the_bound_all_looked_at_arent_cut() {
         prefixes: 0,
         suffixes: 0,
     };
-    let mut search = Search::new(&candidates, 24, room, 0);
 
-    search.walk(0, &mut Vec::new());
+    let best = best_reading(&candidates, 24, room, 0).expect("every reading looked at");
 
-    assert_eq!(search.readings, MAX_READINGS);
-    assert!(!search.cut);
+    assert_eq!(best.readings, MAX_READINGS);
 }

@@ -46,10 +46,7 @@ impl<'a> Copied<'a> {
                 .get(line_match.lines.clone())?
                 .iter()
                 .flat_map(|line| &line.rolls);
-            let counted = rolls
-                .zip(&stat.counted)
-                .filter_map(|(roll, &counted)| counted.then_some(roll.range));
-            for range in counted {
+            for range in stat.counted(rolls).map(|roll| roll.range) {
                 match (&mut ranges, range) {
                     (Some(ranges), Some(range)) => ranges.push(range),
                     _ => ranges = None,

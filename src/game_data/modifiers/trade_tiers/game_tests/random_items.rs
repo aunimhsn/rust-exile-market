@@ -29,7 +29,9 @@ use crate::game_data::bases::{self, BaseSpawn, Domain};
 use crate::game_data::modifiers::base_tiers::range_values;
 use crate::game_data::modifiers::best_reading::MAX_READINGS;
 use crate::game_data::modifiers::doubts;
-use crate::game_data::modifiers::tables::{TableAffix, TableTier, first_of_its_modifier};
+use crate::game_data::modifiers::tables::{
+    TABLES, Table, TableAffix, TableTier, first_of_its_modifier,
+};
 use crate::game_data::stats::Stats;
 use crate::item::{Range, StatLine};
 
@@ -267,7 +269,7 @@ impl Draw {
 }
 
 /// A modifier of the tables on a base: its first table, and its tiers on the base, the best
-/// first, numbered as `tiers_on_base` numbers them.
+/// first, numbered as [`ItemTables::tiers_of`] numbers them.
 struct Rolled<'a> {
     table: &'a Table,
     tiers: Vec<&'a TableTier>,
@@ -740,8 +742,8 @@ fn measure(way: Way) -> (Counts, Vec<&'static str>) {
         left_out.extend(unwritten);
         let (desecrated, unwritten) = rolled(&TABLES, base, true, way.item_level);
         left_out.extend(unwritten);
-        let trade_item = TradeItem {
-            language: Language::English,
+        let tables = ItemTables {
+            all: &TABLES,
             base,
             item_level: Some(way.item_level),
         };
@@ -759,7 +761,7 @@ fn measure(way: Way) -> (Counts, Vec<&'static str>) {
             };
             read += 1;
             let limits = AffixLimits::new(most, most);
-            let (found, effort) = trade_tiers_in(&TABLES, &trade_item, &modifiers, limits);
+            let (found, effort) = trade_tiers_in(&tables, Language::English, &modifiers, limits);
             counts.items += 1;
             counts.most_readings = counts.most_readings.max(effort.readings);
             counts.most_steps = counts.most_steps.max(effort.steps);

@@ -110,11 +110,7 @@ fn stats_of<'a>(text: &str, kind: ModifierKind, trade: Option<&'a TradeStats>) -
         .filter_map(|line_match| {
             let stat = line_match.stat?;
             let lines = modifier.lines.get(line_match.lines)?;
-            let mut rolls = lines
-                .iter()
-                .flat_map(|line| &line.rolls)
-                .zip(&stat.counted)
-                .filter_map(|(roll, &counted)| counted.then_some(roll));
+            let mut rolls = stat.counted(lines.iter().flat_map(|line| &line.rolls));
             let (Some(roll), None) = (rolls.next(), rolls.next()) else {
                 return None;
             };
@@ -163,11 +159,7 @@ fn write_range(modifier: &mut Modifier, line_match: &LineMatch, pool: &mut Vec<R
     let Some(lines) = modifier.lines.get_mut(line_match.lines.clone()) else {
         return;
     };
-    let mut rolls = lines
-        .iter_mut()
-        .flat_map(|line| &mut line.rolls)
-        .zip(&stat.counted)
-        .filter_map(|(roll, &counted)| counted.then_some(roll));
+    let mut rolls = stat.counted(lines.iter_mut().flat_map(|line| &mut line.rolls));
     let (Some(roll), None) = (rolls.next(), rolls.next()) else {
         return;
     };

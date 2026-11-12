@@ -2,10 +2,20 @@
 //! of the game.
 
 use super::*;
+use crate::game_data::bases::BaseSpawn;
 use crate::game_data::lines::modifier_stats;
 use crate::game_data::modifiers::fixtures::{equipment, modifier, range};
 use crate::game_data::modifiers::tables::read;
 use crate::item::{Currency, ModifierOrigin};
+
+/// `tables` as an item of any level sees them on `base`.
+fn any_level<'a>(tables: &'a [Table], base: &'a BaseSpawn) -> ItemTables<'a> {
+    ItemTables {
+        all: tables,
+        base,
+        item_level: None,
+    }
+}
 
 #[test]
 fn the_value_of_a_line_without_number_is_divided_as_its_table_shows_it() {
@@ -25,9 +35,8 @@ fn the_value_of_a_line_without_number_is_divided_as_its_table_shows_it() {
     };
     let number = |copied| {
         find(
-            &tables,
+            &any_level(&tables, &equipment(&["weapon"])),
             TableAffix::Suffix,
-            &equipment(&["weapon"]),
             &copied,
             Tie::Best,
         )
@@ -62,9 +71,8 @@ fn of_two_tiers_as_good_the_one_the_advanced_copy_wrote_is_taken() {
     };
     let found = |tier| {
         find(
-            &tables,
+            &any_level(&tables, &equipment(&["helmet"])),
             TableAffix::Prefix,
-            &equipment(&["helmet"]),
             &copied(tier),
             Tie::Best,
         )
@@ -112,9 +120,8 @@ fn two_tables_with_the_same_lines_in_another_order_are_two_modifiers() {
     };
 
     let tiers = find(
-        &tables,
+        &any_level(&tables, &equipment(&["weapon"])),
         TableAffix::Prefix,
-        &equipment(&["weapon"]),
         &copied,
         Tie::Best,
     )
@@ -148,9 +155,8 @@ fn a_value_in_several_tiers_takes_the_worst_without_the_ranges_of_the_copy() {
     };
     let number = |tie| {
         find(
-            &tables,
+            &any_level(&tables, &equipment(&["helmet"])),
             TableAffix::Prefix,
-            &equipment(&["helmet"]),
             &copied,
             tie,
         )
@@ -158,7 +164,41 @@ fn a_value_in_several_tiers_takes_the_worst_without_the_ranges_of_the_copy() {
     };
 
     assert_eq!(number(Tie::Best), Some(1));
-    assert_eq!(number(Tie::Worst { item_level: None }), Some(2));
+    assert_eq!(number(Tie::Worst), Some(2));
+}
+
+#[test]
+fn only_the_worst_tie_is_bound_by_the_level_of_the_item() {
+    // The T1 `5–15` needs the item level 50.
+    let tables = read(concat!(
+        r##"{"type": "Life", "affix": "prefix", "lines": [{"template": "# to maximum Life"}], "##,
+        r#""spawn": [["helmet", 1]], "tiers": [{"level": 1, "ranges": [[[1, 10]]]}, {"level": 50, "ranges": [[[5, 15]]]}]}"#
+    ));
+    let copied = Copied {
+        lines: vec![CopiedLine {
+            templates: vec!["# to maximum Life"],
+            values: vec![12.0],
+            written: None,
+        }],
+        ranges: None,
+        tier: CopiedTier::Unknown,
+        origin: None,
+    };
+    let number = |tie, item_level| {
+        let tables = ItemTables {
+            all: &tables,
+            base: &equipment(&["helmet"]),
+            item_level,
+        };
+        find(&tables, TableAffix::Prefix, &copied, tie).and_then(|tiers| Some(tiers.tier()?.number))
+    };
+
+    // The advanced copy wrote the tier: found whatever the level of the item.
+    assert_eq!(number(Tie::Best, Some(10)), Some(1));
+    // From its values alone, a tier the item can't roll isn't one of its own.
+    assert_eq!(number(Tie::Worst, Some(10)), None);
+    assert_eq!(number(Tie::Worst, Some(50)), Some(1));
+    assert_eq!(number(Tie::Worst, None), Some(1));
 }
 
 #[test]
@@ -179,9 +219,8 @@ fn a_line_an_essence_and_an_alloy_hold_as_well_names_no_currency() {
     let copied = Copied::of(&suffix, &matches).expect("copied");
     let currency = |tables: &[Table]| {
         find(
-            tables,
+            &any_level(tables, &equipment(&["bow"])),
             TableAffix::Suffix,
-            &equipment(&["bow"]),
             &copied,
             Tie::Best,
         )

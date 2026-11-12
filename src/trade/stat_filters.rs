@@ -282,35 +282,6 @@ fn best_roll(value: TradeValue, line: &StatLine, numbers: &[usize], headed: bool
     Some(value.of(highest).max(value.of(lowest)))
 }
 
-/// For each line of `found`, a line of `modifier`, the indexes of its numbers the stat counts;
-/// all of them when the numbers of the lines don't line up with those the stat read.
-#[must_use]
-pub fn counted_numbers(found: &game_data::LineMatch, modifier: &Modifier) -> Vec<Vec<usize>> {
-    let counts: Vec<usize> = found
-        .lines
-        .clone()
-        .map(|line| modifier.lines.get(line).map_or(0, |line| line.rolls.len()))
-        .collect();
-    let counted = found
-        .stat
-        .as_ref()
-        .map(|stat| stat.counted.as_slice())
-        .filter(|counted| counted.len() == counts.iter().sum::<usize>());
-    let mut start = 0;
-    counts
-        .iter()
-        .map(|&count| {
-            let numbers = (0..count)
-                .filter(|number| {
-                    counted.is_none_or(|counted| counted.get(start + number) == Some(&true))
-                })
-                .collect();
-            start += count;
-            numbers
-        })
-        .collect()
-}
-
 /// A number of affixes added up from the values of lines, rounded.
 fn affixes(total: f64) -> i32 {
     #[expect(
@@ -416,7 +387,7 @@ impl LineStats {
             let group = TradeGroup::of(modifier);
             let source = Source::of(modifier.kind);
             for found in game_data::modifier_stats(language, modifier, trade) {
-                let numbers = counted_numbers(&found, modifier);
+                let numbers = found.counted_numbers(modifier);
                 // The first line with a number of the stat holds its filter: `Life that would
                 // be lost… is instead Reserved` / `until you take no Damage to Life for #
                 // seconds`.

@@ -275,13 +275,9 @@ fn with_ranges(
             let taken: Vec<Range> = ranges.by_ref().take(count).copied().collect();
             let stat = line_match.stat.as_ref()?;
             let lines = offset + line_match.lines.start..offset + line_match.lines.end;
-            let rolls: Vec<_> = joined
-                .lines
-                .get_mut(lines)?
-                .iter_mut()
-                .flat_map(|line| &mut line.rolls)
-                .zip(&stat.counted)
-                .filter_map(|(roll, &counted)| counted.then_some(roll))
+            let numbers = joined.lines.get_mut(lines)?.iter_mut();
+            let rolls: Vec<_> = stat
+                .counted(numbers.flat_map(|line| &mut line.rolls))
                 .collect();
             if rolls.len() == taken.len() {
                 for (roll, range) in rolls.into_iter().zip(taken) {

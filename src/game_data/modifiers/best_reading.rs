@@ -58,9 +58,9 @@ impl Room {
 /// room of the item, then the lines read with a tier, then the lines not split, then the
 /// lines read alone.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub(super) struct ReadingKey {
+struct ReadingKey {
     fractured: bool,
-    pub(super) room: bool,
+    room: bool,
     /// How many lines are read with a tier: a line only a hybrid holds is read in it
     /// (`30% increased Physical Damage` of a weapon, the pure modifier starting at 40%), and
     /// one no tier holds split into two modifiers.
@@ -74,35 +74,103 @@ pub(super) struct ReadingKey {
     modifiers: usize,
 }
 
+/// The best reading of the lines of an item among its candidates, and what the readings as
+/// good as it leave in doubt.
+pub(super) struct BestReading<'a> {
+    candidates: &'a [Candidate],
+    /// The indexes among `candidates` of those it reads, in the order of their lines.
+    chosen: Vec<usize>,
+    /// How many prefixes and suffixes the lines can add to the item.
+    pub(super) room: Room,
+    /// Whether it fits that room.
+    pub(super) fits_room: bool,
+    /// The lines that a reading as good reads otherwise, with the other lines of their
+    /// modifiers: the indexes among the modifiers of the item.
+    pub(super) ambiguous: Vec<usize>,
+    /// Whether a reading as good leaves another room to the modifiers that can be a prefix or
+    /// a suffix.
+    pub(super) room_in_doubt: bool,
+    /// The readings looked at to find it, [`MAX_READINGS`] at most.
+    pub(super) readings: usize,
+}
+
+impl BestReading<'_> {
+    /// The candidates it reads, in the order of their lines.
+    pub(super) fn candidates(&self) -> impl Iterator<Item = &Candidate> {
+        self.chosen
+            .iter()
+            .filter_map(|&index| self.candidates.get(index))
+    }
+
+    /// Whether a modifier of it that can be both can be a prefix, and a suffix
+    /// ([`Room::both`]).
+    pub(super) fn both(&self) -> (bool, bool) {
+        self.room.both(&self.chosen, self.candidates)
+    }
+}
+
+/// The search of the best reading stopped at [`MAX_READINGS`], some readings not looked at.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) struct Cut {
+    /// The readings it looked at before it stopped.
+    pub(super) readings: usize,
+}
+
+/// The best reading of the `count` modifiers of an item among `candidates`, within `room`,
+/// `fractured` of the modifiers being fractured. Past [`MAX_READINGS`], none: a reading not
+/// looked at may be as good as the best of the others, or better.
+pub(super) fn best_reading(
+    candidates: &[Candidate],
+    count: usize,
+    room: Room,
+    fractured: usize,
+) -> Result<BestReading<'_>, Cut> {
+    let mut search = Search::new(candidates, count, room, fractured);
+    search.walk(0, &mut Vec::new());
+    match search.best {
+        Some((key, chosen)) if !search.cut => Ok(BestReading {
+            candidates,
+            chosen,
+            room,
+            fits_room: key.room,
+            ambiguous: search.ambiguous,
+            room_in_doubt: search.room_in_doubt,
+            readings: search.readings,
+        }),
+        // Cut, the search holds the best of the readings it looked at only, which it doesn't
+        // give. Not cut, it always holds one: the reading of no line for an item without any.
+        Some(_) | None => Err(Cut {
+            readings: search.readings,
+        }),
+    }
+}
+
 /// The ways to read the modifiers of an item, looked at one by one: for each, the candidates
 /// chosen, the other modifiers without tier.
-pub(super) struct Search<'a> {
+struct Search<'a> {
     candidates: &'a [Candidate],
     /// For each modifier of the item, the candidates that start at it, the shorter first.
     starting: Vec<Vec<usize>>,
     room: Room,
     /// How many modifiers of the item are fractured.
     fractured: usize,
-    pub(super) readings: usize,
+    readings: usize,
     /// Whether the search stopped at [`MAX_READINGS`], some readings not looked at.
-    pub(super) cut: bool,
-    /// The best reading, the first one on a tie.
-    pub(super) best: Option<(ReadingKey, Vec<usize>)>,
-    /// The lines that a reading as good as the best one reads otherwise, with the other lines
-    /// of their modifiers: the indexes among the modifiers of the item.
-    pub(super) ambiguous: Vec<usize>,
-    /// Whether a reading as good as the best one leaves another room to the modifiers that
-    /// can be a prefix or a suffix.
-    pub(super) room_in_doubt: bool,
+    cut: bool,
+    /// The best reading so far, the first one on a tie.
+    best: Option<(ReadingKey, Vec<usize>)>,
+    /// The lines that a reading as good as the best one reads otherwise
+    /// ([`BestReading::ambiguous`]).
+    ambiguous: Vec<usize>,
+    /// Whether a reading as good as the best one leaves another room
+    /// ([`BestReading::room_in_doubt`]).
+    room_in_doubt: bool,
 }
 
 impl<'a> Search<'a> {
-    pub(super) fn new(
-        candidates: &'a [Candidate],
-        count: usize,
-        room: Room,
-        fractured: usize,
-    ) -> Self {
+    /// A search among `candidates` that has looked at no reading yet, of the `count` modifiers
+    /// of an item, `fractured` of them fractured, within `room`.
+    fn new(candidates: &'a [Candidate], count: usize, room: Room, fractured: usize) -> Self {
         let mut starting = vec![Vec::new(); count];
         for (index, candidate) in candidates.iter().enumerate() {
             if let Some(starting) = starting.get_mut(candidate.modifiers.start) {
@@ -125,7 +193,7 @@ impl<'a> Search<'a> {
     /// Every reading from the modifier `position` on, after the candidates `chosen`, at most
     /// [`MAX_READINGS`]: the lines alone first, a modifier no candidate starts at read
     /// without tier.
-    pub(super) fn walk(&mut self, position: usize, chosen: &mut Vec<usize>) {
+    fn walk(&mut self, position: usize, chosen: &mut Vec<usize>) {
         if self.readings >= MAX_READINGS {
             self.cut = true;
             return;
@@ -154,6 +222,9 @@ impl<'a> Search<'a> {
         }
     }
 
+    /// Ranks the reading of the candidates `chosen` against the best one so far: kept when
+    /// better; as good, the lines both read otherwise are ambiguous, and their room in doubt
+    /// when they leave another one.
     fn keep(&mut self, chosen: &[usize]) {
         let (mut read, mut joined, mut split) = (0, 0, 0);
         // The fractured modifiers, the lines alone counted.
