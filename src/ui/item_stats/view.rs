@@ -99,49 +99,37 @@ const UNREVEALED_PADDING: Margin = Margin::symmetric(6, 3);
 /// words stay at the left edge.
 const UNREVEALED_OUTSET: Margin = Margin::symmetric(-6, 0);
 
-/// How the bar of a roll is drawn: a setting from step 19, which adds the zone searched.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum RollBar {
-    /// Filled up to where the roll falls in its range, also on a line better lower, so that
-    /// it reads with the range written next to it.
-    Position,
-}
-
 impl Stats<'_> {
     /// Draws the stats, in the item block, with the filters the player set.
     pub fn show(self, ui: &mut Ui, filters: &mut Filters, i18n: &Translator) {
-        show(ui, self.rows, filters, i18n, RollBar::Position);
-    }
-}
-
-fn show(ui: &mut Ui, rows: Vec<Row<'_>>, filters: &mut Filters, i18n: &Translator, bar: RollBar) {
-    // "min – max" on the right of the first title, above the range fields.
-    let mut shows_range_title = rows.iter().any(|row| {
-        matches!(
-            row,
-            Row::Stat(Stat {
-                filter: Some(StatFilter { limit: Some(_), .. }),
-                ..
-            })
-        )
-    });
-    for (index, row) in rows.into_iter().enumerate() {
-        if index > 0 {
-            let group_gap = if matches!(row, Row::Group(_)) {
-                GROUP_GAP
-            } else {
-                0.0
-            };
-            ui.add_space(ROW_GAP + group_gap);
-        }
-        match row {
-            Row::Group(group) => {
-                group_title(ui, group, std::mem::take(&mut shows_range_title), i18n);
+        // "min – max" on the right of the first title, above the range fields.
+        let mut shows_range_title = self.rows.iter().any(|row| {
+            matches!(
+                row,
+                Row::Stat(Stat {
+                    filter: Some(StatFilter { limit: Some(_), .. }),
+                    ..
+                })
+            )
+        });
+        for (index, row) in self.rows.into_iter().enumerate() {
+            if index > 0 {
+                let group_gap = if matches!(row, Row::Group(_)) {
+                    GROUP_GAP
+                } else {
+                    0.0
+                };
+                ui.add_space(ROW_GAP + group_gap);
             }
-            Row::Stat(stat) => stat_row(ui, &stat, filters, i18n, bar),
-            Row::UnrevealedNote => note(ui, i18n.text(Message::UnrevealedNote)),
-            Row::TradeCopyNote => note(ui, i18n.text(Message::TradeCopyNote)),
-            Row::UniqueRollsNote => note(ui, i18n.text(Message::UniqueRollsNote)),
+            match row {
+                Row::Group(group) => {
+                    group_title(ui, group, std::mem::take(&mut shows_range_title), i18n);
+                }
+                Row::Stat(stat) => stat_row(ui, &stat, filters, i18n),
+                Row::UnrevealedNote => note(ui, i18n.text(Message::UnrevealedNote)),
+                Row::TradeCopyNote => note(ui, i18n.text(Message::TradeCopyNote)),
+                Row::UniqueRollsNote => note(ui, i18n.text(Message::UniqueRollsNote)),
+            }
         }
     }
 }
@@ -199,7 +187,7 @@ fn group_title(ui: &mut Ui, group: Group, range: bool, i18n: &Translator) {
 
 /// A stat in the color of the modifiers, on four lines at most, and its roll under it; a
 /// filter between its checkbox and the column of its range field.
-fn stat_row(ui: &mut Ui, stat: &Stat<'_>, filters: &mut Filters, i18n: &Translator, bar: RollBar) {
+fn stat_row(ui: &mut Ui, stat: &Stat<'_>, filters: &mut Filters, i18n: &Translator) {
     if let StatText::Unrevealed(_) = stat.text {
         unrevealed_row(ui, &stat.text.text(i18n));
         return;
@@ -223,13 +211,12 @@ fn stat_row(ui: &mut Ui, stat: &Stat<'_>, filters: &mut Filters, i18n: &Translat
                 stat,
                 None,
                 (width - CHECKBOX_COLUMN - COLUMN_GAP - COLUMN_GAP - RANGE_COLUMN).max(0.0),
-                bar,
                 i18n,
             );
             return;
         }
         let Some(filter) = stat.filter else {
-            stat_text(ui, stat, None, width, bar, i18n);
+            stat_text(ui, stat, None, width, i18n);
             return;
         };
         let mut choice = filters.get(stat.key, || filter.default_choice());
@@ -263,7 +250,6 @@ fn stat_row(ui: &mut Ui, stat: &Stat<'_>, filters: &mut Filters, i18n: &Translat
             stat,
             note.as_deref(),
             (width - CHECKBOX_COLUMN - COLUMN_GAP - COLUMN_GAP - column).max(0.0),
-            bar,
             i18n,
         );
         ui.add_space(COLUMN_GAP);
@@ -305,14 +291,7 @@ fn unrevealed_row(ui: &mut Ui, words: &str) {
 
 /// The text of a stat and its roll, the tag of the passive skills of its radius after it (alone
 /// under a line without roll), or a `note` in faint text under it, `width` across.
-fn stat_text(
-    ui: &mut Ui,
-    stat: &Stat,
-    note: Option<&str>,
-    width: f32,
-    bar: RollBar,
-    i18n: &Translator,
-) {
+fn stat_text(ui: &mut Ui, stat: &Stat, note: Option<&str>, width: f32, i18n: &Translator) {
     ui.allocate_ui_with_layout(vec2(width, 0.0), Layout::top_down(Align::Min), |ui| {
         ui.set_width(width);
         let response = ui.add(Label::new(clamped(&stat.text.text(i18n))).wrap());
@@ -325,7 +304,7 @@ fn stat_text(
         let skills = stat.text.radius_skills();
         if let Some(roll) = &stat.roll {
             ui.add_space(ROLL_GAP);
-            roll_line(ui, roll, skills, bar, i18n);
+            roll_line(ui, roll, skills, i18n);
         } else if let Some(skills) = skills {
             ui.add_space(ROLL_GAP);
             roll_row(ui, |ui| radius_tag(ui, skills, i18n));
@@ -551,18 +530,12 @@ fn clamped(text: &str) -> LayoutJob {
     job
 }
 
-/// The bar of a roll drawn in the style `bar`, and its ranges; for a line of a prefix or
-/// suffix, its bar over every tier, then under the last line of its modifier its tier, the
-/// ranges of that tier and its origin; or the tiers of a line that can be a prefix or a
-/// suffix, one under the other, then its origin on a row of its own. Last, the tag of the
+/// The bar of a roll and its ranges; for a line of a prefix or suffix, its bar over every
+/// tier, then under the last line of its modifier its tier, the ranges of that tier and its
+/// origin; or the tiers of a line that can be a prefix or a suffix, one under the other, then
+/// its origin on a row of its own. Last, the tag of the
 /// passive `skills` of the radius of a line of a Time-Lost jewel.
-fn roll_line(
-    ui: &mut Ui,
-    roll: &StatRoll,
-    skills: Option<RadiusSkills>,
-    bar: RollBar,
-    i18n: &Translator,
-) {
+fn roll_line(ui: &mut Ui, roll: &StatRoll, skills: Option<RadiusSkills>, i18n: &Translator) {
     // What ends the roll: its origin, then the tag.
     let ending = |ui: &mut Ui, origin: Option<Origin>| {
         if let Some(origin) = origin {
@@ -578,7 +551,7 @@ fn roll_line(
             ranges,
             origin,
         } => roll_row(ui, |ui| {
-            roll_bar(ui, *share, bar, color::ACCENT);
+            roll_bar(ui, *share, color::ACCENT);
             range_label(ui, ranges);
             ending(ui, *origin);
         }),
@@ -588,7 +561,7 @@ fn roll_line(
             origin,
         } => roll_row(ui, |ui| {
             if let Some(share) = share {
-                roll_bar(ui, *share, bar, color::ACCENT);
+                roll_bar(ui, *share, color::ACCENT);
             }
             if let Some(tier) = tier {
                 tier_row(ui, tier, i18n);
@@ -609,7 +582,7 @@ fn roll_line(
         }
         StatRoll::WaystoneTier(tier) => roll_row(ui, |ui| {
             let tint = waystone_tier_color(*tier);
-            roll_bar(ui, waystone_tier_share(*tier), bar, tint);
+            roll_bar(ui, waystone_tier_share(*tier), tint);
             ui.label(
                 RichText::new(format!("T{tier}"))
                     .font(text::tier())
@@ -631,7 +604,7 @@ fn waystone_tier_share(tier: u32) -> f32 {
 /// tooltip wrapped past [`WORD_TIP_WIDTH`].
 fn tier_row(ui: &mut Ui, row: &TierRow, i18n: &Translator) {
     let word = tier_word(row, i18n);
-    if !row.quiet_tier() {
+    if !row.is_tier_in_word {
         tier_label(ui, &row.tier, row.better);
     }
     if let Some(word) = word {
@@ -732,21 +705,18 @@ fn origin_label(origin: Origin) -> (Message, Color32) {
     }
 }
 
-/// The bar of a roll, filled to `share` in the style `bar`, in `tint`.
-fn roll_bar(ui: &mut Ui, share: f32, bar: RollBar, tint: Color32) {
+/// The bar of a roll, filled in `tint` up to where the roll falls in its range, `share`, also on
+/// a line better lower, so that it reads with the range written next to it.
+fn roll_bar(ui: &mut Ui, share: f32, tint: Color32) {
     let (rect, _) = ui.allocate_exact_size(BAR_SIZE, Sense::hover());
     let radius = BAR_SIZE.y / 2.0;
     let painter = ui.painter();
     painter.rect_filled(rect, radius, color::CONTROL_LINE);
-    match bar {
-        RollBar::Position => {
-            let fill = Rect::from_min_size(
-                rect.min,
-                vec2(rect.width() * share.clamp(0.0, 1.0), rect.height()),
-            );
-            painter.rect_filled(fill, radius, tint);
-        }
-    }
+    let fill = Rect::from_min_size(
+        rect.min,
+        vec2(rect.width() * share.clamp(0.0, 1.0), rect.height()),
+    );
+    painter.rect_filled(fill, radius, tint);
 }
 
 /// The ranges of a roll, in faint text.

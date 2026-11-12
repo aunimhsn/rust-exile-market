@@ -158,9 +158,11 @@ pub(super) struct TierRow<'a> {
     pub(super) word: Option<Message>,
     /// The lord of the Abyss named before the affix: "Amanamu Prefix".
     pub(super) lord: Option<Lord>,
-    /// Whether its tier, an affix of a line in doubt without range (a fixed value), is written
-    /// in the style of its word: "T2 Suffix".
-    quiet: bool,
+    /// Whether its tier is written in the style of its word, "T2 Suffix": only for an affix of a
+    /// line in doubt without range (a fixed value), set by [`Self::affix`]; the other rows keep
+    /// the color of their tier ("T1 Hybrid suffix" under the other line of a hybrid split from a
+    /// summed line, whose T1 the summed line writes too).
+    pub(super) is_tier_in_word: bool,
     /// The tooltip of that word.
     pub(super) tip: Option<WordTip<'a>>,
     /// The currency that adds the part of a line that adds up two modifiers, an essence or an
@@ -182,14 +184,6 @@ pub(super) enum WordTip<'a> {
 }
 
 impl<'a> TierRow<'a> {
-    /// Whether its tier, without range, is written as its word: "T2 Suffix"; only under a line
-    /// in doubt, the other rows keeping the color of their tier ("T1 Hybrid suffix" under the
-    /// other line of a hybrid split from a summed line, whose T1 the summed line writes too).
-    pub(super) fn quiet_tier(&self) -> bool {
-        // Set by `TierRow::affix` only: a word, no ranges, one tier.
-        self.quiet
-    }
-
     /// The tier `tier` of a modifier, without word.
     pub(super) fn plain(tier: ModifierTier) -> Self {
         Self {
@@ -197,7 +191,7 @@ impl<'a> TierRow<'a> {
             better: None,
             word: None,
             lord: None,
-            quiet: false,
+            is_tier_in_word: false,
             tip: None,
             currency: None,
         }
@@ -214,7 +208,7 @@ impl<'a> TierRow<'a> {
             better: None,
             word: Some(affix_word(found.affix)),
             lord: found.lord,
-            quiet: found.ranges.is_empty(),
+            is_tier_in_word: found.ranges.is_empty(),
             tip: None,
             currency: None,
         }
@@ -252,7 +246,7 @@ impl<'a> TierRow<'a> {
                 .filter(|&better| better != worse),
             word,
             lord: None,
-            quiet: false,
+            is_tier_in_word: false,
             tip,
             currency: part.currency,
         })
@@ -270,7 +264,7 @@ pub(super) fn tier_word(row: &TierRow, i18n: &Translator) -> Option<String> {
         (Some(lord), Message::AffixSuffix) => i18n.lord_affix(Affix::Suffix, lord),
         _ => i18n.text(word),
     };
-    Some(match row.tier.number.filter(|_| row.quiet_tier()) {
+    Some(match row.tier.number.filter(|_| row.is_tier_in_word) {
         Some(number) => format!("T{number} {text}"),
         None => text,
     })

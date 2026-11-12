@@ -180,9 +180,9 @@ fn the_words_of_a_tier_name_the_lord_and_take_a_tier_without_range() {
     assert_eq!(words(&ulaman, &french).as_deref(), Some("Préfixe d'Ulaman"));
     // A tier without range written as the word, in its style; with a range, apart.
     assert_eq!(words(&t2, &english).as_deref(), Some("T2 Suffix"));
-    assert!(t2.quiet_tier());
+    assert!(t2.is_tier_in_word);
     assert_eq!(words(&ranged, &english).as_deref(), Some("Prefix"));
-    assert!(!ranged.quiet_tier());
+    assert!(!ranged.is_tier_in_word);
 }
 
 #[test]

@@ -200,7 +200,7 @@ fn tier_row_text(row: &TierRow) -> String {
         .collect::<Vec<_>>()
         .join(" ");
     // A tier written in the style of its word, between braces.
-    if row.quiet_tier() {
+    if row.is_tier_in_word {
         format!("{{{text}}}")
     } else {
         text
