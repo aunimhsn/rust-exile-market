@@ -6,9 +6,9 @@
 //! line alone where a hybrid holds it too (`30% increased Energy Shield` and `+30 to maximum
 //! Life` of a helmet: two pure modifiers, or their hybrid).
 
-use super::base_tiers::ItemTables;
 use super::best_reading::BestReading;
 use super::copied::{Copied, CopiedLine};
+use super::item_tables::ItemTables;
 use crate::item::{Affix, ModifierOrigin, Range};
 use placements::placements;
 use walk::{Ground, Met, State};

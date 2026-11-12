@@ -4,6 +4,7 @@
 use super::*;
 use crate::game_data::bases::BaseSpawn;
 use crate::game_data::lines::modifier_stats;
+use crate::game_data::modifiers::copied::CopiedLine;
 use crate::game_data::modifiers::fixtures::{equipment, modifier, range};
 use crate::game_data::modifiers::tables::read;
 use crate::item::{Currency, ModifierOrigin};
@@ -185,21 +186,31 @@ fn only_the_worst_tie_is_bound_by_the_level_of_the_item() {
         tier: CopiedTier::Unknown,
         origin: None,
     };
-    let number = |tie, item_level| {
+    // The number of the tier found, then the number and the level of every tier.
+    let found = |tie, item_level| {
         let tables = ItemTables {
             all: &tables,
             base: &equipment(&["helmet"]),
             item_level,
         };
-        find(&tables, TableAffix::Prefix, &copied, tie).and_then(|tiers| Some(tiers.tier()?.number))
+        let tiers = find(&tables, TableAffix::Prefix, &copied, tie)?;
+        let all: Vec<(u32, u32)> = tiers
+            .tiers
+            .iter()
+            .map(|tier| (tier.number, tier.level))
+            .collect();
+        Some((tiers.tier()?.number, all))
     };
+    // Every tier of the base, those above the level of the item too: the bar of the rolls
+    // shows them all.
+    let first_of_two = Some((1, vec![(1, 50), (2, 1)]));
 
     // The advanced copy wrote the tier: found whatever the level of the item.
-    assert_eq!(number(Tie::Best, Some(10)), Some(1));
+    assert_eq!(found(Tie::Best, Some(10)), first_of_two);
     // From its values alone, a tier the item can't roll isn't one of its own.
-    assert_eq!(number(Tie::Worst, Some(10)), None);
-    assert_eq!(number(Tie::Worst, Some(50)), Some(1));
-    assert_eq!(number(Tie::Worst, None), Some(1));
+    assert_eq!(found(Tie::Worst, Some(10)), None);
+    assert_eq!(found(Tie::Worst, Some(50)), first_of_two);
+    assert_eq!(found(Tie::Worst, None), first_of_two);
 }
 
 #[test]

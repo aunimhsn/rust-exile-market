@@ -2,8 +2,8 @@
 //! run of consecutive lines, that a modifier of the tables holds, or that adds up two.
 
 use super::ModifierTiers;
-use super::base_tiers::ItemTables;
 use super::copied::{Copied, CopiedTier};
+use super::item_tables::ItemTables;
 use super::lookup::{Tie, find};
 use super::split_lines::{AddedTiers, splits};
 use super::tables::{Table, TableAffix};
@@ -22,6 +22,8 @@ pub(super) struct Candidate {
 }
 
 impl Candidate {
+    /// The affixes its modifier can be; for a split line, the one of the modifier of every
+    /// line.
     pub(super) fn set(&self) -> AffixSet {
         match self.affixes.as_slice() {
             [(affix, _)] => AffixSet::Only(*affix),
@@ -88,39 +90,50 @@ pub(super) fn candidates(tables: &ItemTables<'_>, copied: &[Option<Copied<'_>>])
                 tier: CopiedTier::Unknown,
                 origin,
             };
-            let affixes: Vec<_> = [
-                (Affix::Prefix, TableAffix::Prefix),
-                (Affix::Suffix, TableAffix::Suffix),
-            ]
-            .into_iter()
-            .filter_map(|(affix, table_affix)| {
-                Some((affix, find(tables, table_affix, &joined, Tie::Worst)?))
-            })
-            .collect();
-            let fractured = origin == Some(ModifierOrigin::Fractured);
-            if !affixes.is_empty() {
-                candidates.push(Candidate {
-                    modifiers: start..end,
-                    fractured,
-                    affixes,
-                    added: None,
-                });
-            }
-            for (summed, &owner) in owners.iter().enumerate() {
-                // A modifier of one line only: the line the game writes for both.
-                if owners.iter().filter(|&&other| other == owner).count() != 1 {
-                    continue;
-                }
-                for split in splits(tables, &joined, (summed, owner)) {
-                    candidates.push(Candidate {
-                        modifiers: start..end,
-                        fractured,
-                        affixes: vec![(split.affix, split.tiers)],
-                        added: Some(split.added),
-                    });
-                }
-            }
+            candidates.extend(run_candidates(tables, &joined, &owners, start..end));
         }
     }
     candidates
+}
+
+/// The candidates of the run of modifiers `modifiers` of the item, read as the lines `joined`,
+/// `owners` giving the index among the modifiers of the item of the modifier of each line: the
+/// modifier that holds them all, with each affix whose tables hold them; then each way one of
+/// these lines adds up two modifiers.
+fn run_candidates(
+    tables: &ItemTables<'_>,
+    joined: &Copied<'_>,
+    owners: &[usize],
+    modifiers: std::ops::Range<usize>,
+) -> Vec<Candidate> {
+    let fractured = joined.origin == Some(ModifierOrigin::Fractured);
+    let affixes: Vec<_> = [
+        (Affix::Prefix, TableAffix::Prefix),
+        (Affix::Suffix, TableAffix::Suffix),
+    ]
+    .into_iter()
+    .filter_map(|(affix, table_affix)| {
+        Some((affix, find(tables, table_affix, joined, Tie::Worst)?))
+    })
+    .collect();
+    let whole = (!affixes.is_empty()).then(|| Candidate {
+        modifiers: modifiers.clone(),
+        fractured,
+        affixes,
+        added: None,
+    });
+    // A modifier of one line only may be split: the line the game writes for both.
+    let has_one_line = |owner: usize| owners.iter().filter(|&&other| other == owner).count() == 1;
+    let split = owners
+        .iter()
+        .enumerate()
+        .filter(|&(_, &owner)| has_one_line(owner))
+        .flat_map(|(summed, &owner)| splits(tables, joined, (summed, owner)))
+        .map(|split| Candidate {
+            modifiers: modifiers.clone(),
+            fractured,
+            affixes: vec![(split.affix, split.tiers)],
+            added: Some(split.added),
+        });
+    whole.into_iter().chain(split).collect()
 }

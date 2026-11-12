@@ -38,9 +38,9 @@ impl Room {
         (lowest <= highest).then_some((lowest, highest))
     }
 
-    /// Whether a modifier that can be both can be a prefix, and a suffix, while the others of
-    /// the `chosen` candidates fit the room.
-    pub(super) fn both(self, chosen: &[usize], candidates: &[Candidate]) -> (bool, bool) {
+    /// The affixes a modifier that can be both is left with, while the others of the `chosen`
+    /// candidates fit the room; both when the candidates don't fit it.
+    pub(super) fn affixes_left(self, chosen: &[usize], candidates: &[Candidate]) -> AffixesLeft {
         let both = chosen
             .iter()
             .filter_map(|&index| candidates.get(index))
@@ -48,9 +48,35 @@ impl Room {
             .filter(|&set| set == AffixSet::Both)
             .count();
         self.bounds(chosen, candidates)
-            .map_or((true, true), |(lowest, highest)| {
-                (highest >= 1, lowest < both)
+            .map_or(AffixesLeft::BOTH, |(lowest, highest)| AffixesLeft {
+                prefix: highest >= 1,
+                suffix: lowest < both,
             })
+    }
+}
+
+/// The affixes a modifier that can be a prefix or a suffix is left with, once the other
+/// modifiers of a reading have taken their room on the item; neither for a reading without
+/// such a modifier.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) struct AffixesLeft {
+    prefix: bool,
+    suffix: bool,
+}
+
+impl AffixesLeft {
+    /// A prefix or a suffix: nothing tells which.
+    pub(super) const BOTH: Self = Self {
+        prefix: true,
+        suffix: true,
+    };
+
+    /// Whether such a modifier can be of `affix`.
+    pub(super) fn has(self, affix: Affix) -> bool {
+        match affix {
+            Affix::Prefix => self.prefix,
+            Affix::Suffix => self.suffix,
+        }
     }
 }
 
@@ -102,10 +128,9 @@ impl BestReading<'_> {
             .filter_map(|&index| self.candidates.get(index))
     }
 
-    /// Whether a modifier of it that can be both can be a prefix, and a suffix
-    /// ([`Room::both`]).
-    pub(super) fn both(&self) -> (bool, bool) {
-        self.room.both(&self.chosen, self.candidates)
+    /// The affixes a modifier of it that can be both is left with ([`Room::affixes_left`]).
+    pub(super) fn affixes_left(&self) -> AffixesLeft {
+        self.room.affixes_left(&self.chosen, self.candidates)
     }
 }
 
@@ -260,8 +285,8 @@ impl<'a> Search<'a> {
                         self.ambiguous.push(line);
                     }
                 }
-                let both = |reading| self.room.both(reading, self.candidates);
-                if both(reading) != both(chosen) {
+                let affixes_left = |reading| self.room.affixes_left(reading, self.candidates);
+                if affixes_left(reading) != affixes_left(chosen) {
                     self.room_in_doubt = true;
                 }
             }

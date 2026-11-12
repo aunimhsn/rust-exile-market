@@ -3,10 +3,10 @@
 //! then the tiers of a modifier as the advanced copy writes it (`modifier_tiers`,
 //! `lacks_table`).
 
-use super::base_tiers::{ItemBase, ItemTables};
-use super::copied::{Copied, CopiedLine, CopiedTier, Fit};
+use super::copied::{Copied, CopiedTier, Fit};
+use super::item_tables::{ItemBase, ItemTables};
 use super::split_lines::split_tiers;
-use super::tables::{Table, TableAffix, first_of_its_modifier};
+use super::tables::{Table, TableAffix};
 use super::{ModifierTiers, Tier};
 use crate::game_data::lines::LineMatch;
 use crate::item::{Affix, Lord, Modifier, ModifierKind, TierDoubt};
@@ -112,21 +112,10 @@ pub(super) fn find(
         CopiedTier::Unknown => false,
     };
     let mut best: Option<((Fit, bool), ModifierTiers)> = None;
-    for (index, table) in tables.all.iter().enumerate() {
-        if table.affix != affix || !copied.may_be(table) {
-            continue;
-        }
-        let Some(order) = copied.order(&table.lines) else {
-            continue;
-        };
-        if !first_of_its_modifier(tables.all, index) {
-            continue;
-        }
-        let Some(tiers) = tables.tiers_of(table, &order, copied) else {
-            continue;
-        };
-        let values = copied.values(&table.lines, &order);
-        let found = tiers
+    for held in tables.holding_as(copied, affix) {
+        let table = held.table;
+        let found = held
+            .tiers
             .iter()
             .enumerate()
             .filter(|(_, tier)| match tie {
@@ -135,7 +124,7 @@ pub(super) fn find(
             })
             .filter_map(|(index, tier)| {
                 Some((
-                    (copied.fit(&values, tier)?, other_number(table, tier)),
+                    (copied.fit(&held.values, tier)?, other_number(table, tier)),
                     index,
                 ))
             })
@@ -149,19 +138,7 @@ pub(super) fn find(
         if let Some((fit, found)) = found
             && best.as_ref().is_none_or(|(best, _)| fit < *best)
         {
-            let counts = copied.lines.iter().map(CopiedLine::count).collect();
-            best = Some((
-                fit,
-                ModifierTiers {
-                    tiers,
-                    found,
-                    neighbour: None,
-                    counts,
-                    tier_unwritten: table.tier_unwritten(),
-                    currency: table.currency(),
-                    lord: table.lord.map(Lord::from),
-                },
-            ));
+            best = Some((fit, held.into_tiers(found, copied)));
         } else if let Some(((fit, _), (best_fit, best_tiers))) = found.zip(best.as_mut())
             && fit == *best_fit
         {

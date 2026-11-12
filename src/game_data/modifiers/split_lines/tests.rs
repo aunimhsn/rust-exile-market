@@ -2,6 +2,7 @@
 //! hand: what they do whatever the patch of the game.
 
 use super::*;
+use crate::game_data::modifiers::copied::CopiedLine;
 use crate::game_data::modifiers::fixtures::{equipment, part, range};
 use crate::game_data::modifiers::tables::read;
 

@@ -1,12 +1,12 @@
 //! A line that adds up two modifiers of its stat, which the game writes as one: the ways a
 //! line copied from the in-game trade splits, and the tiers of the modifier of a line read so.
 
-use super::base_tiers::ItemTables;
-use super::copied::{Copied, CopiedLine, CopiedTier, Fit, holds};
-use super::tables::{Table, TableAffix, first_of_its_modifier};
+use super::copied::{Copied, CopiedTier, Fit, holds};
+use super::item_tables::{Held, ItemTables};
+use super::tables::TableAffix;
 use super::{ModifierTiers, Tier};
 use crate::game_data::lines::LineMatch;
-use crate::item::{Affix, Lord, Modifier, PartTier, Range};
+use crate::item::{Affix, Modifier, PartTier, Range};
 
 /// The other modifier of a line copied from the in-game trade that adds up two modifiers of
 /// its stat, a pure one, found from the value of that line.
@@ -59,83 +59,38 @@ pub(super) fn splits(
         origin: copied.origin,
     };
     // The values of the summed line among those of every line, in their order.
-    let offset: usize = copied
-        .lines
-        .iter()
-        .take(summed)
-        .map(CopiedLine::count)
-        .sum();
+    let offset = copied.values_before(summed);
     let summed_values = offset..offset + line.count();
-    let counts: Vec<usize> = copied.lines.iter().map(CopiedLine::count).collect();
     // The pure modifiers of the summed line.
-    let pure: Vec<_> = tables
-        .all
-        .iter()
-        .enumerate()
-        .filter(|(_, table)| alone.may_be(table))
-        .filter_map(|(index, table)| {
-            let order = alone.order(&table.lines)?;
-            let tiers = tables.tiers_of(table, &order, &alone)?;
-            first_of_its_modifier(tables.all, index).then_some((index, table, tiers))
-        })
-        .collect();
+    let pure: Vec<Held<'_>> = tables.holding(&alone).collect();
     // Of two pure modifiers, the prefix first.
-    let rank = |table: &Table, index: usize| (table.affix, index);
+    let rank = |held: &Held<'_>| (held.table.affix, held.index);
     let mut ways = Vec::new();
-    for (whole_index, whole) in tables.all.iter().enumerate() {
-        if !copied.may_be(whole) {
-            continue;
-        }
-        let Some(order) = copied.order(&whole.lines) else {
-            continue;
-        };
-        if !first_of_its_modifier(tables.all, whole_index) {
-            continue;
-        }
-        let Some(whole_tiers) = tables.tiers_of(whole, &order, copied) else {
-            continue;
-        };
-        let values = copied.values(&whole.lines, &order);
-        for (added_index, added, added_tiers) in &pure {
+    for whole in tables.holding(copied) {
+        for added in &pure {
             // Each pair of pure modifiers once, the prefix first.
-            if added.kind == whole.kind
-                || (whole.lines.len() == 1 && rank(added, *added_index) <= rank(whole, whole_index))
+            if added.table.kind == whole.table.kind
+                || (whole.table.lines.len() == 1 && rank(added) <= rank(&whole))
             {
                 continue;
             }
-            for (found, whole_tier) in whole_tiers.iter().enumerate() {
-                for (added_found, added_tier) in added_tiers.iter().enumerate() {
+            for (found, whole_tier) in whole.tiers.iter().enumerate() {
+                for (added_found, added_tier) in added.tiers.iter().enumerate() {
                     if !tables.allows(whole_tier) || !tables.allows(added_tier) {
                         continue;
                     }
-                    let Some(fit) = split_fit(&values, whole_tier, added_tier, &summed_values)
-                    else {
+                    let fit = split_fit(&whole.values, whole_tier, added_tier, &summed_values);
+                    let Some(fit) = fit else {
                         continue;
                     };
                     ways.push(Split {
-                        tables: (whole_index, *added_index),
-                        affix: whole.affix.into(),
-                        tiers: ModifierTiers {
-                            tiers: whole_tiers.clone(),
-                            found,
-                            neighbour: None,
-                            counts: counts.clone(),
-                            tier_unwritten: whole.tier_unwritten(),
-                            currency: whole.currency(),
-                            lord: whole.lord.map(Lord::from),
-                        },
+                        tables: (whole.index, added.index),
+                        affix: whole.table.affix.into(),
+                        tiers: whole.clone().into_tiers(found, copied),
                         added: AddedTiers {
                             line: owner,
-                            affix: added.affix.into(),
-                            tiers: ModifierTiers {
-                                tiers: added_tiers.clone(),
-                                found: added_found,
-                                neighbour: None,
-                                counts: vec![line.count()],
-                                tier_unwritten: added.tier_unwritten(),
-                                currency: added.currency(),
-                                lord: added.lord.map(Lord::from),
-                            },
+                            affix: added.table.affix.into(),
+                            tiers: added.clone().into_tiers(added_found, &alone),
                         },
                         fit,
                     });
@@ -257,12 +212,7 @@ fn hybrid_tiers(
         Affix::Suffix => TableAffix::Suffix,
     };
     // The values of that line among those of every line, in their order.
-    let offset: usize = copied
-        .lines
-        .iter()
-        .take(summed)
-        .map(CopiedLine::count)
-        .sum();
+    let offset = copied.values_before(summed);
     let values = &mut copied.lines.get_mut(summed)?.values;
     if values.len() != whole.ranges.len() {
         return None;
@@ -271,41 +221,22 @@ fn hybrid_tiers(
         // The ranges as the game writes them, the values with the sign of the stat.
         *value = range.min.copysign(*value);
     }
-    let counts: Vec<usize> = copied.lines.iter().map(CopiedLine::count).collect();
     let mut best: Option<(Fit, ModifierTiers)> = None;
-    for (index, table) in tables.all.iter().enumerate() {
-        if table.affix != affix || !copied.may_be(table) {
-            continue;
-        }
-        let Some(order) = copied.order(&table.lines) else {
+    for held in tables.holding_as(&copied, affix) {
+        let Some((worse, better)) = part_in(tables, &held.tiers, whole, offset) else {
             continue;
         };
-        if !first_of_its_modifier(tables.all, index) {
-            continue;
-        }
-        let Some(tiers) = tables.tiers_of(table, &order, &copied) else {
-            continue;
-        };
-        let Some((worse, better)) = part_in(tables, &tiers, whole, offset) else {
-            continue;
-        };
-        let values = copied.values(&table.lines, &order);
         let fit = [Some(worse), better]
             .into_iter()
             .flatten()
-            .filter_map(|tier| holds(&values, &tiers.get(tier)?.ranges))
+            .filter_map(|tier| holds(&held.values, &held.tiers.get(tier)?.ranges))
             .min();
         if let Some(fit) = fit
             && best.as_ref().is_none_or(|(best, _)| fit < *best)
         {
             let tiers = ModifierTiers {
-                tiers,
-                found: worse,
                 neighbour: better,
-                counts: counts.clone(),
-                tier_unwritten: table.tier_unwritten(),
-                currency: table.currency(),
-                lord: table.lord.map(Lord::from),
+                ..held.into_tiers(worse, &copied)
             };
             best = Some((fit, tiers));
         }

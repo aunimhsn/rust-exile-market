@@ -108,16 +108,42 @@ fn the_room_tells_the_affix_of_the_modifiers_that_can_be_both() {
 
     // One more prefix and one more suffix: one of the two is a prefix, either.
     assert_eq!(room(2, 2).bounds(&all, &candidates), Some((1, 1)));
-    assert_eq!(room(2, 2).both(&all, &candidates), (true, true));
+    assert_eq!(
+        room(2, 2).affixes_left(&all, &candidates),
+        AffixesLeft::BOTH
+    );
     // No room for another suffix: both are prefixes.
     assert_eq!(room(3, 1).bounds(&all, &candidates), Some((2, 2)));
-    assert_eq!(room(3, 1).both(&all, &candidates), (true, false));
+    assert_eq!(
+        room(3, 1).affixes_left(&all, &candidates),
+        AffixesLeft {
+            prefix: true,
+            suffix: false
+        }
+    );
     // No room for another prefix: both are suffixes.
-    assert_eq!(room(1, 3).both(&all, &candidates), (false, true));
+    assert_eq!(
+        room(1, 3).affixes_left(&all, &candidates),
+        AffixesLeft {
+            prefix: false,
+            suffix: true
+        }
+    );
     // Too few: none fits, every affix kept.
     assert_eq!(room(1, 2).bounds(&all, &candidates), None);
-    assert_eq!(room(1, 2).both(&all, &candidates), (true, true));
+    assert_eq!(
+        room(1, 2).affixes_left(&all, &candidates),
+        AffixesLeft::BOTH
+    );
     assert_eq!(room(0, 5).bounds(&all, &candidates), None);
+    // Without a modifier that can be both: neither.
+    assert_eq!(
+        room(1, 1).affixes_left(&[0, 3], &candidates),
+        AffixesLeft {
+            prefix: false,
+            suffix: false
+        }
+    );
     assert_eq!(room(0, 0).bounds(&[], &candidates), Some((0, 0)));
 }
 

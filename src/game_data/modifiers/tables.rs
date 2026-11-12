@@ -80,6 +80,16 @@ pub(super) enum TableAffix {
     Suffix,
 }
 
+impl From<TableAffix> for Affix {
+    fn from(affix: TableAffix) -> Self {
+        match affix {
+            TableAffix::Prefix => Self::Prefix,
+            TableAffix::Suffix => Self::Suffix,
+        }
+    }
+}
+
+/// A line of the modifier of a table, as the generator writes it.
 #[derive(Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub(super) struct TableLine {
@@ -89,29 +99,24 @@ pub(super) struct TableLine {
     /// be written without number: its value is then that of the stat (1000 for `Inherent Rage
     /// loss starts 1 second later`, shown in seconds; no such line rolls on a base on
     /// 2026-10-28, the generator writes the divisor when one does).
-    #[serde(default = "one")]
+    #[serde(default = "default_divisor")]
     pub(super) divisor: f64,
 }
 
-fn one() -> f64 {
+/// The divisor of a line the generator writes without one ([`TableLine::divisor`]): its value
+/// is shown as the stat stores it.
+fn default_divisor() -> f64 {
     1.0
 }
 
+/// A tier of a table, as the generator writes it.
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(super) struct TableTier {
+    /// The level an item needs for the tier to roll.
     pub(super) level: u32,
     /// For each line, the range of each of its values, with the sign of the stat.
     pub(super) ranges: Vec<Vec<[f64; 2]>>,
-}
-
-impl From<TableAffix> for Affix {
-    fn from(affix: TableAffix) -> Self {
-        match affix {
-            TableAffix::Prefix => Self::Prefix,
-            TableAffix::Suffix => Self::Suffix,
-        }
-    }
 }
 
 impl Table {
@@ -183,6 +188,7 @@ impl Table {
     }
 }
 
+/// The modifier tables of the game, read once from the embedded file.
 pub(super) static TABLES: LazyLock<Vec<Table>> =
     LazyLock::new(|| read(include_str!("../../../assets/game-data/modifiers.ndjson")));
 

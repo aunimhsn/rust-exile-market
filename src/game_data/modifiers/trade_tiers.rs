@@ -3,11 +3,11 @@
 //! and how the search ended.
 
 use super::ModifierTiers;
-use super::base_tiers::{ItemBase, ItemTables};
-use super::best_reading::{Cut, Room, best_reading};
+use super::best_reading::{AffixesLeft, BestReading, Cut, Room, best_reading};
 use super::candidates::{AffixSet, Candidate, candidates};
 use super::copied::Copied;
-use super::doubts::{self, Outcome};
+use super::doubts::{self, Doubts, Outcome};
+use super::item_tables::{ItemBase, ItemTables};
 use super::split_lines::AddedTiers;
 use crate::game_data::lines::modifier_stats;
 use crate::item::{Affix, Modifier, ModifierKind, ModifierOrigin};
@@ -220,21 +220,7 @@ fn trade_tiers_in(
 ) -> (Vec<FoundTiers>, Effort) {
     let copied = lines_to_read(language, modifiers);
     let candidates = candidates(tables, &copied);
-    let known = |affix| {
-        modifiers
-            .iter()
-            .filter(|modifier| modifier.kind == ModifierKind::Explicit(Some(affix)))
-            .count()
-    };
-    let room = |limit: u32, affix| {
-        usize::try_from(limit)
-            .unwrap_or(usize::MAX)
-            .saturating_sub(known(affix))
-    };
-    let room = Room {
-        prefixes: room(limits.prefixes, Affix::Prefix),
-        suffixes: room(limits.suffixes, Affix::Suffix),
-    };
+    let room = room_left(limits, modifiers);
     let fractured = modifiers
         .iter()
         .filter(|modifier| modifier.origin == Some(ModifierOrigin::Fractured))
@@ -258,13 +244,38 @@ fn trade_tiers_in(
         steps: doubts.steps,
         ending: Ending::OtherReadings(doubts.outcome),
     };
-    // A modifier that can be both keeps the affixes the others leave room for ([`Room::both`],
-    // both when the reading doesn't fit the room): both too when a reading as good, or one in
-    // doubt, leaves another room.
-    let both = if best.room_in_doubt || doubts.other_room {
-        (true, true)
+    (found_tiers(&best, &doubts), effort)
+}
+
+/// The room `limits` leave to the lines read from their values: without those of `modifiers`
+/// whose header tells the affix.
+fn room_left(limits: AffixLimits, modifiers: &[Modifier]) -> Room {
+    let left = |limit: u32, affix| {
+        let known = modifiers
+            .iter()
+            .filter(|modifier| modifier.kind == ModifierKind::Explicit(Some(affix)))
+            .count();
+        usize::try_from(limit)
+            .unwrap_or(usize::MAX)
+            .saturating_sub(known)
+    };
+    Room {
+        prefixes: left(limits.prefixes, Affix::Prefix),
+        suffixes: left(limits.suffixes, Affix::Suffix),
+    }
+}
+
+/// The tiers the `best` reading gives, once the other readings told their `doubts`: without
+/// the lines in doubt, and each modifier that can be a prefix or a suffix with the affixes
+/// the item has room for.
+fn found_tiers(best: &BestReading<'_>, doubts: &Doubts) -> Vec<FoundTiers> {
+    // A modifier that can be both keeps the affixes the others leave room for
+    // ([`Room::affixes_left`], both when the reading doesn't fit the room): both too when a
+    // reading as good, or one in doubt, leaves another room.
+    let affixes_left = if best.room_in_doubt || doubts.other_room {
+        AffixesLeft::BOTH
     } else {
-        best.both()
+        best.affixes_left()
     };
     // A line two readings as good read otherwise, or another reading leaves in doubt, and the
     // other lines of its modifiers: without tier, the others read as the best reading does.
@@ -272,14 +283,12 @@ fn trade_tiers_in(
         let mut lines = best.ambiguous.iter().chain(&doubts.in_doubt);
         lines.any(|line| candidate.modifiers.contains(line))
     };
-    let found = best
-        .candidates()
+    best.candidates()
         .filter(|candidate| !in_doubt(candidate))
         .map(|candidate| {
-            let kept = |affix| match (candidate.set(), affix) {
-                (AffixSet::Only(_), _) => true,
-                (AffixSet::Both, Affix::Prefix) => both.0,
-                (AffixSet::Both, Affix::Suffix) => both.1,
+            let kept = |affix| match candidate.set() {
+                AffixSet::Only(_) => true,
+                AffixSet::Both => affixes_left.has(affix),
             };
             FoundTiers {
                 modifiers: candidate.modifiers.clone(),
@@ -294,8 +303,7 @@ fn trade_tiers_in(
                 added: candidate.added.clone(),
             }
         })
-        .collect();
-    (found, effort)
+        .collect()
 }
 
 #[cfg(test)]

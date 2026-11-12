@@ -27,6 +27,9 @@ pub(super) struct Copied<'a> {
 }
 
 impl<'a> Copied<'a> {
+    /// The lines of `modifier` as the tables are searched with them, each matched with its
+    /// stat in `matches`; none when a line has no stat, or one the trade site alone knows,
+    /// which has no template of the tables.
     pub(super) fn of(modifier: &Modifier, matches: &[LineMatch<'a>]) -> Option<Self> {
         let mut lines = Vec::new();
         let mut ranges = Some(Vec::new());
@@ -72,6 +75,17 @@ impl<'a> Copied<'a> {
             },
             origin: modifier.origin,
         })
+    }
+
+    /// How many values each line has, in their order.
+    pub(super) fn counts(&self) -> Vec<usize> {
+        self.lines.iter().map(CopiedLine::count).collect()
+    }
+
+    /// How many values the lines before the line `line` have: where its values start among
+    /// those of every line.
+    pub(super) fn values_before(&self, line: usize) -> usize {
+        self.lines.iter().take(line).map(CopiedLine::count).sum()
     }
 
     /// Whether the modifier may be one of `table` ([`Table::may_hold`]).
