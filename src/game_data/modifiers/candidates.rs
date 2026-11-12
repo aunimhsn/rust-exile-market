@@ -137,3 +137,6 @@ fn run_candidates(
         });
     whole.into_iter().chain(split).collect()
 }
+
+#[cfg(test)]
+mod tests;

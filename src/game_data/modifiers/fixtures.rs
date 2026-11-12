@@ -110,9 +110,8 @@ pub(super) fn copied(lines: &[(&'static str, f64)]) -> Copied<'static> {
     }
 }
 
-/// The line of the file of a table of one or two lines that rolls on the helmets: its type,
-/// its affix, the template of each line, and for each tier its level and the range of each
-/// line.
+/// The line of the file of a table that rolls on the helmets: its type, its affix, the
+/// template of each of its lines, and for each tier its level and the range of each line.
 pub(super) fn table_json(
     kind: &str,
     affix: &str,
