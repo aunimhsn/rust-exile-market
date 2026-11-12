@@ -465,10 +465,10 @@ fn a_range_across_zero_has_no_rolls() {
 /// skipped without a line in the log.
 #[test]
 fn a_tier_the_copy_writes_and_no_table_holds_is_told_apart() {
-    let lacks = |lines: &str| {
+    let lacks_at = |item_level: u32, lines: &str| {
         let maul = format!(
             "Item Class: Two Hand Maces\nRarity: Magic\nCrackling Temple Maul of the Brute\n\
-             --------\nItem Level: 40\n--------\n{lines}"
+             --------\nItem Level: {item_level}\n--------\n{lines}"
         );
         let item = Item::parse(&CopiedItem::from_text(&maul).expect("an item")).expect("read");
         let modifier = &item.modifiers()[0];
@@ -480,9 +480,17 @@ fn a_tier_the_copy_writes_and_no_table_holds_is_told_apart() {
         };
         game_data::lacks_table(base, modifier, &matches)
     };
+    let lacks = |lines: &str| lacks_at(40, lines);
 
     // The tier of the data.
     assert!(!lacks(
+        "{ Prefix Modifier \"Crackling\" (Tier: 7) — Damage, Elemental, Lightning, Attack }\n\
+         Adds 2(1-4) to 60(53-76) Lightning Damage"
+    ));
+    // Whatever the level of the item: the copy wrote the tier, and the table that holds it
+    // isn't missing because the item is below the level its tier needs.
+    assert!(!lacks_at(
+        1,
         "{ Prefix Modifier \"Crackling\" (Tier: 7) — Damage, Elemental, Lightning, Attack }\n\
          Adds 2(1-4) to 60(53-76) Lightning Damage"
     ));

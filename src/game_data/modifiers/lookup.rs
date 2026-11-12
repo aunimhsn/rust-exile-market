@@ -65,10 +65,10 @@ fn affix_and_copied<'a>(
 
 /// Whether the tables should hold `modifier`, of the item of `base`, and don't: a prefix or
 /// suffix the advanced copy writes with its tier, on a base the data know, each of its lines
-/// with its stat, and no
-/// table with these ranges. The advanced copy tells the truth: either the data are behind the
-/// game, after a patch, or the item kept the ranges of an older patch (in Standard), which this
-/// can't tell apart; worth a line in the log ([`modifier_tiers`] gives nothing).
+/// with its stat, and no table with these ranges, whatever the level of the item, which isn't
+/// read: the copy wrote the tier. The advanced copy tells the truth: either the data are
+/// behind the game, after a patch, or the item kept the ranges of an older patch (in Standard),
+/// which this can't tell apart; worth a line in the log ([`modifier_tiers`] gives nothing).
 #[must_use]
 pub fn lacks_table(base: ItemBase<'_>, modifier: &Modifier, matches: &[LineMatch<'_>]) -> bool {
     if modifier.tier.is_none() || modifier.doubt.is_some() {
