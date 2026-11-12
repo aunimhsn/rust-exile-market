@@ -218,4 +218,7 @@ pub(super) fn first_of_its_modifier(tables: &[Table], index: usize) -> bool {
 }
 
 #[cfg(test)]
+mod tests;
+
+#[cfg(test)]
 mod game_tests;
