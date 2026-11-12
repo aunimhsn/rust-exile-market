@@ -432,7 +432,7 @@ mod tests {
     use super::*;
     use crate::game_data::trade_stats;
     use crate::item::{
-        Affix, CopiedItem, Item, ModifierKind, ModifierOrigin, StatLine, test_items,
+        Affix, CopiedItem, Item, ModifierKind, ModifierOrigin, Roll, StatLine, test_items,
     };
 
     fn modifier(kind: ModifierKind, origin: Option<ModifierOrigin>, lines: &[&str]) -> Modifier {
@@ -544,6 +544,46 @@ mod tests {
         );
         assert_eq!(found.values, Vec::<f64>::new());
         assert_eq!(found.matcher_value, Some(100.0));
+    }
+
+    #[test]
+    fn the_numbers_a_stat_counts_are_those_of_its_hashes() {
+        // The 25 is a `#` of the stat, the 40 a number its string writes.
+        let glory = explicit(&["25% chance for Skills to retain 40% of Glory on use"]);
+        let found = stat(Language::English, &glory);
+        let counted = |numbers: &[&'static str]| -> Vec<&'static str> {
+            found.counted(numbers.iter().copied()).collect()
+        };
+
+        assert_eq!(counted(&["25", "40"]), ["25"]);
+        // Numbers that don't line up with those the stat read stop at the fewer of both.
+        assert_eq!(counted(&["25"]), ["25"]);
+        assert_eq!(counted(&["25", "40", "7"]), ["25"]);
+        assert_eq!(counted(&[]), [""; 0]);
+    }
+
+    #[test]
+    fn the_counted_numbers_of_lines_that_dont_line_up_with_their_stat_are_all_of_them() {
+        let glory = explicit(&["25% chance for Skills to retain 40% of Glory on use"]);
+        let matches = modifier_stats(Language::English, &glory, None);
+        let found = matches.first().expect("its line");
+
+        // The 25 only.
+        assert_eq!(found.counted_numbers(&glory), [vec![0]]);
+        // The line read with one number more than the stat read: nothing tells which the stat
+        // counts, so every number is counted.
+        let mut longer = glory.clone();
+        longer.lines[0].rolls.push(Roll {
+            value: 7.0,
+            range: None,
+        });
+        assert_eq!(found.counted_numbers(&longer), [vec![0, 1, 2]]);
+        // A line found nowhere has no stat to tell: every number too.
+        let unknown = explicit(&["12 of something no stat writes 3"]);
+        let matches = modifier_stats(Language::English, &unknown, None);
+        let found = matches.first().expect("its line");
+        assert_eq!(found.stat, None);
+        assert_eq!(found.counted_numbers(&unknown), [vec![0, 1]]);
     }
 
     #[test]
