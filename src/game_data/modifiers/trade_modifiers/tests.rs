@@ -806,6 +806,26 @@ fn a_part_in_two_neighbouring_tiers_has_both_the_best_first_over_the_range_of_bo
 }
 
 #[test]
+fn a_part_has_no_range_for_a_number_the_string_of_its_stat_writes() {
+    // The 40 is written by the string of the stat: no tier gives it a range.
+    let glory = trade_lines(&["12% chance for Skills to retain 40% of Glory on use"]);
+    let sure = line_tiers(1, &[(16.0, 19.0), (10.0, 15.0)]);
+    let either = or_the_tier_above(line_tiers(1, &[(5.0, 6.0), (3.0, 4.0)]));
+    let found = split(found(0..1, Affix::Prefix, sure), 0, Affix::Suffix, either);
+
+    // One range for each part, in one tier or over two.
+    let written = written_again(&glory, &[found]);
+    assert_eq!(
+        written.first().and_then(|modifier| modifier.doubt.clone()),
+        Some(TierDoubt::Split {
+            line: 0,
+            whole: part(Affix::Prefix, &[2], &[(10.0, 15.0)]),
+            added: part(Affix::Suffix, &[1, 2], &[(3.0, 6.0)]),
+        })
+    );
+}
+
+#[test]
 fn the_other_lines_of_a_hybrid_in_two_neighbouring_tiers_take_the_range_over_both() {
     let lines = trade_lines(&["248% increased Physical Damage", "+195 to Accuracy Rating"]);
     let hybrid = or_the_tier_above(tiers(
