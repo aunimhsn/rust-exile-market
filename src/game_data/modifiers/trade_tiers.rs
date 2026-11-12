@@ -4,7 +4,7 @@
 
 use super::ModifierTiers;
 use super::base_tiers::{ItemBase, ItemTables};
-use super::best_reading::{BestReading, Cut, Room, best_reading};
+use super::best_reading::{BestReading, Cut, OpenAffixes, Room, best_reading};
 use super::candidates::{AffixSet, Candidate, candidates};
 use super::copied::Copied;
 use super::doubts::{self, Doubts, Outcome};
@@ -269,13 +269,13 @@ fn room_left(limits: AffixLimits, modifiers: &[Modifier]) -> Room {
 /// the lines in doubt, and each modifier that can be a prefix or a suffix with the affixes
 /// the item has room for.
 fn found_tiers(best: &BestReading<'_>, doubts: &Doubts) -> Vec<FoundTiers> {
-    // A modifier that can be both keeps the affixes the others leave room for ([`Room::both`],
-    // both when the reading doesn't fit the room): both too when a reading as good, or one in
-    // doubt, leaves another room.
-    let both = if best.room_in_doubt || doubts.other_room {
-        (true, true)
+    // A modifier that can be both keeps the affixes the others leave room for
+    // ([`Room::open_affixes`], both when the reading doesn't fit the room): both too when a
+    // reading as good, or one in doubt, leaves another room.
+    let open_affixes = if best.room_in_doubt || doubts.other_room {
+        OpenAffixes::BOTH
     } else {
-        best.both()
+        best.open_affixes()
     };
     // A line two readings as good read otherwise, or another reading leaves in doubt, and the
     // other lines of its modifiers: without tier, the others read as the best reading does.
@@ -286,10 +286,9 @@ fn found_tiers(best: &BestReading<'_>, doubts: &Doubts) -> Vec<FoundTiers> {
     best.candidates()
         .filter(|candidate| !in_doubt(candidate))
         .map(|candidate| {
-            let kept = |affix| match (candidate.set(), affix) {
-                (AffixSet::Only(_), _) => true,
-                (AffixSet::Both, Affix::Prefix) => both.0,
-                (AffixSet::Both, Affix::Suffix) => both.1,
+            let kept = |affix| match candidate.set() {
+                AffixSet::Only(_) => true,
+                AffixSet::Both => open_affixes.has(affix),
             };
             FoundTiers {
                 modifiers: candidate.modifiers.clone(),

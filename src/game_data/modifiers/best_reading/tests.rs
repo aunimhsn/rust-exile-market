@@ -105,18 +105,28 @@ fn the_room_tells_the_affix_of_the_modifiers_that_can_be_both() {
     ];
     let all = [0, 1, 2, 3];
     let room = |prefixes, suffixes| Room { prefixes, suffixes };
+    let open = |prefix, suffix| OpenAffixes { prefix, suffix };
 
     // One more prefix and one more suffix: one of the two is a prefix, either.
     assert_eq!(room(2, 2).bounds(&all, &candidates), Some((1, 1)));
-    assert_eq!(room(2, 2).both(&all, &candidates), (true, true));
+    assert_eq!(room(2, 2).open_affixes(&all, &candidates), open(true, true));
     // No room for another suffix: both are prefixes.
     assert_eq!(room(3, 1).bounds(&all, &candidates), Some((2, 2)));
-    assert_eq!(room(3, 1).both(&all, &candidates), (true, false));
+    assert_eq!(
+        room(3, 1).open_affixes(&all, &candidates),
+        open(true, false)
+    );
     // No room for another prefix: both are suffixes.
-    assert_eq!(room(1, 3).both(&all, &candidates), (false, true));
+    assert_eq!(
+        room(1, 3).open_affixes(&all, &candidates),
+        open(false, true)
+    );
     // Too few: none fits, every affix kept.
     assert_eq!(room(1, 2).bounds(&all, &candidates), None);
-    assert_eq!(room(1, 2).both(&all, &candidates), (true, true));
+    assert_eq!(
+        room(1, 2).open_affixes(&all, &candidates),
+        OpenAffixes::BOTH
+    );
     assert_eq!(room(0, 5).bounds(&all, &candidates), None);
     assert_eq!(room(0, 0).bounds(&[], &candidates), Some((0, 0)));
 }
