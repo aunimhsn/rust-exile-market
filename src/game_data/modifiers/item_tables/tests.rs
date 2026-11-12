@@ -91,6 +91,31 @@ fn the_tiers_of_a_modifier_on_a_base_are_those_of_its_tables_that_roll_on_it_the
 }
 
 #[test]
+fn tiers_are_numbered_by_their_level_before_their_ranges() {
+    // The higher level with the lower range, as a stat that rolls negative values has; the
+    // level in between in a second table, after both in the file.
+    let tables = [
+        life(&[(1, &[(11, 20)]), (45, &[(1, 10)])]),
+        on("armour", life(&[(30, &[(21, 30)])])),
+    ];
+    let helmet = equipment(&["helmet", "armour"]);
+    let tables = ItemTables {
+        all: &tables,
+        base: &helmet,
+        item_level: None,
+    };
+
+    assert_eq!(
+        tables.tiers_of(&tables.all[0], &[0], &copied(&[(LIFE, 12.0)])),
+        Some(vec![
+            tier(1, 45, &[(1.0, 10.0)]),
+            tier(2, 30, &[(21.0, 30.0)]),
+            tier(3, 1, &[(11.0, 20.0)]),
+        ])
+    );
+}
+
+#[test]
 fn tiers_of_one_level_are_numbered_by_their_ranges_the_higher_the_better() {
     let helmet = equipment(&["helmet", "armour"]);
     let ranges = |tables: &[Table], copied: &Copied<'_>, order: &[usize]| {
@@ -297,6 +322,26 @@ fn the_modifiers_that_have_the_lines_of_a_copied_one_are_given_once_in_the_order
     assert_eq!(
         holding(Some(ModifierOrigin::Desecrated)),
         [life, suffix, lord, on_the_rings]
+    );
+}
+
+#[test]
+fn a_modifier_is_given_at_its_first_table_with_the_tiers_of_its_tables_that_roll_on_the_base() {
+    // The first table of the life rolls on the helmets, its second one on the rings.
+    let tables = [
+        life(&[(1, &[(1, 30)])]),
+        on("ring", life(&[(60, &[(61, 90)])])),
+    ];
+    let ring = equipment(&["ring"]);
+    let tables = ItemTables {
+        all: &tables,
+        base: &ring,
+        item_level: None,
+    };
+
+    assert_eq!(
+        modifiers(tables.holding(&copied(&[(LIFE, 70.0)]))),
+        [(0, vec![(1, 60)], vec![70.0])]
     );
 }
 
