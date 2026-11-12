@@ -8,6 +8,7 @@ use crate::game_data::lines::modifier_stats;
 use crate::game_data::modifiers::ModifierTiers;
 use crate::game_data::modifiers::item_tables::ItemBase;
 use crate::game_data::modifiers::lookup::modifier_tiers;
+use crate::game_data::modifiers::tables::{Table, read};
 use crate::game_data::modifiers::trade_tiers::{AffixLimits, FoundTiers, TradeItem};
 use crate::item::{
     Affix, CopiedItem, Item, ItemState, Modifier, ModifierKind, ModifierOrigin, PartTier, Range,
@@ -80,6 +81,47 @@ pub(super) fn part(affix: Affix, tiers: &[u32], ranges: &[(f64, f64)]) -> PartTi
         currency: None,
     }
 }
+
+/// A table of one or two lines that rolls on the helmets: its type, its affix, the template
+/// of each line, and for each tier its level and the range of each line.
+pub(super) fn table(
+    kind: &str,
+    affix: &str,
+    templates: &[&str],
+    tiers: &[(u32, &[(u32, u32)])],
+) -> String {
+    let lines: Vec<String> = templates
+        .iter()
+        .map(|template| format!(r#"{{"template": "{template}"}}"#))
+        .collect();
+    let tiers: Vec<String> = tiers
+        .iter()
+        .map(|(level, ranges)| {
+            let ranges: Vec<String> = ranges
+                .iter()
+                .map(|(min, max)| format!("[[{min}, {max}]]"))
+                .collect();
+            format!(r#"{{"level": {level}, "ranges": [{}]}}"#, ranges.join(", "))
+        })
+        .collect();
+    format!(
+        r#"{{"type": "{kind}", "affix": "{affix}", "lines": [{}], "spawn": [["helmet", 1]], "tiers": [{}]}}"#,
+        lines.join(", "),
+        tiers.join(", ")
+    )
+}
+
+/// The tables written line by line in `lines` ([`table`]), every one of them read.
+pub(super) fn written(lines: &[String]) -> Vec<Table> {
+    let tables = read(&lines.join("\n"));
+    assert_eq!(tables.len(), lines.len());
+    tables
+}
+
+pub(super) const LIFE: &str = "# to maximum Life";
+pub(super) const MANA: &str = "# to maximum Mana";
+pub(super) const ENERGY_SHIELD: &str = "#% increased Energy Shield";
+pub(super) const RARITY: &str = "#% increased Rarity of Items found";
 
 // The readers of what the search found.
 

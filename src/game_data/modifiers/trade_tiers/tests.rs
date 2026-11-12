@@ -5,9 +5,10 @@
 use super::*;
 use crate::game_data::modifiers::best_reading::MAX_READINGS;
 use crate::game_data::modifiers::fixtures::{
-    Added, AffixTiers, added, equipment, modifier, summary,
+    Added, AffixTiers, ENERGY_SHIELD, LIFE, MANA, RARITY, added, equipment, modifier, summary,
+    table, written,
 };
-use crate::game_data::modifiers::tables::{Table, read};
+use crate::game_data::modifiers::tables::Table;
 
 /// What [`read_in`] gives: for each modifier read, how many lines it has and the tier number
 /// of each affix it can be; and the text of each line split with the affix and tier number of
@@ -42,42 +43,6 @@ fn read_modifiers(
         effort,
     )
 }
-
-/// A table of one or two lines that rolls on the helmets: its type, its affix, the template
-/// of each line, and for each tier its level and the range of each line.
-fn table(kind: &str, affix: &str, templates: &[&str], tiers: &[(u32, &[(u32, u32)])]) -> String {
-    let lines: Vec<String> = templates
-        .iter()
-        .map(|template| format!(r#"{{"template": "{template}"}}"#))
-        .collect();
-    let tiers: Vec<String> = tiers
-        .iter()
-        .map(|(level, ranges)| {
-            let ranges: Vec<String> = ranges
-                .iter()
-                .map(|(min, max)| format!("[[{min}, {max}]]"))
-                .collect();
-            format!(r#"{{"level": {level}, "ranges": [{}]}}"#, ranges.join(", "))
-        })
-        .collect();
-    format!(
-        r#"{{"type": "{kind}", "affix": "{affix}", "lines": [{}], "spawn": [["helmet", 1]], "tiers": [{}]}}"#,
-        lines.join(", "),
-        tiers.join(", ")
-    )
-}
-
-/// The tables written line by line in `lines` ([`table`]), every one of them read.
-fn written(lines: &[String]) -> Vec<Table> {
-    let tables = read(&lines.join("\n"));
-    assert_eq!(tables.len(), lines.len());
-    tables
-}
-
-const LIFE: &str = "# to maximum Life";
-const MANA: &str = "# to maximum Mana";
-const ENERGY_SHIELD: &str = "#% increased Energy Shield";
-const RARITY: &str = "#% increased Rarity of Items found";
 
 #[test]
 fn a_line_copied_from_the_in_game_trade_takes_the_worst_tier_its_item_level_allows() {
