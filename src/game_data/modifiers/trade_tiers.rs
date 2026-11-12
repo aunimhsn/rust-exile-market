@@ -3,7 +3,7 @@
 //! and how the search ended.
 
 use super::ModifierTiers;
-use super::best_reading::{BestReading, Cut, OpenAffixes, Room, best_reading};
+use super::best_reading::{AffixesLeft, BestReading, Cut, Room, best_reading};
 use super::candidates::{AffixSet, Candidate, candidates};
 use super::copied::Copied;
 use super::doubts::{self, Doubts, Outcome};
@@ -270,12 +270,12 @@ fn room_left(limits: AffixLimits, modifiers: &[Modifier]) -> Room {
 /// the item has room for.
 fn found_tiers(best: &BestReading<'_>, doubts: &Doubts) -> Vec<FoundTiers> {
     // A modifier that can be both keeps the affixes the others leave room for
-    // ([`Room::open_affixes`], both when the reading doesn't fit the room): both too when a
+    // ([`Room::affixes_left`], both when the reading doesn't fit the room): both too when a
     // reading as good, or one in doubt, leaves another room.
-    let open_affixes = if best.room_in_doubt || doubts.other_room {
-        OpenAffixes::BOTH
+    let affixes_left = if best.room_in_doubt || doubts.other_room {
+        AffixesLeft::BOTH
     } else {
-        best.open_affixes()
+        best.affixes_left()
     };
     // A line two readings as good read otherwise, or another reading leaves in doubt, and the
     // other lines of its modifiers: without tier, the others read as the best reading does.
@@ -288,7 +288,7 @@ fn found_tiers(best: &BestReading<'_>, doubts: &Doubts) -> Vec<FoundTiers> {
         .map(|candidate| {
             let kept = |affix| match candidate.set() {
                 AffixSet::Only(_) => true,
-                AffixSet::Both => open_affixes.has(affix),
+                AffixSet::Both => affixes_left.has(affix),
             };
             FoundTiers {
                 modifiers: candidate.modifiers.clone(),

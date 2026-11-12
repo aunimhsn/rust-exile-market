@@ -40,7 +40,7 @@ impl Room {
 
     /// The affixes a modifier that can be both is left with, while the others of the `chosen`
     /// candidates fit the room; both when the candidates don't fit it.
-    pub(super) fn open_affixes(self, chosen: &[usize], candidates: &[Candidate]) -> OpenAffixes {
+    pub(super) fn affixes_left(self, chosen: &[usize], candidates: &[Candidate]) -> AffixesLeft {
         let both = chosen
             .iter()
             .filter_map(|&index| candidates.get(index))
@@ -48,7 +48,7 @@ impl Room {
             .filter(|&set| set == AffixSet::Both)
             .count();
         self.bounds(chosen, candidates)
-            .map_or(OpenAffixes::BOTH, |(lowest, highest)| OpenAffixes {
+            .map_or(AffixesLeft::BOTH, |(lowest, highest)| AffixesLeft {
                 prefix: highest >= 1,
                 suffix: lowest < both,
             })
@@ -56,14 +56,15 @@ impl Room {
 }
 
 /// The affixes a modifier that can be a prefix or a suffix is left with, once the other
-/// modifiers of a reading have taken their room on the item.
+/// modifiers of a reading have taken their room on the item; neither for a reading without
+/// such a modifier.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) struct OpenAffixes {
+pub(super) struct AffixesLeft {
     prefix: bool,
     suffix: bool,
 }
 
-impl OpenAffixes {
+impl AffixesLeft {
     /// A prefix or a suffix: nothing tells which.
     pub(super) const BOTH: Self = Self {
         prefix: true,
@@ -127,9 +128,9 @@ impl BestReading<'_> {
             .filter_map(|&index| self.candidates.get(index))
     }
 
-    /// The affixes a modifier of it that can be both is left with ([`Room::open_affixes`]).
-    pub(super) fn open_affixes(&self) -> OpenAffixes {
-        self.room.open_affixes(&self.chosen, self.candidates)
+    /// The affixes a modifier of it that can be both is left with ([`Room::affixes_left`]).
+    pub(super) fn affixes_left(&self) -> AffixesLeft {
+        self.room.affixes_left(&self.chosen, self.candidates)
     }
 }
 
@@ -284,8 +285,8 @@ impl<'a> Search<'a> {
                         self.ambiguous.push(line);
                     }
                 }
-                let open_affixes = |reading| self.room.open_affixes(reading, self.candidates);
-                if open_affixes(reading) != open_affixes(chosen) {
+                let affixes_left = |reading| self.room.affixes_left(reading, self.candidates);
+                if affixes_left(reading) != affixes_left(chosen) {
                     self.room_in_doubt = true;
                 }
             }
