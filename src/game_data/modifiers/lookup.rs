@@ -58,7 +58,11 @@ fn searched<'a>(
     let affix = match modifier.kind {
         ModifierKind::Explicit(Some(Affix::Prefix)) => TableAffix::Prefix,
         ModifierKind::Explicit(Some(Affix::Suffix)) => TableAffix::Suffix,
-        _ => return None,
+        ModifierKind::Explicit(None)
+        | ModifierKind::Implicit
+        | ModifierKind::Enchant
+        | ModifierKind::Rune
+        | ModifierKind::Corruption => return None,
     };
     Some((affix, Copied::of(modifier, matches)?))
 }
