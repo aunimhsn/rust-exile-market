@@ -2,8 +2,8 @@
 //! tables of the game. The lines still find their stat in the embedded stats of the game.
 
 use super::*;
-use crate::game_data::modifiers::fixtures::{modifier, part, range, tier, trade_lines};
-use crate::item::{Currency, Lord, ModifierOrigin, StatLine};
+use crate::game_data::modifiers::fixtures::{advanced, part, range, tier, trade_lines};
+use crate::item::{Currency, Lord, ModifierOrigin};
 
 /// `modifiers`, their lines written in English, written again with the tiers `found`.
 fn written_again(modifiers: &[Modifier], found: &[FoundTiers]) -> Vec<Modifier> {
@@ -80,15 +80,10 @@ fn modifier_of_lines(lines: &[&str]) -> Modifier {
     advanced(None, None, lines)
 }
 
-/// A modifier of `affix` and `tier` as the advanced copy writes it, each of `lines` with the
-/// range of a value after it (`+85(80-89) to maximum Life`): what a modifier written again is
-/// compared with.
-fn advanced(affix: Option<Affix>, tier: Option<u32>, lines: &[&str]) -> Modifier {
-    Modifier {
-        tier,
-        lines: lines.iter().map(|line| StatLine::parse(line)).collect(),
-        ..modifier(affix, &[])
-    }
+/// Checks that `lines` written again with the tiers `found` stay as they were.
+fn assert_left_as_they_were(lines: &[Modifier], found: FoundTiers) {
+    let found = [found];
+    assert_eq!(written_again(lines, &found), lines, "{found:?}");
 }
 
 /// The tier `tier` of a modifier as `affix`, over `ranges`: its number written, no lord's.
@@ -345,10 +340,6 @@ fn a_line_whose_values_arent_as_many_as_their_ranges_keeps_them_without_range() 
 fn modifiers_whose_tiers_cant_be_written_stay_as_they_were() {
     let lines = trade_lines(&["+50 to Armour", "+41 to Evasion Rating"]);
     let hybrid = || tiers(&[1, 1], 0, &[&[(42.0, 52.0), (40.0, 50.0)]]);
-    let unwritten = |lines: &[Modifier], found: FoundTiers| {
-        let found = [found];
-        assert_eq!(written_again(lines, &found), lines, "{found:?}");
-    };
 
     // Written again as they are, but for what each case changes.
     let whole = [found(0..2, Affix::Prefix, hybrid())];
@@ -358,21 +349,21 @@ fn modifiers_whose_tiers_cant_be_written_stay_as_they_were() {
         found: 1,
         ..hybrid()
     };
-    unwritten(&lines, found(0..2, Affix::Prefix, beyond));
+    assert_left_as_they_were(&lines, found(0..2, Affix::Prefix, beyond));
     // No affix.
     let no_affix = FoundTiers {
         affixes: Vec::new(),
         ..found(0..2, Affix::Prefix, hybrid())
     };
-    unwritten(&lines, no_affix);
+    assert_left_as_they_were(&lines, no_affix);
     // The values of the first line only are counted.
     let one_line = tiers(&[1], 0, &[&[(42.0, 52.0)]]);
-    unwritten(&lines, found(0..2, Affix::Prefix, one_line));
+    assert_left_as_they_were(&lines, found(0..2, Affix::Prefix, one_line));
     // More modifiers than the item has.
-    unwritten(&lines, found(0..3, Affix::Prefix, hybrid()));
+    assert_left_as_they_were(&lines, found(0..3, Affix::Prefix, hybrid()));
     // A line no stat of the game data writes.
     let unknown = trade_lines(&["+50 to Armour", "+41 to the Rating of no Stat"]);
-    unwritten(&unknown, found(0..2, Affix::Prefix, hybrid()));
+    assert_left_as_they_were(&unknown, found(0..2, Affix::Prefix, hybrid()));
 }
 
 #[test]
@@ -579,13 +570,13 @@ fn modifiers_whose_two_affixes_cant_be_written_stay_as_they_were() {
         found: 1,
         ..hybrid()
     };
-    let unwritten = |affixes: Vec<(Affix, ModifierTiers)>| {
-        let found = [FoundTiers {
+    let assert_left = |affixes: Vec<(Affix, ModifierTiers)>| {
+        let found = FoundTiers {
             modifiers: 0..2,
             affixes,
             added: None,
-        }];
-        assert_eq!(written_again(&lines, &found), lines, "{found:?}");
+        };
+        assert_left_as_they_were(&lines, found);
     };
 
     // Written again as they are, but for what each case changes.
@@ -595,13 +586,13 @@ fn modifiers_whose_two_affixes_cant_be_written_stay_as_they_were() {
     )];
     assert_ne!(written_again(&lines, &either), lines);
     // The tier found as a prefix, then as a suffix, isn't among its tiers.
-    unwritten(vec![(Affix::Prefix, beyond()), (Affix::Suffix, hybrid())]);
-    unwritten(vec![(Affix::Prefix, hybrid()), (Affix::Suffix, beyond())]);
+    assert_left(vec![(Affix::Prefix, beyond()), (Affix::Suffix, hybrid())]);
+    assert_left(vec![(Affix::Prefix, hybrid()), (Affix::Suffix, beyond())]);
     // The suffix first; an affix twice; a third affix.
-    unwritten(vec![(Affix::Suffix, hybrid()), (Affix::Prefix, hybrid())]);
-    unwritten(vec![(Affix::Prefix, hybrid()), (Affix::Prefix, hybrid())]);
-    unwritten(vec![(Affix::Suffix, hybrid()), (Affix::Suffix, hybrid())]);
-    unwritten(vec![
+    assert_left(vec![(Affix::Suffix, hybrid()), (Affix::Prefix, hybrid())]);
+    assert_left(vec![(Affix::Prefix, hybrid()), (Affix::Prefix, hybrid())]);
+    assert_left(vec![(Affix::Suffix, hybrid()), (Affix::Suffix, hybrid())]);
+    assert_left(vec![
         (Affix::Prefix, hybrid()),
         (Affix::Suffix, hybrid()),
         (Affix::Suffix, hybrid()),
@@ -790,13 +781,13 @@ fn a_part_in_two_neighbouring_tiers_has_both_the_best_first_over_the_range_of_bo
         1,
         &[&[(1.0, 2.0), (5.0, 10.0)], &[(1.0, 4.0), (6.0, 12.0)]],
     );
-    let one_tier = tiers(
+    let sure_damage = tiers(
         &[2],
         1,
         &[&[(3.0, 4.0), (5.0, 6.0)], &[(1.0, 2.0), (3.0, 4.0)]],
     );
     assert_eq!(
-        doubt(&damage, &or_the_tier_above(two_values), &one_tier),
+        doubt(&damage, &or_the_tier_above(two_values), &sure_damage),
         Some(TierDoubt::Split {
             line: 0,
             whole: part(Affix::Prefix, &[1, 2], &[(1.0, 4.0), (5.0, 12.0)]),
@@ -975,10 +966,7 @@ fn a_split_that_cant_be_written_leaves_its_lines_as_they_were() {
         )
     };
     let rarity = || line_tiers(1, &[(5.0, 6.0), (3.0, 4.0)]);
-    let unwritten = |found: FoundTiers| {
-        let found = [found];
-        assert_eq!(written_again(&lines, &found), lines, "{found:?}");
-    };
+    let assert_left = |found: FoundTiers| assert_left_as_they_were(&lines, found);
     let whole = |tiers: ModifierTiers| found(1..3, Affix::Prefix, tiers);
     // The rarity, the second modifier of the item, adds up `added`.
     let split_rarity =
@@ -989,7 +977,7 @@ fn a_split_that_cant_be_written_leaves_its_lines_as_they_were() {
     assert_ne!(written_again(&lines, &written), lines);
     // A tier of the two of a part without the range of the value.
     let without_range = or_the_tier_above(tiers(&[1], 1, &[&[(5.0, 6.0)], &[]]));
-    unwritten(split_rarity(hybrid(), without_range));
+    assert_left(split_rarity(hybrid(), without_range));
     let hybrid_without_range = or_the_tier_above(tiers(
         &[1, 2],
         1,
@@ -998,23 +986,28 @@ fn a_split_that_cant_be_written_leaves_its_lines_as_they_were() {
             &[(12.0, 15.0), (1.0, 4.0), (6.0, 12.0)],
         ],
     ));
-    unwritten(split_rarity(hybrid_without_range, rarity()));
-    // Each of the two tiers without the range of another value of the summed line: as many
-    // ranges, but not of the same values.
-    let damage = or_the_tier_above(tiers(
-        &[2],
-        1,
-        &[&[(-1.0, 2.0), (5.0, 10.0)], &[(1.0, 4.0), (-2.0, 12.0)]],
-    ));
-    unwritten(split(whole(hybrid()), 2, Affix::Suffix, damage));
+    assert_left(split_rarity(hybrid_without_range, rarity()));
+    // Each of the two tiers without the range of another value of the summed line, the
+    // damage: as many ranges, but not of the same values.
+    let damage = |first: f64, second: f64| {
+        let ranges: [&[(f64, f64)]; 2] =
+            [&[(first, 2.0), (5.0, 10.0)], &[(1.0, 4.0), (second, 12.0)]];
+        or_the_tier_above(tiers(&[2], 1, &ranges))
+    };
+    let split_damage = |added: ModifierTiers| split(whole(hybrid()), 2, Affix::Suffix, added);
+    assert_ne!(
+        written_again(&lines, &[split_damage(damage(1.0, 6.0))]),
+        lines
+    );
+    assert_left(split_damage(damage(-1.0, -2.0)));
     // The tier found of a part isn't among its tiers.
     let beyond = |tiers: ModifierTiers| ModifierTiers { found: 2, ..tiers };
-    unwritten(split_rarity(beyond(hybrid()), rarity()));
-    unwritten(split_rarity(hybrid(), beyond(rarity())));
+    assert_left(split_rarity(beyond(hybrid()), rarity()));
+    assert_left(split_rarity(hybrid(), beyond(rarity())));
     // The line that adds them up before the modifiers of the split, then after them.
-    unwritten(split(whole(hybrid()), 0, Affix::Suffix, rarity()));
-    unwritten(split(whole(hybrid()), 3, Affix::Suffix, rarity()));
+    assert_left(split(whole(hybrid()), 0, Affix::Suffix, rarity()));
+    assert_left(split(whole(hybrid()), 3, Affix::Suffix, rarity()));
     // A split of a modifier that can be a prefix or a suffix.
     let either = found_either(1..3, [(Affix::Prefix, hybrid()), (Affix::Suffix, hybrid())]);
-    unwritten(split(either, 1, Affix::Suffix, rarity()));
+    assert_left(split(either, 1, Affix::Suffix, rarity()));
 }
