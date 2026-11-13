@@ -3,12 +3,22 @@
 //! Energy Shield`. Each copied line is matched with a modifier of the database by its stat,
 //! not by its text, so that a French copy gets them too.
 
+use serde::{Deserialize, Serialize};
+
 use super::lines::{LineMatch, modifier_stats};
 use super::stats::{Stat, TradeGroup};
 use super::trade_site::TradeStats;
 use crate::item::{Modifier, ModifierKind, ModifierOrigin, Range, StatLine};
 use crate::language::Language;
-use crate::price::UniqueModifiers;
+
+/// The modifiers of a unique with their ranges, e.g. `+(17-23)% to Chaos Resistance`: those
+/// of its base (implicit), and its own (explicit), apart so that a line is only matched with
+/// the modifiers of its kind.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub struct UniqueModifiers {
+    pub implicit: Vec<String>,
+    pub explicit: Vec<String>,
+}
 
 /// The difference under which two values are one: both are read from decimal texts, so that
 /// the same text gives the same value. A range of one value whose decimals the database left

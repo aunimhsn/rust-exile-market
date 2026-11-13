@@ -262,9 +262,9 @@ fn line_reach(
 }
 
 /// The value on the trade site of `searched`, of the trade `value`, at its best roll: the end
-/// of the ranges of its numbers that gives the most. A number written
-/// without range is a fixed value in the advanced copy (`headed`); in a copy from the in-game
-/// trade, which writes no range, its best roll is unknown: none.
+/// of the ranges of its numbers that gives the most. A number written without range is a fixed
+/// value in the advanced copy (`headed`); in a copy from the in-game trade, which writes no
+/// range, its best roll is unknown: none.
 fn best_roll(value: TradeValue, searched: SearchedLine<'_>, headed: bool) -> Option<f64> {
     let SearchedLine { line, numbers } = searched;
     let field = |end: fn(&Range) -> f64| -> Option<f64> {
@@ -399,24 +399,24 @@ impl LineStats {
                     .iter()
                     .position(|line| !line.is_empty())
                     .unwrap_or(0);
-                let searched = found.lines.start + offset;
+                let searched_index = found.lines.start + offset;
                 let counted = numbers.get(offset).map_or(&[][..], Vec::as_slice);
-                let searched_line = modifier.lines.get(searched).map(|line| SearchedLine {
+                let searched = modifier.lines.get(searched_index).map(|line| SearchedLine {
                     line,
                     numbers: counted,
                 });
                 let stat = found
                     .stat
                     .as_ref()
-                    .zip(searched_line)
-                    .and_then(|(stat, line)| TradeStat::new(stat, group, line));
+                    .zip(searched)
+                    .and_then(|(stat, searched)| TradeStat::new(stat, group, searched));
                 // A line without number gives a total nothing.
                 let reach = stat
                     .as_ref()
                     .and_then(|stat| stat.value)
-                    .zip(searched_line)
-                    .map_or(0.0, |(value, line)| {
-                        line_reach(source, value, line, implicits)
+                    .zip(searched)
+                    .map_or(0.0, |(value, searched)| {
+                        line_reach(source, value, searched, implicits)
                     });
                 let known = found.stat.is_some();
                 let game_id = found.stat.as_ref().and_then(|found| found.stat.id.clone());
@@ -437,13 +437,13 @@ impl LineStats {
                         line,
                     };
                     let line_stat = match &stat {
-                        Some(stat) if line == searched => LineStat::Searched(stat.clone()),
+                        Some(stat) if line == searched_index => LineStat::Searched(stat.clone()),
                         Some(_) => LineStat::Continued,
                         None => LineStat::Unsearchable,
                     };
                     lines.push(Line {
                         key,
-                        searched,
+                        searched: searched_index,
                         stat: line_stat,
                         numbers: known.then_some(numbers),
                         game_id: game_id.clone(),

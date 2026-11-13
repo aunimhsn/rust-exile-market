@@ -284,7 +284,7 @@ struct Pools<'a> {
 impl<'a> Pools<'a> {
     /// The modifiers of `tables` an item of `item_level` can roll on `base` ([`rolled`]); and
     /// the types of those left out.
-    fn on(tables: &'a [Table], base: &BaseSpawn, item_level: u32) -> (Self, Vec<&'a str>) {
+    fn of(tables: &'a [Table], base: &BaseSpawn, item_level: u32) -> (Self, Vec<&'a str>) {
         let (ordinary, mut unwritten) = rolled(tables, base, false, item_level);
         let (desecrated, unwritten_desecrated) = rolled(tables, base, true, item_level);
         unwritten.extend(unwritten_desecrated);
@@ -766,7 +766,7 @@ fn measure(way: Way) -> (Counts, Vec<&'static str>) {
     let mut left_out = Vec::new();
     for (base_type, most) in BASES {
         let base = bases::spawn(Language::English, base_type).expect(base_type);
-        let (pools, unwritten) = Pools::on(&TABLES, base, way.item_level);
+        let (pools, unwritten) = Pools::of(&TABLES, base, way.item_level);
         left_out.extend(unwritten);
         let tables = ItemTables {
             all: &TABLES,

@@ -8,12 +8,13 @@ use std::time::Duration;
 use egui::{Context, Event, Order, RawInput, Rect, pos2, vec2};
 
 use super::*;
+use crate::game_data::UniqueModifiers;
 use crate::i18n::Message;
 use crate::item::{Item, test_items};
 use crate::language::Language;
 use crate::market::MarketEvent;
 use crate::offers_state::OffersState;
-use crate::price::{CurrencyPrice, Price, PriceList, Rates, UniqueModifiers, UniquePrice};
+use crate::price::{CurrencyPrice, Price, PriceList, Rates, UniquePrice};
 use crate::trade::offers::tests::{every_exchange_offer, every_item_offer};
 use crate::trade::query::Query;
 use crate::trade::search::{Answer, Failure, NextSearch, Outcome, Rest};
@@ -146,8 +147,9 @@ fn writes(shapes: &[egui::epaint::ClippedShape], text: &str) -> bool {
 #[derive(Clone, Copy)]
 struct FrameSetup {
     width: f32,
-    /// The height of the pointer, in the middle of the window; none without a pointer.
-    pointer: Option<f32>,
+    /// The height of the pointer, in points, in the middle of the window; none without a
+    /// pointer.
+    pointer_height: Option<f32>,
     stats_open: bool,
     prices: PricesState,
 }
@@ -176,7 +178,7 @@ impl Scene {
     fn draw(&mut self, ctx: &Context, drawn: &mut Drawn, setup: FrameSetup) -> f32 {
         let FrameSetup {
             width,
-            pointer,
+            pointer_height,
             stats_open,
             prices,
         } = setup;
@@ -184,7 +186,7 @@ impl Scene {
         let input = RawInput {
             screen_rect: Some(Rect::from_min_size(egui::Pos2::ZERO, vec2(width, HEIGHT))),
             time: Some(drawn.time),
-            events: pointer
+            events: pointer_height
                 .map(|y| Event::PointerMoved(pos2(width * 0.5, y)))
                 .into_iter()
                 .collect(),
@@ -218,7 +220,7 @@ impl Scene {
         let estimated = self.i18n.text(Message::EstimatedPriceLabel).to_uppercase();
         drawn.with_an_estimate += wrote(&estimated);
         drawn.with_a_check_hint += wrote(&self.i18n.text(Message::CheckToEstimate));
-        match self.desk.work.offers.state() {
+        match self.desk.search.offers.state() {
             OffersState::Items(_) => drawn.with_offers_of_items += 1,
             OffersState::Exchange { .. } => drawn.with_offers_of_the_exchange += 1,
             OffersState::Idle
@@ -248,7 +250,7 @@ impl Scene {
             for (prices, stats_open) in states.into_iter().zip([true, false].into_iter().cycle()) {
                 let setup = FrameSetup {
                     width,
-                    pointer: None,
+                    pointer_height: None,
                     stats_open,
                     prices,
                 };
@@ -265,19 +267,19 @@ impl Scene {
         };
         let setup = FrameSetup {
             width: WIDTHS[0],
-            pointer: None,
+            pointer_height: None,
             stats_open: true,
             prices: known,
         };
         let height = self.draw(ctx, drawn, setup);
-        let mut pointer = 0.0;
-        while pointer < height.min(HEIGHT) {
+        let mut pointer_height = 0.0;
+        while pointer_height < height.min(HEIGHT) {
             let under_the_pointer = FrameSetup {
-                pointer: Some(pointer),
+                pointer_height: Some(pointer_height),
                 ..setup
             };
             self.draw(ctx, drawn, under_the_pointer);
-            pointer += POINTER_STEP;
+            pointer_height += POINTER_STEP;
         }
     }
 
@@ -293,7 +295,7 @@ impl Scene {
             (Query::Items(_), Some(SearchKind::Items))
                 | (Query::Exchange(_), Some(SearchKind::Exchange))
         ));
-        let order = self.desk.work.offers.search(search, Instant::now());
+        let order = self.desk.search.offers.search(search, Instant::now());
         assert!(order.is_some(), "the search is allowed");
         self.desk.apply_answer(answer, SystemTime::now());
     }
@@ -307,7 +309,7 @@ fn draw_the_offers(scene: &mut Scene, ctx: &Context, drawn: &mut Drawn, kind: Se
         .desk
         .shown_search()
         .expect("a search for an item with a kind");
-    let _ = scene.desk.work.offers.search(search, Instant::now());
+    let _ = scene.desk.search.offers.search(search, Instant::now());
     scene.draw_each_way(ctx, drawn);
     // Its offers, then the next ones asked, which don't come.
     scene
@@ -315,9 +317,9 @@ fn draw_the_offers(scene: &mut Scene, ctx: &Context, drawn: &mut Drawn, kind: Se
         .apply_answer(answer(kind, interface), SystemTime::now());
     scene.draw_each_way(ctx, drawn);
     scene.draw_under_the_pointer(ctx, drawn);
-    let _ = scene.desk.work.offers.more();
+    let _ = scene.desk.search.offers.more();
     scene.draw_each_way(ctx, drawn);
-    if scene.desk.work.offers.busy() {
+    if scene.desk.search.offers.busy() {
         scene.desk.apply_answer(
             Answer {
                 outcome: Outcome::Failed(Failure::Unreadable),

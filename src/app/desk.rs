@@ -15,7 +15,7 @@ use crate::item_names::ItemNames;
 use crate::league::League;
 use crate::market::MarketEvent;
 use crate::offers_state::LONG_WAIT;
-use crate::recent_items::{ItemWork, RecentItems};
+use crate::recent_items::{RecentItems, ShownSearch};
 use crate::session::{LeagueChange, PricesState, Session, ShownItem};
 use crate::trade::query::SearchKind;
 use crate::trade::search::{Answer, Order, Search};
@@ -57,8 +57,8 @@ pub(super) struct Desk {
     /// The item shown, the last one copied, and the items copied before it, with their filters
     /// and offers as the player left them.
     recent: RecentItems,
-    /// What the player did with the item shown: its filters and its offers.
-    work: ItemWork,
+    /// The search of the item shown: its filters and its offers.
+    search: ShownSearch,
     /// The stats of the item are unfolded, for every item copied until the player folds them.
     stats_open: bool,
     /// An item was copied: the content scrolls back to the top, to its name and its price.
@@ -72,7 +72,7 @@ impl Desk {
         Self {
             session: Session::new(league),
             recent: RecentItems::default(),
-            work: ItemWork::default(),
+            search: ShownSearch::default(),
             stats_open: false,
             scroll_to_top: false,
         }
@@ -104,14 +104,14 @@ impl Desk {
                 .item()
                 .map(ShownItem::shape)
                 .unwrap_or_default();
-            back = self.recent.show(item, shape, &mut self.work);
+            back = self.recent.show(item, shape, &mut self.search);
         }
         self.session.apply(event);
         // Read again with the names of the trade site arrived since it was left, its lines may
         // have moved, the filters set on them no longer falling on the same lines.
         let shown = self.session.item().map(ShownItem::shape);
         if lines_moved(back.as_deref(), shown.as_deref()) {
-            self.work.filters.forget_stats();
+            self.search.filters.forget_stats();
         }
     }
 
@@ -139,7 +139,7 @@ impl Desk {
     /// forgets the filters of its lines when they moved.
     pub(super) fn apply_item_names(&mut self, names: ItemNames) {
         if self.session.apply_item_names(names) {
-            self.work.filters.forget_stats();
+            self.search.filters.forget_stats();
         }
     }
 
@@ -159,28 +159,28 @@ impl Desk {
     /// Forgets the offers of the item shown and of the items remembered: they were searched in
     /// the previous league.
     fn forget_offers(&mut self) {
-        self.work.offers.clear();
+        self.search.offers.clear();
         self.recent.forget_offers();
     }
 
     /// Takes in the answer of a search of the trade site, at `clock`.
     pub(super) fn apply_answer(&mut self, answer: Answer, clock: SystemTime) {
-        self.work.offers.apply(answer, clock);
+        self.search.offers.apply(answer, clock);
     }
 
     /// The thread of the searches ended: a search waiting for its answer never gets it.
     pub(super) fn search_thread_lost(&mut self) {
-        self.work.offers.thread_lost();
+        self.search.offers.thread_lost();
     }
 
     /// Settles the number typed in a field of `window`, as leaving it does.
     pub(super) fn settle_edited(&mut self, window: Window) {
-        self.work.filters.settle_edited(window);
+        self.search.filters.settle_edited(window);
     }
 
     /// No field of `window` is edited any more.
     pub(super) fn forget_edited(&mut self, window: Window) {
-        self.work.filters.forget_edited(window);
+        self.search.filters.forget_edited(window);
     }
 
     /// The kind of the search of the offers of the item shown, when it can be searched.
@@ -195,7 +195,7 @@ impl Desk {
         let shown = self.session.item()?;
         let item = shown.parsed().ok()?;
         let trade = self.session.trade(item);
-        trade.search(search_filters(&trade, shown, &self.work.filters))
+        trade.search(search_filters(&trade, shown, &self.search.filters))
     }
 
     /// The state of the trade site in the status bar, at `now`: the long wait before the next
@@ -207,8 +207,8 @@ impl Desk {
         clock: SystemTime,
     ) -> TradeStatus {
         match (
-            self.work.offers.wait(kind, now),
-            self.work.offers.last_search(),
+            self.search.offers.wait(kind, now),
+            self.search.offers.last_search(),
         ) {
             (wait, _) if wait > LONG_WAIT => TradeStatus::Waiting(wait),
             (_, Some(searched)) => {
@@ -238,8 +238,8 @@ impl Desk {
             session: &self.session,
             shown,
             item,
-            offers: &self.work.offers,
-            filters: &mut self.work.filters,
+            offers: &self.search.offers,
+            filters: &mut self.search.filters,
             stats_open: self.stats_open,
             prices: around.prices,
             kind: around.kind,
@@ -254,9 +254,9 @@ impl Desk {
             // Built at the click, with the filters as the player just left them.
             Some(OffersAction::Search) => self
                 .shown_search()
-                .and_then(|search| self.work.offers.search(search, Instant::now()))
+                .and_then(|search| self.search.offers.search(search, Instant::now()))
                 .map(DeskRequest::Search),
-            Some(OffersAction::More) => self.work.offers.more().map(DeskRequest::Search),
+            Some(OffersAction::More) => self.search.offers.more().map(DeskRequest::Search),
             Some(OffersAction::ReportBug) => Some(DeskRequest::BugReport),
             None => None,
         };

@@ -90,7 +90,8 @@ fn file_name(league: &League) -> String {
 mod tests {
     use super::*;
     use crate::files::TestDirectory;
-    use crate::price::{CurrencyPrice, Price, Rates, UniqueModifiers, UniquePrice};
+    use crate::game_data::UniqueModifiers;
+    use crate::price::{CurrencyPrice, Price, Rates, UniquePrice};
     use std::fs;
     use std::time::{Duration, SystemTime};
 

@@ -12,9 +12,10 @@ use crate::offers_state::{Offers, OffersState};
 /// one forgotten.
 pub const REMEMBERED: usize = 10;
 
-/// What the player did with the item shown, which an item left keeps.
+/// The search of the item shown: its filters as the player set them, and its offers; an item
+/// left keeps them.
 #[derive(Debug, Default)]
-pub struct ItemWork {
+pub struct ShownSearch {
     /// The filters of the search as the player set them: those of another item copied are its
     /// own, by default or as the player left them.
     pub filters: Filters,
@@ -51,7 +52,7 @@ impl RecentItems {
     }
 
     /// Shows `item`, copied, in place of the item shown, whose modifiers have `shape`: the
-    /// item shown is remembered with the filters and the offers of `work`, which become those
+    /// item shown is remembered with the filters and the offers of `search`, which become those
     /// of `item` as the player left them, or none. The item shown copied again keeps them.
     ///
     /// Returns the shape of the modifiers of `item` when it was left, when it comes back: read
@@ -61,14 +62,14 @@ impl RecentItems {
         &mut self,
         item: &CopiedItem,
         shape: Vec<usize>,
-        work: &mut ItemWork,
+        search: &mut ShownSearch,
     ) -> Option<Vec<usize>> {
         if self.shown.as_ref() == Some(item) {
             return None;
         }
         // A number being typed is settled, as leaving its field does.
-        work.filters.settle_edited(Window::Main);
-        work.filters.settle_edited(Window::OverTheGame);
+        search.filters.settle_edited(Window::Main);
+        search.filters.settle_edited(Window::OverTheGame);
         let back = self
             .left
             .iter()
@@ -78,8 +79,8 @@ impl RecentItems {
         let remembered = back.is_some();
         let back = back.unwrap_or_default();
         let left = Left {
-            filters: std::mem::replace(&mut work.filters, back.filters),
-            offers: work.offers.swap(back.offers),
+            filters: std::mem::replace(&mut search.filters, back.filters),
+            offers: search.offers.swap(back.offers),
             shape,
         };
         if let Some(shown) = self.shown.replace(item.clone()) {
@@ -161,17 +162,16 @@ mod tests {
         );
     }
 
-    /// The item shown and what the player did with it, with `recent` the items copied before
-    /// it.
+    /// The item shown and its search, with `recent` the items copied before it.
     #[derive(Default)]
     struct Shown {
         recent: RecentItems,
-        work: ItemWork,
+        search: ShownSearch,
     }
 
     impl Shown {
         fn copy(&mut self, item: &CopiedItem) -> Option<Vec<usize>> {
-            self.recent.show(item, vec![1, 2], &mut self.work)
+            self.recent.show(item, vec![1, 2], &mut self.search)
         }
     }
 
@@ -180,25 +180,25 @@ mod tests {
         let now = Instant::now();
         let mut shown = Shown::default();
         assert_eq!(shown.copy(&ring("Woe Loop")), None, "not remembered");
-        set_item_level(&mut shown.work.filters, "80");
-        searched(&mut shown.work.offers, 3, now);
+        set_item_level(&mut shown.search.filters, "80");
+        searched(&mut shown.search.offers, 3, now);
 
         assert_eq!(shown.copy(&ring("Doom Loop")), None, "not remembered");
-        assert_eq!(item_level(&shown.work.filters), None, "its own filters");
+        assert_eq!(item_level(&shown.search.filters), None, "its own filters");
         assert_eq!(
-            shown.work.offers.state(),
+            shown.search.offers.state(),
             &OffersState::Idle,
             "no offers yet"
         );
-        set_item_level(&mut shown.work.filters, "75");
+        set_item_level(&mut shown.search.filters, "75");
 
         assert_eq!(shown.copy(&ring("Woe Loop")), Some(vec![1, 2]));
-        assert_eq!(item_level(&shown.work.filters).as_deref(), Some("80"));
-        assert_eq!(exchange_total(&shown.work.offers), Some(3));
+        assert_eq!(item_level(&shown.search.filters).as_deref(), Some("80"));
+        assert_eq!(exchange_total(&shown.search.offers), Some(3));
         assert_eq!(shown.recent.shown(), Some(&ring("Woe Loop")));
 
         shown.copy(&ring("Doom Loop"));
-        assert_eq!(item_level(&shown.work.filters).as_deref(), Some("75"));
+        assert_eq!(item_level(&shown.search.filters).as_deref(), Some("75"));
     }
 
     #[test]
@@ -206,13 +206,13 @@ mod tests {
         let now = Instant::now();
         let mut shown = Shown::default();
         shown.copy(&ring("Woe Loop"));
-        set_item_level(&mut shown.work.filters, "80");
-        searched(&mut shown.work.offers, 3, now);
+        set_item_level(&mut shown.search.filters, "80");
+        searched(&mut shown.search.offers, 3, now);
 
         assert_eq!(shown.copy(&ring("Woe Loop")), None);
 
-        assert_eq!(item_level(&shown.work.filters).as_deref(), Some("80"));
-        assert_eq!(exchange_total(&shown.work.offers), Some(3));
+        assert_eq!(item_level(&shown.search.filters).as_deref(), Some("80"));
+        assert_eq!(exchange_total(&shown.search.offers), Some(3));
     }
 
     #[test]
@@ -221,14 +221,14 @@ mod tests {
         // Eleven items, the first one the oldest.
         for index in 0..=REMEMBERED {
             shown.copy(&ring(&format!("Ring {index}")));
-            set_item_level(&mut shown.work.filters, &index.to_string());
+            set_item_level(&mut shown.search.filters, &index.to_string());
         }
 
         // The oldest item remembered, then the one copied before it.
         shown.copy(&ring("Ring 1"));
-        assert_eq!(item_level(&shown.work.filters).as_deref(), Some("1"));
+        assert_eq!(item_level(&shown.search.filters).as_deref(), Some("1"));
         shown.copy(&ring("Ring 0"));
-        assert_eq!(item_level(&shown.work.filters), None, "forgotten");
+        assert_eq!(item_level(&shown.search.filters), None, "forgotten");
     }
 
     #[test]
@@ -236,7 +236,7 @@ mod tests {
         let mut shown = Shown::default();
         for index in 0..REMEMBERED {
             shown.copy(&ring(&format!("Ring {index}")));
-            set_item_level(&mut shown.work.filters, &index.to_string());
+            set_item_level(&mut shown.search.filters, &index.to_string());
         }
 
         // The oldest copied again, then one more item: the next oldest is forgotten.
@@ -244,9 +244,9 @@ mod tests {
         shown.copy(&ring("Ring 10"));
 
         shown.copy(&ring("Ring 0"));
-        assert_eq!(item_level(&shown.work.filters).as_deref(), Some("0"));
+        assert_eq!(item_level(&shown.search.filters).as_deref(), Some("0"));
         shown.copy(&ring("Ring 1"));
-        assert_eq!(item_level(&shown.work.filters), None, "forgotten");
+        assert_eq!(item_level(&shown.search.filters), None, "forgotten");
     }
 
     #[test]
@@ -254,7 +254,7 @@ mod tests {
         let mut shown = Shown::default();
         shown.copy(&ring("Woe Loop"));
         let key = FilterKey::Property(Property::ItemLevel);
-        shown.work.filters.set(
+        shown.search.filters.set(
             key,
             Filter {
                 bounds: Some(crate::item::Range {
@@ -264,12 +264,12 @@ mod tests {
                 ..filter(true, "120")
             },
         );
-        shown.work.filters.edit(Window::Main, key, Half::Minimum);
+        shown.search.filters.edit(Window::Main, key, Half::Minimum);
 
         shown.copy(&ring("Doom Loop"));
         shown.copy(&ring("Woe Loop"));
 
-        assert_eq!(item_level(&shown.work.filters).as_deref(), Some("100"));
+        assert_eq!(item_level(&shown.search.filters).as_deref(), Some("100"));
     }
 
     #[test]
@@ -278,18 +278,18 @@ mod tests {
         let mut shown = Shown::default();
         shown.copy(&ring("Woe Loop"));
         let woe = Rest::new(Language::English, "Q1", &["k"]);
-        let _ = shown.work.offers.search(item_search(), now);
+        let _ = shown.search.offers.search(item_search(), now);
         let outcome = Outcome::Items {
             offers: Vec::new(),
             total: 11,
             rest: woe.clone(),
         };
         shown
-            .work
+            .search
             .offers
             .apply(answer(outcome, after(now, 0)), SystemTime::now());
         // Its next offers asked, then left before they came.
-        assert!(shown.work.offers.more().is_some());
+        assert!(shown.search.offers.more().is_some());
 
         shown.copy(&ring("Doom Loop"));
         // The answer to the next offers of the item left changes nothing.
@@ -298,30 +298,30 @@ mod tests {
             rest: Rest::new(Language::English, "Q1", &[]),
         };
         shown
-            .work
+            .search
             .offers
             .apply(answer(more, after(now, 0)), SystemTime::now());
-        let _ = shown.work.offers.search(item_search(), now);
+        let _ = shown.search.offers.search(item_search(), now);
         let doom = Outcome::Items {
             offers: Vec::new(),
             total: 12,
             rest: Rest::new(Language::English, "Q2", &["x"]),
         };
         shown
-            .work
+            .search
             .offers
             .apply(answer(doom, after(now, 0)), SystemTime::now());
 
         shown.copy(&ring("Woe Loop"));
         assert!(matches!(
-            shown.work.offers.state(),
+            shown.search.offers.state(),
             OffersState::Items(ItemOffers {
                 total: 11,
                 next: NextOffers::NotAwaited,
                 ..
             })
         ));
-        assert_eq!(shown.work.offers.more(), Some(Order::More(woe)));
+        assert_eq!(shown.search.offers.more(), Some(Order::More(woe)));
     }
 
     #[test]
@@ -329,7 +329,7 @@ mod tests {
         let now = Instant::now();
         let mut shown = Shown::default();
         shown.copy(&ring("Woe Loop"));
-        let _ = shown.work.offers.search(exchange_search(), now);
+        let _ = shown.search.offers.search(exchange_search(), now);
 
         shown.copy(&ring("Doom Loop"));
         let outcome = Outcome::Exchange {
@@ -337,20 +337,20 @@ mod tests {
             total: 3,
         };
         shown
-            .work
+            .search
             .offers
             .apply(answer(outcome, after(now, 10)), SystemTime::now());
         assert_eq!(
-            shown.work.offers.state(),
+            shown.search.offers.state(),
             &OffersState::Idle,
             "not its answer"
         );
         shown.copy(&ring("Woe Loop"));
 
-        assert_eq!(shown.work.offers.state(), &OffersState::Idle);
+        assert_eq!(shown.search.offers.state(), &OffersState::Idle);
         assert!(
             !shown
-                .work
+                .search
                 .offers
                 .wait(crate::trade::query::SearchKind::Exchange, now)
                 .is_zero()
@@ -362,14 +362,14 @@ mod tests {
         let now = Instant::now();
         let mut shown = Shown::default();
         shown.copy(&ring("Woe Loop"));
-        set_item_level(&mut shown.work.filters, "80");
-        searched(&mut shown.work.offers, 3, now);
+        set_item_level(&mut shown.search.filters, "80");
+        searched(&mut shown.search.offers, 3, now);
         shown.copy(&ring("Doom Loop"));
 
         shown.recent.forget_offers();
         shown.copy(&ring("Woe Loop"));
 
-        assert_eq!(shown.work.offers.state(), &OffersState::Idle);
-        assert_eq!(item_level(&shown.work.filters).as_deref(), Some("80"));
+        assert_eq!(shown.search.offers.state(), &OffersState::Idle);
+        assert_eq!(item_level(&shown.search.filters).as_deref(), Some("80"));
     }
 }

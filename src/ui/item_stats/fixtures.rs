@@ -7,8 +7,8 @@ use super::model::{
 use super::rolls::ranges_text;
 use super::{LineFacts, Stats};
 use crate::filters::{Filters, Half};
+use crate::game_data::UniqueModifiers;
 use crate::item::{Affix, CopiedItem, Item, PartTier, Range, Rarity, StatLine};
-use crate::price::UniqueModifiers;
 use crate::roll_difference::CopiedLines;
 use crate::tier_rolls::TierRolls;
 use crate::trade::stat_filters::LineStats;

@@ -11,9 +11,10 @@ use std::time::{Duration, SystemTime};
 
 use serde::{Deserialize, Serialize};
 
+use crate::game_data::UniqueModifiers;
 use crate::league::League;
+
 /// The orbs the prices show in: the Divine, Chaos and Exalted Orbs.
-/// The currencies the prices show in.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Orb {
     Divine,
@@ -115,15 +116,6 @@ pub struct UniquePrice {
     /// Its modifiers with their ranges, in English: the rolls of a unique copied without them,
     /// from the in-game trade.
     pub modifiers: UniqueModifiers,
-}
-
-/// The modifiers of a unique with their ranges, e.g. `+(17-23)% to Chaos Resistance`: those
-/// of its base (implicit), and its own (explicit), apart so that a line is only matched with
-/// the modifiers of its kind.
-#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
-pub struct UniqueModifiers {
-    pub implicit: Vec<String>,
-    pub explicit: Vec<String>,
 }
 
 /// An item of the currency exchange: currency, fragments, essences, runes…
