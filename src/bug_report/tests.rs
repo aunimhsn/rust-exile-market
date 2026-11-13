@@ -14,9 +14,15 @@ fn facts(league: Option<&League>) -> Facts<'_> {
     }
 }
 
-/// `text`, a line of the log already written short.
+/// The line of the log written short as `text`, `18:48:03 INFO …`.
 fn line(text: &str) -> LogLine {
-    short_lines(text, None).pop().expect("one line")
+    let (time, rest) = text.split_once(' ').expect("a time");
+    let (level, message) = rest.split_once(' ').expect("a level");
+    let stamped = format!("2026-11-04T{time}.0+01:00 [{level}] {message}");
+    let [line] = &short_lines(&stamped, None)[..] else {
+        panic!("one line: {text}");
+    };
+    line.clone()
 }
 
 /// `count` lines of the log, numbered, of about 60 characters each once encoded.
@@ -180,9 +186,31 @@ fn an_item_too_long_for_the_address_keeps_its_first_lines() {
 #[test]
 fn an_item_that_starts_with_an_empty_line_keeps_whole_lines() {
     let item = "\nRarity: Unique\nHeadhunter";
-    let room = encoded_len("\nRarity: Unique") + 1;
+    let kept = "\nRarity: Unique";
 
-    assert_eq!(fitting_item(item, room), "\nRarity: Unique");
+    assert_eq!(fitting_item(item, encoded_len(kept) + 1), kept);
+    assert_eq!(fitting_item(item, encoded_len(kept)), kept, "just fitting");
+    assert_eq!(
+        fitting_item("\n\nHeadhunter\nX", encoded_len("\n\nHeadhunter")),
+        "\n\nHeadhunter"
+    );
+    assert_eq!(fitting_item(item, 0), "");
+}
+
+#[test]
+fn the_last_lines_of_the_log_that_fit_are_sent() {
+    let log = [line("18:48:03 INFO a"), line("18:48:04 INFO b")];
+    let last = encoded_len(log[1].text());
+    let both = encoded_len(log[0].text()) + ENCODED_LINE_BREAK + last;
+
+    assert_eq!(first_line_that_fits(&log, both), 0, "just fitting");
+    assert_eq!(first_line_that_fits(&log, both - 1), 1);
+    assert_eq!(
+        first_line_that_fits(&log, last - 1),
+        2,
+        "not even the last one"
+    );
+    assert_eq!(first_line_that_fits(&[], 100), 0);
 }
 
 #[test]

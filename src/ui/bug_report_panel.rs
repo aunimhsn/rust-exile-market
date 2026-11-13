@@ -10,7 +10,7 @@ use egui::{
 
 use super::theme::{color, size, text};
 use super::widgets::{self, Mark, Pill};
-use crate::bug_report::{HidingParts, Level, LogLine, LogSession, Report};
+use crate::bug_report::{AroundAnotherWindow, Level, LogLine, LogSession, Report};
 use crate::i18n::{Message, Translator};
 
 /// The space above and under the preview, as in the settings.
@@ -290,8 +290,8 @@ fn log_job(lines: &[LogLine]) -> LayoutJob {
         };
         let format = TextFormat::simple(text::report(), tint);
         let line_break = if index + 1 < lines.len() { "\n" } else { "" };
-        match line.hiding_parts() {
-            Some(HidingParts {
+        match line.around_another_window() {
+            Some(AroundAnotherWindow {
                 before,
                 hidden,
                 after,
