@@ -19,7 +19,9 @@ use crate::league::League;
 use crate::logging;
 use crate::update::{ClosedUpdate, LeagueOfTheMoment, Release};
 
+/// The file of the settings, in the configuration directory.
 const FILE_NAME: &str = "settings.toml";
+/// The file of the size and the position of the window, written by eframe next to the settings.
 const WINDOW_FILE_NAME: &str = "window.ron";
 /// Where a settings file that isn't TOML is moved before the default settings replace it.
 const INVALID_FILE_NAME: &str = "settings.invalid.toml";
@@ -36,6 +38,7 @@ pub enum LanguageSetting {
 }
 
 impl LanguageSetting {
+    /// Every choice, in the order of the settings panel.
     pub const ALL: [Self; 3] = [Self::System, Self::English, Self::French];
 
     /// The language of the interface.
@@ -76,6 +79,7 @@ impl Default for HotkeySetting {
     }
 }
 
+/// The keys of the hotkey, written joined (`Alt+D`).
 #[expect(
     clippy::trivially_copy_pass_by_ref,
     reason = "the signature serde asks for"
@@ -196,16 +200,19 @@ pub struct Settings {
 }
 
 impl Settings {
+    /// The language chosen for the interface.
     #[must_use]
     pub fn language(&self) -> LanguageSetting {
         self.language
     }
 
+    /// Whether the window stays above the other windows.
     #[must_use]
     pub fn always_on_top(&self) -> bool {
         self.always_on_top
     }
 
+    /// The price-check hotkey: on or off, and its keys.
     #[must_use]
     pub fn hotkey(&self) -> HotkeySetting {
         self.hotkey
@@ -226,6 +233,7 @@ impl Settings {
         true
     }
 
+    /// The new leagues whose bubble the player closed.
     #[must_use]
     pub fn closed_new_leagues(&self) -> &[League] {
         &self.closed_new_leagues
@@ -257,8 +265,8 @@ impl Settings {
         true
     }
 
-    /// Gives the update closed before the leagues were known `league`, the league of the
-    /// moment, once known; whether it changed.
+    /// Gives `league`, the league of the moment once known, to the update closed before the
+    /// leagues were known; whether it changed.
     pub fn settle_closed_update(&mut self, league: LeagueOfTheMoment) -> bool {
         self.closed_update
             .as_mut()
@@ -364,6 +372,8 @@ impl SettingsFile {
     }
 }
 
+/// The configuration directory of the application; none when the system gives no home
+/// directory.
 fn config_directory() -> Option<PathBuf> {
     files::project_directories().map(|directories| directories.config_dir().to_path_buf())
 }
@@ -390,6 +400,7 @@ fn set_aside(directory: &Path, path: &Path) {
     }
 }
 
+/// Writes `settings` to the file of `directory`, atomically.
 fn write(directory: &Path, settings: &Settings) -> io::Result<()> {
     let text = toml::to_string(settings).map_err(io::Error::other)?;
     files::write_atomically(directory, FILE_NAME, text.as_bytes())
