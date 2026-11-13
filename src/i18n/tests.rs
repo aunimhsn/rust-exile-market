@@ -187,7 +187,7 @@ fn every_message_formats_without_errors() {
     // The errors fail the `debug_assert` of `format`.
     for language in Language::ALL {
         let translator = Translator::new(language);
-        for message in Message::ALL {
+        for &message in Message::ALL {
             assert_ne!(translator.text(message), "", "{message:?} in {language:?}");
         }
         assert_ne!(translator.status_bar("A", "B"), "", "{language:?}");
