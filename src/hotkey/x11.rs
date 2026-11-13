@@ -15,8 +15,9 @@ use x11rb::protocol::xproto::{
 use x11rb::protocol::xtest::{self, ConnectionExt as _};
 use x11rb::rust_connection::RustConnection;
 
+use super::Shortcut;
 use super::grab::{Active, GAME_TITLE};
-use super::{Held, Key, Shortcut, copy_keys, modifiers_for_log, send_all};
+use super::keys::{Held, Key, copy_keys, modifiers_for_log, send_all};
 use crate::logging;
 use crate::overlay::{Point, ScreenRect, Target};
 use crate::x11::{self as shared, Atoms, Result};

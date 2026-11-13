@@ -14,8 +14,9 @@ use enigo::{Direction, Enigo, Keyboard as _, Settings};
 use global_hotkey::HotKeyState;
 use winsafe::{HWND, co};
 
+use super::Shortcut;
 use super::grab::{Foreground, is_game_window};
-use super::{Held, Key, Shortcut, copy_keys_after_focus, modifiers_for_log, send_all};
+use super::keys::{Held, Key, copy_keys_after_focus, modifiers_for_log, send_all};
 use crate::logging;
 use crate::overlay::{KeyboardBack, Point, ScreenRect, Target};
 
