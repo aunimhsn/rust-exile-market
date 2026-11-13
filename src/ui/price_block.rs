@@ -482,7 +482,7 @@ fn unit_amounts(exalted: f64, rates: Rates) -> String {
         .filter_map(|currency| shown_amount(exalted, currency, rates))
         .map(|(amount, abbreviation)| format!("{amount} {abbreviation}"))
         .collect::<Vec<_>>()
-        .join(widgets::SEPARATOR)
+        .join(text::SEPARATOR)
 }
 
 /// `exalted` Exalted Orbs in `currency`, written as [`in_currency`] does, when worth showing:

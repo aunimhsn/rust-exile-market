@@ -279,7 +279,7 @@ fn the_link_of_a_hint_is_found_on_each_row_it_wraps_on() {
     let ctx = egui::Context::default();
     crate::ui::install(&ctx);
     let mut checked = 0;
-    crate::ui::test_frame(&ctx, egui::RawInput::default(), |ui| {
+    crate::ui::fixtures::run_frame(&ctx, egui::RawInput::default(), |ui| {
         for language in Language::ALL {
             let i18n = Translator::new(language);
             // The link inside the sentence, after accented letters in French, and first
@@ -334,7 +334,7 @@ impl HintWindow {
             ..Default::default()
         };
         let mut drawn = (false, Pos2::ZERO, Vec::new());
-        crate::ui::test_frame(&self.ctx, input, |ui| {
+        crate::ui::fixtures::run_frame(&self.ctx, input, |ui| {
             let origin = ui.cursor().min + vec2(size::BAND_PADDING, 0.0);
             let galley = linked_galley(ui, &self.hint, Self::WIDTH, true);
             let rects = link_rects(&galley, &self.hint)

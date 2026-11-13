@@ -347,7 +347,7 @@ impl<'a> ItemBlock<'a> {
         let font = text::item_line();
         if let Some((name, tier)) = self.waystone_base() {
             append(&mut job, name, &font, color::TEXT);
-            append(&mut job, widgets::SEPARATOR, &font, color::WEAK);
+            append(&mut job, text::SEPARATOR, &font, color::WEAK);
             append(
                 &mut job,
                 &format!("T{tier}"),
@@ -358,11 +358,11 @@ impl<'a> ItemBlock<'a> {
         }
         if let Some(base_type) = self.base_line() {
             append(&mut job, base_type, &font, color::TEXT);
-            append(&mut job, widgets::SEPARATOR, &font, color::WEAK);
+            append(&mut job, text::SEPARATOR, &font, color::WEAK);
         }
         append(&mut job, self.item.class(), &font, color::WEAK);
         if let Some(level) = self.item.skill_gem_level() {
-            append(&mut job, widgets::SEPARATOR, &font, color::WEAK);
+            append(&mut job, text::SEPARATOR, &font, color::WEAK);
             append(
                 &mut job,
                 &self.i18n.gem_level(level),
@@ -609,7 +609,7 @@ impl<'a> ItemBlock<'a> {
     /// The skills the item grants, e.g. a staff.
     fn skills(&self) -> Option<String> {
         let skills = self.item.granted_skills();
-        (!skills.is_empty()).then(|| self.i18n.granted_skill(&skills.join(widgets::SEPARATOR)))
+        (!skills.is_empty()).then(|| self.i18n.granted_skill(&skills.join(text::SEPARATOR)))
     }
 
     /// The level and the attributes the item requires, each in its color.
@@ -665,7 +665,7 @@ pub(super) fn requirements_job(
     append(&mut job, &requires.before, font, color::WEAK);
     for (index, (part, tint)) in parts.iter().enumerate() {
         if index > 0 {
-            append(&mut job, widgets::SEPARATOR, font, color::WEAK);
+            append(&mut job, text::SEPARATOR, font, color::WEAK);
         }
         append(&mut job, part, font, *tint);
     }

@@ -394,7 +394,7 @@ mod tests {
             };
             let list = HotkeyList::new(self.chosen, &self.i18n);
             let mut action = None;
-            crate::ui::test_frame(&self.ctx, input, |ui| {
+            crate::ui::fixtures::run_frame(&self.ctx, input, |ui| {
                 let button = ui.interact(BUTTON, button_id(), Sense::click());
                 action = list.show(ui.ctx(), &button, open);
             });

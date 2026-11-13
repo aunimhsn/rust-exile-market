@@ -863,7 +863,7 @@ impl<'a> OffersBlock<'a> {
         let after = if let Some(catalyst) = row.other_quality {
             let mut job = LayoutJob::default();
             job.append(
-                widgets::SEPARATOR,
+                text::SEPARATOR,
                 0.0,
                 TextFormat::simple(text::note(), color::FAINT),
             );

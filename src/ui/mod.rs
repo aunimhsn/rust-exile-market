@@ -6,6 +6,8 @@
 mod bubble;
 mod bug_report_panel;
 mod empty_state;
+#[cfg(test)]
+pub mod fixtures;
 mod fonts;
 mod hotkey_list;
 mod images;
@@ -70,20 +72,6 @@ pub fn content<R>(
             (output.inner, output.content_size.y)
         })
         .inner
-}
-
-/// One frame of `ctx` without a screen, for the tests, drawn by `run` from `input`; what it
-/// drew.
-#[cfg(test)]
-pub fn test_frame(
-    ctx: &egui::Context,
-    input: egui::RawInput,
-    run: impl FnMut(&mut egui::Ui),
-) -> egui::FullOutput {
-    let mut output = ctx.run_ui(input, run);
-    // epaint panics when the texture changes of a frame are dropped unapplied.
-    output.textures_delta.clear();
-    output
 }
 
 /// Sets up the image loaders, the fonts and the style, once, before the first frame.

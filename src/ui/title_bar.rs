@@ -419,7 +419,7 @@ mod tests {
             let bar =
                 TitleBar::new(Some(&self.league), &self.i18n).leagues_known(self.leagues_known);
             let mut action = None;
-            crate::ui::test_frame(&self.ctx, input, |ui| action = bar.show(ui));
+            crate::ui::fixtures::run_frame(&self.ctx, input, |ui| action = bar.show(ui));
             action
         }
 

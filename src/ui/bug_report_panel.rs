@@ -328,7 +328,7 @@ mod tests {
         let ctx = egui::Context::default();
         crate::ui::install(&ctx);
         let mut drawn = (String::new(), false);
-        crate::ui::test_frame(&ctx, egui::RawInput::default(), |ui| {
+        crate::ui::fixtures::run_frame(&ctx, egui::RawInput::default(), |ui| {
             let job = LayoutJob::simple_singleline(label.to_owned(), text::bubble(), color::TEXT);
             let galley = ui.painter().layout_job(one_line(job, width));
             // The characters drawn, the "…" of a text cut with them.

@@ -197,7 +197,7 @@ impl Scene {
         };
         let kind = self.kind();
         let mut height = 0.0;
-        let output = ui::test_frame(ctx, input, |ui| {
+        let output = ui::fixtures::run_frame(ctx, input, |ui| {
             let shown = self.session.item().expect("an item shown");
             let view = ItemView {
                 session: &self.session,

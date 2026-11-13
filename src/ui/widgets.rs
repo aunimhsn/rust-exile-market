@@ -279,10 +279,6 @@ pub fn spaced_line(
     line(ui, text, format, None)
 }
 
-/// The separator of the parts of a line: the base type and the class, the amounts of a unit
-/// price, the ranges of a stat of several rolls.
-pub const SEPARATOR: &str = " · ";
-
 /// A small title, `title` in capitals spaced in the font of the labels: "PRICE", "OFFERS".
 #[must_use]
 pub fn small_title_line(ui: &Ui, title: &str) -> Arc<Galley> {

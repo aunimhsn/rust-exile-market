@@ -395,12 +395,12 @@ fn meta(offer: &ItemOffer, item: &Item, i18n: &Translator, width: f32) -> Layout
     let gem_level = offered.gem_level.filter(|_| item.is_skill_gem());
     if let Some((name, tier)) = waystone {
         append(name, &font, color::WEAK);
-        append(widgets::SEPARATOR, &font, color::WEAK);
+        append(text::SEPARATOR, &font, color::WEAK);
         // In the font of its line, not bold as in the item block (owner, 2026-11-01).
         append(&format!("T{tier}"), &font, waystone_tier_color(tier));
     } else if let Some(level) = gem_level {
         append(item.class(), &font, color::WEAK);
-        append(widgets::SEPARATOR, &font, color::WEAK);
+        append(text::SEPARATOR, &font, color::WEAK);
         append(
             &i18n.gem_level(level),
             &text::tooltip_tier(),
@@ -417,7 +417,7 @@ fn meta(offer: &ItemOffer, item: &Item, i18n: &Translator, width: f32) -> Layout
         rest.push(i18n.text(Message::TagCorrupted));
     }
     for part in rest {
-        append(widgets::SEPARATOR, &font, color::WEAK);
+        append(text::SEPARATOR, &font, color::WEAK);
         append(&part, &font, color::WEAK);
     }
     job
@@ -471,10 +471,10 @@ impl OfferTooltip<'_> {
         let i18n = self.i18n;
         self.head(ui);
         ui.add_space(META_GAP);
-        let meta = ui
-            .painter()
-            .layout_job(meta(self.offer, self.item, i18n, ui.available_width()));
-        widgets::text_row(ui, meta, 0.0, color::WEAK);
+        let meta_line =
+            ui.painter()
+                .layout_job(meta(self.offer, self.item, i18n, ui.available_width()));
+        widgets::text_row(ui, meta_line, 0.0, color::WEAK);
         if let Some(job) = requirements(self.offer, self.item, i18n, ui.available_width()) {
             ui.add_space(META_GAP);
             widgets::text_row(ui, ui.painter().layout_job(job), 0.0, color::WEAK);
@@ -613,8 +613,11 @@ impl OfferTooltip<'_> {
             pill_size,
         );
         // Placed at the right of the row the status took, which the pill was counted in.
-        let mut pill_ui =
-            ui.new_child(UiBuilder::new().id_salt("copy-whisper").max_rect(pill_rect));
+        let mut pill_ui = ui.new_child(
+            UiBuilder::new()
+                .scope_id(ui.scope_id().with("copy-whisper"))
+                .max_rect(pill_rect),
+        );
         let pill = match self.pill {
             WhisperPill::Copy => widgets::control_pill(&mut pill_ui, &label),
             WhisperPill::Copied => widgets::copied_pill(&mut pill_ui, &label),
@@ -668,10 +671,10 @@ fn group(ui: &mut Ui, lines: &[Line]) {
         let delta_width = delta
             .as_ref()
             .map_or(0.0, |(galley, _)| galley.size().x + DIFFERENCE_GAP);
-        let galley = ui.painter().layout(
-            line.text.clone(),
+        let galley = widgets::wrapped_line(
+            ui,
+            &line.text,
             text::tooltip_line(),
-            Color32::PLACEHOLDER,
             (width - delta_width).max(0.0),
         );
         let (rect, _) = ui.allocate_exact_size(vec2(width, galley.size().y), Sense::hover());

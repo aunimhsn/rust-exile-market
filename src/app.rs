@@ -1177,7 +1177,7 @@ mod tests {
             events,
             ..Default::default()
         };
-        crate::ui::test_frame(ctx, input, content);
+        crate::ui::fixtures::run_frame(ctx, input, content);
     }
 
     fn key(key: Key) -> egui::Event {

@@ -5,7 +5,7 @@ use super::model::{Origin, StatRoll};
 use crate::filters::Half;
 use crate::format;
 use crate::item::{Range, StatLine};
-use crate::ui::widgets;
+use crate::ui::theme::text;
 
 /// The share of the copied value the limit of a rare, magic or normal item leaves below it
 /// for a minimum, above it for the maximum of a line better lower, to find comparable items
@@ -152,7 +152,7 @@ pub(super) fn ranges_text(ranges: &[Range]) -> String {
             }
         })
         .collect::<Vec<_>>()
-        .join(widgets::SEPARATOR)
+        .join(text::SEPARATOR)
 }
 
 #[cfg(test)]

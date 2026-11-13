@@ -189,7 +189,9 @@ mod tests {
             };
             let list = LeagueList::new(self.leagues.rows(), Some(&self.chosen), &self.i18n);
             let mut action = None;
-            crate::ui::test_frame(&self.ctx, input, |ui| action = list.show(ui.ctx(), open));
+            crate::ui::fixtures::run_frame(&self.ctx, input, |ui| {
+                action = list.show(ui.ctx(), open);
+            });
             action
         }
 
