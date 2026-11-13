@@ -1442,15 +1442,14 @@ mod tests {
 
     /// A search of items with the filters of `properties`.
     fn searched(properties: Vec<crate::trade::query::PropertyFilter>) -> Search {
-        use crate::trade::query::{ItemQuery, Query, StatFilter, StateFilters};
+        use crate::trade::query::{ItemQuery, Query, SearchedBase, StatFilter, StateFilters};
 
         Search {
             language: crate::language::Language::English,
             league: League::new("Standard"),
             query: Query::Items(ItemQuery {
                 name: None,
-                base_type: Some("Gemini Bow".to_owned()),
-                category: None,
+                base: SearchedBase::Type("Gemini Bow".to_owned()),
                 properties,
                 rarity: None,
                 states: StateFilters {

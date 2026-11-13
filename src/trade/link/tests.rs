@@ -6,7 +6,7 @@ use super::*;
 use crate::filters::Property;
 use crate::item::CopiedItem;
 use crate::item_names::tests::item_names;
-use crate::trade::query::{PropertyFilter, RulesOut, StatFilter};
+use crate::trade::query::{PropertyFilter, RulesOut, SearchedBase, StatFilter};
 use serde_json::Value;
 
 fn parse(text: &str) -> Item {
@@ -375,20 +375,29 @@ fn a_unique_is_searched_with_its_stats_and_the_other_items_with_all_their_filter
     let searched_unique = searched(&unique, true);
     assert_eq!(searched_unique.stats, stats);
     // A unique is searched by its name and base type, without the filters of the others.
-    assert_eq!(searched_unique.base_type.as_deref(), Some("Gold Ring"));
+    assert_eq!(
+        searched_unique.base,
+        SearchedBase::Type("Gold Ring".to_owned())
+    );
     assert_eq!(searched_unique.properties, Vec::new());
     let rare = parse("Item Class: Rings\nRarity: Rare\nWoe Loop\nRuby Ring");
     let searched_rare = searched(&rare, false);
     assert_eq!(searched_rare.stats, stats);
     assert_eq!(searched_rare.properties, properties);
-    assert_eq!(searched_rare.base_type.as_deref(), Some("Ruby Ring"));
-    // The base type unchecked: any base.
-    assert_eq!(searched(&rare, true).base_type, None);
+    assert_eq!(
+        searched_rare.base,
+        SearchedBase::Type("Ruby Ring".to_owned())
+    );
+    // The base type unchecked: a ring among all the rings.
+    assert_eq!(
+        searched(&rare, true).base,
+        SearchedBase::Category("accessory.ring")
+    );
 }
 
-/// The base type and the category `item` is searched with, its base type unchecked when
+/// The base `item` is searched with, its base type unchecked when
 /// `any_base`, with a minimum item level when `narrowed`.
-fn searched_base(item: &Item, any_base: bool, narrowed: bool) -> (Option<String>, Option<&str>) {
+fn searched_base(item: &Item, any_base: bool, narrowed: bool) -> SearchedBase {
     let target = target(item, None, None).expect("a target");
     let filters = SearchFilters {
         any_base,
@@ -402,7 +411,7 @@ fn searched_base(item: &Item, any_base: bool, narrowed: bool) -> (Option<String>
         states: Vec::new(),
     };
     match super::query(item, &target, filters) {
-        Query::Items(items) => (items.base_type, items.category),
+        Query::Items(items) => items.base,
         Query::Exchange(_) => panic!("a search of items"),
     }
 }
@@ -412,13 +421,13 @@ fn the_base_type_unchecked_searches_its_category() {
     let rare = parse("Item Class: Rings\nRarity: Rare\nWoe Loop\nRuby Ring");
     assert_eq!(
         searched_base(&rare, false, true),
-        (Some("Ruby Ring".to_owned()), None)
+        SearchedBase::Type("Ruby Ring".to_owned())
     );
     // A ring among all the rings, also when nothing else narrows the search.
     for narrowed in [false, true] {
         assert_eq!(
             searched_base(&rare, true, narrowed),
-            (None, Some("accessory.ring"))
+            SearchedBase::Category("accessory.ring")
         );
     }
     // In French, and a flask by its kind: the trade site tells the life flasks from the
@@ -428,12 +437,12 @@ fn the_base_type_unchecked_searches_its_category() {
     ));
     assert_eq!(
         searched_base(&french, true, false),
-        (None, Some("armour.chest"))
+        SearchedBase::Category("armour.chest")
     );
     let flask = parse("Item Class: Mana Flasks\nRarity: Normal\nUltimate Mana Flask");
     assert_eq!(
         searched_base(&flask, true, false),
-        (None, Some("flask.mana"))
+        SearchedBase::Category("flask.mana")
     );
 }
 
@@ -448,10 +457,7 @@ fn a_magic_item_is_searched_by_the_category_of_the_base_its_name_holds() {
     };
 
     match super::query(&mace, &target, filters) {
-        Query::Items(items) => assert_eq!(
-            (items.base_type, items.category),
-            (None, Some("weapon.twomace"))
-        ),
+        Query::Items(items) => assert_eq!(items.base, SearchedBase::Category("weapon.twomace")),
         Query::Exchange(_) => panic!("a search of items"),
     }
 }
@@ -462,9 +468,9 @@ fn a_base_the_game_data_doesnt_know_is_searched_when_nothing_else_narrows_the_se
 
     assert_eq!(
         searched_base(&rare, true, false),
-        (Some("Mystery Ring".to_owned()), None)
+        SearchedBase::Type("Mystery Ring".to_owned())
     );
-    assert_eq!(searched_base(&rare, true, true), (None, None));
+    assert_eq!(searched_base(&rare, true, true), SearchedBase::Any);
 
     // A checked stat narrows it, an implicit too; the count of the unrevealed modifiers,
     // which any item may have, doesn't.
@@ -481,14 +487,14 @@ fn a_base_the_game_data_doesnt_know_is_searched_when_nothing_else_narrows_the_se
             ..SearchFilters::default()
         };
         match super::query(&rare, &target, filters) {
-            Query::Items(items) => items.base_type,
+            Query::Items(items) => items.base,
             Query::Exchange(_) => panic!("a search of items"),
         }
     };
-    assert_eq!(base_with(RulesOut::OfTheLeague), None);
+    assert_eq!(base_with(RulesOut::OfTheLeague), SearchedBase::Any);
     assert_eq!(
         base_with(RulesOut::Nothing),
-        Some("Mystery Ring".to_owned())
+        SearchedBase::Type("Mystery Ring".to_owned())
     );
 }
 

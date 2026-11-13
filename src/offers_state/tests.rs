@@ -2,7 +2,7 @@ use super::*;
 use crate::language::Language;
 use crate::league::League;
 use crate::trade::offers::fixtures::{exchange_offer, item_offer};
-use crate::trade::query::{ItemQuery, Query, RulesOut, StateFilters};
+use crate::trade::query::{ItemQuery, Query, RulesOut, SearchedBase, StateFilters};
 
 pub(crate) fn item_search() -> Search {
     Search {
@@ -10,8 +10,7 @@ pub(crate) fn item_search() -> Search {
         league: League::new("Standard"),
         query: Query::Items(ItemQuery {
             name: Some("Andvarius".to_owned()),
-            base_type: Some("Gold Ring".to_owned()),
-            category: None,
+            base: SearchedBase::Type("Gold Ring".to_owned()),
             properties: Vec::new(),
             rarity: None,
             states: StateFilters {

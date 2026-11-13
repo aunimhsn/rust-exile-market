@@ -61,15 +61,23 @@ pub enum SearchKind {
 pub struct ItemQuery {
     /// The name of a unique.
     pub name: Option<String>,
-    /// Any base type when `None`.
-    pub base_type: Option<String>,
-    /// The id of a category of the trade site (`weapon.bow`), searched in place of the base
-    /// type: a bow among all the bows.
-    pub category: Option<&'static str>,
+    pub base: SearchedBase,
     pub rarity: Option<RarityFilter>,
     pub states: StateFilters,
     pub properties: Vec<PropertyFilter>,
     pub stats: Vec<StatFilter>,
+}
+
+/// The base of the items searched.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SearchedBase {
+    /// One base type, e.g. `Gold Ring`.
+    Type(String),
+    /// The id of a category of the trade site (`weapon.bow`), searched in place of the base
+    /// type: a bow among all the bows.
+    Category(&'static str),
+    /// Any base.
+    Any,
 }
 
 /// The states of the offers (`misc_filters` of the trade site): for each, the offers of that
@@ -240,7 +248,7 @@ impl ItemQuery {
         if let Some(name) = &self.name {
             query.insert("name".to_owned(), json!(name));
         }
-        if let Some(base_type) = &self.base_type {
+        if let SearchedBase::Type(base_type) = &self.base {
             query.insert("type".to_owned(), json!(base_type));
         }
         if !self.stats.is_empty() {
@@ -254,7 +262,7 @@ impl ItemQuery {
                 .or_insert_with(|| json!({ "filters": {} }));
             filters["filters"][id] = filter;
         };
-        if let Some(category) = self.category {
+        if let SearchedBase::Category(category) = self.base {
             add("type_filters", "category", json!({ "option": category }));
         }
         if let Some(rarity) = self.rarity {

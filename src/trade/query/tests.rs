@@ -4,8 +4,7 @@ use super::*;
 fn a_category_is_searched_among_the_type_filters() {
     let query = ItemQuery {
         name: None,
-        base_type: None,
-        category: Some("weapon.bow"),
+        base: SearchedBase::Category("weapon.bow"),
         rarity: Some(RarityFilter::NotUnique),
         states: StateFilters::default(),
         properties: Vec::new(),
@@ -25,8 +24,7 @@ fn a_category_is_searched_among_the_type_filters() {
 fn a_search_writes_only_its_filters() {
     let query = ItemQuery {
         name: None,
-        base_type: Some("Ruby Ring".to_owned()),
-        category: None,
+        base: SearchedBase::Type("Ruby Ring".to_owned()),
         rarity: None,
         states: StateFilters::default(),
         properties: Vec::new(),
@@ -46,8 +44,7 @@ fn a_search_writes_only_its_filters() {
 fn the_corrupted_sanctified_and_mirrored_states_share_the_misc_filters() {
     let query = ItemQuery {
         name: None,
-        base_type: Some("Ruby Ring".to_owned()),
-        category: None,
+        base: SearchedBase::Type("Ruby Ring".to_owned()),
         rarity: Some(RarityFilter::NotUnique),
         states: StateFilters {
             corrupted: Some(false),
@@ -83,8 +80,7 @@ fn the_corrupted_sanctified_and_mirrored_states_share_the_misc_filters() {
 fn the_twice_corrupted_and_fractured_states_have_their_own_ids() {
     let query = ItemQuery {
         name: None,
-        base_type: Some("Ruby Ring".to_owned()),
-        category: None,
+        base: SearchedBase::Type("Ruby Ring".to_owned()),
         rarity: None,
         states: StateFilters {
             twice_corrupted: Some(true),
@@ -108,8 +104,7 @@ fn the_twice_corrupted_and_fractured_states_have_their_own_ids() {
 fn the_stats_and_the_corrupted_state_are_filters() {
     let query = ItemQuery {
         name: Some("Andvarius".to_owned()),
-        base_type: Some("Gold Ring".to_owned()),
-        category: None,
+        base: SearchedBase::Type("Gold Ring".to_owned()),
         rarity: Some(RarityFilter::Unique),
         states: StateFilters {
             corrupted: Some(false),
@@ -157,8 +152,7 @@ fn the_stats_and_the_corrupted_state_are_filters() {
 fn a_local_and_a_global_stat_are_searched_in_a_count_group() {
     let query = ItemQuery {
         name: Some("Bloodthirst".to_owned()),
-        base_type: Some("Gold Ring".to_owned()),
-        category: None,
+        base: SearchedBase::Type("Gold Ring".to_owned()),
         rarity: None,
         states: StateFilters::default(),
         properties: Vec::new(),
@@ -199,8 +193,7 @@ fn a_local_and_a_global_stat_are_searched_in_a_count_group() {
 fn a_count_group_without_limits_searches_its_ids_alone() {
     let query = ItemQuery {
         name: None,
-        base_type: Some("Gold Ring".to_owned()),
-        category: None,
+        base: SearchedBase::Type("Gold Ring".to_owned()),
         rarity: None,
         states: StateFilters::default(),
         properties: Vec::new(),
@@ -228,8 +221,7 @@ fn a_count_group_without_limits_searches_its_ids_alone() {
 fn the_properties_are_filters_and_the_base_type_may_be_left_out() {
     let query = ItemQuery {
         name: None,
-        base_type: None,
-        category: None,
+        base: SearchedBase::Any,
         rarity: Some(RarityFilter::NotUnique),
         states: StateFilters {
             corrupted: Some(false),
@@ -310,8 +302,7 @@ fn the_properties_of_a_waystone_are_searched_among_the_endgame_filters() {
     };
     let query = ItemQuery {
         name: None,
-        base_type: Some("Waystone (Tier 12)".to_owned()),
-        category: None,
+        base: SearchedBase::Type("Waystone (Tier 12)".to_owned()),
         rarity: Some(RarityFilter::NotUnique),
         states: StateFilters::default(),
         properties: vec![
@@ -349,8 +340,7 @@ fn the_level_and_the_sockets_of_a_gem_share_the_misc_filters_with_its_states() {
     };
     let query = ItemQuery {
         name: None,
-        base_type: Some("Comet".to_owned()),
-        category: None,
+        base: SearchedBase::Type("Comet".to_owned()),
         rarity: Some(RarityFilter::NotUnique),
         states: StateFilters {
             corrupted: Some(false),
@@ -442,8 +432,7 @@ fn a_search_compares_the_item_by_a_filter_that_rules_out_items_of_its_base() {
     let query = |stats| {
         Query::Items(ItemQuery {
             name: None,
-            base_type: Some("Ruby".to_owned()),
-            category: None,
+            base: SearchedBase::Type("Ruby".to_owned()),
             rarity: None,
             states: StateFilters::default(),
             properties: Vec::new(),
