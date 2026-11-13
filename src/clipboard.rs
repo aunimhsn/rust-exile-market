@@ -225,6 +225,12 @@ impl ClipboardWatch {
     ) -> Self {
         let copy_expected = CopyExpected::default();
         let expected = Arc::clone(&copy_expected);
+        // Waited for, so that the handle of the thread closes before the one that keeps the
+        // written texts: under X11 the last handle hands a text the player copied from the
+        // window over to the clipboard manager, which a thread cut by the end of the program
+        // wouldn't. The closing waits at most for a reading under way: up to 4 s under X11 when
+        // another application holds the clipboard and doesn't answer (`LONG_TIMEOUT_DUR` of
+        // arboard 3.7.0), the window still shown; nothing of ours is to hand over then.
         let worker = Worker::spawn("clipboard", OnDrop::Join, wake, move |outbox, wake| {
             watch(ClipboardWatcher::new(open(), expected), outbox, wake);
         });
