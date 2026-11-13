@@ -12,6 +12,7 @@ use std::time::{Duration, SystemTime};
 use serde::{Deserialize, Serialize};
 
 use crate::language::{Language, PerLanguage};
+use crate::words;
 
 /// The names of one language.
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
@@ -168,13 +169,7 @@ impl ItemNames {
 
 /// `text` holds `words` between spaces or at its ends, not inside a longer word.
 fn holds_words(text: &str, words: &str) -> bool {
-    !words.is_empty()
-        && text.match_indices(words).any(|(start, _)| {
-            let before = text[..start].chars().next_back();
-            let after = text[start + words.len()..].chars().next();
-            before.is_none_or(|character| character == ' ')
-                && after.is_none_or(|character| character == ' ')
-        })
+    !words.is_empty() && words::holds_whole(text, words, |character| character == ' ')
 }
 
 #[cfg(test)]
@@ -391,20 +386,9 @@ pub mod tests {
     }
 
     #[test]
-    fn whole_words_are_found_at_both_ends_and_after_a_part_of_a_word() {
-        assert!(holds_words("Temple Maul", "Temple Maul"), "the whole text");
-        assert!(
-            holds_words("Temple Maul of the Brute", "Temple Maul"),
-            "at the start"
-        );
-        assert!(
-            holds_words("Crackling Temple Maul", "Temple Maul"),
-            "at the end"
-        );
-        // The first "Maul" is inside "Mauling", the second one is a word.
-        assert!(holds_words("Mauling Maul", "Maul"));
-        assert!(!holds_words("Mauling", "Maul"));
-        assert!(!holds_words("Shammaul", "Maul"));
+    fn a_base_type_is_held_between_spaces_and_is_never_empty() {
+        assert!(holds_words("Crackling Temple Maul", "Temple Maul"));
+        assert!(!holds_words("Temple-Maul", "Maul"));
         assert!(!holds_words("Temple Maul", ""), "nothing isn't a base type");
     }
 }

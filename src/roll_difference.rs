@@ -21,6 +21,7 @@ use crate::item::{Modifier, ModifierKind};
 use crate::language::Language;
 use crate::trade::offers::ModifierKind as OfferKind;
 use crate::trade::stat_filters::LineStats;
+use crate::words;
 
 /// The words that make a line read the other way, in lowercase: "reduced Movement Speed" is
 /// worse when its number is higher, "increased Mana Cost" too, and "reduced Mana Cost" is
@@ -217,11 +218,7 @@ fn direction(template: &str) -> Direction {
 
 /// Whether `text` holds `word` as whole words: "less" isn't in "unless".
 fn has_word(text: &str, word: &str) -> bool {
-    text.match_indices(word).any(|(start, _)| {
-        let before = text[..start].chars().next_back();
-        let after = text[start + word.len()..].chars().next();
-        !before.is_some_and(char::is_alphanumeric) && !after.is_some_and(char::is_alphanumeric)
-    })
+    words::holds_whole(text, word, |character| !character.is_alphanumeric())
 }
 
 /// Whether a modifier of the copied item of `kind` is where the trade site lists the
