@@ -427,25 +427,20 @@ fn fitting_item(item: &str, room: usize) -> &str {
         return item;
     }
     log::warn!("The item is too long for the address of the bug report: its first lines only");
+    // The end of the lines that fit, their encoded length, and the start of the next line.
     let mut end = 0;
     let mut length = 0;
-    for line in item.split_inclusive('\n') {
-        // Without its line break, which goes only between two lines.
-        let text = line.strip_suffix('\n').unwrap_or(line);
-        let cost = if end == 0 {
-            encoded_len(text)
-        } else {
-            ENCODED_LINE_BREAK + encoded_len(text)
-        };
+    let mut line_start = 0;
+    for (index, line) in item.split('\n').enumerate() {
+        // With the line break before it, which goes only between two lines.
+        let line_break = if index == 0 { 0 } else { ENCODED_LINE_BREAK };
+        let cost = line_break + encoded_len(line);
         if length + cost > room {
             break;
         }
         length += cost;
-        end = if end == 0 {
-            text.len()
-        } else {
-            end + 1 + text.len()
-        };
+        end = line_start + line.len();
+        line_start = end + 1;
     }
     &item[..end]
 }

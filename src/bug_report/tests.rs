@@ -178,6 +178,14 @@ fn an_item_too_long_for_the_address_keeps_its_first_lines() {
 }
 
 #[test]
+fn an_item_that_starts_with_an_empty_line_keeps_whole_lines() {
+    let item = "\nRarity: Unique\nHeadhunter";
+    let room = encoded_len("\nRarity: Unique") + 1;
+
+    assert_eq!(fitting_item(item, room), "\nRarity: Unique");
+}
+
+#[test]
 fn without_a_log_the_report_sends_the_summary_and_the_item() {
     let report = Report::new("Exile Market 0.1.0".to_owned(), None, None);
 
