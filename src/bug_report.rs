@@ -277,17 +277,7 @@ impl Report {
     /// log"; none when it can't be read.
     #[must_use]
     pub fn whole_log(&self) -> Option<String> {
-        self.log().map(|log| {
-            let mut whole =
-                String::with_capacity(log.iter().map(|line| line.text().len() + 1).sum());
-            for (index, line) in log.iter().enumerate() {
-                if index > 0 {
-                    whole.push('\n');
-                }
-                whole.push_str(line.text());
-            }
-            whole
-        })
+        self.log().map(joined)
     }
 
     /// Whether the player copied the log of the session chosen: "✓ Copied" until the preview
@@ -327,6 +317,15 @@ impl Report {
 /// application stopped) stays readable.
 fn read_log(path: &Path) -> io::Result<String> {
     fs::read(path).map(|log| String::from_utf8_lossy(&log).into_owned())
+}
+
+/// The texts of `lines`, joined by line breaks.
+fn joined(lines: &[LogLine]) -> String {
+    lines
+        .iter()
+        .map(LogLine::text)
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 /// The summary of the report: the version, the system (`system`), the languages, the league and
@@ -397,12 +396,13 @@ fn sent(summary: &str, item: Option<&str>, log: &[LogLine], budget: usize) -> Se
     let mut room = budget.saturating_sub(address.len() + "&log=".len());
     let mut first_line = log.len();
     for (index, line) in log.iter().enumerate().rev() {
-        let cost = encoded_len(line.text())
-            + if first_line == log.len() {
-                0
-            } else {
-                ENCODED_LINE_BREAK
-            };
+        // With the line break before the line after it, already sent.
+        let line_break = if index + 1 < log.len() {
+            ENCODED_LINE_BREAK
+        } else {
+            0
+        };
+        let cost = encoded_len(line.text()) + line_break;
         if cost > room {
             break;
         }
@@ -410,9 +410,8 @@ fn sent(summary: &str, item: Option<&str>, log: &[LogLine], budget: usize) -> Se
         first_line = index;
     }
     if first_line < log.len() {
-        let lines: Vec<&str> = log[first_line..].iter().map(LogLine::text).collect();
         address.push_str("&log=");
-        address.push_str(&encode(&lines.join("\n")));
+        address.push_str(&encode(&joined(&log[first_line..])));
     }
     Sent {
         address,
