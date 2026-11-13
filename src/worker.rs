@@ -106,7 +106,7 @@ pub struct Worker<E, C = Infallible> {
     thread: Option<JoinHandle<()>>,
     /// The thread has one thing to do, then ends by itself (a check made once); any other ends
     /// only when told to.
-    once: bool,
+    ends_by_itself: bool,
 }
 
 impl<E: Send + 'static, C: Send + 'static> Worker<E, C> {
@@ -143,7 +143,7 @@ impl<E: Send + 'static, C: Send + 'static> Worker<E, C> {
             events,
             orders: Some(orders),
             thread: Some(thread),
-            once: false,
+            ends_by_itself: false,
         }
     }
 
@@ -159,12 +159,13 @@ impl<E: Send + 'static, C: Send + 'static> Worker<E, C> {
         body: impl FnOnce(&Outbox<E, C>, &dyn Fn()) + Send + 'static,
     ) -> Self {
         let mut worker = Self::spawn(name, on_drop, wake, body);
-        worker.once = true;
+        worker.ends_by_itself = true;
         worker
     }
 
-    /// Gives `order` to the thread, which takes it at its next wait; a thread that ended
-    /// ignores it.
+    /// Gives `order` to the thread, which takes it at its next wait. A thread that ended
+    /// ignores it, without a word here: its end is told by [`Self::receive`], which the owner
+    /// of the worker calls at every frame, rather than by each order.
     pub fn order(&self, order: C) {
         if let Some(orders) = &self.orders {
             let _ = orders.send(order);
@@ -195,7 +196,7 @@ impl<E: Send + 'static, C: Send + 'static> Worker<E, C> {
             log::error!("The {} thread stopped", self.name);
             return true;
         }
-        if self.once {
+        if self.ends_by_itself {
             log::info!("The {} thread ended", self.name);
             return false;
         }
@@ -357,6 +358,27 @@ mod tests {
         assert_eq!(received, [1]);
         assert!(!worker.receive(|event| received.push(event)));
         assert!(worker.thread.is_none(), "joined");
+    }
+
+    #[test]
+    fn an_order_given_to_a_thread_that_ended_is_ignored() {
+        let (woken, wakes) = mpsc::channel();
+        let mut worker = Worker::<(), &str>::spawn_once(
+            "test",
+            OnDrop::Join,
+            move || {
+                let _ = woken.send(());
+            },
+            |_, _| {},
+        );
+        wakes
+            .recv_timeout(Duration::from_secs(5))
+            .expect("woken up when the thread ends");
+        assert!(!worker.receive(|()| {}));
+
+        worker.order("refresh");
+
+        assert!(!worker.receive(|()| {}));
     }
 
     #[test]
