@@ -28,6 +28,7 @@ impl PriceCache {
         Self { directory }
     }
 
+    /// The cache in `directory`, for the tests.
     #[cfg(test)]
     pub fn in_directory(directory: PathBuf) -> Self {
         Self {
