@@ -253,16 +253,10 @@ impl<D: PriceDatabase> Watch<'_, D> {
     fn run(mut self, league: Option<League>) {
         let mut waited = league.map(Waited::Order);
         loop {
-            if let Some(waited) = waited.take() {
-                match self.latest(waited) {
-                    Waited::Order(league) => {
-                        if !self.switch(league) {
-                            return;
-                        }
-                    }
-                    Waited::Stop => return,
-                    Waited::Elapsed => {}
-                }
+            if let Some(waited) = waited.take()
+                && !self.follow(waited)
+            {
+                return;
             }
             let mut reachable = true;
             if Instant::now() >= self.leagues_due {
@@ -272,30 +266,47 @@ impl<D: PriceDatabase> Watch<'_, D> {
                     return;
                 }
             }
-            if let Some(pricing) = &mut self.pricing
-                && Instant::now() >= pricing.due
-            {
-                if reachable {
-                    let due = pricing.clone();
-                    match self.read_prices(due) {
-                        Downloaded::Done(event) => {
-                            if !self.send(event) {
-                                return;
-                            }
-                        }
-                        Downloaded::Interrupted(interruption) => {
-                            waited = Some(interruption);
-                            continue;
+            match self.due_pricing() {
+                Some(pricing) if reachable => match self.read_prices(pricing) {
+                    Downloaded::Done(event) => {
+                        if !self.send(event) {
+                            return;
                         }
                     }
-                } else {
-                    // One request per minute while the database can't be reached: the
-                    // prices wait for the leagues to be read again.
-                    pricing.due = self.leagues_due;
+                    Downloaded::Interrupted(interruption) => {
+                        waited = Some(interruption);
+                        continue;
+                    }
+                },
+                // One request per minute while the database can't be reached: the prices
+                // wait for the leagues to be read again.
+                Some(pricing) => {
+                    self.pricing = Some(Pricing {
+                        due: self.leagues_due,
+                        ..pricing
+                    });
                 }
+                None => {}
             }
             waited = Some(self.outbox.wait_for_order(self.until_due()));
         }
+    }
+
+    /// Follows what the application asked while the thread waited; `false` when the thread
+    /// stops.
+    fn follow(&mut self, waited: Waited<League>) -> bool {
+        match self.latest(waited) {
+            Waited::Order(league) => self.switch(league),
+            Waited::Stop => false,
+            Waited::Elapsed => true,
+        }
+    }
+
+    /// The league whose prices are due now, if any.
+    fn due_pricing(&self) -> Option<Pricing> {
+        self.pricing
+            .clone()
+            .filter(|pricing| Instant::now() >= pricing.due)
     }
 
     /// The last thing the application asked, when `waited` is an order: the leagues the
