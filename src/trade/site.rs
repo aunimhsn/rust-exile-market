@@ -10,9 +10,9 @@ use std::time::{Duration, Instant, SystemTime};
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
 
-use super::client::{Network, Request, Transport};
 use super::limits;
 use super::refusal::Refusal;
+use super::transport::{Network, Request, Transport};
 use crate::game_data::TradeGroup;
 use crate::http::{self, HttpError, Pace};
 use crate::item_names::{ItemNames, Names, StatTemplate, UniqueName, UniqueNames};
@@ -419,9 +419,9 @@ fn unique_name(item: &ApiItem) -> Option<UniqueName> {
 mod tests {
     use super::*;
     use crate::language::PerLanguage;
-    use crate::trade::client::Answer;
-    use crate::trade::client::tests::FakeSite;
     use crate::trade::limits::LimitHeaders;
+    use crate::trade::transport::Answer;
+    use crate::trade::transport::tests::FakeSite;
 
     /// The shape of `/data/items` on www.pathofexile.com on 2026-10-25, a few items of it.
     const ENGLISH_ITEMS: &str = r#"{"result": [

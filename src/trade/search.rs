@@ -7,10 +7,11 @@
 use std::thread;
 use std::time::{Duration, Instant};
 
-use super::client::{FETCH_SIZE, TradeClient, TradeError, Transport};
+use super::client::{FETCH_SIZE, TradeClient, TradeError};
 use super::offers::{ExchangeOffer, ItemOffer};
 use super::query::{Query, SearchKind};
 use super::refusal::Refusal;
+use super::transport::Transport;
 use crate::http::HttpError;
 use crate::language::Language;
 use crate::league::League;
@@ -314,8 +315,9 @@ impl<T: Transport> Searches<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::trade::client::tests::{FakeSite, SEARCH, limits, ring};
+    use crate::trade::client::tests::{SEARCH, ring};
     use crate::trade::limits::LimitHeaders;
+    use crate::trade::transport::tests::{FakeSite, limits};
     use std::sync::mpsc::{self, Receiver};
 
     /// One offer of `/fetch`, shortened.
