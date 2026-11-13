@@ -52,24 +52,31 @@ pub struct ItemOffers {
     pub first_page: usize,
     /// The offers left to fetch, of this search.
     pub rest: Rest,
-    /// The next offers are asked.
-    pub loading_more: bool,
-    /// Why the next offers couldn't come. Refused by its limits, the waiting block tells it
-    /// already: `None`.
-    pub more_failed: Option<Failure>,
+    pub next: NextOffers,
     /// What the search filtered.
     pub searched_by: SearchedBy,
     pub searched: SystemTime,
 }
 
-impl ItemOffers {
-    /// The offers once the next ones are no longer awaited, with why they couldn't come, if
-    /// they couldn't.
-    fn done_loading(self, more_failed: Option<Failure>) -> Self {
-        Self {
-            loading_more: false,
-            more_failed,
-            ..self
+/// What became of the next offers of a search of items.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NextOffers {
+    /// None is asked: not yet, or those asked came, or were refused by the limits of the trade
+    /// site, which the waiting block tells already.
+    NotAwaited,
+    /// They are asked, and their answer awaited.
+    Loading,
+    /// They couldn't come, for this reason.
+    Failed(Failure),
+}
+
+impl NextOffers {
+    /// Why the next offers couldn't come, if they couldn't.
+    #[must_use]
+    pub fn failure(self) -> Option<Failure> {
+        match self {
+            Self::Failed(failure) => Some(failure),
+            Self::NotAwaited | Self::Loading => None,
         }
     }
 }
@@ -174,7 +181,10 @@ impl Offers {
             pending.shown = false;
         }
         match std::mem::replace(&mut self.state, back) {
-            OffersState::Items(items) => OffersState::Items(items.done_loading(None)),
+            OffersState::Items(items) => OffersState::Items(ItemOffers {
+                next: NextOffers::NotAwaited,
+                ..items
+            }),
             exchange @ OffersState::Exchange { .. } => exchange,
             // A failure belongs to the moment it was told.
             OffersState::Idle
@@ -229,8 +239,7 @@ impl Offers {
                 None
             }
             OffersState::Items(items) if !busy && !items.rest.is_empty() => {
-                items.loading_more = true;
-                items.more_failed = None;
+                items.next = NextOffers::Loading;
                 self.pending = Some(Pending {
                     order: PendingOrder::More,
                     shown: true,
@@ -323,8 +332,7 @@ impl Offers {
                 offers,
                 total,
                 rest,
-                loading_more: false,
-                more_failed: None,
+                next: NextOffers::NotAwaited,
                 searched_by: match pending.order {
                     PendingOrder::Search { searched_by, .. } => searched_by,
                     PendingOrder::More => SearchedBy::default(),
@@ -340,18 +348,25 @@ impl Offers {
             (Outcome::More { offers: next, rest }, OffersState::Items(mut items)) => {
                 items.offers.extend(next);
                 items.rest = rest;
-                OffersState::Items(items.done_loading(None))
+                items.next = NextOffers::NotAwaited;
+                OffersState::Items(items)
             }
             // More offers that couldn't come: the offers shown stay, to ask them again.
             (Outcome::Failed(failure), OffersState::Items(items))
                 if pending.order == PendingOrder::More =>
             {
-                OffersState::Items(items.done_loading(Some(failure)))
+                OffersState::Items(ItemOffers {
+                    next: NextOffers::Failed(failure),
+                    ..items
+                })
             }
             (Outcome::Limited { .. }, OffersState::Items(items))
                 if pending.order == PendingOrder::More =>
             {
-                OffersState::Items(items.done_loading(None))
+                OffersState::Items(ItemOffers {
+                    next: NextOffers::NotAwaited,
+                    ..items
+                })
             }
             (Outcome::Failed(failure), _) => OffersState::Failed(failure),
             (Outcome::Limited { .. }, _) => OffersState::Limited,

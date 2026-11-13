@@ -21,7 +21,7 @@ use super::theme::{color, size, text};
 use super::{icons, widgets};
 use crate::i18n::{Message, Translator};
 use crate::item::Item;
-use crate::offers_state::{ItemOffers, LONG_WAIT, Offers, OffersState};
+use crate::offers_state::{ItemOffers, LONG_WAIT, NextOffers, Offers, OffersState};
 use crate::price::estimate::Reference;
 use crate::roll_difference::CopiedLines;
 use crate::trade::offers::{ExchangeOffer, ItemOffer};
@@ -268,7 +268,7 @@ impl<'a> List<'a> {
             items: Some(&items.offers),
             total: items.total,
             more: More::of_items(items),
-            more_failed: items.more_failed,
+            more_failed: items.next.failure(),
             searched: items.searched,
         }
     }
@@ -327,12 +327,10 @@ impl More {
     /// What is under the offers of a search of items, `items`: the spinner while the next ones
     /// come, the chevron while some are left to fetch.
     fn of_items(items: &ItemOffers) -> Self {
-        if items.loading_more {
-            Self::Loading
-        } else if items.rest.is_empty() {
-            Self::None
-        } else {
-            Self::Chevron
+        match items.next {
+            NextOffers::Loading => Self::Loading,
+            NextOffers::NotAwaited | NextOffers::Failed(_) if items.rest.is_empty() => Self::None,
+            NextOffers::NotAwaited | NextOffers::Failed(_) => Self::Chevron,
         }
     }
 }

@@ -289,7 +289,7 @@ fn more_offers_of_items_are_fetched_and_added_to_the_list() {
     assert!(matches!(
         offers.state(),
         OffersState::Items(ItemOffers {
-            loading_more: true,
+            next: NextOffers::Loading,
             ..
         })
     ));
@@ -302,7 +302,7 @@ fn more_offers_of_items_are_fetched_and_added_to_the_list() {
     assert_eq!(ids(&offers), ["a", "b", "c"]);
     assert!(matches!(
         offers.state(),
-        OffersState::Items(ItemOffers { rest, loading_more: false, searched, .. })
+        OffersState::Items(ItemOffers { rest, next: NextOffers::NotAwaited, searched, .. })
             if rest.is_empty() && *searched == SystemTime::UNIX_EPOCH
     ));
     assert!(
@@ -335,7 +335,7 @@ fn more_offers_that_cant_come_keep_the_list_to_ask_them_again() {
     assert!(matches!(
         offers.state(),
         OffersState::Items(ItemOffers {
-            more_failed: Some(Failure::Unreadable),
+            next: NextOffers::Failed(Failure::Unreadable),
             ..
         })
     ));
@@ -344,8 +344,7 @@ fn more_offers_that_cant_come_keep_the_list_to_ask_them_again() {
         matches!(
             offers.state(),
             OffersState::Items(ItemOffers {
-                more_failed: None,
-                loading_more: true,
+                next: NextOffers::Loading,
                 ..
             })
         ),
@@ -485,7 +484,7 @@ fn refused_more_offers_wait_as_the_limits_of_the_fetch_tell() {
         matches!(
             offers.state(),
             OffersState::Items(ItemOffers {
-                more_failed: None,
+                next: NextOffers::NotAwaited,
                 ..
             })
         ),
@@ -590,8 +589,7 @@ fn the_offers_of_an_item_left_keep_its_list_but_not_a_failure_nor_a_search_under
     assert!(matches!(
         &left,
         OffersState::Items(ItemOffers {
-            loading_more: false,
-            more_failed: None,
+            next: NextOffers::NotAwaited,
             rest,
             ..
         }) if !rest.is_empty()

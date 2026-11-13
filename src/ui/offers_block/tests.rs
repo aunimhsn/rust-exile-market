@@ -28,20 +28,24 @@ fn the_offers_of_items_show_the_chevron_while_some_are_left_and_the_spinner_whil
         total: 12,
         first_page: 1,
         rest: Rest::new(Language::English, "Q2", &["x"]),
-        loading_more: false,
-        more_failed: None,
+        next: NextOffers::NotAwaited,
         searched_by: SearchedBy::default(),
         searched: SystemTime::UNIX_EPOCH,
     };
     assert_eq!(More::of_items(&items), More::Chevron);
 
-    items.loading_more = true;
+    items.next = NextOffers::Loading;
     assert_eq!(More::of_items(&items), More::Loading);
+
+    items.next = NextOffers::Failed(Failure::Unreachable);
+    assert_eq!(More::of_items(&items), More::Chevron, "to ask them again");
+
+    items.next = NextOffers::Loading;
 
     items.rest = Rest::new(Language::English, "Q2", &[]);
     assert_eq!(More::of_items(&items), More::Loading, "the last ones come");
 
-    items.loading_more = false;
+    items.next = NextOffers::NotAwaited;
     assert_eq!(More::of_items(&items), More::None);
 }
 

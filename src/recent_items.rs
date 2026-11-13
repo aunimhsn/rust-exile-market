@@ -96,8 +96,8 @@ mod tests {
     use super::*;
     use crate::filters::{Filter, FilterKey, Half, Property};
     use crate::language::Language;
-    use crate::offers_state::ItemOffers;
     use crate::offers_state::tests::{after, answer, exchange_search, item_search};
+    use crate::offers_state::{ItemOffers, NextOffers};
     use crate::trade::search::{Order, Outcome, Rest};
 
     fn ring(name: &str) -> CopiedItem {
@@ -310,7 +310,7 @@ mod tests {
             shown.offers.state(),
             OffersState::Items(ItemOffers {
                 total: 11,
-                loading_more: false,
+                next: NextOffers::NotAwaited,
                 ..
             })
         ));
