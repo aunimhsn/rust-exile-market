@@ -160,6 +160,61 @@ pub fn not_allowed_sign(ui: &mut Ui, size: Vec2) -> Response {
     response
 }
 
+/// What lies under a floating list shows through it a little: the item under the leagues, the
+/// settings under the keys.
+pub const FLOATING_LIST_OPACITY: f32 = 0.94;
+
+/// A list floating over the window, in the foreground: the leagues, the keys of the hotkey.
+pub struct FloatingList {
+    pub id: egui::Id,
+    pub top_left: Pos2,
+    pub size: Vec2,
+    /// How much of it shows, from 0 (closed) to 1 (open), as it opens and closes.
+    pub shown: f32,
+    /// Whether it is open, not closing: only then do its rows take the pointer, and a click
+    /// outside closes it.
+    pub is_open: bool,
+}
+
+impl FloatingList {
+    /// Draws the list, its shadow then its rows, which `add` draws in its rect; what the player
+    /// did: what `add` gives, else `close` at a click outside the open list.
+    pub fn show<A>(
+        self,
+        ctx: &egui::Context,
+        close: A,
+        add: impl FnOnce(&mut Ui, Rect) -> Option<A>,
+    ) -> Option<A> {
+        egui::Area::new(self.id)
+            .order(egui::Order::Foreground)
+            .fixed_pos(self.top_left)
+            .interactable(self.is_open)
+            .show(ctx, |ui| {
+                ui.multiply_opacity(self.shown);
+                let list = Rect::from_min_size(ui.next_widget_position(), self.size);
+                ui.painter().add(
+                    super::theme::floating_shadow()
+                        .as_shape(list, CornerRadius::same(size::RADIUS)),
+                );
+                let action = add(ui, list);
+                ui.allocate_rect(list, Sense::hover());
+                action.or_else(|| (self.is_open && clicked_outside(ui, list)).then_some(close))
+            })
+            .inner
+    }
+}
+
+/// Whether a click of this frame fell outside `rect`.
+fn clicked_outside(ui: &Ui, rect: Rect) -> bool {
+    ui.input(|input| {
+        input.pointer.any_click()
+            && input
+                .pointer
+                .interact_pos()
+                .is_some_and(|pointer| !rect.contains(pointer))
+    })
+}
+
 /// A line of text.
 #[must_use]
 pub fn text_line(ui: &Ui, text: impl Into<String>, font: FontId) -> Arc<Galley> {
@@ -185,6 +240,28 @@ pub fn truncated_line(
         TextFormat::simple(font, Color32::PLACEHOLDER),
         Some(max_width),
     )
+}
+
+/// A text wrapped at `max_width`.
+#[must_use]
+pub fn wrapped_line(ui: &Ui, text: &str, font: FontId, max_width: f32) -> Arc<Galley> {
+    ui.painter()
+        .layout(text.to_owned(), font, Color32::PLACEHOLDER, max_width)
+}
+
+/// `text` wrapped at the width of `ui`, on a row across it, in `tint`.
+pub fn wrapped_text(ui: &mut Ui, text: &str, font: FontId, tint: Color32) {
+    let galley = wrapped_line(ui, text, font, ui.available_width());
+    text_row(ui, galley, 0.0, tint);
+}
+
+/// A row across the width of `ui`, as tall as `galley`, which it draws `inset` from its left
+/// in `tint`.
+pub fn text_row(ui: &mut Ui, galley: Arc<Galley>, inset: f32, tint: Color32) {
+    let (rect, _) =
+        ui.allocate_exact_size(vec2(ui.available_width(), galley.size().y), Sense::hover());
+    ui.painter()
+        .galley(pos2(rect.left() + inset, rect.top()), galley, tint);
 }
 
 /// A line of text with extra space between its letters, for the small uppercase labels.

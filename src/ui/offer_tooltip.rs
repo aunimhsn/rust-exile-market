@@ -471,22 +471,17 @@ impl OfferTooltip<'_> {
         let i18n = self.i18n;
         self.head(ui);
         ui.add_space(META_GAP);
-        let galley =
-            ui.painter()
-                .layout_job(meta(self.offer, self.item, i18n, ui.available_width()));
-        let (rect, _) =
-            ui.allocate_exact_size(vec2(ui.available_width(), galley.size().y), Sense::hover());
-        ui.painter().galley(rect.min, galley, color::WEAK);
+        let meta = ui
+            .painter()
+            .layout_job(meta(self.offer, self.item, i18n, ui.available_width()));
+        widgets::text_row(ui, meta, 0.0, color::WEAK);
         if let Some(job) = requirements(self.offer, self.item, i18n, ui.available_width()) {
             ui.add_space(META_GAP);
-            let galley = ui.painter().layout_job(job);
-            let (rect, _) =
-                ui.allocate_exact_size(vec2(ui.available_width(), galley.size().y), Sense::hover());
-            ui.painter().galley(rect.min, galley, color::WEAK);
+            widgets::text_row(ui, ui.painter().layout_job(job), 0.0, color::WEAK);
         }
         if self.suspicious {
             ui.add_space(WARNING_GAP);
-            text_block(
+            widgets::wrapped_text(
                 ui,
                 &i18n.text(Message::OffersSuspicious),
                 text::note(),
@@ -498,7 +493,7 @@ impl OfferTooltip<'_> {
             .is_some_and(|catalyst| self.offer.has_other_quality(catalyst))
         {
             ui.add_space(WARNING_GAP);
-            text_block(
+            widgets::wrapped_text(
                 ui,
                 &i18n.text(Message::OffersOtherQuality),
                 text::note(),
@@ -642,19 +637,6 @@ pub fn reach(area: Rect, row: Rect) -> Rect {
         pos2(area.left().min(row.left()), top),
         pos2(area.right().max(row.right()), bottom.max(top)),
     )
-}
-
-/// A text wrapped at the width of `ui`.
-fn text_block(ui: &mut Ui, line: &str, font: egui::FontId, tint: Color32) {
-    let galley = ui.painter().layout(
-        line.to_owned(),
-        font,
-        Color32::PLACEHOLDER,
-        ui.available_width(),
-    );
-    let (rect, _) =
-        ui.allocate_exact_size(vec2(ui.available_width(), galley.size().y), Sense::hover());
-    ui.painter().galley(rect.min, galley, tint);
 }
 
 /// A group of modifiers under a thin line, each with its difference on the right.
