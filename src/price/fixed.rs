@@ -43,7 +43,7 @@ pub enum NoFixedPrice {
 
 /// The price of `item` among `prices`, none before they arrive; `names` find the items
 /// copied in French, and the uniques an unidentified item can be.
-pub fn fixed_price<'a>(
+pub fn price_of<'a>(
     item: &Item,
     prices: Option<&'a PriceList>,
     names: Option<&'a ItemNames>,
@@ -177,7 +177,7 @@ mod tests {
         names: Option<&ItemNames>,
     ) -> Result<String, NoFixedPrice> {
         let item = Item::parse(&CopiedItem::from_text(text).expect("an item")).expect("read");
-        fixed_price(&item, Some(prices), names).map(|price| match price {
+        price_of(&item, Some(prices), names).map(|price| match price {
             FixedPrice::Currency(currency) => currency.exchange_id.clone(),
             FixedPrice::Unique(unique) => unique.name.clone(),
             FixedPrice::Uniques(candidates) => candidates
@@ -282,11 +282,11 @@ mod tests {
         let parse = |text| Item::parse(&CopiedItem::from_text(text).unwrap()).unwrap();
 
         assert_eq!(
-            fixed_price(&parse(orb), None, None),
+            price_of(&parse(orb), None, None),
             Err(NoFixedPrice::PricesUnknown)
         );
         assert_eq!(
-            fixed_price(&parse(rare), None, None),
+            price_of(&parse(rare), None, None),
             Err(NoFixedPrice::NotFixedName)
         );
     }

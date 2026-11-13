@@ -54,9 +54,9 @@ pub struct Price {
     pub currency: String,
 }
 
-/// The currency of the prices of the trade site `id`; `None` for another currency.
+/// The currency the prices show in for the trade site id `id`; `None` for another currency.
 #[must_use]
-pub fn currency(id: &str) -> Option<Currency> {
+pub fn shown_currency(id: &str) -> Option<Currency> {
     match id {
         "exalted" => Some(Currency::Exalted),
         "divine" => Some(Currency::Divine),

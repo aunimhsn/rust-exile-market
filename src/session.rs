@@ -188,7 +188,7 @@ fn unique_rolls(
     names: Option<&ItemNames>,
     prices: Option<&PriceList>,
 ) -> Vec<Modifier> {
-    match fixed::fixed_price(item, prices, names) {
+    match fixed::price_of(item, prices, names) {
         Ok(FixedPrice::Unique(unique)) => game_data::with_unique_rolls(
             item.language(),
             copied,
@@ -462,7 +462,7 @@ impl Session {
     /// rates of the currencies of these prices.
     pub fn fixed_price(&self, item: &Item) -> Result<(FixedPrice<'_>, Rates), NoFixedPrice> {
         let prices = self.league_prices().map(|prices| &prices.list);
-        let price = fixed::fixed_price(item, prices, self.item_names.as_ref())?;
+        let price = fixed::price_of(item, prices, self.item_names.as_ref())?;
         // A price comes from the prices, which have their rates.
         let rates = prices.ok_or(NoFixedPrice::PricesUnknown)?.rates;
         Ok((price, rates))
