@@ -14,12 +14,9 @@ fn facts(league: Option<&League>) -> Facts<'_> {
     }
 }
 
+/// `text`, a line of the log already written short.
 fn line(text: &str) -> LogLine {
-    LogLine {
-        text: text.to_owned(),
-        level: Some(Level::Info),
-        hidden: None,
-    }
+    short_lines(text, None).pop().expect("one line")
 }
 
 /// `count` lines of the log, numbered, of about 60 characters each once encoded.
@@ -136,7 +133,7 @@ fn the_address_keeps_the_last_lines_of_the_log_that_fit() {
     assert_eq!(
         decoded,
         sent.iter()
-            .map(|line| line.text.as_str())
+            .map(LogLine::text)
             .collect::<Vec<_>>()
             .join("\n"),
         "the preview shows exactly the lines sent"
@@ -345,7 +342,7 @@ fn without_a_log_nothing_is_copied() {
 #[test]
 fn an_empty_previous_log_offers_no_choice() {
     let mut report = Report::new("Exile Market 0.1.0".to_owned(), None, Some(log(3)))
-        .with_previous(vec![line(""), line("  ")], true);
+        .with_previous(short_lines("\n  ", None), true);
     report.choose(LogSession::Previous);
 
     assert!(!report.has_previous());

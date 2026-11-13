@@ -51,17 +51,57 @@ impl Level {
     }
 }
 
-/// A line of the log written short.
+/// A line of the log written short, built by [`short_lines`] alone, which holds the invariant of
+/// `hidden`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LogLine {
     /// `18:48:03 INFO Item copied: Item Class: Belts`; a line of a message on several lines as
     /// it is.
-    pub text: String,
+    text: String,
     /// The level of its message; a line of a message on several lines has the level of its
     /// first line.
-    pub level: Option<Level>,
-    /// Where "another window" stands in `text`, to draw it apart.
-    pub hidden: Option<Range<usize>>,
+    level: Option<Level>,
+    /// Where "another window" stands in `text`: in its bounds and on character boundaries,
+    /// since it is the range [`without_other_window`] wrote it in.
+    hidden: Option<Range<usize>>,
+}
+
+/// A line of the log around "another window", to draw it apart.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct HidingParts<'a> {
+    pub before: &'a str,
+    /// "another window".
+    pub hidden: &'a str,
+    pub after: &'a str,
+}
+
+impl LogLine {
+    /// `18:48:03 INFO Item copied: Item Class: Belts`; a line of a message on several lines as
+    /// it is.
+    #[must_use]
+    pub fn text(&self) -> &str {
+        &self.text
+    }
+
+    /// The level of its message; a line of a message on several lines has the level of its
+    /// first line.
+    #[must_use]
+    pub fn level(&self) -> Option<Level> {
+        self.level
+    }
+
+    /// The line around "another window"; none when it names no other window.
+    #[must_use]
+    pub fn hiding_parts(&self) -> Option<HidingParts<'_>> {
+        let hidden = self.hidden.as_ref()?;
+        // `get` rather than an index: a broken invariant draws the line whole, never closes
+        // the panel of the bug report with a panic.
+        Some(HidingParts {
+            before: self.text.get(..hidden.start)?,
+            hidden: self.text.get(hidden.clone())?,
+            after: self.text.get(hidden.end..)?,
+        })
+    }
 }
 
 /// The lines of `log`, the text of a log file, written short; `home`, the home folder, written
@@ -257,8 +297,43 @@ mod tests {
             lines[0].text,
             "18:51:09 INFO The active window, of class another window, isn't the game"
         );
-        let hidden = lines[0].hidden.clone().expect("hidden");
-        assert_eq!(&lines[0].text[hidden], ANOTHER_WINDOW);
+        assert_eq!(
+            lines[0].hiding_parts(),
+            Some(HidingParts {
+                before: "18:51:09 INFO The active window, of class ",
+                hidden: ANOTHER_WINDOW,
+                after: ", isn't the game",
+            })
+        );
+    }
+
+    /// The interface review of 2026-11-10: the range is computed here and drawn by the panel.
+    #[test]
+    fn another_window_is_cut_out_whole_among_characters_of_several_bytes() {
+        let log = "2026-11-04T18:51:09.7+01:00 [INFO] Fenêtre active, of class épée (été), \
+                   isn't the game\n\
+                   2026-11-04T18:51:10.0+01:00 [INFO] Copié to the window of class 日本 (Ctrl \
+                   still held)\n\
+                   2026-11-04T18:51:11.0+01:00 [INFO] Something of class ü";
+
+        let lines = short_lines(log, None);
+
+        assert_eq!(lines.len(), 3);
+        for line in &lines {
+            let parts = line.hiding_parts().expect("a window hidden");
+            assert_eq!(parts.hidden, ANOTHER_WINDOW, "{}", line.text());
+            assert_eq!(
+                [parts.before, parts.hidden, parts.after].concat(),
+                line.text()
+            );
+        }
+    }
+
+    #[test]
+    fn a_line_without_another_window_has_no_part_to_hide() {
+        let lines = short_lines("2026-11-04T18:48:03.0+01:00 [INFO] Prices loaded", None);
+
+        assert_eq!(lines[0].hiding_parts(), None);
     }
 
     #[test]

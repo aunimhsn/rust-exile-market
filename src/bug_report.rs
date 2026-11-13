@@ -19,8 +19,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use directories::BaseDirs;
 
 #[cfg(test)]
-pub use self::short_log::ANOTHER_WINDOW;
-pub use self::short_log::{Level, LogLine};
+pub use self::short_log::{ANOTHER_WINDOW, short_lines};
+pub use self::short_log::{HidingParts, Level, LogLine};
 use crate::language::Language;
 use crate::league::{League, LeagueMode};
 use crate::settings::HotkeySetting;
@@ -165,7 +165,7 @@ impl Report {
     /// The report with the log of the previous session, `lines`, chosen at once when that session
     /// `crashed`; a session stopped before its first line has nothing to show, nor to choose.
     fn with_previous(mut self, lines: Vec<LogLine>, crashed: bool) -> Self {
-        if lines.iter().all(|line| line.text.trim().is_empty()) {
+        if lines.iter().all(|line| line.text().trim().is_empty()) {
             return self;
         }
         self.previous_log = Some(lines);
@@ -278,12 +278,13 @@ impl Report {
     #[must_use]
     pub fn whole_log(&self) -> Option<String> {
         self.log().map(|log| {
-            let mut whole = String::with_capacity(log.iter().map(|line| line.text.len() + 1).sum());
+            let mut whole =
+                String::with_capacity(log.iter().map(|line| line.text().len() + 1).sum());
             for (index, line) in log.iter().enumerate() {
                 if index > 0 {
                     whole.push('\n');
                 }
-                whole.push_str(&line.text);
+                whole.push_str(line.text());
             }
             whole
         })
@@ -396,7 +397,7 @@ fn sent(summary: &str, item: Option<&str>, log: &[LogLine], budget: usize) -> Se
     let mut room = budget.saturating_sub(address.len() + "&log=".len());
     let mut first_line = log.len();
     for (index, line) in log.iter().enumerate().rev() {
-        let cost = encoded_len(&line.text)
+        let cost = encoded_len(line.text())
             + if first_line == log.len() {
                 0
             } else {
@@ -409,10 +410,7 @@ fn sent(summary: &str, item: Option<&str>, log: &[LogLine], budget: usize) -> Se
         first_line = index;
     }
     if first_line < log.len() {
-        let lines: Vec<&str> = log[first_line..]
-            .iter()
-            .map(|line| line.text.as_str())
-            .collect();
+        let lines: Vec<&str> = log[first_line..].iter().map(LogLine::text).collect();
         address.push_str("&log=");
         address.push_str(&encode(&lines.join("\n")));
     }
