@@ -1,7 +1,7 @@
 use super::*;
 use crate::language::Language;
 use crate::league::League;
-use crate::trade::offers::{OfferItem, Price, SellerStatus};
+use crate::trade::offers::fixtures::{exchange_offer, item_offer};
 use crate::trade::query::{ItemQuery, Query, RulesOut, StateFilters};
 
 pub(crate) fn item_search() -> Search {
@@ -31,47 +31,11 @@ pub(crate) fn exchange_search() -> Search {
     }
 }
 
+/// An offer of the item `id` for one Divine Orb.
 fn offer(id: &str) -> ItemOffer {
     ItemOffer {
         id: id.to_owned(),
-        price: Some(Price {
-            amount: 1.0,
-            currency: "divine".to_owned(),
-        }),
-        seller: SellerStatus::Online,
-        listed: None,
-        whisper: String::new(),
-        item: OfferItem {
-            rarity: None,
-            name: None,
-            base_type: "Gold Ring".to_owned(),
-            item_level: None,
-            corrupted: false,
-            quality: None,
-            gem_level: None,
-            gem_sockets: None,
-            requirements: crate::item::Requirements::default(),
-            waystone_properties: Vec::new(),
-            waystone_unread: false,
-            modifiers: Vec::new(),
-        },
-    }
-}
-
-fn exchange_offer() -> ExchangeOffer {
-    ExchangeOffer {
-        seller: SellerStatus::Online,
-        listed: None,
-        pay: Price {
-            amount: 750.0,
-            currency: "exalted".to_owned(),
-        },
-        get: Price {
-            amount: 1.0,
-            currency: "divine".to_owned(),
-        },
-        stock: 3,
-        whisper: String::new(),
+        ..item_offer(1.0, "divine")
     }
 }
 
@@ -240,7 +204,9 @@ fn the_quality_searched_lasts_with_its_offers_until_the_next_search() {
 
 fn ids(offers: &Offers) -> Vec<String> {
     match offers.state() {
-        OffersState::Items { offers, .. } => offers.iter().map(|offer| offer.id.clone()).collect(),
+        OffersState::Items(ItemOffers { offers, .. }) => {
+            offers.iter().map(|offer| offer.id.clone()).collect()
+        }
         state => panic!("no offers of items: {state:?}"),
     }
 }
@@ -322,10 +288,10 @@ fn more_offers_of_items_are_fetched_and_added_to_the_list() {
     assert_eq!(offers.more(), None, "once at a time");
     assert!(matches!(
         offers.state(),
-        OffersState::Items {
-            loading_more: true,
+        OffersState::Items(ItemOffers {
+            next: NextOffers::Loading,
             ..
-        }
+        })
     ));
     let outcome = Outcome::More {
         offers: vec![offer("c")],
@@ -336,11 +302,14 @@ fn more_offers_of_items_are_fetched_and_added_to_the_list() {
     assert_eq!(ids(&offers), ["a", "b", "c"]);
     assert!(matches!(
         offers.state(),
-        OffersState::Items { rest, loading_more: false, searched, .. }
+        OffersState::Items(ItemOffers { rest, next: NextOffers::NotAwaited, searched, .. })
             if rest.is_empty() && *searched == SystemTime::UNIX_EPOCH
     ));
     assert!(
-        matches!(offers.state(), OffersState::Items { first_page: 2, .. }),
+        matches!(
+            offers.state(),
+            OffersState::Items(ItemOffers { first_page: 2, .. })
+        ),
         "the next offers aren't in the answer to the search"
     );
     assert_eq!(offers.more(), None, "none left");
@@ -365,20 +334,19 @@ fn more_offers_that_cant_come_keep_the_list_to_ask_them_again() {
     assert_eq!(ids(&offers), ["a"]);
     assert!(matches!(
         offers.state(),
-        OffersState::Items {
-            more_failed: Some(Failure::Unreadable),
+        OffersState::Items(ItemOffers {
+            next: NextOffers::Failed(Failure::Unreadable),
             ..
-        }
+        })
     ));
     assert_eq!(offers.more(), Some(Order::More(rest(true))));
     assert!(
         matches!(
             offers.state(),
-            OffersState::Items {
-                more_failed: None,
-                loading_more: true,
+            OffersState::Items(ItemOffers {
+                next: NextOffers::Loading,
                 ..
-            }
+            })
         ),
         "asked again"
     );
@@ -515,10 +483,10 @@ fn refused_more_offers_wait_as_the_limits_of_the_fetch_tell() {
     assert!(
         matches!(
             offers.state(),
-            OffersState::Items {
-                more_failed: None,
+            OffersState::Items(ItemOffers {
+                next: NextOffers::NotAwaited,
                 ..
-            }
+            })
         ),
         "the waiting block tells the refusal"
     );
@@ -620,12 +588,11 @@ fn the_offers_of_an_item_left_keep_its_list_but_not_a_failure_nor_a_search_under
 
     assert!(matches!(
         &left,
-        OffersState::Items {
-            loading_more: false,
-            more_failed: None,
+        OffersState::Items(ItemOffers {
+            next: NextOffers::NotAwaited,
             rest,
             ..
-        } if !rest.is_empty()
+        }) if !rest.is_empty()
     ));
     assert_eq!(offers.state(), &OffersState::Idle);
     // The next offers of the item left come to nothing.

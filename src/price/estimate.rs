@@ -153,11 +153,10 @@ fn median(sorted: &[f64]) -> Option<f64> {
 
 #[cfg(test)]
 mod tests {
-    use std::time::SystemTime;
-
     use super::*;
     use crate::item::QualityKind;
-    use crate::trade::offers::{OfferItem, OfferQuality, Price, SellerStatus};
+    use crate::trade::offers::OfferQuality;
+    use crate::trade::offers::fixtures::item_offer;
 
     const RATES: Rates = Rates {
         chaos: 70.0,
@@ -168,44 +167,17 @@ mod tests {
         currencies: &[],
     };
 
-    fn offer(amount: f64, currency: &str) -> ItemOffer {
-        ItemOffer {
-            id: "a".to_owned(),
-            price: Some(Price {
-                amount,
-                currency: currency.to_owned(),
-            }),
-            seller: SellerStatus::Online,
-            listed: Some(SystemTime::UNIX_EPOCH),
-            whisper: String::new(),
-            item: OfferItem {
-                rarity: None,
-                name: Some("Storm Bite".to_owned()),
-                base_type: "Gemini Bow".to_owned(),
-                item_level: None,
-                corrupted: false,
-                quality: None,
-                gem_level: None,
-                gem_sockets: None,
-                requirements: crate::item::Requirements::default(),
-                waystone_properties: Vec::new(),
-                waystone_unread: false,
-                modifiers: Vec::new(),
-            },
-        }
-    }
-
     fn divines(amounts: &[f64]) -> Vec<ItemOffer> {
         amounts
             .iter()
-            .map(|&amount| offer(amount, "divine"))
+            .map(|&amount| item_offer(amount, "divine"))
             .collect()
     }
 
     #[test]
     fn the_estimate_is_the_median_of_the_five_cheapest_offers_but_the_suspicious_ones() {
         // The rare bow of the mock-up: 300 ex is under a quarter of the median of the page.
-        let mut offers = vec![offer(300.0, "exalted")];
+        let mut offers = vec![item_offer(300.0, "exalted")];
         offers.extend(divines(&[2.0, 2.2, 2.4, 2.5, 3.0, 3.1, 3.5, 4.0, 4.2]));
 
         let bow = Estimate::of(&offers, 18, WORTH, None).unwrap();
@@ -223,9 +195,9 @@ mod tests {
     fn the_offers_are_compared_in_exalted_orbs() {
         // The magic item of the mock-up: 1 c is worth 70 ex, and comes after 50 ex.
         let offers = [
-            offer(50.0, "exalted"),
-            offer(70.0, "exalted"),
-            offer(1.0, "chaos"),
+            item_offer(50.0, "exalted"),
+            item_offer(70.0, "exalted"),
+            item_offer(1.0, "chaos"),
         ];
 
         let magic = Estimate::of(&offers, 3, WORTH, None).unwrap();
@@ -238,9 +210,9 @@ mod tests {
     fn the_offers_are_sorted_again_with_the_rates_of_the_prices() {
         // The trade site put 1 div before 650 ex: its rate of the Divine Orb is lower.
         let offers = [
-            offer(1.0, "divine"),
-            offer(650.0, "exalted"),
-            offer(1.1, "divine"),
+            item_offer(1.0, "divine"),
+            item_offer(650.0, "exalted"),
+            item_offer(1.1, "divine"),
         ];
 
         let sorted = Estimate::of(&offers, 3, WORTH, None).unwrap();
@@ -259,7 +231,7 @@ mod tests {
     #[test]
     fn the_suspicious_offers_are_left_out_of_the_count() {
         // Six offers, two of them bait: four are counted, of the six found.
-        let mut offers = vec![offer(10.0, "exalted"), offer(20.0, "exalted")];
+        let mut offers = vec![item_offer(10.0, "exalted"), item_offer(20.0, "exalted")];
         offers.extend(divines(&[1.0, 1.2, 1.4, 1.6]));
 
         let baited = Estimate::of(&offers, 6, WORTH, None).unwrap();
@@ -290,7 +262,8 @@ mod tests {
     fn past_half_the_page_of_bait_the_estimate_is_the_one_of_the_bait() {
         let real = [2.0, 2.2, 2.4, 2.5, 3.0, 3.1];
         let page = |bait: usize| {
-            let mut offers: Vec<ItemOffer> = (0..bait).map(|_| offer(1.0, "exalted")).collect();
+            let mut offers: Vec<ItemOffer> =
+                (0..bait).map(|_| item_offer(1.0, "exalted")).collect();
             offers.extend(divines(&real[..10 - bait]));
             Estimate::of(&offers, 10, WORTH, None).unwrap()
         };
@@ -312,11 +285,14 @@ mod tests {
 
     #[test]
     fn an_offer_without_a_known_price_isnt_counted() {
-        let mut offers = vec![offer(1.0, "annul"), offer(2.0, "divine")];
+        let mut offers = vec![item_offer(1.0, "annul"), item_offer(2.0, "divine")];
         offers[0].price = None;
-        offers.push(offer(3.0, "annul"));
+        offers.push(item_offer(3.0, "annul"));
 
-        assert_eq!(Estimate::of(&[offer(1.0, "annul")], 1, WORTH, None), None);
+        assert_eq!(
+            Estimate::of(&[item_offer(1.0, "annul")], 1, WORTH, None),
+            None
+        );
         assert_eq!(Estimate::of(&[], 0, WORTH, None), None);
 
         let known = Estimate::of(&offers, 3, WORTH, None).unwrap();
@@ -395,10 +371,10 @@ mod tests {
             currencies: &currencies,
         };
         let offers = [
-            offer(1.0, "divine"),
-            offer(1.1, "divine"),
-            offer(1000.0, "vaal"),
-            offer(3.0, "waystone-12"),
+            item_offer(1.0, "divine"),
+            item_offer(1.1, "divine"),
+            item_offer(1000.0, "vaal"),
+            item_offer(3.0, "waystone-12"),
         ];
 
         let bow = Estimate::of(&offers, 4, worth, None).unwrap();
@@ -406,10 +382,10 @@ mod tests {
         assert_eq!(bow.counted, 3, "the waystones left out");
         assert!((bow.exalted - 750.0).abs() < 1e-9, "the vaal in the middle");
         assert_eq!(
-            Estimate::of(&[offer(1.0, "waystone-12")], 1, worth, None),
+            Estimate::of(&[item_offer(1.0, "waystone-12")], 1, worth, None),
             None
         );
-        let mirror = Estimate::of(&[offer(1.0, "mirror")], 1, worth, None).unwrap();
+        let mirror = Estimate::of(&[item_offer(1.0, "mirror")], 1, worth, None).unwrap();
         assert!((mirror.exalted - 70_000.0).abs() < 1e-9);
     }
 
@@ -439,8 +415,8 @@ mod tests {
             currencies: &currencies,
         };
 
-        let divine = Estimate::of(&[offer(1.0, "divine")], 1, worth, None).unwrap();
-        let chaos = Estimate::of(&[offer(1.0, "chaos")], 1, worth, None).unwrap();
+        let divine = Estimate::of(&[item_offer(1.0, "divine")], 1, worth, None).unwrap();
+        let chaos = Estimate::of(&[item_offer(1.0, "chaos")], 1, worth, None).unwrap();
 
         assert!((divine.exalted - 700.0).abs() < 1e-9);
         assert!((chaos.exalted - 70.0).abs() < 1e-9);
@@ -463,10 +439,10 @@ mod tests {
             worth,
         };
 
-        let rune = [offer(1.0, "lesser-charging-rune")];
+        let rune = [item_offer(1.0, "lesser-charging-rune")];
         assert_eq!(Estimate::of(&rune, 1, worth, None), None);
         assert!(!reference.suspicious(1.0, "lesser-charging-rune"));
-        assert!(Estimate::of(&[offer(1.0, "mirror")], 1, worth, None).is_some());
+        assert!(Estimate::of(&[item_offer(1.0, "mirror")], 1, worth, None).is_some());
         assert!(reference.suspicious(1.0, "mirror"));
     }
 
@@ -478,7 +454,7 @@ mod tests {
             rates: RATES,
             currencies: &currencies,
         };
-        let mut offers = vec![offer(10.0, "vaal")];
+        let mut offers = vec![item_offer(10.0, "vaal")];
         offers.extend(divines(&[1.0, 1.2, 1.4, 1.6]));
 
         let baited = Estimate::of(&offers, 5, worth, None).unwrap();
@@ -507,7 +483,7 @@ mod tests {
 
             for id in ["chaos", "divine"] {
                 assert_eq!(
-                    Estimate::of(&[offer(1.0, id)], 1, worth, None),
+                    Estimate::of(&[item_offer(1.0, id)], 1, worth, None),
                     None,
                     "{id}"
                 );
@@ -533,7 +509,7 @@ mod tests {
 
         for id in ["vaal", "regal", "alch"] {
             assert_eq!(
-                Estimate::of(&[offer(5.0, id)], 1, worth, None),
+                Estimate::of(&[item_offer(5.0, id)], 1, worth, None),
                 None,
                 "{id}"
             );

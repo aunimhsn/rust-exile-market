@@ -28,25 +28,7 @@ pub enum OffersState {
     #[default]
     Idle,
     Searching,
-    /// The offers of a search of items, the cheapest first.
-    Items {
-        offers: Vec<ItemOffer>,
-        total: u64,
-        /// How many offers of `offers`, the first ones, came in the answer to the search:
-        /// fewer than a page when some were gone since the search, or left out for their
-        /// currency.
-        first_page: usize,
-        /// The offers left to fetch, of this search.
-        rest: Rest,
-        /// The next offers are asked.
-        loading_more: bool,
-        /// Why the next offers couldn't come. Refused by its limits, the waiting block tells
-        /// it already: `None`.
-        more_failed: Option<Failure>,
-        /// What the search filtered.
-        searched_by: SearchedBy,
-        searched: SystemTime,
-    },
+    Items(ItemOffers),
     /// The offers of the currency exchange, all of them, the first `shown` shown.
     Exchange {
         offers: Vec<ExchangeOffer>,
@@ -58,6 +40,45 @@ pub enum OffersState {
     Failed(Failure),
     /// The trade site refused the search, or its limits didn't allow it.
     Limited,
+}
+
+/// The offers of a search of items, the cheapest first.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ItemOffers {
+    pub offers: Vec<ItemOffer>,
+    pub total: u64,
+    /// How many offers of `offers`, the first ones, came in the answer to the search: fewer
+    /// than a page when some were gone since the search, or left out for their currency.
+    pub first_page: usize,
+    /// The offers left to fetch, of this search.
+    pub rest: Rest,
+    pub next: NextOffers,
+    /// What the search filtered.
+    pub searched_by: SearchedBy,
+    pub searched: SystemTime,
+}
+
+/// What became of the next offers of a search of items.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NextOffers {
+    /// None is asked: not yet, or those asked came, or were refused by the limits of the trade
+    /// site, which the waiting block tells already.
+    NotAwaited,
+    /// They are asked, and their answer awaited.
+    Loading,
+    /// They couldn't come, for this reason.
+    Failed(Failure),
+}
+
+impl NextOffers {
+    /// Why the next offers couldn't come, if they couldn't.
+    #[must_use]
+    pub fn failure(self) -> Option<Failure> {
+        match self {
+            Self::Failed(failure) => Some(failure),
+            Self::NotAwaited | Self::Loading => None,
+        }
+    }
 }
 
 /// What a search of items filtered, which its offers keep.
@@ -122,26 +143,20 @@ impl Offers {
     /// were searched with its quality: the offers of another kind aren't counted.
     #[must_use]
     pub fn searched_catalyst(&self, item: &Item) -> Option<Catalyst> {
-        match self.state {
-            OffersState::Items {
-                searched_by: SearchedBy { quality: true, .. },
-                ..
-            } => item.quality_kind()?.catalyst,
-            _ => None,
+        let OffersState::Items(items) = &self.state else {
+            return None;
+        };
+        if !items.searched_by.quality {
+            return None;
         }
+        item.quality_kind()?.catalyst
     }
 
     /// The offers shown are those of a search of items that compared the stats of the item, not
     /// only its base.
     #[must_use]
     pub fn compared_stats(&self) -> bool {
-        matches!(
-            self.state,
-            OffersState::Items {
-                searched_by: SearchedBy { stats: true, .. },
-                ..
-            }
-        )
+        matches!(&self.state, OffersState::Items(items) if items.searched_by.stats)
     }
 
     /// When the last search was answered with its offers, for any item.
@@ -166,24 +181,10 @@ impl Offers {
             pending.shown = false;
         }
         match std::mem::replace(&mut self.state, back) {
-            OffersState::Items {
-                offers,
-                total,
-                first_page,
-                rest,
-                searched_by,
-                searched,
-                ..
-            } => OffersState::Items {
-                offers,
-                total,
-                first_page,
-                rest,
-                loading_more: false,
-                more_failed: None,
-                searched_by,
-                searched,
-            },
+            OffersState::Items(items) => OffersState::Items(ItemOffers {
+                next: NextOffers::NotAwaited,
+                ..items
+            }),
             exchange @ OffersState::Exchange { .. } => exchange,
             // A failure belongs to the moment it was told.
             OffersState::Idle
@@ -237,21 +238,19 @@ impl Offers {
                 *shown = (*shown + PAGE).min(offers.len());
                 None
             }
-            OffersState::Items {
-                rest,
-                loading_more,
-                more_failed,
-                ..
-            } if !busy && !rest.is_empty() => {
-                *loading_more = true;
-                *more_failed = None;
+            OffersState::Items(items) if !busy && !items.rest.is_empty() => {
+                items.next = NextOffers::Loading;
                 self.pending = Some(Pending {
                     order: PendingOrder::More,
                     shown: true,
                 });
-                Some(Order::More(rest.clone()))
+                Some(Order::More(items.rest.clone()))
             }
-            _ => None,
+            OffersState::Items(_)
+            | OffersState::Idle
+            | OffersState::Searching
+            | OffersState::Failed(_)
+            | OffersState::Limited => None,
         }
     }
 
@@ -328,73 +327,47 @@ impl Offers {
                     rest,
                 },
                 _,
-            ) => OffersState::Items {
+            ) => OffersState::Items(ItemOffers {
                 first_page: offers.len(),
                 offers,
                 total,
                 rest,
-                loading_more: false,
-                more_failed: None,
+                next: NextOffers::NotAwaited,
                 searched_by: match pending.order {
                     PendingOrder::Search { searched_by, .. } => searched_by,
                     PendingOrder::More => SearchedBy::default(),
                 },
                 searched: now,
-            },
+            }),
             (Outcome::Exchange { offers, total }, _) => OffersState::Exchange {
                 shown: offers.len().min(PAGE),
                 offers,
                 total,
                 searched: now,
             },
-            (
-                Outcome::More { offers: next, rest },
-                OffersState::Items {
-                    mut offers,
-                    total,
-                    first_page,
-                    searched_by,
-                    searched,
-                    ..
-                },
-            ) => {
-                offers.extend(next);
-                OffersState::Items {
-                    offers,
-                    total,
-                    first_page,
-                    rest,
-                    loading_more: false,
-                    more_failed: None,
-                    searched_by,
-                    searched,
-                }
+            (Outcome::More { offers: next, rest }, OffersState::Items(mut items)) => {
+                items.offers.extend(next);
+                items.rest = rest;
+                items.next = NextOffers::NotAwaited;
+                OffersState::Items(items)
             }
             // More offers that couldn't come: the offers shown stay, to ask them again.
-            (
-                failure @ (Outcome::Failed(_) | Outcome::Limited { .. }),
-                OffersState::Items {
-                    offers,
-                    total,
-                    first_page,
-                    rest,
-                    searched_by,
-                    searched,
-                    ..
-                },
-            ) if pending.order == PendingOrder::More => OffersState::Items {
-                offers,
-                total,
-                first_page,
-                rest,
-                loading_more: false,
-                more_failed: match failure {
-                    Outcome::Failed(failure) => Some(failure),
-                    _ => None,
-                },
-                searched_by,
-                searched,
-            },
+            (Outcome::Failed(failure), OffersState::Items(items))
+                if pending.order == PendingOrder::More =>
+            {
+                OffersState::Items(ItemOffers {
+                    next: NextOffers::Failed(failure),
+                    ..items
+                })
+            }
+            (Outcome::Limited { .. }, OffersState::Items(items))
+                if pending.order == PendingOrder::More =>
+            {
+                OffersState::Items(ItemOffers {
+                    next: NextOffers::NotAwaited,
+                    ..items
+                })
+            }
             (Outcome::Failed(failure), _) => OffersState::Failed(failure),
             (Outcome::Limited { .. }, _) => OffersState::Limited,
             (Outcome::More { .. }, state) => state,
