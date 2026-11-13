@@ -101,6 +101,7 @@ impl<T: Transport> TradeClient<T> {
         Self::with_guarded(Guarded::new(transport, refusal))
     }
 
+    /// The client of the trade site behind `transport`, its limits not known yet.
     fn with_guarded(transport: Guarded<T>) -> Self {
         Self {
             transport,

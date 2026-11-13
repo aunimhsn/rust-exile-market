@@ -70,8 +70,8 @@ pub(super) trait Transport {
 
 /// The only way to the trade site: nothing is sent during the wait of a refusal, and a
 /// refusal (403, 429) starts one, for every request of the application, since all of them
-/// reach the same site from the same address. Its fields are private, so that no request
-/// can go around it.
+/// reach the same site from the same address. No request can go around it: its fields are
+/// private, and only [`Guarded::network`] builds a [`Network`] outside the tests.
 pub(super) struct Guarded<T> {
     transport: T,
     /// The wait asked by a refusal, shared by the searches of offers and the download of the
@@ -106,7 +106,7 @@ impl Guarded<Network> {
 }
 
 impl<T: Transport> Guarded<T> {
-    /// A fake trade site `transport` behind the guard, for the tests of its callers.
+    /// A fake trade site `transport` behind the guard, for the tests.
     #[cfg(test)]
     pub fn new(transport: T, refusal: Refusal) -> Self {
         Self { transport, refusal }
@@ -503,11 +503,11 @@ pub(super) mod tests {
         refusal.extend(until);
         let mut guarded = Guarded::new(site.clone(), refusal);
 
-        let sent = guarded.send(&get());
+        let attempt = guarded.send(&get());
 
         assert!(
-            matches!(sent, Attempt::Waiting(wait) if wait == until),
-            "{sent:?}"
+            matches!(attempt, Attempt::Waiting(wait) if wait == until),
+            "{attempt:?}"
         );
         assert_eq!(guarded.refused_until(Instant::now()), Some(until));
         assert_eq!(site.requests(), []);
