@@ -142,6 +142,16 @@ fn writes(shapes: &[egui::epaint::ClippedShape], text: &str) -> bool {
         .any(|clipped| shape_writes(&clipped.shape, text))
 }
 
+/// How a frame is drawn.
+#[derive(Clone, Copy)]
+struct FrameSetup {
+    width: f32,
+    /// The height of the pointer, in the middle of the window; none without a pointer.
+    pointer: Option<f32>,
+    stats_open: bool,
+    prices: PricesState,
+}
+
 /// An item shown on a desk, and the language of the interface.
 struct Scene {
     desk: Desk,
@@ -162,17 +172,14 @@ impl Scene {
         shown.parsed().expect("an item the parser reads")
     }
 
-    /// Draws one frame of `width`, the pointer at the height `pointer` in the middle of the
-    /// window; the height of the blocks.
-    fn draw(
-        &mut self,
-        ctx: &Context,
-        drawn: &mut Drawn,
-        width: f32,
-        pointer: Option<f32>,
-        stats_open: bool,
-        prices: PricesState,
-    ) -> f32 {
+    /// Draws one frame as `setup` says; the height of the blocks.
+    fn draw(&mut self, ctx: &Context, drawn: &mut Drawn, setup: FrameSetup) -> f32 {
+        let FrameSetup {
+            width,
+            pointer,
+            stats_open,
+            prices,
+        } = setup;
         drawn.time += 0.1;
         let input = RawInput {
             screen_rect: Some(Rect::from_min_size(egui::Pos2::ZERO, vec2(width, HEIGHT))),
@@ -239,7 +246,13 @@ impl Scene {
         ];
         for width in WIDTHS {
             for (prices, stats_open) in states.into_iter().zip([true, false].into_iter().cycle()) {
-                self.draw(ctx, drawn, width, None, stats_open, prices);
+                let setup = FrameSetup {
+                    width,
+                    pointer: None,
+                    stats_open,
+                    prices,
+                };
+                self.draw(ctx, drawn, setup);
             }
         }
     }
@@ -250,10 +263,20 @@ impl Scene {
             age: Duration::from_mins(10),
             offline: false,
         };
-        let height = self.draw(ctx, drawn, WIDTHS[0], None, true, known);
+        let setup = FrameSetup {
+            width: WIDTHS[0],
+            pointer: None,
+            stats_open: true,
+            prices: known,
+        };
+        let height = self.draw(ctx, drawn, setup);
         let mut pointer = 0.0;
         while pointer < height.min(HEIGHT) {
-            self.draw(ctx, drawn, WIDTHS[0], Some(pointer), true, known);
+            let under_the_pointer = FrameSetup {
+                pointer: Some(pointer),
+                ..setup
+            };
+            self.draw(ctx, drawn, under_the_pointer);
             pointer += POINTER_STEP;
         }
     }
