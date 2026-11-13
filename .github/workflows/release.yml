@@ -31,9 +31,6 @@ permissions:
 
 env:
   CARGO_TERM_COLOR: always
-  # Version in the archive names: the tag, or "test" for a pull request or a
-  # branch.
-  VERSION: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'test' }}
 
 jobs:
   # A release only from a commit of main, which went through a pull request and its checks, with
@@ -89,6 +86,10 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
+        # `system` names the archive, the same from one version to the next: the
+        # buttons of the download page link to releases/latest/download/<archive>
+        # (exile-market-windows-x64.zip and exile-market-linux-x64.tar.gz), so a
+        # rename breaks them.
         include:
           # glibc rather than musl: the executable loads the graphics
           # libraries of the system (OpenGL, X11), which a static musl
@@ -96,12 +97,16 @@ jobs:
           # the runner or a newer one, hence the oldest Ubuntu runner.
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-22.04
+            system: linux-x64
           - target: x86_64-apple-darwin
             os: macos-latest
+            system: macos-x64
           - target: aarch64-apple-darwin
             os: macos-latest
+            system: macos-arm64
           - target: x86_64-pc-windows-msvc
             os: windows-latest
+            system: windows-x64
     defaults:
       run:
         shell: bash
@@ -137,7 +142,7 @@ jobs:
       - run: cargo build --release --locked --target ${{ matrix.target }}
       - name: Package
         run: |
-          directory="$NAME-$VERSION-${{ matrix.target }}"
+          directory="$NAME-${{ matrix.system }}"
           mkdir "$directory"
           cp README.md LICENSE THIRD-PARTY-LICENSES "$directory/"
           # The notices of what the executable embeds, at the paths the README links to.
