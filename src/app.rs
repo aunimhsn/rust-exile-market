@@ -1,6 +1,7 @@
 //! The application: the session, the settings, the clipboard watching, the price-check
 //! hotkey and the price database, and the window built from the components of [`crate::ui`].
 
+mod desk;
 mod item_view;
 mod leagues;
 mod open_lists;
@@ -14,29 +15,26 @@ use egui::{
     WindowLevel, X11WindowType, pos2, vec2,
 };
 
-use self::item_view::{ItemView, search_filters};
+use self::desk::{Desk, DeskRequest, EMPTY_HEIGHT, Surroundings};
 use self::open_lists::{OpenList, OpenLists};
 use crate::bug_report::{Facts, JoinedItem, LogSession, Report};
 use crate::clipboard::{self, ClipboardEvent, ClipboardWatch};
-use crate::filters::{Filters, Window};
+use crate::filters::Window;
 use crate::hotkey::PriceCheckHotkey;
 use crate::i18n::{DOWNLOAD_QUOTE_COUNT, Message, Translator};
 use crate::item::CopiedItem;
 use crate::league::League;
 use crate::market::MarketWatch;
-use crate::offers_state::{LONG_WAIT, Offers};
 use crate::overlay::{self, Activation, ClickWatch, KeyboardFocus, Overlay, ScreenRect};
-use crate::recent_items::RecentItems;
-use crate::session::{LeagueChange, PricesState, Session, ShownItem};
+use crate::session::{LeagueChange, PricesState};
 use crate::settings::{SettingChange, Settings, SettingsFile};
 use crate::trade::Refusal;
 use crate::trade::names_watch::ItemNamesWatch;
 use crate::trade::query::SearchKind;
-use crate::trade::search::{OfferSearch, Search};
+use crate::trade::search::OfferSearch;
 use crate::ui::{
-    self, BugReportAction, BugReportPanel, EmptyState, ItemBlockAction, OffersAction,
-    PriceDownload, ResizeEdges, SettingsPanel, StatusBar, TitleBar, TitleBarAction, TradeStatus,
-    UnreadableItem, WarningBand,
+    self, BugReportAction, BugReportPanel, EmptyState, PriceDownload, ResizeEdges, SettingsPanel,
+    StatusBar, TitleBar, TitleBarAction, TradeStatus, WarningBand,
 };
 use crate::update::{Release, UpdateCheck};
 
@@ -69,7 +67,8 @@ impl View {
 
 pub struct ExileMarketApp {
     i18n: Translator,
-    session: Session,
+    /// The item shown and what the player did with it.
+    desk: Desk,
     settings: Settings,
     settings_file: SettingsFile,
     view: View,
@@ -92,22 +91,10 @@ pub struct ExileMarketApp {
     /// The window over the game made the active window while the game holds the pointer (a
     /// single screen, on Linux).
     activation: Activation,
-    /// The item shown, the last one copied, and the items copied before it, with their filters
-    /// and offers as the player left them.
-    recent: RecentItems,
     market: MarketWatch,
     item_names: ItemNamesWatch,
     /// The searches of the trade site, asked by the player.
     search: OfferSearch,
-    /// The offers of the item shown, and the waiting time before the next search.
-    offers: Offers,
-    /// The stats of the item are unfolded, for every item copied until the player folds them.
-    stats_open: bool,
-    /// The filters of the search as the player set them, for the item shown: those of another
-    /// item copied are its own, by default or as the player left them.
-    filters: Filters,
-    /// An item was copied: the content scrolls back to the top, to its name and its price.
-    scroll_to_top: bool,
     /// The sentence shown during the download of the prices of a league, drawn at its start.
     download_quote: Option<(League, usize)>,
     /// The latest release, asked once at launch.
@@ -153,8 +140,7 @@ impl ExileMarketApp {
             // The language of the copied items never changes the interface: it only chooses
             // the item names and the trade site.
             i18n: Translator::new(settings.language().language()),
-            // The league of the last session, until the leagues arrive.
-            session: Session::new(settings.league()),
+            desk: Desk::new(settings.league()),
             settings,
             settings_file,
             view: View::Item,
@@ -167,16 +153,11 @@ impl ExileMarketApp {
             overlay_height: None,
             keyboard: KeyboardFocus::new(),
             activation: Activation::new(),
-            recent: RecentItems::default(),
             market,
             item_names: ItemNamesWatch::start(refusal.clone(), move || {
                 names_ctx.request_repaint();
             }),
             search: OfferSearch::start(refusal, move || search_ctx.request_repaint()),
-            offers: Offers::default(),
-            stats_open: false,
-            filters: Filters::default(),
-            scroll_to_top: false,
             download_quote: None,
             update_check: UpdateCheck::start(move || update_ctx.request_repaint()),
             release: None,
@@ -192,7 +173,7 @@ impl ExileMarketApp {
                 self.view = View::Item;
                 self.lists.close_all();
             }
-            TitleBarAction::Leagues if self.session.leagues().is_some() => {
+            TitleBarAction::Leagues if self.desk.session().leagues().is_some() => {
                 self.lists.toggle(OpenList::Leagues);
             }
             // Still a click outside the list of the keys.
@@ -224,19 +205,19 @@ impl ExileMarketApp {
     /// The bug report of what the window shows now: the summary, the log of this session or of
     /// the previous one after a crash, and the item shown, joined by default.
     fn new_bug_report(&self) -> Report {
-        let copied = self.recent.shown();
+        let copied = self.desk.copied();
+        let session = self.desk.session();
         let facts = Facts {
             interface: self.i18n.language(),
             items: copied.map(CopiedItem::language),
-            league: self.session.league(),
+            league: session.league(),
             always_on_top: self.settings.always_on_top(),
             hotkey: cfg!(any(target_os = "linux", target_os = "windows"))
                 .then(|| self.settings.hotkey()),
         };
         let item = copied.map(|copied| JoinedItem {
             text: copied.text().to_owned(),
-            name: self
-                .session
+            name: session
                 .item()
                 .and_then(|shown| shown.parsed().ok())
                 .map(|item| item.name().unwrap_or(item.base_type()).to_owned()),
@@ -276,13 +257,6 @@ impl ExileMarketApp {
         }
     }
 
-    /// Forgets the offers of the item shown and of the items remembered: they were searched in
-    /// the previous league.
-    fn forget_offers(&mut self) {
-        self.offers.clear();
-        self.recent.forget_offers();
-    }
-
     /// Applies a change of the settings at once, and saves them.
     fn change_setting(&mut self, ctx: &Context, change: SettingChange) {
         if !self.settings.apply(change) {
@@ -306,7 +280,7 @@ impl ExileMarketApp {
     /// The warnings of the band under the title bar, given the state of the prices.
     fn warnings(&self, prices: PricesState) -> Vec<String> {
         let mut warnings = Vec::new();
-        if !self.session.clipboard_readable() {
+        if !self.desk.session().clipboard_readable() {
             warnings.push(self.i18n.text(Message::ClipboardUnreadable));
         }
         match prices {
@@ -319,22 +293,14 @@ impl ExileMarketApp {
         warnings
     }
 
-    /// The item shown, with the `kind` of the search of its offers when it can be searched.
-    /// Draws the item shown, or the empty state; the height of its blocks, which sizes the
-    /// window over the game. In the main window, the hint of a failed search opens the bug
-    /// report.
-    fn item(
-        &mut self,
-        ui: &mut Ui,
-        prices: PricesState,
-        kind: Option<SearchKind>,
-        to_top: bool,
-        window: Window,
-    ) -> f32 {
-        let Some(shown) = self.session.item() else {
+    /// Draws the item shown, or the empty state before the first one; the height of its blocks,
+    /// which sizes the window over the game. In the main window, the hint of a failed search
+    /// opens the bug report.
+    fn item(&mut self, ui: &mut Ui, around: Surroundings) -> f32 {
+        let Some(drawn) = self.desk.show_item(ui, &self.i18n, around) else {
             let empty = EmptyState::new(&self.i18n, self.hotkey.state(), self.hotkey.shortcut());
             if let (PricesState::Downloading { progress }, Some((league, quote))) =
-                (prices, &self.download_quote)
+                (around.prices, &self.download_quote)
             {
                 empty
                     .downloading(PriceDownload {
@@ -348,42 +314,12 @@ impl ExileMarketApp {
             }
             return EMPTY_HEIGHT;
         };
-        let Ok(item) = shown.parsed() else {
-            UnreadableItem::new(&self.i18n).show(ui);
-            return EMPTY_HEIGHT;
-        };
-        let view = ItemView {
-            session: &self.session,
-            shown,
-            item,
-            offers: &self.offers,
-            filters: &mut self.filters,
-            stats_open: self.stats_open,
-            prices,
-            kind,
-            has_bug_report: window == Window::Main,
-            i18n: &self.i18n,
-        };
-        let ((action, offers_action), height) = ui::content(ui, to_top, |ui| view.show(ui));
-        if action == Some(ItemBlockAction::ToggleStats) {
-            self.stats_open = !self.stats_open;
+        match drawn.request {
+            Some(DeskRequest::Search(order)) => self.search.order(order),
+            Some(DeskRequest::BugReport) => self.open_bug_report(),
+            None => {}
         }
-        let order = match offers_action {
-            // Built at the click, with the filters as the player just left them.
-            Some(OffersAction::Search) => self
-                .shown_search()
-                .and_then(|search| self.offers.search(search, Instant::now())),
-            Some(OffersAction::More) => self.offers.more(),
-            Some(OffersAction::ReportBug) => {
-                self.open_bug_report();
-                None
-            }
-            None => None,
-        };
-        if let Some(order) = order {
-            self.search.order(order);
-        }
-        height
+        drawn.height
     }
 
     /// The window over the game, drawn at every frame and shown while it is open: the blocks of
@@ -400,14 +336,7 @@ impl ExileMarketApp {
     /// On Windows, always on top, and shown without activation; a click in it activates it all
     /// the same, and it gives the focus back to the game, unless the click opens a link, the
     /// browser then coming to the front, or goes to a field, which keeps it until it is left.
-    fn show_overlay(
-        &mut self,
-        ctx: &Context,
-        prices: PricesState,
-        kind: Option<SearchKind>,
-        trade: TradeStatus,
-        to_top: bool,
-    ) {
+    fn show_overlay(&mut self, ctx: &Context, around: Surroundings, trade: TradeStatus) {
         // No window over the game on macOS, where Path of Exile 2 has no client.
         if !cfg!(any(target_os = "linux", target_os = "windows")) {
             return;
@@ -454,7 +383,7 @@ impl ExileMarketApp {
                 .with_position(pos2(to_points(place.x, scale), to_points(place.y, scale)))
                 .with_inner_size(vec2(overlay::WIDTH, to_points(place.height, scale)));
         }
-        let league = self.session.league().cloned();
+        let league = self.desk.session().league().cloned();
         let held = self.keyboard.held();
         // Drawn at every frame, hidden while it is closed (see above).
         let height = ctx.show_viewport_immediate(id, builder, |ui, _| {
@@ -475,7 +404,7 @@ impl ExileMarketApp {
                         .any(|event| matches!(event, egui::Event::WindowFocused(false)))
                 });
             if (place.is_none() || left || lost) && ui.ctx().text_edit_focused() {
-                self.filters.settle_edited(Window::OverTheGame);
+                self.desk.settle_edited(Window::OverTheGame);
                 ui.ctx().memory_mut(egui::Memory::stop_text_input);
             }
             #[cfg(target_os = "windows")]
@@ -493,12 +422,12 @@ impl ExileMarketApp {
             // Its own ids: the scroll and the panels of the main window are its own.
             let height = ui
                 .push_id("window-over-the-game", |ui| {
-                    StatusBar::sources(&self.i18n, prices, trade)
+                    StatusBar::sources(&self.i18n, around.prices, trade)
                         .league(league.as_ref())
                         .keyboard(self.keyboard.held())
                         .single_screen(self.activation.holds())
                         .show(ui);
-                    self.item(ui, prices, kind, to_top, Window::OverTheGame)
+                    self.item(ui, around)
                 })
                 .inner;
             let editing = ui.ctx().text_edit_focused();
@@ -524,7 +453,7 @@ impl ExileMarketApp {
         self.activation.editing(editing);
         let height = height.map(|(height, _)| height);
         if !editing {
-            self.filters.forget_edited(Window::OverTheGame);
+            self.desk.forget_edited(Window::OverTheGame);
         }
         // The status bar, drawn before the fields, says it at the next frame: on Windows, the
         // window took the keyboard during the frame already. On a single screen, the window
@@ -539,49 +468,18 @@ impl ExileMarketApp {
     }
 
     /// Takes in an event of the clipboard watching: an item copied opens the window over the
-    /// game when the hotkey copied it. The item shown, copied again, keeps its filters and
-    /// offers; another item copied leaves them to the items remembered, and shows its own.
-    fn take_clipboard_event(&mut self, event: ClipboardEvent) {
-        let mut back = None;
-        if let ClipboardEvent::Copied { item, hotkey } = &event {
+    /// game when the hotkey copied it, and closes the settings and the bug report.
+    fn apply_clipboard_event(&mut self, event: ClipboardEvent) {
+        if let ClipboardEvent::Copied { hotkey, .. } = &event {
             let was_open = self.overlay.shown().is_some();
             // A window that opens is laid out once before it shows; an open one keeps its
             // height until the next frame, without blinking.
             if self.overlay.copied(*hotkey) && !was_open {
                 self.overlay_height = None;
             }
-            // The clipboard watching alone tells the copy of the hotkey.
-            if copied_again(hotkey.is_some(), self.recent.shown(), item) {
-                // Its filters and offers stay.
-                self.view = View::Item;
-                return;
-            }
-            self.scroll_to_top = true;
-            let shape = self
-                .session
-                .item()
-                .map(ShownItem::shape)
-                .unwrap_or_default();
-            back = self
-                .recent
-                .show(item, shape, &mut self.filters, &mut self.offers);
         }
         self.view = self.view.after(&event);
-        self.session.apply(event);
-        // Read again with the names of the trade site arrived since it was left, its lines may
-        // have moved, the filters set on them no longer falling on the same lines.
-        let shown = self.session.item().map(ShownItem::shape);
-        if lines_moved(back.as_deref(), shown.as_deref()) {
-            self.filters.forget_stats();
-        }
-    }
-
-    /// The search of the offers of the item shown, when it can be searched.
-    fn shown_search(&self) -> Option<Search> {
-        let shown = self.session.item()?;
-        let item = shown.parsed().ok()?;
-        let filters = search_filters(&self.session, shown, item, &self.filters);
-        self.session.trade_search(item, filters)
+        self.desk.apply_clipboard_event(event);
     }
 }
 
@@ -615,7 +513,7 @@ impl App for ExileMarketApp {
             );
         }
         for event in events {
-            self.take_clipboard_event(event);
+            self.apply_clipboard_event(event);
         }
         if let Some(left) = self.overlay.expire(now) {
             ctx.request_repaint_after(left);
@@ -641,34 +539,29 @@ impl App for ExileMarketApp {
         }
         if self
             .search
-            .receive(|answer| self.offers.apply(answer, SystemTime::now()))
+            .receive(|answer| self.desk.apply_answer(answer, SystemTime::now()))
         {
-            self.offers.thread_lost();
+            self.desk.search_thread_lost();
         }
         let mut shown = None;
         self.market.receive(|event| {
             let closed = self.settings.closed_new_leagues();
-            if let Some(LeagueChange::Shown(league)) = self.session.apply_market(event, closed) {
+            if let Some(LeagueChange::Shown(league)) = self.desk.apply_market(event, closed) {
                 shown = Some(league);
             }
         });
-        if let Some(league) = shown {
-            // The offers shown were searched in the previous league.
-            self.forget_offers();
-            if self.settings.set_league(&league) {
-                self.settings_file.save(&self.settings);
-            }
+        if let Some(league) = shown
+            && self.settings.set_league(&league)
+        {
+            self.settings_file.save(&self.settings);
         }
         // The league shown at the first launch, or after the end of a league.
-        self.market.price(self.session.league());
+        self.market.price(self.desk.session().league());
         self.update_check
             .receive(|release| self.release = Some(release));
         self.settle_closed_update();
-        self.item_names.receive(|names| {
-            if self.session.apply_item_names(names) {
-                self.filters.forget_stats();
-            }
-        });
+        self.item_names
+            .receive(|names| self.desk.apply_item_names(names));
         // Escape closes what is on top: a list, then the settings or the bug report.
         if ctx.input(|input| input.key_pressed(Key::Escape))
             && !self.lists.escape()
@@ -684,8 +577,8 @@ impl App for ExileMarketApp {
             ctx.send_viewport_cmd(ViewportCommand::BeginResize(direction));
         }
         // The panels on the edges come first, so that the central one takes what remains.
-        let action = TitleBar::new(self.session.league(), &self.i18n)
-            .leagues_known(self.session.leagues().is_some())
+        let action = TitleBar::new(self.desk.session().league(), &self.i18n)
+            .leagues_known(self.desk.session().leagues().is_some())
             .settings_open(self.view == View::Settings)
             .bug_report_open(self.view == View::BugReport)
             .leagues_open(self.lists.is_open(OpenList::Leagues))
@@ -694,9 +587,10 @@ impl App for ExileMarketApp {
             self.act_on(&ctx, action);
         }
         self.league_overlays(&ctx, action);
-        let prices = self.session.prices_state(SystemTime::now());
+        let session = self.desk.session();
+        let prices = session.prices_state(SystemTime::now());
         // A sentence per download: drawn again for another league.
-        self.download_quote = match (prices, self.session.league()) {
+        self.download_quote = match (prices, session.league()) {
             (PricesState::Downloading { .. }, Some(league)) => match self.download_quote.take() {
                 Some((drawn, quote)) if drawn == *league => Some((drawn, quote)),
                 _ => Some((league.clone(), random_quote())),
@@ -708,14 +602,12 @@ impl App for ExileMarketApp {
             // The age of the prices changes with the time, without an event.
             ctx.request_repaint_after(Duration::from_secs(60 - age.as_secs() % 60));
         }
-        let search_kind = self
-            .session
-            .item()
-            .and_then(|shown| shown.parsed().ok())
-            .and_then(|item| self.session.search_kind(item));
+        let search_kind = self.desk.search_kind();
         // The status bar tells the wait before a search of the item shown.
         let kind = search_kind.unwrap_or(SearchKind::Items);
-        let trade = trade_status(&self.offers, kind, Instant::now(), SystemTime::now());
+        let trade = self
+            .desk
+            .trade_status(kind, Instant::now(), SystemTime::now());
         match trade {
             // The age of the last search, and the countdown of the long wait, change with the time.
             TradeStatus::Searched(age) => {
@@ -728,17 +620,29 @@ impl App for ExileMarketApp {
             View::Item | View::BugReport => StatusBar::sources(&self.i18n, prices, trade).show(ui),
             View::Settings => StatusBar::author(&self.i18n, self.release.as_ref()).show(ui),
         }
-        // Taken once for both windows.
-        let to_top = std::mem::take(&mut self.scroll_to_top);
-        self.show_overlay(&ctx, prices, search_kind, trade, to_top);
+        let main = Surroundings {
+            prices,
+            kind: search_kind,
+            // Taken once for both windows.
+            to_top: self.desk.take_scroll_to_top(),
+            window: Window::Main,
+        };
+        self.show_overlay(
+            &ctx,
+            Surroundings {
+                window: Window::OverTheGame,
+                ..main
+            },
+            trade,
+        );
         // Another item copied leaves the field the player was in, its number already settled,
         // so that the caret doesn't go on in the same field of that item.
-        if to_top && ctx.text_edit_focused() {
+        if main.to_top && ctx.text_edit_focused() {
             ctx.memory_mut(egui::Memory::stop_text_input);
         }
         match self.view {
             View::Item => {
-                self.item(ui, prices, search_kind, to_top, Window::Main);
+                self.item(ui, main);
             }
             View::Settings => {
                 let action = SettingsPanel::new(&self.settings, &self.i18n, self.hotkey.state())
@@ -769,7 +673,7 @@ impl App for ExileMarketApp {
         // No field of the main window edited, or its field no longer drawn (the settings
         // opened): its number settled, again when leaving it settled it already.
         if !ctx.text_edit_focused() {
-            self.filters.settle_edited(Window::Main);
+            self.desk.settle_edited(Window::Main);
         }
     }
 
@@ -829,22 +733,6 @@ fn overlay_frame(ui: &egui::Ui, editing: bool) -> overlay::Frame {
     }
 }
 
-/// The item shown came back with the shape `back` of its modifiers when it was left, and has the
-/// shape `shown` now: read again with the names of the trade site arrived since, its lines moved.
-fn lines_moved(back: Option<&[usize]>, shown: Option<&[usize]>) -> bool {
-    back.is_some_and(|back| shown != Some(back))
-}
-
-/// `item` copied by the hotkey again: the item already shown, which stays as it is. Copied
-/// with Ctrl+C after another text, it is read again with the latest known price, its filters
-/// and offers kept.
-fn copied_again(by_hotkey: bool, last: Option<&CopiedItem>, item: &CopiedItem) -> bool {
-    by_hotkey && last == Some(item)
-}
-
-/// The height of the window over the game for an item that can't be read, in points.
-const EMPTY_HEIGHT: f32 = 160.0;
-
 /// `points` in the physical pixels of a screen of `scale` pixels per point.
 #[expect(
     clippy::cast_possible_truncation,
@@ -863,27 +751,12 @@ fn to_points(pixels: i32, scale: f32) -> f32 {
     pixels as f32 / scale
 }
 
-/// The state of the trade site in the status bar, at `now`: the long wait before the next
-/// search of `kind`, or else the age of the last search.
-fn trade_status(offers: &Offers, kind: SearchKind, now: Instant, clock: SystemTime) -> TradeStatus {
-    match (offers.wait(kind, now), offers.last_search()) {
-        (wait, _) if wait > LONG_WAIT => TradeStatus::Waiting(wait),
-        (_, Some(searched)) => {
-            TradeStatus::Searched(clock.duration_since(searched).unwrap_or_default())
-        }
-        (_, None) => TradeStatus::Idle,
-    }
-}
-
 /// A sentence of the download of the prices, drawn at random.
 fn random_quote() -> usize {
     // Each `RandomState` has its own keys: enough to draw a sentence.
     let [byte, ..] = RandomState::new().hash_one(()).to_le_bytes();
     usize::from(byte) % DOWNLOAD_QUOTE_COUNT
 }
-
-#[cfg(test)]
-mod smoke_tests;
 
 #[cfg(test)]
 mod tests;
