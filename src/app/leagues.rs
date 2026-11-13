@@ -15,23 +15,19 @@ impl ExileMarketApp {
     fn choose_league(&mut self, league: League) {
         self.lists.close(OpenList::Leagues);
         let mut changed = self.settings.set_league(&league);
-        if let Some(offered) = self.session.close_new_league() {
+        if let Some(offered) = self.desk.close_new_league() {
             changed |= self.settings.close_new_league(&offered);
         }
         if changed {
             self.settings_file.save(&self.settings);
         }
-        // The offers shown were searched in the previous league.
-        if self.session.league() != Some(&league) {
-            self.forget_offers();
-        }
-        self.session.choose_league(league);
-        self.market.price(self.session.league());
+        self.desk.choose_league(league);
+        self.market.price(self.desk.session().league());
     }
 
     /// Closes the bubble of the new league for good.
     fn close_new_league(&mut self) {
-        if let Some(league) = self.session.close_new_league()
+        if let Some(league) = self.desk.close_new_league()
             && self.settings.close_new_league(&league)
         {
             self.settings_file.save(&self.settings);
@@ -41,7 +37,7 @@ impl ExileMarketApp {
     /// The newer release to offer in a bubble: not once its page was opened in this session,
     /// nor while the player closed its bubble during the league of the moment.
     fn offered_release(&self) -> Option<&Release> {
-        let league = LeagueOfTheMoment::of(self.session.leagues());
+        let league = LeagueOfTheMoment::of(self.desk.session().leagues());
         self.release.as_ref().filter(|release| {
             !self.release_opened
                 && !self
@@ -56,7 +52,7 @@ impl ExileMarketApp {
         let Some(release) = &self.release else {
             return;
         };
-        let league = LeagueOfTheMoment::of(self.session.leagues());
+        let league = LeagueOfTheMoment::of(self.desk.session().leagues());
         if self.settings.close_update(release, league) {
             self.settings_file.save(&self.settings);
         }
@@ -65,7 +61,7 @@ impl ExileMarketApp {
     /// Gives an update closed before the leagues were known the league of the moment, once
     /// known.
     pub(super) fn settle_closed_update(&mut self) {
-        let league = LeagueOfTheMoment::of(self.session.leagues());
+        let league = LeagueOfTheMoment::of(self.desk.session().leagues());
         if self.settings.settle_closed_update(league) {
             self.settings_file.save(&self.settings);
         }
@@ -78,8 +74,8 @@ impl ExileMarketApp {
         ctx: &Context,
         title_bar_action: Option<TitleBarAction>,
     ) {
-        if let Some(leagues) = self.session.leagues() {
-            let list = LeagueList::new(leagues.rows(), self.session.league(), &self.i18n);
+        if let Some(leagues) = self.desk.session().leagues() {
+            let list = LeagueList::new(leagues.rows(), self.desk.session().league(), &self.i18n);
             match list.show(ctx, self.lists.is_open(OpenList::Leagues)) {
                 Some(LeagueListAction::Choose(league)) => self.choose_league(league),
                 // The click on the league block that opened the list isn't outside it.
@@ -98,7 +94,7 @@ impl ExileMarketApp {
             return;
         }
         let mut bottom = None;
-        if let Some(league) = self.session.new_league().cloned() {
+        if let Some(league) = self.desk.session().new_league().cloned() {
             let shown = Bubble::new_league(&league, &self.i18n).show(ctx);
             bottom = Some(shown.bottom);
             match shown.action {

@@ -34,9 +34,9 @@ fn the_status_bar_tells_a_long_wait_rather_than_the_age_of_the_last_search() {
 
     let now = Instant::now();
     let clock = SystemTime::UNIX_EPOCH + Duration::from_secs(600);
-    let mut offers = Offers::default();
+    let mut desk = Desk::new(None);
     assert_eq!(
-        trade_status(&offers, SearchKind::Items, now, clock),
+        desk.trade_status(SearchKind::Items, now, clock),
         TradeStatus::Idle
     );
     let search = Search {
@@ -44,7 +44,7 @@ fn the_status_bar_tells_a_long_wait_rather_than_the_age_of_the_last_search() {
         league: League::new("Standard"),
         query: Query::Exchange("divine".to_owned()),
     };
-    let _ = offers.search(search, now);
+    let _ = desk.offers.search(search, now);
     let answer = |seconds| Answer {
         outcome: Outcome::Exchange {
             offers: Vec::new(),
@@ -55,17 +55,17 @@ fn the_status_bar_tells_a_long_wait_rather_than_the_age_of_the_last_search() {
             exchange: now + Duration::from_secs(10),
         },
     };
-    offers.apply(
+    desk.take_answer(
         answer(240),
         SystemTime::UNIX_EPOCH + Duration::from_secs(480),
     );
 
     assert_eq!(
-        trade_status(&offers, SearchKind::Items, now, clock),
+        desk.trade_status(SearchKind::Items, now, clock),
         TradeStatus::Waiting(Duration::from_secs(240))
     );
     assert_eq!(
-        trade_status(&offers, SearchKind::Exchange, now, clock),
+        desk.trade_status(SearchKind::Exchange, now, clock),
         TradeStatus::Searched(Duration::from_secs(120)),
         "the usual 10 s aren't told"
     );

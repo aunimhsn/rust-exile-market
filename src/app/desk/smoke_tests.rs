@@ -3,9 +3,12 @@
 //! inside a character) closes the application in the middle of a game, and the tests of the
 //! models never run the drawing.
 
-use egui::{Event, Order, RawInput, Rect, pos2};
+use std::time::Duration;
 
-use crate::app::*;
+use egui::{Context, Event, Order, RawInput, Rect, pos2, vec2};
+
+use super::*;
+use crate::i18n::Message;
 use crate::item::{Item, test_items};
 use crate::language::Language;
 use crate::market::MarketEvent;
