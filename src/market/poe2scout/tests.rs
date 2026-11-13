@@ -374,7 +374,7 @@ impl FakeApi {
     }
 }
 
-impl Source for FakeApi {
+impl Api for FakeApi {
     fn get(&mut self, path: &str, query: &[(&str, &str)]) -> Result<String, HttpError> {
         let pairs: Vec<String> = query
             .iter()
@@ -449,7 +449,7 @@ fn league() -> League {
 
 /// A client of `api` that doesn't wait between two requests.
 fn scout(api: FakeApi) -> Poe2Scout<FakeApi> {
-    Poe2Scout::with_source(api, Duration::ZERO)
+    Poe2Scout::with_api(api, Duration::ZERO)
 }
 
 /// The network review of 2026-11-10: nothing ran the download itself, only its parts.
@@ -464,7 +464,7 @@ fn a_download_asks_for_the_rates_then_the_currency_then_the_uniques() {
         .expect("not interrupted");
 
     assert_eq!(
-        scout.source.requests,
+        scout.api.requests,
         [
             CATEGORIES_PATH.to_owned(),
             RATES_PATH.to_owned(),
@@ -527,9 +527,9 @@ fn every_page_of_a_category_is_read() {
         .expect("every request answered")
         .expect("not interrupted");
 
-    assert_eq!(scout.source.requests.len(), 7);
+    assert_eq!(scout.api.requests.len(), 7);
     assert_eq!(
-        scout.source.requests[4..],
+        scout.api.requests[4..],
         [1, 2, 3].map(|number| page_request("Uniques", "accessory", number))
     );
     let names: Vec<&str> = prices
@@ -563,7 +563,7 @@ fn a_category_stops_at_its_tenth_page() {
         .expect("every page answered")
         .expect("not interrupted");
 
-    assert_eq!(scout.source.requests.len(), MAX_PAGES as usize);
+    assert_eq!(scout.api.requests.len(), MAX_PAGES as usize);
     assert_eq!(items.len(), MAX_PAGES as usize);
 }
 
@@ -581,8 +581,8 @@ fn a_download_stops_at_its_first_failed_request() {
         .prices(&league(), &mut download)
         .expect_err("a request failed");
 
-    assert_eq!(scout.source.requests.len(), 4, "no unique asked for");
-    assert_eq!(scout.source.requests.last(), Some(&fragments));
+    assert_eq!(scout.api.requests.len(), 4, "no unique asked for");
+    assert_eq!(scout.api.requests.last(), Some(&fragments));
     assert!(
         matches!(
             &error,
@@ -607,7 +607,7 @@ fn a_request_that_hangs_counts_as_answered_after_the_first_answers_of_its_downlo
         let error = scout
             .prices(&league(), &mut Download::default())
             .expect_err("a request hung");
-        (error.answered(), scout.source.requests.len())
+        (error.answered(), scout.api.requests.len())
     };
 
     assert_eq!(hangs(CATEGORIES_PATH), (false, 1));
@@ -639,7 +639,7 @@ fn the_leagues_are_read_whole_or_not_at_all() {
     let leagues = |answer: &str| {
         let mut scout = scout(FakeApi::default().with("/Leagues", answer));
         let leagues = scout.leagues();
-        assert_eq!(scout.source.requests, ["/Leagues"]);
+        assert_eq!(scout.api.requests, ["/Leagues"]);
         leagues
     };
 
@@ -680,7 +680,7 @@ fn an_interrupted_download_sends_no_other_request() {
         let prices = scout.prices(&league(), &mut download);
 
         assert!(matches!(prices, Ok(None)), "interrupted at {stop_at}");
-        assert_eq!(scout.source.requests.len(), stop_at);
+        assert_eq!(scout.api.requests.len(), stop_at);
     }
 }
 
@@ -702,7 +702,7 @@ fn rates_or_categories_that_cant_be_used_stop_the_download_before_any_price() {
         let error = scout
             .prices(&league(), &mut Download::default())
             .expect_err("an answer that can't be used");
-        assert_eq!(scout.source.requests.len(), 2, "{error}");
+        assert_eq!(scout.api.requests.len(), 2, "{error}");
         error
     };
 
@@ -721,7 +721,7 @@ fn rates_or_categories_that_cant_be_used_stop_the_download_before_any_price() {
 #[test]
 fn the_requests_of_a_download_are_spaced() {
     const INTERVAL: Duration = Duration::from_millis(15);
-    let mut scout = Poe2Scout::with_source(api().with("/Leagues", LEAGUES), INTERVAL);
+    let mut scout = Poe2Scout::with_api(api().with("/Leagues", LEAGUES), INTERVAL);
     // From before the first request, which the pace counts from: the gap between two
     // instants taken after each wait could look shorter than the interval.
     let start = Instant::now();
@@ -731,7 +731,7 @@ fn the_requests_of_a_download_are_spaced() {
         .prices(&league(), &mut Download::default())
         .expect("every request answered");
 
-    let times = &scout.source.times;
+    let times = &scout.api.times;
     assert_eq!(times.len(), 6);
     for (after, time) in (0_u32..).zip(times) {
         let least = INTERVAL * after;

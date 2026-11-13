@@ -238,7 +238,7 @@ impl Kind {
 }
 
 /// Where the answers come from: the API over the network, or a fake one in the tests.
-pub(super) trait Source {
+pub(super) trait Api {
     /// The text of the answer of `path` with the parameters `query`.
     fn get(&mut self, path: &str, query: &[(&str, &str)]) -> Result<String, HttpError>;
 }
@@ -246,7 +246,7 @@ pub(super) trait Source {
 /// The API of poe2scout, asked by an agent that identifies the application in each request.
 pub struct Network(ureq::Agent);
 
-impl Source for Network {
+impl Api for Network {
     fn get(&mut self, path: &str, query: &[(&str, &str)]) -> Result<String, HttpError> {
         http::get_text(&self.0, &format!("{BASE_URL}{path}"), query)
     }
@@ -254,25 +254,26 @@ impl Source for Network {
 
 /// The client of poe2scout, which spaces its requests, in the order that prices the most
 /// copied items first, and stops a download at its first failure.
-pub struct Poe2Scout<S = Network> {
-    source: S,
+pub struct Poe2Scout<A = Network> {
+    api: A,
     pace: Pace,
     /// A request of the download under way was answered ([`FetchError::Http`]).
     answered: bool,
 }
 
 impl Poe2Scout {
+    /// The client of poe2scout over the network, at the pace of its rules.
     #[must_use]
     pub fn new() -> Self {
-        Self::with_source(Network(http::agent()), PACE)
+        Self::with_api(Network(http::agent()), PACE)
     }
 }
 
-impl<S: Source> Poe2Scout<S> {
-    /// A client that asks `source`, `interval` between two requests at least.
-    fn with_source(source: S, interval: Duration) -> Self {
+impl<A: Api> Poe2Scout<A> {
+    /// A client that asks `api`, `interval` between two requests at least.
+    fn with_api(api: A, interval: Duration) -> Self {
         Self {
-            source,
+            api,
             pace: Pace::new(interval),
             answered: false,
         }
@@ -310,7 +311,7 @@ impl<S: Source> Poe2Scout<S> {
         query: &[(&str, &str)],
     ) -> Result<T, FetchError> {
         let answer = self
-            .source
+            .api
             .get(path, query)
             .and_then(|text| Ok(serde_json::from_str(&text)?));
         let after_answers = self.answered;
@@ -353,7 +354,7 @@ impl<S: Source> Poe2Scout<S> {
     }
 }
 
-impl<S: Source> PriceDatabase for Poe2Scout<S> {
+impl<A: Api> PriceDatabase for Poe2Scout<A> {
     fn leagues(&mut self) -> Result<Vec<League>, FetchError> {
         self.answered = false;
         // Read strictly: a league left out because it can't be read would be taken for a
