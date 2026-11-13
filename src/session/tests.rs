@@ -370,7 +370,7 @@ fn the_base_type_among_the_filters_of_a_magic_item_comes_with_the_names() {
     let mut session = session();
     let base_type = |session: &Session| {
         let item = session.item()?.parsed().ok()?;
-        session.filtered_base_type(item).map(str::to_owned)
+        session.trade(item).filtered_base_type().map(str::to_owned)
     };
 
     copy(&mut session, MACE);
@@ -665,35 +665,33 @@ fn the_offers_are_searched_in_the_league_shown_once_the_item_is_identified() {
     let parsed = |session: &Session| -> Item { session.item().unwrap().parsed().unwrap().clone() };
     let mut unknown_league = Session::new(None);
     copy(&mut unknown_league, UNIQUE);
+    let unknown = parsed(&unknown_league);
+    let trade = unknown_league.trade(&unknown);
     assert_eq!(
-        unknown_league.trade_search(&parsed(&unknown_league), SearchFilters::default()),
+        trade.search(SearchFilters::default()),
         None,
         "the league isn't known yet"
     );
-    let unknown = parsed(&unknown_league);
-    assert_eq!(unknown_league.search_kind(&unknown), None);
-    assert!(!unknown_league.tradable(&unknown));
+    assert_eq!(trade.search_kind(), None);
+    assert!(!trade.is_tradable());
 
     let mut session = session();
     copy(&mut session, UNIQUE);
     let unique = parsed(&session);
-    let search = session
-        .trade_search(&unique, SearchFilters::default())
-        .expect("a search");
+    let trade = session.trade(&unique);
+    let search = trade.search(SearchFilters::default()).expect("a search");
     assert_eq!(search.league, League::new("Forbidden Rites"));
     assert_eq!(search.language, Language::English);
-    assert!(!session.must_identify(&unique));
-    assert_eq!(session.search_kind(&unique), Some(SearchKind::Items));
-    assert!(session.tradable(&unique));
+    assert!(!trade.must_identify());
+    assert_eq!(trade.search_kind(), Some(SearchKind::Items));
+    assert!(trade.is_tradable());
 
     copy(&mut session, UNIDENTIFIED);
     let unidentified = parsed(&session);
-    assert_eq!(
-        session.trade_search(&unidentified, SearchFilters::default()),
-        None
-    );
-    assert!(session.must_identify(&unidentified));
-    assert_eq!(session.search_kind(&unidentified), None);
+    let trade = session.trade(&unidentified);
+    assert_eq!(trade.search(SearchFilters::default()), None);
+    assert!(trade.must_identify());
+    assert_eq!(trade.search_kind(), None);
     // Its link searches its base type.
-    assert!(session.tradable(&unidentified));
+    assert!(trade.is_tradable());
 }

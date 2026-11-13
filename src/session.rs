@@ -484,79 +484,16 @@ impl Session {
         self.league_prices().map(|prices| Worth::of(&prices.list))
     }
 
-    /// What the search for `item` on the trade site looks for; none for a magic item whose
-    /// base type isn't known yet.
-    fn trade_target<'a>(&'a self, item: &'a Item) -> Option<TradeTarget<'a>> {
+    /// What the trade site can do with `item` in the league shown, its target worked out once
+    /// for the questions the window asks of it at each frame.
+    #[must_use]
+    pub fn trade<'a>(&'a self, item: &'a Item) -> ItemTrade<'a> {
         let prices = self.league_prices().map(|prices| &prices.list);
-        link::target(item, self.item_names.as_ref(), prices)
-    }
-
-    /// The base type of `item` among its filters, which its search looks for unless the
-    /// player unchecks it: for a rare, magic or normal item, or a jewel; none for a magic item
-    /// whose base type isn't known yet.
-    #[must_use]
-    pub fn filtered_base_type<'a>(&'a self, item: &'a Item) -> Option<&'a str> {
-        if !item.rarity().has_item_filters() {
-            return None;
+        ItemTrade {
+            item,
+            league: self.league.as_ref(),
+            target: link::target(item, self.item_names.as_ref(), prices),
         }
-        self.trade_target(item)?.base_type()
-    }
-
-    /// The search for `item` on the trade site with its `filters`, in the league shown; none
-    /// before the league is known, and for an unidentified unique, which is identified to be
-    /// searched.
-    #[must_use]
-    pub fn trade_search(&self, item: &Item, filters: SearchFilters) -> Option<Search> {
-        let league = self.league.as_ref()?;
-        let target = self.searched_target(item)?;
-        Some(Search {
-            language: item.language(),
-            league: league.clone(),
-            query: link::query(item, &target, filters),
-        })
-    }
-
-    /// The kind of the search of `item`, without building it; none when it has no search
-    /// ([`Self::trade_search`]).
-    #[must_use]
-    pub fn search_kind(&self, item: &Item) -> Option<SearchKind> {
-        self.league.as_ref()?;
-        Some(self.searched_target(item)?.query().kind())
-    }
-
-    /// What the search of `item` looks for; none for an unidentified unique, which is
-    /// identified to be searched.
-    fn searched_target<'a>(&'a self, item: &'a Item) -> Option<TradeTarget<'a>> {
-        self.trade_target(item)
-            .filter(|target| !matches!(target, TradeTarget::UnidentifiedUnique { .. }))
-    }
-
-    /// The link of the search for `item` can be opened: the league and its target known.
-    #[must_use]
-    pub fn tradable(&self, item: &Item) -> bool {
-        self.league.is_some() && self.trade_target(item).is_some()
-    }
-
-    /// An unidentified unique, whose offers are searched once it is identified.
-    #[must_use]
-    pub fn must_identify(&self, item: &Item) -> bool {
-        matches!(
-            self.trade_target(item),
-            Some(TradeTarget::UnidentifiedUnique { .. })
-        )
-    }
-
-    /// The link of the search for `item` on the trade site with its `filters`, in the league
-    /// shown; none before the league is known.
-    #[must_use]
-    pub fn trade_url(&self, item: &Item, filters: SearchFilters) -> Option<String> {
-        let league = self.league.as_ref()?;
-        let target = self.trade_target(item)?;
-        Some(link::url(
-            item.language(),
-            league,
-            &link::query(item, &target, filters),
-        ))
     }
 
     /// The prices of the league shown, complete or still downloading.
@@ -598,6 +535,88 @@ impl Session {
     #[must_use]
     pub fn clipboard_readable(&self) -> bool {
         self.clipboard_readable
+    }
+}
+
+/// What the trade site can do with an item in the league shown ([`Session::trade`]).
+#[derive(Debug)]
+pub struct ItemTrade<'a> {
+    item: &'a Item,
+    /// None before the leagues arrive at the first session.
+    league: Option<&'a League>,
+    /// What its search looks for; none for a magic item whose base type isn't known yet.
+    target: Option<TradeTarget<'a>>,
+}
+
+impl<'a> ItemTrade<'a> {
+    #[must_use]
+    pub fn item(&self) -> &'a Item {
+        self.item
+    }
+
+    /// The base type of the item among its filters, which its search looks for unless the
+    /// player unchecks it: for a rare, magic or normal item, or a jewel; none for a magic item
+    /// whose base type isn't known yet.
+    #[must_use]
+    pub fn filtered_base_type(&self) -> Option<&'a str> {
+        if !self.item.rarity().has_item_filters() {
+            return None;
+        }
+        self.target.as_ref()?.base_type()
+    }
+
+    /// The search for the item on the trade site with its `filters`; none before the league
+    /// is known, and for an unidentified unique, which is identified to be searched.
+    #[must_use]
+    pub fn search(&self, filters: SearchFilters) -> Option<Search> {
+        let league = self.league?;
+        let target = self.searched_target()?;
+        Some(Search {
+            language: self.item.language(),
+            league: league.clone(),
+            query: link::query(self.item, target, filters),
+        })
+    }
+
+    /// The kind of the search of the item, without building it; none when it has no search
+    /// ([`Self::search`]).
+    #[must_use]
+    pub fn search_kind(&self) -> Option<SearchKind> {
+        self.league?;
+        Some(self.searched_target()?.query().kind())
+    }
+
+    /// What the search of the item looks for; none for an unidentified unique, which is
+    /// identified to be searched.
+    fn searched_target(&self) -> Option<&TradeTarget<'a>> {
+        self.target
+            .as_ref()
+            .filter(|target| !matches!(target, TradeTarget::UnidentifiedUnique { .. }))
+    }
+
+    /// The link of the search for the item can be opened: the league and its target known.
+    #[must_use]
+    pub fn is_tradable(&self) -> bool {
+        self.league.is_some() && self.target.is_some()
+    }
+
+    /// An unidentified unique, whose offers are searched once it is identified.
+    #[must_use]
+    pub fn must_identify(&self) -> bool {
+        matches!(self.target, Some(TradeTarget::UnidentifiedUnique { .. }))
+    }
+
+    /// The link of the search for the item on the trade site with its `filters`; none before
+    /// the league is known.
+    #[must_use]
+    pub fn url(&self, filters: SearchFilters) -> Option<String> {
+        let league = self.league?;
+        let target = self.target.as_ref()?;
+        Some(link::url(
+            self.item.language(),
+            league,
+            &link::query(self.item, target, filters),
+        ))
     }
 }
 
