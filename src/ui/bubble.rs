@@ -9,6 +9,7 @@ use egui::{
     Ui, Vec2, WidgetInfo, pos2, vec2,
 };
 
+use super::icons;
 use super::theme::{self, color, size, text};
 use super::title_bar::LEAGUE_BLOCK_LEFT;
 use super::widgets;
@@ -142,7 +143,7 @@ impl<'a> Bubble<'a> {
             let tooltip = self.i18n.text(Message::CloseTooltip);
             close.widget_info(|| WidgetInfo::labeled(Role::Button, true, &tooltip));
             let lit = close.hovered() || close.has_focus();
-            widgets::cross(
+            icons::cross(
                 ui.painter(),
                 rect.center(),
                 CLOSE_SIZE,

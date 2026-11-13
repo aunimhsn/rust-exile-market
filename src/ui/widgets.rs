@@ -3,7 +3,6 @@
 //! The lines of text are laid out without a color: the caller gives it when drawing them
 //! (`painter.galley(position, galley, color)`), in one place.
 
-use std::f32::consts::FRAC_PI_2;
 use std::sync::Arc;
 
 use egui::text::{LayoutJob, TextFormat, TextWrapping};
@@ -12,6 +11,7 @@ use egui::{
     Stroke, StrokeKind, Ui, Vec2, WidgetInfo, pos2, vec2,
 };
 
+use super::icons;
 use super::theme::{color, size, text};
 use crate::i18n::CutSentence;
 
@@ -75,7 +75,7 @@ impl Mark {
                 let radius = CornerRadius::same(size::RADIUS);
                 if checked {
                     painter.rect_filled(rect, radius, color::ACCENT);
-                    check_mark(painter, center, CHECK_MARK_WIDTH, color::ON_ACCENT);
+                    icons::check_mark(painter, center, CHECK_MARK_WIDTH, color::ON_ACCENT);
                 } else {
                     let line = if hovered { color::TEXT } else { color::WEAK };
                     painter.rect(
@@ -324,53 +324,6 @@ pub fn sentence_with(
     job
 }
 
-/// A chevron centered on `center`, `width` across its opening: pointing right at `turn` 0,
-/// down at 1, and turned in between, for its animation.
-pub fn chevron(painter: &Painter, center: Pos2, width: f32, turn: f32, color: Color32) {
-    let (sin, cos) = (turn * FRAC_PI_2).sin_cos();
-    let rotate = |point: Vec2| vec2(point.x * cos - point.y * sin, point.x * sin + point.y * cos);
-    let half_width = width / 2.0;
-    let half_depth = width / 4.0;
-    painter.line(
-        [
-            vec2(-half_depth, -half_width),
-            vec2(half_depth, 0.0),
-            vec2(-half_depth, half_width),
-        ]
-        .map(|point| center + rotate(point))
-        .to_vec(),
-        Stroke::new(size::ICON_STROKE, color),
-    );
-}
-
-/// A check mark, centered on `center`.
-pub fn check_mark(painter: &Painter, center: Pos2, width: f32, color: Color32) {
-    // The "check" icon of Lucide, from its 24 point grid: 16 points across.
-    let scale = width / 16.0;
-    painter.line(
-        vec![
-            center + vec2(-8.0, 0.5) * scale,
-            center + vec2(-3.0, 5.5) * scale,
-            center + vec2(8.0, -5.5) * scale,
-        ],
-        Stroke::new(size::ICON_STROKE, color),
-    );
-}
-
-/// A cross `width` across, centered on `center`: the close icons.
-pub fn cross(painter: &Painter, center: Pos2, width: f32, color: Color32) {
-    let half = width / 2.0;
-    let stroke = Stroke::new(size::ICON_STROKE, color);
-    painter.line_segment(
-        [center - Vec2::splat(half), center + Vec2::splat(half)],
-        stroke,
-    );
-    painter.line_segment(
-        [center + vec2(-half, half), center + vec2(half, -half)],
-        stroke,
-    );
-}
-
 /// The size of the pill of `label`, to make room for it.
 #[must_use]
 pub fn pill_size(ui: &Ui, label: &str) -> Vec2 {
@@ -447,7 +400,7 @@ pub fn copied_pill(ui: &mut Ui, label: &str) -> Response {
     painter.rect_filled(rect, CornerRadius::same(size::RADIUS), color::ACCENT);
     let check_left = rect.left() + PILL_PADDING.x + galley.size().x + CHECK_GAP;
     painter.galley(rect.min + PILL_PADDING, galley, color::ON_ACCENT);
-    check_mark(
+    icons::check_mark(
         painter,
         pos2(check_left + CHECK_SIZE / 2.0, rect.center().y),
         CHECK_SIZE,
@@ -467,7 +420,7 @@ pub fn copied_control_pill(ui: &mut Ui, label: &str) {
     let painter = ui.painter();
     painter.rect_filled(rect, CornerRadius::same(size::RADIUS), color::CONTROL);
     let check_left = rect.left() + PILL_PADDING.x;
-    check_mark(
+    icons::check_mark(
         painter,
         pos2(check_left + CHECK_SIZE / 2.0, rect.center().y),
         CHECK_SIZE,
