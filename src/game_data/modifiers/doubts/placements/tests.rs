@@ -47,27 +47,9 @@ fn only_the_tiers_the_item_level_allows_are_placed() {
 #[test]
 fn a_tier_past_its_value_is_left_out_only_when_every_range_rises_or_falls() {
     let placements = [
-        placement(
-            "Life",
-            Affix::Prefix,
-            &[0],
-            &[(0, range(10.0, 20.0))],
-            false,
-        ),
-        placement(
-            "Mixed",
-            Affix::Prefix,
-            &[1],
-            &[(1, range(-5.0, 3.0))],
-            false,
-        ),
-        placement(
-            "Reduced",
-            Affix::Prefix,
-            &[2],
-            &[(2, range(-20.0, -10.0))],
-            false,
-        ),
+        placement("Life", Affix::Prefix, &[0], &[(0, range(10.0, 20.0))]),
+        placement("Mixed", Affix::Prefix, &[1], &[(1, range(-5.0, 3.0))]),
+        placement("Reduced", Affix::Prefix, &[2], &[(2, range(-20.0, -10.0))]),
     ];
     let directions = Directions::of(&placements, 3);
     assert_eq!(directions.rising, [true, false, false]);

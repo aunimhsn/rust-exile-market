@@ -122,8 +122,7 @@ fn lines_are_in_doubt_where_another_reading_is_as_likely_as_the_best_one() {
 #[test]
 fn a_reading_leaves_the_same_room_to_a_prefix_or_suffix_with_as_many_of_each_elsewhere() {
     use Affix::{Prefix, Suffix};
-    let on =
-        |line: usize, affix| placement("Kind", affix, &[line], &[(line, range(1.0, 100.0))], false);
+    let on = |line: usize, affix| placement("Kind", affix, &[line], &[(line, range(1.0, 100.0))]);
     // Three lines: a rarity, a life and an accuracy.
     let best = BestShown {
         lines: Vec::new(),
@@ -159,7 +158,6 @@ fn a_reading_leaves_the_same_room_to_a_prefix_or_suffix_with_as_many_of_each_els
         Prefix,
         &[0, 1],
         &[(0, range(1.0, 10.0)), (1, range(1.0, 10.0))],
-        false,
     );
     assert!(same(&[hybrid, on(2, Suffix)]));
     // A prefix and a suffix added up on the rarity line.

@@ -4,31 +4,31 @@
 use super::*;
 use crate::game_data::modifiers::best_reading::Room;
 use crate::game_data::modifiers::doubts::Line;
-use crate::game_data::modifiers::doubts::fixtures::{ground, line, placement};
+use crate::game_data::modifiers::doubts::fixtures::{fractured, ground, line, placement};
 use crate::game_data::modifiers::fixtures::range;
 use crate::item::ModifierOrigin;
 
 #[test]
 fn a_modifier_is_added_once_per_type_in_the_room_and_never_on_a_line_without_value() {
     use Affix::{Prefix, Suffix};
-    let fractured = Some(ModifierOrigin::Fractured);
+    let fractured_origin = Some(ModifierOrigin::Fractured);
     let lines = [
         line(0, "+# to maximum Life", 0..1, None),
         line(1, "+# to maximum Mana", 1..2, None),
         line(2, "Loads an additional bolt", 2..2, None),
-        line(3, "+# to Armour", 2..3, fractured),
-        line(4, "#% increased Armour", 3..4, fractured),
+        line(3, "+# to Armour", 2..3, fractured_origin),
+        line(4, "#% increased Armour", 3..4, fractured_origin),
     ];
     let values = [50.0, 50.0, 20.0, 30.0];
     let ranges = |value: usize| [(value, range(1.0, 100.0))];
     let placements = [
-        placement("Life", Prefix, &[0], &ranges(0), false),
-        placement("Life", Prefix, &[0], &ranges(0), false),
-        placement("Mana", Prefix, &[1], &ranges(1), false),
-        placement("Bolt", Suffix, &[2], &[], false),
-        placement("Bolts", Suffix, &[2], &[], false),
-        placement("Armour", Prefix, &[3], &ranges(2), true),
-        placement("Increased", Suffix, &[4], &ranges(3), true),
+        placement("Life", Prefix, &[0], &ranges(0)),
+        placement("Life", Prefix, &[0], &ranges(0)),
+        placement("Mana", Prefix, &[1], &ranges(1)),
+        placement("Bolt", Suffix, &[2], &[]),
+        placement("Bolts", Suffix, &[2], &[]),
+        fractured(placement("Armour", Prefix, &[3], &ranges(2))),
+        fractured(placement("Increased", Suffix, &[4], &ranges(3))),
     ];
     let ground = Ground {
         room: Room {
@@ -76,9 +76,9 @@ fn a_line_is_settled_once_its_modifiers_hold_it_or_left_as_the_best_reading_leav
     ];
     let values = [50.0, 50.0];
     let placements = [
-        placement("Life", Prefix, &[0], &[(0, range(1.0, 100.0))], false),
-        placement("Mana", Prefix, &[1], &[(1, range(60.0, 100.0))], false),
-        placement("More", Prefix, &[1], &[(1, range(-20.0, -10.0))], false),
+        placement("Life", Prefix, &[0], &[(0, range(1.0, 100.0))]),
+        placement("Mana", Prefix, &[1], &[(1, range(60.0, 100.0))]),
+        placement("More", Prefix, &[1], &[(1, range(-20.0, -10.0))]),
     ];
     let ground = ground(&lines, &values, &placements);
     let mut state = State::new(&ground);
