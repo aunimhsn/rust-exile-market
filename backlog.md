@@ -6,6 +6,8 @@ One entry per item: what it is, its kind (the section it sits in), what it depen
 
 ## Polish
 
+- The banner « The price database can't be reached » shows too when poe2scout answers but its answer can't be read (`src/session.rs`): a text of its own, or none. Depends on a mock-up (the text, in both languages). Network review of 17e3, outside the area; noted in step 17e3d11 on 2026-11-13.
+
 - Say why a line copied from the in-game trade has no tier (owner, 2026-11-11, step 17e3e: "important"): a line the application can't tell apart (pure modifiers or their hybrid, a line that adds up modifiers in several ways, a search that stopped at its bound) shows no tier, no bar and no word, the owner's choice of 2026-10-29 against "Two splits" with a tooltip, and the only note is the one under the stats, "The tiers are found from the values."; since 17e3e, more lines are without tier (7.6 % of the lines of the draw, 4.6 % before), so that a player may take the lack for a bug. A word in gray in place of the tier, a tooltip, or a second sentence in the note under the stats. The causes aren't one: pure modifiers or their hybrid ("Hybrid or pure"), a hybrid whose lines don't follow each other, which the room may even make certain (the entry of the Edge cases), a line that adds up modifiers in several ways, two readings as good, a sanctified item (no tier at all, and no note under its stats), a search that stopped. Mock-up first (the best 2 or 3 options); `doubts::doubts` would then tell why a line is in doubt, which it doesn't keep today (`PartRead` knows it for each part of the item).
 
 - The line "Check a modifier to estimate this item." stays after the player checks an implicit, a rune, an enchantment or a total its base reaches, which compare nothing (sixth code review of 17e3f, 2026-11-11): the rule is right, but the game itself calls an implicit a modifier, so that the line reads as a bug. Other words ("Check a prefix or a suffix…"), or a tooltip on the line that says what doesn't compare. Mock-up first; depends on the owner's choice of the words.
@@ -99,6 +101,8 @@ One entry per item: what it is, its kind (the section it sits in), what it depen
 - The certificates of the system rather than those built into the executable (security audit of 2026-11-10, finding 16, info): `ureq` trusts the list of `webpki-roots` of the day of the build, so an old version keeps authorities since withdrawn and lacks the new ones; its `platform-verifier` feature reads the store of the system, with more dependencies. To weigh with step 20 (Automatic updates). Noted on 2026-11-10.
 
 ## Code
+
+- `read_lines`, in `src/session.rs`, works out the stats of the same lines several times for each item copied (`LineStats::new` twice, then `TierRolls::new`, then `with_ranges` for each tier): no measurable effect today, to look at if the reading of an item slows. Depends on nothing; critical code (the matching of the game data), so a review on Fable 5.2. Parser review of 17e3, outside the area; noted in step 17e3d11 on 2026-11-13.
 
 - `src/ui/icons.rs` places its icons two ways: in a square (`chevron`, `search`, `refresh`, `double_chevron`) or by a center and a width (`check_mark`, `cross`, `spinner`); one way would read better. Depends on nothing; cost: one small commit of the interface. Code review of 17e3d6d, 2026-11-13.
 
