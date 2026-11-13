@@ -265,22 +265,16 @@ impl<T: Transport> TradeClient<T> {
             }
             Sent::Answered(answer) => answer,
         };
-        let is_success = (200..300).contains(&answer.status);
-        let counted = is_success && !answer.limits.rules.is_empty();
+        let counted = answer.is_success() && !answer.limits.rules.is_empty();
         self.limits.sent(policy, hit(counted));
-        if is_success && !counted && !self.told_no_limits {
+        if answer.is_success() && !counted && !self.told_no_limits {
             // Its headers renamed, maybe: only the 10 seconds between two searches and the
             // wait of a refusal hold then. Once: every answer would say the same.
             log::warn!("Trade site: an answer told no limits, the known ones are kept");
             self.told_no_limits = true;
         }
         self.limits.answered(policy, &answer.limits, now);
-        if !is_success {
-            answer.log_error_message();
-            return Err(HttpError::Request(ureq::Error::StatusCode(answer.status)).into());
-        }
-        let body = answer.body.map_err(HttpError::Request)?;
-        Ok(serde_json::from_str(&body).map_err(HttpError::Json)?)
+        Ok(answer.json()?)
     }
 }
 

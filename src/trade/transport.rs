@@ -5,9 +5,11 @@
 
 use std::time::Instant;
 
+use serde::de::DeserializeOwned;
+
 use super::limits::{self, LimitHeaders, RuleHeaders};
 use super::refusal::Refusal;
-use crate::http;
+use crate::http::{self, HttpError};
 use crate::logging;
 
 /// A request to the trade site: a `GET`, or a `POST` of a JSON body.
@@ -28,9 +30,24 @@ pub(super) struct Answer {
 }
 
 impl Answer {
+    /// The status is a success (2xx).
+    pub fn is_success(&self) -> bool {
+        (200..300).contains(&self.status)
+    }
+
+    /// The JSON of a success. An error status is an error, whose message is logged.
+    pub fn json<A: DeserializeOwned>(self) -> Result<A, HttpError> {
+        if !self.is_success() {
+            self.log_error_message();
+            return Err(HttpError::Request(ureq::Error::StatusCode(self.status)));
+        }
+        let body = self.body.map_err(HttpError::Request)?;
+        serde_json::from_str(&body).map_err(HttpError::Json)
+    }
+
     /// Writes to the log why the trade site answered with an error status, when it says so:
     /// after a change of the game, the filter it no longer knows is named there.
-    pub fn log_error_message(&self) {
+    fn log_error_message(&self) {
         let message = self.body.as_deref().ok().and_then(error_message);
         if let Some(message) = message {
             log::warn!("Trade site: status {}, \"{message}\"", self.status);

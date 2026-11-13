@@ -238,16 +238,7 @@ impl<T: Transport> TradeSite<T> {
             }
             Sent::Answered(answer) => answer,
         };
-        if !(200..300).contains(&answer.status) {
-            answer.log_error_message();
-            let status = ureq::Error::StatusCode(answer.status);
-            return Err(failed(HttpError::Request(status)));
-        }
-        let body = answer
-            .body
-            .map_err(|error| failed(HttpError::Request(error)))?;
-        let result: ApiResult<A> =
-            serde_json::from_str(&body).map_err(|error| failed(HttpError::Json(error)))?;
+        let result: ApiResult<A> = answer.json().map_err(failed)?;
         self.answered = true;
         Ok(result.result)
     }
