@@ -7,7 +7,7 @@ Pour le testeur Windows. Un bug à gauche de l'engrenage ouvre l'aperçu du rapp
 ## Avant
 
 1. Ferme Exile Market et Exiled Exchange 2 s'il tourne.
-2. Télécharge la nouvelle archive Windows `exile-market-test-x86_64-pc-windows-msvc.zip` (lien donné par le propriétaire ; il faut être connecté à un compte GitHub pour la télécharger) et décompresse-la.
+2. Télécharge la nouvelle archive Windows `exile-market-windows-x64.zip` (lien donné par le propriétaire ; il faut être connecté à un compte GitHub pour la télécharger) et décompresse-la.
 3. Lance `exile-market.exe`. Si Windows SmartScreen bloque : « Informations complémentaires », puis « Exécuter quand même ».
 4. Connecte-toi à GitHub dans ton navigateur par défaut, pour voir le formulaire comme un joueur connecté.
 5. Le log est dans `%LOCALAPPDATA%\exile-market\data\exile-market.log` (colle ce chemin dans la barre d'adresse de l'Explorateur), celui de la session précédente à côté, `exile-market.previous.log`. Il est écrit au fur et à mesure : ouvre-le dans le Bloc-notes à la fin, ou rouvre-le pour voir les nouvelles lignes.

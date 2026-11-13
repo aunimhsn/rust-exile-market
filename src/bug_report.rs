@@ -40,8 +40,11 @@ static OPENINGS: AtomicU64 = AtomicU64::new(0);
 const ENCODED_LINE_BREAK: usize = "%0A".len();
 /// The most of a log file the report reads, its end, read on the thread of the interface at the
 /// click: "Copy the log" copies it whole, to paste into an issue, whose text GitHub limits to
-/// 65,536 characters (as known, not measured yet: 17f). A session of play logs a few kilobytes (3
-/// and 5 KB, the owner's last two on 2026-11-09), so a log reaches it only in a long session.
+/// 65,536 characters (its API answers "body is too long (maximum is 65536 characters)", as many
+/// reports show; GitHub documents no unit, but 60,000 bytes are at most 60,000 characters, which
+/// leaves room for the text of the form either way; checked on 2026-11-13, 17f1). A session of
+/// play logs a few kilobytes (3 and 5 KB, the owner's last two on 2026-11-09), so a log reaches
+/// it only in a long session.
 const LOG_BUDGET_BYTES: u64 = 60_000;
 
 /// What the application knows, for the summary of the report.

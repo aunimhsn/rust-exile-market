@@ -3,7 +3,7 @@
 ## Publish a version
 
 1. Run the `security-auditor` subagent on `main` and fix the findings the owner approves (a critical or high one blocks the release), and run the guides of `docs/tests/` again ([the list](tests/README.md)).
-2. Update `version` in `Cargo.toml` (then run `cargo build` to update `Cargo.lock`) and merge it into `main`.
+2. Update `version` in `Cargo.toml` (then run `cargo build` to update `Cargo.lock`), write the notes of the version in `docs/release-notes/v<version>.md` (for the players: the download, the display mode the game needs, what changed, the known limits), and merge them into `main`.
 3. Run the Release workflow by hand on `main` (Actions, Release, Run workflow) and wait for its builds on every system: a tag can't be moved, so a build that fails at the tag costs a version number.
 4. Tag the merged commit with the same version and push the tag:
 
@@ -13,13 +13,15 @@
    git push origin v0.1.0
    ```
 
-The [Release workflow](../.github/workflows/release.yml) builds the archives for Windows, macOS and Linux and publishes them as a GitHub release, with their checksums (`SHA256SUMS.txt`). It fails if the tag does not match the version of `Cargo.toml`, if its commit isn't on `main` (a commit that went through a pull request and its checks; a guard against a tag put by mistake, since the workflow that runs is the one of the tagged commit), or if a security advisory on a dependency isn't sorted yet (`cargo deny check advisories`: update the dependency, or list the advisory in `deny.toml` with its reason). A ruleset of the repository keeps the tags `v*` from being moved or deleted: a wrong tag is replaced by the next version, never pushed again.
+The [Release workflow](../.github/workflows/release.yml) builds the archives for Windows, macOS and Linux and publishes them as a GitHub release, with their checksums (`SHA256SUMS.txt`) and the notes of `docs/release-notes/<tag>.md`. The release is a normal one, never a pre-release: `releases/latest`, which the download page and the README link to, skips the pre-releases. It fails if the tag does not match the version of `Cargo.toml`, if the notes of the version are missing, if its commit isn't on `main` (a commit that went through a pull request and its checks; a guard against a tag put by mistake, since the workflow that runs is the one of the tagged commit), or if a security advisory on a dependency isn't sorted yet (`cargo deny check advisories`: update the dependency, or list the advisory in `deny.toml` with its reason). A ruleset of the repository keeps the tags `v*` from being moved or deleted: a wrong tag is replaced by the next version, never pushed again.
 
 The version of Rust is pinned in `rust-toolchain.toml`: the release is built by the compiler the checks of `main` ran with. Dependabot proposes the new versions; each action of the workflows is pinned to a commit the same way (`.github/scripts/pinned-actions.sh`, run by the CI).
 
 Between two releases, the [Advisories workflow](../.github/workflows/advisories.yml) checks the advisories every day and fails, with an email to the owner, on a new one: a flaw that reaches the players calls for an urgent fix and a patch release.
 
 ## What an archive holds
+
+Each archive keeps its name from one version to the next (`exile-market-windows-x64.zip`, `exile-market-linux-x64.tar.gz`, `exile-market-macos-x64.tar.gz`, `exile-market-macos-arm64.tar.gz`), and so does the folder inside it: the buttons of the download page link to `releases/latest/download/<archive>`, which a rename breaks.
 
 - the executable (`exile-market` or `exile-market.exe`) and `README.md`;
 - `LICENSE`, the GNU General Public License;

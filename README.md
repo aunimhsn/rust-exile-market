@@ -6,14 +6,16 @@ A price checker for Path of Exile 2, free and open source, for Windows and Linux
 - **Rare, magic and normal items, and jewels**: their stats and tiers, each stat a filter to tick, then the offers of similar items on the official trade site, and a price estimated from them.
 - The game in English or French, and the interface in both.
 
+Exile Market is a pre-alpha, out early to hear from the players: expect bugs, and report them through the bug icon of the title bar.
+
 ## Download
 
 Take the archive of your system from the [latest release](https://github.com/aunimhsn/rust-exile-market/releases/latest):
 
 | System | Archive |
 |---|---|
-| Windows | `exile-market-<version>-x86_64-pc-windows-msvc.zip` |
-| Linux | `exile-market-<version>-x86_64-unknown-linux-gnu.tar.gz` |
+| Windows | [`exile-market-windows-x64.zip`](https://github.com/aunimhsn/rust-exile-market/releases/latest/download/exile-market-windows-x64.zip) |
+| Linux | [`exile-market-linux-x64.tar.gz`](https://github.com/aunimhsn/rust-exile-market/releases/latest/download/exile-market-linux-x64.tar.gz) |
 
 Unpack it and start `exile-market.exe` (Windows) or `exile-market` (Linux). There is nothing to install. The application tells you when a new version is out, and you download it the same way.
 
@@ -21,7 +23,7 @@ The executable isn't signed for now, so Windows may show an alert at the first l
 
 The checksums of the archives are in `SHA256SUMS.txt`, on the page of the release.
 
-The macOS archives are for players who run the Windows client through a compatibility layer, the game having no macOS client: there, only Ctrl+C copies an item, without the window over the game, and macOS refuses the unsigned executable at first (System Settings, Privacy & Security, Open Anyway). They are less tested.
+The macOS archives (`exile-market-macos-arm64.tar.gz` for an Apple chip, `exile-market-macos-x64.tar.gz` for an Intel one) are for players who run the Windows client through a compatibility layer, the game having no macOS client: there, only Ctrl+C copies an item, without the window over the game, and macOS refuses the unsigned executable at first (System Settings, Privacy & Security, Open Anyway). They are less tested.
 
 ## Set the display mode of the game
 

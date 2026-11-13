@@ -4,7 +4,7 @@
 
 ## Avant
 
-1. Télécharge l'archive Windows `exile-market-test-x86_64-pc-windows-msvc.zip` (lien donné par le propriétaire) et décompresse-la.
+1. Télécharge l'archive Windows `exile-market-windows-x64.zip` (lien donné par le propriétaire) et décompresse-la.
 2. Lance `exile-market.exe`, puis ouvre le Bloc-notes pour coller.
 3. **Avant de garder le presse-papiers**, sinon l'objet ne sera plus lu : copie dans le jeu un objet qui a des offres, clique sur la **loupe** si elles ne sont pas déjà là, et vérifie qu'un vendeur en ligne apparaît.
 4. Ouvre PowerShell, et garde la même fenêtre pour tout le guide. Colle ces deux lignes, puis appuie sur Entrée : le presse-papiers reste gardé jusqu'à ce que tu répondes par Entrée à la question de PowerShell.

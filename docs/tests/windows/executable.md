@@ -5,7 +5,7 @@ Pour le testeur Windows. L'exécutable s'appelle désormais `exile-market.exe`. 
 ## Avant
 
 1. Ferme Exile Market s'il tourne.
-2. Télécharge la nouvelle archive Windows `exile-market-test-x86_64-pc-windows-msvc.zip` (lien donné par le propriétaire ; il faut être connecté à un compte GitHub pour la télécharger) et décompresse-la.
+2. Télécharge la nouvelle archive Windows `exile-market-windows-x64.zip` (lien donné par le propriétaire ; il faut être connecté à un compte GitHub pour la télécharger) et décompresse-la.
 
 ## Les tests
 

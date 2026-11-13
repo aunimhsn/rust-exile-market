@@ -12,6 +12,8 @@ publish = false
 
 # The executable, named without the `rust-` prefix of the repository: its name is also the
 # application id of the window and the folder of the user's directories (`APP_ID` in main.rs).
+# It names the release archives too (`release.yml`), which the download page links to: a
+# rename breaks its buttons.
 [[bin]]
 name = "exile-market"
 path = "src/main.rs"
