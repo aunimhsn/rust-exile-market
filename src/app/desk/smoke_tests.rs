@@ -218,7 +218,7 @@ impl Scene {
         let estimated = self.i18n.text(Message::EstimatedPriceLabel).to_uppercase();
         drawn.with_an_estimate += wrote(&estimated);
         drawn.with_a_check_hint += wrote(&self.i18n.text(Message::CheckToEstimate));
-        match self.desk.offers.state() {
+        match self.desk.work.offers.state() {
             OffersState::Items(_) => drawn.with_offers_of_items += 1,
             OffersState::Exchange { .. } => drawn.with_offers_of_the_exchange += 1,
             OffersState::Idle
@@ -293,7 +293,7 @@ impl Scene {
             (Query::Items(_), Some(SearchKind::Items))
                 | (Query::Exchange(_), Some(SearchKind::Exchange))
         ));
-        let order = self.desk.offers.search(search, Instant::now());
+        let order = self.desk.work.offers.search(search, Instant::now());
         assert!(order.is_some(), "the search is allowed");
         self.desk.apply_answer(answer, SystemTime::now());
     }
@@ -307,7 +307,7 @@ fn draw_the_offers(scene: &mut Scene, ctx: &Context, drawn: &mut Drawn, kind: Se
         .desk
         .shown_search()
         .expect("a search for an item with a kind");
-    let _ = scene.desk.offers.search(search, Instant::now());
+    let _ = scene.desk.work.offers.search(search, Instant::now());
     scene.draw_each_way(ctx, drawn);
     // Its offers, then the next ones asked, which don't come.
     scene
@@ -315,9 +315,9 @@ fn draw_the_offers(scene: &mut Scene, ctx: &Context, drawn: &mut Drawn, kind: Se
         .apply_answer(answer(kind, interface), SystemTime::now());
     scene.draw_each_way(ctx, drawn);
     scene.draw_under_the_pointer(ctx, drawn);
-    let _ = scene.desk.offers.more();
+    let _ = scene.desk.work.offers.more();
     scene.draw_each_way(ctx, drawn);
-    if scene.desk.offers.busy() {
+    if scene.desk.work.offers.busy() {
         scene.desk.apply_answer(
             Answer {
                 outcome: Outcome::Failed(Failure::Unreadable),

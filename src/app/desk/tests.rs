@@ -45,7 +45,7 @@ fn the_status_bar_tells_a_long_wait_rather_than_the_age_of_the_last_search() {
         league: League::new("Standard"),
         query: Query::Exchange("divine".to_owned()),
     };
-    let _ = desk.offers.search(search, now);
+    let _ = desk.work.offers.search(search, now);
     let answer = |seconds| Answer {
         outcome: Outcome::Exchange {
             offers: Vec::new(),
@@ -114,15 +114,15 @@ fn an_item_copied_again_after_another_comes_back_with_its_filters() {
                 .item()
                 .is_some_and(|shown| shown.parsed().is_ok())
         );
-        desk.filters.set(life, filter(true, "25"));
+        desk.work.filters.set(life, filter(true, "25"));
         desk.apply_clipboard_event(copied(&second));
-        let on_second = desk.filters.get(life, by_default);
+        let on_second = desk.work.filters.get(life, by_default);
         let _ = desk.take_scroll_to_top();
         desk.apply_clipboard_event(copied(&first));
 
         assert_eq!(on_second, by_default(), "{hotkey:?}");
         assert_eq!(
-            desk.filters.get(life, by_default),
+            desk.work.filters.get(life, by_default),
             filter(true, "25"),
             "{hotkey:?}"
         );
@@ -146,7 +146,7 @@ fn the_item_shown_copied_again_by_the_hotkey_stays_as_it_is() {
         item: ring.clone(),
         hotkey: None,
     });
-    desk.filters.set(life, filter(true, "25"));
+    desk.work.filters.set(life, filter(true, "25"));
     let _ = desk.take_scroll_to_top();
 
     desk.apply_clipboard_event(ClipboardEvent::Copied {
@@ -155,7 +155,7 @@ fn the_item_shown_copied_again_by_the_hotkey_stays_as_it_is() {
     });
 
     assert_eq!(
-        desk.filters.get(life, || filter(false, "")),
+        desk.work.filters.get(life, || filter(false, "")),
         filter(true, "25")
     );
     assert!(!desk.take_scroll_to_top(), "it stays where the player is");

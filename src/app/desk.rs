@@ -8,14 +8,14 @@ use egui::Ui;
 
 use super::item_view::{ItemView, search_filters};
 use crate::clipboard::ClipboardEvent;
-use crate::filters::{Filters, Window};
+use crate::filters::Window;
 use crate::i18n::Translator;
 use crate::item::CopiedItem;
 use crate::item_names::ItemNames;
 use crate::league::League;
 use crate::market::MarketEvent;
-use crate::offers_state::{LONG_WAIT, Offers};
-use crate::recent_items::RecentItems;
+use crate::offers_state::LONG_WAIT;
+use crate::recent_items::{ItemWork, RecentItems};
 use crate::session::{LeagueChange, PricesState, Session, ShownItem};
 use crate::trade::query::SearchKind;
 use crate::trade::search::{Answer, Order, Search};
@@ -57,11 +57,8 @@ pub(super) struct Desk {
     /// The item shown, the last one copied, and the items copied before it, with their filters
     /// and offers as the player left them.
     recent: RecentItems,
-    /// The filters of the search as the player set them, for the item shown: those of another
-    /// item copied are its own, by default or as the player left them.
-    filters: Filters,
-    /// The offers of the item shown, and the waiting time before the next search.
-    offers: Offers,
+    /// What the player did with the item shown: its filters and its offers.
+    work: ItemWork,
     /// The stats of the item are unfolded, for every item copied until the player folds them.
     stats_open: bool,
     /// An item was copied: the content scrolls back to the top, to its name and its price.
@@ -75,8 +72,7 @@ impl Desk {
         Self {
             session: Session::new(league),
             recent: RecentItems::default(),
-            filters: Filters::default(),
-            offers: Offers::default(),
+            work: ItemWork::default(),
             stats_open: false,
             scroll_to_top: false,
         }
@@ -108,16 +104,14 @@ impl Desk {
                 .item()
                 .map(ShownItem::shape)
                 .unwrap_or_default();
-            back = self
-                .recent
-                .show(item, shape, &mut self.filters, &mut self.offers);
+            back = self.recent.show(item, shape, &mut self.work);
         }
         self.session.apply(event);
         // Read again with the names of the trade site arrived since it was left, its lines may
         // have moved, the filters set on them no longer falling on the same lines.
         let shown = self.session.item().map(ShownItem::shape);
         if lines_moved(back.as_deref(), shown.as_deref()) {
-            self.filters.forget_stats();
+            self.work.filters.forget_stats();
         }
     }
 
@@ -145,7 +139,7 @@ impl Desk {
     /// forgets the filters of its lines when they moved.
     pub(super) fn apply_item_names(&mut self, names: ItemNames) {
         if self.session.apply_item_names(names) {
-            self.filters.forget_stats();
+            self.work.filters.forget_stats();
         }
     }
 
@@ -165,28 +159,28 @@ impl Desk {
     /// Forgets the offers of the item shown and of the items remembered: they were searched in
     /// the previous league.
     fn forget_offers(&mut self) {
-        self.offers.clear();
+        self.work.offers.clear();
         self.recent.forget_offers();
     }
 
     /// Takes in the answer of a search of the trade site, at `clock`.
     pub(super) fn apply_answer(&mut self, answer: Answer, clock: SystemTime) {
-        self.offers.apply(answer, clock);
+        self.work.offers.apply(answer, clock);
     }
 
     /// The thread of the searches ended: a search waiting for its answer never gets it.
     pub(super) fn search_thread_lost(&mut self) {
-        self.offers.thread_lost();
+        self.work.offers.thread_lost();
     }
 
     /// Settles the number typed in a field of `window`, as leaving it does.
     pub(super) fn settle_edited(&mut self, window: Window) {
-        self.filters.settle_edited(window);
+        self.work.filters.settle_edited(window);
     }
 
     /// No field of `window` is edited any more.
     pub(super) fn forget_edited(&mut self, window: Window) {
-        self.filters.forget_edited(window);
+        self.work.filters.forget_edited(window);
     }
 
     /// The kind of the search of the offers of the item shown, when it can be searched.
@@ -201,7 +195,7 @@ impl Desk {
         let shown = self.session.item()?;
         let item = shown.parsed().ok()?;
         let trade = self.session.trade(item);
-        trade.search(search_filters(&trade, shown, &self.filters))
+        trade.search(search_filters(&trade, shown, &self.work.filters))
     }
 
     /// The state of the trade site in the status bar, at `now`: the long wait before the next
@@ -212,7 +206,10 @@ impl Desk {
         now: Instant,
         clock: SystemTime,
     ) -> TradeStatus {
-        match (self.offers.wait(kind, now), self.offers.last_search()) {
+        match (
+            self.work.offers.wait(kind, now),
+            self.work.offers.last_search(),
+        ) {
             (wait, _) if wait > LONG_WAIT => TradeStatus::Waiting(wait),
             (_, Some(searched)) => {
                 TradeStatus::Searched(clock.duration_since(searched).unwrap_or_default())
@@ -241,8 +238,8 @@ impl Desk {
             session: &self.session,
             shown,
             item,
-            offers: &self.offers,
-            filters: &mut self.filters,
+            offers: &self.work.offers,
+            filters: &mut self.work.filters,
             stats_open: self.stats_open,
             prices: around.prices,
             kind: around.kind,
@@ -257,9 +254,9 @@ impl Desk {
             // Built at the click, with the filters as the player just left them.
             Some(OffersAction::Search) => self
                 .shown_search()
-                .and_then(|search| self.offers.search(search, Instant::now()))
+                .and_then(|search| self.work.offers.search(search, Instant::now()))
                 .map(DeskRequest::Search),
-            Some(OffersAction::More) => self.offers.more().map(DeskRequest::Search),
+            Some(OffersAction::More) => self.work.offers.more().map(DeskRequest::Search),
             Some(OffersAction::ReportBug) => Some(DeskRequest::BugReport),
             None => None,
         };
