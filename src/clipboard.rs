@@ -91,7 +91,9 @@ struct ClipboardWatcher<S> {
     hasher: RandomState,
     last_text_hash: Option<u64>,
     failures_in_a_row: u32,
-    readable: bool,
+    /// The clipboard counts as readable: the last event told wasn't
+    /// [`ClipboardEvent::Unreadable`].
+    is_readable: bool,
     /// When the hotkey prepared its copy: the item read within [`COPY_WAIT`] is a new copy, even
     /// the same.
     copy_expected: CopyExpected,
@@ -109,7 +111,7 @@ impl<S: ClipboardSource> ClipboardWatcher<S> {
             hasher: RandomState::new(),
             last_text_hash: None,
             failures_in_a_row: 0,
-            readable: true,
+            is_readable: true,
             copy_expected,
         }
     }
@@ -171,19 +173,22 @@ impl<S: ClipboardSource> ClipboardWatcher<S> {
         expected.then_some(at)
     }
 
+    /// A reading succeeded: tells `emit` when the clipboard is readable again.
     fn succeeded(&mut self, emit: &mut impl FnMut(ClipboardEvent)) {
         self.failures_in_a_row = 0;
-        if !self.readable {
-            self.readable = true;
+        if !self.is_readable {
+            self.is_readable = true;
             log::info!("The clipboard can be read again");
             emit(ClipboardEvent::Readable);
         }
     }
 
+    /// A reading failed for `reason`: tells `emit` when the clipboard has failed too often in
+    /// a row to count as readable.
     fn failed(&mut self, reason: &str, emit: &mut impl FnMut(ClipboardEvent)) {
         self.failures_in_a_row += 1;
-        if self.readable && self.failures_in_a_row >= FAILURES_BEFORE_UNREADABLE {
-            self.readable = false;
+        if self.is_readable && self.failures_in_a_row >= FAILURES_BEFORE_UNREADABLE {
+            self.is_readable = false;
             log::warn!("The clipboard can't be read: {reason}");
             emit(ClipboardEvent::Unreadable);
         }

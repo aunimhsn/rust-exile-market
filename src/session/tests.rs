@@ -83,11 +83,11 @@ fn keeps_the_item_while_the_clipboard_is_unreadable() {
     copy(&mut session, RING);
 
     session.apply(ClipboardEvent::Unreadable);
-    assert!(!session.clipboard_readable());
+    assert!(!session.is_clipboard_readable());
     assert_eq!(shown_base(&session), Some("Ruby Ring"));
 
     session.apply(ClipboardEvent::Readable);
-    assert!(session.clipboard_readable());
+    assert!(session.is_clipboard_readable());
 }
 
 #[test]
@@ -674,6 +674,7 @@ fn the_offers_are_searched_in_the_league_shown_once_the_item_is_identified() {
     );
     assert_eq!(trade.search_kind(), None);
     assert!(!trade.is_tradable());
+    assert_eq!(trade.url(SearchFilters::default()), None);
 
     let mut session = session();
     copy(&mut session, UNIQUE);
@@ -694,4 +695,5 @@ fn the_offers_are_searched_in_the_league_shown_once_the_item_is_identified() {
     assert_eq!(trade.search_kind(), None);
     // Its link searches its base type.
     assert!(trade.is_tradable());
+    assert!(trade.url(SearchFilters::default()).is_some());
 }

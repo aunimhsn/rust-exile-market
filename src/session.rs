@@ -65,9 +65,9 @@ impl TradeCopy {
 
 /// What the services gave so far, which the lines of an item are read with.
 #[derive(Debug, Clone, Copy)]
-struct Known<'a> {
+struct ServiceData<'a> {
     /// The stats of the trade site, once it gave them.
-    trade: Option<&'a TradeStats>,
+    trade_stats: Option<&'a TradeStats>,
     /// The names of the items of the trade site, once it gave them.
     names: Option<&'a ItemNames>,
     /// The prices of the league shown known so far.
@@ -76,7 +76,7 @@ struct Known<'a> {
 
 impl ShownItem {
     /// The item `copied`, read with what the services gave so far.
-    fn new(copied: &CopiedItem, known: Known) -> Self {
+    fn new(copied: &CopiedItem, service_data: ServiceData) -> Self {
         // An item that can't be read shows its message in the window.
         let parsed = Item::parse(copied);
         match &parsed {
@@ -96,7 +96,7 @@ impl ShownItem {
             stats: LineStats::default(),
             tiers: TierRolls::default(),
         };
-        shown.read_lines(known);
+        shown.read_lines(service_data);
         shown
     }
 
@@ -106,31 +106,20 @@ impl ShownItem {
     /// that way their ranges from its modifiers among the prices, from its modifiers as the
     /// parser read them. True when its modifiers changed shape (the lines of a hybrid joined
     /// once the names tell the base of a magic item): the keys of their filters moved.
-    fn read_lines(&mut self, known: Known) -> bool {
-        let Known { trade, names, .. } = known;
+    fn read_lines(&mut self, service_data: ServiceData) -> bool {
+        let trade = service_data.trade_stats;
         let Ok(item) = &mut self.parsed else {
             return false;
         };
-        let base_type = link::target(item, names, None)
+        let base_type = link::target(item, service_data.names, None)
             .and_then(|target| target.base_type())
             .map(str::to_owned);
         let mut reshaped = false;
         if let Some(trade_copy) = &self.trade_copy {
             let modifiers = match (trade_copy, &base_type) {
-                (TradeCopy::Prices(copied), _) => unique_rolls(item, copied, known),
+                (TradeCopy::Prices(copied), _) => unique_rolls(item, copied, service_data),
                 (TradeCopy::Values(copied), Some(base_type)) => {
-                    // The runes and the implicits, which tell the room, are never read again.
-                    let stats = LineStats::new(item, copied, trade);
-                    let trade_item = TradeItem {
-                        base: ItemBase {
-                            language: item.language(),
-                            base_type,
-                            item_level: item.item_level(),
-                        },
-                        limits: stats.affix_limits(item),
-                        is_sanctified: item.has_state(ItemState::Sanctified),
-                    };
-                    game_data::with_trade_tiers(&trade_item, copied)
+                    value_tiers(item, copied, base_type, trade)
                 }
                 // A magic item before the names of the trade site tell its base.
                 (TradeCopy::Values(copied), None) => copied.clone(),
@@ -179,24 +168,50 @@ impl ShownItem {
     }
 }
 
+/// The modifiers `copied` of `item`, a rare or magic item copied from the in-game trade whose
+/// base is `base_type`, with the tiers found from their values in the modifier tables, the
+/// stats of the trade site `trade` telling the affixes its runes and implicits allow.
+fn value_tiers(
+    item: &Item,
+    copied: &[Modifier],
+    base_type: &str,
+    trade: Option<&TradeStats>,
+) -> Vec<Modifier> {
+    // The runes and the implicits, which tell the room, are never read again.
+    let stats = LineStats::new(item, copied, trade);
+    let trade_item = TradeItem {
+        base: ItemBase {
+            language: item.language(),
+            base_type,
+            item_level: item.item_level(),
+        },
+        limits: stats.affix_limits(item),
+        is_sanctified: item.has_state(ItemState::Sanctified),
+    };
+    game_data::with_trade_tiers(&trade_item, copied)
+}
+
 /// The modifiers `copied` of `item`, a unique copied from the in-game trade, with the ranges of
-/// its modifiers and of those of its base among the prices `known`, found by its English name
-/// (through the names of the trade site for a French copy); as copied while they don't hold it.
-fn unique_rolls(item: &Item, copied: &[Modifier], known: Known) -> Vec<Modifier> {
-    let Known {
-        trade,
-        names,
-        prices,
-    } = known;
-    match fixed::price_of(item, prices, names) {
+/// its modifiers and of those of its base among the prices of `service_data`, found by its
+/// English name (through the names of the trade site for a French copy); as copied while they
+/// don't hold it.
+fn unique_rolls(item: &Item, copied: &[Modifier], service_data: ServiceData) -> Vec<Modifier> {
+    let price = fixed::price_of(item, service_data.prices, service_data.names);
+    match price {
         Ok(FixedPrice::Unique(unique)) => game_data::with_unique_rolls(
             item.language(),
             copied,
             &unique.modifiers.implicit,
             &unique.modifiers.explicit,
-            trade,
+            service_data.trade_stats,
         ),
-        _ => copied.to_vec(),
+        Ok(FixedPrice::Currency(_) | FixedPrice::Uniques(_))
+        | Err(
+            NoFixedPrice::NotFixedName
+            | NoFixedPrice::PricesUnknown
+            | NoFixedPrice::NotPriced
+            | NoFixedPrice::NamesUnknown,
+        ) => copied.to_vec(),
     }
 }
 
@@ -217,6 +232,8 @@ fn shape(modifiers: &[Modifier]) -> Vec<usize> {
         .collect()
 }
 
+/// What the window shows of the leagues, the prices, the names of the trade site and the
+/// item copied, built from the events of the threads.
 #[derive(Debug)]
 pub struct Session {
     /// The leagues of the price database, once they arrived.
@@ -228,7 +245,7 @@ pub struct Session {
     /// The prices of the league shown, from the cache or the price database.
     prices: Option<LeaguePrices>,
     /// The last request for the leagues succeeded.
-    leagues_reachable: bool,
+    are_leagues_reachable: bool,
     /// The league whose last download of the prices failed, if any.
     prices_failed: Option<League>,
     /// The names of the items of the trade site, which find the prices of a French item.
@@ -238,7 +255,8 @@ pub struct Session {
     trade_stats: Option<TradeStats>,
     /// Shown until another item is copied.
     item: Option<ShownItem>,
-    clipboard_readable: bool,
+    /// The clipboard can be read, as its watcher last told.
+    is_clipboard_readable: bool,
 }
 
 /// The prices of a league, complete or still downloading.
@@ -278,12 +296,12 @@ impl Session {
             league,
             new_league: None,
             prices: None,
-            leagues_reachable: true,
+            are_leagues_reachable: true,
             prices_failed: None,
             item_names: None,
             trade_stats: None,
             item: None,
-            clipboard_readable: true,
+            is_clipboard_readable: true,
         }
     }
 
@@ -292,7 +310,7 @@ impl Session {
     pub fn apply_market(&mut self, event: MarketEvent, closed: &[League]) -> Option<LeagueChange> {
         match event {
             MarketEvent::Leagues(leagues) => {
-                self.leagues_reachable = true;
+                self.are_leagues_reachable = true;
                 return self.apply_leagues(leagues, closed);
             }
             MarketEvent::CachedPrices(prices) => self.keep_prices(prices, None),
@@ -304,7 +322,7 @@ impl Session {
                 self.downloaded(&prices.league);
                 self.keep_prices(prices, None);
             }
-            MarketEvent::Unreachable(Source::Leagues) => self.leagues_reachable = false,
+            MarketEvent::Unreachable(Source::Leagues) => self.are_leagues_reachable = false,
             MarketEvent::Unreachable(Source::Prices(league)) => self.prices_failed = Some(league),
         }
         None
@@ -352,8 +370,8 @@ impl Session {
             && shown.parsed().is_ok_and(Item::has_rolls_from_prices)
         {
             // Those of the league shown, checked above.
-            shown.read_lines(Known {
-                trade: self.trade_stats.as_ref(),
+            shown.read_lines(ServiceData {
+                trade_stats: self.trade_stats.as_ref(),
                 names: self.item_names.as_ref(),
                 prices: self.prices.as_ref().map(|prices| &prices.list),
             });
@@ -382,8 +400,8 @@ impl Session {
         self.item_names = Some(names);
         // An item copied before them may have a line only the trade site knows, or be a
         // magic item whose base type they tell.
-        let known = Known {
-            trade: Some(&trade),
+        let service_data = ServiceData {
+            trade_stats: Some(&trade),
             names: self.item_names.as_ref(),
             prices: shown_prices(self.prices.as_ref(), self.league.as_ref())
                 .map(|prices| &prices.list),
@@ -391,28 +409,30 @@ impl Session {
         let reshaped = self
             .item
             .as_mut()
-            .is_some_and(|shown| shown.read_lines(known));
+            .is_some_and(|shown| shown.read_lines(service_data));
         self.trade_stats = Some(trade);
         reshaped
     }
 
+    /// Takes in what the clipboard watcher sent: the item copied, read with what the services
+    /// gave so far, or a change of readability.
     pub fn apply(&mut self, event: ClipboardEvent) {
         match event {
             ClipboardEvent::Copied { item: copied, .. } => {
-                let known = Known {
-                    trade: self.trade_stats.as_ref(),
+                let service_data = ServiceData {
+                    trade_stats: self.trade_stats.as_ref(),
                     names: self.item_names.as_ref(),
                     prices: self.league_prices().map(|prices| &prices.list),
                 };
-                let shown = ShownItem::new(&copied, known);
+                let shown = ShownItem::new(&copied, service_data);
                 if let Ok(item) = shown.parsed() {
                     self.log_price(item);
-                    log_unknown_stats(item, known.trade);
+                    log_unknown_stats(item, service_data.trade_stats);
                 }
                 self.item = Some(shown);
             }
-            ClipboardEvent::Unreadable => self.clipboard_readable = false,
-            ClipboardEvent::Readable => self.clipboard_readable = true,
+            ClipboardEvent::Unreadable => self.is_clipboard_readable = false,
+            ClipboardEvent::Readable => self.is_clipboard_readable = true,
         }
     }
 
@@ -506,7 +526,7 @@ impl Session {
     pub fn prices_state(&self, now: SystemTime) -> PricesState {
         // A failed download of another league says nothing of this one.
         let prices_failed = self.prices_failed.is_some() && self.prices_failed == self.league;
-        let offline = !self.leagues_reachable || prices_failed;
+        let offline = !self.are_leagues_reachable || prices_failed;
         match self.league_prices() {
             Some(LeaguePrices {
                 list,
@@ -533,8 +553,8 @@ impl Session {
     }
 
     #[must_use]
-    pub fn clipboard_readable(&self) -> bool {
-        self.clipboard_readable
+    pub fn is_clipboard_readable(&self) -> bool {
+        self.is_clipboard_readable
     }
 }
 
@@ -549,6 +569,7 @@ pub struct ItemTrade<'a> {
 }
 
 impl<'a> ItemTrade<'a> {
+    /// The item asked about.
     #[must_use]
     pub fn item(&self) -> &'a Item {
         self.item
@@ -569,8 +590,7 @@ impl<'a> ItemTrade<'a> {
     /// is known, and for an unidentified unique, which is identified to be searched.
     #[must_use]
     pub fn search(&self, filters: SearchFilters) -> Option<Search> {
-        let league = self.league?;
-        let target = self.searched_target()?;
+        let (league, target) = self.search_parts()?;
         Some(Search {
             language: self.item.language(),
             league: league.clone(),
@@ -582,22 +602,14 @@ impl<'a> ItemTrade<'a> {
     /// ([`Self::search`]).
     #[must_use]
     pub fn search_kind(&self) -> Option<SearchKind> {
-        self.league?;
-        Some(self.searched_target()?.query().kind())
-    }
-
-    /// What the search of the item looks for; none for an unidentified unique, which is
-    /// identified to be searched.
-    fn searched_target(&self) -> Option<&TradeTarget<'a>> {
-        self.target
-            .as_ref()
-            .filter(|target| !matches!(target, TradeTarget::UnidentifiedUnique { .. }))
+        let (_, target) = self.search_parts()?;
+        Some(target.query().kind())
     }
 
     /// The link of the search for the item can be opened: the league and its target known.
     #[must_use]
     pub fn is_tradable(&self) -> bool {
-        self.league.is_some() && self.target.is_some()
+        self.link_parts().is_some()
     }
 
     /// An unidentified unique, whose offers are searched once it is identified.
@@ -610,13 +622,24 @@ impl<'a> ItemTrade<'a> {
     /// the league is known.
     #[must_use]
     pub fn url(&self, filters: SearchFilters) -> Option<String> {
-        let league = self.league?;
-        let target = self.target.as_ref()?;
+        let (league, target) = self.link_parts()?;
         Some(link::url(
             self.item.language(),
             league,
             &link::query(self.item, target, filters),
         ))
+    }
+
+    /// The league and the target of the link of the item, once both are known.
+    fn link_parts(&self) -> Option<(&'a League, &TradeTarget<'a>)> {
+        Some((self.league?, self.target.as_ref()?))
+    }
+
+    /// The league and the target of the search of the item: those of its link, but for an
+    /// unidentified unique, which is identified to be searched.
+    fn search_parts(&self) -> Option<(&'a League, &TradeTarget<'a>)> {
+        self.link_parts()
+            .filter(|(_, target)| !matches!(target, TradeTarget::UnidentifiedUnique { .. }))
     }
 }
 

@@ -261,7 +261,7 @@ impl ExileMarketApp {
     /// The warnings of the band under the title bar, given the state of the prices.
     fn warnings(&self, prices: PricesState) -> Vec<String> {
         let mut warnings = Vec::new();
-        if !self.desk.session().clipboard_readable() {
+        if !self.desk.session().is_clipboard_readable() {
             warnings.push(self.i18n.text(Message::ClipboardUnreadable));
         }
         match prices {
