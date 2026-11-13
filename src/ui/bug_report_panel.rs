@@ -9,7 +9,7 @@ use egui::{
 };
 
 use super::theme::{color, size, text};
-use super::widgets::{self, Mark};
+use super::widgets::{self, Mark, Pill};
 use crate::bug_report::{Level, LogLine, LogSession, Report};
 use crate::i18n::{Message, Translator};
 
@@ -186,13 +186,17 @@ impl<'a> BugReportPanel<'a> {
                         self.i18n.text(Message::BugReportThisSession),
                         self.i18n.text(Message::BugReportPreviousSession),
                     ];
+                    let spoken = words
+                        .each_ref()
+                        .map(|word| self.i18n.bug_report_log_session(word));
+                    let pills = [0, 1].map(|index| Pill {
+                        label: &words[index],
+                        spoken: &spoken[index],
+                    });
                     widgets::segmented(
                         ui,
                         ui.make_persistent_id(("bug-report-session", self.report.opening())),
-                        [&words[0], &words[1]],
-                        &words
-                            .each_ref()
-                            .map(|word| self.i18n.bug_report_log_session(word)),
+                        &pills,
                         chosen,
                     )
                 })

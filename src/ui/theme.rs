@@ -4,7 +4,7 @@
 //! these tokens. The components only keep the measures of their own layout.
 
 use egui::style::{WidgetVisuals, Widgets};
-use egui::{Color32, Context, CornerRadius, Shadow, Stroke, ThemePreference, Visuals};
+use egui::{Color32, Context, CornerRadius, Frame, Shadow, Stroke, ThemePreference, Visuals};
 
 use crate::league::LeagueMode;
 
@@ -367,6 +367,15 @@ pub fn floating_shadow() -> Shadow {
         spread: 0,
         color: Color32::from_black_alpha(153),
     }
+}
+
+/// The frame of a bubble, of the tooltip of an offer and of the tooltips of the stats: its
+/// fill, its rounding and its shadow, without its margin, which each one sets.
+pub fn bubble_frame() -> Frame {
+    Frame::NONE
+        .fill(color::BUBBLE)
+        .corner_radius(CornerRadius::same(size::BUBBLE_RADIUS))
+        .shadow(floating_shadow())
 }
 
 /// The colors of a league block, the only sign of its mode on screen.

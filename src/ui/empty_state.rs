@@ -6,7 +6,7 @@ use egui::text::TextFormat;
 use egui::{CentralPanel, Frame, Image, Rect, RichText, Sense, Ui, Vec2, vec2};
 
 use super::images;
-use super::keys::{self, Caps};
+use super::keys::{self, Caps, Emphasis};
 use super::theme::{color, motion, text};
 use super::widgets;
 use crate::hotkey::{HotkeyState, Shortcut};
@@ -125,9 +125,11 @@ impl<'a> EmptyState<'a> {
         let mut job = keys::two_lines(
             &self.i18n.hotkey_taken(&hotkey),
             &self.i18n.text(Message::HotkeyTakenChoose),
-            &[&hotkey],
-            &TextFormat::simple(text::note(), color::WARNING),
-            &TextFormat::simple(text::note_strong(), color::WARNING),
+            &Emphasis {
+                strong: &[&hotkey],
+                regular: TextFormat::simple(text::note(), color::WARNING),
+                bold: TextFormat::simple(text::note_strong(), color::WARNING),
+            },
         );
         job.halign = egui::Align::Center;
         ui.scope(|ui| {
@@ -191,7 +193,7 @@ impl<'a> EmptyState<'a> {
             padding: KEY_PADDING,
             gap: KEY_GAP,
         };
-        keys::caps(ui, &pressed, &caps, color::TEXT, true);
+        keys::caps(ui, &pressed, &caps);
     }
 }
 

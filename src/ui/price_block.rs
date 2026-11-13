@@ -55,11 +55,7 @@ const SMALL_AMOUNT: f64 = 0.1;
 #[derive(Debug, Clone, PartialEq)]
 enum PriceView<'a> {
     /// The price of a fixed-name item; of a unique, with its offers.
-    Priced {
-        price: &'a Price,
-        rates: Rates,
-        of: Fixed,
-    },
+    Priced(MarketPrice<'a>),
     /// The price of a rare, magic or normal item, from its similar offers.
     Estimated(Estimate<'a>),
     /// The uniques an unidentified item can be.
@@ -69,6 +65,14 @@ enum PriceView<'a> {
     },
     /// Why there is no price.
     Notice(Notice<'a>),
+}
+
+/// The price of a fixed-name item, with the rates of the prices it is read in.
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct MarketPrice<'a> {
+    price: &'a Price,
+    rates: Rates,
+    of: Fixed,
 }
 
 /// What a fixed price is the price of, and whether it stands on too little to be sure.
@@ -149,36 +153,43 @@ enum Notice<'a> {
     NoPriceFound(&'a str),
 }
 
+/// The league shown: its name, once it is known, and where its prices stand.
+#[derive(Debug, Clone, Copy)]
+pub struct ShownLeague<'a> {
+    pub name: Option<&'a str>,
+    pub prices: PricesState,
+}
+
 /// What the block shows for the fixed `price` of an item of `rarity`, or else its
-/// `estimate`, given the state of the `prices` of the `league` shown.
+/// `estimate`, given the prices of the `league` shown.
 fn view<'a>(
     price: &'a Result<(FixedPrice<'a>, Rates), NoFixedPrice>,
     estimate: Option<Estimate<'a>>,
     rarity: Rarity,
-    prices: PricesState,
-    league: Option<&'a str>,
+    league: ShownLeague<'a>,
 ) -> PriceView<'a> {
+    let ShownLeague { name, prices } = league;
     let downloading = match prices {
         PricesState::Unavailable => Notice::PricesUnavailable,
         PricesState::Downloading { .. } | PricesState::Known { .. } => {
-            Notice::PricesDownloading(league)
+            Notice::PricesDownloading(name)
         }
     };
     match price {
-        Ok((FixedPrice::Currency(currency), rates)) => PriceView::Priced {
+        Ok((FixedPrice::Currency(currency), rates)) => PriceView::Priced(MarketPrice {
             price: &currency.price,
             rates: *rates,
             of: Fixed::Exchange {
                 thin: currency.is_thin(),
             },
-        },
-        Ok((FixedPrice::Unique(unique), rates)) => PriceView::Priced {
+        }),
+        Ok((FixedPrice::Unique(unique), rates)) => PriceView::Priced(MarketPrice {
             price: &unique.price,
             rates: *rates,
             of: Fixed::Unique {
                 uncertain: unique.price.quantity < ENOUGH_OFFERS,
             },
-        },
+        }),
         Ok((FixedPrice::Uniques(candidates), rates)) => PriceView::Candidates {
             candidates,
             rates: *rates,
@@ -189,7 +200,7 @@ fn view<'a>(
         },
         Err(NoFixedPrice::NamesUnknown) => PriceView::Notice(Notice::FrenchNamesDownloading),
         Err(NoFixedPrice::PricesUnknown) => PriceView::Notice(downloading),
-        Err(NoFixedPrice::NotPriced) => PriceView::Notice(match (prices, league) {
+        Err(NoFixedPrice::NotPriced) => PriceView::Notice(match (prices, name) {
             // Complete prices: the item isn't in them.
             (PricesState::Known { .. }, Some(league)) => Notice::NoPriceFound(league),
             // Its category may still come.
@@ -198,53 +209,24 @@ fn view<'a>(
     }
 }
 
+/// The block of an item: its fixed price, or why it has none; for an item without a fixed
+/// price, its estimate from its similar offers, or else what to do to get one.
 pub struct PriceBlock<'a> {
-    item: &'a Item,
-    price: Result<(FixedPrice<'a>, Rates), NoFixedPrice>,
+    pub item: &'a Item,
+    /// The fixed price of the item with the rates of its prices, or why it has none.
+    pub price: Result<(FixedPrice<'a>, Rates), NoFixedPrice>,
     /// The estimated price of an item without a fixed price, from its similar offers.
-    estimate: Option<Estimate<'a>>,
-    /// Whether the filters of the item compare its stats.
-    checks: StatChecks,
-    prices: PricesState,
-    league: Option<&'a str>,
-    i18n: &'a Translator,
+    pub estimate: Option<Estimate<'a>>,
+    /// Whether the filters of the item, as the player left them, compare its stats.
+    pub checks: StatChecks,
+    pub league: ShownLeague<'a>,
+    pub i18n: &'a Translator,
 }
 
-impl<'a> PriceBlock<'a> {
-    /// The block of `item`: its fixed `price` with the rates of its prices, or why it has
-    /// none, given the state of the `prices` of the `league` shown; for an item without a
-    /// fixed price, its `estimate` from its similar offers, or else, by the `checks` of its
-    /// filters as the player left them, what to do to get one.
-    #[must_use]
-    pub fn new(
-        item: &'a Item,
-        price: Result<(FixedPrice<'a>, Rates), NoFixedPrice>,
-        estimate: Option<Estimate<'a>>,
-        checks: StatChecks,
-        prices: PricesState,
-        league: Option<&'a str>,
-        i18n: &'a Translator,
-    ) -> Self {
-        Self {
-            item,
-            price,
-            estimate,
-            checks,
-            prices,
-            league,
-            i18n,
-        }
-    }
-
+impl PriceBlock<'_> {
     /// Draws the block, the whole width of `ui`.
     pub fn show(self, ui: &mut Ui) {
-        let view = view(
-            &self.price,
-            self.estimate,
-            self.item.rarity(),
-            self.prices,
-            self.league,
-        );
+        let view = view(&self.price, self.estimate, self.item.rarity(), self.league);
         Frame::NONE
             .fill(color::BAND_A)
             .inner_margin(vec2(size::BAND_PADDING, PADDING_Y))
@@ -254,7 +236,7 @@ impl<'a> PriceBlock<'a> {
                 self.title_row(ui, &view);
                 ui.add_space(TITLE_GAP);
                 match view {
-                    PriceView::Priced { price, rates, of } => self.priced(ui, price, rates, of),
+                    PriceView::Priced(market_price) => self.priced(ui, market_price),
                     PriceView::Estimated(estimate) => self.estimated(ui, estimate),
                     PriceView::Candidates { candidates, rates } => {
                         self.candidates(ui, candidates, rates);
@@ -273,15 +255,15 @@ impl<'a> PriceBlock<'a> {
         };
         let label = widgets::small_title_line(ui, &self.i18n.text(title));
         let caption = match *view {
-            PriceView::Priced {
+            PriceView::Priced(MarketPrice {
                 price,
                 of: Fixed::Unique { .. },
                 ..
-            } => Some(self.i18n.offers(price.quantity)),
-            PriceView::Priced {
+            }) => Some(self.i18n.offers(price.quantity)),
+            PriceView::Priced(MarketPrice {
                 of: Fixed::Exchange { .. },
                 ..
-            } => self.stack_size().map(|size| self.i18n.stack_of(size)),
+            }) => self.stack_size().map(|size| self.i18n.stack_of(size)),
             PriceView::Estimated(estimate) => Some(self.i18n.similar(estimate.total)),
             PriceView::Candidates { .. } | PriceView::Notice(_) => None,
         };
@@ -307,7 +289,8 @@ impl<'a> PriceBlock<'a> {
     /// The price in the three currencies, the value of the whole stack when there is one,
     /// then the unit price, the trend and the warning of a unique with few offers, or of an
     /// item of the currency exchange with few trades.
-    fn priced(&self, ui: &mut Ui, price: &Price, rates: Rates, of: Fixed) {
+    fn priced(&self, ui: &mut Ui, market_price: MarketPrice) {
+        let MarketPrice { price, rates, of } = market_price;
         let stack = self.stack_size();
         amounts(ui, price.exalted * f64::from(stack.unwrap_or(1)), rates);
         if stack.is_some() {
@@ -378,7 +361,10 @@ impl<'a> PriceBlock<'a> {
             if index % 2 == 0 {
                 ui.painter().rect_filled(row, 0.0, color::ROW_VEIL);
             }
-            let price_width = self.candidate_price(ui, rect, candidate, rates);
+            let listed = candidate
+                .price
+                .map(|unique| list_price(unique.price.exalted, rates));
+            let price_width = self.candidate_price(ui, rect, listed);
             let name = &candidate.names.of(language).name;
             let name_width = (rect.width() - price_width - NAME_GAP).max(0.0);
             let galley = widgets::truncated_line(ui, name.as_str(), text::body(), name_width);
@@ -392,10 +378,11 @@ impl<'a> PriceBlock<'a> {
         }
     }
 
-    /// Draws the price of a possible unique at the right of its row; its width.
-    fn candidate_price(&self, ui: &Ui, row: Rect, candidate: &Candidate, rates: Rates) -> f32 {
+    /// Draws the price of a possible unique at the right of its row, as [`list_price`] writes
+    /// it, or that it has no offers; its width.
+    fn candidate_price(&self, ui: &Ui, row: Rect, listed: Option<(String, Currency)>) -> f32 {
         let painter = ui.painter();
-        let Some(unique) = candidate.price else {
+        let Some((amount, currency)) = listed else {
             let label = self.i18n.text(Message::NoOffers);
             let galley = widgets::text_line(ui, label, text::tag());
             let size = galley.size();
@@ -406,7 +393,6 @@ impl<'a> PriceBlock<'a> {
             );
             return size.x;
         };
-        let (amount, currency) = list_price(unique.price.exalted, rates);
         let orb_rect = Rect::from_center_size(
             pos2(row.right() - LIST_ORB_SIZE / 2.0, row.center().y),
             Vec2::splat(LIST_ORB_SIZE),

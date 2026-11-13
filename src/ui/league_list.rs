@@ -71,12 +71,20 @@ impl<'a> LeagueList<'a> {
                 for (column, league) in [&row.softcore, &row.hardcore].into_iter().enumerate() {
                     let Some(league) = league else { continue };
                     #[expect(clippy::cast_precision_loss, reason = "a few leagues")]
-                    let cell = Rect::from_min_size(
-                        list.min + vec2(column as f32 * CELL.x, index as f32 * CELL.y),
-                        CELL,
-                    );
-                    let corners = corners(index == 0, index + 1 == self.rows.len(), column);
-                    let response = self.cell(ui, cell, corners, league);
+                    let shape = CellShape {
+                        rect: Rect::from_min_size(
+                            list.min + vec2(column as f32 * CELL.x, index as f32 * CELL.y),
+                            CELL,
+                        ),
+                        corners: corners(
+                            RowPlace {
+                                is_first: index == 0,
+                                is_last: index + 1 == self.rows.len(),
+                            },
+                            column,
+                        ),
+                    };
+                    let response = self.cell(ui, shape, league);
                     if just_opened && self.chosen == Some(league) {
                         response.request_focus();
                     }
@@ -89,8 +97,10 @@ impl<'a> LeagueList<'a> {
         })
     }
 
-    /// A league in its mode: lighter under the pointer, and while it is the chosen one.
-    fn cell(&self, ui: &mut Ui, rect: Rect, corners: CornerRadius, league: &League) -> Response {
+    /// A league in its mode, in its cell: lighter under the pointer, and while it is the chosen
+    /// one.
+    fn cell(&self, ui: &mut Ui, shape: CellShape, league: &League) -> Response {
+        let CellShape { rect, corners } = shape;
         let response = ui.interact(rect, ui.scope_id().with(league.id()), Sense::click());
         let colors = LeagueModeColors::of(league.mode());
         let lit = response.hovered() || response.has_focus() || self.chosen == Some(league);
@@ -135,15 +145,29 @@ impl<'a> LeagueList<'a> {
     }
 }
 
-/// The rounded corners of a cell: the corners of the list.
-fn corners(first_row: bool, last_row: bool, column: usize) -> CornerRadius {
+/// Where a cell of the list is, and its corners rounded at the corners of the list.
+#[derive(Debug, Clone, Copy)]
+struct CellShape {
+    rect: Rect,
+    corners: CornerRadius,
+}
+
+/// Whether a row is the first of the list, its last, or both.
+#[derive(Debug, Clone, Copy)]
+struct RowPlace {
+    is_first: bool,
+    is_last: bool,
+}
+
+/// The rounded corners of the cell in `column` of a row placed at `row`: the corners of the list.
+fn corners(row: RowPlace, column: usize) -> CornerRadius {
     let round = |yes: bool| if yes { size::RADIUS } else { 0 };
     let (left, right) = (column == 0, column == 1);
     CornerRadius {
-        nw: round(first_row && left),
-        ne: round(first_row && right),
-        sw: round(last_row && left),
-        se: round(last_row && right),
+        nw: round(row.is_first && left),
+        ne: round(row.is_first && right),
+        sw: round(row.is_last && left),
+        se: round(row.is_last && right),
     }
 }
 
@@ -261,26 +285,45 @@ mod tests {
         );
     }
 
+    const FIRST: RowPlace = RowPlace {
+        is_first: true,
+        is_last: false,
+    };
+    const LAST: RowPlace = RowPlace {
+        is_first: false,
+        is_last: true,
+    };
+
     #[test]
     fn only_the_corners_of_the_list_are_rounded() {
         assert_eq!(
-            corners(true, false, 0),
+            corners(FIRST, 0),
             CornerRadius {
                 nw: size::RADIUS,
                 ..CornerRadius::ZERO
             }
         );
         assert_eq!(
-            corners(false, true, 1),
+            corners(LAST, 1),
             CornerRadius {
                 se: size::RADIUS,
                 ..CornerRadius::ZERO
             }
         );
-        assert_eq!(corners(false, false, 0), CornerRadius::ZERO);
+        let middle = RowPlace {
+            is_first: false,
+            is_last: false,
+        };
+        assert_eq!(corners(middle, 0), CornerRadius::ZERO);
         // A list of one line rounds both corners of each side.
         assert_eq!(
-            corners(true, true, 0),
+            corners(
+                RowPlace {
+                    is_first: true,
+                    is_last: true,
+                },
+                0
+            ),
             CornerRadius {
                 nw: size::RADIUS,
                 sw: size::RADIUS,

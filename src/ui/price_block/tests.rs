@@ -15,6 +15,11 @@ const KNOWN: PricesState = PricesState::Known {
     age: Duration::ZERO,
     offline: false,
 };
+/// The complete prices of Standard.
+const STANDARD: ShownLeague = ShownLeague {
+    name: Some("Standard"),
+    prices: KNOWN,
+};
 const DOWNLOADING: PricesState = PricesState::Downloading { progress: 0.5 };
 
 fn notice<'a>(
@@ -22,7 +27,15 @@ fn notice<'a>(
     prices: PricesState,
     league: Option<&'a str>,
 ) -> PriceView<'a> {
-    view(price, None, Rarity::Currency, prices, league)
+    view(
+        price,
+        None,
+        Rarity::Currency,
+        ShownLeague {
+            name: league,
+            prices,
+        },
+    )
 }
 
 #[test]
@@ -30,7 +43,7 @@ fn a_rare_item_has_no_market_price() {
     let price = Err(NoFixedPrice::NotFixedName);
 
     assert_eq!(
-        view(&price, None, Rarity::Magic, KNOWN, Some("Standard")),
+        view(&price, None, Rarity::Magic, STANDARD),
         PriceView::Notice(Notice::NoMarketPrice(Rarity::Magic))
     );
 }
@@ -65,7 +78,7 @@ fn a_skill_gem_has_no_market_price_either() {
     let price = Err(NoFixedPrice::NotFixedName);
 
     assert_eq!(
-        view(&price, None, Rarity::Gem, KNOWN, Some("Standard")),
+        view(&price, None, Rarity::Gem, STANDARD),
         PriceView::Notice(Notice::NoMarketPrice(Rarity::Gem))
     );
 }
@@ -88,8 +101,7 @@ fn once_its_offers_are_searched_a_rare_item_has_an_estimated_price() {
             &Err(NoFixedPrice::NotFixedName),
             Some(estimate),
             Rarity::Rare,
-            KNOWN,
-            Some("Standard")
+            STANDARD
         ),
         PriceView::Estimated(estimate)
     );
@@ -204,9 +216,8 @@ fn a_fixed_price_on_too_little_is_told_uncertain() {
         price: price(quantity),
         modifiers: UniqueModifiers::default(),
     };
-    let of = |fixed: FixedPrice| match view(&Ok((fixed, RATES)), None, Rarity::Unique, KNOWN, None)
-    {
-        PriceView::Priced { of, .. } => of,
+    let of = |fixed: FixedPrice| match view(&Ok((fixed, RATES)), None, Rarity::Unique, STANDARD) {
+        PriceView::Priced(MarketPrice { of, .. }) => of,
         other => panic!("{other:?}"),
     };
 

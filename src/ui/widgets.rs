@@ -505,20 +505,22 @@ fn slide_at(from: f32, to: f32, progress: f32) -> f32 {
     from + (to - from) * super::theme::motion::slowing(progress.clamp(0.0, 1.0))
 }
 
-/// Two pills joined on the dark of the controls, `labels`, the one of `chosen` (0 or 1) white
-/// like the main action; at a click, the white pill slides to the other one (`motion::SLIDE`)
-/// from where it stands, even in the middle of a slide, and is placed at once the first time
-/// `id` is drawn. `spoken` is what a screen reader says of each pill ("Log: This session"). The
-/// pill clicked, if another one.
-pub fn segmented(
-    ui: &mut Ui,
-    id: egui::Id,
-    labels: [&str; 2],
-    spoken: &[String; 2],
-    chosen: usize,
-) -> Option<usize> {
+/// A pill of [`segmented()`]: its label, and what a screen reader says of it ("Log: This
+/// session").
+pub struct Pill<'a> {
+    pub label: &'a str,
+    pub spoken: &'a str,
+}
+
+/// Two `pills` joined on the dark of the controls, the one of `chosen` (0 or 1) white like the
+/// main action; at a click, the white pill slides to the other one (`motion::SLIDE`) from where
+/// it stands, even in the middle of a slide, and is placed at once the first time `id` is
+/// drawn. The pill clicked, if another one.
+pub fn segmented(ui: &mut Ui, id: egui::Id, pills: &[Pill; 2], chosen: usize) -> Option<usize> {
     use segmented::{INSET, PADDING};
-    let galleys = labels.map(|label| text_line(ui, label, text::small_strong()));
+    let galleys = pills
+        .each_ref()
+        .map(|pill| text_line(ui, pill.label, text::small_strong()));
     let sizes = galleys
         .each_ref()
         .map(|galley| galley.size() + 2.0 * PADDING);
@@ -527,7 +529,7 @@ pub fn segmented(
         vec2(sizes[0].x + sizes[1].x + 2.0 * INSET, height + 2.0 * INSET),
         Sense::hover(),
     );
-    let pills = [
+    let rects = [
         Rect::from_min_size(track.min + vec2(INSET, INSET), vec2(sizes[0].x, height)),
         Rect::from_min_size(
             track.min + vec2(INSET + sizes[0].x, INSET),
@@ -535,9 +537,14 @@ pub fn segmented(
         ),
     ];
     let responses = [0, 1].map(|index| {
-        let response = ui.interact(pills[index], id.with(index), Sense::click());
+        let response = ui.interact(rects[index], id.with(index), Sense::click());
         response.widget_info(|| {
-            WidgetInfo::selected(Role::RadioButton, true, index == chosen, &spoken[index])
+            WidgetInfo::selected(
+                Role::RadioButton,
+                true,
+                index == chosen,
+                pills[index].spoken,
+            )
         });
         response
     });
@@ -559,8 +566,8 @@ pub fn segmented(
     let radius = CornerRadius::same(size::RADIUS);
     painter.rect_filled(track, radius, color::CONTROL);
     let white = Rect::from_min_max(
-        pills[0].min.lerp(pills[1].min, t),
-        pills[0].max.lerp(pills[1].max, t),
+        rects[0].min.lerp(rects[1].min, t),
+        rects[0].max.lerp(rects[1].max, t),
     );
     // Dimmed a little when the pill chosen has the focus of the keyboard.
     let fill = if responses[chosen.min(1)].has_focus() {
@@ -581,7 +588,7 @@ pub fn segmented(
         };
         let tint = rest.lerp_to_gamma(color::ON_ACCENT, under);
         ui.painter()
-            .galley(pills[index].min + PADDING, galley, tint);
+            .galley(rects[index].min + PADDING, galley, tint);
         if index != chosen && response.on_hover_cursor(CursorIcon::PointingHand).clicked() {
             clicked = Some(index);
         }

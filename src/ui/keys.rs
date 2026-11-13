@@ -3,7 +3,7 @@
 //! sentence, in bold ("**Ctrl+D** is taken by another application.").
 
 use egui::text::{LayoutJob, TextFormat};
-use egui::{Align2, Color32, FontId, Rect, Response, Sense, Stroke, StrokeKind, Ui, pos2, vec2};
+use egui::{Align2, FontId, Rect, Response, Sense, Stroke, StrokeKind, Ui, pos2, vec2};
 
 use super::theme::{color, size};
 use super::widgets;
@@ -44,15 +44,8 @@ pub struct Caps {
     pub gap: f32,
 }
 
-/// `keys` drawn as key caps joined by "+", their letters in `letters`; on the color of the
-/// controls when `filled`, otherwise only outlined (a hotkey turned off).
-pub fn caps<K: AsRef<str>>(
-    ui: &mut Ui,
-    keys: &[K],
-    caps: &Caps,
-    letters: Color32,
-    filled: bool,
-) -> Response {
+/// `keys` drawn as key caps on the color of the controls, joined by "+".
+pub fn caps<K: AsRef<str>>(ui: &mut Ui, keys: &[K], caps: &Caps) -> Response {
     let galleys: Vec<_> = keys
         .iter()
         .map(|key| widgets::text_line(ui, key.as_ref(), caps.font.clone()))
@@ -90,9 +83,7 @@ pub fn caps<K: AsRef<str>>(
             pos2(left, rect.top()),
             vec2(cap.size().x + 2.0 * caps.padding, caps.height),
         );
-        if filled {
-            painter.rect_filled(key, f32::from(size::RADIUS), color::CONTROL);
-        }
+        painter.rect_filled(key, f32::from(size::RADIUS), color::CONTROL);
         painter.rect_stroke(
             key,
             f32::from(size::RADIUS),
@@ -104,51 +95,46 @@ pub fn caps<K: AsRef<str>>(
                 .anchor_size(key.center(), cap.size())
                 .min,
             cap,
-            letters,
+            color::TEXT,
         );
         left = key.right();
     }
     response
 }
 
-/// `first` then, on a line of its own, `second`, each of `strong` in the format `bold` and the rest
-/// in `regular`: the two sentences of the key of the hotkey taken.
+/// How the keys of a warning are set apart in its sentences: each of `strong` in the format
+/// `bold`, the rest in `regular`.
+pub struct Emphasis<'a> {
+    pub strong: &'a [&'a str],
+    pub regular: TextFormat,
+    pub bold: TextFormat,
+}
+
+/// `first` then, on a line of its own, `second`, set apart by `emphasis`: the two sentences of
+/// the key of the hotkey taken.
 #[must_use]
-pub fn two_lines(
-    first: &str,
-    second: &str,
-    strong: &[&str],
-    regular: &TextFormat,
-    bold: &TextFormat,
-) -> LayoutJob {
-    let mut job = emphasized(first, strong, regular, bold);
-    job.append("\n", 0.0, regular.clone());
-    append_emphasized(&mut job, second, strong, regular, bold);
+pub fn two_lines(first: &str, second: &str, emphasis: &Emphasis) -> LayoutJob {
+    let mut job = emphasized(first, emphasis);
+    job.append("\n", 0.0, emphasis.regular.clone());
+    append_emphasized(&mut job, second, emphasis);
     job
 }
 
-/// `sentence` with each of `strong` in the format `bold`, the rest in `regular`: the keys of a
-/// warning in bold.
+/// `sentence` set apart by `emphasis`: the keys of a warning in bold.
 #[must_use]
-pub fn emphasized(
-    sentence: &str,
-    strong: &[&str],
-    regular: &TextFormat,
-    bold: &TextFormat,
-) -> LayoutJob {
+pub fn emphasized(sentence: &str, emphasis: &Emphasis) -> LayoutJob {
     let mut job = LayoutJob::default();
-    append_emphasized(&mut job, sentence, strong, regular, bold);
+    append_emphasized(&mut job, sentence, emphasis);
     job
 }
 
 /// Appends `sentence` to `job` as [`emphasized`] writes it.
-fn append_emphasized(
-    job: &mut LayoutJob,
-    sentence: &str,
-    strong: &[&str],
-    regular: &TextFormat,
-    bold: &TextFormat,
-) {
+fn append_emphasized(job: &mut LayoutJob, sentence: &str, emphasis: &Emphasis) {
+    let Emphasis {
+        strong,
+        regular,
+        bold,
+    } = emphasis;
     let mut rest = sentence;
     loop {
         // The first of the strong parts left, the longest when two start at the same place.
@@ -174,6 +160,7 @@ fn append_emphasized(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use egui::Color32;
 
     /// The parts of `job`, each with whether it is bold.
     fn parts(job: &LayoutJob) -> Vec<(&str, bool)> {
@@ -188,12 +175,14 @@ mod tests {
             .collect()
     }
 
-    fn formats() -> (TextFormat, TextFormat) {
+    /// Each of `strong` in red, the rest in white.
+    fn emphasis<'a>(strong: &'a [&'a str]) -> Emphasis<'a> {
         let font = FontId::proportional(12.0);
-        (
-            TextFormat::simple(font.clone(), Color32::WHITE),
-            TextFormat::simple(font, Color32::RED),
-        )
+        Emphasis {
+            strong,
+            regular: TextFormat::simple(font.clone(), Color32::WHITE),
+            bold: TextFormat::simple(font, Color32::RED),
+        }
     }
 
     #[test]
@@ -204,12 +193,9 @@ mod tests {
 
     #[test]
     fn every_key_of_a_sentence_is_bold() {
-        let (regular, bold) = formats();
         let job = emphasized(
             "Ctrl+D is taken by another application. Choose another key, or copy with Ctrl+C.",
-            &["Ctrl+D", "Ctrl+C"],
-            &regular,
-            &bold,
+            &emphasis(&["Ctrl+D", "Ctrl+C"]),
         );
 
         assert_eq!(
@@ -228,13 +214,10 @@ mod tests {
 
     #[test]
     fn the_second_sentence_goes_on_a_line_of_its_own_its_keys_bold_too() {
-        let (regular, bold) = formats();
         let job = two_lines(
             "Ctrl+D is taken by another application.",
             "Choose another key, or copy with Ctrl+C.",
-            &["Ctrl+D", "Ctrl+C"],
-            &regular,
-            &bold,
+            &emphasis(&["Ctrl+D", "Ctrl+C"]),
         );
 
         assert_eq!(
@@ -269,8 +252,7 @@ mod tests {
 
     #[test]
     fn a_sentence_without_its_keys_stays_regular() {
-        let (regular, bold) = formats();
-        let job = emphasized("Choose another key.", &["Ctrl+D"], &regular, &bold);
+        let job = emphasized("Choose another key.", &emphasis(&["Ctrl+D"]));
 
         assert_eq!(parts(&job), [("Choose another key.", false)]);
     }

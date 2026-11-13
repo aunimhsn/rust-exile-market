@@ -173,6 +173,20 @@ fn every_currency_is_named_the_three_orbs_too() {
 }
 
 #[test]
+fn each_column_has_its_title() {
+    let i18n = Translator::new(Language::English);
+    let row = Rect::from_min_size(Pos2::ZERO, vec2(400.0, 20.0));
+    for kind in [SearchKind::Exchange, SearchKind::Items] {
+        // The first title is on the left, each other one over a right edge.
+        assert_eq!(
+            column_titles(&i18n, kind).len(),
+            Columns::of(row, kind).right_edges().len() + 1,
+            "{kind:?}"
+        );
+    }
+}
+
+#[test]
 fn no_offer_is_said_only_when_none_is_left_to_fetch() {
     assert!(no_offer(&[], More::None));
     assert!(

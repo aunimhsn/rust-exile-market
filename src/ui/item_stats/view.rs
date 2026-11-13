@@ -525,10 +525,7 @@ fn tooltip(ui: &Ui, place: Area, lines: Vec<TooltipLine>) {
         .order(Order::Tooltip)
         .interactable(false)
         .show(ui.ctx(), |ui| {
-            Frame::NONE
-                .fill(color::BUBBLE)
-                .corner_radius(CornerRadius::same(size::BUBBLE_RADIUS))
-                .shadow(theme::floating_shadow())
+            theme::bubble_frame()
                 .inner_margin(TOOLTIP_PADDING)
                 .show(ui, |ui| {
                     ui.spacing_mut().item_spacing = Vec2::ZERO;

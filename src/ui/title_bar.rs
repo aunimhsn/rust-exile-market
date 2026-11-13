@@ -262,16 +262,14 @@ impl<'a> TitleBar<'a> {
             self.leagues_open,
             motion::OPEN,
         );
-        icons::chevron(
-            painter,
+        let chevron = Rect::from_center_size(
             pos2(
                 name_left + name_width + GAP + CHEVRON_WIDTH / 2.0,
                 rect.center().y,
             ),
-            CHEVRON_WIDTH,
-            turn,
-            color::TEXT,
+            Vec2::splat(CHEVRON_WIDTH),
         );
+        icons::chevron(painter, chevron, turn, color::TEXT);
 
         let mode = self.i18n.text(match league.mode() {
             LeagueMode::Softcore => Message::LeagueModeSoftcore,
