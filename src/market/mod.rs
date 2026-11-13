@@ -164,27 +164,23 @@ impl MarketWatch {
     /// If the system can't start a thread.
     #[must_use]
     pub fn start(league: Option<League>, wake: impl Fn() + Send + 'static) -> Self {
-        Self::spawn(
-            Poe2Scout::new,
-            PriceCache::in_cache_directory,
-            INTERVALS,
-            league,
-            wake,
-        )
+        let open = || (Poe2Scout::new(), PriceCache::in_cache_directory());
+        Self::spawn(open, INTERVALS, league, wake)
     }
 
+    /// Starts reading the database and the cache that `open` gives, on the thread.
     fn spawn<D: PriceDatabase>(
-        open: impl FnOnce() -> D + Send + 'static,
-        open_cache: impl FnOnce() -> PriceCache + Send + 'static,
+        open: impl FnOnce() -> (D, PriceCache) + Send + 'static,
         intervals: Intervals,
         league: Option<League>,
         wake: impl Fn() + Send + 'static,
     ) -> Self {
         let first = league.clone();
         let worker = Worker::spawn("market", OnDrop::Detach, wake, move |outbox, wake| {
+            let (database, cache) = open();
             let watch = Watch {
-                database: open(),
-                cache: open_cache(),
+                database,
+                cache,
                 outbox,
                 wake,
                 intervals,

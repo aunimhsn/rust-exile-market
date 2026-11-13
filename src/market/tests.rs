@@ -124,8 +124,7 @@ fn watch(
     let (woken, wakes) = mpsc::channel();
     let cache = directory.0.clone();
     let watch = MarketWatch::spawn(
-        move || database,
-        move || PriceCache::in_directory(cache),
+        move || (database, PriceCache::in_directory(cache)),
         FAST,
         league.map(League::new),
         move || {
@@ -297,8 +296,7 @@ fn the_leagues_read_often_dont_hasten_a_download_the_database_refuses() {
         ..FAST
     };
     let _watch = MarketWatch::spawn(
-        move || database,
-        move || PriceCache::in_directory(cache),
+        move || (database, PriceCache::in_directory(cache)),
         hourly,
         Some(League::new("Standard")),
         || {},
