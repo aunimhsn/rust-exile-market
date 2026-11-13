@@ -274,6 +274,36 @@ struct Rolled<'a> {
     tiers: Vec<&'a TableTier>,
 }
 
+/// The modifiers an item can roll on a base, apart by the pool they are drawn from.
+struct Pools<'a> {
+    ordinary: Vec<Rolled<'a>>,
+    /// A lord's modifiers, which a desecration reveals.
+    desecrated: Vec<Rolled<'a>>,
+}
+
+impl<'a> Pools<'a> {
+    /// The modifiers of `tables` an item of `item_level` can roll on `base` ([`rolled`]); and
+    /// the types of those left out.
+    fn on(tables: &'a [Table], base: &BaseSpawn, item_level: u32) -> (Self, Vec<&'a str>) {
+        let (ordinary, mut unwritten) = rolled(tables, base, false, item_level);
+        let (desecrated, unwritten_desecrated) = rolled(tables, base, true, item_level);
+        unwritten.extend(unwritten_desecrated);
+        let pools = Self {
+            ordinary,
+            desecrated,
+        };
+        (pools, unwritten)
+    }
+}
+
+/// A modifier drawn for an item, before its tier.
+#[derive(Clone, Copy)]
+struct Candidate<'a> {
+    rolled: &'a Rolled<'a>,
+    /// What the game marks its lines.
+    origin: Option<ModifierOrigin>,
+}
+
 /// The modifiers of `tables` an item of `item_level` can roll on `base`, desecrated or not,
 /// whose lines the stats write back; and the types of those left out for that.
 fn rolled<'a>(
@@ -432,9 +462,10 @@ struct DrawnItem<'a> {
 }
 
 impl<'a> DrawnItem<'a> {
-    /// Whether `rolled` can be added: no modifier of its type yet, and none of its lines a
+    /// Whether `candidate` can be added: no modifier of its type yet, and none of its lines a
     /// line of the item it can't add up with (another origin, or no value to add).
-    fn takes(&self, rolled: &Rolled<'_>, origin: Option<ModifierOrigin>) -> bool {
+    fn takes(&self, candidate: Candidate<'_>) -> bool {
+        let Candidate { rolled, origin } = candidate;
         let kind = self
             .modifiers
             .iter()
@@ -448,14 +479,9 @@ impl<'a> DrawnItem<'a> {
         !kind && !clash
     }
 
-    /// Adds `rolled` in its tier `tier`, marked `origin`, its values drawn.
-    fn add(
-        &mut self,
-        draw: &mut Draw,
-        rolled: &'a Rolled<'a>,
-        tier: usize,
-        origin: Option<ModifierOrigin>,
-    ) {
+    /// Adds `candidate` in its tier `tier`, its values drawn.
+    fn add(&mut self, draw: &mut Draw, candidate: Candidate<'a>, tier: usize) {
+        let Candidate { rolled, origin } = candidate;
         let index = self.modifiers.len();
         let mut lines = Vec::new();
         for (line, ranges) in rolled.table.lines.iter().zip(&rolled.tiers[tier].ranges) {
@@ -519,15 +545,9 @@ impl<'a> DrawnItem<'a> {
     }
 }
 
-/// An item with one to `most` prefixes and as many suffixes drawn among `ordinary` and
-/// `desecrated` as `way` says.
-fn drawn<'a>(
-    draw: &mut Draw,
-    ordinary: &'a [Rolled<'a>],
-    desecrated: &'a [Rolled<'a>],
-    way: Way,
-    most: u32,
-) -> DrawnItem<'a> {
+/// An item with one to `most` prefixes and as many suffixes drawn among `pools` as `way`
+/// says.
+fn drawn<'a>(draw: &mut Draw, pools: &'a Pools<'a>, way: Way, most: u32) -> DrawnItem<'a> {
     let most = usize::try_from(most).expect("a count");
     let mut item = DrawnItem {
         modifiers: Vec::new(),
@@ -541,10 +561,14 @@ fn drawn<'a>(
                 Desecrated::All => true,
             };
             let of_a_lord = marked && !(way.revealed && draw.below(2) == 0);
-            let pool: Vec<&Rolled<'_>> = if of_a_lord { desecrated } else { ordinary }
-                .iter()
-                .filter(|rolled| rolled.table.affix == affix)
-                .collect();
+            let pool: Vec<&Rolled<'_>> = if of_a_lord {
+                &pools.desecrated
+            } else {
+                &pools.ordinary
+            }
+            .iter()
+            .filter(|rolled| rolled.table.affix == affix)
+            .collect();
             if pool.is_empty() {
                 continue;
             }
@@ -552,7 +576,8 @@ fn drawn<'a>(
             // A few tries: a type already on the item is drawn again.
             for _ in 0..20 {
                 let rolled = pool[draw.below(pool.len())];
-                if !item.takes(rolled, origin) {
+                let candidate = Candidate { rolled, origin };
+                if !item.takes(candidate) {
                     continue;
                 }
                 let allowed = rolled
@@ -562,7 +587,7 @@ fn drawn<'a>(
                     .count();
                 let first = rolled.tiers.len() - allowed;
                 let tier = first + draw.below(allowed);
-                item.add(draw, rolled, tier, origin);
+                item.add(draw, candidate, tier);
                 break;
             }
         }
@@ -741,9 +766,7 @@ fn measure(way: Way) -> (Counts, Vec<&'static str>) {
     let mut left_out = Vec::new();
     for (base_type, most) in BASES {
         let base = bases::spawn(Language::English, base_type).expect(base_type);
-        let (ordinary, unwritten) = rolled(&TABLES, base, false, way.item_level);
-        left_out.extend(unwritten);
-        let (desecrated, unwritten) = rolled(&TABLES, base, true, way.item_level);
+        let (pools, unwritten) = Pools::on(&TABLES, base, way.item_level);
         left_out.extend(unwritten);
         let tables = ItemTables {
             all: &TABLES,
@@ -752,7 +775,7 @@ fn measure(way: Way) -> (Counts, Vec<&'static str>) {
         };
         let mut read = 0;
         while read < ITEMS_PER_BASE {
-            let mut item = drawn(&mut draw, &ordinary, &desecrated, way, most);
+            let mut item = drawn(&mut draw, &pools, way, most);
             if way.shuffled {
                 item.shuffle(&mut shuffle);
             }
