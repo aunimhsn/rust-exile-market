@@ -163,9 +163,10 @@ impl<E: Send + 'static, C: Send + 'static> Worker<E, C> {
         worker
     }
 
-    /// Gives `order` to the thread, which takes it at its next wait. A thread that ended
-    /// ignores it, without a word here: its end is told by [`Self::receive`], which the owner
-    /// of the worker calls at every frame, rather than by each order.
+    /// Gives `order` to the thread, which takes it at its next wait. A thread that ended when it
+    /// shouldn't have (a panic) ignores it, without a word here: its end is told once by
+    /// [`Self::receive`], which the owner of the worker calls at every frame, rather than by
+    /// each order.
     pub fn order(&self, order: C) {
         if let Some(orders) = &self.orders {
             let _ = orders.send(order);
@@ -363,7 +364,8 @@ mod tests {
     #[test]
     fn an_order_given_to_a_thread_that_ended_is_ignored() {
         let (woken, wakes) = mpsc::channel();
-        let mut worker = Worker::<(), &str>::spawn_once(
+        // A lasting thread, as the three that take orders, ended without being asked to.
+        let mut worker = Worker::<(), &str>::spawn(
             "test",
             OnDrop::Join,
             move || {
@@ -374,11 +376,11 @@ mod tests {
         wakes
             .recv_timeout(Duration::from_secs(5))
             .expect("woken up when the thread ends");
-        assert!(!worker.receive(|()| {}));
+        assert!(worker.receive(|()| {}), "its end told");
 
         worker.order("refresh");
 
-        assert!(!worker.receive(|()| {}));
+        assert!(!worker.receive(|()| {}), "not told again");
     }
 
     #[test]

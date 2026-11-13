@@ -29,7 +29,8 @@ struct Versioned<T> {
     value: T,
 }
 
-/// Only the version of a JSON file, read when the whole can't be: a file of another version.
+/// Only the version of a JSON file, read when its value doesn't: it tells a file of another
+/// version from a broken one.
 #[derive(Deserialize)]
 struct VersionOnly {
     version: u32,
@@ -37,8 +38,9 @@ struct VersionOnly {
 
 /// The value of the JSON file at `path`, written with `version`; `None` when there is no
 /// file, or a file of another version: the shape of the value changed, and the file is
-/// downloaded again rather than migrated. The file is read whole once (the cache of the prices
-/// weighs several megabytes); its version alone only when its value doesn't read.
+/// downloaded again rather than migrated. The file is read whole once (the names of the trade
+/// site weighed 1.7 MB, the prices of a league 290 KB, measured on 2026-11-09); its version
+/// alone only when its value doesn't read.
 pub fn read_versioned_json<T: DeserializeOwned>(
     path: &Path,
     version: u32,
@@ -48,16 +50,18 @@ pub fn read_versioned_json<T: DeserializeOwned>(
         Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
         Err(error) => return Err(error),
     };
-    let found = match serde_json::from_slice::<Versioned<T>>(&json) {
+    let found_version = match serde_json::from_slice::<Versioned<T>>(&json) {
         Ok(file) if file.version == version => return Ok(Some(file.value)),
         Ok(file) => file.version,
         Err(error) => match serde_json::from_slice::<VersionOnly>(&json) {
             Ok(file) if file.version != version => file.version,
+            // A file of this version whose value doesn't read, or no version at all: the error
+            // of the whole read says where the file breaks.
             _ => return Err(io::Error::other(error)),
         },
     };
     log::info!(
-        "{} is of version {found}: ignored",
+        "{} is of version {found_version}: ignored",
         crate::logging::without_home(path).display()
     );
     Ok(None)

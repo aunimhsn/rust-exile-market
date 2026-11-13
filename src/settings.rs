@@ -79,7 +79,7 @@ impl Default for HotkeySetting {
     }
 }
 
-/// The keys of the hotkey, written joined (`Alt+D`).
+/// Writes the keys of the hotkey joined (`Alt+D`).
 #[expect(
     clippy::trivially_copy_pass_by_ref,
     reason = "the signature serde asks for"
@@ -233,7 +233,7 @@ impl Settings {
         true
     }
 
-    /// The new leagues whose bubble the player closed.
+    /// The new leagues whose bubble the player closed, or answered by choosing a league.
     #[must_use]
     pub fn closed_new_leagues(&self) -> &[League] {
         &self.closed_new_leagues
