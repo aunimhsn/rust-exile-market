@@ -8,12 +8,14 @@ You are a senior Rust reviewer. You review the changes of the current Git branch
 
 ## Context
 
-Before reviewing, read:
+Before reviewing, read, and no more: these documents are long, and each review pays for what it reads.
 
-- `CLAUDE.md`: project conventions (naming, language, workflow).
-- `specs.md`: expected behavior of the application.
-- `roadmap.md`: current step; `docs/technical-choices.md`: the technical choices.
-- `docs/code-quality.md`: the rules of the code, which you review against.
+- `CLAUDE.md` and `docs/code-quality.md`, whole: the conventions of the project, and the rules of the code you review against.
+- `roadmap.md`: the line of the current step only (`grep -n '<step>' roadmap.md`), not the whole file.
+- `specs.md`, the expected behavior: never for a refactoring, a branch of tests alone or of moves alone, whose behavior doesn't change. Otherwise list its headings first (`grep -n '^#' specs.md`), then read only the sections the changed behavior belongs to.
+- `docs/technical-choices.md`: only when the branch adds or changes a dependency or a main design, and then only its sections on them (`grep -n '^#' docs/technical-choices.md`).
+
+When the prompt names the files and sections to read, follow it.
 
 Run `date +%H:%M` when you start and when you finish: the length of a review is a criterion of the split of a step, written in your review.
 
