@@ -10,11 +10,11 @@ use std::time::{Duration, Instant};
 
 use serde::de::DeserializeOwned;
 
-use super::limits::{self, Hit, Limits, Policy};
+use super::limits::{Hit, Limits, Policy};
 use super::offers::{ApiExchange, ApiFetch, ApiSearch, ExchangeOffer, ItemOffer};
 use super::query::{self, ItemQuery, SearchKind};
 use super::refusal::Refusal;
-use super::transport::{Network, Request, Transport};
+use super::transport::{Guarded, Network, Request, Sent, Transport};
 use crate::http::{self, HttpError};
 use crate::language::Language;
 use crate::league::League;
@@ -80,10 +80,8 @@ pub struct ExchangeSearch {
 
 /// The client of the trade site.
 pub struct TradeClient<T = Network> {
-    transport: T,
+    transport: Guarded<T>,
     limits: Limits,
-    /// The wait asked by a refusal, shared with the download of the item names.
-    refusal: Refusal,
     last_search: Option<Instant>,
     /// The log already says that an answer told no limits.
     told_no_limits: bool,
@@ -99,9 +97,8 @@ impl TradeClient {
 impl<T: Transport> TradeClient<T> {
     pub(super) fn with_transport(transport: T, refusal: Refusal) -> Self {
         Self {
-            transport,
+            transport: Guarded::new(transport, refusal),
             limits: Limits::default(),
-            refusal,
             last_search: None,
             told_no_limits: false,
         }
@@ -129,8 +126,8 @@ impl<T: Transport> TradeClient<T> {
     /// of a refusal, whichever request of the application the trade site refused.
     fn ready_at(&self, policy: Policy, now: Instant) -> Instant {
         let ready = self.limits.ready_at(policy, now);
-        self.refusal
-            .until(now)
+        self.transport
+            .refused_until(now)
             .map_or(ready, |until| ready.max(until))
     }
 
@@ -245,37 +242,40 @@ impl<T: Transport> TradeClient<T> {
         // (`&mut self`). Only a success that tells the limits was counted for sure by the
         // trade site: a request that didn't reach it, or that it refused, may not be.
         let now = Instant::now();
-        let counted = result.as_ref().is_ok_and(|answer| {
-            (200..300).contains(&answer.status) && !answer.limits.rules.is_empty()
-        });
-        self.limits.sent(
-            policy,
-            Hit {
-                sent,
-                answered: now,
-                counted,
-            },
-        );
-        let answer = result.map_err(|error| TradeError::Http(HttpError::Request(error)))?;
-        if (200..300).contains(&answer.status) && !counted && !self.told_no_limits {
+        let hit = |counted| Hit {
+            sent,
+            answered: now,
+            counted,
+        };
+        let answer = match result {
+            // Refused meanwhile by the download of the item names.
+            Sent::Waiting(until) => return Err(TradeError::Wait(until)),
+            Sent::Unanswered(error) => {
+                self.limits.sent(policy, hit(false));
+                return Err(HttpError::Request(error).into());
+            }
+            Sent::Refused { answer, .. } => {
+                self.limits.sent(policy, hit(false));
+                log::warn!(
+                    "Trade site: request refused with the status {}",
+                    answer.status
+                );
+                let until = self.limits.refused(policy, &answer.limits, now);
+                return Err(TradeError::Refused(until));
+            }
+            Sent::Answered(answer) => answer,
+        };
+        let is_success = (200..300).contains(&answer.status);
+        let counted = is_success && !answer.limits.rules.is_empty();
+        self.limits.sent(policy, hit(counted));
+        if is_success && !counted && !self.told_no_limits {
             // Its headers renamed, maybe: only the 10 seconds between two searches and the
             // wait of a refusal hold then. Once: every answer would say the same.
             log::warn!("Trade site: an answer told no limits, the known ones are kept");
             self.told_no_limits = true;
         }
-        // A 403 too: the trade site turns the address away, as it does the item names.
-        if matches!(answer.status, 403 | 429) {
-            log::warn!(
-                "Trade site: request refused with the status {}",
-                answer.status
-            );
-            let until = self.limits.refused(policy, &answer.limits, now);
-            self.refusal
-                .extend(now + limits::refusal_wait(&answer.limits));
-            return Err(TradeError::Refused(until));
-        }
         self.limits.answered(policy, &answer.limits, now);
-        if !(200..300).contains(&answer.status) {
+        if !is_success {
             answer.log_error_message();
             return Err(HttpError::Request(ureq::Error::StatusCode(answer.status)).into());
         }

@@ -1,8 +1,12 @@
 //! The way requests reach the trade site: over the network with `ureq`, or to a fake trade
 //! site in the tests, and the answers, whatever their status, with the headers of their
-//! limits.
+//! limits. Every request goes through [`Guarded`], which sends nothing during the wait of a
+//! refusal.
 
-use super::limits::{LimitHeaders, RuleHeaders};
+use std::time::Instant;
+
+use super::limits::{self, LimitHeaders, RuleHeaders};
+use super::refusal::Refusal;
 use crate::http;
 use crate::logging;
 
@@ -45,6 +49,61 @@ fn error_message(body: &str) -> Option<String> {
 /// How the requests are sent: over the network, or to a fake trade site in the tests.
 pub(super) trait Transport {
     fn send(&mut self, request: &Request) -> Result<Answer, ureq::Error>;
+}
+
+/// The only way to the trade site: nothing is sent during the wait of a refusal, and a
+/// refusal (403, 429) starts one, for every request of the application, since all of them
+/// reach the same site from the same address. Its fields are private, so that no request
+/// can go around it.
+pub(super) struct Guarded<T> {
+    transport: T,
+    /// The wait asked by a refusal, shared by the searches of offers and the download of the
+    /// item names.
+    refusal: Refusal,
+}
+
+/// What became of a request sent through [`Guarded`].
+#[derive(Debug)]
+pub(super) enum Sent {
+    /// Not sent: the trade site refused a request a moment ago, and nothing is sent before
+    /// this time.
+    Waiting(Instant),
+    /// Sent, but no answer came.
+    Unanswered(ureq::Error),
+    /// The trade site refused it (403, 429): nothing is sent before `until`.
+    Refused { answer: Answer, until: Instant },
+    /// An answer that isn't a refusal, of any other status.
+    Answered(Answer),
+}
+
+impl<T: Transport> Guarded<T> {
+    pub fn new(transport: T, refusal: Refusal) -> Self {
+        Self { transport, refusal }
+    }
+
+    /// The end of the wait of a refusal, while it is after `now`.
+    pub fn refused_until(&self, now: Instant) -> Option<Instant> {
+        self.refusal.until(now)
+    }
+
+    /// Sends `request`, unless the wait of a refusal holds; a refusal starts one, of the delay
+    /// of its `Retry-After`.
+    pub fn send(&mut self, request: &Request) -> Sent {
+        if let Some(until) = self.refusal.until(Instant::now()) {
+            return Sent::Waiting(until);
+        }
+        let answer = match self.transport.send(request) {
+            Ok(answer) => answer,
+            Err(error) => return Sent::Unanswered(error),
+        };
+        // A 403 too: the trade site turns the address away.
+        if matches!(answer.status, 403 | 429) {
+            let until = Instant::now() + limits::refusal_wait(&answer.limits);
+            self.refusal.extend(until);
+            return Sent::Refused { answer, until };
+        }
+        Sent::Answered(answer)
+    }
 }
 
 /// The requests sent with `ureq`, which keeps no cookie (its `cookies` feature is off, see
@@ -123,7 +182,7 @@ fn limit_headers(headers: &ureq::http::HeaderMap) -> LimitHeaders {
 pub(super) mod tests {
     use std::collections::VecDeque;
     use std::sync::{Arc, Mutex};
-    use std::time::Instant;
+    use std::time::Duration;
 
     use super::*;
     use crate::trade::client::tests::SEARCH;
@@ -360,5 +419,81 @@ pub(super) mod tests {
         assert_eq!(get.expect("an answer").status, 302);
         assert_eq!(requests.load(Ordering::SeqCst), 2);
         assert_eq!(followed.load(Ordering::SeqCst), 0);
+    }
+
+    /// A request to the fake site.
+    fn get() -> Request {
+        Request {
+            url: "https://www.pathofexile.com/api/trade2/data/items".to_owned(),
+            body: None,
+        }
+    }
+
+    #[test]
+    fn a_refusal_stops_the_requests_that_follow_until_its_delay() {
+        for status in [429, 403] {
+            let site = FakeSite::default();
+            let headers = LimitHeaders {
+                retry_after: Some("600".to_owned()),
+                ..LimitHeaders::default()
+            };
+            site.answer(status, headers, "");
+            let refusal = Refusal::default();
+            let mut guarded = Guarded::new(site.clone(), refusal.clone());
+            let start = Instant::now();
+
+            let refused = guarded.send(&get());
+            let next = guarded.send(&get());
+
+            let Sent::Refused { answer, until } = refused else {
+                panic!("a refusal: {refused:?}");
+            };
+            assert_eq!(answer.status, status);
+            assert!(until >= start + Duration::from_mins(10), "{status}");
+            assert_eq!(refusal.until(start), Some(until), "{status}");
+            assert!(
+                matches!(next, Sent::Waiting(wait) if wait == until),
+                "{next:?}"
+            );
+            assert_eq!(site.requests().len(), 1, "{status}");
+        }
+    }
+
+    #[test]
+    fn nothing_is_sent_during_the_wait_of_a_refusal_of_another_request() {
+        let site = FakeSite::default();
+        let refusal = Refusal::default();
+        let until = Instant::now() + Duration::from_mins(5);
+        refusal.extend(until);
+        let mut guarded = Guarded::new(site.clone(), refusal);
+
+        let sent = guarded.send(&get());
+
+        assert!(
+            matches!(sent, Sent::Waiting(wait) if wait == until),
+            "{sent:?}"
+        );
+        assert_eq!(guarded.refused_until(Instant::now()), Some(until));
+        assert_eq!(site.requests(), []);
+    }
+
+    #[test]
+    fn an_error_status_or_no_answer_isnt_a_refusal() {
+        let site = FakeSite::default();
+        site.answer(400, LimitHeaders::default(), "{}");
+        let refusal = Refusal::default();
+        let mut guarded = Guarded::new(site.clone(), refusal.clone());
+
+        let error_status = guarded.send(&get());
+        // The fake site has no answer left: a request without answer.
+        let unanswered = guarded.send(&get());
+
+        assert!(
+            matches!(&error_status, Sent::Answered(answer) if answer.status == 400),
+            "{error_status:?}"
+        );
+        assert!(matches!(unanswered, Sent::Unanswered(_)), "{unanswered:?}");
+        assert_eq!(refusal.until(Instant::now()), None);
+        assert_eq!(site.requests().len(), 2);
     }
 }

@@ -10,9 +10,8 @@ use std::time::{Duration, Instant, SystemTime};
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
 
-use super::limits;
 use super::refusal::Refusal;
-use super::transport::{Network, Request, Transport};
+use super::transport::{Guarded, Network, Request, Sent, Transport};
 use crate::game_data::TradeGroup;
 use crate::http::{self, HttpError, Pace};
 use crate::item_names::{ItemNames, Names, StatTemplate, UniqueName, UniqueNames};
@@ -170,10 +169,8 @@ struct LanguageData {
 /// The client of the data of the trade site, which identifies the application, spaces its
 /// requests, follows no redirection and sends nothing during the wait of a refusal.
 pub struct TradeSite<T = Network> {
-    transport: T,
+    transport: Guarded<T>,
     pace: Pace,
-    /// The wait asked by a refusal, shared with the searches of offers.
-    refusal: Refusal,
     /// A request of the download under way was answered ([`NamesError::Http`]).
     answered: bool,
 }
@@ -188,9 +185,8 @@ impl TradeSite {
 impl<T: Transport> TradeSite<T> {
     fn with_transport(transport: T, refusal: Refusal) -> Self {
         Self {
-            transport,
+            transport: Guarded::new(transport, refusal),
             pace: Pace::new(PACE),
-            refusal,
             answered: false,
         }
     }
@@ -222,9 +218,6 @@ impl<T: Transport> TradeSite<T> {
         name: &str,
     ) -> Result<Vec<A>, NamesError> {
         self.pace.wait();
-        if let Some(until) = self.refusal.until(Instant::now()) {
-            return Err(NamesError::Wait(until));
-        }
         let path = format!("/api/trade2/data/{name}");
         let request = Request {
             url: format!("{}{path}", super::host(language)),
@@ -237,15 +230,14 @@ impl<T: Transport> TradeSite<T> {
             error,
             after_answers,
         };
-        let answer = self
-            .transport
-            .send(&request)
-            .map_err(|error| failed(HttpError::Request(error)))?;
-        if matches!(answer.status, 403 | 429) {
-            let until = Instant::now() + limits::refusal_wait(&answer.limits);
-            self.refusal.extend(until);
-            return Err(NamesError::Refused(answer.status, until));
-        }
+        let answer = match self.transport.send(&request) {
+            Sent::Waiting(until) => return Err(NamesError::Wait(until)),
+            Sent::Unanswered(error) => return Err(failed(HttpError::Request(error))),
+            Sent::Refused { answer, until } => {
+                return Err(NamesError::Refused(answer.status, until));
+            }
+            Sent::Answered(answer) => answer,
+        };
         if !(200..300).contains(&answer.status) {
             answer.log_error_message();
             let status = ureq::Error::StatusCode(answer.status);
