@@ -21,7 +21,8 @@ use crate::trade::query::SearchKind;
 use crate::trade::search::{Answer, Order, Search};
 use crate::ui::{self, ItemBlockAction, OffersAction, TradeStatus, UnreadableItem};
 
-/// What a window draws the item shown with.
+/// What a window draws the item shown with: read once a frame, for both windows and the status
+/// bar, though the desk could tell some of it.
 #[derive(Debug, Clone, Copy)]
 pub(super) struct Surroundings {
     pub(super) prices: PricesState,
@@ -93,7 +94,7 @@ impl Desk {
     /// Takes in an event of the clipboard watching. The item shown, copied again, keeps its
     /// filters and offers; another item copied leaves them to the items remembered, and shows
     /// its own.
-    pub(super) fn take_clipboard_event(&mut self, event: ClipboardEvent) {
+    pub(super) fn apply_clipboard_event(&mut self, event: ClipboardEvent) {
         let mut back = None;
         if let ClipboardEvent::Copied { item, hotkey } = &event {
             // The clipboard watching alone tells the copy of the hotkey.
@@ -169,7 +170,7 @@ impl Desk {
     }
 
     /// Takes in the answer of a search of the trade site, at `clock`.
-    pub(super) fn take_answer(&mut self, answer: Answer, clock: SystemTime) {
+    pub(super) fn apply_answer(&mut self, answer: Answer, clock: SystemTime) {
         self.offers.apply(answer, clock);
     }
 
@@ -196,7 +197,7 @@ impl Desk {
 
     /// The search of the offers of the item shown, with its filters as they are, when it can
     /// be searched.
-    pub(super) fn shown_search(&self) -> Option<Search> {
+    fn shown_search(&self) -> Option<Search> {
         let shown = self.session.item()?;
         let item = shown.parsed().ok()?;
         let filters = search_filters(&self.session, shown, item, &self.filters);

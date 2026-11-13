@@ -32,7 +32,7 @@ fn league() -> League {
 /// A desk showing the copied item `text`.
 fn desk_showing(text: &str) -> Desk {
     let mut desk = Desk::new(Some(league()));
-    desk.take_clipboard_event(ClipboardEvent::Copied {
+    desk.apply_clipboard_event(ClipboardEvent::Copied {
         item: CopiedItem::from_text(text).expect("an item"),
         hotkey: None,
     });
@@ -272,7 +272,7 @@ impl Scene {
         ));
         let order = self.desk.offers.search(search, Instant::now());
         assert!(order.is_some(), "the search is allowed");
-        self.desk.take_answer(answer, SystemTime::now());
+        self.desk.apply_answer(answer, SystemTime::now());
     }
 }
 
@@ -289,13 +289,13 @@ fn draw_the_offers(scene: &mut Scene, ctx: &Context, drawn: &mut Drawn, kind: Se
     // Its offers, then the next ones asked, which don't come.
     scene
         .desk
-        .take_answer(answer(kind, interface), SystemTime::now());
+        .apply_answer(answer(kind, interface), SystemTime::now());
     scene.draw_each_way(ctx, drawn);
     scene.draw_under_the_pointer(ctx, drawn);
     let _ = scene.desk.offers.more();
     scene.draw_each_way(ctx, drawn);
     if scene.desk.offers.busy() {
-        scene.desk.take_answer(
+        scene.desk.apply_answer(
             Answer {
                 outcome: Outcome::Failed(Failure::Unreadable),
                 ..answer(kind, interface)

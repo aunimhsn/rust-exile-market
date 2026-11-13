@@ -469,7 +469,7 @@ impl ExileMarketApp {
 
     /// Takes in an event of the clipboard watching: an item copied opens the window over the
     /// game when the hotkey copied it, and closes the settings and the bug report.
-    fn take_clipboard_event(&mut self, event: ClipboardEvent) {
+    fn apply_clipboard_event(&mut self, event: ClipboardEvent) {
         if let ClipboardEvent::Copied { hotkey, .. } = &event {
             let was_open = self.overlay.shown().is_some();
             // A window that opens is laid out once before it shows; an open one keeps its
@@ -479,7 +479,7 @@ impl ExileMarketApp {
             }
         }
         self.view = self.view.after(&event);
-        self.desk.take_clipboard_event(event);
+        self.desk.apply_clipboard_event(event);
     }
 }
 
@@ -513,7 +513,7 @@ impl App for ExileMarketApp {
             );
         }
         for event in events {
-            self.take_clipboard_event(event);
+            self.apply_clipboard_event(event);
         }
         if let Some(left) = self.overlay.expire(now) {
             ctx.request_repaint_after(left);
@@ -539,7 +539,7 @@ impl App for ExileMarketApp {
         }
         if self
             .search
-            .receive(|answer| self.desk.take_answer(answer, SystemTime::now()))
+            .receive(|answer| self.desk.apply_answer(answer, SystemTime::now()))
         {
             self.desk.search_thread_lost();
         }

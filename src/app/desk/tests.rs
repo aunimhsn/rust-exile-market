@@ -56,7 +56,7 @@ fn the_status_bar_tells_a_long_wait_rather_than_the_age_of_the_last_search() {
             exchange: now + Duration::from_secs(10),
         },
     };
-    desk.take_answer(
+    desk.apply_answer(
         answer(240),
         SystemTime::UNIX_EPOCH + Duration::from_secs(480),
     );
@@ -108,17 +108,17 @@ fn an_item_copied_again_after_another_comes_back_with_its_filters() {
         };
         let mut desk = Desk::new(Some(League::new("Standard")));
 
-        desk.take_clipboard_event(copied(&first));
+        desk.apply_clipboard_event(copied(&first));
         assert!(
             desk.session
                 .item()
                 .is_some_and(|shown| shown.parsed().is_ok())
         );
         desk.filters.set(life, filter(true, "25"));
-        desk.take_clipboard_event(copied(&second));
+        desk.apply_clipboard_event(copied(&second));
         let on_second = desk.filters.get(life, by_default);
         let _ = desk.take_scroll_to_top();
-        desk.take_clipboard_event(copied(&first));
+        desk.apply_clipboard_event(copied(&first));
 
         assert_eq!(on_second, by_default(), "{hotkey:?}");
         assert_eq!(
@@ -132,4 +132,31 @@ fn an_item_copied_again_after_another_comes_back_with_its_filters() {
             "{hotkey:?}: back to its name and its price"
         );
     }
+}
+
+#[test]
+fn the_item_shown_copied_again_by_the_hotkey_stays_as_it_is() {
+    let ring = rare_ring("Woe Loop");
+    let life = FilterKey::Stat(StatKey {
+        modifier: 0,
+        line: 0,
+    });
+    let mut desk = Desk::new(Some(League::new("Standard")));
+    desk.apply_clipboard_event(ClipboardEvent::Copied {
+        item: ring.clone(),
+        hotkey: None,
+    });
+    desk.filters.set(life, filter(true, "25"));
+    let _ = desk.take_scroll_to_top();
+
+    desk.apply_clipboard_event(ClipboardEvent::Copied {
+        item: ring,
+        hotkey: Some(Instant::now()),
+    });
+
+    assert_eq!(
+        desk.filters.get(life, || filter(false, "")),
+        filter(true, "25")
+    );
+    assert!(!desk.take_scroll_to_top(), "it stays where the player is");
 }
