@@ -22,6 +22,7 @@ pub(super) struct SystemPointer {
 }
 
 impl SystemPointer {
+    /// Connects to the X server.
     pub(super) fn connect() -> Result<Self, Box<dyn Error>> {
         Ok(Self {
             session: Session::connect()?,

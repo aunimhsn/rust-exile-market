@@ -29,7 +29,7 @@ use std::time::{Duration, Instant};
 
 use x11rb::protocol::xproto::Window;
 
-use crate::x11::{Lazy, Result};
+use crate::x11::{LazyConnection, Result};
 
 mod x_screen;
 
@@ -152,7 +152,7 @@ impl State {
 pub struct Activation<S: Screen = XScreen> {
     /// The connection to the X server: made when the window over the game first opens, and again
     /// at the next opening once it failed.
-    screen: Lazy<S>,
+    screen: LazyConnection<S>,
     state: State,
     /// The state at the start of the last [`Self::follow`], which [`Self::lost`] compares.
     before: State,
@@ -187,7 +187,7 @@ impl Default for Activation {
 impl<S: Screen> Activation<S> {
     fn with(connect: fn() -> Result<S>) -> Self {
         Self {
-            screen: Lazy::new(
+            screen: LazyConnection::new(
                 connect,
                 "The window over the game can't tell whether the game holds the pointer",
             ),

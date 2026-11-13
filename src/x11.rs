@@ -1,6 +1,7 @@
 //! What the hotkey ([`crate::hotkey`]) and the window over the game ([`crate::overlay`]) read
-//! alike on the X server: the active window of the desktop, the windows of this application, and
-//! where the keyboard is.
+//! alike on the X server, through a [`Session`] each: the active window of the desktop, the
+//! windows of this application, the pointer, and where the keyboard is; and the
+//! [`LazyConnection`] of the window over the game, made at its first use.
 
 use std::error::Error;
 
@@ -45,11 +46,11 @@ impl Session {
     pub fn connect() -> Result<Self> {
         let (connection, screen) = x11rb::connect(None)?;
         let root = connection.setup().roots[screen].root;
-        let intern = |name: &[u8]| intern(&connection, name);
+        let atom = |name: &[u8]| intern(&connection, name);
         let atoms = Atoms {
-            active_window: intern(b"_NET_ACTIVE_WINDOW")?,
-            pid: intern(b"_NET_WM_PID")?,
-            game_behind: intern(b"_EXILE_MARKET_GAME")?,
+            active_window: atom(b"_NET_ACTIVE_WINDOW")?,
+            pid: atom(b"_NET_WM_PID")?,
+            game_behind: atom(b"_EXILE_MARKET_GAME")?,
         };
         Ok(Self {
             connection,
@@ -191,15 +192,16 @@ impl Session {
 
 /// A connection to the X server made at its first use, and made again at the next use after an
 /// error; one that can't be made is written to the log once, and never tried again.
-pub struct Lazy<T> {
-    /// A function rather than a closure, so that it is copied out when it is called.
+pub struct LazyConnection<T> {
+    /// A plain function: the connections of the application capture nothing, and a test hands
+    /// its fake through a `thread_local!`.
     connect: fn() -> Result<T>,
-    /// What the application can't do without it, written to the log.
-    unavailable: &'static str,
+    /// What the application can't do without it, written to the log when it can't be made.
+    unavailable_message: &'static str,
     link: Link<T>,
 }
 
-/// Where the connection of a [`Lazy`] is.
+/// Where the connection of a [`LazyConnection`] is.
 enum Link<T> {
     Waiting,
     Connected(T),
@@ -207,12 +209,12 @@ enum Link<T> {
     Unavailable,
 }
 
-impl<T> Lazy<T> {
+impl<T> LazyConnection<T> {
     /// Not connected yet: `connect` is called at the first [`Self::get_or_connect`].
-    pub fn new(connect: fn() -> Result<T>, unavailable: &'static str) -> Self {
+    pub fn new(connect: fn() -> Result<T>, unavailable_message: &'static str) -> Self {
         Self {
             connect,
-            unavailable,
+            unavailable_message,
             link: Link::Waiting,
         }
     }
@@ -223,7 +225,7 @@ impl<T> Lazy<T> {
             self.link = match (self.connect)() {
                 Ok(connection) => Link::Connected(connection),
                 Err(error) => {
-                    log::warn!("{}: no X server ({error})", self.unavailable);
+                    log::warn!("{}: no X server ({error})", self.unavailable_message);
                     Link::Unavailable
                 }
             };
@@ -239,7 +241,8 @@ impl<T> Lazy<T> {
         }
     }
 
-    /// Drops the connection after an error on it: it is made again at the next use.
+    /// Drops the connection after a failure of its user, of the X server or not (the window
+    /// sought not there): it is made again at the next use, which costs one connection.
     pub fn forget(&mut self) {
         if let Link::Connected(_) = self.link {
             self.link = Link::Waiting;
@@ -285,15 +288,15 @@ mod tests {
     const ROOT: Window = 0x410;
 
     /// A connection that counts itself in `connections`, the static of its test, which the
-    /// function given to a [`Lazy`] can't capture.
+    /// function given to a [`LazyConnection`] can't capture.
     fn counted(connections: &'static AtomicUsize) -> usize {
         connections.fetch_add(1, Ordering::Relaxed) + 1
     }
 
     #[test]
-    fn a_lazy_connection_is_made_at_its_first_use_only() {
+    fn a_connection_is_made_at_its_first_use_only() {
         static CONNECTIONS: AtomicUsize = AtomicUsize::new(0);
-        let mut lazy = Lazy::new(|| Ok(counted(&CONNECTIONS)), "test");
+        let mut lazy = LazyConnection::new(|| Ok(counted(&CONNECTIONS)), "test");
         assert_eq!(lazy.get(), None);
         assert_eq!(lazy.get_or_connect(), Some(&mut 1));
         assert_eq!(lazy.get_or_connect(), Some(&mut 1));
@@ -302,9 +305,9 @@ mod tests {
     }
 
     #[test]
-    fn a_lazy_connection_forgotten_after_an_error_is_made_again_at_the_next_use() {
+    fn a_connection_forgotten_after_an_error_is_made_again_at_the_next_use() {
         static CONNECTIONS: AtomicUsize = AtomicUsize::new(0);
-        let mut lazy = Lazy::new(|| Ok(counted(&CONNECTIONS)), "test");
+        let mut lazy = LazyConnection::new(|| Ok(counted(&CONNECTIONS)), "test");
         lazy.get_or_connect();
         lazy.forget();
         assert_eq!(lazy.get(), None);
@@ -312,9 +315,9 @@ mod tests {
     }
 
     #[test]
-    fn a_lazy_connection_that_cant_be_made_is_tried_once() {
+    fn a_connection_that_cant_be_made_is_tried_once() {
         static ATTEMPTS: AtomicUsize = AtomicUsize::new(0);
-        let mut lazy = Lazy::<()>::new(
+        let mut lazy = LazyConnection::<()>::new(
             || {
                 ATTEMPTS.fetch_add(1, Ordering::Relaxed);
                 Err("no display".into())

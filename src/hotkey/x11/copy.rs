@@ -147,11 +147,13 @@ struct Sent {
     missed: Vec<&'static str>,
 }
 
+/// The keyboard of the X server, which the copy is sent to.
 struct Keyboard {
     session: Session,
 }
 
 impl Keyboard {
+    /// Connects to the X server, which must have the XTest extension.
     fn connect() -> Result<Self> {
         let session = Session::connect()?;
         if session
@@ -200,7 +202,7 @@ impl Keyboard {
     /// The active window, the game in place of the helper of the window over the game; whether
     /// the desktop refused to make the game active again.
     fn active_game(&self) -> (Result<Option<Window>>, bool) {
-        match self.active_window() {
+        match self.session.active_window() {
             Ok(Some(window)) => {
                 let (window, refused) = self.game_in_front(window);
                 (Ok(Some(window)), refused)
@@ -214,7 +216,7 @@ impl Keyboard {
     /// window over the game taken the keyboard. The game is made active again and given the
     /// keyboard back, so that the keys reach it.
     fn game_in_front_again(&self) {
-        if let Ok(Some(active)) = self.active_window() {
+        if let Ok(Some(active)) = self.session.active_window() {
             let (game, _) = self.game_in_front(active);
             if let Err(error) = self.give_back_keyboard(game) {
                 log::warn!("The keyboard can't be given back to the game: {error}");
@@ -228,7 +230,7 @@ impl Keyboard {
         self.session.activate(game)?;
         let start = Instant::now();
         while start.elapsed() < ACTIVATION_WAIT {
-            if self.active_window()? == Some(game) {
+            if self.session.active_window()? == Some(game) {
                 log::info!("The price-check hotkey made the game the active window again");
                 return Ok(());
             }
@@ -247,11 +249,6 @@ impl Keyboard {
             log::info!("The price-check hotkey gave the keyboard back to the game");
         }
         Ok(())
-    }
-
-    /// The active window, none when the desktop gives the focus to a window outside X11.
-    fn active_window(&self) -> Result<Option<Window>> {
-        self.session.active_window()
     }
 
     /// Where `window` is on the screen, without its frame; none when it has no size.

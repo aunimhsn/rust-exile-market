@@ -63,6 +63,7 @@ struct ActiveWindow {
 }
 
 impl ActiveWindow {
+    /// Connects to the X server, with the atoms the active window is followed with.
     fn connect() -> Result<Self> {
         let session = Session::connect()?;
         let atoms = WatchAtoms {

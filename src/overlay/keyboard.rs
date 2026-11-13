@@ -9,7 +9,7 @@
 
 use x11rb::protocol::xproto::{ConnectionExt as _, Window};
 
-use crate::x11::{self as shared, Lazy, Result, Session};
+use crate::x11::{self as shared, LazyConnection, Result, Session};
 
 /// The input focus of the X server, or a fake one in the tests.
 pub trait Focus {
@@ -36,8 +36,8 @@ struct Held {
 /// Gives the keyboard to the window over the game while one of its fields is edited.
 pub struct KeyboardFocus<F = XFocus> {
     /// The connection to the X server: made at the first field edited, and again at the next
-    /// field edited or left once it failed.
-    focus: Lazy<F>,
+    /// field edited once it failed.
+    focus: LazyConnection<F>,
     editing: bool,
     held: Option<Held>,
 }
@@ -58,7 +58,7 @@ impl Default for KeyboardFocus {
 impl<F: Focus> KeyboardFocus<F> {
     fn with(connect: fn() -> Result<F>) -> Self {
         Self {
-            focus: Lazy::new(connect, "The window over the game can't take the keyboard"),
+            focus: LazyConnection::new(connect, "The window over the game can't take the keyboard"),
             editing: false,
             held: None,
         }
@@ -85,7 +85,7 @@ impl<F: Focus> KeyboardFocus<F> {
     }
 
     /// Gives the keyboard to the window over the game; on a failure, the connection is made
-    /// again at the next field edited or left.
+    /// again at the next field edited.
     fn take(&mut self) {
         let Some(focus) = self.focus.get_or_connect() else {
             return;
@@ -103,7 +103,8 @@ impl<F: Focus> KeyboardFocus<F> {
     /// next field edited.
     fn give_back(&mut self) {
         let Some(held) = self.held.take() else { return };
-        let Some(focus) = self.focus.get_or_connect() else {
+        // Held, the keyboard was taken on this connection.
+        let Some(focus) = self.focus.get() else {
             return;
         };
         if let Err(error) = give_back(focus, held) {
@@ -160,6 +161,7 @@ pub struct XFocus {
 }
 
 impl XFocus {
+    /// Connects to the X server.
     fn connect() -> Result<Self> {
         Ok(Self {
             session: Session::connect()?,
@@ -388,6 +390,21 @@ mod tests {
         assert!(keyboard.follow(true));
 
         assert_eq!(server.borrow().focused, OVERLAY);
+        assert_eq!(server.borrow().connections, 2);
+    }
+
+    #[test]
+    fn a_field_edited_away_from_the_window_connects_again_at_the_next_one() {
+        let (mut keyboard, server) = keyboard(Server {
+            under_pointer: None,
+            ..Server::default()
+        });
+        assert!(!keyboard.follow(true));
+        keyboard.follow(false);
+        server.borrow_mut().under_pointer = Some(OVERLAY);
+
+        assert!(keyboard.follow(true));
+
         assert_eq!(server.borrow().connections, 2);
     }
 
