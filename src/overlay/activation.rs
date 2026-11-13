@@ -29,7 +29,7 @@ use std::time::{Duration, Instant};
 
 use x11rb::protocol::xproto::Window;
 
-use crate::x11::Result;
+use crate::x11::{Lazy, Result};
 
 mod x_screen;
 
@@ -148,20 +148,11 @@ impl State {
     }
 }
 
-/// The connection to the X server: made when the window over the game first opens, and again at
-/// the next opening once it failed.
-enum Link<S> {
-    Waiting,
-    Connected(S),
-    /// It couldn't be made, which is written to the log once.
-    Unavailable,
-}
-
 /// Makes the window over the game the active window while the game holds the pointer.
 pub struct Activation<S: Screen = XScreen> {
-    /// A function rather than a closure, so that it is copied out when it is called.
-    connect: fn() -> Result<S>,
-    link: Link<S>,
+    /// The connection to the X server: made when the window over the game first opens, and again
+    /// at the next opening once it failed.
+    screen: Lazy<S>,
     state: State,
     /// The state at the start of the last [`Self::follow`], which [`Self::lost`] compares.
     before: State,
@@ -196,8 +187,10 @@ impl Default for Activation {
 impl<S: Screen> Activation<S> {
     fn with(connect: fn() -> Result<S>) -> Self {
         Self {
-            connect,
-            link: Link::Waiting,
+            screen: Lazy::new(
+                connect,
+                "The window over the game can't tell whether the game holds the pointer",
+            ),
             state: State::Idle,
             before: State::Idle,
             opened: None,
@@ -280,24 +273,6 @@ impl<S: Screen> Activation<S> {
         }
     }
 
-    fn screen(&mut self) -> Option<&mut S> {
-        if let Link::Waiting = self.link {
-            self.link = match (self.connect)() {
-                Ok(screen) => Link::Connected(screen),
-                Err(error) => {
-                    log::warn!(
-                        "The window over the game can't tell whether the game holds the pointer: no X server ({error})"
-                    );
-                    Link::Unavailable
-                }
-            };
-        }
-        match &mut self.link {
-            Link::Connected(screen) => Some(screen),
-            Link::Waiting | Link::Unavailable => None,
-        }
-    }
-
     /// The window opens, or opens again on another item: it waits to become the active window
     /// when the game holds the pointer, or when it was, or was becoming, the active window;
     /// otherwise it looks for the game holding it a moment later.
@@ -306,7 +281,9 @@ impl<S: Screen> Activation<S> {
         // The hotkey made the game the active window for its copy, so the window was the active
         // one when it was pressed.
         let carry = carry || state.shown().is_some();
-        let Some(screen) = self.screen() else { return };
+        let Some(screen) = self.screen.get_or_connect() else {
+            return;
+        };
         let next = open(screen, state, carry, now);
         self.step(state, next);
     }
@@ -319,7 +296,9 @@ impl<S: Screen> Activation<S> {
             return;
         }
         let carry = self.carry;
-        let Some(screen) = self.screen() else { return };
+        let Some(screen) = self.screen.get_or_connect() else {
+            return;
+        };
         let next = advance(
             screen,
             state,
@@ -346,7 +325,7 @@ impl<S: Screen> Activation<S> {
                 log::warn!("The window over the game can't become the active window: {error}");
                 self.release(state, true);
                 self.state = State::Idle;
-                self.link = Link::Waiting;
+                self.screen.forget();
             }
         }
     }
@@ -357,7 +336,7 @@ impl<S: Screen> Activation<S> {
         let Some((game, helper)) = state.shown() else {
             return;
         };
-        let Link::Connected(screen) = &mut self.link else {
+        let Some(screen) = self.screen.get() else {
             return;
         };
         if give_back && let Err(error) = self::give_back(screen, game, helper) {

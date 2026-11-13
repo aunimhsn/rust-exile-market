@@ -9,7 +9,7 @@
 
 use x11rb::protocol::xproto::{ConnectionExt as _, Window};
 
-use crate::x11::{self as shared, Result, Session};
+use crate::x11::{self as shared, Lazy, Result, Session};
 
 /// The input focus of the X server, or a fake one in the tests.
 pub trait Focus {
@@ -33,17 +33,11 @@ struct Held {
     game: Window,
 }
 
-/// The connection to the X server: made at the first field edited.
-enum Link<F> {
-    Waiting(fn() -> Result<F>),
-    Connected(F),
-    /// It couldn't be made, which is written to the log once.
-    Unavailable,
-}
-
 /// Gives the keyboard to the window over the game while one of its fields is edited.
 pub struct KeyboardFocus<F = XFocus> {
-    link: Link<F>,
+    /// The connection to the X server: made at the first field edited, and again at the next
+    /// field edited or left once it failed.
+    focus: Lazy<F>,
     editing: bool,
     held: Option<Held>,
 }
@@ -64,7 +58,7 @@ impl Default for KeyboardFocus {
 impl<F: Focus> KeyboardFocus<F> {
     fn with(connect: fn() -> Result<F>) -> Self {
         Self {
-            link: Link::Waiting(connect),
+            focus: Lazy::new(connect, "The window over the game can't take the keyboard"),
             editing: false,
             held: None,
         }
@@ -90,38 +84,31 @@ impl<F: Focus> KeyboardFocus<F> {
         self.held.is_some()
     }
 
-    fn focus(&mut self) -> Option<&mut F> {
-        if let Link::Waiting(connect) = self.link {
-            self.link = match connect() {
-                Ok(focus) => Link::Connected(focus),
-                Err(error) => {
-                    log::warn!(
-                        "The window over the game can't take the keyboard: no X server ({error})"
-                    );
-                    Link::Unavailable
-                }
-            };
-        }
-        match &mut self.link {
-            Link::Connected(focus) => Some(focus),
-            Link::Waiting(_) | Link::Unavailable => None,
-        }
-    }
-
+    /// Gives the keyboard to the window over the game; on a failure, the connection is made
+    /// again at the next field edited or left.
     fn take(&mut self) {
-        let Some(focus) = self.focus() else { return };
-        self.held = take(focus)
-            .map_err(|error| {
+        let Some(focus) = self.focus.get_or_connect() else {
+            return;
+        };
+        match take(focus) {
+            Ok(held) => self.held = Some(held),
+            Err(error) => {
                 log::warn!("The window over the game can't take the keyboard: {error}");
-            })
-            .ok();
+                self.focus.forget();
+            }
+        }
     }
 
+    /// Gives the keyboard back to the game; on a failure, the connection is made again at the
+    /// next field edited.
     fn give_back(&mut self) {
         let Some(held) = self.held.take() else { return };
-        let Some(focus) = self.focus() else { return };
+        let Some(focus) = self.focus.get_or_connect() else {
+            return;
+        };
         if let Err(error) = give_back(focus, held) {
             log::warn!("The keyboard can't be given back to the game: {error}");
+            self.focus.forget();
         }
     }
 }
@@ -238,6 +225,8 @@ mod tests {
         focused: Window,
         fails: bool,
         set: Vec<Window>,
+        /// How many connections were made.
+        connections: usize,
     }
 
     impl Default for Server {
@@ -248,6 +237,7 @@ mod tests {
                 focused: GAME,
                 fails: false,
                 set: Vec::new(),
+                connections: 0,
             }
         }
     }
@@ -278,11 +268,20 @@ mod tests {
         }
     }
 
-    /// The keyboard of the window over the game on `server`, already connected.
+    thread_local! {
+        /// The fake X server of the test, for the connection, a function that can't capture it.
+        static SERVER: RefCell<Option<Rc<RefCell<Server>>>> = const { RefCell::new(None) };
+    }
+
+    /// The keyboard of the window over the game on `server`, connected at the first field edited.
     fn keyboard(server: Server) -> (KeyboardFocus<FakeFocus>, Rc<RefCell<Server>>) {
         let server = Rc::new(RefCell::new(server));
-        let mut keyboard = KeyboardFocus::with(|| Err("never connected".into()));
-        keyboard.link = Link::Connected(FakeFocus(Rc::clone(&server)));
+        SERVER.with(|cell| *cell.borrow_mut() = Some(Rc::clone(&server)));
+        let keyboard = KeyboardFocus::with(|| {
+            let server = SERVER.with(|cell| cell.borrow().clone().expect("a fake X server"));
+            server.borrow_mut().connections += 1;
+            Ok(FakeFocus(server))
+        });
         (keyboard, server)
     }
 
@@ -370,9 +369,35 @@ mod tests {
         server.borrow_mut().fails = true;
         assert!(!keyboard.follow(false));
         assert!(!keyboard.held());
-        // The next field edited tries again.
+        // The next field edited tries again, on a new connection.
         server.borrow_mut().fails = false;
         assert!(keyboard.follow(true));
+        assert_eq!(server.borrow().connections, 2);
+    }
+
+    #[test]
+    fn after_a_focus_refused_the_next_field_edited_connects_again() {
+        let (mut keyboard, server) = keyboard(Server {
+            fails: true,
+            ..Server::default()
+        });
+        assert!(!keyboard.follow(true));
+        keyboard.follow(false);
+        server.borrow_mut().fails = false;
+
+        assert!(keyboard.follow(true));
+
+        assert_eq!(server.borrow().focused, OVERLAY);
+        assert_eq!(server.borrow().connections, 2);
+    }
+
+    #[test]
+    fn the_connection_is_kept_while_nothing_fails() {
+        let (mut keyboard, server) = keyboard(Server::default());
+        for editing in [true, false, true, false] {
+            keyboard.follow(editing);
+        }
+        assert_eq!(server.borrow().connections, 1);
     }
 
     #[test]

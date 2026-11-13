@@ -189,6 +189,64 @@ impl Session {
     }
 }
 
+/// A connection to the X server made at its first use, and made again at the next use after an
+/// error; one that can't be made is written to the log once, and never tried again.
+pub struct Lazy<T> {
+    /// A function rather than a closure, so that it is copied out when it is called.
+    connect: fn() -> Result<T>,
+    /// What the application can't do without it, written to the log.
+    unavailable: &'static str,
+    link: Link<T>,
+}
+
+/// Where the connection of a [`Lazy`] is.
+enum Link<T> {
+    Waiting,
+    Connected(T),
+    /// It couldn't be made.
+    Unavailable,
+}
+
+impl<T> Lazy<T> {
+    /// Not connected yet: `connect` is called at the first [`Self::get_or_connect`].
+    pub fn new(connect: fn() -> Result<T>, unavailable: &'static str) -> Self {
+        Self {
+            connect,
+            unavailable,
+            link: Link::Waiting,
+        }
+    }
+
+    /// The connection, made now when it isn't yet; none when it can't be.
+    pub fn get_or_connect(&mut self) -> Option<&mut T> {
+        if let Link::Waiting = self.link {
+            self.link = match (self.connect)() {
+                Ok(connection) => Link::Connected(connection),
+                Err(error) => {
+                    log::warn!("{}: no X server ({error})", self.unavailable);
+                    Link::Unavailable
+                }
+            };
+        }
+        self.get()
+    }
+
+    /// The connection, when it is made; never makes it.
+    pub fn get(&mut self) -> Option<&mut T> {
+        match &mut self.link {
+            Link::Connected(connection) => Some(connection),
+            Link::Waiting | Link::Unavailable => None,
+        }
+    }
+
+    /// Drops the connection after an error on it: it is made again at the next use.
+    pub fn forget(&mut self) {
+        if let Link::Connected(_) = self.link {
+            self.link = Link::Waiting;
+        }
+    }
+}
+
 /// The atom of `name` on `connection`, created when the X server doesn't know it yet.
 fn intern(connection: &RustConnection, name: &[u8]) -> Result<Atom> {
     Ok(connection.intern_atom(false, name)?.reply()?.atom)
@@ -222,8 +280,53 @@ pub fn is_nowhere(focused: Window, root: Window) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
 
     const ROOT: Window = 0x410;
+
+    /// A connection that counts itself in `connections`, the static of its test, which the
+    /// function given to a [`Lazy`] can't capture.
+    fn counted(connections: &'static AtomicUsize) -> usize {
+        connections.fetch_add(1, Ordering::Relaxed) + 1
+    }
+
+    #[test]
+    fn a_lazy_connection_is_made_at_its_first_use_only() {
+        static CONNECTIONS: AtomicUsize = AtomicUsize::new(0);
+        let mut lazy = Lazy::new(|| Ok(counted(&CONNECTIONS)), "test");
+        assert_eq!(lazy.get(), None);
+        assert_eq!(lazy.get_or_connect(), Some(&mut 1));
+        assert_eq!(lazy.get_or_connect(), Some(&mut 1));
+        assert_eq!(lazy.get(), Some(&mut 1));
+        assert_eq!(CONNECTIONS.load(Ordering::Relaxed), 1);
+    }
+
+    #[test]
+    fn a_lazy_connection_forgotten_after_an_error_is_made_again_at_the_next_use() {
+        static CONNECTIONS: AtomicUsize = AtomicUsize::new(0);
+        let mut lazy = Lazy::new(|| Ok(counted(&CONNECTIONS)), "test");
+        lazy.get_or_connect();
+        lazy.forget();
+        assert_eq!(lazy.get(), None);
+        assert_eq!(lazy.get_or_connect(), Some(&mut 2));
+    }
+
+    #[test]
+    fn a_lazy_connection_that_cant_be_made_is_tried_once() {
+        static ATTEMPTS: AtomicUsize = AtomicUsize::new(0);
+        let mut lazy = Lazy::<()>::new(
+            || {
+                ATTEMPTS.fetch_add(1, Ordering::Relaxed);
+                Err("no display".into())
+            },
+            "test",
+        );
+        for _ in 0..3 {
+            assert_eq!(lazy.get_or_connect(), None);
+            lazy.forget();
+        }
+        assert_eq!(ATTEMPTS.load(Ordering::Relaxed), 1);
+    }
 
     #[test]
     fn the_root_and_no_window_are_nowhere_the_pointer_root_isnt() {
