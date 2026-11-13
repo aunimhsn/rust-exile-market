@@ -911,3 +911,79 @@ fn the_requirements_are_written_for_a_gem_a_weapon_or_an_armour_only() {
     free.item.requirements = crate::item::Requirements::default();
     assert_eq!(written(&free, &bow), None);
 }
+
+/// Whether a click at `at` from the bottom right (or left) of the tooltip of an offer, with
+/// its whisper `pill`, was a click of Copy whisper.
+fn clicks_the_whisper(pill: WhisperPill, from_the_right: bool) -> bool {
+    use egui::{Event, Modifiers, PointerButton, RawInput};
+
+    let ctx = egui::Context::default();
+    crate::ui::install(&ctx);
+    let i18n = Translator::new(crate::language::Language::English);
+    let item = owners_waystone();
+    let offer = waystone("Waystone (Tier 12)", &[]);
+    let lines = CopiedLines::default();
+    let tooltip = OfferTooltip {
+        offer: &offer,
+        item: &item,
+        searched_catalyst: None,
+        lines: &lines,
+        name_color: color::TEXT,
+        suspicious: false,
+        pill,
+        i18n: &i18n,
+    };
+    let row = Rect::from_min_size(pos2(20.0, 600.0), vec2(380.0, 30.0));
+    let mut time = 0.0;
+    let mut frame = |events: Vec<Event>| {
+        time += 0.1;
+        let input = RawInput {
+            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(420.0, 720.0))),
+            time: Some(time),
+            events,
+            ..Default::default()
+        };
+        let mut clicked = false;
+        crate::ui::fixtures::run_frame(&ctx, input, |ui| {
+            clicked = tooltip.show(ui, row, 0.0);
+        });
+        clicked
+    };
+    // egui lays out a new area once before showing it.
+    frame(vec![]);
+    frame(vec![]);
+    let area = ctx
+        .memory(|memory| memory.area_rect(OfferTooltip::area_id(&offer.id)))
+        .expect("the tooltip shown");
+    let inset = f32::from(PADDING_X) + 4.0;
+    let x = if from_the_right {
+        area.right() - inset
+    } else {
+        area.left() + inset
+    };
+    // Within the pill, which is as tall as the foot of the tooltip.
+    let at = pos2(x, area.bottom() - f32::from(PADDING_Y) - 6.0);
+    let button = |pressed| Event::PointerButton {
+        pos: at,
+        button: PointerButton::Primary,
+        pressed,
+        modifiers: Modifiers::NONE,
+    };
+    [
+        frame(vec![Event::PointerMoved(at)]),
+        frame(vec![button(true)]),
+        frame(vec![button(false)]),
+    ]
+    .contains(&true)
+}
+
+#[test]
+fn a_click_on_the_whisper_pill_copies_the_whisper_in_each_of_its_states() {
+    for pill in [WhisperPill::Copy, WhisperPill::Copied, WhisperPill::Failed] {
+        assert!(clicks_the_whisper(pill, true), "{pill:?}");
+        assert!(
+            !clicks_the_whisper(pill, false),
+            "{pill:?} on the seller status"
+        );
+    }
+}

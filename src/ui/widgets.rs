@@ -160,6 +160,61 @@ pub fn not_allowed_sign(ui: &mut Ui, size: Vec2) -> Response {
     response
 }
 
+/// What lies under a floating list shows through it a little: the item under the leagues, the
+/// settings under the keys.
+pub const FLOATING_LIST_OPACITY: f32 = 0.94;
+
+/// A list floating over the window, in the foreground: the leagues, the keys of the hotkey.
+pub struct FloatingList {
+    pub id: egui::Id,
+    pub top_left: Pos2,
+    pub size: Vec2,
+    /// How much of it shows, from 0 (closed) to 1 (open), as it opens and closes.
+    pub shown: f32,
+    /// Whether it is open, not closing: only then do its rows take the pointer, and a click
+    /// outside closes it.
+    pub is_open: bool,
+}
+
+impl FloatingList {
+    /// Draws the list, its shadow then its rows, which `add` draws in its rect; what the player
+    /// did: what `add` gives, else `close` at a click outside the open list.
+    pub fn show<A>(
+        self,
+        ctx: &egui::Context,
+        close: A,
+        add: impl FnOnce(&mut Ui, Rect) -> Option<A>,
+    ) -> Option<A> {
+        egui::Area::new(self.id)
+            .order(egui::Order::Foreground)
+            .fixed_pos(self.top_left)
+            .interactable(self.is_open)
+            .show(ctx, |ui| {
+                ui.multiply_opacity(self.shown);
+                let list = Rect::from_min_size(ui.next_widget_position(), self.size);
+                ui.painter().add(
+                    super::theme::floating_shadow()
+                        .as_shape(list, CornerRadius::same(size::RADIUS)),
+                );
+                let action = add(ui, list);
+                ui.allocate_rect(list, Sense::hover());
+                action.or_else(|| (self.is_open && clicked_outside(ui, list)).then_some(close))
+            })
+            .inner
+    }
+}
+
+/// Whether a click of this frame fell outside `rect`.
+fn clicked_outside(ui: &Ui, rect: Rect) -> bool {
+    ui.input(|input| {
+        input.pointer.any_click()
+            && input
+                .pointer
+                .interact_pos()
+                .is_some_and(|pointer| !rect.contains(pointer))
+    })
+}
+
 /// A line of text.
 #[must_use]
 pub fn text_line(ui: &Ui, text: impl Into<String>, font: FontId) -> Arc<Galley> {
@@ -187,6 +242,28 @@ pub fn truncated_line(
     )
 }
 
+/// A text wrapped at `max_width`.
+#[must_use]
+pub fn wrapped_line(ui: &Ui, text: &str, font: FontId, max_width: f32) -> Arc<Galley> {
+    ui.painter()
+        .layout(text.to_owned(), font, Color32::PLACEHOLDER, max_width)
+}
+
+/// `text` wrapped at the width of `ui`, on a row across it, in `tint`.
+pub fn wrapped_text(ui: &mut Ui, text: &str, font: FontId, tint: Color32) {
+    let galley = wrapped_line(ui, text, font, ui.available_width());
+    text_row(ui, galley, 0.0, tint);
+}
+
+/// A row across the width of `ui`, as tall as `galley`, which it draws `inset` from its left
+/// in `tint`.
+pub fn text_row(ui: &mut Ui, galley: Arc<Galley>, inset: f32, tint: Color32) {
+    let (rect, _) =
+        ui.allocate_exact_size(vec2(ui.available_width(), galley.size().y), Sense::hover());
+    ui.painter()
+        .galley(pos2(rect.left() + inset, rect.top()), galley, tint);
+}
+
 /// A line of text with extra space between its letters, for the small uppercase labels.
 #[must_use]
 pub fn spaced_line(
@@ -200,6 +277,24 @@ pub fn spaced_line(
         ..TextFormat::simple(font, Color32::PLACEHOLDER)
     };
     line(ui, text, format, None)
+}
+
+/// A small title, `title` in capitals spaced in the font of the labels: "PRICE", "OFFERS".
+#[must_use]
+pub fn small_title_line(ui: &Ui, title: &str) -> Arc<Galley> {
+    spaced_line(
+        ui,
+        title.to_uppercase(),
+        text::label(),
+        text::LABEL_LETTER_SPACING,
+    )
+}
+
+/// A small title where the layout places it, in `tint`.
+pub fn small_title(ui: &mut Ui, title: &str, tint: Color32) {
+    let galley = small_title_line(ui, title);
+    let (rect, _) = ui.allocate_exact_size(galley.size(), Sense::hover());
+    ui.painter().galley(rect.min, galley, tint);
 }
 
 fn line(
@@ -326,6 +421,67 @@ fn tinted_control_pill(ui: &mut Ui, label: &str, tint: Color32, lit_tint: Color3
 
 /// The space around the text of a pill.
 const PILL_PADDING: Vec2 = vec2(10.0, 4.0);
+
+/// The check mark of a "Copied" pill, as in the mock-up.
+mod copied {
+    pub const CHECK_SIZE: f32 = 11.0;
+    /// The space between the check mark and the word.
+    pub const CHECK_GAP: f32 = 5.0;
+}
+
+/// The size of a "Copied" pill: its word and its check mark.
+#[must_use]
+pub fn copied_pill_size(ui: &Ui, label: &str) -> Vec2 {
+    pill_size(ui, label) + vec2(copied::CHECK_SIZE + copied::CHECK_GAP, 0.0)
+}
+
+/// "Copied ✓" on the accent, like the main action: the whisper copied, which a click copies
+/// again.
+pub fn copied_pill(ui: &mut Ui, label: &str) -> Response {
+    use copied::{CHECK_GAP, CHECK_SIZE};
+
+    let galley = text_line(ui, label, text::pill());
+    let (rect, response) = ui.allocate_exact_size(copied_pill_size(ui, label), Sense::click());
+    response.widget_info(|| WidgetInfo::labeled(Role::Button, true, label));
+    let painter = ui.painter();
+    painter.rect_filled(rect, CornerRadius::same(size::RADIUS), color::ACCENT);
+    let check_left = rect.left() + PILL_PADDING.x + galley.size().x + CHECK_GAP;
+    painter.galley(rect.min + PILL_PADDING, galley, color::ON_ACCENT);
+    check_mark(
+        painter,
+        pos2(check_left + CHECK_SIZE / 2.0, rect.center().y),
+        CHECK_SIZE,
+        color::ON_ACCENT,
+    );
+    response.on_hover_cursor(CursorIcon::PointingHand)
+}
+
+/// "✓ Copied" on the color of the controls, in the weak color, in place of the pill of a
+/// secondary action: done, nothing to click.
+pub fn copied_control_pill(ui: &mut Ui, label: &str) {
+    use copied::{CHECK_GAP, CHECK_SIZE};
+
+    let galley = text_line(ui, label, text::pill());
+    let (rect, response) = ui.allocate_exact_size(copied_pill_size(ui, label), Sense::hover());
+    response.widget_info(|| WidgetInfo::labeled(Role::Label, true, label));
+    let painter = ui.painter();
+    painter.rect_filled(rect, CornerRadius::same(size::RADIUS), color::CONTROL);
+    let check_left = rect.left() + PILL_PADDING.x;
+    check_mark(
+        painter,
+        pos2(check_left + CHECK_SIZE / 2.0, rect.center().y),
+        CHECK_SIZE,
+        color::WEAK,
+    );
+    painter.galley(
+        pos2(
+            check_left + CHECK_SIZE + CHECK_GAP,
+            rect.top() + PILL_PADDING.y,
+        ),
+        galley,
+        color::WEAK,
+    );
+}
 
 /// The measures of two pills joined.
 mod segmented {

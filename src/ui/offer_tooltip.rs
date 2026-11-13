@@ -9,12 +9,12 @@ use std::time::Duration;
 
 use egui::text::{LayoutJob, TextFormat};
 use egui::{
-    Align2, Area, Color32, CornerRadius, Frame, Id, Margin, Order, Pos2, Rect, Response, Sense,
-    Stroke, Ui, Vec2, pos2, vec2,
+    Align2, Area, Color32, CornerRadius, Frame, Id, Margin, Order, Pos2, Rect, Sense, Stroke, Ui,
+    UiBuilder, Vec2, pos2, vec2,
 };
 
 use super::item_block::{
-    SEPARATOR, gem_level_color, requirement_parts, requirements_job, waystone_tier_color,
+    gem_level_color, requirement_parts, requirements_job, waystone_tier_color,
 };
 use super::item_stats::property_value;
 use super::offers_block::{RowPrice, offer_price};
@@ -52,9 +52,6 @@ const ORB: f32 = 18.0;
 const ORB_GAP: f32 = 6.0;
 const DOT_RADIUS: f32 = 3.5;
 const DOT_GAP: f32 = 6.0;
-const CHECK_SIZE: f32 = 11.0;
-const CHECK_GAP: f32 = 5.0;
-const PILL_PADDING: Vec2 = vec2(10.0, 4.0);
 
 /// The tooltip open, from one frame to the next.
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -398,12 +395,12 @@ fn meta(offer: &ItemOffer, item: &Item, i18n: &Translator, width: f32) -> Layout
     let gem_level = offered.gem_level.filter(|_| item.is_skill_gem());
     if let Some((name, tier)) = waystone {
         append(name, &font, color::WEAK);
-        append(SEPARATOR, &font, color::WEAK);
+        append(text::SEPARATOR, &font, color::WEAK);
         // In the font of its line, not bold as in the item block (owner, 2026-11-01).
         append(&format!("T{tier}"), &font, waystone_tier_color(tier));
     } else if let Some(level) = gem_level {
         append(item.class(), &font, color::WEAK);
-        append(SEPARATOR, &font, color::WEAK);
+        append(text::SEPARATOR, &font, color::WEAK);
         append(
             &i18n.gem_level(level),
             &text::tooltip_tier(),
@@ -420,7 +417,7 @@ fn meta(offer: &ItemOffer, item: &Item, i18n: &Translator, width: f32) -> Layout
         rest.push(i18n.text(Message::TagCorrupted));
     }
     for part in rest {
-        append(SEPARATOR, &font, color::WEAK);
+        append(text::SEPARATOR, &font, color::WEAK);
         append(&part, &font, color::WEAK);
     }
     job
@@ -474,22 +471,17 @@ impl OfferTooltip<'_> {
         let i18n = self.i18n;
         self.head(ui);
         ui.add_space(META_GAP);
-        let galley =
+        let meta_line =
             ui.painter()
                 .layout_job(meta(self.offer, self.item, i18n, ui.available_width()));
-        let (rect, _) =
-            ui.allocate_exact_size(vec2(ui.available_width(), galley.size().y), Sense::hover());
-        ui.painter().galley(rect.min, galley, color::WEAK);
+        widgets::text_row(ui, meta_line, 0.0, color::WEAK);
         if let Some(job) = requirements(self.offer, self.item, i18n, ui.available_width()) {
             ui.add_space(META_GAP);
-            let galley = ui.painter().layout_job(job);
-            let (rect, _) =
-                ui.allocate_exact_size(vec2(ui.available_width(), galley.size().y), Sense::hover());
-            ui.painter().galley(rect.min, galley, color::WEAK);
+            widgets::text_row(ui, ui.painter().layout_job(job), 0.0, color::WEAK);
         }
         if self.suspicious {
             ui.add_space(WARNING_GAP);
-            text_block(
+            widgets::wrapped_text(
                 ui,
                 &i18n.text(Message::OffersSuspicious),
                 text::note(),
@@ -501,7 +493,7 @@ impl OfferTooltip<'_> {
             .is_some_and(|catalyst| self.offer.has_other_quality(catalyst))
         {
             ui.add_space(WARNING_GAP);
-            text_block(
+            widgets::wrapped_text(
                 ui,
                 &i18n.text(Message::OffersOtherQuality),
                 text::note(),
@@ -596,16 +588,9 @@ impl OfferTooltip<'_> {
                 WhisperPill::Failed => Message::WhisperCopyFailed,
             })
         });
-        let pill = whisper
-            .as_ref()
-            .map(|label| widgets::text_line(ui, label.as_str(), text::pill()));
-        let pill_size = pill.as_ref().map(|galley| {
-            let check = if self.pill == WhisperPill::Copied {
-                CHECK_GAP + CHECK_SIZE
-            } else {
-                0.0
-            };
-            galley.size() + 2.0 * PILL_PADDING + vec2(check, 0.0)
+        let pill_size = whisper.as_deref().map(|label| match self.pill {
+            WhisperPill::Copied => widgets::copied_pill_size(ui, label),
+            WhisperPill::Copy | WhisperPill::Failed => widgets::pill_size(ui, label),
         });
         let height = pill_size.map_or(status.size().y, |size| size.y.max(status.size().y));
         let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), height), Sense::hover());
@@ -620,54 +605,25 @@ impl OfferTooltip<'_> {
             status,
             color::WEAK,
         );
-        let (Some(galley), Some(pill_size), Some(label)) = (pill, pill_size, whisper) else {
+        let (Some(label), Some(pill_size)) = (whisper, pill_size) else {
             return false;
         };
         let pill_rect = Rect::from_min_size(
             pos2(rect.right() - pill_size.x, center_y - pill_size.y / 2.0),
             pill_size,
         );
-        let response = ui.interact(
-            pill_rect,
-            ui.scope_id().with("copy-whisper"),
-            Sense::click(),
+        // Placed at the right of the row the status took, which the pill was counted in.
+        let mut pill_ui = ui.new_child(
+            UiBuilder::new()
+                .scope_id(ui.scope_id().with("copy-whisper"))
+                .max_rect(pill_rect),
         );
-        response
-            .widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, label.as_str()));
-        self.paint_pill(ui, &response, galley);
-        response
-            .on_hover_cursor(egui::CursorIcon::PointingHand)
-            .clicked()
-    }
-
-    /// Copy whisper on the color of the controls, lighter under the pointer; "Copied" and a
-    /// check mark on the accent; a copy that failed in red on the color of the controls.
-    fn paint_pill(&self, ui: &Ui, response: &Response, galley: std::sync::Arc<egui::Galley>) {
-        let rect = response.rect;
-        let lit = response.hovered() || response.has_focus();
-        let (fill, tint) = match (self.pill, lit) {
-            (WhisperPill::Copied, _) => (color::ACCENT, color::ON_ACCENT),
-            (WhisperPill::Failed, true) => (color::CONTROL_LINE, color::FALL),
-            (WhisperPill::Failed, false) => (color::CONTROL, color::FALL),
-            (WhisperPill::Copy, true) => (color::CONTROL_LINE, color::ACCENT),
-            (WhisperPill::Copy, false) => (color::CONTROL, color::TEXT),
+        let pill = match self.pill {
+            WhisperPill::Copy => widgets::control_pill(&mut pill_ui, &label),
+            WhisperPill::Copied => widgets::copied_pill(&mut pill_ui, &label),
+            WhisperPill::Failed => widgets::failed_pill(&mut pill_ui, &label),
         };
-        let painter = ui.painter();
-        painter.rect_filled(rect, CornerRadius::same(size::RADIUS), fill);
-        let text_left = rect.left() + PILL_PADDING.x;
-        let text_width = galley.size().x;
-        painter.galley(pos2(text_left, rect.top() + PILL_PADDING.y), galley, tint);
-        if self.pill == WhisperPill::Copied {
-            widgets::check_mark(
-                painter,
-                pos2(
-                    text_left + text_width + CHECK_GAP + CHECK_SIZE / 2.0,
-                    rect.center().y,
-                ),
-                CHECK_SIZE,
-                tint,
-            );
-        }
+        pill.clicked()
     }
 }
 
@@ -684,19 +640,6 @@ pub fn reach(area: Rect, row: Rect) -> Rect {
         pos2(area.left().min(row.left()), top),
         pos2(area.right().max(row.right()), bottom.max(top)),
     )
-}
-
-/// A text wrapped at the width of `ui`.
-fn text_block(ui: &mut Ui, line: &str, font: egui::FontId, tint: Color32) {
-    let galley = ui.painter().layout(
-        line.to_owned(),
-        font,
-        Color32::PLACEHOLDER,
-        ui.available_width(),
-    );
-    let (rect, _) =
-        ui.allocate_exact_size(vec2(ui.available_width(), galley.size().y), Sense::hover());
-    ui.painter().galley(rect.min, galley, tint);
 }
 
 /// A group of modifiers under a thin line, each with its difference on the right.
@@ -728,10 +671,10 @@ fn group(ui: &mut Ui, lines: &[Line]) {
         let delta_width = delta
             .as_ref()
             .map_or(0.0, |(galley, _)| galley.size().x + DIFFERENCE_GAP);
-        let galley = ui.painter().layout(
-            line.text.clone(),
+        let galley = widgets::wrapped_line(
+            ui,
+            &line.text,
             text::tooltip_line(),
-            Color32::PLACEHOLDER,
             (width - delta_width).max(0.0),
         );
         let (rect, _) = ui.allocate_exact_size(vec2(width, galley.size().y), Sense::hover());

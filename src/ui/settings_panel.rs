@@ -111,14 +111,7 @@ impl<'a> SettingsPanel<'a> {
     /// The label above a group of choices, after the space above the group.
     fn group_label(&self, ui: &mut Ui, message: Message) {
         ui.add_space(GROUP_GAP);
-        let label = widgets::spaced_line(
-            ui,
-            self.i18n.text(message).to_uppercase(),
-            text::label(),
-            text::LABEL_LETTER_SPACING,
-        );
-        let (rect, _) = ui.allocate_exact_size(label.size(), egui::Sense::hover());
-        ui.painter().galley(rect.min, label, color::WEAK);
+        widgets::small_title(ui, &self.i18n.text(message), color::WEAK);
     }
 
     fn language(&self, ui: &mut Ui) -> Option<SettingChange> {

@@ -3,13 +3,13 @@
 //! slides down, and lets the item show through a little.
 
 use egui::{
-    Area, Context, CornerRadius, CursorIcon, Id, Order, Rect, Response, Role, Sense, Ui, Vec2,
-    WidgetInfo, pos2, vec2,
+    Context, CornerRadius, CursorIcon, Id, Rect, Response, Role, Sense, Ui, Vec2, WidgetInfo, pos2,
+    vec2,
 };
 
-use super::theme::{self, LeagueModeColors, color, motion, size, text};
+use super::theme::{LeagueModeColors, color, motion, size, text};
 use super::title_bar::LEAGUE_BLOCK_LEFT;
-use super::widgets;
+use super::widgets::{self, FloatingList};
 use crate::i18n::{Message, Translator};
 use crate::league::{League, LeagueMode, LeagueRow};
 
@@ -19,8 +19,6 @@ const CELL_PADDING_LEFT: f32 = 10.0;
 const CELL_PADDING_RIGHT: f32 = 8.0;
 /// The space between the title bar and the open list, which it slides down through.
 const GAP_UNDER_BAR: f32 = 4.0;
-/// The leagues let the item show through a little.
-const OPACITY: f32 = 0.94;
 
 /// What the player did with the list.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -60,46 +58,35 @@ impl<'a> LeagueList<'a> {
         let top = size::TITLE_BAR_HEIGHT + GAP_UNDER_BAR * shown;
         #[expect(clippy::cast_precision_loss, reason = "a few leagues")]
         let list_size = vec2(2.0 * CELL.x, self.rows.len() as f32 * CELL.y);
-        Area::new(Id::NULL.with("league-list-area"))
-            .order(Order::Foreground)
-            .fixed_pos(pos2(LEAGUE_BLOCK_LEFT, top))
-            .interactable(open)
-            .show(ctx, |ui| {
-                ui.multiply_opacity(shown);
-                let list = Rect::from_min_size(ui.next_widget_position(), list_size);
-                let radius = CornerRadius::same(size::RADIUS);
-                ui.painter()
-                    .add(theme::floating_shadow().as_shape(list, radius));
-                let mut action = None;
-                for (index, row) in self.rows.iter().enumerate() {
-                    for (column, league) in [&row.softcore, &row.hardcore].into_iter().enumerate() {
-                        let Some(league) = league else { continue };
-                        #[expect(clippy::cast_precision_loss, reason = "a few leagues")]
-                        let cell = Rect::from_min_size(
-                            list.min + vec2(column as f32 * CELL.x, index as f32 * CELL.y),
-                            CELL,
-                        );
-                        let corners = corners(index == 0, index + 1 == self.rows.len(), column);
-                        let response = self.cell(ui, cell, corners, league);
-                        if just_opened && self.chosen == Some(league) {
-                            response.request_focus();
-                        }
-                        if response.clicked() {
-                            action = Some(LeagueListAction::Choose(league.clone()));
-                        }
+        let floating = FloatingList {
+            id: Id::NULL.with("league-list-area"),
+            top_left: pos2(LEAGUE_BLOCK_LEFT, top),
+            size: list_size,
+            shown,
+            is_open: open,
+        };
+        floating.show(ctx, LeagueListAction::Close, |ui, list| {
+            let mut action = None;
+            for (index, row) in self.rows.iter().enumerate() {
+                for (column, league) in [&row.softcore, &row.hardcore].into_iter().enumerate() {
+                    let Some(league) = league else { continue };
+                    #[expect(clippy::cast_precision_loss, reason = "a few leagues")]
+                    let cell = Rect::from_min_size(
+                        list.min + vec2(column as f32 * CELL.x, index as f32 * CELL.y),
+                        CELL,
+                    );
+                    let corners = corners(index == 0, index + 1 == self.rows.len(), column);
+                    let response = self.cell(ui, cell, corners, league);
+                    if just_opened && self.chosen == Some(league) {
+                        response.request_focus();
+                    }
+                    if response.clicked() {
+                        action = Some(LeagueListAction::Choose(league.clone()));
                     }
                 }
-                ui.allocate_rect(list, Sense::hover());
-                let clicked_outside = ui.input(|input| {
-                    input.pointer.any_click()
-                        && input
-                            .pointer
-                            .interact_pos()
-                            .is_some_and(|pointer| !list.contains(pointer))
-                });
-                action.or_else(|| (open && clicked_outside).then_some(LeagueListAction::Close))
-            })
-            .inner
+            }
+            action
+        })
     }
 
     /// A league in its mode: lighter under the pointer, and while it is the chosen one.
@@ -120,7 +107,11 @@ impl<'a> LeagueList<'a> {
         );
         let name_is_cut = name.elided;
         let painter = ui.painter();
-        painter.rect_filled(rect, corners, background.gamma_multiply(OPACITY));
+        painter.rect_filled(
+            rect,
+            corners,
+            background.gamma_multiply(widgets::FLOATING_LIST_OPACITY),
+        );
         painter.galley(
             pos2(
                 rect.left() + CELL_PADDING_LEFT,
@@ -198,11 +189,9 @@ mod tests {
             };
             let list = LeagueList::new(self.leagues.rows(), Some(&self.chosen), &self.i18n);
             let mut action = None;
-            let mut output = self
-                .ctx
-                .run_ui(input, |ui| action = list.show(ui.ctx(), open));
-            // epaint panics when the texture changes of a frame are dropped unapplied.
-            output.textures_delta.clear();
+            crate::ui::fixtures::run_frame(&self.ctx, input, |ui| {
+                action = list.show(ui.ctx(), open);
+            });
             action
         }
 

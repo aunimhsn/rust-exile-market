@@ -4,8 +4,8 @@
 
 use egui::text::{LayoutJob, TextFormat, TextWrapping};
 use egui::{
-    Align, CentralPanel, CornerRadius, Frame, Label, Layout, Margin, RichText, Role, ScrollArea,
-    Sense, Ui, Vec2, WidgetInfo, pos2, vec2,
+    Align, CentralPanel, CornerRadius, Frame, Label, Layout, Margin, RichText, ScrollArea, Ui,
+    Vec2, vec2,
 };
 
 use super::theme::{color, size, text};
@@ -29,10 +29,6 @@ const ACTIONS_GAP: f32 = 14.0;
 const ACCOUNT_GAP: f32 = 8.0;
 /// The space between the two pills of the actions.
 const PILLS_GAP: f32 = 8.0;
-/// The pill "✓ Copied", as in the mock-up: its check mark before the word.
-const COPIED_PADDING: Vec2 = vec2(10.0, 4.0);
-const CHECK_SIZE: f32 = 11.0;
-const CHECK_GAP: f32 = 5.0;
 
 /// What the player did in the bug report.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -143,7 +139,7 @@ impl<'a> BugReportPanel<'a> {
                 action = Some(BugReportAction::Open);
             }
             if self.report.copied() {
-                copied_pill(ui, &self.i18n.text(Message::BugReportCopied));
+                widgets::copied_control_pill(ui, &self.i18n.text(Message::BugReportCopied));
             } else if self.report.has_log() {
                 let pill = if self.report.copy_failed() {
                     widgets::failed_pill(ui, &self.i18n.text(Message::BugReportCopyFailed))
@@ -168,14 +164,7 @@ impl<'a> BugReportPanel<'a> {
     }
 
     fn label_text(&self, ui: &mut Ui, message: Message) {
-        let label = widgets::spaced_line(
-            ui,
-            self.i18n.text(message).to_uppercase(),
-            text::label(),
-            text::LABEL_LETTER_SPACING,
-        );
-        let (rect, _) = ui.allocate_exact_size(label.size(), Sense::hover());
-        ui.painter().galley(rect.min, label, color::WEAK);
+        widgets::small_title(ui, &self.i18n.text(message), color::WEAK);
     }
 
     /// The label "Log", with on its right the two pills joined that choose the log of this
@@ -273,32 +262,6 @@ fn one_line(mut job: LayoutJob, width: f32) -> LayoutJob {
     job
 }
 
-/// "✓ Copied" in place of "Copy the log", on the dark of the controls, in the weak color: done,
-/// nothing to click.
-fn copied_pill(ui: &mut Ui, label: &str) {
-    let galley = widgets::text_line(ui, label, text::pill());
-    let size = galley.size() + 2.0 * COPIED_PADDING + vec2(CHECK_SIZE + CHECK_GAP, 0.0);
-    let (rect, response) = ui.allocate_exact_size(size, Sense::hover());
-    response.widget_info(|| WidgetInfo::labeled(Role::Label, true, label));
-    let painter = ui.painter();
-    painter.rect_filled(rect, CornerRadius::same(size::RADIUS), color::CONTROL);
-    let check_left = rect.left() + COPIED_PADDING.x;
-    widgets::check_mark(
-        painter,
-        pos2(check_left + CHECK_SIZE / 2.0, rect.center().y),
-        CHECK_SIZE,
-        color::WEAK,
-    );
-    painter.galley(
-        pos2(
-            check_left + CHECK_SIZE + CHECK_GAP,
-            rect.top() + COPIED_PADDING.y,
-        ),
-        galley,
-        color::WEAK,
-    );
-}
-
 /// A box on the dark of the controls, across the width, around `content`.
 fn report_box(ui: &mut Ui, content: impl FnOnce(&mut Ui)) {
     Frame::NONE
@@ -365,7 +328,7 @@ mod tests {
         let ctx = egui::Context::default();
         crate::ui::install(&ctx);
         let mut drawn = (String::new(), false);
-        let mut output = ctx.run_ui(egui::RawInput::default(), |ui| {
+        crate::ui::fixtures::run_frame(&ctx, egui::RawInput::default(), |ui| {
             let job = LayoutJob::simple_singleline(label.to_owned(), text::bubble(), color::TEXT);
             let galley = ui.painter().layout_job(one_line(job, width));
             // The characters drawn, the "…" of a text cut with them.
@@ -376,8 +339,6 @@ mod tests {
                 .collect();
             drawn = (text, galley.elided);
         });
-        // epaint panics when the texture changes of a frame are dropped unapplied.
-        output.textures_delta.clear();
         drawn
     }
 

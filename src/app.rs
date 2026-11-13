@@ -1177,9 +1177,7 @@ mod tests {
             events,
             ..Default::default()
         };
-        let mut output = ctx.run_ui(input, content);
-        // epaint panics when the texture changes of a frame are dropped unapplied.
-        output.textures_delta.clear();
+        crate::ui::fixtures::run_frame(ctx, input, content);
     }
 
     fn key(key: Key) -> egui::Event {

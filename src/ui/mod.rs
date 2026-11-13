@@ -6,6 +6,8 @@
 mod bubble;
 mod bug_report_panel;
 mod empty_state;
+#[cfg(test)]
+pub mod fixtures;
 mod fonts;
 mod hotkey_list;
 mod images;

@@ -166,7 +166,7 @@ fn group_title(ui: &mut Ui, group: Group, i18n: &Translator) {
         Group::Unique => (Message::GroupUnique, None),
     };
     ui.spacing_mut().item_spacing.x = TITLE_GAP;
-    small_title(ui, message, i18n);
+    widgets::small_title(ui, &i18n.text(message), color::FAINT);
     if let Some((filled, max)) = fill {
         let (words, tint) = match max {
             Some(max) if filled < max => (i18n.affix_fill(filled, max), color::ACCENT),
@@ -180,20 +180,8 @@ fn group_title(ui: &mut Ui, group: Group, i18n: &Translator) {
 /// "min – max" on the right of the row of a title, above the range fields of the filters.
 fn range_title(ui: &mut Ui, i18n: &Translator) {
     ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-        small_title(ui, Message::FilterRange, i18n);
+        widgets::small_title(ui, &i18n.text(Message::FilterRange), color::FAINT);
     });
-}
-
-/// The words of `message` in capitals, spaced, faint.
-fn small_title(ui: &mut Ui, message: Message, i18n: &Translator) {
-    let title = widgets::spaced_line(
-        ui,
-        i18n.text(message).to_uppercase(),
-        text::label(),
-        text::LABEL_LETTER_SPACING,
-    );
-    let (rect, _) = ui.allocate_exact_size(title.size(), Sense::hover());
-    ui.painter().galley(rect.min, title, color::FAINT);
 }
 
 /// A stat in the color of the modifiers, on four lines at most, and its roll under it; a

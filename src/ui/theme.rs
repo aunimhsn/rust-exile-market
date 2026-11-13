@@ -171,6 +171,10 @@ pub mod text {
     /// The extra space between the letters of the uppercase labels.
     pub const LABEL_LETTER_SPACING: f32 = 1.3;
 
+    /// The separator of the parts of a line: the base type and the class, the amounts of a
+    /// unit price, the ranges of a stat of several rolls.
+    pub const SEPARATOR: &str = " · ";
+
     /// The name of an item, in its rarity color.
     #[must_use]
     pub fn item_name() -> FontId {

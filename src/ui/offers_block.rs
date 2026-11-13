@@ -16,7 +16,7 @@ use egui::{
     Stroke, Ui, Vec2, WidgetInfo, pos2, vec2,
 };
 
-use super::item_block::{SEPARATOR, rarity_color};
+use super::item_block::rarity_color;
 use super::offer_tooltip::{OfferTooltip, Pointer, TooltipState, reach};
 use super::theme::{color, size, text};
 use super::{images, widgets};
@@ -288,7 +288,12 @@ impl<'a> OffersBlock<'a> {
         band(ui, |ui, width| {
             ui.add_space(PADDING_Y);
             let label = label(ui, i18n);
-            let message = wrapped(ui, &i18n.text(Message::OffersIdentify), width);
+            let message = widgets::wrapped_line(
+                ui,
+                &i18n.text(Message::OffersIdentify),
+                text::message(),
+                width,
+            );
             let height = label.size().y + TITLE_GAP * 2.0 + message.size().y;
             let (rect, _) =
                 ui.allocate_exact_size(vec2(ui.available_width(), height), Sense::hover());
@@ -473,16 +478,8 @@ impl<'a> OffersBlock<'a> {
                 if index > 0 {
                     ui.add_space(MESSAGE_GAP);
                 }
-                let galley = wrapped_with(ui, line, text::item_line(), width);
-                let (rect, _) = ui.allocate_exact_size(
-                    vec2(ui.available_width(), galley.size().y),
-                    Sense::hover(),
-                );
-                ui.painter().galley(
-                    pos2(rect.left() + size::BAND_PADDING, rect.top()),
-                    galley,
-                    *tint,
-                );
+                let galley = widgets::wrapped_line(ui, line, text::item_line(), width);
+                widgets::text_row(ui, galley, size::BAND_PADDING, *tint);
             }
             if !lines.is_empty() && !list.rows.is_empty() {
                 ui.add_space(HEAD_GAP);
@@ -493,16 +490,8 @@ impl<'a> OffersBlock<'a> {
             if let Some(failure) = list.more_failed {
                 ui.add_space(MORE_FAILED_GAP);
                 let message = i18n.text(failure_message(failure));
-                let galley = wrapped_with(ui, &message, text::note(), width);
-                let (rect, _) = ui.allocate_exact_size(
-                    vec2(ui.available_width(), galley.size().y),
-                    Sense::hover(),
-                );
-                ui.painter().galley(
-                    pos2(rect.left() + size::BAND_PADDING, rect.top()),
-                    galley,
-                    color::WEAK,
-                );
+                let galley = widgets::wrapped_line(ui, &message, text::note(), width);
+                widgets::text_row(ui, galley, size::BAND_PADDING, color::WEAK);
             }
             match list.more {
                 More::Chevron => {
@@ -874,7 +863,7 @@ impl<'a> OffersBlock<'a> {
         let after = if let Some(catalyst) = row.other_quality {
             let mut job = LayoutJob::default();
             job.append(
-                SEPARATOR,
+                text::SEPARATOR,
                 0.0,
                 TextFormat::simple(text::note(), color::FAINT),
             );
@@ -1003,22 +992,7 @@ fn band(ui: &mut Ui, add: impl FnOnce(&mut Ui, f32)) {
 
 /// The label of the band, "OFFERS".
 fn label(ui: &Ui, i18n: &Translator) -> Arc<Galley> {
-    widgets::spaced_line(
-        ui,
-        i18n.text(Message::OffersLabel).to_uppercase(),
-        text::label(),
-        text::LABEL_LETTER_SPACING,
-    )
-}
-
-/// A message, wrapped at `width`.
-fn wrapped(ui: &Ui, message: &str, width: f32) -> Arc<Galley> {
-    wrapped_with(ui, message, text::message(), width)
-}
-
-fn wrapped_with(ui: &Ui, line: &str, font: egui::FontId, width: f32) -> Arc<Galley> {
-    ui.painter()
-        .layout(line.to_owned(), font, Color32::PLACEHOLDER, width)
+    widgets::small_title_line(ui, &i18n.text(Message::OffersLabel))
 }
 
 /// The line of the title row after a search that failed for `failure`, and what to do under

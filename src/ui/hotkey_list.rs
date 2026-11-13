@@ -3,13 +3,13 @@
 //! player may choose (`specs.md`, Settings; mock-up section "Hotkey list (14c3b2)").
 
 use egui::{
-    Area, Context, CornerRadius, CursorIcon, FocusDirection, Id, Key, Modifiers, Order, Pos2, Rect,
-    Response, Role, Sense, Ui, Vec2, WidgetInfo, pos2, vec2,
+    Context, CornerRadius, CursorIcon, FocusDirection, Id, Key, Modifiers, Pos2, Rect, Response,
+    Role, Sense, Ui, Vec2, WidgetInfo, pos2, vec2,
 };
 
 use super::keys;
-use super::theme::{self, color, motion, size, text};
-use super::widgets;
+use super::theme::{color, motion, size, text};
+use super::widgets::{self, FloatingList};
 use crate::hotkey::Shortcut;
 use crate::i18n::{Message, Translator};
 
@@ -33,8 +33,6 @@ const ROW_GAP: f32 = 8.0;
 const LIST_MIN_WIDTH: f32 = 200.0;
 /// The space between the button and the open list, which it slides down through.
 const GAP_UNDER_BUTTON: f32 = 4.0;
-/// The keys let the settings show through a little, like the leagues.
-const OPACITY: f32 = 0.94;
 
 /// The animation of the list, which opens and closes.
 fn shown_id() -> Id {
@@ -183,62 +181,54 @@ impl<'a> HotkeyList<'a> {
             button.right() - width,
             button.bottom() + GAP_UNDER_BUTTON * shown,
         );
-        Area::new(Id::NULL.with("hotkey-list-area"))
-            .order(Order::Foreground)
-            .fixed_pos(top_left)
-            .interactable(open)
-            .show(ctx, |ui| {
-                ui.multiply_opacity(shown);
-                let list = Rect::from_min_size(ui.next_widget_position(), list_size);
-                let radius = CornerRadius::same(size::RADIUS);
-                ui.painter()
-                    .add(theme::floating_shadow().as_shape(list, radius));
-                ui.painter()
-                    .rect_filled(list, radius, color::LIST.gamma_multiply(OPACITY));
-                let mut action = None;
-                let mut focused = None;
-                let mut responses = Vec::with_capacity(rows.len());
-                for (index, row) in rows.iter().enumerate() {
-                    #[expect(clippy::cast_precision_loss, reason = "a few keys")]
-                    let rect = Rect::from_min_size(
-                        list.min + vec2(0.0, LIST_PADDING + index as f32 * ROW_HEIGHT),
-                        vec2(width, ROW_HEIGHT),
-                    );
-                    let response = self.row(ui, rect, row);
-                    if by_keyboard && index == start {
-                        response.request_focus();
-                    }
-                    if response.clicked() {
-                        action = Some(HotkeyListAction::Choose(row.shortcut));
-                    }
-                    if response.has_focus() {
-                        focused = Some(index);
-                    }
-                    responses.push(response);
+        let floating = FloatingList {
+            id: Id::NULL.with("hotkey-list-area"),
+            top_left,
+            size: list_size,
+            shown,
+            is_open: open,
+        };
+        floating.show(ctx, HotkeyListAction::Close, |ui, list| {
+            ui.painter().rect_filled(
+                list,
+                CornerRadius::same(size::RADIUS),
+                color::LIST.gamma_multiply(widgets::FLOATING_LIST_OPACITY),
+            );
+            let mut action = None;
+            let mut focused = None;
+            let mut responses = Vec::with_capacity(rows.len());
+            for (index, row) in rows.iter().enumerate() {
+                #[expect(clippy::cast_precision_loss, reason = "a few keys")]
+                let rect = Rect::from_min_size(
+                    list.min + vec2(0.0, LIST_PADDING + index as f32 * ROW_HEIGHT),
+                    vec2(width, ROW_HEIGHT),
+                );
+                let response = self.row(ui, rect, row);
+                if by_keyboard && index == start {
+                    response.request_focus();
                 }
-                if open && let Some(index) = focused {
-                    arrows(ui, &responses, index);
+                if response.clicked() {
+                    action = Some(HotkeyListAction::Choose(row.shortcut));
                 }
-                ctx.data_mut(|data| {
-                    data.insert_temp(
-                        seen_id(),
-                        Seen {
-                            open,
-                            row_focused: focused.is_some(),
-                        },
-                    );
-                });
-                ui.allocate_rect(list, Sense::hover());
-                let clicked_outside = ui.input(|input| {
-                    input.pointer.any_click()
-                        && input
-                            .pointer
-                            .interact_pos()
-                            .is_some_and(|pointer| !list.contains(pointer))
-                });
-                action.or_else(|| (open && clicked_outside).then_some(HotkeyListAction::Close))
-            })
-            .inner
+                if response.has_focus() {
+                    focused = Some(index);
+                }
+                responses.push(response);
+            }
+            if open && let Some(index) = focused {
+                arrows(ui, &responses, index);
+            }
+            ctx.data_mut(|data| {
+                data.insert_temp(
+                    seen_id(),
+                    Seen {
+                        open,
+                        row_focused: focused.is_some(),
+                    },
+                );
+            });
+            action
+        })
     }
 
     /// The rows of the list, with the width each needs.
@@ -404,12 +394,10 @@ mod tests {
             };
             let list = HotkeyList::new(self.chosen, &self.i18n);
             let mut action = None;
-            let mut output = self.ctx.run_ui(input, |ui| {
+            crate::ui::fixtures::run_frame(&self.ctx, input, |ui| {
                 let button = ui.interact(BUTTON, button_id(), Sense::click());
                 action = list.show(ui.ctx(), &button, open);
             });
-            // epaint panics when the texture changes of a frame are dropped unapplied.
-            output.textures_delta.clear();
             action
         }
 
