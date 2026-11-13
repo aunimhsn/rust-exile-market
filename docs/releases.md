@@ -3,7 +3,7 @@
 ## Publish a version
 
 1. Run the `security-auditor` subagent on `main` and fix the findings the owner approves (a critical or high one blocks the release), and run the guides of `docs/tests/` again ([the list](tests/README.md)).
-2. Update `version` in `Cargo.toml` (then run `cargo build` to update `Cargo.lock`) and merge it into `main`.
+2. Update `version` in `Cargo.toml` (then run `cargo build` to update `Cargo.lock`), write the notes of the version in `docs/release-notes/v<version>.md` (for the players: the download, the display mode the game needs, what changed, the known limits), and merge them into `main`.
 3. Run the Release workflow by hand on `main` (Actions, Release, Run workflow) and wait for its builds on every system: a tag can't be moved, so a build that fails at the tag costs a version number.
 4. Tag the merged commit with the same version and push the tag:
 
@@ -11,6 +11,12 @@
    git switch main && git pull
    git tag v0.1.0
    git push origin v0.1.0
+   ```
+
+5. Once the release is published, replace its generated notes, which only list the pull requests, by the notes of the version. Keep it a normal release, never a pre-release: `releases/latest`, which the download page and the README link to, skips the pre-releases.
+
+   ```sh
+   gh release edit v0.1.0 --notes-file docs/release-notes/v0.1.0.md
    ```
 
 The [Release workflow](../.github/workflows/release.yml) builds the archives for Windows, macOS and Linux and publishes them as a GitHub release, with their checksums (`SHA256SUMS.txt`). It fails if the tag does not match the version of `Cargo.toml`, if its commit isn't on `main` (a commit that went through a pull request and its checks; a guard against a tag put by mistake, since the workflow that runs is the one of the tagged commit), or if a security advisory on a dependency isn't sorted yet (`cargo deny check advisories`: update the dependency, or list the advisory in `deny.toml` with its reason). A ruleset of the repository keeps the tags `v*` from being moved or deleted: a wrong tag is replaced by the next version, never pushed again.

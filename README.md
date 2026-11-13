@@ -6,6 +6,8 @@ A price checker for Path of Exile 2, free and open source, for Windows and Linux
 - **Rare, magic and normal items, and jewels**: their stats and tiers, each stat a filter to tick, then the offers of similar items on the official trade site, and a price estimated from them.
 - The game in English or French, and the interface in both.
 
+Exile Market is a pre-alpha, out early to hear from the players: expect bugs, and report them through the bug icon of the title bar.
+
 ## Download
 
 Take the archive of your system from the [latest release](https://github.com/aunimhsn/rust-exile-market/releases/latest):
