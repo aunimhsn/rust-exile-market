@@ -38,7 +38,7 @@ const FUNCTIONS: [&str; 12] = [
 
 /// The codes of [`LETTERS`] for `global-hotkey`, in the same order.
 #[cfg(any(target_os = "linux", target_os = "windows"))]
-const LETTER_CODES: [Code; 26] = [
+const LETTER_CODES: [Code; LETTERS.len()] = [
     Code::KeyA,
     Code::KeyB,
     Code::KeyC,
@@ -68,7 +68,7 @@ const LETTER_CODES: [Code; 26] = [
 ];
 /// The codes of [`DIGITS`] for `global-hotkey`, in the same order.
 #[cfg(any(target_os = "linux", target_os = "windows"))]
-const DIGIT_CODES: [Code; 10] = [
+const DIGIT_CODES: [Code; DIGITS.len()] = [
     Code::Digit0,
     Code::Digit1,
     Code::Digit2,
@@ -82,7 +82,7 @@ const DIGIT_CODES: [Code; 10] = [
 ];
 /// The codes of [`FUNCTIONS`] for `global-hotkey`, in the same order.
 #[cfg(any(target_os = "linux", target_os = "windows"))]
-const FUNCTION_CODES: [Code; 12] = [
+const FUNCTION_CODES: [Code; FUNCTIONS.len()] = [
     Code::F1,
     Code::F2,
     Code::F3,

@@ -140,28 +140,34 @@ impl Drop for OnItsWay<'_> {
 
 /// Connects what a press needs: the keys of the copy, then the grab of the hotkey.
 #[cfg(any(target_os = "linux", target_os = "windows"))]
-fn listen() -> Result<(system::CopySender, GlobalHotKeyManager), Box<dyn std::error::Error>> {
+fn connect_hotkey() -> Result<(system::CopySender, GlobalHotKeyManager), Box<dyn std::error::Error>>
+{
     Ok((system::CopySender::connect()?, GlobalHotKeyManager::new()?))
 }
 
 /// What a press of the hotkey copies with, kept by the handler of the hotkey events: the keys of
-/// the copy, the clipboard prepared before them, and the channel that tells the window.
+/// the copy, the clipboard prepared before them, the channel that tells the window, the count of
+/// the presses on their way and the wake of the window.
 #[cfg(any(target_os = "linux", target_os = "windows"))]
 struct Copier {
     copy_sender: system::CopySender,
     marker: CopyMarker,
     targets: std::sync::mpsc::Sender<Press>,
+    on_their_way: OnTheirWay,
+    wake: std::sync::Arc<dyn Fn() + Send + Sync>,
 }
 
 #[cfg(any(target_os = "linux", target_os = "windows"))]
 impl Copier {
-    /// Copies the item under the pointer with `shortcut`, counted among the presses
-    /// `on_their_way` until the window receives it; `wake` once the window is told.
-    fn copy(&mut self, shortcut: Shortcut, on_their_way: &OnTheirWay, wake: &dyn Fn()) {
+    /// Copies the item under the pointer with `shortcut`, counted among the presses on their way
+    /// until the window receives it, which is woken once told.
+    fn copy(&mut self, shortcut: Shortcut) {
         let Self {
             copy_sender,
             marker,
             targets,
+            on_their_way,
+            wake,
         } = self;
         // Counted before the active window changes, until its keys are sent and the window
         // received it.
@@ -402,33 +408,33 @@ impl PriceCheckHotkey {
             on_their_way: Arc::clone(&on_their_way),
             shortcut: Arc::clone(&keys),
         };
-        let (copy_sender, manager) = match listen() {
+        let (copy_sender, manager) = match connect_hotkey() {
             Ok(listening) => listening,
             Err(error) => {
                 log::warn!("The price-check hotkey can't listen: {error}");
                 return off();
             }
         };
+        log::info!("Price-check hotkey: {shortcut}");
+        let wake: Arc<dyn Fn() + Send + Sync> = Arc::new(wake);
+        let wake_in_game = Arc::clone(&wake);
         let (targets, receiver) = std::sync::mpsc::channel();
         let copier = Mutex::new(Copier {
             copy_sender,
             marker,
             targets,
+            on_their_way: Arc::clone(&on_their_way),
+            wake,
         });
-        log::info!("Price-check hotkey: {shortcut}");
-        let wake = Arc::new(wake);
-        let wake_in_game = Arc::clone(&wake);
         let on_at_press = Arc::clone(&on);
         let keys_at_press = Arc::clone(&keys);
-        let on_their_way_at_press = Arc::clone(&on_their_way);
         GlobalHotKeyEvent::set_event_handler(Some(move |event: GlobalHotKeyEvent| {
             let shortcut = *keys_at_press.lock().unwrap_or_else(PoisonError::into_inner);
             if copies_at(event, shortcut, on_at_press.load(Ordering::Relaxed)) {
-                copier.lock().unwrap_or_else(PoisonError::into_inner).copy(
-                    shortcut,
-                    &on_their_way_at_press,
-                    &*wake,
-                );
+                copier
+                    .lock()
+                    .unwrap_or_else(PoisonError::into_inner)
+                    .copy(shortcut);
             }
         }));
         let in_game = InGame::start(manager, shortcut, on.load(Ordering::Relaxed), move || {
@@ -533,8 +539,8 @@ impl PriceCheckHotkey {
     /// Gives each press of the hotkey since the last call to `handle`, without waiting.
     pub fn receive(&mut self, mut handle: impl FnMut(Press)) {
         if let Some(targets) = &self.targets {
-            // Never disconnected: its sender lives in the handler of the hotkey events, set
-            // once for the life of the program.
+            // Never disconnected: its sender lives in the handler of the hotkey events, which
+            // `global-hotkey` keeps in a static, set once and never dropped.
             while let Ok(target) = targets.try_recv() {
                 self.on_their_way
                     .fetch_sub(1, std::sync::atomic::Ordering::SeqCst);

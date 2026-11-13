@@ -424,7 +424,7 @@ fn send_copy<P>(
     prepare: impl FnOnce() -> P,
     tell: impl FnOnce(Option<Target>, P),
 ) -> Result<Sent> {
-    let window = keys_window(server);
+    let window = aim_keys(server);
     server.drop_events();
     let layout = server.layout()?;
     let (Some(control), Some(c)) = (layout.keycode(XK_CONTROL_L), layout.keycode(XK_C)) else {
@@ -487,11 +487,11 @@ struct KeysWindow {
     refused: bool,
 }
 
-/// The window the keys of a copy go to, given the keyboard back from a field of the window over
-/// the game; a failure to read it is told in the result or the log, so that it doesn't stop the
-/// copy. On a single screen, the helper of the window over the game may be active in place of
+/// Aims the keys of a copy: reads the window they go to, and gives it the keyboard back from a
+/// field of the window over the game; a failure is told in the result or the log, so that it
+/// doesn't stop the copy. On a single screen, the helper of the window over the game may be active in place of
 /// the game: the game is made active again, so that the copy and the window go to it.
-fn keys_window(server: &impl Server) -> KeysWindow {
+fn aim_keys(server: &impl Server) -> KeysWindow {
     let (window, refused) = server.active_game();
     let class = match &window {
         Ok(Some(window)) => server
