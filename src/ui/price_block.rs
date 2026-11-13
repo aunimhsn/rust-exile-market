@@ -46,8 +46,6 @@ const ROW_HEIGHT: f32 = LIST_ORB_SIZE + 2.0 * ROW_PADDING_Y;
 const NAME_GAP: f32 = 12.0;
 /// Fewer offers make the price of a unique uncertain.
 const ENOUGH_OFFERS: u32 = 5;
-/// The separator of the amounts of the unit price.
-const SEPARATOR: &str = " · ";
 /// The currencies of the amounts, in their order.
 const CURRENCIES: [Currency; 3] = [Currency::Divine, Currency::Chaos, Currency::Exalted];
 /// Under this many Divine or Chaos Orbs, an amount is too small to matter and isn't shown.
@@ -273,12 +271,7 @@ impl<'a> PriceBlock<'a> {
             PriceView::Estimated(_) => Message::EstimatedPriceLabel,
             _ => Message::PriceLabel,
         };
-        let label = widgets::spaced_line(
-            ui,
-            self.i18n.text(title).to_uppercase(),
-            text::label(),
-            text::LABEL_LETTER_SPACING,
-        );
+        let label = widgets::small_title_line(ui, &self.i18n.text(title));
         let caption = match *view {
             PriceView::Priced {
                 price,
@@ -489,7 +482,7 @@ fn unit_amounts(exalted: f64, rates: Rates) -> String {
         .filter_map(|currency| shown_amount(exalted, currency, rates))
         .map(|(amount, abbreviation)| format!("{amount} {abbreviation}"))
         .collect::<Vec<_>>()
-        .join(SEPARATOR)
+        .join(widgets::SEPARATOR)
 }
 
 /// `exalted` Exalted Orbs in `currency`, written as [`in_currency`] does, when worth showing:

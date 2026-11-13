@@ -5,6 +5,7 @@ use super::model::{Origin, StatRoll};
 use crate::filters::Half;
 use crate::format;
 use crate::item::{Range, StatLine};
+use crate::ui::widgets;
 
 /// The share of the copied value the limit of a rare, magic or normal item leaves below it
 /// for a minimum, above it for the maximum of a line better lower, to find comparable items
@@ -137,9 +138,6 @@ fn share(value: f64, range: Range) -> f64 {
     ((value - range.min) / (range.max - range.min)).clamp(0.0, 1.0)
 }
 
-/// The separator of the ranges of a stat with several rolls.
-const RANGE_SEPARATOR: &str = " · ";
-
 /// The ranges of a stat, e.g. `40–60`, or `8–12 · 16–22` for several rolls; a range of one
 /// value as one number, as the game writes it (`29(30)%` of a sanctified item).
 pub(super) fn ranges_text(ranges: &[Range]) -> String {
@@ -154,7 +152,7 @@ pub(super) fn ranges_text(ranges: &[Range]) -> String {
             }
         })
         .collect::<Vec<_>>()
-        .join(RANGE_SEPARATOR)
+        .join(widgets::SEPARATOR)
 }
 
 #[cfg(test)]

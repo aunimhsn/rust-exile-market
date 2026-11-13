@@ -16,7 +16,7 @@ use egui::{
     Stroke, Ui, Vec2, WidgetInfo, pos2, vec2,
 };
 
-use super::item_block::{SEPARATOR, rarity_color};
+use super::item_block::rarity_color;
 use super::offer_tooltip::{OfferTooltip, Pointer, TooltipState, reach};
 use super::theme::{color, size, text};
 use super::{images, widgets};
@@ -874,7 +874,7 @@ impl<'a> OffersBlock<'a> {
         let after = if let Some(catalyst) = row.other_quality {
             let mut job = LayoutJob::default();
             job.append(
-                SEPARATOR,
+                widgets::SEPARATOR,
                 0.0,
                 TextFormat::simple(text::note(), color::FAINT),
             );
@@ -1003,12 +1003,7 @@ fn band(ui: &mut Ui, add: impl FnOnce(&mut Ui, f32)) {
 
 /// The label of the band, "OFFERS".
 fn label(ui: &Ui, i18n: &Translator) -> Arc<Galley> {
-    widgets::spaced_line(
-        ui,
-        i18n.text(Message::OffersLabel).to_uppercase(),
-        text::label(),
-        text::LABEL_LETTER_SPACING,
-    )
+    widgets::small_title_line(ui, &i18n.text(Message::OffersLabel))
 }
 
 /// A message, wrapped at `width`.

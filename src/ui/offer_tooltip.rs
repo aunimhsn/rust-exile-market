@@ -14,7 +14,7 @@ use egui::{
 };
 
 use super::item_block::{
-    SEPARATOR, gem_level_color, requirement_parts, requirements_job, waystone_tier_color,
+    gem_level_color, requirement_parts, requirements_job, waystone_tier_color,
 };
 use super::item_stats::property_value;
 use super::offers_block::{RowPrice, offer_price};
@@ -398,12 +398,12 @@ fn meta(offer: &ItemOffer, item: &Item, i18n: &Translator, width: f32) -> Layout
     let gem_level = offered.gem_level.filter(|_| item.is_skill_gem());
     if let Some((name, tier)) = waystone {
         append(name, &font, color::WEAK);
-        append(SEPARATOR, &font, color::WEAK);
+        append(widgets::SEPARATOR, &font, color::WEAK);
         // In the font of its line, not bold as in the item block (owner, 2026-11-01).
         append(&format!("T{tier}"), &font, waystone_tier_color(tier));
     } else if let Some(level) = gem_level {
         append(item.class(), &font, color::WEAK);
-        append(SEPARATOR, &font, color::WEAK);
+        append(widgets::SEPARATOR, &font, color::WEAK);
         append(
             &i18n.gem_level(level),
             &text::tooltip_tier(),
@@ -420,7 +420,7 @@ fn meta(offer: &ItemOffer, item: &Item, i18n: &Translator, width: f32) -> Layout
         rest.push(i18n.text(Message::TagCorrupted));
     }
     for part in rest {
-        append(SEPARATOR, &font, color::WEAK);
+        append(widgets::SEPARATOR, &font, color::WEAK);
         append(&part, &font, color::WEAK);
     }
     job

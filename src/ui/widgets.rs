@@ -202,6 +202,28 @@ pub fn spaced_line(
     line(ui, text, format, None)
 }
 
+/// The separator of the parts of a line: the base type and the class, the amounts of a unit
+/// price, the ranges of a stat of several rolls.
+pub const SEPARATOR: &str = " · ";
+
+/// A small title, `title` in capitals spaced in the font of the labels: "PRICE", "OFFERS".
+#[must_use]
+pub fn small_title_line(ui: &Ui, title: &str) -> Arc<Galley> {
+    spaced_line(
+        ui,
+        title.to_uppercase(),
+        text::label(),
+        text::LABEL_LETTER_SPACING,
+    )
+}
+
+/// A small title where the layout places it, in `tint`.
+pub fn small_title(ui: &mut Ui, title: &str, tint: Color32) {
+    let galley = small_title_line(ui, title);
+    let (rect, _) = ui.allocate_exact_size(galley.size(), Sense::hover());
+    ui.painter().galley(rect.min, galley, tint);
+}
+
 fn line(
     ui: &Ui,
     text: impl Into<String>,

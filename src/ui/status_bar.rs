@@ -10,7 +10,6 @@ use egui::{
 
 use std::time::Duration;
 
-use super::item_block::SEPARATOR;
 use super::theme::{LeagueModeColors, color, size, text};
 use super::widgets;
 use crate::i18n::{Message, Translator};
@@ -197,7 +196,7 @@ impl<'a> StatusBar<'a> {
         };
         ui.add(Label::new(faint(running)));
         if let Some(release) = update {
-            ui.add(Label::new(faint(SEPARATOR)));
+            ui.add(Label::new(faint(widgets::SEPARATOR)));
             let label = self.i18n.status_update(&release.version.to_string());
             link(ui, &label, &release.page);
         }

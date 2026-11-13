@@ -168,14 +168,7 @@ impl<'a> BugReportPanel<'a> {
     }
 
     fn label_text(&self, ui: &mut Ui, message: Message) {
-        let label = widgets::spaced_line(
-            ui,
-            self.i18n.text(message).to_uppercase(),
-            text::label(),
-            text::LABEL_LETTER_SPACING,
-        );
-        let (rect, _) = ui.allocate_exact_size(label.size(), Sense::hover());
-        ui.painter().galley(rect.min, label, color::WEAK);
+        widgets::small_title(ui, &self.i18n.text(message), color::WEAK);
     }
 
     /// The label "Log", with on its right the two pills joined that choose the log of this

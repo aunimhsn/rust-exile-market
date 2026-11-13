@@ -51,9 +51,6 @@ const VALUE_NUMBER_GAP: f32 = 5.0;
 const TAG_SPACING: Vec2 = vec2(6.0, 5.0);
 /// The space around the text of a tag.
 const TAG_PADDING: Vec2 = vec2(7.0, 1.0);
-/// The separator of the base type and the class, of the skills and of the requirements; of
-/// the base, the item level and the states in the tooltip of an offer.
-pub(super) const SEPARATOR: &str = " · ";
 /// The largest DPS shown: far over any weapon, under the largest `u32`.
 const MAX_DPS: f64 = 1e6;
 
@@ -350,7 +347,7 @@ impl<'a> ItemBlock<'a> {
         let font = text::item_line();
         if let Some((name, tier)) = self.waystone_base() {
             append(&mut job, name, &font, color::TEXT);
-            append(&mut job, SEPARATOR, &font, color::WEAK);
+            append(&mut job, widgets::SEPARATOR, &font, color::WEAK);
             append(
                 &mut job,
                 &format!("T{tier}"),
@@ -361,11 +358,11 @@ impl<'a> ItemBlock<'a> {
         }
         if let Some(base_type) = self.base_line() {
             append(&mut job, base_type, &font, color::TEXT);
-            append(&mut job, SEPARATOR, &font, color::WEAK);
+            append(&mut job, widgets::SEPARATOR, &font, color::WEAK);
         }
         append(&mut job, self.item.class(), &font, color::WEAK);
         if let Some(level) = self.item.skill_gem_level() {
-            append(&mut job, SEPARATOR, &font, color::WEAK);
+            append(&mut job, widgets::SEPARATOR, &font, color::WEAK);
             append(
                 &mut job,
                 &self.i18n.gem_level(level),
@@ -612,7 +609,7 @@ impl<'a> ItemBlock<'a> {
     /// The skills the item grants, e.g. a staff.
     fn skills(&self) -> Option<String> {
         let skills = self.item.granted_skills();
-        (!skills.is_empty()).then(|| self.i18n.granted_skill(&skills.join(SEPARATOR)))
+        (!skills.is_empty()).then(|| self.i18n.granted_skill(&skills.join(widgets::SEPARATOR)))
     }
 
     /// The level and the attributes the item requires, each in its color.
@@ -668,7 +665,7 @@ pub(super) fn requirements_job(
     append(&mut job, &requires.before, font, color::WEAK);
     for (index, (part, tint)) in parts.iter().enumerate() {
         if index > 0 {
-            append(&mut job, SEPARATOR, font, color::WEAK);
+            append(&mut job, widgets::SEPARATOR, font, color::WEAK);
         }
         append(&mut job, part, font, *tint);
     }
