@@ -395,8 +395,8 @@ fn a_unique_is_searched_with_its_stats_and_the_other_items_with_all_their_filter
     );
 }
 
-/// The base `item` is searched with, its base type unchecked when
-/// `any_base`, with a minimum item level when `narrowed`.
+/// The base `item` is searched with, its base type unchecked when `any_base`, with a
+/// minimum item level when `narrowed`.
 fn searched_base(item: &Item, any_base: bool, narrowed: bool) -> SearchedBase {
     let target = target(item, None, None).expect("a target");
     let filters = SearchFilters {

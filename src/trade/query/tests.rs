@@ -12,11 +12,17 @@ fn a_category_is_searched_among_the_type_filters() {
     };
 
     assert_eq!(
-        query.to_json()["query"]["filters"]["type_filters"],
-        json!({ "filters": {
-            "category": { "option": "weapon.bow" },
-            "rarity": { "option": "nonunique" },
-        } })
+        query.to_json(),
+        json!({
+            "query": {
+                "status": { "option": "online" },
+                "filters": { "type_filters": { "filters": {
+                    "category": { "option": "weapon.bow" },
+                    "rarity": { "option": "nonunique" },
+                } } },
+            },
+            "sort": { "price": "asc" }
+        })
     );
 }
 

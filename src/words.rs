@@ -1,7 +1,8 @@
 //! The search of whole words in a text; what ends a word is the rule of each use.
 
 /// Whether `text` holds `words` with a boundary before and after them: a character for which
-/// `is_boundary` holds, or an end of `text`.
+/// `is_boundary` holds, or an end of `text`. Empty `words` are held between any two
+/// boundaries, always in an empty `text`: a use that may give them refuses them first.
 pub fn holds_whole(text: &str, words: &str, is_boundary: impl Fn(char) -> bool) -> bool {
     text.match_indices(words).any(|(start, _)| {
         let before = text[..start].chars().next_back();

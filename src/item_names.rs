@@ -367,22 +367,51 @@ pub mod tests {
 
     #[test]
     fn the_names_keep_the_shape_of_the_cache_of_their_version() {
-        let json = serde_json::to_value(item_names()).expect("the names serialize");
-        let keys = |value: &serde_json::Value| {
-            let mut keys: Vec<String> = value
-                .as_object()
-                .map(|object| object.keys().cloned().collect())
-                .unwrap_or_default();
-            keys.sort_unstable();
-            keys
+        // A cache of version 2, as the application wrote it on 2026-11-13.
+        let cache = serde_json::json!({
+            "updated": { "secs_since_epoch": 0, "nanos_since_epoch": 0 },
+            "english": {
+                "exchange": { "Divine Orb": "divine" },
+                "base_types": ["Ruby Ring"],
+                "stats": [{ "id": "explicit.stat_3299347043", "text": "# to maximum Life" }],
+            },
+            "french": {
+                "exchange": { "Orbe divin": "divine" },
+                "base_types": ["Bague de rubis"],
+                "stats": [],
+            },
+            "uniques": [{
+                "english": { "name": "Grand Spectrum", "base_type": "Emerald" },
+                "french": { "name": "Grand spectre", "base_type": "Émeraude" },
+            }],
+        });
+        let names = |exchange: (&str, &str), base_type: &str, stats| Names {
+            exchange: HashMap::from([(exchange.0.to_owned(), exchange.1.to_owned())]),
+            base_types: vec![base_type.to_owned()],
+            stats,
         };
-
-        assert_eq!(keys(&json), ["english", "french", "uniques", "updated"]);
-        assert_eq!(keys(&json["uniques"][0]), ["english", "french"]);
-        assert_eq!(
-            serde_json::from_value::<ItemNames>(json).ok(),
-            Some(item_names())
+        let expected = ItemNames::new(
+            SystemTime::UNIX_EPOCH,
+            names(
+                ("Divine Orb", "divine"),
+                "Ruby Ring",
+                vec![StatTemplate {
+                    id: "explicit.stat_3299347043".to_owned(),
+                    text: "# to maximum Life".to_owned(),
+                }],
+            ),
+            names(("Orbe divin", "divine"), "Bague de rubis", Vec::new()),
+            vec![UniqueNames {
+                english: unique("Grand Spectrum", "Emerald"),
+                french: unique("Grand spectre", "Émeraude"),
+            }],
         );
+
+        assert_eq!(
+            serde_json::from_value::<ItemNames>(cache.clone()).ok(),
+            Some(expected.clone())
+        );
+        assert_eq!(serde_json::to_value(expected).ok(), Some(cache));
     }
 
     #[test]

@@ -244,16 +244,6 @@ impl ItemQuery {
     #[must_use]
     pub fn to_json(&self) -> Value {
         let mut query = Map::new();
-        query.insert("status".to_owned(), online());
-        if let Some(name) = &self.name {
-            query.insert("name".to_owned(), json!(name));
-        }
-        if let SearchedBase::Type(base_type) = &self.base {
-            query.insert("type".to_owned(), json!(base_type));
-        }
-        if !self.stats.is_empty() {
-            query.insert("stats".to_owned(), self.stats_json());
-        }
         // Each group of filters, with its filters by id.
         let mut groups: Map<String, Value> = Map::new();
         let mut add = |group: &str, id: &str, filter: Value| {
@@ -262,8 +252,21 @@ impl ItemQuery {
                 .or_insert_with(|| json!({ "filters": {} }));
             filters["filters"][id] = filter;
         };
-        if let SearchedBase::Category(category) = self.base {
-            add("type_filters", "category", json!({ "option": category }));
+        query.insert("status".to_owned(), online());
+        if let Some(name) = &self.name {
+            query.insert("name".to_owned(), json!(name));
+        }
+        match &self.base {
+            SearchedBase::Type(base_type) => {
+                query.insert("type".to_owned(), json!(base_type));
+            }
+            SearchedBase::Category(category) => {
+                add("type_filters", "category", json!({ "option": category }));
+            }
+            SearchedBase::Any => {}
+        }
+        if !self.stats.is_empty() {
+            query.insert("stats".to_owned(), self.stats_json());
         }
         if let Some(rarity) = self.rarity {
             let option = match rarity {

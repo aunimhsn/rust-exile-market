@@ -1,7 +1,7 @@
 //! The official trade site: the links to its searches ([`link`]), its offers, searched on
 //! their own thread when the player asks ([`search`]), and the names of the items in each
-//! language, read on their own thread ([`names_watch`]), which find the price of an item copied in French, with
-//! the templates of its stats.
+//! language, read on their own thread ([`names_watch`]), which find the price of an item
+//! copied in French, with the templates of its stats.
 
 mod client;
 mod limits;
