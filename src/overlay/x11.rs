@@ -3,12 +3,11 @@
 
 use std::error::Error;
 
-use x11rb::connection::Connection as _;
-use x11rb::protocol::xproto::{ConnectionExt as _, KeyButMask, Window};
-use x11rb::rust_connection::RustConnection;
+use x11rb::protocol::xproto::KeyButMask;
 
 use super::Point;
 use super::clicks::PointerSource;
+use crate::x11::Session;
 
 /// The buttons that count as a click: left, middle and right.
 const BUTTONS: [KeyButMask; 3] = [
@@ -19,22 +18,22 @@ const BUTTONS: [KeyButMask; 3] = [
 
 /// The pointer of the X server.
 pub(super) struct SystemPointer {
-    connection: RustConnection,
-    root: Window,
+    session: Session,
 }
 
 impl SystemPointer {
+    /// Connects to the X server.
     pub(super) fn connect() -> Result<Self, Box<dyn Error>> {
-        let (connection, screen) = x11rb::connect(None)?;
-        let root = connection.setup().roots[screen].root;
-        Ok(Self { connection, root })
+        Ok(Self {
+            session: Session::connect()?,
+        })
     }
 }
 
 impl PointerSource for SystemPointer {
     fn read(&mut self) -> Result<(Point, bool), Box<dyn Error>> {
-        crate::x11::drop_events(&self.connection);
-        let reply = self.connection.query_pointer(self.root)?.reply()?;
+        self.session.drop_events();
+        let reply = self.session.pointer()?;
         let point = Point {
             x: i32::from(reply.root_x),
             y: i32::from(reply.root_y),

@@ -13,7 +13,7 @@ use x11rb::rust_connection::RustConnection;
 
 use crate::hotkey::grab::{Active, GAME_TITLE};
 use crate::logging;
-use crate::x11::{self as shared, Atoms, Result};
+use crate::x11::{Result, Session};
 
 use super::window_class;
 
@@ -58,32 +58,21 @@ struct WatchAtoms {
 
 /// The connection that follows the active window.
 struct ActiveWindow {
-    connection: RustConnection,
-    root: Window,
-    shared: Atoms,
+    session: Session,
     atoms: WatchAtoms,
 }
 
 impl ActiveWindow {
+    /// Connects to the X server, with the atoms the active window is followed with.
     fn connect() -> Result<Self> {
-        let (connection, screen) = x11rb::connect(None)?;
-        let root = connection.setup().roots[screen].root;
-        let shared = Atoms::intern(&connection)?;
-        let intern = |name: &[u8]| -> Result<Atom> {
-            Ok(connection.intern_atom(false, name)?.reply()?.atom)
-        };
+        let session = Session::connect()?;
         let atoms = WatchAtoms {
-            active_window: shared.active_window,
-            supported: intern(b"_NET_SUPPORTED")?,
-            net_wm_name: intern(b"_NET_WM_NAME")?,
-            utf8_string: intern(b"UTF8_STRING")?,
+            active_window: session.atoms().active_window,
+            supported: session.intern(b"_NET_SUPPORTED")?,
+            net_wm_name: session.intern(b"_NET_WM_NAME")?,
+            utf8_string: session.intern(b"UTF8_STRING")?,
         };
-        Ok(Self {
-            connection,
-            root,
-            shared,
-            atoms,
-        })
+        Ok(Self { session, atoms })
     }
 
     /// Follows the active window until `game` returns `false`.
@@ -102,16 +91,13 @@ impl ActiveWindow {
             return Err("the desktop doesn't tell its active window (_NET_SUPPORTED)".into());
         }
         // Listened to before the active window is read, so that no change is missed.
-        self.listen(self.root, EventMask::PROPERTY_CHANGE)?
+        self.listen(self.session.root(), EventMask::PROPERTY_CHANGE)?
             .check()?;
         let mut followed = None;
         // The classes of the windows already written to the log.
         let mut classes_told = HashSet::new();
         loop {
-            let active = known_active(
-                shared::active_window(&self.connection, self.root, self.shared)?,
-                self.root,
-            );
+            let active = known_active(self.session.active_window()?, self.session.root());
             if active != followed {
                 // The windows may be gone: their errors are dropped.
                 if let Some(window) = followed {
@@ -147,10 +133,11 @@ impl ActiveWindow {
     fn tells_active_window(&self) -> Result<bool> {
         // Read whole: the server sends the property up to its length.
         let supported = self
-            .connection
+            .session
+            .connection()
             .get_property(
                 false,
-                self.root,
+                self.session.root(),
                 self.atoms.supported,
                 AtomEnum::ATOM,
                 0,
@@ -166,22 +153,17 @@ impl ActiveWindow {
     /// The name of the window manager: the `_NET_WM_NAME` of the window it names on the root
     /// window (`_NET_SUPPORTING_WM_CHECK`, EWMH), e.g. `KWin` or `GNOME Shell`.
     fn window_manager(&self) -> Result<String> {
-        let check = self
-            .connection
-            .intern_atom(false, b"_NET_SUPPORTING_WM_CHECK")?
-            .reply()?
-            .atom;
-        let window = self
-            .connection
-            .get_property(false, self.root, check, AtomEnum::WINDOW, 0, 1)?
+        let connection = self.session.connection();
+        let check = self.session.intern(b"_NET_SUPPORTING_WM_CHECK")?;
+        let window = connection
+            .get_property(false, self.session.root(), check, AtomEnum::WINDOW, 0, 1)?
             .reply()?
             .value32()
             .and_then(|mut windows| windows.next());
         let Some(window) = window else {
             return Ok("none told (_NET_SUPPORTING_WM_CHECK)".to_owned());
         };
-        let name = self
-            .connection
+        let name = connection
             .get_property(
                 false,
                 window,
@@ -198,8 +180,8 @@ impl ActiveWindow {
     /// Waits for a change that may change whether the active window is the game.
     fn wait_for_change(&self, followed: Option<Window>) -> Result<()> {
         loop {
-            if let Event::PropertyNotify(event) = self.connection.wait_for_event()?
-                && matters(&event, self.root, followed, self.atoms)
+            if let Event::PropertyNotify(event) = self.session.connection().wait_for_event()?
+                && matters(&event, self.session.root(), followed, self.atoms)
             {
                 return Ok(());
             }
@@ -212,7 +194,7 @@ impl ActiveWindow {
         window: Window,
         events: EventMask,
     ) -> Result<x11rb::cookie::VoidCookie<'_, RustConnection>> {
-        Ok(self.connection.change_window_attributes(
+        Ok(self.session.connection().change_window_attributes(
             window,
             &ChangeWindowAttributesAux::new().event_mask(events),
         )?)
@@ -225,12 +207,13 @@ impl ActiveWindow {
     fn is_game(&self, window: Window, classes_told: &mut HashSet<String>) -> Result<bool> {
         // The helper of the window over the game, active in its place on a single screen
         // (`crate::overlay`): the hotkey stays grabbed, and its copy gives the game back first.
-        if shared::game_behind(&self.connection, self.shared, window)?.is_some() {
+        if self.session.game_behind(window)?.is_some() {
             return Ok(true);
         }
         let property = |name: Atom, kind: Atom| -> Result<Vec<u8>> {
             Ok(self
-                .connection
+                .session
+                .connection()
                 .get_property(false, window, name, kind, 0, 256)?
                 .reply()?
                 .value)
