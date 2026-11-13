@@ -21,7 +21,7 @@ pub(super) struct Keys {
     /// The window took the keyboard, while one of its fields is edited.
     pub(super) held: bool,
     /// The window is the active window, on a single screen.
-    pub(super) single_screen: bool,
+    pub(super) window_is_active: bool,
 }
 
 /// The window over the game: when it shows and where, the clicks in the game that close it, and
@@ -33,8 +33,9 @@ pub(super) struct OverlayWindow {
     clicks: ClickWatch,
     /// Where it was drawn, in physical pixels, while it is open.
     place: Option<ScreenRect>,
-    /// The height of its content at the last frame, in points; none until it is laid out once.
-    content_height: Option<f32>,
+    /// The height of the item in it at the last frame, without the status bar, in points; none
+    /// until it is laid out once.
+    item_height: Option<f32>,
     /// The keyboard, given to it while one of its fields is edited.
     keyboard: KeyboardFocus,
     /// It is made the active window while the game holds the pointer (a single screen, on
@@ -49,7 +50,7 @@ impl OverlayWindow {
             overlay: Overlay::default(),
             clicks: ClickWatch::start(wake),
             place: None,
-            content_height: None,
+            item_height: None,
             keyboard: KeyboardFocus::new(),
             activation: Activation::new(),
         }
@@ -86,13 +87,14 @@ impl OverlayWindow {
         // A window that opens is laid out once before it shows; an open one keeps its height
         // until the next frame, without blinking.
         if self.overlay.copied(hotkey) && !was_open {
-            self.content_height = None;
+            self.item_height = None;
         }
     }
 
     /// Follows the window once the items are taken in, at `now`: forgets a hotkey that copied
     /// nothing, makes the window the active one while the game holds the pointer, watches the
-    /// clicks while it is open, and asks for the frames it waits for.
+    /// clicks while it is open, and asks for the frames it waits for and for those drawn while
+    /// the main window is hidden.
     pub(super) fn follow(&mut self, ctx: &Context, hotkey: &PriceCheckHotkey, now: Instant) {
         if let Some(left) = self.overlay.expire(now) {
             ctx.request_repaint_after(left);
@@ -152,7 +154,7 @@ impl OverlayWindow {
         let scale = native.unwrap_or(1.0) * ctx.zoom_factor();
         let width = to_pixels(overlay::WIDTH, scale);
         let content_height = self
-            .content_height
+            .item_height
             .map(|height| height + ui::STATUS_BAR_HEIGHT);
         let place = target.map(|target| {
             target.place(
@@ -219,7 +221,7 @@ impl OverlayWindow {
             }
             let keys = Keys {
                 held: self.keyboard.held(),
-                single_screen: self.activation.holds(),
+                window_is_active: self.activation.holds(),
             };
             // Its own ids: the scroll and the panels of the main window are its own.
             let drawn = ui
@@ -256,8 +258,8 @@ impl OverlayWindow {
             ctx.request_repaint();
         }
         let (drawn, _) = drawn?;
-        if self.content_height != Some(drawn.height) {
-            self.content_height = Some(drawn.height);
+        if self.item_height != Some(drawn.height) {
+            self.item_height = Some(drawn.height);
             ctx.request_repaint();
         }
         drawn.request

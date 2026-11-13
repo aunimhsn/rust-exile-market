@@ -293,7 +293,7 @@ impl ExileMarketApp {
                 StatusBar::sources(page.i18n, around.prices, trade)
                     .league(desk.session().league())
                     .keyboard(keys.held)
-                    .single_screen(keys.single_screen)
+                    .single_screen(keys.window_is_active)
                     .show(ui);
                 page.show(ui, desk, around)
             });
