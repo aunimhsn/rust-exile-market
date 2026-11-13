@@ -184,9 +184,7 @@ impl<'a> StatusBar<'a> {
     /// running version.
     fn author_line(&self, ui: &mut Ui, update: Option<&Release>) {
         let site = crate::AUTHOR_SITE_LABEL;
-        let author = self
-            .i18n
-            .author_line(crate::APP_NAME, crate::VERSION, crate::AUTHOR, site);
+        let author = self.i18n.author_line();
         // The translations start with the version and end with the site (checked by the tests
         // of `i18n`).
         let running = format!("{} {}", crate::APP_NAME, crate::VERSION);

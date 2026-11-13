@@ -24,518 +24,209 @@ fn messages(language: Language) -> &'static str {
     }
 }
 
-/// A message of the interface without arguments.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Message {
-    LeagueModeSoftcore,
-    LeagueModeHardcore,
-    LeagueLoading,
-    NewLeagueSwitch,
-    UpdateDownload,
-    HomeTooltip,
-    SettingsTooltip,
-    BugReportTooltip,
-    MinimizeTooltip,
-    CloseTooltip,
-    StatusPricesUnavailable,
-    StatusPricesDownloading,
-    StatusTradeIdle,
-    StatusKeyboard,
-    StatusKeyboardSingleScreen,
-    EmptyCopy,
-    EmptyPrice,
-    EmptyDisplayMode,
-    ClipboardUnreadable,
-    PricesUnavailable,
-    ItemUnreadable,
-    ItemUnreadableHint,
-    SettingsTitle,
-    SettingsLanguage,
-    LanguageSystem,
-    LanguageEnglish,
-    LanguageFrench,
-    SettingsAlwaysOnTop,
-    SettingsHotkey,
-    SettingsHotkeyPriceCheck,
-    SettingsHotkeyHelp,
-    SettingsHotkeyChange,
-    SettingsHotkeyDefault,
-    KeyShift,
-    HotkeyTakenChoose,
-    Disclaimer,
-    BugReportTitle,
-    BugReportIntro,
-    BugReportSent,
-    BugReportLog,
-    BugReportLogNote,
-    BugReportThisSession,
-    BugReportPreviousSession,
-    BugReportNoLog,
-    BugReportJoinUnreadable,
-    BugReportOpen,
-    BugReportCopy,
-    BugReportCopied,
-    BugReportCopyFailed,
-    BugReportAccount,
-    CheckOnTrade,
-    TagCorrupted,
-    TagTwiceCorrupted,
-    TagSanctified,
-    TagFractured,
-    TagMirrored,
-    TagUnidentified,
-    /// The tooltip of a state tag, gray or lit.
-    StateCorruptedOrNot,
-    StateCorruptedOnly,
-    StateTwiceCorruptedOnly,
-    StateSanctifiedOrNot,
-    StateSanctifiedOnly,
-    StateFracturedOrNot,
-    StateFracturedOnly,
-    StateMirroredOrNot,
-    StateMirroredOnly,
-    PriceLabel,
-    EstimatedPriceLabel,
-    PossibleUniques,
-    IdentifyToPrice,
-    NoOffers,
-    SearchToEstimate,
-    CheckToEstimate,
-    NoMarketPriceRare,
-    NoMarketPriceSkillGem,
-    NoMarketPriceMagic,
-    NoMarketPriceNormal,
-    FrenchNamesDownloading,
-    PricesDownloadingNoLeague,
-    HideStats,
-    GroupImplicit,
-    GroupPrefixes,
-    GroupSuffixes,
-    GroupExplicit,
-    DpsPhysical,
-    DpsElemental,
-    DpsChaos,
-    DefenceArmour,
-    DefenceEvasion,
-    DefenceEnergyShield,
-    DefenceBlock,
-    DefenceRunicWard,
-    /// The properties of a waystone in the item block, two of them written short, their name
-    /// of the game in their tooltip (`…Full`).
-    WaystoneRevives,
-    WaystoneRevivesFull,
-    WaystoneItemRarity,
-    WaystonePackSize,
-    WaystoneMonsterRarity,
-    WaystoneMonsterEffectiveness,
-    WaystoneDropChance,
-    WaystoneDropChanceFull,
-    GroupEnchant,
-    GroupRunes,
-    GroupUnique,
-    GroupItem,
-    GroupWeapon,
-    GroupWaystone,
-    GroupGem,
-    GroupPseudo,
-    ShowFilters,
-    HideFilters,
-    FilterRange,
-    FilterLowerBetter,
-    FilterUnsearchable,
-    FilterUnsearchableHint,
-    /// The tooltip of the filter of the quality of a catalyst.
-    FilterAnyQualityKind,
-    OriginDesecrated,
-    OriginFractured,
-    OriginCrafted,
-    OriginVaal,
-    /// The currency that adds a modifier whose tier the game doesn't write, in place of its
-    /// origin.
-    OriginEssence,
-    OriginAlloy,
-    /// The line of a modifier not revealed yet, and the note under the stats of its item.
-    UnrevealedPrefix,
-    UnrevealedSuffix,
-    UnrevealedNote,
-    /// The note under the stats of a rare or magic item copied from the in-game trade.
-    TradeCopyNote,
-    /// The note under the stats of a unique copied from the in-game trade.
-    UniqueRollsNote,
-    /// After the range of a line of a Time-Lost jewel, the passive skills in its radius it is
-    /// granted to.
-    RadiusSmall,
-    RadiusNotable,
-    /// After the range of a tier found from the values, the affix it is the tier of.
-    AffixPrefix,
-    AffixSuffix,
-    /// The tooltip of the suffix of a line that adds up a prefix and a suffix.
-    AddedUpWithPrefix,
-    /// After the range of the part of a hybrid in a line that adds up two modifiers, and of
-    /// its other lines; with its affix when the other part is of the other affix.
-    Hybrid,
-    HybridPrefix,
-    HybridSuffix,
-    OffersLabel,
-    OffersSearchHint,
-    OffersSearchTooltip,
-    OffersSearching,
-    OffersColumnPrice,
-    OffersColumnPerUnit,
-    OffersColumnStock,
-    OffersColumnListed,
-    OffersAgainTooltip,
-    OffersBusyTooltip,
-    OffersNone,
-    OffersNoneHint,
-    OffersUnreachable,
-    /// The trade site turned the search down with an error.
-    OffersRefused,
-    /// The answer of the trade site can't be read.
-    OffersUnreadable,
-    OffersIdentify,
-    OffersMoreTooltip,
-    OffersSuspicious,
-    /// Under the name of an offer of another kind of quality, while the quality is searched.
-    OffersOtherQuality,
-    SellerOnline,
-    SellerAway,
-    SellerOffline,
-    CopyWhisper,
-    WhisperCopied,
-    WhisperCopyFailed,
+/// Declares [`Message`], its list for the tests and the identifier of each message in the
+/// `.ftl` files, from one table, so that a message without arguments is declared once.
+macro_rules! messages {
+    ($($(#[$attribute:meta])* $variant:ident => $id:literal,)*) => {
+        /// A message of the interface without arguments.
+        #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+        pub enum Message {
+            $($(#[$attribute])* $variant,)*
+        }
+
+        impl Message {
+            /// Every message, for the tests.
+            #[cfg(test)]
+            const ALL: &'static [Self] = &[$(Self::$variant,)*];
+
+            /// Its identifier in the `.ftl` files.
+            fn id(self) -> &'static str {
+                match self {
+                    $(Self::$variant => $id,)*
+                }
+            }
+        }
+    };
 }
 
-impl Message {
-    /// Every message, for the tests.
-    #[cfg(test)]
-    const ALL: [Self; 159] = [
-        Self::LeagueModeSoftcore,
-        Self::LeagueModeHardcore,
-        Self::LeagueLoading,
-        Self::NewLeagueSwitch,
-        Self::UpdateDownload,
-        Self::HomeTooltip,
-        Self::SettingsTooltip,
-        Self::BugReportTooltip,
-        Self::MinimizeTooltip,
-        Self::CloseTooltip,
-        Self::StatusPricesUnavailable,
-        Self::StatusPricesDownloading,
-        Self::StatusTradeIdle,
-        Self::StatusKeyboard,
-        Self::StatusKeyboardSingleScreen,
-        Self::EmptyCopy,
-        Self::EmptyPrice,
-        Self::EmptyDisplayMode,
-        Self::ClipboardUnreadable,
-        Self::PricesUnavailable,
-        Self::ItemUnreadable,
-        Self::ItemUnreadableHint,
-        Self::SettingsTitle,
-        Self::SettingsLanguage,
-        Self::LanguageSystem,
-        Self::LanguageEnglish,
-        Self::LanguageFrench,
-        Self::SettingsAlwaysOnTop,
-        Self::SettingsHotkey,
-        Self::SettingsHotkeyPriceCheck,
-        Self::SettingsHotkeyHelp,
-        Self::SettingsHotkeyChange,
-        Self::SettingsHotkeyDefault,
-        Self::KeyShift,
-        Self::HotkeyTakenChoose,
-        Self::Disclaimer,
-        Self::BugReportTitle,
-        Self::BugReportIntro,
-        Self::BugReportSent,
-        Self::BugReportLog,
-        Self::BugReportLogNote,
-        Self::BugReportThisSession,
-        Self::BugReportPreviousSession,
-        Self::BugReportNoLog,
-        Self::BugReportJoinUnreadable,
-        Self::BugReportOpen,
-        Self::BugReportCopy,
-        Self::BugReportCopied,
-        Self::BugReportCopyFailed,
-        Self::BugReportAccount,
-        Self::CheckOnTrade,
-        Self::TagCorrupted,
-        Self::TagTwiceCorrupted,
-        Self::TagSanctified,
-        Self::TagFractured,
-        Self::TagMirrored,
-        Self::TagUnidentified,
-        Self::StateCorruptedOrNot,
-        Self::StateCorruptedOnly,
-        Self::StateTwiceCorruptedOnly,
-        Self::StateSanctifiedOrNot,
-        Self::StateSanctifiedOnly,
-        Self::StateFracturedOrNot,
-        Self::StateFracturedOnly,
-        Self::StateMirroredOrNot,
-        Self::StateMirroredOnly,
-        Self::PriceLabel,
-        Self::EstimatedPriceLabel,
-        Self::PossibleUniques,
-        Self::IdentifyToPrice,
-        Self::NoOffers,
-        Self::SearchToEstimate,
-        Self::CheckToEstimate,
-        Self::NoMarketPriceRare,
-        Self::NoMarketPriceSkillGem,
-        Self::NoMarketPriceMagic,
-        Self::NoMarketPriceNormal,
-        Self::FrenchNamesDownloading,
-        Self::PricesDownloadingNoLeague,
-        Self::HideStats,
-        Self::GroupImplicit,
-        Self::GroupPrefixes,
-        Self::GroupSuffixes,
-        Self::GroupExplicit,
-        Self::DpsPhysical,
-        Self::DpsElemental,
-        Self::DpsChaos,
-        Self::DefenceArmour,
-        Self::DefenceEvasion,
-        Self::DefenceEnergyShield,
-        Self::DefenceBlock,
-        Self::DefenceRunicWard,
-        Self::WaystoneRevives,
-        Self::WaystoneRevivesFull,
-        Self::WaystoneItemRarity,
-        Self::WaystonePackSize,
-        Self::WaystoneMonsterRarity,
-        Self::WaystoneMonsterEffectiveness,
-        Self::WaystoneDropChance,
-        Self::WaystoneDropChanceFull,
-        Self::GroupEnchant,
-        Self::GroupRunes,
-        Self::GroupUnique,
-        Self::GroupItem,
-        Self::GroupWeapon,
-        Self::GroupWaystone,
-        Self::GroupGem,
-        Self::GroupPseudo,
-        Self::ShowFilters,
-        Self::HideFilters,
-        Self::FilterRange,
-        Self::FilterLowerBetter,
-        Self::FilterUnsearchable,
-        Self::FilterUnsearchableHint,
-        Self::FilterAnyQualityKind,
-        Self::OriginDesecrated,
-        Self::OriginFractured,
-        Self::OriginCrafted,
-        Self::OriginVaal,
-        Self::OriginEssence,
-        Self::OriginAlloy,
-        Self::UnrevealedPrefix,
-        Self::UnrevealedSuffix,
-        Self::UnrevealedNote,
-        Self::TradeCopyNote,
-        Self::UniqueRollsNote,
-        Self::RadiusSmall,
-        Self::RadiusNotable,
-        Self::AffixPrefix,
-        Self::AffixSuffix,
-        Self::AddedUpWithPrefix,
-        Self::Hybrid,
-        Self::HybridPrefix,
-        Self::HybridSuffix,
-        Self::OffersLabel,
-        Self::OffersSearchHint,
-        Self::OffersSearchTooltip,
-        Self::OffersSearching,
-        Self::OffersColumnPrice,
-        Self::OffersColumnPerUnit,
-        Self::OffersColumnStock,
-        Self::OffersColumnListed,
-        Self::OffersAgainTooltip,
-        Self::OffersBusyTooltip,
-        Self::OffersNone,
-        Self::OffersNoneHint,
-        Self::OffersUnreachable,
-        Self::OffersRefused,
-        Self::OffersUnreadable,
-        Self::OffersIdentify,
-        Self::OffersMoreTooltip,
-        Self::OffersSuspicious,
-        Self::OffersOtherQuality,
-        Self::SellerOnline,
-        Self::SellerAway,
-        Self::SellerOffline,
-        Self::CopyWhisper,
-        Self::WhisperCopied,
-        Self::WhisperCopyFailed,
-    ];
-
-    /// Its identifier in the `.ftl` files.
-    #[expect(clippy::too_many_lines, reason = "one line per message")]
-    fn id(self) -> &'static str {
-        match self {
-            Self::LeagueModeSoftcore => "league-mode-softcore",
-            Self::LeagueModeHardcore => "league-mode-hardcore",
-            Self::LeagueLoading => "league-loading",
-            Self::NewLeagueSwitch => "new-league-switch",
-            Self::UpdateDownload => "update-download",
-            Self::HomeTooltip => "home-tooltip",
-            Self::SettingsTooltip => "settings-tooltip",
-            Self::BugReportTooltip => "bug-report-tooltip",
-            Self::MinimizeTooltip => "minimize-tooltip",
-            Self::CloseTooltip => "close-tooltip",
-            Self::StatusPricesUnavailable => "status-prices-unavailable",
-            Self::StatusPricesDownloading => "status-prices-downloading",
-            Self::StatusTradeIdle => "status-trade-idle",
-            Self::StatusKeyboard => "status-keyboard",
-            Self::StatusKeyboardSingleScreen => "status-keyboard-single-screen",
-            Self::EmptyCopy => "empty-copy",
-            Self::EmptyPrice => "empty-price",
-            Self::EmptyDisplayMode => "empty-display-mode",
-            Self::ClipboardUnreadable => "clipboard-unreadable",
-            Self::PricesUnavailable => "prices-unavailable",
-            Self::ItemUnreadable => "item-unreadable",
-            Self::ItemUnreadableHint => "item-unreadable-hint",
-            Self::SettingsTitle => "settings-title",
-            Self::SettingsLanguage => "settings-language",
-            Self::LanguageSystem => "language-system",
-            Self::LanguageEnglish => "language-english",
-            Self::LanguageFrench => "language-french",
-            Self::SettingsAlwaysOnTop => "settings-always-on-top",
-            Self::SettingsHotkey => "settings-hotkey",
-            Self::SettingsHotkeyPriceCheck => "settings-hotkey-price-check",
-            Self::SettingsHotkeyHelp => "settings-hotkey-help",
-            Self::SettingsHotkeyChange => "settings-hotkey-change",
-            Self::SettingsHotkeyDefault => "settings-hotkey-default",
-            Self::KeyShift => "key-shift",
-            Self::HotkeyTakenChoose => "hotkey-taken-choose",
-            Self::Disclaimer => "disclaimer",
-            Self::BugReportTitle => "bug-report-title",
-            Self::BugReportIntro => "bug-report-intro",
-            Self::BugReportSent => "bug-report-sent",
-            Self::BugReportLog => "bug-report-log",
-            Self::BugReportLogNote => "bug-report-log-note",
-            Self::BugReportThisSession => "bug-report-this-session",
-            Self::BugReportPreviousSession => "bug-report-previous-session",
-            Self::BugReportNoLog => "bug-report-no-log",
-            Self::BugReportJoinUnreadable => "bug-report-join-unreadable",
-            Self::BugReportOpen => "bug-report-open",
-            Self::BugReportCopy => "bug-report-copy",
-            Self::BugReportCopied => "bug-report-copied",
-            Self::BugReportCopyFailed => "bug-report-copy-failed",
-            Self::BugReportAccount => "bug-report-account",
-            Self::CheckOnTrade => "check-on-trade",
-            Self::TagCorrupted => "tag-corrupted",
-            Self::TagTwiceCorrupted => "tag-twice-corrupted",
-            Self::TagSanctified => "tag-sanctified",
-            Self::TagFractured => "tag-fractured",
-            Self::TagMirrored => "tag-mirrored",
-            Self::TagUnidentified => "tag-unidentified",
-            Self::StateCorruptedOrNot => "state-corrupted-or-not",
-            Self::StateCorruptedOnly => "state-corrupted-only",
-            Self::StateTwiceCorruptedOnly => "state-twice-corrupted-only",
-            Self::StateSanctifiedOrNot => "state-sanctified-or-not",
-            Self::StateSanctifiedOnly => "state-sanctified-only",
-            Self::StateFracturedOrNot => "state-fractured-or-not",
-            Self::StateFracturedOnly => "state-fractured-only",
-            Self::StateMirroredOrNot => "state-mirrored-or-not",
-            Self::StateMirroredOnly => "state-mirrored-only",
-            Self::PriceLabel => "price-label",
-            Self::EstimatedPriceLabel => "estimated-price-label",
-            Self::PossibleUniques => "possible-uniques",
-            Self::IdentifyToPrice => "identify-to-price",
-            Self::NoOffers => "no-offers",
-            Self::SearchToEstimate => "search-to-estimate",
-            Self::CheckToEstimate => "check-to-estimate",
-            Self::NoMarketPriceRare => "no-market-price-rare",
-            Self::NoMarketPriceSkillGem => "no-market-price-skill-gem",
-            Self::NoMarketPriceMagic => "no-market-price-magic",
-            Self::NoMarketPriceNormal => "no-market-price-normal",
-            Self::FrenchNamesDownloading => "french-names-downloading",
-            Self::PricesDownloadingNoLeague => "prices-downloading-no-league",
-            Self::HideStats => "hide-stats",
-            Self::GroupImplicit => "group-implicit",
-            Self::GroupPrefixes => "group-prefixes",
-            Self::GroupSuffixes => "group-suffixes",
-            Self::GroupExplicit => "group-explicit",
-            Self::DpsPhysical => "dps-physical",
-            Self::DpsElemental => "dps-elemental",
-            Self::DpsChaos => "dps-chaos",
-            Self::DefenceArmour => "defence-armour",
-            Self::DefenceEvasion => "defence-evasion",
-            Self::DefenceEnergyShield => "defence-energy-shield",
-            Self::DefenceBlock => "defence-block",
-            Self::DefenceRunicWard => "defence-runic-ward",
-            Self::WaystoneRevives => "waystone-revives",
-            Self::WaystoneRevivesFull => "waystone-revives-full",
-            Self::WaystoneItemRarity => "waystone-item-rarity",
-            Self::WaystonePackSize => "waystone-pack-size",
-            Self::WaystoneMonsterRarity => "waystone-monster-rarity",
-            Self::WaystoneMonsterEffectiveness => "waystone-monster-effectiveness",
-            Self::WaystoneDropChance => "waystone-drop-chance",
-            Self::WaystoneDropChanceFull => "waystone-drop-chance-full",
-            Self::GroupEnchant => "group-enchant",
-            Self::GroupRunes => "group-runes",
-            Self::GroupUnique => "group-unique",
-            Self::GroupItem => "group-item",
-            Self::GroupWeapon => "group-weapon",
-            Self::GroupWaystone => "group-waystone",
-            Self::GroupGem => "group-gem",
-            Self::GroupPseudo => "group-pseudo",
-            Self::ShowFilters => "show-filters",
-            Self::HideFilters => "hide-filters",
-            Self::FilterRange => "filter-range",
-            Self::FilterLowerBetter => "filter-lower-better",
-            Self::FilterUnsearchable => "filter-unsearchable",
-            Self::FilterUnsearchableHint => "filter-unsearchable-hint",
-            Self::FilterAnyQualityKind => "filter-any-quality-kind",
-            Self::OriginDesecrated => "origin-desecrated",
-            Self::OriginFractured => "origin-fractured",
-            Self::OriginCrafted => "origin-crafted",
-            Self::OriginVaal => "origin-vaal",
-            Self::OriginEssence => "origin-essence",
-            Self::OriginAlloy => "origin-alloy",
-            Self::UnrevealedPrefix => "unrevealed-prefix",
-            Self::UnrevealedSuffix => "unrevealed-suffix",
-            Self::UnrevealedNote => "unrevealed-note",
-            Self::TradeCopyNote => "trade-copy-note",
-            Self::UniqueRollsNote => "unique-rolls-note",
-            Self::RadiusSmall => "radius-small",
-            Self::RadiusNotable => "radius-notable",
-            Self::AffixPrefix => "affix-prefix",
-            Self::AffixSuffix => "affix-suffix",
-            Self::AddedUpWithPrefix => "added-up-with-prefix",
-            Self::Hybrid => "hybrid",
-            Self::HybridPrefix => "hybrid-prefix",
-            Self::HybridSuffix => "hybrid-suffix",
-            Self::OffersLabel => "offers-label",
-            Self::OffersSearchHint => "offers-search-hint",
-            Self::OffersSearchTooltip => "offers-search-tooltip",
-            Self::OffersSearching => "offers-searching",
-            Self::OffersColumnPrice => "offers-column-price",
-            Self::OffersColumnPerUnit => "offers-column-per-unit",
-            Self::OffersColumnStock => "offers-column-stock",
-            Self::OffersColumnListed => "offers-column-listed",
-            Self::OffersAgainTooltip => "offers-again-tooltip",
-            Self::OffersBusyTooltip => "offers-busy-tooltip",
-            Self::OffersNone => "offers-none",
-            Self::OffersNoneHint => "offers-none-hint",
-            Self::OffersUnreachable => "offers-unreachable",
-            Self::OffersRefused => "offers-refused",
-            Self::OffersUnreadable => "offers-unreadable",
-            Self::OffersIdentify => "offers-identify",
-            Self::OffersMoreTooltip => "offers-more-tooltip",
-            Self::OffersSuspicious => "offers-suspicious",
-            Self::OffersOtherQuality => "offers-other-quality",
-            Self::SellerOnline => "seller-online",
-            Self::SellerAway => "seller-away",
-            Self::SellerOffline => "seller-offline",
-            Self::CopyWhisper => "copy-whisper",
-            Self::WhisperCopied => "whisper-copied",
-            Self::WhisperCopyFailed => "whisper-copy-failed",
-        }
-    }
+messages! {
+    LeagueModeSoftcore => "league-mode-softcore",
+    LeagueModeHardcore => "league-mode-hardcore",
+    LeagueLoading => "league-loading",
+    NewLeagueSwitch => "new-league-switch",
+    UpdateDownload => "update-download",
+    HomeTooltip => "home-tooltip",
+    SettingsTooltip => "settings-tooltip",
+    BugReportTooltip => "bug-report-tooltip",
+    MinimizeTooltip => "minimize-tooltip",
+    CloseTooltip => "close-tooltip",
+    StatusPricesUnavailable => "status-prices-unavailable",
+    StatusPricesDownloading => "status-prices-downloading",
+    StatusTradeIdle => "status-trade-idle",
+    StatusKeyboard => "status-keyboard",
+    StatusKeyboardSingleScreen => "status-keyboard-single-screen",
+    EmptyCopy => "empty-copy",
+    EmptyPrice => "empty-price",
+    EmptyDisplayMode => "empty-display-mode",
+    ClipboardUnreadable => "clipboard-unreadable",
+    PricesUnavailable => "prices-unavailable",
+    ItemUnreadable => "item-unreadable",
+    ItemUnreadableHint => "item-unreadable-hint",
+    SettingsTitle => "settings-title",
+    SettingsLanguage => "settings-language",
+    LanguageSystem => "language-system",
+    LanguageEnglish => "language-english",
+    LanguageFrench => "language-french",
+    SettingsAlwaysOnTop => "settings-always-on-top",
+    SettingsHotkey => "settings-hotkey",
+    SettingsHotkeyPriceCheck => "settings-hotkey-price-check",
+    SettingsHotkeyHelp => "settings-hotkey-help",
+    SettingsHotkeyChange => "settings-hotkey-change",
+    SettingsHotkeyDefault => "settings-hotkey-default",
+    KeyShift => "key-shift",
+    HotkeyTakenChoose => "hotkey-taken-choose",
+    Disclaimer => "disclaimer",
+    BugReportTitle => "bug-report-title",
+    BugReportIntro => "bug-report-intro",
+    BugReportSent => "bug-report-sent",
+    BugReportLog => "bug-report-log",
+    BugReportLogNote => "bug-report-log-note",
+    BugReportThisSession => "bug-report-this-session",
+    BugReportPreviousSession => "bug-report-previous-session",
+    BugReportNoLog => "bug-report-no-log",
+    BugReportJoinUnreadable => "bug-report-join-unreadable",
+    BugReportOpen => "bug-report-open",
+    BugReportCopy => "bug-report-copy",
+    BugReportCopied => "bug-report-copied",
+    BugReportCopyFailed => "bug-report-copy-failed",
+    BugReportAccount => "bug-report-account",
+    CheckOnTrade => "check-on-trade",
+    TagCorrupted => "tag-corrupted",
+    TagTwiceCorrupted => "tag-twice-corrupted",
+    TagSanctified => "tag-sanctified",
+    TagFractured => "tag-fractured",
+    TagMirrored => "tag-mirrored",
+    TagUnidentified => "tag-unidentified",
+    /// The tooltip of a state tag, gray or lit.
+    StateCorruptedOrNot => "state-corrupted-or-not",
+    StateCorruptedOnly => "state-corrupted-only",
+    StateTwiceCorruptedOnly => "state-twice-corrupted-only",
+    StateSanctifiedOrNot => "state-sanctified-or-not",
+    StateSanctifiedOnly => "state-sanctified-only",
+    StateFracturedOrNot => "state-fractured-or-not",
+    StateFracturedOnly => "state-fractured-only",
+    StateMirroredOrNot => "state-mirrored-or-not",
+    StateMirroredOnly => "state-mirrored-only",
+    PriceLabel => "price-label",
+    EstimatedPriceLabel => "estimated-price-label",
+    PossibleUniques => "possible-uniques",
+    IdentifyToPrice => "identify-to-price",
+    NoOffers => "no-offers",
+    SearchToEstimate => "search-to-estimate",
+    CheckToEstimate => "check-to-estimate",
+    NoMarketPriceRare => "no-market-price-rare",
+    NoMarketPriceSkillGem => "no-market-price-skill-gem",
+    NoMarketPriceMagic => "no-market-price-magic",
+    NoMarketPriceNormal => "no-market-price-normal",
+    FrenchNamesDownloading => "french-names-downloading",
+    PricesDownloadingNoLeague => "prices-downloading-no-league",
+    HideStats => "hide-stats",
+    GroupImplicit => "group-implicit",
+    GroupPrefixes => "group-prefixes",
+    GroupSuffixes => "group-suffixes",
+    GroupExplicit => "group-explicit",
+    DpsPhysical => "dps-physical",
+    DpsElemental => "dps-elemental",
+    DpsChaos => "dps-chaos",
+    DefenceArmour => "defence-armour",
+    DefenceEvasion => "defence-evasion",
+    DefenceEnergyShield => "defence-energy-shield",
+    DefenceBlock => "defence-block",
+    DefenceRunicWard => "defence-runic-ward",
+    /// The properties of a waystone in the item block, two of them written short, their name
+    /// of the game in their tooltip (`…Full`).
+    WaystoneRevives => "waystone-revives",
+    WaystoneRevivesFull => "waystone-revives-full",
+    WaystoneItemRarity => "waystone-item-rarity",
+    WaystonePackSize => "waystone-pack-size",
+    WaystoneMonsterRarity => "waystone-monster-rarity",
+    WaystoneMonsterEffectiveness => "waystone-monster-effectiveness",
+    WaystoneDropChance => "waystone-drop-chance",
+    WaystoneDropChanceFull => "waystone-drop-chance-full",
+    GroupEnchant => "group-enchant",
+    GroupRunes => "group-runes",
+    GroupUnique => "group-unique",
+    GroupItem => "group-item",
+    GroupWeapon => "group-weapon",
+    GroupWaystone => "group-waystone",
+    GroupGem => "group-gem",
+    GroupPseudo => "group-pseudo",
+    ShowFilters => "show-filters",
+    HideFilters => "hide-filters",
+    FilterRange => "filter-range",
+    FilterLowerBetter => "filter-lower-better",
+    FilterUnsearchable => "filter-unsearchable",
+    FilterUnsearchableHint => "filter-unsearchable-hint",
+    /// The tooltip of the filter of the quality of a catalyst.
+    FilterAnyQualityKind => "filter-any-quality-kind",
+    OriginDesecrated => "origin-desecrated",
+    OriginFractured => "origin-fractured",
+    OriginCrafted => "origin-crafted",
+    OriginVaal => "origin-vaal",
+    /// The currency that adds a modifier whose tier the game doesn't write, in place of its
+    /// origin.
+    OriginEssence => "origin-essence",
+    OriginAlloy => "origin-alloy",
+    /// The line of a modifier not revealed yet, and the note under the stats of its item.
+    UnrevealedPrefix => "unrevealed-prefix",
+    UnrevealedSuffix => "unrevealed-suffix",
+    UnrevealedNote => "unrevealed-note",
+    /// The note under the stats of a rare or magic item copied from the in-game trade.
+    TradeCopyNote => "trade-copy-note",
+    /// The note under the stats of a unique copied from the in-game trade.
+    UniqueRollsNote => "unique-rolls-note",
+    /// After the range of a line of a Time-Lost jewel, the passive skills in its radius it is
+    /// granted to.
+    RadiusSmall => "radius-small",
+    RadiusNotable => "radius-notable",
+    /// After the range of a tier found from the values, the affix it is the tier of.
+    AffixPrefix => "affix-prefix",
+    AffixSuffix => "affix-suffix",
+    /// The tooltip of the suffix of a line that adds up a prefix and a suffix.
+    AddedUpWithPrefix => "added-up-with-prefix",
+    /// After the range of the part of a hybrid in a line that adds up two modifiers, and of
+    /// its other lines; with its affix when the other part is of the other affix.
+    Hybrid => "hybrid",
+    HybridPrefix => "hybrid-prefix",
+    HybridSuffix => "hybrid-suffix",
+    OffersLabel => "offers-label",
+    OffersSearchHint => "offers-search-hint",
+    OffersSearchTooltip => "offers-search-tooltip",
+    OffersSearching => "offers-searching",
+    OffersColumnPrice => "offers-column-price",
+    OffersColumnPerUnit => "offers-column-per-unit",
+    OffersColumnStock => "offers-column-stock",
+    OffersColumnListed => "offers-column-listed",
+    OffersAgainTooltip => "offers-again-tooltip",
+    OffersBusyTooltip => "offers-busy-tooltip",
+    OffersNone => "offers-none",
+    OffersNoneHint => "offers-none-hint",
+    OffersUnreachable => "offers-unreachable",
+    /// The trade site turned the search down with an error.
+    OffersRefused => "offers-refused",
+    /// The answer of the trade site can't be read.
+    OffersUnreadable => "offers-unreadable",
+    OffersIdentify => "offers-identify",
+    OffersMoreTooltip => "offers-more-tooltip",
+    OffersSuspicious => "offers-suspicious",
+    /// Under the name of an offer of another kind of quality, while the quality is searched.
+    OffersOtherQuality => "offers-other-quality",
+    SellerOnline => "seller-online",
+    SellerAway => "seller-away",
+    SellerOffline => "seller-offline",
+    CopyWhisper => "copy-whisper",
+    WhisperCopied => "whisper-copied",
+    WhisperCopyFailed => "whisper-copy-failed",
 }
 
 /// A sentence with a link in it.
@@ -613,10 +304,23 @@ const UNCERTAIN: &str = "uncertain";
 const THIN_TRADES: &str = "thin-trades";
 const SIMILAR: &str = "similar";
 const ESTIMATE_UNCERTAIN: &str = "estimate-uncertain";
-const ESTIMATE_MEDIAN: &str = "estimate-median";
-const ESTIMATE_MEDIAN_CHEAPEST: &str = "estimate-median-cheapest";
-const ESTIMATE_MEDIAN_OF: &str = "estimate-median-of";
-const ESTIMATE_MEDIAN_CHEAPEST_OF: &str = "estimate-median-cheapest-of";
+
+/// The two messages of the note of an estimate: `plain`, and `of_kind` with the kind of the
+/// quality of a catalyst searched.
+#[derive(Clone, Copy)]
+struct EstimateNote {
+    plain: &'static str,
+    of_kind: &'static str,
+}
+
+const MEDIAN: EstimateNote = EstimateNote {
+    plain: "estimate-median",
+    of_kind: "estimate-median-of",
+};
+const MEDIAN_CHEAPEST: EstimateNote = EstimateNote {
+    plain: "estimate-median-cheapest",
+    of_kind: "estimate-median-cheapest-of",
+};
 const QUALITY_OF_KIND: &str = "quality-of-kind";
 const OFFER_QUALITY_KIND: &str = "offer-quality-kind";
 const PRICES_DOWNLOADING: &str = "prices-downloading";
@@ -683,6 +387,27 @@ const DOWNLOAD_QUOTES: [&str; 10] = [
 ];
 /// The number of sentences of the download of the prices.
 pub const DOWNLOAD_QUOTE_COUNT: usize = DOWNLOAD_QUOTES.len();
+
+/// A translated sentence cut around one of its arguments, which the caller writes apart, in
+/// bold or in its color: "Rise of the Abyssal has started." is `""`, the league, then
+/// `" has started."`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CutSentence {
+    pub before: String,
+    pub after: String,
+}
+
+impl CutSentence {
+    /// The whole sentence, `argument` in its place.
+    #[must_use]
+    pub fn whole(&self, argument: &str) -> String {
+        format!("{}{argument}{}", self.before, self.after)
+    }
+}
+
+/// The character [`Translator::around`] puts in place of an argument: no translation writes
+/// it, so that the place of the argument is exact whatever the sentence says.
+const PLACE: &str = "\u{1}";
 
 /// Gives the texts of the interface in one language.
 pub struct Translator {
@@ -775,12 +500,10 @@ impl Translator {
         self.format(id, Some(&args))
     }
 
-    /// The title of the download of the prices, with the name of the league.
+    /// The title of the download of the prices, around the name of the league.
     #[must_use]
-    pub fn download_title(&self, league: &str) -> String {
-        let mut args = FluentArgs::new();
-        args.set("league", league);
-        self.format(DOWNLOAD_TITLE, Some(&args))
+    pub fn download_title(&self) -> CutSentence {
+        self.around(DOWNLOAD_TITLE, "league", FluentArgs::new())
     }
 
     /// The sentence `index` under the bar of the download of the prices, taken modulo their
@@ -1010,12 +733,7 @@ impl Translator {
     /// catalyst searched: "Median of the 3 similar offers of mana quality."
     #[must_use]
     pub fn estimate_median(&self, counted: usize, searched_catalyst: Option<Catalyst>) -> String {
-        self.format_estimate(
-            ESTIMATE_MEDIAN,
-            ESTIMATE_MEDIAN_OF,
-            counted,
-            searched_catalyst,
-        )
+        self.format_estimate(MEDIAN, counted, searched_catalyst)
     }
 
     /// How an estimate from the `counted` cheapest offers is made, of the kind of the quality
@@ -1026,12 +744,7 @@ impl Translator {
         counted: usize,
         searched_catalyst: Option<Catalyst>,
     ) -> String {
-        self.format_estimate(
-            ESTIMATE_MEDIAN_CHEAPEST,
-            ESTIMATE_MEDIAN_CHEAPEST_OF,
-            counted,
-            searched_catalyst,
-        )
+        self.format_estimate(MEDIAN_CHEAPEST, counted, searched_catalyst)
     }
 
     /// The kind of the quality of an offer, after its price in the list: "Attack quality".
@@ -1088,19 +801,11 @@ impl Translator {
         self.format(GRANTED_SKILL, Some(&args))
     }
 
-    /// The texts of the requirements line before and after its parts, which the caller
-    /// writes each in its color: `("Requires ", "")`.
+    /// The requirements line around its parts, which the caller writes each in its color:
+    /// `"Requires "`, then the parts.
     #[must_use]
-    pub fn requires_around(&self) -> (String, String) {
-        // A character no translation writes, in place of the parts.
-        const PARTS: &str = "\u{1}";
-        let mut args = FluentArgs::new();
-        args.set("parts", PARTS);
-        let line = self.format(REQUIRES, Some(&args));
-        match line.split_once(PARTS) {
-            Some((before, after)) => (before.to_owned(), after.to_owned()),
-            None => (line, String::new()),
-        }
+    pub fn requirements_line(&self) -> CutSentence {
+        self.around(REQUIRES, "parts", FluentArgs::new())
     }
 
     /// A part of the requirements line: the level, or an attribute.
@@ -1123,21 +828,19 @@ impl Translator {
         self.format(LEAGUE_TOOLTIP, Some(&args))
     }
 
-    /// The bubble of a new league, with its name.
+    /// The bubble of a new league, around its name.
     #[must_use]
-    pub fn new_league(&self, league: &str) -> String {
-        let mut args = FluentArgs::new();
-        args.set("league", league);
-        self.format(NEW_LEAGUE, Some(&args))
+    pub fn new_league(&self) -> CutSentence {
+        self.around(NEW_LEAGUE, "league", FluentArgs::new())
     }
 
-    /// The bubble of a newer version: "Exile Market 0.2.0 is available."
+    /// The bubble of a newer version of `app`, around the version: "Exile Market 0.2.0 is
+    /// available."
     #[must_use]
-    pub fn update_available(&self, app: &str, version: &str) -> String {
+    pub fn update_available(&self, app: &str) -> CutSentence {
         let mut args = FluentArgs::new();
         args.set("app", app);
-        args.set("version", version);
-        self.format(UPDATE_AVAILABLE, Some(&args))
+        self.around(UPDATE_AVAILABLE, "version", args)
     }
 
     /// A newer version in the status bar of the settings, a link: "0.2.0 available".
@@ -1157,12 +860,10 @@ impl Translator {
         self.format(HOTKEY_TAKEN, Some(&args))
     }
 
-    /// The checkbox that joins the item shown to the bug report, `name` its name, in bold.
+    /// The checkbox that joins the item shown to the bug report, around its name, in bold.
     #[must_use]
-    pub fn bug_report_join_item(&self, name: &str) -> String {
-        let mut args = FluentArgs::new();
-        args.set("name", name);
-        self.format(BUG_REPORT_JOIN_ITEM, Some(&args))
+    pub fn bug_report_join_item(&self) -> CutSentence {
+        self.around(BUG_REPORT_JOIN_ITEM, "name", FluentArgs::new())
     }
 
     /// What a screen reader says of a pill of the choice of the log, `session` its word.
@@ -1218,12 +919,12 @@ impl Translator {
     /// The line of the status bar while the settings are open: the application, its version,
     /// the author, then the author's site.
     #[must_use]
-    pub fn author_line(&self, app: &str, version: &str, author: &str, site: &str) -> String {
+    pub fn author_line(&self) -> String {
         let mut args = FluentArgs::new();
-        args.set("app", app);
-        args.set("version", version);
-        args.set("author", author);
-        args.set("site", site);
+        args.set("app", crate::APP_NAME);
+        args.set("version", crate::VERSION);
+        args.set("author", crate::AUTHOR);
+        args.set("site", crate::AUTHOR_SITE_LABEL);
         self.format(STATUS_AUTHOR, Some(&args))
     }
 
@@ -1283,23 +984,11 @@ impl Translator {
 
     /// The message `id`, its argument `report` the message `link`, and where that one is in it.
     fn linked(&self, id: &str, link: &str) -> Linked {
-        // A mark no translation holds stands for the words, so that their place is exact
-        // whatever the sentence says; a translation without them has no link.
-        const MARK: char = '\u{E000}';
         let words = self.format(link, None);
-        let mut args = FluentArgs::new();
-        args.set("report", MARK.to_string());
-        let marked = self.format(id, Some(&args));
-        let Some(start) = marked.find(MARK) else {
-            debug_assert!(false, "{id} without its link");
-            return Linked {
-                text: marked,
-                link: 0..0,
-            };
-        };
-        let text = marked.replacen(MARK, &words, 1);
+        let sentence = self.around(id, "report", FluentArgs::new());
+        let start = sentence.before.len();
         Linked {
-            text,
+            text: sentence.whole(&words),
             link: start..start + words.len(),
         }
     }
@@ -1327,21 +1016,20 @@ impl Translator {
         self.format(id, Some(&args))
     }
 
-    /// The note of an estimate, `id`, or `of_kind` with the kind of the quality searched.
+    /// The note of an estimate, with the kind of the quality searched when there is one.
     fn format_estimate(
         &self,
-        id: &str,
-        of_kind: &str,
+        note: EstimateNote,
         counted: usize,
         searched_catalyst: Option<Catalyst>,
     ) -> String {
         let Some(catalyst) = searched_catalyst else {
-            return self.format_number(id, "count", counted);
+            return self.format_number(note.plain, "count", counted);
         };
         let mut args = FluentArgs::new();
         args.set("count", counted);
         args.set("quality", self.format_kind(QUALITY_OF_KIND, catalyst));
-        self.format(of_kind, Some(&args))
+        self.format(note.of_kind, Some(&args))
     }
 
     fn format_kind(&self, id: &str, catalyst: Catalyst) -> String {
@@ -1354,6 +1042,26 @@ impl Translator {
         let mut args = FluentArgs::new();
         args.set("age", age);
         self.format(id, Some(&args))
+    }
+
+    /// The message `id` formatted with `args`, cut around the argument `name`, which the
+    /// translation writes once. Without the argument, which the tests rule out, the whole
+    /// message comes before it.
+    fn around(&self, id: &str, name: &'static str, mut args: FluentArgs<'_>) -> CutSentence {
+        args.set(name, PLACE);
+        let line = self.format(id, Some(&args));
+        let Some((before, after)) = line.split_once(PLACE) else {
+            debug_assert!(false, "no {name} in the message {id}");
+            return CutSentence {
+                before: line,
+                after: String::new(),
+            };
+        };
+        debug_assert!(!after.contains(PLACE), "{name} twice in the message {id}");
+        CutSentence {
+            before: before.to_owned(),
+            after: after.to_owned(),
+        }
     }
 
     /// The text of the message `id`; the id itself when the message is missing, which the
@@ -1397,589 +1105,4 @@ fn catalyst_id(catalyst: Catalyst) -> &'static str {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use std::collections::BTreeSet;
-
-    fn file_ids(language: Language) -> BTreeSet<String> {
-        let resource =
-            FluentResource::try_new(messages(language).to_owned()).expect("the messages parse");
-        resource
-            .entries()
-            .filter_map(|entry| match entry {
-                fluent_syntax::ast::Entry::Message(message) => Some(message.id.name.to_owned()),
-                _ => None,
-            })
-            .collect()
-    }
-
-    #[test]
-    #[expect(clippy::too_many_lines, reason = "one line per message")]
-    fn the_code_and_every_file_have_the_same_messages() {
-        let code_ids: BTreeSet<String> = Message::ALL
-            .iter()
-            .map(|message| message.id())
-            .chain([
-                STATUS_BAR,
-                LEAGUE_TOOLTIP,
-                STATUS_AUTHOR,
-                NEW_LEAGUE,
-                UPDATE_AVAILABLE,
-                STATUS_UPDATE,
-                HOTKEY_TAKEN,
-                HOTKEY_TAKEN_SETTINGS,
-                BUG_REPORT_JOIN_ITEM,
-                BUG_REPORT_LOG_SESSION,
-                STATUS_PRICES,
-                STATUS_PRICES_OFFLINE,
-                PRICES_UNREACHABLE,
-                AGE_NOW,
-                AGE_MINUTES,
-                WAIT_SECONDS,
-                WAIT_MINUTES,
-                AGE_HOURS,
-                AGE_DAYS,
-                DOWNLOAD_TITLE,
-                TAG_QUALITY,
-                TAG_SOCKETS,
-                TAG_ITEM_LEVEL,
-                TAG_STACK,
-                GEM_LEVEL,
-                GRANTED_SKILL,
-                REQUIRES,
-                REQUIREMENT_LEVEL,
-                REQUIREMENT_STRENGTH,
-                REQUIREMENT_DEXTERITY,
-                REQUIREMENT_INTELLIGENCE,
-                SHOW_STATS,
-                AFFIX_FILL,
-                AFFIX_FILL_OPEN,
-                LORD_PREFIX,
-                LORD_SUFFIX,
-                ACTIVE_FILTERS,
-                FILTER_ROLLS,
-                HYBRID_WITH,
-                HYBRID_LINES_AND,
-                HYBRID_PART,
-                FILTER_BASE_TYPE,
-                FILTER_ITEM_CLASS,
-                FILTER_ITEM_LEVEL,
-                FILTER_SOCKETS,
-                FILTER_GEM_LEVEL,
-                FILTER_QUALITY,
-                FILTER_CATALYST_QUALITY,
-                FILTER_REQUIRED_LEVEL,
-                FILTER_PHYSICAL_DPS,
-                FILTER_ELEMENTAL_DPS,
-                FILTER_WAYSTONE_REVIVES,
-                FILTER_WAYSTONE_ITEM_RARITY,
-                FILTER_WAYSTONE_PACK_SIZE,
-                FILTER_WAYSTONE_MONSTER_RARITY,
-                FILTER_WAYSTONE_MONSTER_EFFECTIVENESS,
-                FILTER_WAYSTONE_DROP_CHANCE,
-                PSEUDO_ELEMENTAL_RESISTANCE,
-                PSEUDO_CHAOS_RESISTANCE,
-                PSEUDO_LIFE,
-                PSEUDO_MANA,
-                PSEUDO_STRENGTH,
-                PSEUDO_DEXTERITY,
-                PSEUDO_INTELLIGENCE,
-                PSEUDO_ALL_ATTRIBUTES,
-                PSEUDO_UNREVEALED_MODIFIERS,
-                OFFERS,
-                STACK_OF,
-                UNIT_PRICE,
-                TREND_RISE,
-                TREND_FALL,
-                TREND_STABLE,
-                UNCERTAIN,
-                SIMILAR,
-                ESTIMATE_UNCERTAIN,
-                ESTIMATE_MEDIAN,
-                ESTIMATE_MEDIAN_CHEAPEST,
-                ESTIMATE_MEDIAN_OF,
-                ESTIMATE_MEDIAN_CHEAPEST_OF,
-                QUALITY_OF_KIND,
-                OFFER_QUALITY_KIND,
-                PRICES_DOWNLOADING,
-                NO_PRICE_FOUND,
-                STATUS_TRADE,
-                STATUS_TRADE_WAIT,
-                OFFERS_SEARCHED,
-                OFFERS_COUNT,
-                OFFERS_NEXT_SEARCH_TOOLTIP,
-                OFFERS_LIMIT,
-                OFFERS_REFUSED_HINT,
-                OFFERS_UNREADABLE_HINT,
-                OFFERS_REPORT,
-                OFFERS_REPORT_START,
-                THIN_TRADES,
-            ])
-            .chain(WINDOW_ERROR_IDS)
-            .chain(DOWNLOAD_QUOTES)
-            .map(str::to_owned)
-            .collect();
-        for language in Language::ALL {
-            assert_eq!(file_ids(language), code_ids, "messages of {language:?}");
-        }
-    }
-
-    #[test]
-    fn the_affix_of_a_lord_names_him_in_each_language() {
-        for language in Language::ALL {
-            let translator = Translator::new(language);
-            for lord in [Lord::Amanamu, Lord::Kurgal, Lord::Ulaman] {
-                for affix in [Affix::Prefix, Affix::Suffix] {
-                    let text = translator.lord_affix(affix, lord);
-                    assert!(text.contains(lord.name()), "{text} in {language:?}");
-                }
-            }
-        }
-        let english = Translator::new(Language::English);
-        assert_eq!(
-            english.lord_affix(Affix::Prefix, Lord::Amanamu),
-            "Amanamu Prefix"
-        );
-        // The elision of the French: "de Kurgal", "d'Amanamu".
-        let french = Translator::new(Language::French);
-        assert_eq!(
-            french.lord_affix(Affix::Prefix, Lord::Kurgal),
-            "Préfixe de Kurgal"
-        );
-        assert_eq!(
-            french.lord_affix(Affix::Suffix, Lord::Amanamu),
-            "Suffixe d'Amanamu"
-        );
-    }
-
-    /// The messages of a window that can't open.
-    const WINDOW_ERROR_IDS: [&str; 8] = [
-        WINDOW_ERROR_DISPLAY,
-        WINDOW_ERROR_DISPLAY_FIX,
-        WINDOW_ERROR_OPENGL,
-        WINDOW_ERROR_OPENGL_FIX,
-        WINDOW_ERROR_OTHER,
-        WINDOW_ERROR_OTHER_FIX,
-        WINDOW_ERROR_LOG,
-        WINDOW_ERROR_DETAILS,
-    ];
-
-    #[test]
-    fn every_message_of_a_window_that_cant_open_formats_without_errors() {
-        // The errors fail the `debug_assert` of `format`.
-        for language in Language::ALL {
-            let translator = Translator::new(language);
-            for cause in [Cause::Display, Cause::OpenGl, Cause::Other] {
-                let [failed, fix] = translator.window_error(cause);
-                assert!(
-                    failed.contains(crate::APP_NAME),
-                    "{cause:?} in {language:?}"
-                );
-                assert!(!fix.is_empty(), "{cause:?} in {language:?}");
-            }
-            assert!(translator.window_error_log("/log").contains("/log"));
-            assert!(translator.window_error_details("failed").contains("failed"));
-        }
-    }
-
-    #[test]
-    fn every_message_formats_without_errors() {
-        // The errors fail the `debug_assert` of `format`.
-        for language in Language::ALL {
-            let translator = Translator::new(language);
-            for message in Message::ALL {
-                assert_ne!(translator.text(message), "", "{message:?} in {language:?}");
-            }
-            assert_ne!(translator.status_bar("A", "B"), "", "{language:?}");
-            assert_ne!(translator.league_tooltip("A"), "", "{language:?}");
-            assert!(
-                translator
-                    .bug_report_log_session("Session")
-                    .contains("Session"),
-                "{language:?}"
-            );
-            assert!(
-                translator.new_league("League").contains("League"),
-                "{language:?}"
-            );
-            for age in [0, 60, 3600, 86_400] {
-                assert_ne!(translator.age(Duration::from_secs(age)), "", "{language:?}");
-            }
-            for tag in [NumberTag::Quality, NumberTag::Sockets, NumberTag::ItemLevel] {
-                for value in [0, 1, 2, 20] {
-                    let text = translator.tag(tag, value);
-                    assert!(text.contains(&value.to_string()), "{text} in {language:?}");
-                }
-            }
-            assert!(translator.stack_tag(7, 20).contains("7/20"), "{language:?}");
-            assert!(translator.granted_skill("Skill").contains("Skill"));
-            let lines = ["+38 to Armour", "+35 to Evasion"];
-            let with = translator.hybrid_with(&lines);
-            assert!(
-                with.contains(lines[0]) && with.contains(lines[1]),
-                "{with} in {language:?}"
-            );
-            let part = translator.hybrid_part("75–79", "258% increased");
-            assert!(
-                part.contains("75–79") && part.contains("258% increased"),
-                "{part} in {language:?}"
-            );
-            for count in [0, 1, 4, 23] {
-                assert!(translator.offers(count).contains(&count.to_string()));
-                assert_ne!(translator.uncertain(count), "");
-                let thin = translator.thin_trades(count);
-                assert!(
-                    count < 2 || thin.contains(&count.to_string()),
-                    "{thin} in {language:?}"
-                );
-            }
-            assert!(translator.stack_of(7).contains('7'));
-            for count in [1, 3, 5, 18] {
-                assert!(translator.similar(count).contains(&count.to_string()));
-            }
-            for count in [1, 4] {
-                assert_ne!(translator.estimate_uncertain(count), "");
-                assert_ne!(translator.estimate_median(count, None), "");
-            }
-            assert!(translator.estimate_median_cheapest(5, None).contains('5'));
-            assert!(translator.show_stats(1).contains('1'));
-            assert!(translator.show_stats(6).contains('6'));
-            assert!(translator.affix_fill(3, 3).contains('3'));
-            assert!(translator.affix_fill(2, 3).contains('1'));
-            assert!(translator.active_filters(1).contains('1'));
-            assert!(translator.active_filters(3).contains('3'));
-            assert!(translator.filter_rolls("-7.5", "60").contains("-7.5"));
-            assert!(translator.filter_rolls("-7.5", "60").contains("60"));
-            assert!(translator.unit_price("prices").contains("prices"));
-            for direction in [Direction::Rise, Direction::Fall, Direction::Stable] {
-                assert!(translator.trend(direction, 4, 7).contains('7'));
-            }
-            assert!(translator.prices_downloading("League").contains("League"));
-            assert!(translator.no_price_found("League").contains("League"));
-            assert_ne!(translator.requires_around().0, "", "{language:?}");
-            for requirement in [
-                Requirement::Level,
-                Requirement::Strength,
-                Requirement::Dexterity,
-                Requirement::Intelligence,
-            ] {
-                assert!(translator.requirement(requirement, 65).contains("65"));
-            }
-            assert!(
-                translator.download_title("League").contains("League"),
-                "{language:?}"
-            );
-            for index in 0..DOWNLOAD_QUOTE_COUNT {
-                assert_ne!(translator.download_quote(index), "", "{language:?}");
-            }
-            for line in [
-                translator.status_prices("age"),
-                translator.status_prices_offline("age"),
-                translator.prices_unreachable("age"),
-            ] {
-                assert!(line.contains("age"), "{line} in {language:?}");
-            }
-            assert_ne!(
-                translator.author_line("App", "1", "A", "a.b"),
-                "",
-                "{language:?}"
-            );
-        }
-    }
-
-    #[test]
-    fn the_open_affixes_agree_in_number_in_french() {
-        let french = Translator::new(Language::French);
-
-        assert_eq!(french.affix_fill(2, 3), "2 sur 3 · 1 libre");
-        assert_eq!(french.affix_fill(1, 3), "1 sur 3 · 2 libres");
-        assert_eq!(french.affix_fill(3, 3), "3 sur 3");
-    }
-
-    #[test]
-    fn arguments_are_inserted_without_isolation_marks() {
-        assert_eq!(
-            Translator::new(Language::English).status_bar("A", "B"),
-            "A · B"
-        );
-    }
-
-    #[test]
-    fn the_author_line_ends_with_the_site_in_every_language() {
-        // The status bar draws the site as a link, cut from the end of the line.
-        for language in Language::ALL {
-            let line =
-                Translator::new(language).author_line("App", "0.1.0", "Author", "author.site");
-
-            assert!(line.starts_with("App 0.1.0 · "), "{line}");
-            assert!(line.ends_with("Author · author.site"), "{line}");
-        }
-    }
-
-    #[test]
-    fn the_fill_of_the_affixes_tells_the_open_ones() {
-        let english = Translator::new(Language::English);
-
-        assert_eq!(english.affix_fill(3, 3), "3 of 3");
-        assert_eq!(english.affix_fill(2, 3), "2 of 3 · 1 open");
-    }
-
-    /// The marks of `line`, a line of a translation file, that don't follow a non-breaking
-    /// space (ordinary or narrow): the code between braces and the address of a link aside.
-    fn marks_without_their_space(line: &str) -> Vec<String> {
-        let mut found = Vec::new();
-        let mut depth = 0_u32;
-        let mut previous = None;
-        for (index, character) in line.char_indices() {
-            match character {
-                '{' => depth += 1,
-                '}' => depth = depth.saturating_sub(1),
-                ':' | ';' | '?' | '!' if depth == 0 => {
-                    let address = line[index..].starts_with("://");
-                    if !address && !matches!(previous, Some('\u{a0}' | '\u{202f}')) {
-                        found.push(format!("{character} in \"{line}\""));
-                    }
-                }
-                _ => {}
-            }
-            previous = Some(character);
-        }
-        found
-    }
-
-    #[test]
-    fn a_french_punctuation_mark_follows_a_non_breaking_space() {
-        // egui breaks a line at an ordinary space only: a wrapped text never starts a line with
-        // ":". The interface review of 2026-11-10: a mark right after its word passed too.
-        // A quote in English keeps the typography of English.
-        const ENGLISH_QUOTES: [&str; 1] = ["still available?"];
-        let mut found = Vec::new();
-        for line in messages(Language::French)
-            .lines()
-            .filter(|line| !line.trim_start().starts_with('#'))
-            .filter(|line| !ENGLISH_QUOTES.iter().any(|quote| line.contains(quote)))
-        {
-            found.extend(marks_without_their_space(line));
-        }
-
-        assert!(found.is_empty(), "{found:#?}");
-    }
-
-    #[test]
-    fn a_mark_right_after_its_word_or_after_an_ordinary_space_is_found() {
-        let none = Vec::<String>::new();
-        assert_eq!(marks_without_their_space("base = Base: { $base }").len(), 1);
-        assert_eq!(
-            marks_without_their_space("base = Base : { $base }").len(),
-            1
-        );
-        assert_eq!(
-            marks_without_their_space("base = Base\u{a0}: { $base }"),
-            none
-        );
-        assert_eq!(marks_without_their_space("base = Prêt\u{202f}?"), none);
-        // The code of Fluent and the address of a link.
-        assert_eq!(
-            marks_without_their_space("a = { $count -> [one] b; *[other] c! }"),
-            none
-        );
-        assert_eq!(
-            marks_without_their_space("site = https://example.org"),
-            none
-        );
-    }
-
-    #[test]
-    fn no_offer_has_its_own_warning_in_every_language() {
-        // In French, the plural category "one" covers 0 too.
-        let french = Translator::new(Language::French);
-        assert!(french.uncertain(0).starts_with("Aucune offre"));
-        assert!(french.uncertain(1).starts_with("Une seule offre"));
-        assert!(french.thin_trades(0).starts_with("Aucun échange"));
-        assert!(french.thin_trades(1).starts_with("Un seul échange"));
-        let english = Translator::new(Language::English);
-        assert!(english.uncertain(0).starts_with("No offer"));
-        assert!(english.thin_trades(0).starts_with("No trade"));
-    }
-
-    #[test]
-    fn an_estimate_from_one_offer_is_its_price() {
-        for language in Language::ALL {
-            let translator = Translator::new(language);
-            assert!(
-                !translator.estimate_median(1, None).contains('1'),
-                "{language:?}"
-            );
-            assert!(translator.estimate_median(3, None).contains('3'));
-        }
-        assert_eq!(
-            Translator::new(Language::English).estimate_uncertain(3),
-            "Only 3 similar offers: the estimate is uncertain"
-        );
-    }
-
-    #[test]
-    fn an_age_is_rounded_down_to_its_largest_unit() {
-        let english = Translator::new(Language::English);
-        let age = |seconds| english.age(Duration::from_secs(seconds));
-
-        assert_eq!(age(59), "just now");
-        assert_eq!(age(12 * 60 + 59), "12min ago");
-        assert_eq!(age(3 * 3600 + 59 * 60), "3h ago");
-        assert_eq!(age(2 * 86_400 + 3600), "2d ago");
-        // Glued to the unit in French too.
-        let french = Translator::new(Language::French);
-        assert_eq!(french.age(Duration::from_secs(59)), "à l'instant");
-        assert_eq!(french.age(Duration::from_mins(12)), "il y a 12min");
-    }
-
-    #[test]
-    fn a_wait_is_rounded_up_so_that_it_never_ends_too_soon() {
-        let english = Translator::new(Language::English);
-        assert_eq!(english.wait(Duration::from_millis(8_200)), "9s");
-        assert_eq!(english.wait(Duration::from_secs(8)), "8s");
-        assert_eq!(english.wait(Duration::from_secs(59)), "59s");
-        assert_eq!(english.wait(Duration::from_secs(60)), "1min");
-        assert_eq!(english.wait(Duration::from_secs(181)), "4min");
-        let french = Translator::new(Language::French);
-        assert_eq!(
-            french.offers_limit(Duration::from_secs(240)),
-            "Limite du site d'échange\u{a0}: prochaine recherche dans 4min."
-        );
-    }
-
-    #[test]
-    fn the_quality_of_a_catalyst_is_short_with_its_kind() {
-        let english = Translator::new(Language::English);
-        let french = Translator::new(Language::French);
-        let known = |catalyst| QualityKind {
-            catalyst: Some(catalyst),
-            words: String::new(),
-        };
-        let mana = known(Catalyst::Mana);
-        let attack = known(Catalyst::Attack);
-        let unknown = QualityKind {
-            catalyst: None,
-            words: "Speedy Modifiers".to_owned(),
-        };
-
-        assert_eq!(
-            english.filter_catalyst_quality(&mana, "40"),
-            "Mana quality: 40%"
-        );
-        assert_eq!(
-            french.filter_catalyst_quality(&mana, "40"),
-            "Qualité de mana\u{a0}: 40%"
-        );
-        assert_eq!(
-            french.filter_catalyst_quality(&attack, "20"),
-            "Qualité d'attaque\u{a0}: 20%"
-        );
-        // A kind the application doesn't know keeps the words of the game.
-        assert_eq!(
-            english.filter_catalyst_quality(&unknown, "20"),
-            "Quality (Speedy Modifiers): 20%"
-        );
-    }
-
-    #[test]
-    fn the_note_of_an_estimate_names_the_kind_of_quality_searched() {
-        let english = Translator::new(Language::English);
-        let french = Translator::new(Language::French);
-
-        assert_eq!(
-            english.estimate_median_cheapest(5, Some(Catalyst::Mana)),
-            "Median of the 5 cheapest similar offers of mana quality."
-        );
-        assert_eq!(
-            english.estimate_median_cheapest(5, None),
-            "Median of the 5 cheapest similar offers."
-        );
-        assert_eq!(
-            english.estimate_median(1, Some(Catalyst::Attack)),
-            "Price of the only similar offer of attack quality."
-        );
-        assert_eq!(
-            french.estimate_median_cheapest(5, Some(Catalyst::Mana)),
-            "Médiane des 5 offres similaires les moins chères de qualité de mana."
-        );
-        assert_eq!(
-            french.estimate_median(3, Some(Catalyst::Attack)),
-            "Médiane des 3 offres similaires de qualité d'attaque."
-        );
-        assert_eq!(
-            french.offer_quality_kind(Catalyst::Caster),
-            "Qualité de sorts"
-        );
-    }
-
-    #[test]
-    fn every_kind_of_catalyst_has_its_text_in_every_language() {
-        for language in [Language::English, Language::French] {
-            let translator = Translator::new(language);
-            for catalyst in Catalyst::ALL {
-                let kind = QualityKind {
-                    catalyst: Some(catalyst),
-                    words: "the words of the game".to_owned(),
-                };
-                let text = translator.filter_catalyst_quality(&kind, "40");
-                // Not the fallback with the words of the game.
-                assert!(
-                    !text.contains("the words") && text.contains("40%"),
-                    "{catalyst:?} in {language:?}: {text}"
-                );
-                // Not the default variants.
-                let note = translator.estimate_median(3, Some(catalyst));
-                let word = translator.offer_quality_kind(catalyst);
-                assert!(
-                    !["Other quality", "Autre qualité"].contains(&word.as_str())
-                        && !note.ends_with(" of quality.")
-                        && !note.ends_with(" de qualité."),
-                    "{catalyst:?} in {language:?}: {word}, {note}"
-                );
-            }
-        }
-    }
-
-    #[test]
-    fn the_level_and_the_sockets_of_a_gem_are_named_in_each_language() {
-        let english = Translator::new(Language::English);
-        let french = Translator::new(Language::French);
-        assert_eq!(english.filter_property(Property::GemLevel, "2"), "Level: 2");
-        assert_eq!(
-            french.filter_property(Property::GemLevel, "2"),
-            "Niveau\u{a0}: 2"
-        );
-        // The same words as the sockets of another item.
-        assert_eq!(
-            english.filter_property(Property::GemSockets, "5"),
-            "Sockets: 5"
-        );
-        assert_eq!(
-            french.filter_property(Property::GemSockets, "5"),
-            "Châsses\u{a0}: 5"
-        );
-        assert_eq!(english.gem_level(21), "Level\u{a0}21");
-        assert_eq!(french.gem_level(21), "Niveau\u{a0}21");
-    }
-
-    #[test]
-    fn the_hint_of_a_failed_search_holds_its_link_in_each_language() {
-        for language in Language::ALL {
-            let translator = Translator::new(language);
-            for (hint, words) in [
-                (translator.offers_refused_hint(), OFFERS_REPORT),
-                (translator.offers_unreadable_hint(), OFFERS_REPORT_START),
-            ] {
-                let words = translator.format(words, None);
-                assert_eq!(
-                    hint.text.get(hint.link.clone()),
-                    Some(words.as_str()),
-                    "{hint:?} in {language:?}"
-                );
-            }
-        }
-        let english = Translator::new(Language::English).offers_unreadable_hint();
-        assert_eq!(english.text.get(english.link), Some("Report it"));
-    }
-}
+mod tests;

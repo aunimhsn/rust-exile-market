@@ -2,12 +2,13 @@
 //! height: how to use the application, or, while no price of the league is known, the
 //! download of the prices.
 
-use egui::text::{LayoutJob, TextFormat};
+use egui::text::TextFormat;
 use egui::{CentralPanel, Frame, Image, Rect, RichText, Sense, Ui, Vec2, vec2};
 
 use super::images;
 use super::keys::{self, Caps};
 use super::theme::{color, motion, text};
+use super::widgets;
 use crate::hotkey::{HotkeyState, Shortcut};
 use crate::i18n::{Message, Translator};
 
@@ -146,20 +147,12 @@ impl<'a> EmptyState<'a> {
     /// The league whose prices are downloaded, in the color of the text, the bar, then a
     /// sentence.
     fn download(&self, ui: &mut Ui, download: PriceDownload<'_>) {
-        let title = self.i18n.download_title(download.league);
-        let mut job = LayoutJob::default();
-        let mut append = |part: &str, tint| {
-            job.append(part, 0.0, TextFormat::simple(text::body(), tint));
-        };
-        match title.split_once(download.league) {
-            Some((before, after)) => {
-                append(before, color::WEAK);
-                append(download.league, color::TEXT);
-                append(after, color::WEAK);
-            }
-            None => append(&title, color::WEAK),
-        }
-        ui.label(job);
+        ui.label(widgets::sentence_with(
+            &self.i18n.download_title(),
+            download.league,
+            &TextFormat::simple(text::body(), color::WEAK),
+            TextFormat::simple(text::body(), color::TEXT),
+        ));
         ui.add_space(DOWNLOAD_GAP);
 
         let (rect, _) = ui.allocate_exact_size(BAR_SIZE, Sense::hover());

@@ -13,6 +13,7 @@ use egui::{
 };
 
 use super::theme::{color, size, text};
+use crate::i18n::CutSentence;
 
 /// The mark in front of a choice: a radio button among exclusive choices, a check box for a
 /// choice of its own.
@@ -210,6 +211,22 @@ fn line(
     let mut job = LayoutJob::single_section(text.into(), format);
     job.wrap = max_width.map_or_else(TextWrapping::no_max_width, TextWrapping::truncate_at_width);
     ui.painter().layout_job(job)
+}
+
+/// `sentence` with `argument` in its place, in the format `apart`, the rest in `regular`: the
+/// name of a league in bold in its bubble.
+#[must_use]
+pub fn sentence_with(
+    sentence: &CutSentence,
+    argument: &str,
+    regular: &TextFormat,
+    apart: TextFormat,
+) -> LayoutJob {
+    let mut job = LayoutJob::default();
+    job.append(&sentence.before, 0.0, regular.clone());
+    job.append(argument, 0.0, apart);
+    job.append(&sentence.after, 0.0, regular.clone());
+    job
 }
 
 /// A chevron centered on `center`, `width` across its opening: pointing right at `turn` 0,
@@ -466,6 +483,28 @@ pub fn segmented(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_argument_is_set_apart_at_its_place_even_when_the_sentence_writes_it_before() {
+        let sentence = CutSentence {
+            before: "Join a: ".to_owned(),
+            after: ".".to_owned(),
+        };
+        let regular = TextFormat::simple(text::bubble(), color::TEXT);
+        let apart = TextFormat::simple(text::bubble_strong(), color::TEXT);
+
+        let job = sentence_with(&sentence, "a", &regular, apart.clone());
+
+        let sections: Vec<(&str, bool)> = job
+            .sections
+            .iter()
+            .map(|section| {
+                let range = section.byte_range.start.0..section.byte_range.end.0;
+                (&job.text[range], section.format == apart)
+            })
+            .collect();
+        assert_eq!(sections, [("Join a: ", false), ("a", true), (".", false)]);
+    }
 
     #[test]
     fn the_white_pill_is_placed_at_once_the_first_time() {
