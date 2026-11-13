@@ -358,7 +358,6 @@ impl<'a> OffersBlock<'a> {
                     rows: &rows,
                     items: Some(offers),
                     total: *total,
-                    exchange: false,
                     more: match (rest.is_empty(), *loading_more) {
                         (_, true) => More::Loading,
                         (false, false) => More::Chevron,
@@ -380,7 +379,6 @@ impl<'a> OffersBlock<'a> {
                     rows: &rows,
                     items: None,
                     total: *total,
-                    exchange: true,
                     more: if shown.len() < offers.len() {
                         More::Chevron
                     } else {
@@ -611,7 +609,7 @@ impl<'a> OffersBlock<'a> {
     /// The titles of the columns, then the rows, the whole width of the band.
     fn list(&self, ui: &mut Ui, list: &List) {
         let i18n = self.i18n;
-        let titles: Vec<String> = if list.exchange {
+        let titles: Vec<String> = if list.is_exchange() {
             vec![
                 i18n.text(Message::OffersColumnPerUnit),
                 i18n.text(Message::OffersColumnStock),
@@ -638,7 +636,7 @@ impl<'a> OffersBlock<'a> {
             + galleys.first().map_or(0.0, |galley| galley.size().y)
             + COLUMNS_PADDING_BOTTOM;
         let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), height), Sense::hover());
-        let columns = Columns::of(rect, list.exchange);
+        let columns = Columns::of(rect, list.is_exchange());
         let painter = ui.painter();
         let top = rect.top() + ROW_PADDING_Y;
         let mut cells = columns.right_edges().into_iter();
@@ -689,7 +687,7 @@ impl<'a> OffersBlock<'a> {
             }
             // The whole name of a currency cut, under the pointer; the offers of items have
             // the tooltip of their item instead.
-            if self.row(ui, rect, row, list.exchange)
+            if self.row(ui, rect, row, list.is_exchange())
                 && list.items.is_none()
                 && let Some(price) = &row.price
             {
@@ -902,14 +900,20 @@ impl<'a> OffersBlock<'a> {
 /// What the list shows.
 struct List<'a> {
     rows: &'a [Row],
-    /// The offers of items, whose rows open their tooltips.
+    /// The offers of items, whose rows open their tooltips; `None` for the offers of the
+    /// currency exchange.
     items: Option<&'a [ItemOffer]>,
     total: u64,
-    /// The offers of the currency exchange, with their stock.
-    exchange: bool,
     more: More,
     /// Why the next offers couldn't come.
     more_failed: Option<Failure>,
+}
+
+impl List<'_> {
+    /// Whether the list shows the offers of the currency exchange, with their stock.
+    fn is_exchange(&self) -> bool {
+        self.items.is_none()
+    }
 }
 
 /// Whether the block says that no offer was found: none shown, and none left to fetch. A page
