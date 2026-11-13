@@ -1,7 +1,8 @@
 //! The prices of the fixed-name items of a league, from the price database: the uniques and
 //! the items of the currency exchange, in Exalted Orbs, with the rates of the Chaos and Divine
 //! Orbs to show them in the three currencies; and the modifiers of each unique with their
-//! ranges, the rolls of a unique copied without them.
+//! ranges, the rolls of a unique copied without them. The price of a copied item is found
+//! among them ([`fixed`]), or estimated from its offers on the trade site ([`estimate`]).
 
 pub mod estimate;
 pub mod fixed;
