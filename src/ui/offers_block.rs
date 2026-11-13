@@ -574,17 +574,16 @@ impl OffersBlock<'_> {
     /// The titles of the columns, then the rows, the whole width of the band.
     fn list(&self, ui: &mut Ui, list: &List) {
         let i18n = self.i18n;
-        let titles: Vec<String> = if list.is_exchange() {
-            vec![
+        let titles: Vec<String> = match list.kind() {
+            SearchKind::Exchange => vec![
                 i18n.text(Message::OffersColumnPerUnit),
                 i18n.text(Message::OffersColumnStock),
                 i18n.text(Message::OffersColumnListed),
-            ]
-        } else {
-            vec![
+            ],
+            SearchKind::Items => vec![
                 i18n.text(Message::OffersColumnPrice),
                 i18n.text(Message::OffersColumnListed),
-            ]
+            ],
         };
         let galleys: Vec<_> = titles
             .into_iter()
@@ -601,7 +600,7 @@ impl OffersBlock<'_> {
             + galleys.first().map_or(0.0, |galley| galley.size().y)
             + COLUMNS_PADDING_BOTTOM;
         let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), height), Sense::hover());
-        let columns = Columns::of(rect, list.is_exchange());
+        let columns = Columns::of(rect, list.kind());
         let painter = ui.painter();
         let top = rect.top() + ROW_PADDING_Y;
         let mut cells = columns.right_edges().into_iter();
@@ -650,7 +649,7 @@ impl OffersBlock<'_> {
             }
             // The whole name of a currency cut, under the pointer; the offers of items have
             // the tooltip of their item instead.
-            if self.row(ui, &Columns::of(rect, list.is_exchange()), row)
+            if self.row(ui, &Columns::of(rect, list.kind()), row)
                 && list.items.is_none()
                 && let Some(price) = &row.price
             {
@@ -873,9 +872,14 @@ struct List<'a> {
 }
 
 impl List<'_> {
-    /// Whether the list shows the offers of the currency exchange, with their stock.
-    fn is_exchange(&self) -> bool {
-        self.items.is_none()
+    /// The search whose offers the list shows: of items, or of the currency exchange, with
+    /// their stock.
+    fn kind(&self) -> SearchKind {
+        if self.items.is_some() {
+            SearchKind::Items
+        } else {
+            SearchKind::Exchange
+        }
     }
 }
 
@@ -924,27 +928,27 @@ struct Columns {
     right: f32,
     /// The top and the bottom of the row, whose texts are centered across it.
     y_range: Rangef,
-    exchange: bool,
+    /// The search of the offers: those of the currency exchange have a column of their stock.
+    kind: SearchKind,
 }
 
 impl Columns {
-    /// The columns of the `row`, of the currency exchange or not.
-    fn of(row: Rect, exchange: bool) -> Self {
+    /// The columns of the `row` of an offer of a search of `kind`.
+    fn of(row: Rect, kind: SearchKind) -> Self {
         Self {
             left: row.left() + size::BAND_PADDING,
             right: row.right() - size::BAND_PADDING,
             y_range: row.y_range(),
-            exchange,
+            kind,
         }
     }
 
     /// The right edges of the columns after the first one, whose text is aligned on the
     /// right.
     fn right_edges(&self) -> Vec<f32> {
-        if self.exchange {
-            vec![self.right - LISTED_WIDTH - COLUMN_GAP, self.right]
-        } else {
-            vec![self.right]
+        match self.kind {
+            SearchKind::Exchange => vec![self.right - LISTED_WIDTH - COLUMN_GAP, self.right],
+            SearchKind::Items => vec![self.right],
         }
     }
 }
