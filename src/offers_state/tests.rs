@@ -222,7 +222,9 @@ fn the_quality_searched_lasts_with_its_offers_until_the_next_search() {
 
 fn ids(offers: &Offers) -> Vec<String> {
     match offers.state() {
-        OffersState::Items { offers, .. } => offers.iter().map(|offer| offer.id.clone()).collect(),
+        OffersState::Items(ItemOffers { offers, .. }) => {
+            offers.iter().map(|offer| offer.id.clone()).collect()
+        }
         state => panic!("no offers of items: {state:?}"),
     }
 }
@@ -304,10 +306,10 @@ fn more_offers_of_items_are_fetched_and_added_to_the_list() {
     assert_eq!(offers.more(), None, "once at a time");
     assert!(matches!(
         offers.state(),
-        OffersState::Items {
+        OffersState::Items(ItemOffers {
             loading_more: true,
             ..
-        }
+        })
     ));
     let outcome = Outcome::More {
         offers: vec![offer("c")],
@@ -318,11 +320,14 @@ fn more_offers_of_items_are_fetched_and_added_to_the_list() {
     assert_eq!(ids(&offers), ["a", "b", "c"]);
     assert!(matches!(
         offers.state(),
-        OffersState::Items { rest, loading_more: false, searched, .. }
+        OffersState::Items(ItemOffers { rest, loading_more: false, searched, .. })
             if rest.is_empty() && *searched == SystemTime::UNIX_EPOCH
     ));
     assert!(
-        matches!(offers.state(), OffersState::Items { first_page: 2, .. }),
+        matches!(
+            offers.state(),
+            OffersState::Items(ItemOffers { first_page: 2, .. })
+        ),
         "the next offers aren't in the answer to the search"
     );
     assert_eq!(offers.more(), None, "none left");
@@ -347,20 +352,20 @@ fn more_offers_that_cant_come_keep_the_list_to_ask_them_again() {
     assert_eq!(ids(&offers), ["a"]);
     assert!(matches!(
         offers.state(),
-        OffersState::Items {
+        OffersState::Items(ItemOffers {
             more_failed: Some(Failure::Unreadable),
             ..
-        }
+        })
     ));
     assert_eq!(offers.more(), Some(Order::More(rest(true))));
     assert!(
         matches!(
             offers.state(),
-            OffersState::Items {
+            OffersState::Items(ItemOffers {
                 more_failed: None,
                 loading_more: true,
                 ..
-            }
+            })
         ),
         "asked again"
     );
@@ -497,10 +502,10 @@ fn refused_more_offers_wait_as_the_limits_of_the_fetch_tell() {
     assert!(
         matches!(
             offers.state(),
-            OffersState::Items {
+            OffersState::Items(ItemOffers {
                 more_failed: None,
                 ..
-            }
+            })
         ),
         "the waiting block tells the refusal"
     );
@@ -602,12 +607,12 @@ fn the_offers_of_an_item_left_keep_its_list_but_not_a_failure_nor_a_search_under
 
     assert!(matches!(
         &left,
-        OffersState::Items {
+        OffersState::Items(ItemOffers {
             loading_more: false,
             more_failed: None,
             rest,
             ..
-        } if !rest.is_empty()
+        }) if !rest.is_empty()
     ));
     assert_eq!(offers.state(), &OffersState::Idle);
     // The next offers of the item left come to nothing.

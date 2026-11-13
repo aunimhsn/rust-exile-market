@@ -1134,19 +1134,13 @@ fn shown_estimate<'a>(
         return None;
     }
     let searched_catalyst = offers.searched_catalyst(item);
-    let OffersState::Items {
-        offers,
-        total,
-        first_page,
-        ..
-    } = offers.state()
-    else {
+    let OffersState::Items(items) = offers.state() else {
         return None;
     };
     // The next offers loaded don't move it.
     Estimate::of(
-        offers.get(..*first_page)?,
-        *total,
+        items.offers.get(..items.first_page)?,
+        items.total,
         worth?,
         searched_catalyst,
     )

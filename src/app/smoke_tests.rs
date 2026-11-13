@@ -226,7 +226,7 @@ impl Scene {
         drawn.with_an_estimate += wrote(&estimated);
         drawn.with_a_check_hint += wrote(&self.i18n.text(Message::CheckToEstimate));
         match self.offers.state() {
-            OffersState::Items { .. } => drawn.with_offers_of_items += 1,
+            OffersState::Items(_) => drawn.with_offers_of_items += 1,
             OffersState::Exchange { .. } => drawn.with_offers_of_the_exchange += 1,
             _ => {}
         }

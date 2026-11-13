@@ -21,7 +21,7 @@ use super::theme::{color, size, text};
 use super::{icons, widgets};
 use crate::i18n::{Message, Translator};
 use crate::item::Item;
-use crate::offers_state::{LONG_WAIT, Offers, OffersState};
+use crate::offers_state::{ItemOffers, LONG_WAIT, Offers, OffersState};
 use crate::price::estimate::Reference;
 use crate::roll_difference::CopiedLines;
 use crate::trade::offers::ItemOffer;
@@ -144,7 +144,7 @@ impl OffersBlock<'_> {
                 let line = (i18n.text(Message::OffersSearching), color::FAINT);
                 self.title_row(ui, &Head::of(line, Block::Searching), None)
             }
-            OffersState::Items {
+            OffersState::Items(ItemOffers {
                 offers,
                 total,
                 rest,
@@ -152,7 +152,7 @@ impl OffersBlock<'_> {
                 more_failed,
                 searched,
                 ..
-            } => {
+            }) => {
                 let rows = item_rows(
                     offers,
                     self.reference,
