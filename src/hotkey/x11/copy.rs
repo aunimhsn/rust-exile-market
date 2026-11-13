@@ -5,16 +5,13 @@ use std::time::{Duration, Instant};
 
 use global_hotkey::HotKeyState;
 use x11rb::connection::{Connection, RequestConnection as _};
-use x11rb::protocol::xproto::{
-    self, AtomEnum, ConnectionExt as _, InputFocus, KeyButMask, Keycode, Window,
-};
+use x11rb::protocol::xproto::{self, AtomEnum, ConnectionExt as _, KeyButMask, Keycode, Window};
 use x11rb::protocol::xtest::{self, ConnectionExt as _};
-use x11rb::rust_connection::RustConnection;
 
 use crate::hotkey::Shortcut;
 use crate::hotkey::sent_keys::{Held, Key, copy_keys, modifiers_for_log, send_all};
 use crate::overlay::{Point, ScreenRect, Target};
-use crate::x11::{self as shared, Atoms, Result};
+use crate::x11::{self as shared, Result, Session};
 
 use super::window_class;
 
@@ -151,35 +148,28 @@ struct Sent {
 }
 
 struct Keyboard {
-    connection: RustConnection,
-    root: Window,
-    atoms: Atoms,
+    session: Session,
 }
 
 impl Keyboard {
     fn connect() -> Result<Self> {
-        let (connection, screen) = x11rb::connect(None)?;
-        if connection
+        let session = Session::connect()?;
+        if session
+            .connection()
             .extension_information(xtest::X11_EXTENSION_NAME)?
             .is_none()
         {
             return Err("the X server has no XTest extension".into());
         }
-        let root = connection.setup().roots[screen].root;
-        let atoms = Atoms::intern(&connection)?;
-        Ok(Self {
-            connection,
-            root,
-            atoms,
-        })
+        Ok(Self { session })
     }
 
     /// The keyboard mapping, read at each copy: the player may change the layout of the
     /// keyboard meanwhile.
     fn read_layout(&self) -> Result<Layout> {
-        let setup = self.connection.setup();
-        let mapping = self
-            .connection
+        let connection = self.session.connection();
+        let setup = connection.setup();
+        let mapping = connection
             .get_keyboard_mapping(setup.min_keycode, setup.max_keycode - setup.min_keycode + 1)?
             .reply()?;
         Ok(Layout {
@@ -192,7 +182,7 @@ impl Keyboard {
     /// The game, when `window` is the helper of the window over the game, made the active window
     /// again; `window` otherwise. Whether the desktop refused to make the game active.
     fn game_in_front(&self, window: Window) -> (Window, bool) {
-        match shared::game_behind(&self.connection, self.atoms, window) {
+        match self.session.game_behind(window) {
             Ok(Some(game)) => {
                 let refused = self.bring_back(game).map_err(|error| {
                     log::warn!("The game can't be made the active window again: {error}");
@@ -235,7 +225,7 @@ impl Keyboard {
     /// Asks the desktop to make `game` the active window, and waits until it is, up to
     /// [`ACTIVATION_WAIT`].
     fn bring_back(&self, game: Window) -> Result<()> {
-        shared::activate(&self.connection, self.root, self.atoms, game)?;
+        self.session.activate(game)?;
         let start = Instant::now();
         while start.elapsed() < ACTIVATION_WAIT {
             if self.active_window()? == Some(game) {
@@ -250,12 +240,10 @@ impl Keyboard {
     /// Gives the keyboard back to `game`, the active window, when the window over the game has
     /// it, or no window has it (the window over the game just hid).
     fn give_back_keyboard(&self, game: Window) -> Result<()> {
-        let focused = self.connection.get_input_focus()?.reply()?.focus;
-        let ours = || shared::is_ours(&self.connection, self.atoms, focused);
-        if gives_keyboard_back(focused, game, self.root, ours)? {
-            self.connection
-                .set_input_focus(InputFocus::PARENT, game, x11rb::CURRENT_TIME)?
-                .check()?;
+        let focused = self.session.focused()?;
+        let ours = || self.session.is_ours(focused);
+        if gives_keyboard_back(focused, game, self.session.root(), ours)? {
+            self.session.set_focus(game)?;
             log::info!("The price-check hotkey gave the keyboard back to the game");
         }
         Ok(())
@@ -263,17 +251,17 @@ impl Keyboard {
 
     /// The active window, none when the desktop gives the focus to a window outside X11.
     fn active_window(&self) -> Result<Option<Window>> {
-        shared::active_window(&self.connection, self.root, self.atoms)
+        self.session.active_window()
     }
 
     /// Where `window` is on the screen, without its frame; none when it has no size.
     fn window_rect(&self, window: Window) -> Result<Option<ScreenRect>> {
-        let geometry = self.connection.get_geometry(window)?.reply()?;
+        let connection = self.session.connection();
+        let geometry = connection.get_geometry(window)?.reply()?;
         // The position of the geometry is in the frame of the desktop: the one on the screen
         // comes from the root window.
-        let origin = self
-            .connection
-            .translate_coordinates(window, self.root, 0, 0)?
+        let origin = connection
+            .translate_coordinates(window, self.session.root(), 0, 0)?
             .reply()?;
         let rect = ScreenRect {
             x: i32::from(origin.dst_x),
@@ -287,7 +275,8 @@ impl Keyboard {
     /// The class of `window` (`WM_CLASS`).
     fn window_class(&self, window: Window) -> Result<String> {
         let class = self
-            .connection
+            .session
+            .connection()
             .get_property(false, window, AtomEnum::WM_CLASS, AtomEnum::STRING, 0, 256)?
             .reply()?
             .value;
@@ -371,7 +360,7 @@ impl Server for Keyboard {
     }
 
     fn drop_events(&self) {
-        shared::drop_events(&self.connection);
+        self.session.drop_events();
     }
 
     fn layout(&self) -> Result<Layout> {
@@ -379,7 +368,7 @@ impl Server for Keyboard {
     }
 
     fn pointer(&self) -> Result<Pointer> {
-        let pointer = self.connection.query_pointer(self.root)?.reply()?;
+        let pointer = self.session.pointer()?;
         Ok(Pointer {
             position: Point {
                 x: i32::from(pointer.root_x),
@@ -390,7 +379,13 @@ impl Server for Keyboard {
     }
 
     fn keys_held(&self) -> Result<Vec<u8>> {
-        Ok(self.connection.query_keymap()?.reply()?.keys.to_vec())
+        Ok(self
+            .session
+            .connection()
+            .query_keymap()?
+            .reply()?
+            .keys
+            .to_vec())
     }
 
     fn game_in_front_again(&self) {
@@ -402,8 +397,9 @@ impl Server for Keyboard {
             Key::Down(keycode) => (xproto::KEY_PRESS_EVENT, keycode),
             Key::Up(keycode) => (xproto::KEY_RELEASE_EVENT, keycode),
         };
-        self.connection
-            .xtest_fake_input(event, keycode, delay_ms, self.root, 0, 0, 0)?
+        self.session
+            .connection()
+            .xtest_fake_input(event, keycode, delay_ms, self.session.root(), 0, 0, 0)?
             .check()?;
         Ok(())
     }

@@ -7,11 +7,9 @@
 //! window meanwhile (`_NET_ACTIVE_WINDOW`), and doesn't take the keyboard back, which a probe in
 //! the owner's game checked on 2026-11-01 (Bazzite KDE, windowed fullscreen).
 
-use x11rb::connection::Connection as _;
-use x11rb::protocol::xproto::{ConnectionExt as _, InputFocus, Window};
-use x11rb::rust_connection::RustConnection;
+use x11rb::protocol::xproto::{ConnectionExt as _, Window};
 
-use crate::x11::{self as shared, Atoms, Result};
+use crate::x11::{self as shared, Result, Session};
 
 /// The input focus of the X server, or a fake one in the tests.
 pub trait Focus {
@@ -171,60 +169,50 @@ fn gives_back(focused: Window, active: Option<Window>, held: Held, root: Window)
 
 /// The input focus of the X server.
 pub struct XFocus {
-    connection: RustConnection,
-    root: Window,
-    atoms: Atoms,
+    session: Session,
 }
 
 impl XFocus {
     fn connect() -> Result<Self> {
-        let (connection, screen) = x11rb::connect(None)?;
-        let root = connection.setup().roots[screen].root;
-        let atoms = Atoms::intern(&connection)?;
         Ok(Self {
-            connection,
-            root,
-            atoms,
+            session: Session::connect()?,
         })
     }
 }
 
 impl Focus for XFocus {
     fn ours_under_pointer(&mut self) -> Result<Option<Window>> {
-        shared::drop_events(&self.connection);
+        self.session.drop_events();
         // The window over the game is a child of the root window, without the frame of the
         // window manager.
-        let window = self.connection.query_pointer(self.root)?.reply()?.child;
+        let window = self.session.pointer()?.child;
         if window == x11rb::NONE
             || !self
-                .connection
+                .session
+                .connection()
                 .get_window_attributes(window)?
                 .reply()?
                 .override_redirect
         {
             return Ok(None);
         }
-        Ok(shared::is_ours(&self.connection, self.atoms, window)?.then_some(window))
+        Ok(self.session.is_ours(window)?.then_some(window))
     }
 
     fn active(&mut self) -> Result<Option<Window>> {
-        shared::active_window(&self.connection, self.root, self.atoms)
+        self.session.active_window()
     }
 
     fn focused(&mut self) -> Result<Window> {
-        Ok(self.connection.get_input_focus()?.reply()?.focus)
+        self.session.focused()
     }
 
     fn root(&self) -> Window {
-        self.root
+        self.session.root()
     }
 
     fn set_focus(&mut self, window: Window) -> Result<()> {
-        // Back to the root window if it hides, which `gives_back` recognizes.
-        self.connection
-            .set_input_focus(InputFocus::PARENT, window, x11rb::CURRENT_TIME)?
-            .check()?;
-        Ok(())
+        self.session.set_focus(window)
     }
 }
 
@@ -234,6 +222,7 @@ mod tests {
     use std::cell::RefCell;
     use std::rc::Rc;
     use std::sync::atomic::{AtomicUsize, Ordering};
+    use x11rb::protocol::xproto::InputFocus;
 
     const ROOT: Window = 0x410;
     const OVERLAY: Window = 0x3e0_000a;

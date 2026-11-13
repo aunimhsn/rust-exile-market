@@ -1,4 +1,5 @@
 use super::*;
+use x11rb::protocol::xproto::InputFocus;
 
 const ROOT: Window = 0x410;
 const GAME: Window = 0x660_0001;

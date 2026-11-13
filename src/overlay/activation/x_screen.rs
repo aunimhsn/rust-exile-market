@@ -5,13 +5,12 @@ use x11rb::connection::Connection as _;
 use x11rb::properties::{WmSizeHints, WmSizeHintsSpecification};
 use x11rb::protocol::xproto::{
     AtomEnum, ConfigureWindowAux, ConnectionExt as _, CreateWindowAux, EventMask,
-    GetWindowAttributesReply, GrabMode, GrabStatus, InputFocus, KeyButMask, MapState, PropMode,
-    Window, WindowClass,
+    GetWindowAttributesReply, GrabMode, GrabStatus, KeyButMask, MapState, PropMode, Window,
+    WindowClass,
 };
-use x11rb::rust_connection::RustConnection;
 use x11rb::wrapper::ConnectionExt as _;
 
-use crate::x11::{self as shared, Atoms, Result, unless_gone};
+use crate::x11::{self as shared, Result, Session, unless_gone};
 
 use super::Screen;
 
@@ -39,9 +38,7 @@ fn may_hold_the_pointer(class: WindowClass, override_redirect: bool, map_state: 
 
 /// The desktop on the X server.
 pub struct XScreen {
-    connection: RustConnection,
-    root: Window,
-    atoms: Atoms,
+    session: Session,
     /// The helper, created when it is first shown.
     helper: Option<Window>,
 }
@@ -50,13 +47,8 @@ impl XScreen {
     /// Connects to the X server, with its root window and the atoms of the application; the
     /// helper is created only when it is first shown.
     pub(super) fn connect() -> Result<Self> {
-        let (connection, screen) = x11rb::connect(None)?;
-        let root = connection.setup().roots[screen].root;
-        let atoms = Atoms::intern(&connection)?;
         Ok(Self {
-            connection,
-            root,
-            atoms,
+            session: Session::connect()?,
             helper: None,
         })
     }
@@ -67,15 +59,13 @@ impl XScreen {
         if let Some(helper) = self.helper {
             return Ok(helper);
         }
-        let connection = &self.connection;
-        let intern =
-            |name: &[u8]| -> Result<_> { Ok(connection.intern_atom(false, name)?.reply()?.atom) };
+        let connection = self.session.connection();
         let helper = connection.generate_id()?;
         connection
             .create_window(
                 x11rb::COPY_DEPTH_FROM_PARENT,
                 helper,
-                self.root,
+                self.session.root(),
                 0,
                 0,
                 1,
@@ -103,39 +93,39 @@ impl XScreen {
         connection.change_property32(
             PropMode::REPLACE,
             helper,
-            self.atoms.pid,
+            self.session.atoms().pid,
             AtomEnum::CARDINAL,
             &[std::process::id()],
         )?;
         // Neither functions nor decorations (the flags say both are given, then none): Alt+F4
         // while the helper is the active window can't close it, which `KWin` would do by killing
         // the client of a window that can't be asked to close.
-        let motif = intern(b"_MOTIF_WM_HINTS")?;
+        let motif = self.session.intern(b"_MOTIF_WM_HINTS")?;
         connection.change_property32(PropMode::REPLACE, helper, motif, motif, &[3, 0, 0, 0, 0])?;
         // Asked to close all the same, it is asked rather than killed (the event is dropped).
         connection.change_property32(
             PropMode::REPLACE,
             helper,
-            intern(b"WM_PROTOCOLS")?,
+            self.session.intern(b"WM_PROTOCOLS")?,
             AtomEnum::ATOM,
-            &[intern(b"WM_DELETE_WINDOW")?],
+            &[self.session.intern(b"WM_DELETE_WINDOW")?],
         )?;
         // Its pixel never shows, wherever the window over the game moves above it.
         connection.change_property32(
             PropMode::REPLACE,
             helper,
-            intern(b"_NET_WM_WINDOW_OPACITY")?,
+            self.session.intern(b"_NET_WM_WINDOW_OPACITY")?,
             AtomEnum::CARDINAL,
             &[0],
         )?;
         let skip = [
-            intern(b"_NET_WM_STATE_SKIP_TASKBAR")?,
-            intern(b"_NET_WM_STATE_SKIP_PAGER")?,
+            self.session.intern(b"_NET_WM_STATE_SKIP_TASKBAR")?,
+            self.session.intern(b"_NET_WM_STATE_SKIP_PAGER")?,
         ];
         connection.change_property32(
             PropMode::REPLACE,
             helper,
-            intern(b"_NET_WM_STATE")?,
+            self.session.intern(b"_NET_WM_STATE")?,
             AtomEnum::ATOM,
             &skip,
         )?;
@@ -146,11 +136,15 @@ impl XScreen {
     /// The children of the root window from the bottom, with their attributes, asked for all at
     /// once; a window gone meanwhile is left out.
     fn children(&self) -> Result<Vec<(Window, GetWindowAttributesReply)>> {
-        shared::drop_events(&self.connection);
-        let children = self.connection.query_tree(self.root)?.reply()?.children;
+        self.session.drop_events();
+        let connection = self.session.connection();
+        let children = connection
+            .query_tree(self.session.root())?
+            .reply()?
+            .children;
         let cookies = children
             .into_iter()
-            .map(|window| Ok((window, self.connection.get_window_attributes(window)?)))
+            .map(|window| Ok((window, connection.get_window_attributes(window)?)))
             .collect::<Result<Vec<_>>>()?;
         let mut attributes = Vec::with_capacity(cookies.len());
         for (window, cookie) in cookies {
@@ -165,10 +159,11 @@ impl XScreen {
     /// manager that frames the windows (an X11 session); none once it is gone.
     fn top_level(&self, mut window: Window) -> Result<Option<Window>> {
         loop {
-            let Some(tree) = unless_gone(self.connection.query_tree(window)?.reply())? else {
+            let Some(tree) = unless_gone(self.session.connection().query_tree(window)?.reply())?
+            else {
                 return Ok(None);
             };
-            if tree.parent == self.root || tree.parent == x11rb::NONE {
+            if tree.parent == self.session.root() || tree.parent == x11rb::NONE {
                 return Ok(Some(window));
             }
             window = tree.parent;
@@ -183,15 +178,16 @@ impl Screen for XScreen {
             | KeyButMask::BUTTON3
             | KeyButMask::BUTTON4
             | KeyButMask::BUTTON5;
-        let pointer = self.connection.query_pointer(self.root)?.reply()?;
+        let pointer = self.session.pointer()?;
         if u16::from(pointer.mask) & u16::from(buttons) != 0 {
             return Ok(false);
         }
         let status = self
-            .connection
+            .session
+            .connection()
             .grab_pointer(
                 false,
-                self.root,
+                self.session.root(),
                 EventMask::NO_EVENT,
                 GrabMode::ASYNC,
                 GrabMode::ASYNC,
@@ -202,7 +198,8 @@ impl Screen for XScreen {
             .reply()?
             .status;
         if status == GrabStatus::SUCCESS {
-            self.connection
+            self.session
+                .connection()
                 .ungrab_pointer(x11rb::CURRENT_TIME)?
                 .check()?;
         }
@@ -218,7 +215,11 @@ impl Screen for XScreen {
         // each time, since the size kept from the connection was wrong after a change of
         // resolution or a screen unplugged, and the pointer held never seen again on a
         // smaller screen.
-        let screen = self.connection.get_geometry(self.root)?.reply()?;
+        let screen = self
+            .session
+            .connection()
+            .get_geometry(self.session.root())?
+            .reply()?;
         let screen = (screen.width, screen.height);
         for &(window, ref attributes) in above(&children, game) {
             if !may_hold_the_pointer(
@@ -228,7 +229,9 @@ impl Screen for XScreen {
             ) {
                 continue;
             }
-            let Some(geometry) = unless_gone(self.connection.get_geometry(window)?.reply())? else {
+            let Some(geometry) =
+                unless_gone(self.session.connection().get_geometry(window)?.reply())?
+            else {
                 continue;
             };
             let covers = covers_screen(
@@ -237,9 +240,7 @@ impl Screen for XScreen {
                 screen,
             );
             // Gone meanwhile, it isn't that window either.
-            if covers
-                && shared::ours_unless_gone(&self.connection, self.atoms, window)? == Some(false)
-            {
+            if covers && self.session.ours_unless_gone(window)? == Some(false) {
                 return Ok(true);
             }
         }
@@ -251,7 +252,7 @@ impl Screen for XScreen {
         for (window, attributes) in self.children()?.into_iter().rev() {
             if attributes.override_redirect
                 && attributes.map_state == MapState::VIEWABLE
-                && shared::is_ours(&self.connection, self.atoms, window)?
+                && self.session.is_ours(window)?
             {
                 return Ok(Some(window));
             }
@@ -260,16 +261,17 @@ impl Screen for XScreen {
     }
 
     fn active(&mut self) -> Result<Option<Window>> {
-        shared::active_window(&self.connection, self.root, self.atoms)
+        self.session.active_window()
     }
 
     fn game_behind(&mut self, window: Window) -> Result<Option<Window>> {
-        shared::game_behind(&self.connection, self.atoms, window)
+        self.session.game_behind(window)
     }
 
     fn show_helper(&mut self, overlay: Window, game: Window) -> Result<Window> {
         let helper = self.create_helper()?;
-        let geometry = self.connection.get_geometry(overlay)?.reply()?;
+        let connection = self.session.connection();
+        let geometry = connection.get_geometry(overlay)?.reply()?;
         // Its first pixel under the window over the game, where the player asked for it, so that
         // the desktop doesn't place it elsewhere.
         let mut hints = WmSizeHints::new();
@@ -278,31 +280,31 @@ impl Screen for XScreen {
             i32::from(geometry.x),
             i32::from(geometry.y),
         ));
-        hints.set_normal_hints(&self.connection, helper)?;
-        self.connection.configure_window(
+        hints.set_normal_hints(connection, helper)?;
+        connection.configure_window(
             helper,
             &ConfigureWindowAux::new()
                 .x(i32::from(geometry.x))
                 .y(i32::from(geometry.y)),
         )?;
-        self.connection.change_property32(
+        connection.change_property32(
             PropMode::REPLACE,
             helper,
-            self.atoms.game_behind,
+            self.session.atoms().game_behind,
             AtomEnum::WINDOW,
             &[game],
         )?;
         // A window of the game for the desktop, like its dialogs: `KWin` keeps a fullscreen
         // window above the taskbar while the active window is one of its own, which a fullscreen
         // game no longer active would fall behind.
-        self.connection.change_property32(
+        connection.change_property32(
             PropMode::REPLACE,
             helper,
             AtomEnum::WM_TRANSIENT_FOR,
             AtomEnum::WINDOW,
             &[game],
         )?;
-        self.connection.map_window(helper)?.check()?;
+        connection.map_window(helper)?.check()?;
         Ok(helper)
     }
 
@@ -310,23 +312,20 @@ impl Screen for XScreen {
         let Some(helper) = self.helper else {
             return Ok(());
         };
-        self.connection.unmap_window(helper)?.check()?;
-        self.connection
-            .delete_property(helper, self.atoms.game_behind)?
+        let connection = self.session.connection();
+        connection.unmap_window(helper)?.check()?;
+        connection
+            .delete_property(helper, self.session.atoms().game_behind)?
             .check()?;
         Ok(())
     }
 
     fn activate(&mut self, window: Window) -> Result<()> {
-        shared::activate(&self.connection, self.root, self.atoms, window)
+        self.session.activate(window)
     }
 
     fn set_focus(&mut self, window: Window) -> Result<()> {
-        // Back to the root window if it hides.
-        self.connection
-            .set_input_focus(InputFocus::PARENT, window, x11rb::CURRENT_TIME)?
-            .check()?;
-        Ok(())
+        self.session.set_focus(window)
     }
 }
 
