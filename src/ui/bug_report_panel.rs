@@ -10,7 +10,7 @@ use egui::{
 
 use super::theme::{color, size, text};
 use super::widgets::{self, Mark, Pill};
-use crate::bug_report::{Level, LogLine, LogSession, Report};
+use crate::bug_report::{AroundAnotherWindow, Level, LogLine, LogSession, Report};
 use crate::i18n::{Message, Translator};
 
 /// The space above and under the preview, as in the settings.
@@ -283,28 +283,19 @@ fn report_box(ui: &mut Ui, content: impl FnOnce(&mut Ui)) {
 fn log_job(lines: &[LogLine]) -> LayoutJob {
     let mut job = LayoutJob::default();
     for (index, line) in lines.iter().enumerate() {
-        let tint = if line.level == Some(Level::Error) {
+        let tint = if line.level() == Some(Level::Error) {
             color::WARNING
         } else {
             color::WEAK
         };
         let format = TextFormat::simple(text::report(), tint);
-        let text = if index + 1 < lines.len() {
-            format!("{}\n", line.text)
-        } else {
-            line.text.clone()
-        };
-        // The range comes from another module: off the text or inside a character, the line
-        // is drawn whole rather than closing the panel of the bug report with a panic.
-        let parts = line.hidden.as_ref().and_then(|hidden| {
-            Some((
-                text.get(..hidden.start)?,
-                text.get(hidden.clone())?,
-                text.get(hidden.end..)?,
-            ))
-        });
-        match parts {
-            Some((before, hidden, after)) => {
+        let line_break = if index + 1 < lines.len() { "\n" } else { "" };
+        match line.around_another_window() {
+            Some(AroundAnotherWindow {
+                before,
+                hidden,
+                after,
+            }) => {
                 job.append(before, 0.0, format.clone());
                 job.append(
                     hidden,
@@ -314,9 +305,9 @@ fn log_job(lines: &[LogLine]) -> LayoutJob {
                         ..TextFormat::simple(text::report(), color::FAINT)
                     },
                 );
-                job.append(after, 0.0, format);
+                job.append(&format!("{after}{line_break}"), 0.0, format);
             }
-            None => job.append(&text, 0.0, format),
+            None => job.append(&format!("{}{line_break}", line.text()), 0.0, format),
         }
     }
     job
@@ -325,7 +316,7 @@ fn log_job(lines: &[LogLine]) -> LayoutJob {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::bug_report::ANOTHER_WINDOW;
+    use crate::bug_report::{ANOTHER_WINDOW, short_lines};
 
     /// `label` laid out on one line past `width`: its text drawn, and whether it is cut.
     fn laid_out(label: &str, width: f32) -> (String, bool) {
@@ -359,21 +350,15 @@ mod tests {
 
     #[test]
     fn another_window_is_drawn_apart_and_an_error_in_the_color_of_the_warnings() {
+        let lines = short_lines(
+            "2026-11-04T18:51:09.7+01:00 [INFO] The active window, of class steam, isn't the \
+             game\n\
+             2026-11-04T21:02:40.5+01:00 [ERROR] Panic in the main thread",
+            None,
+        );
         let text =
             format!("18:51:09 INFO The active window, of class {ANOTHER_WINDOW}, isn't the game");
-        let start = text.find(ANOTHER_WINDOW).expect("hidden");
-        let lines = [
-            LogLine {
-                text: text.clone(),
-                level: Some(Level::Info),
-                hidden: Some(start..start + ANOTHER_WINDOW.len()),
-            },
-            LogLine {
-                text: "21:02:40 ERROR Panic in the main thread".to_owned(),
-                level: Some(Level::Error),
-                hidden: None,
-            },
-        ];
+
         let job = log_job(&lines);
 
         assert_eq!(
@@ -388,25 +373,5 @@ mod tests {
         assert!(hidden.format.italics);
         assert_eq!(hidden.format.color, color::FAINT);
         assert_eq!(job.sections[3].format.color, color::WARNING);
-    }
-
-    /// The interface review of 2026-11-10: the range is computed in another module, and
-    /// slicing with it could close the panel of the bug report with a panic.
-    #[test]
-    fn a_hidden_range_that_doesnt_fit_its_line_draws_the_line_whole() {
-        let text = "18:51:09 INFO Fenêtre active";
-        let accent = text.find('ê').expect("an accent");
-        for hidden in [accent + 1..accent + 3, 5..500, 500..600] {
-            let lines = [LogLine {
-                text: text.to_owned(),
-                level: Some(Level::Info),
-                hidden: Some(hidden),
-            }];
-
-            let job = log_job(&lines);
-
-            assert_eq!(job.text, text);
-            assert_eq!(job.sections.len(), 1);
-        }
     }
 }

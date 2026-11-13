@@ -14,12 +14,15 @@ fn facts(league: Option<&League>) -> Facts<'_> {
     }
 }
 
+/// The line of the log written short as `text`, `18:48:03 INFO …`.
 fn line(text: &str) -> LogLine {
-    LogLine {
-        text: text.to_owned(),
-        level: Some(Level::Info),
-        hidden: None,
-    }
+    let (time, rest) = text.split_once(' ').expect("a time");
+    let (level, message) = rest.split_once(' ').expect("a level");
+    let stamped = format!("2026-11-04T{time}.0+01:00 [{level}] {message}");
+    let [line] = &short_lines(&stamped, None)[..] else {
+        panic!("one line: {text}");
+    };
+    line.clone()
 }
 
 /// `count` lines of the log, numbered, of about 60 characters each once encoded.
@@ -136,7 +139,7 @@ fn the_address_keeps_the_last_lines_of_the_log_that_fit() {
     assert_eq!(
         decoded,
         sent.iter()
-            .map(|line| line.text.as_str())
+            .map(LogLine::text)
             .collect::<Vec<_>>()
             .join("\n"),
         "the preview shows exactly the lines sent"
@@ -178,6 +181,36 @@ fn an_item_too_long_for_the_address_keeps_its_first_lines() {
     );
     assert_eq!(report.log_sent().map(<[LogLine]>::len), Some(0));
     assert_eq!(field(report.address(), "log"), None);
+}
+
+#[test]
+fn an_item_that_starts_with_an_empty_line_keeps_whole_lines() {
+    let item = "\nRarity: Unique\nHeadhunter";
+    let kept = "\nRarity: Unique";
+
+    assert_eq!(fitting_item(item, encoded_len(kept) + 1), kept);
+    assert_eq!(fitting_item(item, encoded_len(kept)), kept, "just fitting");
+    assert_eq!(
+        fitting_item("\n\nHeadhunter\nX", encoded_len("\n\nHeadhunter")),
+        "\n\nHeadhunter"
+    );
+    assert_eq!(fitting_item(item, 0), "");
+}
+
+#[test]
+fn the_last_lines_of_the_log_that_fit_are_sent() {
+    let log = [line("18:48:03 INFO a"), line("18:48:04 INFO b")];
+    let last = encoded_len(log[1].text());
+    let both = encoded_len(log[0].text()) + ENCODED_LINE_BREAK + last;
+
+    assert_eq!(first_line_that_fits(&log, both), 0, "just fitting");
+    assert_eq!(first_line_that_fits(&log, both - 1), 1);
+    assert_eq!(
+        first_line_that_fits(&log, last - 1),
+        2,
+        "not even the last one"
+    );
+    assert_eq!(first_line_that_fits(&[], 100), 0);
 }
 
 #[test]
@@ -345,7 +378,7 @@ fn without_a_log_nothing_is_copied() {
 #[test]
 fn an_empty_previous_log_offers_no_choice() {
     let mut report = Report::new("Exile Market 0.1.0".to_owned(), None, Some(log(3)))
-        .with_previous(vec![line(""), line("  ")], true);
+        .with_previous(short_lines("\n  ", None), true);
     report.choose(LogSession::Previous);
 
     assert!(!report.has_previous());
@@ -384,4 +417,37 @@ fn the_log_writes_the_windows_as_the_bug_report_reads_them() {
             "every class written is read"
         );
     }
+}
+
+#[test]
+fn a_log_that_fits_its_budget_is_read_whole() {
+    let log = "line 1\nline 2\n";
+
+    assert_eq!(
+        read_end(io::Cursor::new(log), 14).expect("read"),
+        "line 1\nline 2\n"
+    );
+    assert_eq!(read_end(io::Cursor::new(""), 14).expect("read"), "");
+}
+
+#[test]
+fn a_longer_log_keeps_its_last_whole_lines() {
+    let log = "aaa\nbbb\nccc\n";
+
+    // From a line break: the line after it is whole.
+    assert_eq!(
+        read_end(io::Cursor::new(log), 8).expect("read"),
+        "bbb\nccc\n"
+    );
+    // Inside a line: the line cut is left out.
+    assert_eq!(read_end(io::Cursor::new(log), 7).expect("read"), "ccc\n");
+    assert_eq!(read_end(io::Cursor::new(log), 2).expect("read"), "");
+}
+
+#[test]
+fn a_character_cut_by_the_budget_is_left_out_with_its_line() {
+    let log = "été\nok";
+
+    // Its last byte alone is read: the line break and what follows it fit.
+    assert_eq!(read_end(io::Cursor::new(log), 3).expect("read"), "ok");
 }

@@ -11,16 +11,16 @@ mod short_log;
 mod system;
 
 use std::fmt::Write as _;
-use std::fs;
-use std::io;
+use std::fs::File;
+use std::io::{self, Read, Seek, SeekFrom};
 use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use directories::BaseDirs;
 
 #[cfg(test)]
-pub use self::short_log::ANOTHER_WINDOW;
-pub use self::short_log::{Level, LogLine};
+pub use self::short_log::{ANOTHER_WINDOW, short_lines};
+pub use self::short_log::{AroundAnotherWindow, Level, LogLine};
 use crate::language::Language;
 use crate::league::{League, LeagueMode};
 use crate::settings::HotkeySetting;
@@ -38,6 +38,11 @@ const ADDRESS_BUDGET: usize = 6_000;
 static OPENINGS: AtomicU64 = AtomicU64::new(0);
 /// A line break, encoded, between two lines of the log.
 const ENCODED_LINE_BREAK: usize = "%0A".len();
+/// The most of a log file the report reads, its end, read on the thread of the interface at the
+/// click: "Copy the log" copies it whole, to paste into an issue, whose text GitHub limits to
+/// 65,536 characters (as known, not measured yet: 17f). A session of play logs a few kilobytes (3
+/// and 5 KB, the owner's last two on 2026-11-09), so a log reaches it only in a long session.
+const LOG_BUDGET_BYTES: u64 = 60_000;
 
 /// What the application knows, for the summary of the report.
 #[derive(Debug, Clone)]
@@ -98,7 +103,7 @@ struct Sent {
     address: String,
     /// Whether it holds the item, or its first lines: none fit when the summary takes the whole
     /// budget.
-    item: bool,
+    holds_item: bool,
     /// The first line of the log sent, the lines after it sent too.
     first_line: usize,
 }
@@ -141,6 +146,8 @@ impl Report {
         }
     }
 
+    /// The report of `summary`, `item` and `log`, the log of this session, without the log of the
+    /// previous one; the item joined by default.
     fn new(summary: String, item: Option<JoinedItem>, log: Option<Vec<LogLine>>) -> Self {
         let sent = sent(
             &summary,
@@ -165,7 +172,7 @@ impl Report {
     /// The report with the log of the previous session, `lines`, chosen at once when that session
     /// `crashed`; a session stopped before its first line has nothing to show, nor to choose.
     fn with_previous(mut self, lines: Vec<LogLine>, crashed: bool) -> Self {
-        if lines.iter().all(|line| line.text.trim().is_empty()) {
+        if lines.iter().all(|line| line.text().trim().is_empty()) {
             return self;
         }
         self.previous_log = Some(lines);
@@ -196,7 +203,7 @@ impl Report {
     /// Whether the address holds the item, or its first lines.
     #[must_use]
     pub fn sends_item(&self) -> bool {
-        self.sent.item
+        self.sent.holds_item
     }
 
     /// Which opening of the bug report it is.
@@ -277,16 +284,7 @@ impl Report {
     /// log"; none when it can't be read.
     #[must_use]
     pub fn whole_log(&self) -> Option<String> {
-        self.log().map(|log| {
-            let mut whole = String::with_capacity(log.iter().map(|line| line.text.len() + 1).sum());
-            for (index, line) in log.iter().enumerate() {
-                if index > 0 {
-                    whole.push('\n');
-                }
-                whole.push_str(&line.text);
-            }
-            whole
-        })
+        self.log().map(log_text)
     }
 
     /// Whether the player copied the log of the session chosen: "✓ Copied" until the preview
@@ -322,10 +320,40 @@ impl Report {
     }
 }
 
-/// The text of the log file at `path`; a character cut in the middle (a log written while the
-/// application stopped) stays readable.
+/// The text of the log file at `path`, its last [`LOG_BUDGET_BYTES`].
 fn read_log(path: &Path) -> io::Result<String> {
-    fs::read(path).map(|log| String::from_utf8_lossy(&log).into_owned())
+    read_end(File::open(path)?, LOG_BUDGET_BYTES)
+}
+
+/// The end of `log` that fits in `budget` bytes, from the start of a line: a longer log loses its
+/// first lines whole. A character cut in the middle (a log written while the application stopped)
+/// stays readable.
+fn read_end(mut log: impl Read + Seek, budget: u64) -> io::Result<String> {
+    let length = log.seek(SeekFrom::End(0))?;
+    let is_cut = length > budget;
+    // A cut log is read from one byte earlier: when that byte ends a line, the first line read
+    // is whole and kept.
+    let start = if is_cut { length - budget - 1 } else { 0 };
+    log.seek(SeekFrom::Start(start))?;
+    let mut bytes = Vec::new();
+    // `take`: the log of this session may grow while it is read; what was measured is read.
+    log.take(length - start).read_to_end(&mut bytes)?;
+    let text = String::from_utf8_lossy(&bytes);
+    Ok(if is_cut {
+        text.split_once('\n')
+            .map_or_else(String::new, |(_, rest)| rest.to_owned())
+    } else {
+        text.into_owned()
+    })
+}
+
+/// The text of the log of `lines`, as copied and sent: their texts, joined by line breaks.
+fn log_text(lines: &[LogLine]) -> String {
+    lines
+        .iter()
+        .map(LogLine::text)
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 /// The summary of the report: the version, the system (`system`), the languages, the league and
@@ -383,44 +411,48 @@ fn language_name(language: Language) -> &'static str {
 /// lines that fit.
 fn sent(summary: &str, item: Option<&str>, log: &[LogLine], budget: usize) -> Sent {
     let mut address = format!("{FORM}&report={}", encode(summary));
-    let mut item_sent = false;
+    let mut is_item_sent = false;
     if let Some(item) = item {
         let room = budget.saturating_sub(address.len() + "&item=".len());
         let item = fitting_item(item, room);
         if !item.is_empty() {
             address.push_str("&item=");
             address.push_str(&encode(item));
-            item_sent = true;
+            is_item_sent = true;
         }
     }
-    let mut room = budget.saturating_sub(address.len() + "&log=".len());
+    let room = budget.saturating_sub(address.len() + "&log=".len());
+    let first_line = first_line_that_fits(log, room);
+    if first_line < log.len() {
+        address.push_str("&log=");
+        address.push_str(&encode(&log_text(&log[first_line..])));
+    }
+    Sent {
+        address,
+        holds_item: is_item_sent,
+        first_line,
+    }
+}
+
+/// The first of the last lines of `log` that fit in `room` encoded characters, the lines after
+/// it fitting too; `log.len()` when not even the last one fits.
+fn first_line_that_fits(log: &[LogLine], mut room: usize) -> usize {
     let mut first_line = log.len();
     for (index, line) in log.iter().enumerate().rev() {
-        let cost = encoded_len(&line.text)
-            + if first_line == log.len() {
-                0
-            } else {
-                ENCODED_LINE_BREAK
-            };
+        // With the line break before the line after it, already counted.
+        let line_break = if index + 1 < log.len() {
+            ENCODED_LINE_BREAK
+        } else {
+            0
+        };
+        let cost = encoded_len(line.text()) + line_break;
         if cost > room {
             break;
         }
         room -= cost;
         first_line = index;
     }
-    if first_line < log.len() {
-        let lines: Vec<&str> = log[first_line..]
-            .iter()
-            .map(|line| line.text.as_str())
-            .collect();
-        address.push_str("&log=");
-        address.push_str(&encode(&lines.join("\n")));
-    }
-    Sent {
-        address,
-        item: item_sent,
-        first_line,
-    }
+    first_line
 }
 
 /// The first lines of `item` that fit in `room` encoded characters; all of it when it fits.
@@ -429,25 +461,20 @@ fn fitting_item(item: &str, room: usize) -> &str {
         return item;
     }
     log::warn!("The item is too long for the address of the bug report: its first lines only");
+    // The end of the lines that fit, their encoded length, and the start of the next line.
     let mut end = 0;
-    let mut length = 0;
-    for line in item.split_inclusive('\n') {
-        // Without its line break, which goes only between two lines.
-        let text = line.strip_suffix('\n').unwrap_or(line);
-        let cost = if end == 0 {
-            encoded_len(text)
-        } else {
-            ENCODED_LINE_BREAK + encoded_len(text)
-        };
-        if length + cost > room {
+    let mut encoded_length = 0;
+    let mut line_start = 0;
+    for (index, line) in item.split('\n').enumerate() {
+        // With the line break before it, which goes only between two lines.
+        let line_break = if index == 0 { 0 } else { ENCODED_LINE_BREAK };
+        let cost = line_break + encoded_len(line);
+        if encoded_length + cost > room {
             break;
         }
-        length += cost;
-        end = if end == 0 {
-            text.len()
-        } else {
-            end + 1 + text.len()
-        };
+        encoded_length += cost;
+        end = line_start + line.len();
+        line_start = end + 1;
     }
     &item[..end]
 }
@@ -463,6 +490,7 @@ enum Written {
     Escaped,
 }
 
+/// How `byte` is written in the query of an address.
 fn written(byte: u8) -> Written {
     match byte {
         b' ' => Written::Plus,

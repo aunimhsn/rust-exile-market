@@ -10,11 +10,11 @@ use crate::hotkey::GAME_CLASS;
 /// What the log writes before the name of a window (`The active window, of class steam, isn't
 /// the game`, `Copy sent … to the window of class steam_app_2694490 (Ctrl …)`).
 const CLASS: &str = "of class ";
-/// What may follow the name of a window, which may hold spaces itself (`steam
-/// (steamwebhelper)`).
-const AFTER_CLASS: [&str; 3] = [", isn't the game", ", is the game", " (Ctrl "];
 /// What follows the name of the window taken for the game on Windows, told by its title.
 const IS_THE_GAME: &str = ", is the game";
+/// What may follow the name of a window, which may hold spaces itself (`steam
+/// (steamwebhelper)`).
+const AFTER_CLASS: [&str; 3] = [", isn't the game", IS_THE_GAME, " (Ctrl "];
 /// Written in place of the name of another window.
 pub const ANOTHER_WINDOW: &str = "another window";
 
@@ -29,6 +29,7 @@ pub enum Level {
 }
 
 impl Level {
+    /// The level written `word` in a line of the log; none for another word.
     fn read(word: &str) -> Option<Self> {
         Some(match word {
             "ERROR" => Self::Error,
@@ -40,6 +41,7 @@ impl Level {
         })
     }
 
+    /// The word that writes the level in a line of the log.
     fn word(self) -> &'static str {
         match self {
             Self::Error => "ERROR",
@@ -51,17 +53,53 @@ impl Level {
     }
 }
 
-/// A line of the log written short.
+/// A line of the log written short, built by [`short_lines`] alone, which holds the invariant of
+/// `hidden`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LogLine {
+    text: String,
+    level: Option<Level>,
+    /// Where "another window" stands in `text`: in its bounds and on character boundaries,
+    /// since it is the range [`without_other_window`] wrote it in.
+    hidden: Option<Range<usize>>,
+}
+
+/// A line of the log around "another window", to draw it apart.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AroundAnotherWindow<'a> {
+    pub before: &'a str,
+    /// "another window".
+    pub hidden: &'a str,
+    pub after: &'a str,
+}
+
+impl LogLine {
     /// `18:48:03 INFO Item copied: Item Class: Belts`; a line of a message on several lines as
     /// it is.
-    pub text: String,
+    #[must_use]
+    pub fn text(&self) -> &str {
+        &self.text
+    }
+
     /// The level of its message; a line of a message on several lines has the level of its
     /// first line.
-    pub level: Option<Level>,
-    /// Where "another window" stands in `text`, to draw it apart.
-    pub hidden: Option<Range<usize>>,
+    #[must_use]
+    pub fn level(&self) -> Option<Level> {
+        self.level
+    }
+
+    /// The line around "another window"; none when it names no other window.
+    #[must_use]
+    pub fn around_another_window(&self) -> Option<AroundAnotherWindow<'_>> {
+        let hidden = self.hidden.as_ref()?;
+        // `get` rather than an index: a broken invariant draws the line whole, never closes
+        // the panel of the bug report with a panic.
+        Some(AroundAnotherWindow {
+            before: self.text.get(..hidden.start)?,
+            hidden: self.text.get(hidden.clone())?,
+            after: self.text.get(hidden.end..)?,
+        })
+    }
 }
 
 /// The lines of `log`, the text of a log file, written short; `home`, the home folder, written
@@ -75,10 +113,10 @@ pub fn short_lines(log: &str, home: Option<&str>) -> Vec<LogLine> {
     for line in log.lines() {
         let line = without_home(line, home);
         let text = match stamped(&line) {
-            Some((time, read, message)) => {
-                level = read;
-                match read {
-                    Some(read) => format!("{time} {} {message}", read.word()),
+            Some((time, stamped_level, message)) => {
+                level = stamped_level;
+                match stamped_level {
+                    Some(stamped_level) => format!("{time} {} {message}", stamped_level.word()),
                     None => format!("{time} {message}"),
                 }
             }
@@ -113,31 +151,33 @@ fn game_classes(log: &str) -> HashSet<&str> {
     let mut games: HashSet<&str> = log
         .lines()
         .filter_map(|line| {
-            let (class, after) = class_in(line)?;
-            line[after..].starts_with(IS_THE_GAME).then(|| &line[class])
+            let class = class_in(line)?;
+            line[class.end..]
+                .starts_with(IS_THE_GAME)
+                .then(|| &line[class])
         })
         .collect();
     games.insert(GAME_CLASS);
     games
 }
 
-/// Where the name of a window stands in `line`, and where what follows it starts; to the end of
-/// the line when nothing known follows it. What follows it is looked for from the end of the
+/// Where the name of a window stands in `line`; to the end of the line when nothing known follows
+/// it. What follows it is looked for from the end of the
 /// line: a window named `x, is the game` isn't taken for the game, and its whole name is hidden.
-fn class_in(line: &str) -> Option<(Range<usize>, usize)> {
+fn class_in(line: &str) -> Option<Range<usize>> {
     let start = line.find(CLASS)? + CLASS.len();
     let end = AFTER_CLASS
         .iter()
         .filter_map(|after| line[start..].rfind(after))
         .max()
         .map_or(line.len(), |end| start + end);
-    Some((start..end, end))
+    Some(start..end)
 }
 
 /// `line` with "another window" in place of the name of a window that isn't the game, and where
 /// it stands.
 fn without_other_window(mut line: String, games: &HashSet<&str>) -> (String, Option<Range<usize>>) {
-    let Some((class, _)) = class_in(&line) else {
+    let Some(class) = class_in(&line) else {
         return (line, None);
     };
     if games.contains(&line[class.clone()]) {
@@ -257,8 +297,85 @@ mod tests {
             lines[0].text,
             "18:51:09 INFO The active window, of class another window, isn't the game"
         );
-        let hidden = lines[0].hidden.clone().expect("hidden");
-        assert_eq!(&lines[0].text[hidden], ANOTHER_WINDOW);
+        assert_eq!(
+            lines[0].around_another_window(),
+            Some(AroundAnotherWindow {
+                before: "18:51:09 INFO The active window, of class ",
+                hidden: ANOTHER_WINDOW,
+                after: ", isn't the game",
+            })
+        );
+    }
+
+    /// The interface review of 2026-11-10: the range is computed here and drawn by the panel.
+    #[test]
+    fn another_window_is_cut_out_whole_among_characters_of_several_bytes() {
+        let log = "2026-11-04T18:51:09.7+01:00 [INFO] Fenêtre active, of class épée (été), \
+                   isn't the game\n\
+                   2026-11-04T18:51:10.0+01:00 [INFO] Copié to the window of class 日本 (Ctrl \
+                   still held)\n\
+                   2026-11-04T18:51:11.0+01:00 [INFO] Something of class ü";
+
+        let lines = short_lines(log, None);
+
+        assert_eq!(
+            lines
+                .iter()
+                .map(LogLine::around_another_window)
+                .collect::<Vec<_>>(),
+            [
+                Some(AroundAnotherWindow {
+                    before: "18:51:09 INFO Fenêtre active, of class ",
+                    hidden: ANOTHER_WINDOW,
+                    after: ", isn't the game",
+                }),
+                Some(AroundAnotherWindow {
+                    before: "18:51:10 INFO Copié to the window of class ",
+                    hidden: ANOTHER_WINDOW,
+                    after: " (Ctrl still held)",
+                }),
+                Some(AroundAnotherWindow {
+                    before: "18:51:11 INFO Something of class ",
+                    hidden: ANOTHER_WINDOW,
+                    after: "",
+                }),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_line_that_names_no_other_window_has_nothing_around_it() {
+        let lines = short_lines(
+            "2026-11-04T18:48:03.0+01:00 [INFO] Prices loaded\n\
+             2026-11-04T18:48:04.0+01:00 [INFO] Copy sent to the window of class \
+             steam_app_2694490 (Ctrl still held)",
+            None,
+        );
+
+        assert_eq!(
+            lines
+                .iter()
+                .map(LogLine::around_another_window)
+                .collect::<Vec<_>>(),
+            [None, None]
+        );
+    }
+
+    /// The interface review of 2026-11-10: a broken range draws the line whole, rather than
+    /// closing the panel of the bug report with a panic.
+    #[test]
+    fn a_range_that_doesnt_fit_its_line_has_nothing_around_it() {
+        let text = "18:51:09 INFO Fenêtre active";
+        let accent = text.find('ê').expect("an accent");
+        for hidden in [accent + 1..accent + 3, 5..500, 500..600] {
+            let line = LogLine {
+                text: text.to_owned(),
+                level: Some(Level::Info),
+                hidden: Some(hidden),
+            };
+
+            assert_eq!(line.around_another_window(), None);
+        }
     }
 
     #[test]
