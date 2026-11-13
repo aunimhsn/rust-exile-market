@@ -400,7 +400,7 @@ impl<T: Transport> TradeClient<T> {
 #[cfg(test)]
 pub(super) mod tests {
     use super::*;
-    use crate::trade::query::{RarityFilter, StateFilters};
+    use crate::trade::query::{RarityFilter, SearchedBase, StateFilters};
     use std::collections::VecDeque;
     use std::sync::{Arc, Mutex};
 
@@ -443,8 +443,7 @@ pub(super) mod tests {
     pub fn ring() -> ItemQuery {
         ItemQuery {
             name: Some("Andvarius".to_owned()),
-            base_type: Some("Gold Ring".to_owned()),
-            category: None,
+            base: SearchedBase::Type("Gold Ring".to_owned()),
             properties: Vec::new(),
             rarity: Some(RarityFilter::Unique),
             states: StateFilters::default(),

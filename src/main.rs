@@ -35,6 +35,7 @@ mod trade;
 mod ui;
 mod update;
 mod window_error;
+mod words;
 mod worker;
 #[cfg(target_os = "linux")]
 mod x11;

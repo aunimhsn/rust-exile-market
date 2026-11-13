@@ -11,7 +11,8 @@ use std::time::{Duration, SystemTime};
 
 use serde::{Deserialize, Serialize};
 
-use crate::language::Language;
+use crate::language::{Language, PerLanguage};
+use crate::words;
 
 /// The names of one language.
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
@@ -42,22 +43,7 @@ pub struct UniqueName {
 }
 
 /// A unique item in English and in French.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct UniqueNames {
-    pub english: UniqueName,
-    pub french: UniqueName,
-}
-
-impl UniqueNames {
-    /// Its name and base type in `language`.
-    #[must_use]
-    pub fn of(&self, language: Language) -> &UniqueName {
-        match language {
-            Language::English => &self.english,
-            Language::French => &self.french,
-        }
-    }
-}
+pub type UniqueNames = PerLanguage<UniqueName>;
 
 /// The number of names of each kind, for the log.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -76,8 +62,9 @@ pub struct NameCounts {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ItemNames {
     pub updated: SystemTime,
-    english: Names,
-    french: Names,
+    /// Flattened, so that the cache keeps the shape of its version.
+    #[serde(flatten)]
+    names: PerLanguage<Names>,
     uniques: Vec<UniqueNames>,
 }
 
@@ -92,8 +79,7 @@ impl ItemNames {
     ) -> Self {
         Self {
             updated,
-            english,
-            french,
+            names: PerLanguage { english, french },
             uniques,
         }
     }
@@ -108,10 +94,10 @@ impl ItemNames {
     #[must_use]
     pub fn counts(&self) -> NameCounts {
         NameCounts {
-            exchange: self.english.exchange.len(),
-            base_types: self.english.base_types.len(),
+            exchange: self.names.english.exchange.len(),
+            base_types: self.names.english.base_types.len(),
             uniques: self.uniques.len(),
-            stats: self.english.stats.len(),
+            stats: self.names.english.stats.len(),
         }
     }
 
@@ -119,29 +105,26 @@ impl ItemNames {
     #[cfg(test)]
     #[must_use]
     pub fn stat_templates(&self, language: Language) -> &[StatTemplate] {
-        &self.names(language).stats
+        &self.names.of(language).stats
     }
 
     /// Takes the templates of the stats out of the names, in English and in French: once
     /// indexed ([`crate::game_data::TradeStats`]), they would be kept twice.
-    pub fn take_stat_templates(&mut self) -> (Vec<StatTemplate>, Vec<StatTemplate>) {
-        (
-            std::mem::take(&mut self.english.stats),
-            std::mem::take(&mut self.french.stats),
-        )
-    }
-
-    fn names(&self, language: Language) -> &Names {
-        match language {
-            Language::English => &self.english,
-            Language::French => &self.french,
+    pub fn take_stat_templates(&mut self) -> PerLanguage<Vec<StatTemplate>> {
+        PerLanguage {
+            english: std::mem::take(&mut self.names.english.stats),
+            french: std::mem::take(&mut self.names.french.stats),
         }
     }
 
     /// The id on the currency exchange of the item named `name` in `language`.
     #[must_use]
     pub fn exchange_id(&self, language: Language, name: &str) -> Option<&str> {
-        self.names(language).exchange.get(name).map(String::as_str)
+        self.names
+            .of(language)
+            .exchange
+            .get(name)
+            .map(String::as_str)
     }
 
     /// The English name of the unique named `name` in `language`.
@@ -174,7 +157,8 @@ impl ItemNames {
     /// Brute".
     #[must_use]
     pub fn magic_base_type(&self, language: Language, name: &str) -> Option<&str> {
-        self.names(language)
+        self.names
+            .of(language)
             .base_types
             .iter()
             .filter(|base_type| holds_words(name, base_type))
@@ -185,13 +169,7 @@ impl ItemNames {
 
 /// `text` holds `words` between spaces or at its ends, not inside a longer word.
 fn holds_words(text: &str, words: &str) -> bool {
-    !words.is_empty()
-        && text.match_indices(words).any(|(start, _)| {
-            let before = text[..start].chars().next_back();
-            let after = text[start + words.len()..].chars().next();
-            before.is_none_or(|character| character == ' ')
-                && after.is_none_or(|character| character == ' ')
-        })
+    !words.is_empty() && words::holds_whole(text, words, |character| character == ' ')
 }
 
 #[cfg(test)]
@@ -388,20 +366,58 @@ pub mod tests {
     }
 
     #[test]
-    fn whole_words_are_found_at_both_ends_and_after_a_part_of_a_word() {
-        assert!(holds_words("Temple Maul", "Temple Maul"), "the whole text");
-        assert!(
-            holds_words("Temple Maul of the Brute", "Temple Maul"),
-            "at the start"
+    fn the_names_keep_the_shape_of_the_cache_of_their_version() {
+        // A cache of version 2, as the application wrote it on 2026-11-13.
+        let cache = serde_json::json!({
+            "updated": { "secs_since_epoch": 0, "nanos_since_epoch": 0 },
+            "english": {
+                "exchange": { "Divine Orb": "divine" },
+                "base_types": ["Ruby Ring"],
+                "stats": [{ "id": "explicit.stat_3299347043", "text": "# to maximum Life" }],
+            },
+            "french": {
+                "exchange": { "Orbe divin": "divine" },
+                "base_types": ["Bague de rubis"],
+                "stats": [],
+            },
+            "uniques": [{
+                "english": { "name": "Grand Spectrum", "base_type": "Emerald" },
+                "french": { "name": "Grand spectre", "base_type": "Émeraude" },
+            }],
+        });
+        let names = |exchange: (&str, &str), base_type: &str, stats| Names {
+            exchange: HashMap::from([(exchange.0.to_owned(), exchange.1.to_owned())]),
+            base_types: vec![base_type.to_owned()],
+            stats,
+        };
+        let expected = ItemNames::new(
+            SystemTime::UNIX_EPOCH,
+            names(
+                ("Divine Orb", "divine"),
+                "Ruby Ring",
+                vec![StatTemplate {
+                    id: "explicit.stat_3299347043".to_owned(),
+                    text: "# to maximum Life".to_owned(),
+                }],
+            ),
+            names(("Orbe divin", "divine"), "Bague de rubis", Vec::new()),
+            vec![UniqueNames {
+                english: unique("Grand Spectrum", "Emerald"),
+                french: unique("Grand spectre", "Émeraude"),
+            }],
         );
-        assert!(
-            holds_words("Crackling Temple Maul", "Temple Maul"),
-            "at the end"
+
+        assert_eq!(
+            serde_json::from_value::<ItemNames>(cache.clone()).ok(),
+            Some(expected.clone())
         );
-        // The first "Maul" is inside "Mauling", the second one is a word.
-        assert!(holds_words("Mauling Maul", "Maul"));
-        assert!(!holds_words("Mauling", "Maul"));
-        assert!(!holds_words("Shammaul", "Maul"));
+        assert_eq!(serde_json::to_value(expected).ok(), Some(cache));
+    }
+
+    #[test]
+    fn a_base_type_is_held_between_spaces_and_is_never_empty() {
+        assert!(holds_words("Crackling Temple Maul", "Temple Maul"));
+        assert!(!holds_words("Temple-Maul", "Maul"));
         assert!(!holds_words("Temple Maul", ""), "nothing isn't a base type");
     }
 }

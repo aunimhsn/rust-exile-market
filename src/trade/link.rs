@@ -6,7 +6,9 @@
 use serde_json::json;
 
 use super::host;
-use super::query::{self, ItemQuery, Query, RarityFilter, SearchFilters, StateFilters};
+use super::query::{
+    self, ItemQuery, Query, RarityFilter, SearchFilters, SearchedBase, StateFilters,
+};
 use crate::game_data;
 use crate::http;
 use crate::item::{Item, ItemState, Rarity};
@@ -88,8 +90,7 @@ impl<'a> TradeTarget<'a> {
         let items = |name: Option<&str>, base_type: &str, rarity| {
             Query::Items(ItemQuery {
                 name: name.map(str::to_owned),
-                base_type: Some(base_type.to_owned()),
-                category: None,
+                base: SearchedBase::Type(base_type.to_owned()),
                 rarity,
                 states: StateFilters::default(),
                 properties: Vec::new(),
@@ -124,14 +125,13 @@ pub fn query(item: &Item, target: &TradeTarget, filters: SearchFilters) -> Query
             TradeTarget::Base { base_type } => {
                 if filters.any_base {
                     if let Some(category) = searched_category(item, base_type) {
-                        items.base_type = None;
-                        items.category = Some(category);
+                        items.base = SearchedBase::Category(category);
                     } else if filters.narrows() {
                         log::info!(
                             "No trade site category for the base type {base_type}: \
                              searched among any base"
                         );
-                        items.base_type = None;
+                        items.base = SearchedBase::Any;
                     } else {
                         log::info!(
                             "No trade site category for the base type {base_type}, \

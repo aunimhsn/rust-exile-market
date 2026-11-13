@@ -11,17 +11,20 @@ use fluent_bundle::{FluentArgs, FluentBundle, FluentResource, FluentValue};
 
 use crate::filters::Property;
 use crate::item::{Affix, Catalyst, Lord, QualityKind, WaystoneProperty};
-use crate::language::Language;
+use crate::language::{Language, PerLanguage};
 use crate::price::Direction;
 use crate::trade::pseudo::Pseudo;
 use crate::window_error::Cause;
 
-/// The Fluent messages of a language, embedded in the executable.
+/// The Fluent messages of each language, embedded in the executable.
+const MESSAGES: PerLanguage<&str> = PerLanguage {
+    english: include_str!("../locales/en.ftl"),
+    french: include_str!("../locales/fr.ftl"),
+};
+
+/// The Fluent messages of `language`.
 fn messages(language: Language) -> &'static str {
-    match language {
-        Language::English => include_str!("../locales/en.ftl"),
-        Language::French => include_str!("../locales/fr.ftl"),
-    }
+    MESSAGES.of(language)
 }
 
 /// Declares [`Message`], its list for the tests and the identifier of each message in the

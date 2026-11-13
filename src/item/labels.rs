@@ -8,7 +8,7 @@ use super::{
     Affix, Catalyst, ItemState, ModifierKind, ModifierOrigin, RadiusSkills, Rarity,
     WaystoneProperty,
 };
-use crate::language::Language;
+use crate::language::{Language, PerLanguage};
 
 /// The words of one language. The labels of the `Label: value` lines end with their
 /// separator, as the game writes it (`"Requires: "`, `"Prérequis : "`).
@@ -132,10 +132,7 @@ impl Wording {
 impl Labels {
     /// The words of the game client in `language`.
     pub fn of(language: Language) -> &'static Self {
-        match language {
-            Language::English => &ENGLISH,
-            Language::French => &FRENCH,
-        }
+        LABELS.of(language)
     }
 }
 
@@ -152,6 +149,12 @@ pub(super) mod value_marker {
 const PREFIX: ModifierKind = ModifierKind::Explicit(Some(Affix::Prefix));
 const SUFFIX: ModifierKind = ModifierKind::Explicit(Some(Affix::Suffix));
 const UNIQUE: ModifierKind = ModifierKind::Explicit(None);
+
+/// The words of the game client in each language.
+static LABELS: PerLanguage<&Labels> = PerLanguage {
+    english: &ENGLISH,
+    french: &FRENCH,
+};
 
 /// The words of the English game client.
 static ENGLISH: Labels = Labels {
