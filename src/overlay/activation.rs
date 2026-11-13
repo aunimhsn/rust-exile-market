@@ -77,50 +77,67 @@ pub trait Screen {
 enum State {
     /// The window over the game is closed, or it gave up.
     Idle,
-    /// Open, the game not holding the pointer: looked for at `next`, until `until`, while the
-    /// `game` is the active window (any window when it isn't known).
-    Watching {
-        until: Instant,
-        next: Instant,
-        game: Option<Window>,
-    },
-    /// The game holds the pointer: waiting for the window to show, and for no press of the
-    /// hotkey to be on its way. The helper still `shown` when the window opens again on another
-    /// item, or becomes the active window again.
-    Waiting {
-        game: Window,
-        since: Instant,
-        shown: Option<Window>,
-    },
-    /// The desktop was asked to activate the helper.
-    Activating {
-        overlay: Window,
+    Watching(Watching),
+    Waiting(Waiting),
+    Activating(Activating),
+    /// The helper is the active window and the window over the game has the keyboard.
+    Active {
         game: Window,
         helper: Window,
-        since: Instant,
     },
-    /// The helper is the active window and the window over the game has the keyboard.
-    Active { game: Window, helper: Window },
+}
+
+/// Open, the game not holding the pointer: looked for at `next`, until `until`, while the `game`
+/// is the active window (any window when it isn't known).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Watching {
+    until: Instant,
+    next: Instant,
+    game: Option<Window>,
+}
+
+/// The game holds the pointer: waiting for the window to show, and for no press of the hotkey to
+/// be on its way. The helper still `shown` when the window opens again on another item, or
+/// becomes the active window again.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Waiting {
+    game: Window,
+    since: Instant,
+    shown: Option<Window>,
+}
+
+/// The desktop was asked to activate the helper.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Activating {
+    overlay: Window,
+    game: Window,
+    helper: Window,
+    since: Instant,
 }
 
 impl State {
     /// Looks for the game holding the pointer from `next`, for a while from `now`.
     fn watching(now: Instant, next: Instant, game: Option<Window>) -> Self {
-        Self::Watching {
+        Self::Watching(Watching {
             until: now + WATCH,
             next,
             game,
-        }
+        })
+    }
+
+    /// Waits from `since` for the window to show over the `game`, the helper still `shown` or not.
+    fn waiting(game: Window, since: Instant, shown: Option<Window>) -> Self {
+        Self::Waiting(Waiting { game, since, shown })
     }
 
     /// The game and the helper, while the window is or is about to be the active window: the keys
     /// go to it.
     fn helper(self) -> Option<(Window, Window)> {
         match self {
-            Self::Activating { game, helper, .. } | Self::Active { game, helper } => {
+            Self::Activating(Activating { game, helper, .. }) | Self::Active { game, helper } => {
                 Some((game, helper))
             }
-            Self::Idle | Self::Watching { .. } | Self::Waiting { .. } => None,
+            Self::Idle | Self::Watching(_) | Self::Waiting(_) => None,
         }
     }
 
@@ -128,11 +145,11 @@ impl State {
     /// without it.
     fn shown(self) -> Option<(Window, Window)> {
         match self {
-            Self::Waiting {
+            Self::Waiting(Waiting {
                 game,
                 shown: Some(helper),
                 ..
-            } => Some((game, helper)),
+            }) => Some((game, helper)),
             _ => self.helper(),
         }
     }
@@ -140,10 +157,10 @@ impl State {
     /// The game the window gives the active window back to.
     fn game(self) -> Option<Window> {
         match self {
-            Self::Waiting { game, .. }
-            | Self::Activating { game, .. }
+            Self::Waiting(Waiting { game, .. })
+            | Self::Activating(Activating { game, .. })
             | Self::Active { game, .. } => Some(game),
-            Self::Idle | Self::Watching { .. } => None,
+            Self::Idle | Self::Watching(_) => None,
         }
     }
 }
@@ -265,8 +282,8 @@ impl<S: Screen> Activation<S> {
             self.carry = false;
         }
         match self.state {
-            State::Waiting { .. } | State::Activating { .. } => Some(STEP_POLL),
-            State::Watching { next, .. } => {
+            State::Waiting(_) | State::Activating(_) => Some(STEP_POLL),
+            State::Watching(Watching { next, .. }) => {
                 Some(next.saturating_duration_since(now).max(STEP_POLL))
             }
             State::Idle | State::Active { .. } => None,
@@ -376,11 +393,7 @@ struct Moment<'a> {
 fn open(screen: &mut impl Screen, state: State, carry: bool, now: Instant) -> Result<State> {
     let shown = state.shown().map(|(_, helper)| helper);
     if carry && let Some(game) = state.game() {
-        return Ok(State::Waiting {
-            game,
-            since: now,
-            shown,
-        });
+        return Ok(State::waiting(game, now, shown));
     }
     let Some(active) = screen.active()? else {
         return Ok(State::watching(now, now, None));
@@ -388,126 +401,63 @@ fn open(screen: &mut impl Screen, state: State, carry: bool, now: Instant) -> Re
     // The copy of the hotkey may not have given the active window back yet.
     let game = screen.game_behind(active)?.unwrap_or(active);
     if screen.pointer_window_above(game)? && screen.pointer_grabbed()? {
-        return Ok(State::Waiting {
-            game,
-            since: now,
-            shown,
-        });
+        return Ok(State::waiting(game, now, shown));
     }
     Ok(State::watching(now, now + WATCH_POLL, Some(game)))
 }
 
 /// The state after `state` at `moment`.
 fn advance(screen: &mut impl Screen, state: State, moment: Moment<'_>) -> Result<State> {
-    let now = moment.now;
     match state {
         State::Idle => Ok(state),
-        State::Watching { until, next, game } => {
-            if now > until {
-                return Ok(State::Idle);
-            }
-            // The copy of a press may make the game active, and must not lose its keys.
-            if now < next || (moment.pending)() {
-                return Ok(state);
-            }
-            let watching = State::Watching {
-                until,
-                next: now + WATCH_POLL,
-                game,
-            };
-            let Some(active) = screen.active()? else {
-                return Ok(watching);
-            };
-            if game.is_some_and(|game| game != active) {
-                // Away from the game: the wait counts from the return to it, where Wine
-                // takes the pointer again. Counted from the leave, the window was left
-                // without hover nor click after more than `WATCH` elsewhere.
-                return Ok(State::watching(now, now + WATCH_POLL, game));
-            }
-            // Confirmed by a try of the grab, once the window is seen.
-            if screen.pointer_window_above(active)? && screen.pointer_grabbed()? {
-                return Ok(State::Waiting {
-                    game: active,
-                    since: now,
-                    shown: None,
-                });
-            }
-            Ok(watching)
-        }
-        State::Waiting { game, since, shown } => show(screen, game, since, shown, moment),
-        State::Activating {
-            game,
-            helper,
-            overlay,
-            since,
-        } => {
-            // A press while the desktop activates the helper: activated again once its copy is
-            // sent, which may give the active window back to the game meanwhile.
-            if (moment.pending)() {
-                return Ok(State::Waiting {
-                    game,
-                    since: now,
-                    shown: Some(helper),
-                });
-            }
-            if screen.active()? == Some(helper) {
-                screen.set_focus(overlay)?;
-                log::info!(
-                    "The game holds the pointer: the window over the game is the active window"
-                );
-                return Ok(State::Active { game, helper });
-            }
-            if now.saturating_duration_since(since) > TIMEOUT {
-                return Err("the desktop didn't activate its helper".into());
-            }
-            Ok(state)
-        }
-        State::Active { game, helper } => {
-            if screen.active()? == Some(helper) {
-                return Ok(state);
-            }
-            // The hotkey made the game active for its copy: its item opens the window again
-            // (`Activation::open`).
-            if (moment.pending)() {
-                return Ok(state);
-            }
-            // No item came (an empty cell): the window becomes the active one again.
-            if moment.carry {
-                return Ok(State::Waiting {
-                    game,
-                    since: now,
-                    shown: Some(helper),
-                });
-            }
-            // The player went to another window (Alt+Tab, a click in the game or the main
-            // window): the window stays open, and becomes the active one again if the game holds
-            // the pointer once more.
-            log::info!(
-                "Another window became the active window: the window over the game lets it be"
-            );
-            Ok(State::watching(now, now + WATCH_POLL, Some(game)))
-        }
+        State::Watching(watching) => watch(screen, watching, moment),
+        State::Waiting(waiting) => show(screen, waiting, moment),
+        State::Activating(activating) => confirm_active(screen, activating, moment),
+        State::Active { game, helper } => stay_active(screen, game, helper, moment),
     }
 }
 
-/// The state after waiting for the window over the game since `since`, the helper still `shown`
-/// or not: the helper shown and activated once the window shows.
-fn show(
-    screen: &mut impl Screen,
-    game: Window,
-    since: Instant,
-    shown: Option<Window>,
-    moment: Moment<'_>,
-) -> Result<State> {
+/// The state after `watching` for the game holding the pointer: waiting for the window to show
+/// once it does, idle after a while.
+fn watch(screen: &mut impl Screen, watching: Watching, moment: Moment<'_>) -> Result<State> {
     let now = moment.now;
-    let state = State::Waiting { game, since, shown };
+    let Watching { until, next, game } = watching;
+    if now > until {
+        return Ok(State::Idle);
+    }
+    // The copy of a press may make the game active, and must not lose its keys.
+    if now < next || (moment.pending)() {
+        return Ok(State::Watching(watching));
+    }
+    let watching = State::Watching(Watching {
+        until,
+        next: now + WATCH_POLL,
+        game,
+    });
+    let Some(active) = screen.active()? else {
+        return Ok(watching);
+    };
+    if game.is_some_and(|game| game != active) {
+        // Away from the game: the wait counts from the return to it, where Wine takes the
+        // pointer again. Counted from the leave, the window was left without hover nor click
+        // after more than `WATCH` elsewhere.
+        return Ok(State::watching(now, now + WATCH_POLL, game));
+    }
+    // Confirmed by a try of the grab, once the window is seen.
+    if screen.pointer_window_above(active)? && screen.pointer_grabbed()? {
+        return Ok(State::waiting(active, now, None));
+    }
+    Ok(watching)
+}
+
+/// The state after `waiting` for the window over the game: the helper shown and activated once
+/// the window shows.
+fn show(screen: &mut impl Screen, waiting: Waiting, moment: Moment<'_>) -> Result<State> {
+    let now = moment.now;
+    let Waiting { game, since, shown } = waiting;
     // The keys of the copy of a press would go to the window: once it is sent.
     if (moment.pending)() {
-        return Ok(State::Waiting {
-            game,
-            since: now,
-            shown,
-        });
+        return Ok(State::waiting(game, now, shown));
     }
     // Only from the game, or from its helper still active: never over a window the player went
     // to meanwhile (Alt+Tab while a hotkey on an empty cell waited for its item), which the game,
@@ -523,25 +473,81 @@ fn show(
             log::warn!("The window over the game didn't show: it stays as on two screens");
             State::Idle
         } else {
-            state
+            State::Waiting(waiting)
         });
     };
     let helper = screen.show_helper(overlay, game)?;
     // A press since `pending` was read: its keys first.
     if (moment.pending)() {
-        return Ok(State::Waiting {
-            game,
-            since: now,
-            shown: Some(helper),
-        });
+        return Ok(State::waiting(game, now, Some(helper)));
     }
     screen.activate(helper)?;
-    Ok(State::Activating {
+    Ok(State::Activating(Activating {
         overlay,
         game,
         helper,
         since: now,
-    })
+    }))
+}
+
+/// The state after `activating` the helper: active once the desktop made it the active window,
+/// the window over the game given the keyboard; an error past [`TIMEOUT`].
+fn confirm_active(
+    screen: &mut impl Screen,
+    activating: Activating,
+    moment: Moment<'_>,
+) -> Result<State> {
+    let now = moment.now;
+    let Activating {
+        overlay,
+        game,
+        helper,
+        since,
+    } = activating;
+    // A press while the desktop activates the helper: activated again once its copy is sent,
+    // which may give the active window back to the game meanwhile.
+    if (moment.pending)() {
+        return Ok(State::waiting(game, now, Some(helper)));
+    }
+    if screen.active()? == Some(helper) {
+        screen.set_focus(overlay)?;
+        log::info!("The game holds the pointer: the window over the game is the active window");
+        return Ok(State::Active { game, helper });
+    }
+    if now.saturating_duration_since(since) > TIMEOUT {
+        return Err("the desktop didn't activate its helper".into());
+    }
+    Ok(State::Activating(activating))
+}
+
+/// The state after the `helper` of the `game` was the active window: the same while it still is,
+/// or while a press makes the game active for its copy; waiting to become it again after a press
+/// on an empty cell; watching once the player went to another window.
+fn stay_active(
+    screen: &mut impl Screen,
+    game: Window,
+    helper: Window,
+    moment: Moment<'_>,
+) -> Result<State> {
+    let now = moment.now;
+    let state = State::Active { game, helper };
+    if screen.active()? == Some(helper) {
+        return Ok(state);
+    }
+    // The hotkey made the game active for its copy: its item opens the window again
+    // (`Activation::open`).
+    if (moment.pending)() {
+        return Ok(state);
+    }
+    // No item came (an empty cell): the window becomes the active one again.
+    if moment.carry {
+        return Ok(State::waiting(game, now, Some(helper)));
+    }
+    // The player went to another window (Alt+Tab, a click in the game or the main window): the
+    // window stays open, and becomes the active one again if the game holds the pointer once
+    // more.
+    log::info!("Another window became the active window: the window over the game lets it be");
+    Ok(State::watching(now, now + WATCH_POLL, Some(game)))
 }
 
 /// Makes the `game` the active window again, while the `helper` still is: not when the player

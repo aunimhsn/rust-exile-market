@@ -76,6 +76,15 @@ impl XScreen {
                 &CreateWindowAux::new().background_pixel(0),
             )?
             .check()?;
+        self.name_helper(helper)?;
+        self.hint_helper(helper)?;
+        self.helper = Some(helper);
+        Ok(helper)
+    }
+
+    /// Names the `helper` as a window of this process: its class, its title and its process.
+    fn name_helper(&self, helper: Window) -> Result<()> {
+        let connection = self.session.connection();
         connection.change_property8(
             PropMode::REPLACE,
             helper,
@@ -97,6 +106,13 @@ impl XScreen {
             AtomEnum::CARDINAL,
             &[std::process::id()],
         )?;
+        Ok(())
+    }
+
+    /// Tells the desktop how to treat the `helper`: without decorations, invisible, out of the
+    /// taskbar and the pager, and never closed.
+    fn hint_helper(&self, helper: Window) -> Result<()> {
+        let connection = self.session.connection();
         // Neither functions nor decorations (the flags say both are given, then none): Alt+F4
         // while the helper is the active window can't close it, which `KWin` would do by killing
         // the client of a window that can't be asked to close.
@@ -129,8 +145,7 @@ impl XScreen {
             AtomEnum::ATOM,
             &skip,
         )?;
-        self.helper = Some(helper);
-        Ok(helper)
+        Ok(())
     }
 
     /// The children of the root window from the bottom, with their attributes, asked for all at
