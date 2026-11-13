@@ -3,12 +3,12 @@
 
 use std::f32::consts::{FRAC_PI_2, PI, TAU};
 
-use egui::{Color32, Painter, Pos2, Stroke, Vec2, vec2};
+use egui::{Color32, Painter, Pos2, Rect, Stroke, Vec2, vec2};
 
 use super::theme::{color, size};
 
 /// The width of the strokes of the icons, on their grid of 16.
-const ICON_STROKE: f32 = 1.8;
+const GRID_STROKE: f32 = 1.8;
 /// The spinner of the search.
 const SPINNER_RADIUS: f32 = 6.0;
 const SPINNER_STROKE: f32 = 2.0;
@@ -62,27 +62,29 @@ pub fn cross(painter: &Painter, center: Pos2, width: f32, color: Color32) {
     );
 }
 
-/// A point of an icon drawn on a grid of 16, `size` across, centered on `center`.
-fn grid(center: Pos2, size: f32) -> impl Fn(f32, f32) -> Pos2 {
-    let scale = size / 16.0;
+/// A point of an icon drawn on a grid of 16 that fills `square`.
+fn grid(square: Rect) -> impl Fn(f32, f32) -> Pos2 {
+    let (center, scale) = (square.center(), square.width() / 16.0);
     move |x, y| center + vec2(x - 8.0, y - 8.0) * scale
 }
 
-fn icon_stroke(size: f32, tint: Color32) -> Stroke {
-    Stroke::new(ICON_STROKE * size / 16.0, tint)
+/// The stroke of an icon drawn on a grid of 16 that fills `square`, thicker as it grows.
+fn grid_stroke(square: Rect, tint: Color32) -> Stroke {
+    Stroke::new(GRID_STROKE * square.width() / 16.0, tint)
 }
 
-/// The magnifying glass of the search block.
-pub fn search_icon(painter: &Painter, center: Pos2, size: f32, tint: Color32) {
-    let point = grid(center, size);
-    let stroke = icon_stroke(size, tint);
-    painter.circle_stroke(point(7.0, 7.0), 4.6 * size / 16.0, stroke);
+/// The magnifying glass of the search block, filling `square`.
+pub fn search(painter: &Painter, square: Rect, tint: Color32) {
+    let point = grid(square);
+    let stroke = grid_stroke(square, tint);
+    painter.circle_stroke(point(7.0, 7.0), 4.6 * square.width() / 16.0, stroke);
     painter.line_segment([point(10.4, 10.4), point(14.0, 14.0)], stroke);
 }
 
-/// The refresh arrow, turned by `turn` quarters.
-pub fn refresh_icon(painter: &Painter, center: Pos2, size: f32, turn: f32, tint: Color32) {
-    let point = grid(center, size);
+/// The refresh arrow, filling `square`, turned by `turn` quarters.
+pub fn refresh(painter: &Painter, square: Rect, turn: f32, tint: Color32) {
+    let point = grid(square);
+    let center = square.center();
     let (sin, cos) = (turn * PI / 2.0).sin_cos();
     let rotate = |p: Pos2| {
         center + {
@@ -90,7 +92,7 @@ pub fn refresh_icon(painter: &Painter, center: Pos2, size: f32, turn: f32, tint:
             vec2(v.x * cos - v.y * sin, v.x * sin + v.y * cos)
         }
     };
-    let stroke = icon_stroke(size, tint);
+    let stroke = grid_stroke(square, tint);
     // Three quarters and a half of a circle, from its right, clockwise.
     let arc: Vec<Pos2> = (0..=28)
         .map(|step| {
@@ -110,10 +112,10 @@ pub fn refresh_icon(painter: &Painter, center: Pos2, size: f32, turn: f32, tint:
     );
 }
 
-/// The double chevron pointing down.
-pub fn double_chevron(painter: &Painter, center: Pos2, size: f32, tint: Color32) {
-    let point = grid(center, size);
-    let stroke = icon_stroke(size, tint);
+/// The double chevron pointing down, filling `square`.
+pub fn double_chevron(painter: &Painter, square: Rect, tint: Color32) {
+    let point = grid(square);
+    let stroke = grid_stroke(square, tint);
     for top in [3.5, 8.5] {
         painter.line(
             vec![point(4.0, top), point(8.0, top + 4.0), point(12.0, top)],

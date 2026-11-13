@@ -578,22 +578,15 @@ impl<'a> OffersBlock<'a> {
         match block {
             Block::Search => {
                 painter.rect_filled(rect, 0.0, color::ACCENT);
-                icons::search_icon(
-                    painter,
-                    rect.center(),
-                    SEARCH_ICON * (1.0 + SEARCH_GROWTH * hover),
-                    color::ON_ACCENT,
-                );
+                let size = SEARCH_ICON * (1.0 + SEARCH_GROWTH * hover);
+                let square = Rect::from_center_size(rect.center(), Vec2::splat(size));
+                icons::search(painter, square, color::ON_ACCENT);
             }
             Block::Again => {
                 painter.rect_filled(rect, 0.0, color::ACCENT);
-                icons::refresh_icon(
-                    painter,
-                    rect.center(),
-                    REFRESH_ICON * (1.0 + REFRESH_GROWTH * hover),
-                    hover,
-                    color::ON_ACCENT,
-                );
+                let size = REFRESH_ICON * (1.0 + REFRESH_GROWTH * hover);
+                let square = Rect::from_center_size(rect.center(), Vec2::splat(size));
+                icons::refresh(painter, square, hover, color::ON_ACCENT);
             }
             Block::Searching => {
                 painter.rect_filled(rect, 0.0, color::CONTROL);
@@ -1133,7 +1126,8 @@ fn more(ui: &mut Ui, i18n: &Translator) -> Response {
     );
     let tint = if lit { color::ACCENT } else { color::WEAK };
     let center = rect.center() + vec2(0.0, -MORE_RAISE + MORE_SLIDE * slide);
-    icons::double_chevron(ui.painter(), center, MORE_ICON, tint);
+    let square = Rect::from_center_size(center, Vec2::splat(MORE_ICON));
+    icons::double_chevron(ui.painter(), square, tint);
     response
         .on_hover_text(tooltip)
         .on_hover_cursor(CursorIcon::PointingHand)
