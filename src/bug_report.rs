@@ -11,8 +11,8 @@ mod short_log;
 mod system;
 
 use std::fmt::Write as _;
-use std::fs;
-use std::io;
+use std::fs::File;
+use std::io::{self, Read, Seek, SeekFrom};
 use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -38,6 +38,10 @@ const ADDRESS_BUDGET: usize = 6_000;
 static OPENINGS: AtomicU64 = AtomicU64::new(0);
 /// A line break, encoded, between two lines of the log.
 const ENCODED_LINE_BREAK: usize = "%0A".len();
+/// The most of a log file the report reads, its end: read on the thread of the interface at the
+/// click, and copied whole by "Copy the log". A session of play logs a few kilobytes (3 and 5 KB,
+/// the owner's last two on 2026-11-09), so a log reaches it only in a session left open for long.
+const LOG_BUDGET_BYTES: u64 = 1024 * 1024;
 
 /// What the application knows, for the summary of the report.
 #[derive(Debug, Clone)]
@@ -313,10 +317,31 @@ impl Report {
     }
 }
 
-/// The text of the log file at `path`; a character cut in the middle (a log written while the
-/// application stopped) stays readable.
+/// The text of the log file at `path`, its last [`LOG_BUDGET_BYTES`].
 fn read_log(path: &Path) -> io::Result<String> {
-    fs::read(path).map(|log| String::from_utf8_lossy(&log).into_owned())
+    read_end(File::open(path)?, LOG_BUDGET_BYTES)
+}
+
+/// The end of `log` that fits in `budget` bytes, from the start of a line: a longer log loses its
+/// first lines whole. A character cut in the middle (a log written while the application stopped)
+/// stays readable.
+fn read_end(mut log: impl Read + Seek, budget: u64) -> io::Result<String> {
+    let length = log.seek(SeekFrom::End(0))?;
+    let is_cut = length > budget;
+    // A cut log is read from one byte earlier: when that byte ends a line, the first line read
+    // is whole and kept.
+    let start = if is_cut { length - budget - 1 } else { 0 };
+    log.seek(SeekFrom::Start(start))?;
+    let mut bytes = Vec::new();
+    // `take`: the log of this session may grow while it is read.
+    log.take(budget + 1).read_to_end(&mut bytes)?;
+    let text = String::from_utf8_lossy(&bytes);
+    Ok(if is_cut {
+        text.split_once('\n')
+            .map_or_else(String::new, |(_, rest)| rest.to_owned())
+    } else {
+        text.into_owned()
+    })
 }
 
 /// The texts of `lines`, joined by line breaks.

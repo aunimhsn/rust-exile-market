@@ -390,3 +390,36 @@ fn the_log_writes_the_windows_as_the_bug_report_reads_them() {
         );
     }
 }
+
+#[test]
+fn a_log_that_fits_its_budget_is_read_whole() {
+    let log = "line 1\nline 2\n";
+
+    assert_eq!(
+        read_end(io::Cursor::new(log), 14).expect("read"),
+        "line 1\nline 2\n"
+    );
+    assert_eq!(read_end(io::Cursor::new(""), 14).expect("read"), "");
+}
+
+#[test]
+fn a_longer_log_keeps_its_last_whole_lines() {
+    let log = "aaa\nbbb\nccc\n";
+
+    // From a line break: the line after it is whole.
+    assert_eq!(
+        read_end(io::Cursor::new(log), 8).expect("read"),
+        "bbb\nccc\n"
+    );
+    // Inside a line: the line cut is left out.
+    assert_eq!(read_end(io::Cursor::new(log), 7).expect("read"), "ccc\n");
+    assert_eq!(read_end(io::Cursor::new(log), 2).expect("read"), "");
+}
+
+#[test]
+fn a_character_cut_by_the_budget_is_left_out_with_its_line() {
+    let log = "été\nok";
+
+    // Its last byte alone is read: the line break and what follows it fit.
+    assert_eq!(read_end(io::Cursor::new(log), 3).expect("read"), "ok");
+}
