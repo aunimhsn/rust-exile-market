@@ -1,6 +1,7 @@
 use std::time::Duration;
 
 use super::*;
+use crate::filters::{Filter, FilterKey, StatKey};
 use crate::league::League;
 use crate::trade::search::Search;
 
@@ -69,4 +70,66 @@ fn the_status_bar_tells_a_long_wait_rather_than_the_age_of_the_last_search() {
         TradeStatus::Searched(Duration::from_secs(120)),
         "the usual 10 s aren't told"
     );
+}
+
+/// A rare ring named `name`, with one modifier.
+fn rare_ring(name: &str) -> CopiedItem {
+    CopiedItem::from_text(&format!(
+        "Item Class: Rings\nRarity: Rare\n{name}\nRuby Ring\n--------\nItem Level: 80\n\
+         --------\n+30 to maximum Life"
+    ))
+    .expect("an item")
+}
+
+/// A filter of a minimum, `checked` or not.
+fn filter(checked: bool, minimum: &str) -> Filter {
+    Filter {
+        checked,
+        minimum: minimum.to_owned(),
+        maximum: String::new(),
+        bounds: None,
+    }
+}
+
+#[test]
+fn an_item_copied_again_after_another_comes_back_with_its_filters() {
+    let first = rare_ring("Woe Loop");
+    let second = rare_ring("Doom Band");
+    let life = FilterKey::Stat(StatKey {
+        modifier: 0,
+        line: 0,
+    });
+    let by_default = || filter(false, "");
+    // Copied with Ctrl+C, then with the hotkey, which keeps only the item shown as it is.
+    for hotkey in [None, Some(Instant::now())] {
+        let copied = |item: &CopiedItem| ClipboardEvent::Copied {
+            item: item.clone(),
+            hotkey,
+        };
+        let mut desk = Desk::new(Some(League::new("Standard")));
+
+        desk.take_clipboard_event(copied(&first));
+        assert!(
+            desk.session
+                .item()
+                .is_some_and(|shown| shown.parsed().is_ok())
+        );
+        desk.filters.set(life, filter(true, "25"));
+        desk.take_clipboard_event(copied(&second));
+        let on_second = desk.filters.get(life, by_default);
+        let _ = desk.take_scroll_to_top();
+        desk.take_clipboard_event(copied(&first));
+
+        assert_eq!(on_second, by_default(), "{hotkey:?}");
+        assert_eq!(
+            desk.filters.get(life, by_default),
+            filter(true, "25"),
+            "{hotkey:?}"
+        );
+        assert_eq!(desk.copied(), Some(&first));
+        assert!(
+            desk.take_scroll_to_top(),
+            "{hotkey:?}: back to its name and its price"
+        );
+    }
 }
