@@ -3,7 +3,7 @@ use egui::Pos2;
 use super::*;
 use crate::price::Rates;
 use crate::price::estimate::Worth;
-use crate::trade::offers::fixtures::item_offer;
+use crate::trade::offers::fixtures::{exchange_offer, item_offer};
 
 const RATES: Rates = Rates {
     chaos: 75.0,
@@ -171,8 +171,6 @@ fn a_currency_the_application_doesnt_know_has_no_icon_nor_name() {
 #[test]
 fn an_offer_of_the_exchange_shows_the_price_of_one_item_and_its_stock() {
     let offer = ExchangeOffer {
-        seller: SellerStatus::Online,
-        listed: None,
         pay: Price {
             amount: 350.0,
             currency: "exalted".to_owned(),
@@ -182,7 +180,7 @@ fn an_offer_of_the_exchange_shows_the_price_of_one_item_and_its_stock() {
             currency: "annul".to_owned(),
         },
         stock: 40,
-        whisper: String::new(),
+        ..exchange_offer()
     };
     let reference = Reference {
         exalted: 182.0,

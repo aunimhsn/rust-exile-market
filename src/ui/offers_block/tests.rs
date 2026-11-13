@@ -1,8 +1,7 @@
 use super::*;
 use crate::language::Language;
 use crate::offers_state::SearchedBy;
-use crate::trade::offers::fixtures::item_offer;
-use crate::trade::offers::{Price, SellerStatus};
+use crate::trade::offers::fixtures::{exchange_offer, item_offer};
 use crate::trade::search::Rest;
 
 #[test]
@@ -48,21 +47,7 @@ fn the_offers_of_items_show_the_chevron_while_some_are_left_and_the_spinner_whil
 
 #[test]
 fn the_offers_of_the_exchange_show_the_chevron_until_all_are_shown() {
-    let offer = ExchangeOffer {
-        seller: SellerStatus::Online,
-        listed: None,
-        pay: Price {
-            amount: 750.0,
-            currency: "exalted".to_owned(),
-        },
-        get: Price {
-            amount: 1.0,
-            currency: "divine".to_owned(),
-        },
-        stock: 3,
-        whisper: String::new(),
-    };
-    let offers = vec![offer; 3];
+    let offers = vec![exchange_offer(); 3];
     let rows = exchange_rows(&offers, None, SystemTime::UNIX_EPOCH);
 
     let first = List::of_exchange(&rows[..2], &offers, 3, SystemTime::UNIX_EPOCH);

@@ -46,11 +46,9 @@ const HEAD_GAP: f32 = 6.0;
 /// The length of the hover motions, in seconds.
 const HOVER_TIME: f32 = 0.22;
 
-/// The double chevron under the list.
+/// The double chevron under the list: its icon, its height, the space above it, how high it
+/// is raised to look centered, and how far it slides down under the pointer.
 const MORE_ICON: f32 = 16.0;
-
-/// The double chevron under the list: its height, the space above it, how high it is
-/// raised to look centered, and how far it slides down under the pointer.
 const MORE_HEIGHT: f32 = 32.0;
 const MORE_GAP: f32 = 6.0;
 const MORE_RAISE: f32 = 3.0;

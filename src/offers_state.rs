@@ -343,14 +343,15 @@ impl Offers {
                 OffersState::Items(items.done_loading(None))
             }
             // More offers that couldn't come: the offers shown stay, to ask them again.
-            (
-                failure @ (Outcome::Failed(_) | Outcome::Limited { .. }),
-                OffersState::Items(items),
-            ) if pending.order == PendingOrder::More => {
-                OffersState::Items(items.done_loading(match failure {
-                    Outcome::Failed(failure) => Some(failure),
-                    _ => None,
-                }))
+            (Outcome::Failed(failure), OffersState::Items(items))
+                if pending.order == PendingOrder::More =>
+            {
+                OffersState::Items(items.done_loading(Some(failure)))
+            }
+            (Outcome::Limited { .. }, OffersState::Items(items))
+                if pending.order == PendingOrder::More =>
+            {
+                OffersState::Items(items.done_loading(None))
             }
             (Outcome::Failed(failure), _) => OffersState::Failed(failure),
             (Outcome::Limited { .. }, _) => OffersState::Limited,

@@ -1,8 +1,7 @@
 use super::*;
 use crate::language::Language;
 use crate::league::League;
-use crate::trade::offers::fixtures::item_offer;
-use crate::trade::offers::{Price, SellerStatus};
+use crate::trade::offers::fixtures::{exchange_offer, item_offer};
 use crate::trade::query::{ItemQuery, Query, RulesOut, StateFilters};
 
 pub(crate) fn item_search() -> Search {
@@ -37,23 +36,6 @@ fn offer(id: &str) -> ItemOffer {
     ItemOffer {
         id: id.to_owned(),
         ..item_offer(1.0, "divine")
-    }
-}
-
-fn exchange_offer() -> ExchangeOffer {
-    ExchangeOffer {
-        seller: SellerStatus::Online,
-        listed: None,
-        pay: Price {
-            amount: 750.0,
-            currency: "exalted".to_owned(),
-        },
-        get: Price {
-            amount: 1.0,
-            currency: "divine".to_owned(),
-        },
-        stock: 3,
-        whisper: String::new(),
     }
 }
 

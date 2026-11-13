@@ -1,9 +1,10 @@
-//! The offers the tests build: an offer of an item with its price, the rest plain, which a test
-//! changes with the syntax of a struct update (`ItemOffer { seller, ..item_offer(1.0, "divine") }`).
+//! The offers the tests build: an offer of an item with its price, and one of the currency
+//! exchange, the rest plain, which a test changes with the syntax of a struct update
+//! (`ItemOffer { seller, ..item_offer(1.0, "divine") }`).
 
 use std::time::SystemTime;
 
-use super::{ItemOffer, OfferItem, Price, SellerStatus};
+use super::{ExchangeOffer, ItemOffer, OfferItem, Price, SellerStatus};
 use crate::item::Requirements;
 
 /// An offer of a plain Gold Ring for `amount` of the currency `currency`, by a seller online,
@@ -32,5 +33,24 @@ pub fn item_offer(amount: f64, currency: &str) -> ItemOffer {
             waystone_unread: false,
             modifiers: Vec::new(),
         },
+    }
+}
+
+/// An offer of the currency exchange of 3 Divine Orbs for 750 Exalted Orbs each, by a seller
+/// online, listed at no known time.
+pub fn exchange_offer() -> ExchangeOffer {
+    ExchangeOffer {
+        seller: SellerStatus::Online,
+        listed: None,
+        pay: Price {
+            amount: 750.0,
+            currency: "exalted".to_owned(),
+        },
+        get: Price {
+            amount: 1.0,
+            currency: "divine".to_owned(),
+        },
+        stock: 3,
+        whisper: String::new(),
     }
 }

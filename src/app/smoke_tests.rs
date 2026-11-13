@@ -228,7 +228,10 @@ impl Scene {
         match self.offers.state() {
             OffersState::Items(_) => drawn.with_offers_of_items += 1,
             OffersState::Exchange { .. } => drawn.with_offers_of_the_exchange += 1,
-            _ => {}
+            OffersState::Idle
+            | OffersState::Searching
+            | OffersState::Failed(_)
+            | OffersState::Limited => {}
         }
         height
     }
