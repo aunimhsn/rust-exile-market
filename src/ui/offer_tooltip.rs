@@ -9,8 +9,8 @@ use std::time::Duration;
 
 use egui::text::{LayoutJob, TextFormat};
 use egui::{
-    Align2, Area, Color32, CornerRadius, Frame, Id, Margin, Order, Pos2, Rect, Sense, Stroke, Ui,
-    UiBuilder, Vec2, pos2, vec2,
+    Align2, Area, Color32, Id, Margin, Order, Pos2, Rect, Sense, Stroke, Ui, UiBuilder, Vec2, pos2,
+    vec2,
 };
 
 use super::item_block::{
@@ -18,7 +18,7 @@ use super::item_block::{
 };
 use super::item_stats::property_value;
 use super::offers_block::{RowPrice, offer_price};
-use super::theme::{self, color, size, text};
+use super::theme::{self, color, text};
 use super::{images, widgets};
 use crate::filters::Property;
 use crate::format;
@@ -452,10 +452,7 @@ impl OfferTooltip<'_> {
             .pivot(pivot)
             .fixed_pos(at)
             .show(ui.ctx(), |ui| {
-                Frame::NONE
-                    .fill(color::BUBBLE)
-                    .corner_radius(CornerRadius::same(size::BUBBLE_RADIUS))
-                    .shadow(theme::floating_shadow())
+                theme::bubble_frame()
                     .inner_margin(Margin::symmetric(PADDING_X, PADDING_Y))
                     .show(ui, |ui| {
                         ui.set_width(WIDTH - 2.0 * f32::from(PADDING_X));

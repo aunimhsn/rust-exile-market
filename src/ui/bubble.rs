@@ -5,8 +5,8 @@
 
 use egui::text::{LayoutJob, TextFormat};
 use egui::{
-    Align, Area, Context, CornerRadius, CursorIcon, Frame, Id, Layout, Margin, Order, Role, Sense,
-    Ui, Vec2, WidgetInfo, pos2, vec2,
+    Align, Area, Context, CursorIcon, Id, Layout, Margin, Order, Role, Sense, Ui, Vec2, WidgetInfo,
+    pos2, vec2,
 };
 
 use super::icons;
@@ -94,11 +94,8 @@ impl<'a> Bubble<'a> {
             .order(Order::Foreground)
             .fixed_pos(pos2(LEFT, self.top))
             .show(ctx, |ui| {
-                let frame = Frame::NONE
-                    .fill(color::BUBBLE)
-                    .corner_radius(CornerRadius::same(size::BUBBLE_RADIUS))
-                    .shadow(theme::floating_shadow())
-                    .inner_margin(Margin::symmetric(PADDING_X, PADDING_Y));
+                let frame =
+                    theme::bubble_frame().inner_margin(Margin::symmetric(PADDING_X, PADDING_Y));
                 frame
                     .show(ui, |ui| {
                         ui.set_width(WIDTH - 2.0 * f32::from(PADDING_X));
