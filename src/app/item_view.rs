@@ -31,7 +31,7 @@ pub(super) fn search_filters(
 }
 
 /// What the application knows of the modifier lines of the item `shown`.
-pub(super) fn line_facts(shown: &ShownItem) -> LineFacts<'_> {
+fn line_facts(shown: &ShownItem) -> LineFacts<'_> {
     LineFacts {
         copied_lines: shown.lines(),
         line_stats: shown.stats(),

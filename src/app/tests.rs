@@ -1,5 +1,4 @@
 use super::*;
-use crate::item::CopiedItem;
 
 /// A frame of egui with `events`, `content` drawing it.
 fn egui_frame(
