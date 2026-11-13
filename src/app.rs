@@ -1,6 +1,7 @@
 //! The application: the session, the settings, the clipboard watching, the price-check
 //! hotkey and the price database, and the window built from the components of [`crate::ui`].
 
+mod item_view;
 mod open_lists;
 
 use std::hash::{BuildHasher, RandomState};
@@ -12,31 +13,28 @@ use egui::{
     WindowLevel, X11WindowType, pos2, vec2,
 };
 
+use self::item_view::{ItemView, search_filters};
 use self::open_lists::{OpenList, OpenLists};
 use crate::bug_report::{Facts, JoinedItem, LogSession, Report};
 use crate::clipboard::{self, ClipboardEvent, ClipboardWatch};
-use crate::filters::{Filter, FilterKey, Filters, Window};
+use crate::filters::{Filters, Window};
 use crate::hotkey::PriceCheckHotkey;
 use crate::i18n::{DOWNLOAD_QUOTE_COUNT, Message, Translator};
-use crate::item::{CopiedItem, Item};
+use crate::item::CopiedItem;
 use crate::league::League;
 use crate::market::MarketWatch;
-use crate::offers_state::{LONG_WAIT, Offers, OffersState};
+use crate::offers_state::{LONG_WAIT, Offers};
 use crate::overlay::{self, Activation, ClickWatch, KeyboardFocus, Overlay, ScreenRect};
-use crate::price::Rates;
-use crate::price::estimate::{Estimate, Reference, Worth};
-use crate::price::fixed::{FixedPrice, NoFixedPrice};
 use crate::recent_items::RecentItems;
 use crate::session::{LeagueChange, PricesState, Session, ShownItem};
 use crate::settings::{SettingChange, Settings, SettingsFile};
 use crate::trade::Refusal;
 use crate::trade::names_watch::ItemNamesWatch;
-use crate::trade::query::{SearchFilters, SearchKind};
+use crate::trade::query::SearchKind;
 use crate::trade::search::{OfferSearch, Search};
 use crate::ui::{
-    self, Bubble, BubbleAction, BugReportAction, BugReportPanel, EmptyState, ItemBlock,
-    ItemBlockAction, LeagueList, LeagueListAction, LineFacts, OffersAction, OffersBlock,
-    PriceBlock, PriceDownload, ResizeEdges, SettingsPanel, ShownLeague, StatChecks, Stats,
+    self, Bubble, BubbleAction, BugReportAction, BugReportPanel, EmptyState, ItemBlockAction,
+    LeagueList, LeagueListAction, OffersAction, PriceDownload, ResizeEdges, SettingsPanel,
     StatusBar, TitleBar, TitleBarAction, TradeStatus, UnreadableItem, WarningBand,
 };
 use crate::update::{LeagueOfTheMoment, Release, UpdateCheck};
@@ -697,129 +695,6 @@ impl ExileMarketApp {
     }
 }
 
-/// The filters of the search of `item`, the item `shown`: as the player set them, or else
-/// by default.
-fn search_filters(
-    session: &Session,
-    shown: &ShownItem,
-    item: &Item,
-    filters: &Filters,
-) -> SearchFilters {
-    let (_, search) = every_filter(session, shown, item, filters);
-    search
-}
-
-/// What the application knows of the modifier lines of the item `shown`.
-fn line_facts(shown: &ShownItem) -> LineFacts<'_> {
-    LineFacts {
-        copied_lines: shown.lines(),
-        line_stats: shown.stats(),
-        tier_rolls: shown.tiers(),
-    }
-}
-
-/// Every filter of `item`, the item `shown`, checked or not, as the player set them or else
-/// by default, and the filters of its search they make ([`search_filters`]).
-fn every_filter(
-    session: &Session,
-    shown: &ShownItem,
-    item: &Item,
-    filters: &Filters,
-) -> (Vec<(FilterKey, Filter)>, SearchFilters) {
-    let stats = Stats::new(item, line_facts(shown), session.filtered_base_type(item));
-    let all = stats.filters(filters);
-    let search = SearchFilters {
-        states: filters.lit_states_of(item).collect(),
-        ..shown.stats().search_filters(&all)
-    };
-    (all, search)
-}
-
-/// The blocks of the item shown, one under the other: the item with its filters, its price,
-/// and its offers when it can be searched (`kind`).
-struct ItemView<'a> {
-    session: &'a Session,
-    shown: &'a ShownItem,
-    item: &'a Item,
-    offers: &'a Offers,
-    filters: &'a mut Filters,
-    stats_open: bool,
-    prices: PricesState,
-    kind: Option<SearchKind>,
-    /// The window has the bug report, which the hint of a failed search opens: the main
-    /// window only.
-    has_bug_report: bool,
-    i18n: &'a Translator,
-}
-
-impl ItemView<'_> {
-    /// Draws the blocks; what the player did in the item block and in the offers block. The
-    /// Check on trade pill opens its link here.
-    fn show(self, ui: &mut Ui) -> (Option<ItemBlockAction>, Option<OffersAction>) {
-        let Self {
-            session,
-            shown,
-            item,
-            offers,
-            filters,
-            stats_open,
-            prices,
-            kind,
-            has_bug_report,
-            i18n,
-        } = self;
-        let fixed_price = session.fixed_price(item);
-        let worth = session.worth();
-        let estimate = shown_estimate(offers, item, &fixed_price, worth);
-        // Without a fixed price, the estimate tells the suspicious offers.
-        let reference =
-            reference(&fixed_price, worth).or(estimate.map(|estimate| estimate.reference));
-        let action = ItemBlock::new(item, line_facts(shown), filters, i18n)
-            // The pill shows only when its link can be opened: the league and the search known.
-            .tradable(session.tradable(item))
-            .stats(stats_open, session.filtered_base_type(item))
-            .show(ui);
-        // With the filters as the player just left them.
-        let (all, searched) = every_filter(session, shown, item, filters);
-        let checks = StatChecks::of(&searched, shown.stats(), &all);
-        if action == Some(ItemBlockAction::CheckOnTrade)
-            && let Some(url) = session.trade_url(item, searched)
-        {
-            ui.ctx().open_url(OpenUrl::new_tab(url));
-        }
-        PriceBlock {
-            item,
-            price: fixed_price,
-            estimate,
-            checks,
-            league: ShownLeague {
-                name: session.league().map(League::name),
-                prices,
-            },
-            i18n,
-        }
-        .show(ui);
-        let offers_action = if let Some(kind) = kind {
-            OffersBlock {
-                offers,
-                kind,
-                reference,
-                item,
-                lines: shown.lines(),
-                has_bug_report,
-                i18n,
-            }
-            .show(ui)
-        } else {
-            if session.must_identify(item) {
-                OffersBlock::identify(ui, i18n);
-            }
-            None
-        };
-        (action, offers_action)
-    }
-}
-
 impl App for ExileMarketApp {
     /// Takes in what happened since the last frame; `ui` draws the session, and takes in the
     /// clicks of the components it draws.
@@ -1098,55 +973,6 @@ fn to_points(pixels: i32, scale: f32) -> f32 {
     pixels as f32 / scale
 }
 
-/// The price of one item that tells a suspicious offer: the price of a fixed-name item, with
-/// the `worth` of the currencies of its prices; none for an item of the currency exchange
-/// whose price stands on too few trades, which would tell honest offers. Both come from the
-/// prices of the league shown: the rates beside the fixed price are those of `worth`, which
-/// also prices the other currencies.
-fn reference<'a>(
-    fixed_price: &Result<(FixedPrice, Rates), NoFixedPrice>,
-    worth: Option<Worth<'a>>,
-) -> Option<Reference<'a>> {
-    let exalted = match fixed_price {
-        Ok((FixedPrice::Currency(currency), _)) => currency.trusted_exalted()?,
-        Ok((FixedPrice::Unique(unique), _)) => unique.price.exalted,
-        Ok((FixedPrice::Uniques(_), _)) | Err(_) => return None,
-    };
-    Some(Reference {
-        exalted,
-        worth: worth?,
-    })
-}
-
-/// The estimated price of `item`, the item shown, without a fixed price, from the `offers` of
-/// its search and the `worth` of the currencies with the prices of the league; none for a rare
-/// or magic item whose search compared none of its stats, whose offers are any items of its
-/// base: their price says nothing of its own.
-fn shown_estimate<'a>(
-    offers: &Offers,
-    item: &Item,
-    fixed_price: &Result<(FixedPrice, Rates), NoFixedPrice>,
-    worth: Option<Worth<'a>>,
-) -> Option<Estimate<'a>> {
-    let Err(NoFixedPrice::NotFixedName) = fixed_price else {
-        return None;
-    };
-    if item.is_priced_by_stats() && !offers.compared_stats() {
-        return None;
-    }
-    let searched_catalyst = offers.searched_catalyst(item);
-    let OffersState::Items(items) = offers.state() else {
-        return None;
-    };
-    // The next offers loaded don't move it.
-    Estimate::of(
-        items.offers.get(..items.first_page)?,
-        items.total,
-        worth?,
-        searched_catalyst,
-    )
-}
-
 /// The state of the trade site in the status bar, at `now`: the long wait before the next
 /// search of `kind`, or else the age of the last search.
 fn trade_status(offers: &Offers, kind: SearchKind, now: Instant, clock: SystemTime) -> TradeStatus {
@@ -1264,38 +1090,6 @@ mod tests {
     }
 
     #[test]
-    fn a_lit_state_tag_reaches_the_search() {
-        use crate::item::ItemState;
-        use crate::trade::query::Query;
-
-        let mut session = Session::new(Some(League::new("Standard")));
-        session.apply(ClipboardEvent::Copied {
-            item: CopiedItem::from_text(
-                "Item Class: Rings\nRarity: Rare\nWoe Loop\nRuby Ring\n--------\n\
-                 Item Level: 80\n--------\nCorrupted",
-            )
-            .unwrap(),
-            hotkey: None,
-        });
-        let shown = session.item().expect("an item");
-        let item = shown.parsed().expect("read");
-        let corrupted = |filters: &Filters| {
-            let search = session
-                .trade_search(item, search_filters(&session, shown, item, filters))
-                .expect("a search");
-            let Query::Items(items) = search.query else {
-                panic!("a search of items");
-            };
-            items.states.corrupted
-        };
-        let mut filters = Filters::default();
-
-        assert_eq!(corrupted(&filters), None);
-        filters.toggle_state(ItemState::Corrupted);
-        assert_eq!(corrupted(&filters), Some(true));
-    }
-
-    #[test]
     fn paints_while_hidden_only_for_the_window_over_the_game_and_a_hidden_main_window() {
         assert!(paint_while_hidden(true, Some(false)));
         assert!(!paint_while_hidden(true, Some(true)));
@@ -1410,296 +1204,6 @@ mod tests {
             TradeStatus::Searched(Duration::from_secs(120)),
             "the usual 10 s aren't told"
         );
-    }
-
-    const RATES: Rates = Rates {
-        chaos: 70.0,
-        divine: 700.0,
-    };
-    const WORTH: Worth = Worth {
-        rates: RATES,
-        currencies: &[],
-    };
-
-    /// Offers for `amounts` Divine Orbs.
-    fn divines(amounts: &[f64]) -> Vec<crate::trade::offers::ItemOffer> {
-        amounts
-            .iter()
-            .map(|&amount| crate::trade::offers::fixtures::item_offer(amount, "divine"))
-            .collect()
-    }
-
-    /// The owner's amulet of mana quality.
-    fn amulet() -> Item {
-        Item::parse(
-            &CopiedItem::from_text(include_str!(
-                "item/test-items/en-owner-rare-amulet-catalyst.txt"
-            ))
-            .unwrap(),
-        )
-        .unwrap()
-    }
-
-    /// A search of items with the filters of `properties`.
-    fn searched(properties: Vec<crate::trade::query::PropertyFilter>) -> Search {
-        use crate::trade::query::{ItemQuery, Query, SearchedBase, StatFilter, StateFilters};
-
-        Search {
-            language: crate::language::Language::English,
-            league: League::new("Standard"),
-            query: Query::Items(ItemQuery {
-                name: None,
-                base: SearchedBase::Type("Gemini Bow".to_owned()),
-                properties,
-                rarity: None,
-                states: StateFilters {
-                    corrupted: Some(false),
-                    ..StateFilters::default()
-                },
-                // A stat compared: without, a rare has no estimate.
-                stats: vec![StatFilter {
-                    ids: vec!["explicit.stat_3917489142".to_owned()],
-                    minimum: Some(10.0),
-                    maximum: None,
-                    rules_out: crate::trade::query::RulesOut::OfTheBase,
-                }],
-            }),
-        }
-    }
-
-    /// Offers left to fetch, or none.
-    fn rest(more: bool) -> crate::trade::search::Rest {
-        let left: &[&str] = if more { &["k"] } else { &[] };
-        crate::trade::search::Rest::new(crate::language::Language::English, "Q1", left)
-    }
-
-    /// The answer to a search: `offers` of the `total` found, 10 at most; the next search
-    /// allowed from `now`.
-    fn answer(
-        offers: Vec<crate::trade::offers::ItemOffer>,
-        total: u64,
-        more: bool,
-        now: Instant,
-    ) -> crate::trade::search::Answer {
-        use crate::trade::search::{Answer, NextSearch, Outcome};
-
-        Answer {
-            outcome: Outcome::Items {
-                offers,
-                total,
-                rest: rest(more),
-            },
-            next_search: NextSearch {
-                items: now,
-                exchange: now,
-            },
-        }
-    }
-
-    #[test]
-    fn the_estimate_counts_the_answer_to_the_search_of_an_item_without_a_fixed_price() {
-        use crate::trade::search::{Answer, NextSearch, Outcome};
-
-        let amulet = amulet();
-        let now = Instant::now();
-        let rare = Err(NoFixedPrice::NotFixedName);
-        let mut offers = Offers::default();
-        let _ = offers.search(searched(Vec::new()), now);
-        // One offer of the first ten was gone since the search.
-        offers.apply(
-            answer(
-                divines(&[1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8]),
-                30,
-                true,
-                now,
-            ),
-            SystemTime::now(),
-        );
-        let first = shown_estimate(&offers, &amulet, &rare, Some(WORTH)).unwrap();
-        let _ = offers.more();
-        // Counted, the first of them would lower the estimate to 1.1 div.
-        offers.apply(
-            Answer {
-                outcome: Outcome::More {
-                    offers: divines(&[0.5; 10]),
-                    rest: rest(true),
-                },
-                next_search: NextSearch {
-                    items: now,
-                    exchange: now,
-                },
-            },
-            SystemTime::now(),
-        );
-
-        assert_eq!(
-            shown_estimate(&offers, &amulet, &rare, Some(WORTH)),
-            Some(first)
-        );
-        assert!((first.exalted - 1.2 * 700.0).abs() < 1e-9);
-        assert_eq!(first.total, 30);
-        assert_eq!(
-            shown_estimate(&offers, &amulet, &rare, None),
-            None,
-            "no rates yet"
-        );
-        assert_eq!(
-            shown_estimate(&offers, &amulet, &Err(NoFixedPrice::NotPriced), Some(WORTH)),
-            None,
-            "a fixed-name item isn't estimated"
-        );
-        let _ = offers.search(searched(Vec::new()), now);
-        assert_eq!(
-            shown_estimate(&offers, &amulet, &rare, Some(WORTH)),
-            None,
-            "while searching"
-        );
-    }
-
-    #[test]
-    fn the_price_of_a_unique_tells_its_suspicious_offers_in_every_priced_currency() {
-        use crate::price::{CurrencyPrice, Price, UniqueModifiers, UniquePrice};
-
-        let price = |exalted| Price {
-            exalted,
-            quantity: 100,
-            history: Vec::new(),
-        };
-        let unique = UniquePrice {
-            name: "Storm Bite".to_owned(),
-            base_type: "Gemini Bow".to_owned(),
-            price: price(2000.0),
-            modifiers: UniqueModifiers::default(),
-        };
-        let currencies = [CurrencyPrice {
-            name: "Vaal Orb".to_owned(),
-            exchange_id: "vaal".to_owned(),
-            price: price(10.0),
-        }];
-        let worth = Worth {
-            rates: RATES,
-            currencies: &currencies,
-        };
-        let fixed = Ok((FixedPrice::Unique(&unique), RATES));
-
-        let unique_reference = reference(&fixed, Some(worth)).unwrap();
-
-        // 40 Vaal Orbs are 400 ex, under a quarter of 2,000; 60 are 600 ex.
-        assert!(unique_reference.suspicious(40.0, "vaal"));
-        assert!(!unique_reference.suspicious(60.0, "vaal"));
-        assert_eq!(reference(&fixed, None), None, "the prices not known");
-        assert_eq!(
-            reference(&Err(NoFixedPrice::NotFixedName), Some(worth)),
-            None,
-            "the estimate tells them"
-        );
-    }
-
-    #[test]
-    fn a_price_of_the_currency_exchange_on_few_trades_tells_no_suspicious_offer() {
-        use crate::price::{CurrencyPrice, MIN_TRADES, Price};
-
-        // A Lesser Charging Rune at 40,156 ex on one trade: its honest offers aren't bait.
-        let rune = |quantity| CurrencyPrice {
-            name: "Lesser Charging Rune".to_owned(),
-            exchange_id: "lesser-charging-rune".to_owned(),
-            price: Price {
-                exalted: 40_156.0,
-                quantity,
-                history: Vec::new(),
-            },
-        };
-        let thin = rune(MIN_TRADES - 1);
-        let traded = rune(MIN_TRADES);
-
-        assert_eq!(
-            reference(&Ok((FixedPrice::Currency(&thin), RATES)), Some(WORTH)),
-            None
-        );
-        let traded = reference(&Ok((FixedPrice::Currency(&traded), RATES)), Some(WORTH)).unwrap();
-        assert!((traded.exalted - 40_156.0).abs() < 1e-9);
-    }
-
-    #[test]
-    fn a_rare_or_magic_item_searched_without_its_stats_has_no_estimate() {
-        use crate::trade::query::Query;
-
-        let amulet = amulet();
-        let now = Instant::now();
-        let estimated = |item: &Item, stats: bool| {
-            let mut search = searched(Vec::new());
-            if let (false, Query::Items(query)) = (stats, &mut search.query) {
-                query.stats.clear();
-            }
-            let mut offers = Offers::default();
-            let _ = offers.search(search, now);
-            offers.apply(
-                answer(divines(&[1.0, 1.1, 1.2]), 3, false, now),
-                SystemTime::now(),
-            );
-            shown_estimate(&offers, item, &Err(NoFixedPrice::NotFixedName), Some(WORTH))
-        };
-
-        // The offers of any item of its base say nothing of its price.
-        assert!(estimated(&amulet, true).is_some());
-        assert_eq!(estimated(&amulet, false), None);
-        let magic = Item::parse(
-            &CopiedItem::from_text(include_str!("item/test-items/en-magic-mace.txt")).unwrap(),
-        )
-        .unwrap();
-        assert_eq!(estimated(&magic, false), None);
-        // A normal item, an exceptional base searched by its sockets or its quality, a skill
-        // gem by its level and a waystone by its tier: priced by them, not by modifiers. A
-        // magic item is estimated as a rare.
-        for text in [
-            include_str!("item/test-items/en-owner-normal-quarterstaff-exceptional.txt"),
-            include_str!("item/test-items/en-owner-skill-gem.txt"),
-            // A waystone, priced first by its tier, which its base type holds.
-            include_str!("item/test-items/en-owner-rare-waystone.txt"),
-        ] {
-            let item = Item::parse(&CopiedItem::from_text(text).unwrap()).unwrap();
-            assert!(estimated(&item, false).is_some(), "{:?}", item.rarity());
-        }
-    }
-
-    #[test]
-    fn the_estimate_leaves_out_another_kind_of_quality_only_when_the_quality_is_searched() {
-        use crate::filters::Property;
-        use crate::item::{Catalyst, QualityKind};
-        use crate::trade::offers::OfferQuality;
-        use crate::trade::query::PropertyFilter;
-
-        let amulet = amulet();
-        // The cheapest offer, of attack quality.
-        let mut first_page = divines(&[1.0, 1.1, 1.2]);
-        first_page[0].item.quality = Some(OfferQuality {
-            value: 40,
-            kind: Some(QualityKind {
-                catalyst: Some(Catalyst::Attack),
-                words: "Attack Modifiers".to_owned(),
-            }),
-        });
-        let quality = PropertyFilter {
-            property: Property::Quality,
-            minimum: Some(40.0),
-            maximum: None,
-            rules_out: crate::trade::query::RulesOut::OfTheLeague,
-        };
-
-        for (properties, counted) in [(vec![quality], 2), (Vec::new(), 3)] {
-            let mut offers = Offers::default();
-            let now = Instant::now();
-            let _ = offers.search(searched(properties), now);
-            offers.apply(answer(first_page.clone(), 3, false, now), SystemTime::now());
-            let estimate = shown_estimate(
-                &offers,
-                &amulet,
-                &Err(NoFixedPrice::NotFixedName),
-                Some(WORTH),
-            )
-            .unwrap();
-            assert_eq!(estimate.counted, counted);
-        }
     }
 
     #[test]

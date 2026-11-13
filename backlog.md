@@ -26,7 +26,7 @@ One entry per item: what it is, its kind (the section it sits in), what it depen
 
 - A refusal of the trade site that isn't a limit (HTTP 403, a refusal since the security audit of 2026-11-10) reads "Trade site limit" in the waiting block, as a 429 (`src/ui/offers_block.rs`; `TradeError::Refused` carries no status, written to the log only): a text of its own, e.g. "The trade site refused the search", mock-up first. Depends on nothing; never seen in play so far. Noted on 2026-11-10.
 
-- The price of a unique told uncertain under 5 offers is still the reference of the suspicious offers (core review of 2026-11-10, outside the area; `reference` in `src/app.rs`): a change of behavior, out of the refactoring of 17e3d (owner, 2026-11-13). Decide with the owner whether such a price tells no suspicious offer, as a price of the currency exchange on fewer than 10 trades already does (`CurrencyPrice::trusted_exalted`); depends on nothing. Noted on 2026-11-13.
+- The price of a unique told uncertain under 5 offers is still the reference of the suspicious offers (core review of 2026-11-10, outside the area; `reference` in `src/app/item_view.rs`): a change of behavior, out of the refactoring of 17e3d (owner, 2026-11-13). Decide with the owner whether such a price tells no suspicious offer, as a price of the currency exchange on fewer than 10 trades already does (`CurrencyPrice::trusted_exalted`); depends on nothing. Noted on 2026-11-13.
 
 ## Edge cases
 
