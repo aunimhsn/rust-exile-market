@@ -12,10 +12,10 @@ use std::time::{Duration, SystemTime};
 use serde::{Deserialize, Serialize};
 
 use crate::league::League;
-
+/// The orbs the prices show in: the Divine, Chaos and Exalted Orbs.
 /// The currencies the prices show in.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Currency {
+pub enum Orb {
     Divine,
     Chaos,
     Exalted,

@@ -16,7 +16,7 @@ use crate::item::{
 };
 use crate::language::Language;
 use crate::logging;
-use crate::price::Currency;
+use crate::price::Orb;
 
 /// The stat of `+#% to Maximum Quality` (the Essence of the Breach, the implicit of a Breach
 /// Ring), whatever its kind (`explicit.`, `implicit.`…).
@@ -56,11 +56,11 @@ pub struct Price {
 
 /// The currency the prices show in for the trade site id `id`; `None` for another currency.
 #[must_use]
-pub fn shown_currency(id: &str) -> Option<Currency> {
+pub fn shown_currency(id: &str) -> Option<Orb> {
     match id {
-        "exalted" => Some(Currency::Exalted),
-        "divine" => Some(Currency::Divine),
-        "chaos" => Some(Currency::Chaos),
+        "exalted" => Some(Orb::Exalted),
+        "divine" => Some(Orb::Divine),
+        "chaos" => Some(Orb::Chaos),
         _ => None,
     }
 }

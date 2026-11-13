@@ -16,7 +16,7 @@
 //! when the next offers load.
 
 use crate::item::Catalyst;
-use crate::price::{self, Currency, CurrencyPrice, PriceList, Rates};
+use crate::price::{self, CurrencyPrice, Orb, PriceList, Rates};
 use crate::trade::offers::{self, ItemOffer};
 
 /// An offer under this share of the reference price is suspicious.
@@ -48,9 +48,9 @@ impl<'a> Worth<'a> {
     /// currency without price, or whose price stands on too few trades.
     fn in_exalted(self, amount: f64, id: &str) -> Option<f64> {
         let worth = match offers::shown_currency(id) {
-            Some(Currency::Exalted) => 1.0,
-            Some(Currency::Divine) => self.rates.divine,
-            Some(Currency::Chaos) => self.rates.chaos,
+            Some(Orb::Exalted) => 1.0,
+            Some(Orb::Divine) => self.rates.divine,
+            Some(Orb::Chaos) => self.rates.chaos,
             None => price::currency(self.currencies, id)?.trusted_exalted()?,
         };
         // A price of nothing, or none, would count an offer as free; so would an amount of

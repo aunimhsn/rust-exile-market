@@ -27,7 +27,7 @@ use crate::i18n::{Linked, Message, Translator};
 use crate::item::{Catalyst, Item};
 use crate::language::Language;
 use crate::offers_state::{LONG_WAIT, Offers, OffersState};
-use crate::price::Currency;
+use crate::price::Orb;
 use crate::price::estimate::Reference;
 use crate::roll_difference::CopiedLines;
 use crate::trade::offers::{ExchangeOffer, ItemOffer, Price, SellerStatus, shown_currency};
@@ -139,7 +139,7 @@ impl Row {
 /// of the prices with the decimals of the Divine Orbs.
 fn row_price(amount: f64, id: &str) -> RowPrice {
     RowPrice {
-        amount: format::amount(amount, shown_currency(id).unwrap_or(Currency::Divine)),
+        amount: format::amount(amount, shown_currency(id).unwrap_or(Orb::Divine)),
         currency: exchange_currencies::shown(id),
     }
 }
