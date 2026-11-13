@@ -1,13 +1,38 @@
 //! The prices of the fixed-name items of a league, from the price database: the uniques and
 //! the items of the currency exchange, in Exalted Orbs, with the rates of the Chaos and Divine
 //! Orbs to show them in the three currencies; and the modifiers of each unique with their
-//! ranges, the rolls of a unique copied without them.
+//! ranges, the rolls of a unique copied without them. The price of a copied item is found
+//! among them ([`fixed`]), or estimated from its offers on the trade site ([`estimate`]).
+
+pub mod estimate;
+pub mod fixed;
 
 use std::time::{Duration, SystemTime};
 
 use serde::{Deserialize, Serialize};
 
 use crate::league::League;
+/// The orbs the prices show in: the Divine, Chaos and Exalted Orbs.
+/// The currencies the prices show in.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Orb {
+    Divine,
+    Chaos,
+    Exalted,
+}
+
+impl Orb {
+    /// The orb whose id on the trade site is `id`; `None` for another currency.
+    #[must_use]
+    pub fn of(id: &str) -> Option<Self> {
+        match id {
+            "exalted" => Some(Self::Exalted),
+            "divine" => Some(Self::Divine),
+            "chaos" => Some(Self::Chaos),
+            _ => None,
+        }
+    }
+}
 
 /// How many Exalted Orbs a Chaos Orb and a Divine Orb are worth.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]

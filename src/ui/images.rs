@@ -3,7 +3,7 @@
 use egui::load::Bytes;
 use egui::{ImageSource, include_image};
 
-use crate::currencies::ExchangeCurrency;
+use crate::exchange_currencies::ExchangeCurrency;
 
 /// The emblem of the title bar and of the empty state, white, to tint.
 #[must_use]

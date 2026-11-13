@@ -12,7 +12,7 @@ use fluent_bundle::{FluentArgs, FluentBundle, FluentResource, FluentValue};
 use crate::filters::Property;
 use crate::item::{Affix, Catalyst, Lord, QualityKind, WaystoneProperty};
 use crate::language::Language;
-use crate::prices::Direction;
+use crate::price::Direction;
 use crate::trade::pseudo::Pseudo;
 use crate::window_error::Cause;
 

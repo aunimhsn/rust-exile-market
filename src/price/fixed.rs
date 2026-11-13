@@ -5,7 +5,7 @@
 use crate::item::{Item, Rarity};
 use crate::item_names::{ItemNames, UniqueNames};
 use crate::language::Language;
-use crate::prices::{CurrencyPrice, PriceList, UniquePrice};
+use crate::price::{CurrencyPrice, PriceList, UniquePrice};
 
 /// The price of a fixed-name item.
 #[derive(Debug, Clone, PartialEq)]
@@ -43,7 +43,7 @@ pub enum NoFixedPrice {
 
 /// The price of `item` among `prices`, none before they arrive; `names` find the items
 /// copied in French, and the uniques an unidentified item can be.
-pub fn fixed_price<'a>(
+pub fn price_of<'a>(
     item: &Item,
     prices: Option<&'a PriceList>,
     names: Option<&'a ItemNames>,
@@ -119,7 +119,7 @@ mod tests {
     use crate::item::CopiedItem;
     use crate::item_names::tests::item_names;
     use crate::league::League;
-    use crate::prices::{Price, Rates, UniqueModifiers};
+    use crate::price::{Price, Rates, UniqueModifiers};
     use std::time::SystemTime;
 
     fn price(exalted: f64) -> Price {
@@ -177,7 +177,7 @@ mod tests {
         names: Option<&ItemNames>,
     ) -> Result<String, NoFixedPrice> {
         let item = Item::parse(&CopiedItem::from_text(text).expect("an item")).expect("read");
-        fixed_price(&item, Some(prices), names).map(|price| match price {
+        price_of(&item, Some(prices), names).map(|price| match price {
             FixedPrice::Currency(currency) => currency.exchange_id.clone(),
             FixedPrice::Unique(unique) => unique.name.clone(),
             FixedPrice::Uniques(candidates) => candidates
@@ -218,8 +218,8 @@ mod tests {
     #[test]
     fn a_french_item_is_found_through_the_names_of_the_trade_site() {
         let names = item_names();
-        let stack = include_str!("item/test-items/fr-currency-stack.txt");
-        let crossbow = include_str!("item/test-items/fr-unique-crossbow.txt");
+        let stack = include_str!("../item/test-items/fr-currency-stack.txt");
+        let crossbow = include_str!("../item/test-items/fr-unique-crossbow.txt");
 
         assert_eq!(found(stack, Some(&names)), ok("transmute"));
         assert_eq!(found(crossbow, Some(&names)), ok("Mist Whisper"));
@@ -282,11 +282,11 @@ mod tests {
         let parse = |text| Item::parse(&CopiedItem::from_text(text).unwrap()).unwrap();
 
         assert_eq!(
-            fixed_price(&parse(orb), None, None),
+            price_of(&parse(orb), None, None),
             Err(NoFixedPrice::PricesUnknown)
         );
         assert_eq!(
-            fixed_price(&parse(rare), None, None),
+            price_of(&parse(rare), None, None),
             Err(NoFixedPrice::NotFixedName)
         );
     }

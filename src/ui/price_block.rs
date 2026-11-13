@@ -12,13 +12,14 @@ use egui::{
 use super::images;
 use super::theme::{color, size, text};
 use super::widgets;
-use crate::estimate::{COUNTED, Estimate};
 use crate::filters::{Filter, FilterKey};
-use crate::format::{self, Currency};
+use crate::format;
 use crate::i18n::{Message, Translator};
 use crate::item::{Item, Rarity};
-use crate::prices::{Direction, Price, Rates};
-use crate::pricing::{Candidate, FixedPrice, NoFixedPrice};
+use crate::price::Orb;
+use crate::price::estimate::{COUNTED, Estimate};
+use crate::price::fixed::{Candidate, FixedPrice, NoFixedPrice};
+use crate::price::{Direction, Price, Rates};
 use crate::session::PricesState;
 use crate::trade::query::SearchFilters;
 use crate::trade::stat_filters::LineStats;
@@ -47,7 +48,7 @@ const NAME_GAP: f32 = 12.0;
 /// Fewer offers make the price of a unique uncertain.
 const ENOUGH_OFFERS: u32 = 5;
 /// The currencies of the amounts, in their order.
-const CURRENCIES: [Currency; 3] = [Currency::Divine, Currency::Chaos, Currency::Exalted];
+const CURRENCIES: [Orb; 3] = [Orb::Divine, Orb::Chaos, Orb::Exalted];
 /// Under this many Divine or Chaos Orbs, an amount is too small to matter and isn't shown.
 const SMALL_AMOUNT: f64 = 0.1;
 
@@ -80,7 +81,7 @@ struct MarketPrice<'a> {
 enum Fixed {
     /// A unique, on fewer than [`ENOUGH_OFFERS`] offers when `uncertain`.
     Unique { uncertain: bool },
-    /// An item of the currency exchange, on fewer than [`crate::prices::MIN_TRADES`] trades
+    /// An item of the currency exchange, on fewer than [`crate::price::MIN_TRADES`] trades
     /// when `thin`.
     Exchange { thin: bool },
 }
@@ -380,7 +381,7 @@ impl PriceBlock<'_> {
 
     /// Draws the price of a possible unique at the right of its row, as [`list_price`] writes
     /// it, or that it has no offers; its width.
-    fn candidate_price(&self, ui: &Ui, row: Rect, listed: Option<(String, Currency)>) -> f32 {
+    fn candidate_price(&self, ui: &Ui, row: Rect, listed: Option<(String, Orb)>) -> f32 {
         let painter = ui.painter();
         let Some((amount, currency)) = listed else {
             let label = self.i18n.text(Message::NoOffers);
@@ -474,19 +475,19 @@ fn unit_amounts(exalted: f64, rates: Rates) -> String {
 /// `exalted` Exalted Orbs in `currency`, written as [`in_currency`] does, when worth showing:
 /// always in Exalted Orbs, the smallest currency; in Divine or Chaos Orbs, when the amount as
 /// written, rounded to two decimals, reaches [`SMALL_AMOUNT`].
-fn shown_amount(exalted: f64, currency: Currency, rates: Rates) -> Option<(String, &'static str)> {
+fn shown_amount(exalted: f64, currency: Orb, rates: Rates) -> Option<(String, &'static str)> {
     let written = (value_in(exalted, currency, rates) * 100.0).round() / 100.0;
-    (currency == Currency::Exalted || written >= SMALL_AMOUNT)
+    (currency == Orb::Exalted || written >= SMALL_AMOUNT)
         .then(|| in_currency(exalted, currency, rates))
 }
 
 /// `exalted` Exalted Orbs in `currency`, written, with the abbreviation of the currency, the
 /// same in every language.
-fn in_currency(exalted: f64, currency: Currency, rates: Rates) -> (String, &'static str) {
+fn in_currency(exalted: f64, currency: Orb, rates: Rates) -> (String, &'static str) {
     let abbreviation = match currency {
-        Currency::Divine => "div",
-        Currency::Chaos => "c",
-        Currency::Exalted => "ex",
+        Orb::Divine => "div",
+        Orb::Chaos => "c",
+        Orb::Exalted => "ex",
     };
     (
         format::amount(value_in(exalted, currency, rates), currency),
@@ -495,31 +496,31 @@ fn in_currency(exalted: f64, currency: Currency, rates: Rates) -> (String, &'sta
 }
 
 /// `exalted` Exalted Orbs in `currency`.
-fn value_in(exalted: f64, currency: Currency, rates: Rates) -> f64 {
+fn value_in(exalted: f64, currency: Orb, rates: Rates) -> f64 {
     match currency {
-        Currency::Divine => exalted / rates.divine,
-        Currency::Chaos => exalted / rates.chaos,
-        Currency::Exalted => exalted,
+        Orb::Divine => exalted / rates.divine,
+        Orb::Chaos => exalted / rates.chaos,
+        Orb::Exalted => exalted,
     }
 }
 
 /// The price of a row of a list, in one currency: Divine Orbs from one Divine Orb, Exalted
 /// Orbs under it.
-fn list_price(exalted: f64, rates: Rates) -> (String, Currency) {
+fn list_price(exalted: f64, rates: Rates) -> (String, Orb) {
     let currency = if exalted >= rates.divine {
-        Currency::Divine
+        Orb::Divine
     } else {
-        Currency::Exalted
+        Orb::Exalted
     };
     (in_currency(exalted, currency, rates).0, currency)
 }
 
 /// The orb of `currency`, `size` across.
-pub(super) fn orb(currency: Currency, size: f32) -> Image<'static> {
+pub(super) fn orb(currency: Orb, size: f32) -> Image<'static> {
     let source: ImageSource<'static> = match currency {
-        Currency::Divine => images::divine_orb(),
-        Currency::Chaos => images::chaos_orb(),
-        Currency::Exalted => images::exalted_orb(),
+        Orb::Divine => images::divine_orb(),
+        Orb::Chaos => images::chaos_orb(),
+        Orb::Exalted => images::exalted_orb(),
     };
     Image::new(source).fit_to_exact_size(Vec2::splat(size))
 }

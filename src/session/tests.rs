@@ -6,7 +6,7 @@ use super::*;
 use crate::item::{Affix, ModifierKind};
 use crate::language::Language;
 use crate::league::LeagueMode;
-use crate::prices::Rates;
+use crate::price::Rates;
 
 fn leagues(ids: &[&str]) -> MarketEvent {
     MarketEvent::Leagues(Leagues::new(ids.iter().map(|&id| League::new(id))))
@@ -477,7 +477,7 @@ fn an_item_copied_from_the_in_game_trade_is_read_again_from_its_copy() {
 
 /// The prices of Forbidden Rites with Soul Tether and the modifiers poe2scout writes for it.
 fn soul_tether_prices() -> PriceList {
-    use crate::prices::{Price, UniqueModifiers, UniquePrice};
+    use crate::price::{Price, UniqueModifiers, UniquePrice};
 
     let written = |modifiers: &[&str]| -> Vec<String> {
         modifiers

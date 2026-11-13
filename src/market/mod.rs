@@ -21,7 +21,7 @@ use poe2scout::Poe2Scout;
 use crate::http::Backoff;
 use crate::league::{League, Leagues};
 use crate::logging;
-use crate::prices::PriceList;
+use crate::price::PriceList;
 use crate::worker::{OnDrop, Outbox, Waited, Worker};
 use cache::PriceCache;
 
@@ -496,7 +496,7 @@ mod tests {
     use super::*;
     use crate::files::TestDirectory;
     use crate::http::HttpError;
-    use crate::prices::Rates;
+    use crate::price::Rates;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::mpsc::{self, Receiver};
     use std::sync::{Arc, Mutex};

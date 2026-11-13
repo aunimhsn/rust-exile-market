@@ -13,7 +13,7 @@ use crate::item::{Item, ItemState, Rarity};
 use crate::item_names::ItemNames;
 use crate::language::Language;
 use crate::league::League;
-use crate::prices::PriceList;
+use crate::price::PriceList;
 
 /// What a link searches.
 #[derive(Debug, Clone, PartialEq, Eq)]

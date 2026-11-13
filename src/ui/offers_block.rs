@@ -21,15 +21,16 @@ use super::offer_tooltip::{OfferTooltip, Pointer, TooltipState, reach};
 use super::theme::{color, size, text};
 use super::{icons, images, widgets};
 use crate::clipboard;
-use crate::currencies::{self, ExchangeCurrency};
-use crate::estimate::Reference;
-use crate::format::{self, Currency};
+use crate::exchange_currencies::{self, ExchangeCurrency};
+use crate::format;
 use crate::i18n::{Linked, Message, Translator};
 use crate::item::{Catalyst, Item};
 use crate::language::Language;
-use crate::offers::{LONG_WAIT, Offers, OffersState};
+use crate::offers_state::{LONG_WAIT, Offers, OffersState};
+use crate::price::Orb;
+use crate::price::estimate::Reference;
 use crate::roll_difference::CopiedLines;
-use crate::trade::offers::{ExchangeOffer, ItemOffer, Price, SellerStatus, currency};
+use crate::trade::offers::{ExchangeOffer, ItemOffer, Price, SellerStatus};
 use crate::trade::query::SearchKind;
 use crate::trade::search::Failure;
 
@@ -138,8 +139,8 @@ impl Row {
 /// of the prices with the decimals of the Divine Orbs.
 fn row_price(amount: f64, id: &str) -> RowPrice {
     RowPrice {
-        amount: format::amount(amount, currency(id).unwrap_or(Currency::Divine)),
-        currency: currencies::shown(id),
+        amount: format::amount(amount, Orb::of(id).unwrap_or(Orb::Divine)),
+        currency: exchange_currencies::shown(id),
     }
 }
 

@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use crate::files;
 use crate::league::League;
 use crate::logging;
-use crate::prices::PriceList;
+use crate::price::PriceList;
 
 /// Changed with the shape of [`PriceList`]: a file of another version is downloaded again.
 const VERSION: u32 = 6;
@@ -89,7 +89,7 @@ fn file_name(league: &League) -> String {
 mod tests {
     use super::*;
     use crate::files::TestDirectory;
-    use crate::prices::{CurrencyPrice, Price, Rates, UniqueModifiers, UniquePrice};
+    use crate::price::{CurrencyPrice, Price, Rates, UniqueModifiers, UniquePrice};
     use std::fs;
     use std::time::{Duration, SystemTime};
 

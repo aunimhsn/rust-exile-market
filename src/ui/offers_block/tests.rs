@@ -1,6 +1,6 @@
 use super::*;
-use crate::estimate::Worth;
-use crate::prices::Rates;
+use crate::price::Rates;
+use crate::price::estimate::Worth;
 use crate::trade::offers::OfferItem;
 use egui::Pos2;
 
@@ -64,7 +64,7 @@ fn an_offer_under_a_quarter_of_the_market_price_is_suspicious() {
         Row {
             price: Some(RowPrice {
                 amount: "3.2".to_owned(),
-                currency: currencies::shown("divine"),
+                currency: exchange_currencies::shown("divine"),
             }),
             is_suspicious: false,
             other_quality: None,
@@ -137,10 +137,10 @@ fn another_currency_has_its_icon_and_its_name_and_isnt_suspicious_without_price(
 #[test]
 fn an_offer_in_a_currency_of_the_price_database_may_be_suspicious() {
     // 12.4 div of reference: 10 Orbs of Annulment at 150 ex are 1,500 ex, under a quarter.
-    let currencies = [crate::prices::CurrencyPrice {
+    let currencies = [crate::price::CurrencyPrice {
         name: "Orb of Annulment".to_owned(),
         exchange_id: "annul".to_owned(),
-        price: crate::prices::Price {
+        price: crate::price::Price {
             exalted: 150.0,
             quantity: 100,
             history: Vec::new(),
@@ -239,7 +239,7 @@ fn an_offer_of_the_exchange_shows_the_price_of_one_item_and_its_stock() {
         [Row {
             price: Some(RowPrice {
                 amount: "175".to_owned(),
-                currency: currencies::shown("exalted"),
+                currency: exchange_currencies::shown("exalted"),
             }),
             is_suspicious: false,
             other_quality: None,

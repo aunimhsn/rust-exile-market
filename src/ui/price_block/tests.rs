@@ -1,6 +1,6 @@
 use super::*;
-use crate::estimate::{Reference, Worth};
-use crate::prices::{CurrencyPrice, UniqueModifiers, UniquePrice};
+use crate::price::estimate::{Reference, Worth};
+use crate::price::{CurrencyPrice, UniqueModifiers, UniquePrice};
 use std::time::Duration;
 
 const RATES: Rates = Rates {
@@ -146,9 +146,9 @@ fn before_the_prices_the_block_says_they_are_coming() {
 
 #[test]
 fn the_price_is_written_in_each_currency() {
-    assert_eq!(in_currency(9000.0, Currency::Divine, RATES).0, "12");
-    assert_eq!(in_currency(9000.0, Currency::Chaos, RATES).0, "120");
-    assert_eq!(in_currency(9000.0, Currency::Exalted, RATES).0, "9K");
+    assert_eq!(in_currency(9000.0, Orb::Divine, RATES).0, "12");
+    assert_eq!(in_currency(9000.0, Orb::Chaos, RATES).0, "120");
+    assert_eq!(in_currency(9000.0, Orb::Exalted, RATES).0, "9K");
 }
 
 #[test]
@@ -156,22 +156,22 @@ fn an_amount_under_a_tenth_of_divine_or_chaos_orb_is_hidden() {
     let shown =
         |exalted, currency| shown_amount(exalted, currency, RATES).map(|(amount, _)| amount);
     // 0.1 div, 1 c: all shown.
-    assert_eq!(shown(75.0, Currency::Divine).as_deref(), Some("0.1"));
+    assert_eq!(shown(75.0, Orb::Divine).as_deref(), Some("0.1"));
     // 0.08 div, 0.8 c: the Divine Orbs hidden.
-    assert_eq!(shown(60.0, Currency::Divine), None);
-    assert_eq!(shown(60.0, Currency::Chaos).as_deref(), Some("0.8"));
+    assert_eq!(shown(60.0, Orb::Divine), None);
+    assert_eq!(shown(60.0, Orb::Chaos).as_deref(), Some("0.8"));
     // 0.0013 div, 0.013 c: only the Exalted Orbs.
-    assert_eq!(shown(1.0, Currency::Divine), None);
-    assert_eq!(shown(1.0, Currency::Chaos), None);
-    assert_eq!(shown(1.0, Currency::Exalted).as_deref(), Some("1"));
-    assert_eq!(shown(0.004, Currency::Exalted).as_deref(), Some("<0.01"));
+    assert_eq!(shown(1.0, Orb::Divine), None);
+    assert_eq!(shown(1.0, Orb::Chaos), None);
+    assert_eq!(shown(1.0, Orb::Exalted).as_deref(), Some("1"));
+    assert_eq!(shown(0.004, Orb::Exalted).as_deref(), Some("<0.01"));
 }
 
 #[test]
 fn the_threshold_reads_the_amount_as_written() {
     // 0.0953 div, written 0.1: shown; 0.0947 div, written 0.09: hidden.
-    assert!(shown_amount(71.5, Currency::Divine, RATES).is_some());
-    assert!(shown_amount(71.0, Currency::Divine, RATES).is_none());
+    assert!(shown_amount(71.5, Orb::Divine, RATES).is_some());
+    assert!(shown_amount(71.0, Orb::Divine, RATES).is_none());
 }
 
 #[test]
@@ -182,14 +182,8 @@ fn the_unit_price_leaves_out_the_small_amounts() {
 
 #[test]
 fn a_row_of_a_list_is_in_divine_orbs_from_one_divine_orb() {
-    assert_eq!(
-        list_price(3000.0, RATES),
-        ("4".to_owned(), Currency::Divine)
-    );
-    assert_eq!(
-        list_price(640.0, RATES),
-        ("640".to_owned(), Currency::Exalted)
-    );
+    assert_eq!(list_price(3000.0, RATES), ("4".to_owned(), Orb::Divine));
+    assert_eq!(list_price(640.0, RATES), ("640".to_owned(), Orb::Exalted));
 }
 
 #[test]

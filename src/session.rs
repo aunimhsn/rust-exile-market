@@ -4,15 +4,15 @@
 use std::time::{Duration, SystemTime};
 
 use crate::clipboard::ClipboardEvent;
-use crate::estimate::Worth;
 use crate::game_data::{self, ItemBase, StatSource, TradeGroup, TradeItem, TradeStats};
 use crate::item::{CopiedItem, Item, ItemState, Modifier, ParseError, Rarity, RollsSource};
 use crate::item_names::ItemNames;
 use crate::league::{League, Leagues};
 use crate::logging;
 use crate::market::{MarketEvent, Source};
-use crate::prices::{PriceList, Rates};
-use crate::pricing::{self, FixedPrice, NoFixedPrice};
+use crate::price::estimate::Worth;
+use crate::price::fixed::{self, FixedPrice, NoFixedPrice};
+use crate::price::{PriceList, Rates};
 use crate::roll_difference::CopiedLines;
 use crate::tier_rolls::TierRolls;
 use crate::trade::link::{self, TradeTarget};
@@ -188,7 +188,7 @@ fn unique_rolls(
     names: Option<&ItemNames>,
     prices: Option<&PriceList>,
 ) -> Vec<Modifier> {
-    match pricing::fixed_price(item, prices, names) {
+    match fixed::price_of(item, prices, names) {
         Ok(FixedPrice::Unique(unique)) => game_data::with_unique_rolls(
             item.language(),
             copied,
@@ -462,7 +462,7 @@ impl Session {
     /// rates of the currencies of these prices.
     pub fn fixed_price(&self, item: &Item) -> Result<(FixedPrice<'_>, Rates), NoFixedPrice> {
         let prices = self.league_prices().map(|prices| &prices.list);
-        let price = pricing::fixed_price(item, prices, self.item_names.as_ref())?;
+        let price = fixed::price_of(item, prices, self.item_names.as_ref())?;
         // A price comes from the prices, which have their rates.
         let rates = prices.ok_or(NoFixedPrice::PricesUnknown)?.rates;
         Ok((price, rates))
