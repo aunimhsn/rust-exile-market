@@ -192,7 +192,7 @@ impl Desk {
     /// The kind of the search of the offers of the item shown, when it can be searched.
     pub(super) fn search_kind(&self) -> Option<SearchKind> {
         let item = self.session.item()?.parsed().ok()?;
-        self.session.search_kind(item)
+        self.session.trade(item).search_kind()
     }
 
     /// The search of the offers of the item shown, with its filters as they are, when it can
@@ -200,8 +200,8 @@ impl Desk {
     fn shown_search(&self) -> Option<Search> {
         let shown = self.session.item()?;
         let item = shown.parsed().ok()?;
-        let filters = search_filters(&self.session, shown, item, &self.filters);
-        self.session.trade_search(item, filters)
+        let trade = self.session.trade(item);
+        trade.search(search_filters(&trade, shown, &self.filters))
     }
 
     /// The state of the trade site in the status bar, at `now`: the long wait before the next

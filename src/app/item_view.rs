@@ -11,22 +11,21 @@ use crate::offers_state::{Offers, OffersState};
 use crate::price::Rates;
 use crate::price::estimate::{Estimate, Reference, Worth};
 use crate::price::fixed::{FixedPrice, NoFixedPrice};
-use crate::session::{PricesState, Session, ShownItem};
+use crate::session::{ItemTrade, PricesState, Session, ShownItem};
 use crate::trade::query::{SearchFilters, SearchKind};
 use crate::ui::{
     ItemBlock, ItemBlockAction, LineFacts, OffersAction, OffersBlock, PriceBlock, ShownLeague,
     StatChecks, Stats,
 };
 
-/// The filters of the search of `item`, the item `shown`: as the player set them, or else
-/// by default.
+/// The filters of the search of the item of `trade`, the item `shown`: as the player set
+/// them, or else by default.
 pub(super) fn search_filters(
-    session: &Session,
+    trade: &ItemTrade,
     shown: &ShownItem,
-    item: &Item,
     filters: &Filters,
 ) -> SearchFilters {
-    let (_, search) = every_filter(session, shown, item, filters);
+    let (_, search) = every_filter(trade, shown, filters);
     search
 }
 
@@ -39,15 +38,15 @@ fn line_facts(shown: &ShownItem) -> LineFacts<'_> {
     }
 }
 
-/// Every filter of `item`, the item `shown`, checked or not, as the player set them or else
-/// by default, and the filters of its search they make ([`search_filters`]).
+/// Every filter of the item of `trade`, the item `shown`, checked or not, as the player set
+/// them or else by default, and the filters of its search they make ([`search_filters`]).
 fn every_filter(
-    session: &Session,
+    trade: &ItemTrade,
     shown: &ShownItem,
-    item: &Item,
     filters: &Filters,
 ) -> (Vec<(FilterKey, Filter)>, SearchFilters) {
-    let stats = Stats::new(item, line_facts(shown), session.filtered_base_type(item));
+    let item = trade.item();
+    let stats = Stats::new(item, line_facts(shown), trade.filtered_base_type());
     let all = stats.filters(filters);
     let search = SearchFilters {
         states: filters.lit_states_of(item).collect(),
@@ -89,6 +88,7 @@ impl ItemView<'_> {
             has_bug_report,
             i18n,
         } = self;
+        let trade = session.trade(item);
         let fixed_price = session.fixed_price(item);
         let worth = session.worth();
         let estimate = shown_estimate(offers, item, &fixed_price, worth);
@@ -97,14 +97,14 @@ impl ItemView<'_> {
             reference(&fixed_price, worth).or(estimate.map(|estimate| estimate.reference));
         let action = ItemBlock::new(item, line_facts(shown), filters, i18n)
             // The pill shows only when its link can be opened: the league and the search known.
-            .tradable(session.tradable(item))
-            .stats(stats_open, session.filtered_base_type(item))
+            .tradable(trade.is_tradable())
+            .stats(stats_open, trade.filtered_base_type())
             .show(ui);
         // With the filters as the player just left them.
-        let (all, searched) = every_filter(session, shown, item, filters);
+        let (all, searched) = every_filter(&trade, shown, filters);
         let checks = StatChecks::of(&searched, shown.stats(), &all);
         if action == Some(ItemBlockAction::CheckOnTrade)
-            && let Some(url) = session.trade_url(item, searched)
+            && let Some(url) = trade.url(searched)
         {
             ui.ctx().open_url(OpenUrl::new_tab(url));
         }
@@ -132,7 +132,7 @@ impl ItemView<'_> {
             }
             .show(ui)
         } else {
-            if session.must_identify(item) {
+            if trade.must_identify() {
                 OffersBlock::identify(ui, i18n);
             }
             None

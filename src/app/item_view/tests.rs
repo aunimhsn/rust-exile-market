@@ -22,8 +22,9 @@ fn a_lit_state_tag_reaches_the_search() {
     let shown = session.item().expect("an item");
     let item = shown.parsed().expect("read");
     let corrupted = |filters: &Filters| {
-        let search = session
-            .trade_search(item, search_filters(&session, shown, item, filters))
+        let trade = session.trade(item);
+        let search = trade
+            .search(search_filters(&trade, shown, filters))
             .expect("a search");
         let Query::Items(items) = search.query else {
             panic!("a search of items");
