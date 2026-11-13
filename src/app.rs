@@ -29,9 +29,10 @@ use crate::price::fixed::{FixedPrice, NoFixedPrice};
 use crate::recent_items::RecentItems;
 use crate::session::{LeagueChange, PricesState, Session, ShownItem};
 use crate::settings::{SettingChange, Settings, SettingsFile};
+use crate::trade::Refusal;
+use crate::trade::names_watch::ItemNamesWatch;
 use crate::trade::query::{SearchFilters, SearchKind};
 use crate::trade::search::{OfferSearch, Search};
-use crate::trade::{ItemNamesWatch, Refusal};
 use crate::ui::{
     self, Bubble, BubbleAction, BugReportAction, BugReportPanel, EmptyState, ItemBlock,
     ItemBlockAction, LeagueList, LeagueListAction, LineFacts, OffersAction, OffersBlock,
