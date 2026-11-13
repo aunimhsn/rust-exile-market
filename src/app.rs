@@ -1,6 +1,7 @@
 //! The application: the session, the settings, the clipboard watching, the price-check
 //! hotkey and the price database, and the window built from the components of [`crate::ui`].
 
+mod desk;
 mod item_view;
 mod leagues;
 mod open_lists;
@@ -14,6 +15,7 @@ use egui::{
     WindowLevel, X11WindowType, pos2, vec2,
 };
 
+use self::desk::{EMPTY_HEIGHT, copied_again, lines_moved, trade_status};
 use self::item_view::{ItemView, search_filters};
 use self::open_lists::{OpenList, OpenLists};
 use crate::bug_report::{Facts, JoinedItem, LogSession, Report};
@@ -24,7 +26,7 @@ use crate::i18n::{DOWNLOAD_QUOTE_COUNT, Message, Translator};
 use crate::item::CopiedItem;
 use crate::league::League;
 use crate::market::MarketWatch;
-use crate::offers_state::{LONG_WAIT, Offers};
+use crate::offers_state::Offers;
 use crate::overlay::{self, Activation, ClickWatch, KeyboardFocus, Overlay, ScreenRect};
 use crate::recent_items::RecentItems;
 use crate::session::{LeagueChange, PricesState, Session, ShownItem};
@@ -829,22 +831,6 @@ fn overlay_frame(ui: &egui::Ui, editing: bool) -> overlay::Frame {
     }
 }
 
-/// The item shown came back with the shape `back` of its modifiers when it was left, and has the
-/// shape `shown` now: read again with the names of the trade site arrived since, its lines moved.
-fn lines_moved(back: Option<&[usize]>, shown: Option<&[usize]>) -> bool {
-    back.is_some_and(|back| shown != Some(back))
-}
-
-/// `item` copied by the hotkey again: the item already shown, which stays as it is. Copied
-/// with Ctrl+C after another text, it is read again with the latest known price, its filters
-/// and offers kept.
-fn copied_again(by_hotkey: bool, last: Option<&CopiedItem>, item: &CopiedItem) -> bool {
-    by_hotkey && last == Some(item)
-}
-
-/// The height of the window over the game for an item that can't be read, in points.
-const EMPTY_HEIGHT: f32 = 160.0;
-
 /// `points` in the physical pixels of a screen of `scale` pixels per point.
 #[expect(
     clippy::cast_possible_truncation,
@@ -863,27 +849,12 @@ fn to_points(pixels: i32, scale: f32) -> f32 {
     pixels as f32 / scale
 }
 
-/// The state of the trade site in the status bar, at `now`: the long wait before the next
-/// search of `kind`, or else the age of the last search.
-fn trade_status(offers: &Offers, kind: SearchKind, now: Instant, clock: SystemTime) -> TradeStatus {
-    match (offers.wait(kind, now), offers.last_search()) {
-        (wait, _) if wait > LONG_WAIT => TradeStatus::Waiting(wait),
-        (_, Some(searched)) => {
-            TradeStatus::Searched(clock.duration_since(searched).unwrap_or_default())
-        }
-        (_, None) => TradeStatus::Idle,
-    }
-}
-
 /// A sentence of the download of the prices, drawn at random.
 fn random_quote() -> usize {
     // Each `RandomState` has its own keys: enough to draw a sentence.
     let [byte, ..] = RandomState::new().hash_one(()).to_le_bytes();
     usize::from(byte) % DOWNLOAD_QUOTE_COUNT
 }
-
-#[cfg(test)]
-mod smoke_tests;
 
 #[cfg(test)]
 mod tests;

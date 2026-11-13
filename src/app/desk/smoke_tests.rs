@@ -5,7 +5,7 @@
 
 use egui::{Event, Order, RawInput, Rect, pos2};
 
-use super::*;
+use crate::app::*;
 use crate::item::{Item, test_items};
 use crate::language::Language;
 use crate::market::MarketEvent;
