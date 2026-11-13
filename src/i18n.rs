@@ -392,18 +392,22 @@ pub const DOWNLOAD_QUOTE_COUNT: usize = DOWNLOAD_QUOTES.len();
 /// bold or in its color: "Rise of the Abyssal has started." is `""`, the league, then
 /// `" has started."`.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Around {
+pub struct CutSentence {
     pub before: String,
     pub after: String,
 }
 
-impl Around {
+impl CutSentence {
     /// The whole sentence, `argument` in its place.
     #[must_use]
-    pub fn with(&self, argument: &str) -> String {
+    pub fn whole(&self, argument: &str) -> String {
         format!("{}{argument}{}", self.before, self.after)
     }
 }
+
+/// The character [`Translator::around`] puts in place of an argument: no translation writes
+/// it, so that the place of the argument is exact whatever the sentence says.
+const PLACE: &str = "\u{1}";
 
 /// Gives the texts of the interface in one language.
 pub struct Translator {
@@ -498,7 +502,7 @@ impl Translator {
 
     /// The title of the download of the prices, around the name of the league.
     #[must_use]
-    pub fn download_title(&self) -> Around {
+    pub fn download_title(&self) -> CutSentence {
         self.around(DOWNLOAD_TITLE, "league", FluentArgs::new())
     }
 
@@ -800,7 +804,7 @@ impl Translator {
     /// The requirements line around its parts, which the caller writes each in its color:
     /// `"Requires "`, then the parts.
     #[must_use]
-    pub fn requires(&self) -> Around {
+    pub fn requirements_line(&self) -> CutSentence {
         self.around(REQUIRES, "parts", FluentArgs::new())
     }
 
@@ -826,14 +830,14 @@ impl Translator {
 
     /// The bubble of a new league, around its name.
     #[must_use]
-    pub fn new_league(&self) -> Around {
+    pub fn new_league(&self) -> CutSentence {
         self.around(NEW_LEAGUE, "league", FluentArgs::new())
     }
 
     /// The bubble of a newer version of `app`, around the version: "Exile Market 0.2.0 is
     /// available."
     #[must_use]
-    pub fn update_available(&self, app: &str) -> Around {
+    pub fn update_available(&self, app: &str) -> CutSentence {
         let mut args = FluentArgs::new();
         args.set("app", app);
         self.around(UPDATE_AVAILABLE, "version", args)
@@ -858,7 +862,7 @@ impl Translator {
 
     /// The checkbox that joins the item shown to the bug report, around its name, in bold.
     #[must_use]
-    pub fn bug_report_join_item(&self) -> Around {
+    pub fn bug_report_join_item(&self) -> CutSentence {
         self.around(BUG_REPORT_JOIN_ITEM, "name", FluentArgs::new())
     }
 
@@ -980,23 +984,11 @@ impl Translator {
 
     /// The message `id`, its argument `report` the message `link`, and where that one is in it.
     fn linked(&self, id: &str, link: &str) -> Linked {
-        // A mark no translation holds stands for the words, so that their place is exact
-        // whatever the sentence says; a translation without them has no link.
-        const MARK: char = '\u{E000}';
         let words = self.format(link, None);
-        let mut args = FluentArgs::new();
-        args.set("report", MARK.to_string());
-        let marked = self.format(id, Some(&args));
-        let Some(start) = marked.find(MARK) else {
-            debug_assert!(false, "{id} without its link");
-            return Linked {
-                text: marked,
-                link: 0..0,
-            };
-        };
-        let text = marked.replacen(MARK, &words, 1);
+        let sentence = self.around(id, "report", FluentArgs::new());
+        let start = sentence.before.len();
         Linked {
-            text,
+            text: sentence.whole(&words),
             link: start..start + words.len(),
         }
     }
@@ -1052,23 +1044,23 @@ impl Translator {
         self.format(id, Some(&args))
     }
 
-    /// The message `id` formatted with `args`, cut around the argument `name`. Without the
-    /// argument in the translation, which the tests rule out, the whole message comes before.
-    fn around(&self, id: &str, name: &'static str, mut args: FluentArgs<'_>) -> Around {
-        // A character no translation writes, in place of the argument.
-        const PLACE: &str = "\u{1}";
+    /// The message `id` formatted with `args`, cut around the argument `name`, which the
+    /// translation writes once. Without the argument, which the tests rule out, the whole
+    /// message comes before it.
+    fn around(&self, id: &str, name: &'static str, mut args: FluentArgs<'_>) -> CutSentence {
         args.set(name, PLACE);
         let line = self.format(id, Some(&args));
-        if let Some((before, after)) = line.split_once(PLACE) {
-            return Around {
-                before: before.to_owned(),
-                after: after.to_owned(),
+        let Some((before, after)) = line.split_once(PLACE) else {
+            debug_assert!(false, "no {name} in the message {id}");
+            return CutSentence {
+                before: line,
+                after: String::new(),
             };
-        }
-        debug_assert!(false, "no {name} in the message {id}");
-        Around {
-            before: line,
-            after: String::new(),
+        };
+        debug_assert!(!after.contains(PLACE), "{name} twice in the message {id}");
+        CutSentence {
+            before: before.to_owned(),
+            after: after.to_owned(),
         }
     }
 

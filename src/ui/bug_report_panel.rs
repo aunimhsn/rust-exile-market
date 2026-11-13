@@ -240,7 +240,7 @@ impl<'a> BugReportPanel<'a> {
                 &regular,
                 TextFormat::simple(text::name_in_choice(), color::TEXT),
             );
-            (sentence.with(name), job)
+            (sentence.whole(name), job)
         } else {
             let label = self.i18n.text(Message::BugReportJoinUnreadable);
             let job = LayoutJob::simple_singleline(label.clone(), text::bubble(), color::TEXT);

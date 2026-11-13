@@ -304,8 +304,8 @@ fn the_author_line_ends_with_the_site_in_every_language() {
     }
 }
 
-fn around(before: &str, after: &str) -> Around {
-    Around {
+fn cut(before: &str, after: &str) -> CutSentence {
+    CutSentence {
         before: before.to_owned(),
         after: after.to_owned(),
     }
@@ -315,25 +315,25 @@ fn around(before: &str, after: &str) -> Around {
 fn a_sentence_is_cut_around_its_argument() {
     let english = Translator::new(Language::English);
 
-    assert_eq!(english.new_league(), around("", " has started."));
+    assert_eq!(english.new_league(), cut("", " has started."));
     assert_eq!(
         english.update_available("App"),
-        around("App ", " is available.")
+        cut("App ", " is available.")
     );
     assert_eq!(
         english.download_title(),
-        around("Downloading the prices of ", "")
+        cut("Downloading the prices of ", "")
     );
-    assert_eq!(english.requires(), around("Requires ", ""));
-    // Cut where the argument goes, not where its text is first found in the sentence.
-    let join = english.bug_report_join_item();
-    assert_eq!(join, around("Join the item shown: ", ""));
-    assert_eq!(join.with("a"), "Join the item shown: a");
+    assert_eq!(english.requirements_line(), cut("Requires ", ""));
+    assert_eq!(
+        english.bug_report_join_item(),
+        cut("Join the item shown: ", "")
+    );
 }
 
 #[test]
 fn every_sentence_cut_around_an_argument_holds_it_in_every_language() {
-    // `Translator::around` asserts that the translation holds the argument.
+    // `Translator::around` also asserts that the translation holds the argument.
     for language in Language::ALL {
         let translator = Translator::new(language);
         for sentence in [
@@ -341,9 +341,12 @@ fn every_sentence_cut_around_an_argument_holds_it_in_every_language() {
             translator.update_available("App"),
             translator.download_title(),
             translator.bug_report_join_item(),
-            translator.requires(),
+            translator.requirements_line(),
         ] {
-            assert_ne!(sentence.with(""), "", "{language:?}");
+            assert!(
+                !sentence.whole("").contains(PLACE),
+                "{sentence:?} in {language:?}"
+            );
         }
     }
 }

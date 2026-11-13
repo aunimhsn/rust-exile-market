@@ -12,7 +12,7 @@ use egui::{
 use super::theme::{self, color, size, text};
 use super::title_bar::LEAGUE_BLOCK_LEFT;
 use super::widgets;
-use crate::i18n::{Around, Message, Translator};
+use crate::i18n::{CutSentence, Message, Translator};
 use crate::league::League;
 use crate::update::Version;
 
@@ -38,7 +38,7 @@ pub enum BubbleAction {
 /// A bubble: a sentence with a part in bold, its pill and its cross.
 pub struct Bubble<'a> {
     id: &'static str,
-    sentence: Around,
+    sentence: CutSentence,
     strong: String,
     pill: String,
     i18n: &'a Translator,
@@ -80,7 +80,7 @@ impl<'a> Bubble<'a> {
 
     fn new(
         id: &'static str,
-        sentence: Around,
+        sentence: CutSentence,
         strong: &str,
         pill: String,
         i18n: &'a Translator,
