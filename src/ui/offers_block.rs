@@ -6,20 +6,20 @@
 //! The rows are decided apart from the drawing ([`item_rows`], [`exchange_rows`]), and
 //! tested.
 
-use std::f32::consts::{PI, TAU};
+use std::f32::consts::PI;
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime};
 
 use egui::text::{LayoutJob, TextFormat};
 use egui::{
-    Color32, CursorIcon, Galley, Id, Key, Modifiers, Painter, Pos2, Rect, Response, Role, Sense,
-    Stroke, Ui, Vec2, WidgetInfo, pos2, vec2,
+    Color32, CursorIcon, Galley, Id, Key, Modifiers, Pos2, Rect, Response, Role, Sense, Stroke, Ui,
+    Vec2, WidgetInfo, pos2, vec2,
 };
 
 use super::item_block::rarity_color;
 use super::offer_tooltip::{OfferTooltip, Pointer, TooltipState, reach};
 use super::theme::{color, size, text};
-use super::{images, widgets};
+use super::{icons, images, widgets};
 use crate::clipboard;
 use crate::currencies::{self, ExchangeCurrency};
 use crate::estimate::Reference;
@@ -50,18 +50,11 @@ const HEAD_GAP: f32 = 6.0;
 const SEARCH_ICON: f32 = 22.0;
 const REFRESH_ICON: f32 = 18.0;
 const MORE_ICON: f32 = 16.0;
-/// The width of the strokes of the icons, on their grid of 16.
-const ICON_STROKE: f32 = 1.8;
 /// The growth of the icons under the pointer, and the quarter turn of the refresh icon.
 const SEARCH_GROWTH: f32 = 0.15;
 const REFRESH_GROWTH: f32 = 0.12;
 /// The length of the hover motions, in seconds.
 const HOVER_TIME: f32 = 0.22;
-/// The spinner of the search.
-const SPINNER_RADIUS: f32 = 6.0;
-const SPINNER_STROKE: f32 = 2.0;
-/// Turns per second.
-const SPINNER_SPEED: f32 = 1.2;
 /// The rows: the space above and under their text, and between their columns.
 const ROW_PADDING_Y: f32 = 5.0;
 const COLUMN_GAP: f32 = 12.0;
@@ -507,7 +500,7 @@ impl<'a> OffersBlock<'a> {
                         Sense::hover(),
                     );
                     let time = ui.input(|input| input.time);
-                    spinner(ui.painter(), rect.center() - vec2(0.0, MORE_RAISE), time);
+                    icons::spinner(ui.painter(), rect.center() - vec2(0.0, MORE_RAISE), time);
                     ui.ctx().request_repaint();
                 }
                 More::None => ui.add_space(PADDING_Y),
@@ -585,7 +578,7 @@ impl<'a> OffersBlock<'a> {
         match block {
             Block::Search => {
                 painter.rect_filled(rect, 0.0, color::ACCENT);
-                search_icon(
+                icons::search_icon(
                     painter,
                     rect.center(),
                     SEARCH_ICON * (1.0 + SEARCH_GROWTH * hover),
@@ -594,7 +587,7 @@ impl<'a> OffersBlock<'a> {
             }
             Block::Again => {
                 painter.rect_filled(rect, 0.0, color::ACCENT);
-                refresh_icon(
+                icons::refresh_icon(
                     painter,
                     rect.center(),
                     REFRESH_ICON * (1.0 + REFRESH_GROWTH * hover),
@@ -604,7 +597,7 @@ impl<'a> OffersBlock<'a> {
             }
             Block::Searching => {
                 painter.rect_filled(rect, 0.0, color::CONTROL);
-                spinner(painter, rect.center(), ui.input(|input| input.time));
+                icons::spinner(painter, rect.center(), ui.input(|input| input.time));
                 ui.ctx().request_repaint();
             }
             Block::Waiting(wait) => {
@@ -1140,7 +1133,7 @@ fn more(ui: &mut Ui, i18n: &Translator) -> Response {
     );
     let tint = if lit { color::ACCENT } else { color::WEAK };
     let center = rect.center() + vec2(0.0, -MORE_RAISE + MORE_SLIDE * slide);
-    double_chevron(ui.painter(), center, MORE_ICON, tint);
+    icons::double_chevron(ui.painter(), center, MORE_ICON, tint);
     response
         .on_hover_text(tooltip)
         .on_hover_cursor(CursorIcon::PointingHand)
@@ -1150,85 +1143,6 @@ fn more(ui: &mut Ui, i18n: &Translator) -> Response {
 fn overshoot(t: f32) -> f32 {
     let eased = 1.0 - (1.0 - t).powi(3);
     eased + 0.12 * (PI * t).sin() * t
-}
-
-/// A point of an icon drawn on a grid of 16, `size` across, centered on `center`.
-fn grid(center: Pos2, size: f32) -> impl Fn(f32, f32) -> Pos2 {
-    let scale = size / 16.0;
-    move |x, y| center + vec2(x - 8.0, y - 8.0) * scale
-}
-
-fn icon_stroke(size: f32, tint: Color32) -> Stroke {
-    Stroke::new(ICON_STROKE * size / 16.0, tint)
-}
-
-/// The magnifying glass of the search block.
-fn search_icon(painter: &Painter, center: Pos2, size: f32, tint: Color32) {
-    let point = grid(center, size);
-    let stroke = icon_stroke(size, tint);
-    painter.circle_stroke(point(7.0, 7.0), 4.6 * size / 16.0, stroke);
-    painter.line_segment([point(10.4, 10.4), point(14.0, 14.0)], stroke);
-}
-
-/// The refresh arrow, turned by `turn` quarters.
-fn refresh_icon(painter: &Painter, center: Pos2, size: f32, turn: f32, tint: Color32) {
-    let point = grid(center, size);
-    let (sin, cos) = (turn * PI / 2.0).sin_cos();
-    let rotate = |p: Pos2| {
-        center + {
-            let v = p - center;
-            vec2(v.x * cos - v.y * sin, v.x * sin + v.y * cos)
-        }
-    };
-    let stroke = icon_stroke(size, tint);
-    // Three quarters and a half of a circle, from its right, clockwise.
-    let arc: Vec<Pos2> = (0..=28)
-        .map(|step| {
-            #[expect(clippy::cast_precision_loss, reason = "a small step")]
-            let angle = (step as f32 / 28.0) * TAU * 7.0 / 8.0;
-            rotate(point(8.0 + 5.5 * angle.cos(), 8.0 + 5.5 * angle.sin()))
-        })
-        .collect();
-    painter.line(arc, stroke);
-    painter.line(
-        vec![
-            rotate(point(13.6, 2.6)),
-            rotate(point(13.6, 5.9)),
-            rotate(point(10.3, 5.9)),
-        ],
-        stroke,
-    );
-}
-
-/// The double chevron pointing down.
-fn double_chevron(painter: &Painter, center: Pos2, size: f32, tint: Color32) {
-    let point = grid(center, size);
-    let stroke = icon_stroke(size, tint);
-    for top in [3.5, 8.5] {
-        painter.line(
-            vec![point(4.0, top), point(8.0, top + 4.0), point(12.0, top)],
-            stroke,
-        );
-    }
-}
-
-/// A ring with a turning quarter, at `time` seconds.
-fn spinner(painter: &Painter, center: Pos2, time: f64) {
-    painter.circle_stroke(
-        center,
-        SPINNER_RADIUS,
-        Stroke::new(SPINNER_STROKE, color::CONTROL_LINE),
-    );
-    #[expect(clippy::cast_possible_truncation, reason = "a fraction of a turn")]
-    let start = ((time * f64::from(SPINNER_SPEED)).fract() as f32) * TAU;
-    let arc: Vec<Pos2> = (0..=8)
-        .map(|step| {
-            #[expect(clippy::cast_precision_loss, reason = "a small step")]
-            let angle = start + (step as f32 / 8.0) * TAU / 4.0;
-            center + vec2(angle.cos(), angle.sin()) * SPINNER_RADIUS
-        })
-        .collect();
-    painter.line(arc, Stroke::new(SPINNER_STROKE, color::ACCENT));
 }
 
 #[cfg(test)]

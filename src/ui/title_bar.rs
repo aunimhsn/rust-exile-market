@@ -7,7 +7,7 @@ use egui::{
 };
 
 use super::theme::{LeagueModeColors, color, motion, size, text};
-use super::{images, widgets};
+use super::{icons, images, widgets};
 use crate::i18n::{Message, Translator};
 use crate::league::{League, LeagueMode};
 
@@ -262,7 +262,7 @@ impl<'a> TitleBar<'a> {
             self.leagues_open,
             motion::OPEN,
         );
-        widgets::chevron(
+        icons::chevron(
             painter,
             pos2(
                 name_left + name_width + GAP + CHEVRON_WIDTH / 2.0,
@@ -357,7 +357,7 @@ impl<'a> TitleBar<'a> {
             Icon::Settings => image(images::settings()),
             Icon::Minimize => minimize_mark(ui.painter(), center, tint),
             // A little smaller than the minimize line, so that both look the same size.
-            Icon::Close => widgets::cross(ui.painter(), center, WINDOW_MARK_SIZE * 0.8, tint),
+            Icon::Close => icons::cross(ui.painter(), center, WINDOW_MARK_SIZE * 0.8, tint),
         }
         response
             .on_hover_cursor(CursorIcon::PointingHand)

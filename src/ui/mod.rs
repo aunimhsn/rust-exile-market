@@ -10,6 +10,7 @@ mod empty_state;
 pub mod fixtures;
 mod fonts;
 mod hotkey_list;
+mod icons;
 mod images;
 mod item_block;
 mod item_stats;

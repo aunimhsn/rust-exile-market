@@ -7,9 +7,9 @@ use egui::{
     Role, Sense, Ui, Vec2, WidgetInfo, pos2, vec2,
 };
 
-use super::keys;
 use super::theme::{color, motion, size, text};
 use super::widgets::{self, FloatingList};
+use super::{icons, keys};
 use crate::hotkey::Shortcut;
 use crate::i18n::{Message, Translator};
 
@@ -115,7 +115,7 @@ pub fn button(ui: &mut Ui, label: &str, on: bool, open: bool, tooltip: &str) -> 
     let turn = ui
         .ctx()
         .animate_bool_with_time(chevron_id(), open, motion::OPEN);
-    widgets::chevron(
+    icons::chevron(
         ui.painter(),
         square.center(),
         CHEVRON_WIDTH,
@@ -280,7 +280,7 @@ impl<'a> HotkeyList<'a> {
             rect.center().y,
         );
         if chosen {
-            widgets::check_mark(painter, check_center, CHECK_WIDTH, color::ACCENT);
+            icons::check_mark(painter, check_center, CHECK_WIDTH, color::ACCENT);
         }
         let keys = widgets::text_line(ui, row.label.clone(), text::list_keys());
         let keys_left = rect.left() + ROW_PADDING_LEFT + CHECK_ZONE + ROW_GAP;
