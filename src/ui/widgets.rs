@@ -349,6 +349,67 @@ fn tinted_control_pill(ui: &mut Ui, label: &str, tint: Color32, lit_tint: Color3
 /// The space around the text of a pill.
 const PILL_PADDING: Vec2 = vec2(10.0, 4.0);
 
+/// The check mark of a "Copied" pill, as in the mock-up.
+mod copied {
+    pub const CHECK_SIZE: f32 = 11.0;
+    /// The space between the check mark and the word.
+    pub const CHECK_GAP: f32 = 5.0;
+}
+
+/// The size of a "Copied" pill: its word and its check mark.
+#[must_use]
+pub fn copied_pill_size(ui: &Ui, label: &str) -> Vec2 {
+    pill_size(ui, label) + vec2(copied::CHECK_SIZE + copied::CHECK_GAP, 0.0)
+}
+
+/// "Copied ✓" on the accent, like the main action: the whisper copied, which a click copies
+/// again.
+pub fn copied_pill(ui: &mut Ui, label: &str) -> Response {
+    use copied::{CHECK_GAP, CHECK_SIZE};
+
+    let galley = text_line(ui, label, text::pill());
+    let (rect, response) = ui.allocate_exact_size(copied_pill_size(ui, label), Sense::click());
+    response.widget_info(|| WidgetInfo::labeled(Role::Button, true, label));
+    let painter = ui.painter();
+    painter.rect_filled(rect, CornerRadius::same(size::RADIUS), color::ACCENT);
+    let check_left = rect.left() + PILL_PADDING.x + galley.size().x + CHECK_GAP;
+    painter.galley(rect.min + PILL_PADDING, galley, color::ON_ACCENT);
+    check_mark(
+        painter,
+        pos2(check_left + CHECK_SIZE / 2.0, rect.center().y),
+        CHECK_SIZE,
+        color::ON_ACCENT,
+    );
+    response.on_hover_cursor(CursorIcon::PointingHand)
+}
+
+/// "✓ Copied" on the color of the controls, in the weak color, in place of the pill of a
+/// secondary action: done, nothing to click.
+pub fn copied_control_pill(ui: &mut Ui, label: &str) {
+    use copied::{CHECK_GAP, CHECK_SIZE};
+
+    let galley = text_line(ui, label, text::pill());
+    let (rect, response) = ui.allocate_exact_size(copied_pill_size(ui, label), Sense::hover());
+    response.widget_info(|| WidgetInfo::labeled(Role::Label, true, label));
+    let painter = ui.painter();
+    painter.rect_filled(rect, CornerRadius::same(size::RADIUS), color::CONTROL);
+    let check_left = rect.left() + PILL_PADDING.x;
+    check_mark(
+        painter,
+        pos2(check_left + CHECK_SIZE / 2.0, rect.center().y),
+        CHECK_SIZE,
+        color::WEAK,
+    );
+    painter.galley(
+        pos2(
+            check_left + CHECK_SIZE + CHECK_GAP,
+            rect.top() + PILL_PADDING.y,
+        ),
+        galley,
+        color::WEAK,
+    );
+}
+
 /// The measures of two pills joined.
 mod segmented {
     use egui::{Vec2, vec2};
