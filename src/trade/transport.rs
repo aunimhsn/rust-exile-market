@@ -36,7 +36,7 @@ impl Answer {
     }
 
     /// The JSON of a success. An error status is an error, whose message is logged.
-    pub fn json<A: DeserializeOwned>(self) -> Result<A, HttpError> {
+    pub fn into_json<A: DeserializeOwned>(self) -> Result<A, HttpError> {
         if !self.is_success() {
             self.log_error_message();
             return Err(HttpError::Request(ureq::Error::StatusCode(self.status)));
@@ -79,21 +79,35 @@ pub(super) struct Guarded<T> {
     refusal: Refusal,
 }
 
-/// What became of a request sent through [`Guarded`].
+/// What became of an attempt to send a request through [`Guarded`].
 #[derive(Debug)]
-pub(super) enum Sent {
+pub(super) enum Attempt {
     /// Not sent: the trade site refused a request a moment ago, and nothing is sent before
     /// this time.
     Waiting(Instant),
     /// Sent, but no answer came.
     Unanswered(ureq::Error),
-    /// The trade site refused it (403, 429): nothing is sent before `until`.
+    /// The trade site refused it (403, 429): nothing is sent before `until`, nor after it
+    /// while another refusal asks a longer wait.
     Refused { answer: Answer, until: Instant },
     /// An answer that isn't a refusal, of any other status.
     Answered(Answer),
 }
 
+impl Guarded<Network> {
+    /// The trade site over the network, whose wait of a refusal is `refusal`: the only way
+    /// out of this module to build a [`Network`].
+    pub fn network(refusal: Refusal) -> Self {
+        Self {
+            transport: Network::new(),
+            refusal,
+        }
+    }
+}
+
 impl<T: Transport> Guarded<T> {
+    /// A fake trade site `transport` behind the guard, for the tests of its callers.
+    #[cfg(test)]
     pub fn new(transport: T, refusal: Refusal) -> Self {
         Self { transport, refusal }
     }
@@ -105,21 +119,21 @@ impl<T: Transport> Guarded<T> {
 
     /// Sends `request`, unless the wait of a refusal holds; a refusal starts one, of the delay
     /// of its `Retry-After`.
-    pub fn send(&mut self, request: &Request) -> Sent {
+    pub fn send(&mut self, request: &Request) -> Attempt {
         if let Some(until) = self.refusal.until(Instant::now()) {
-            return Sent::Waiting(until);
+            return Attempt::Waiting(until);
         }
         let answer = match self.transport.send(request) {
             Ok(answer) => answer,
-            Err(error) => return Sent::Unanswered(error),
+            Err(error) => return Attempt::Unanswered(error),
         };
         // A 403 too: the trade site turns the address away.
         if matches!(answer.status, 403 | 429) {
             let until = Instant::now() + limits::refusal_wait(&answer.limits);
             self.refusal.extend(until);
-            return Sent::Refused { answer, until };
+            return Attempt::Refused { answer, until };
         }
-        Sent::Answered(answer)
+        Attempt::Answered(answer)
     }
 }
 
@@ -129,7 +143,7 @@ impl<T: Transport> Guarded<T> {
 pub(super) struct Network(ureq::Agent);
 
 impl Network {
-    pub fn new() -> Self {
+    fn new() -> Self {
         Self(http::agent())
     }
 }
@@ -446,15 +460,19 @@ pub(super) mod tests {
         }
     }
 
+    /// The headers of a refusal that asks to wait `seconds`.
+    pub fn retry_after(seconds: &str) -> LimitHeaders {
+        LimitHeaders {
+            retry_after: Some(seconds.to_owned()),
+            ..LimitHeaders::default()
+        }
+    }
+
     #[test]
-    fn a_refusal_stops_the_requests_that_follow_until_its_delay() {
+    fn a_refusal_stops_the_requests_that_follow() {
         for status in [429, 403] {
             let site = FakeSite::default();
-            let headers = LimitHeaders {
-                retry_after: Some("600".to_owned()),
-                ..LimitHeaders::default()
-            };
-            site.answer(status, headers, "");
+            site.answer(status, retry_after("600"), "");
             let refusal = Refusal::default();
             let mut guarded = Guarded::new(site.clone(), refusal.clone());
             let start = Instant::now();
@@ -462,14 +480,15 @@ pub(super) mod tests {
             let refused = guarded.send(&get());
             let next = guarded.send(&get());
 
-            let Sent::Refused { answer, until } = refused else {
+            let Attempt::Refused { answer, until } = refused else {
                 panic!("a refusal: {refused:?}");
             };
             assert_eq!(answer.status, status);
             assert!(until >= start + Duration::from_mins(10), "{status}");
+            assert!(until < start + Duration::from_mins(11), "{status}");
             assert_eq!(refusal.until(start), Some(until), "{status}");
             assert!(
-                matches!(next, Sent::Waiting(wait) if wait == until),
+                matches!(next, Attempt::Waiting(wait) if wait == until),
                 "{next:?}"
             );
             assert_eq!(site.requests().len(), 1, "{status}");
@@ -487,7 +506,7 @@ pub(super) mod tests {
         let sent = guarded.send(&get());
 
         assert!(
-            matches!(sent, Sent::Waiting(wait) if wait == until),
+            matches!(sent, Attempt::Waiting(wait) if wait == until),
             "{sent:?}"
         );
         assert_eq!(guarded.refused_until(Instant::now()), Some(until));
@@ -506,10 +525,13 @@ pub(super) mod tests {
         let unanswered = guarded.send(&get());
 
         assert!(
-            matches!(&error_status, Sent::Answered(answer) if answer.status == 400),
+            matches!(&error_status, Attempt::Answered(answer) if answer.status == 400),
             "{error_status:?}"
         );
-        assert!(matches!(unanswered, Sent::Unanswered(_)), "{unanswered:?}");
+        assert!(
+            matches!(unanswered, Attempt::Unanswered(_)),
+            "{unanswered:?}"
+        );
         assert_eq!(refusal.until(Instant::now()), None);
         assert_eq!(site.requests().len(), 2);
     }

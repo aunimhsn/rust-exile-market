@@ -11,7 +11,7 @@ use serde::Deserialize;
 use serde::de::DeserializeOwned;
 
 use super::refusal::Refusal;
-use super::transport::{Guarded, Network, Request, Sent, Transport};
+use super::transport::{Attempt, Guarded, Network, Request, Transport};
 use crate::game_data::TradeGroup;
 use crate::http::{self, HttpError, Pace};
 use crate::item_names::{ItemNames, Names, StatTemplate, UniqueName, UniqueNames};
@@ -178,14 +178,20 @@ pub struct TradeSite<T = Network> {
 impl TradeSite {
     #[must_use]
     pub fn new(refusal: Refusal) -> Self {
-        Self::with_transport(Network::new(), refusal)
+        Self::with_guarded(Guarded::network(refusal))
     }
 }
 
 impl<T: Transport> TradeSite<T> {
+    /// The client of the data of the fake trade site `transport`, for the tests.
+    #[cfg(test)]
     fn with_transport(transport: T, refusal: Refusal) -> Self {
+        Self::with_guarded(Guarded::new(transport, refusal))
+    }
+
+    fn with_guarded(transport: Guarded<T>) -> Self {
         Self {
-            transport: Guarded::new(transport, refusal),
+            transport,
             pace: Pace::new(PACE),
             answered: false,
         }
@@ -231,14 +237,14 @@ impl<T: Transport> TradeSite<T> {
             after_answers,
         };
         let answer = match self.transport.send(&request) {
-            Sent::Waiting(until) => return Err(NamesError::Wait(until)),
-            Sent::Unanswered(error) => return Err(failed(HttpError::Request(error))),
-            Sent::Refused { answer, until } => {
+            Attempt::Waiting(until) => return Err(NamesError::Wait(until)),
+            Attempt::Unanswered(error) => return Err(failed(HttpError::Request(error))),
+            Attempt::Refused { answer, until } => {
                 return Err(NamesError::Refused(answer.status, until));
             }
-            Sent::Answered(answer) => answer,
+            Attempt::Answered(answer) => answer,
         };
-        let result: ApiResult<A> = answer.json().map_err(failed)?;
+        let result: ApiResult<A> = answer.into_json().map_err(failed)?;
         self.answered = true;
         Ok(result.result)
     }
@@ -404,7 +410,7 @@ mod tests {
     use crate::language::PerLanguage;
     use crate::trade::limits::LimitHeaders;
     use crate::trade::transport::Answer;
-    use crate::trade::transport::tests::FakeSite;
+    use crate::trade::transport::tests::{FakeSite, retry_after};
 
     /// The shape of `/data/items` on www.pathofexile.com on 2026-10-25, a few items of it.
     const ENGLISH_ITEMS: &str = r#"{"result": [
@@ -627,14 +633,6 @@ mod tests {
             .map(|pair| pair.english.name.as_str())
             .collect();
         assert_eq!(names, ["Andvarius"]);
-    }
-
-    /// The headers of a refusal that asks to wait `seconds`.
-    fn retry_after(seconds: &str) -> LimitHeaders {
-        LimitHeaders {
-            retry_after: Some(seconds.to_owned()),
-            ..LimitHeaders::default()
-        }
     }
 
     #[test]

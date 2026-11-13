@@ -14,7 +14,7 @@ use super::limits::{Hit, Limits, Policy};
 use super::offers::{ApiExchange, ApiFetch, ApiSearch, ExchangeOffer, ItemOffer};
 use super::query::{self, ItemQuery, SearchKind};
 use super::refusal::Refusal;
-use super::transport::{Guarded, Network, Request, Sent, Transport};
+use super::transport::{Attempt, Guarded, Network, Request, Transport};
 use crate::http::{self, HttpError};
 use crate::language::Language;
 use crate::league::League;
@@ -90,14 +90,20 @@ pub struct TradeClient<T = Network> {
 impl TradeClient {
     #[must_use]
     pub fn new(refusal: Refusal) -> Self {
-        Self::with_transport(Network::new(), refusal)
+        Self::with_guarded(Guarded::network(refusal))
     }
 }
 
 impl<T: Transport> TradeClient<T> {
+    /// The client of the fake trade site `transport`, for the tests.
+    #[cfg(test)]
     pub(super) fn with_transport(transport: T, refusal: Refusal) -> Self {
+        Self::with_guarded(Guarded::new(transport, refusal))
+    }
+
+    fn with_guarded(transport: Guarded<T>) -> Self {
         Self {
-            transport: Guarded::new(transport, refusal),
+            transport,
             limits: Limits::default(),
             last_search: None,
             told_no_limits: false,
@@ -249,12 +255,12 @@ impl<T: Transport> TradeClient<T> {
         };
         let answer = match result {
             // Refused meanwhile by the download of the item names.
-            Sent::Waiting(until) => return Err(TradeError::Wait(until)),
-            Sent::Unanswered(error) => {
+            Attempt::Waiting(until) => return Err(TradeError::Wait(until)),
+            Attempt::Unanswered(error) => {
                 self.limits.sent(policy, hit(false));
                 return Err(HttpError::Request(error).into());
             }
-            Sent::Refused { answer, .. } => {
+            Attempt::Refused { answer, .. } => {
                 self.limits.sent(policy, hit(false));
                 log::warn!(
                     "Trade site: request refused with the status {}",
@@ -263,7 +269,7 @@ impl<T: Transport> TradeClient<T> {
                 let until = self.limits.refused(policy, &answer.limits, now);
                 return Err(TradeError::Refused(until));
             }
-            Sent::Answered(answer) => answer,
+            Attempt::Answered(answer) => answer,
         };
         let counted = answer.is_success() && !answer.limits.rules.is_empty();
         self.limits.sent(policy, hit(counted));
@@ -274,7 +280,7 @@ impl<T: Transport> TradeClient<T> {
             self.told_no_limits = true;
         }
         self.limits.answered(policy, &answer.limits, now);
-        Ok(answer.json()?)
+        Ok(answer.into_json()?)
     }
 }
 
