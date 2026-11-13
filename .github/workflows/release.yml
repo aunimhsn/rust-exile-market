@@ -52,6 +52,12 @@ jobs:
             echo "The commit of $GITHUB_REF_NAME is not on main: nothing is released"
             exit 1
           fi
+          # The notes of the release, written before the tag (docs/releases.md): checked here, so
+          # that a version without them builds nothing.
+          if [ ! -f "docs/release-notes/$GITHUB_REF_NAME.md" ]; then
+            echo "docs/release-notes/$GITHUB_REF_NAME.md is missing: nothing is released"
+            exit 1
+          fi
 
   # One file for the four archives: about.toml lists the targets of the matrix below.
   notices:
@@ -89,7 +95,7 @@ jobs:
         # `system` names the archive, the same from one version to the next: the
         # buttons of the download page link to releases/latest/download/<archive>
         # (exile-market-windows-x64.zip and exile-market-linux-x64.tar.gz), so a
-        # rename breaks them.
+        # rename breaks them. NAME is the binary target of Cargo.toml ([[bin]]).
         include:
           # glibc rather than musl: the executable loads the graphics
           # libraries of the system (OpenGL, X11), which a static musl
@@ -161,7 +167,7 @@ jobs:
           fi
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: archive-${{ matrix.target }}
+          name: archive-${{ matrix.system }}
           path: ${{ env.ARCHIVE }}
           if-no-files-found: error
 
@@ -174,6 +180,9 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          sparse-checkout: docs/release-notes
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           path: dist
@@ -185,4 +194,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           sha256sum * > SHA256SUMS.txt
-          gh release create "$GITHUB_REF_NAME" * --repo "$GITHUB_REPOSITORY" --title "$GITHUB_REF_NAME" --generate-notes
+          # A normal release, never a pre-release: releases/latest, which the download page and
+          # the README link to, skips them.
+          gh release create "$GITHUB_REF_NAME" * --repo "$GITHUB_REPOSITORY" --title "$GITHUB_REF_NAME" \
+            --notes-file "../docs/release-notes/$GITHUB_REF_NAME.md"

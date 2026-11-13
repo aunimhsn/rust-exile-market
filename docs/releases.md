@@ -13,13 +13,7 @@
    git push origin v0.1.0
    ```
 
-5. Once the release is published, replace its generated notes, which only list the pull requests, by the notes of the version. Keep it a normal release, never a pre-release: `releases/latest`, which the download page and the README link to, skips the pre-releases.
-
-   ```sh
-   gh release edit v0.1.0 --notes-file docs/release-notes/v0.1.0.md
-   ```
-
-The [Release workflow](../.github/workflows/release.yml) builds the archives for Windows, macOS and Linux and publishes them as a GitHub release, with their checksums (`SHA256SUMS.txt`). It fails if the tag does not match the version of `Cargo.toml`, if its commit isn't on `main` (a commit that went through a pull request and its checks; a guard against a tag put by mistake, since the workflow that runs is the one of the tagged commit), or if a security advisory on a dependency isn't sorted yet (`cargo deny check advisories`: update the dependency, or list the advisory in `deny.toml` with its reason). A ruleset of the repository keeps the tags `v*` from being moved or deleted: a wrong tag is replaced by the next version, never pushed again.
+The [Release workflow](../.github/workflows/release.yml) builds the archives for Windows, macOS and Linux and publishes them as a GitHub release, with their checksums (`SHA256SUMS.txt`) and the notes of `docs/release-notes/<tag>.md`. The release is a normal one, never a pre-release: `releases/latest`, which the download page and the README link to, skips the pre-releases. It fails if the tag does not match the version of `Cargo.toml`, if the notes of the version are missing, if its commit isn't on `main` (a commit that went through a pull request and its checks; a guard against a tag put by mistake, since the workflow that runs is the one of the tagged commit), or if a security advisory on a dependency isn't sorted yet (`cargo deny check advisories`: update the dependency, or list the advisory in `deny.toml` with its reason). A ruleset of the repository keeps the tags `v*` from being moved or deleted: a wrong tag is replaced by the next version, never pushed again.
 
 The version of Rust is pinned in `rust-toolchain.toml`: the release is built by the compiler the checks of `main` ran with. Dependabot proposes the new versions; each action of the workflows is pinned to a commit the same way (`.github/scripts/pinned-actions.sh`, run by the CI).
 
