@@ -71,12 +71,14 @@ impl<'a> LeagueList<'a> {
                 for (column, league) in [&row.softcore, &row.hardcore].into_iter().enumerate() {
                     let Some(league) = league else { continue };
                     #[expect(clippy::cast_precision_loss, reason = "a few leagues")]
-                    let cell = Rect::from_min_size(
-                        list.min + vec2(column as f32 * CELL.x, index as f32 * CELL.y),
-                        CELL,
-                    );
-                    let corners = corners(index == 0, index + 1 == self.rows.len(), column);
-                    let response = self.cell(ui, cell, corners, league);
+                    let shape = CellShape {
+                        rect: Rect::from_min_size(
+                            list.min + vec2(column as f32 * CELL.x, index as f32 * CELL.y),
+                            CELL,
+                        ),
+                        corners: corners(index == 0, index + 1 == self.rows.len(), column),
+                    };
+                    let response = self.cell(ui, shape, league);
                     if just_opened && self.chosen == Some(league) {
                         response.request_focus();
                     }
@@ -89,8 +91,10 @@ impl<'a> LeagueList<'a> {
         })
     }
 
-    /// A league in its mode: lighter under the pointer, and while it is the chosen one.
-    fn cell(&self, ui: &mut Ui, rect: Rect, corners: CornerRadius, league: &League) -> Response {
+    /// A league in its mode, in its cell: lighter under the pointer, and while it is the chosen
+    /// one.
+    fn cell(&self, ui: &mut Ui, shape: CellShape, league: &League) -> Response {
+        let CellShape { rect, corners } = shape;
         let response = ui.interact(rect, ui.scope_id().with(league.id()), Sense::click());
         let colors = LeagueModeColors::of(league.mode());
         let lit = response.hovered() || response.has_focus() || self.chosen == Some(league);
@@ -133,6 +137,13 @@ impl<'a> LeagueList<'a> {
             .on_hover_cursor(CursorIcon::PointingHand)
             .on_hover_text(if name_is_cut { label } else { mode })
     }
+}
+
+/// Where a cell of the list is, and its corners rounded at the corners of the list.
+#[derive(Debug, Clone, Copy)]
+struct CellShape {
+    rect: Rect,
+    corners: CornerRadius,
 }
 
 /// The rounded corners of a cell: the corners of the list.

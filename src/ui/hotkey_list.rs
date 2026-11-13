@@ -67,64 +67,77 @@ pub fn forget(ctx: &Context) {
     ctx.data_mut(|data| data.remove::<Seen>(seen_id()));
 }
 
-/// The split button of the keys, `label` the keys joined, `on` whether the hotkey is on (its keys
-/// faint while off), `open` whether the list is open (its chevron turned down). The whole button
-/// opens the list.
-pub fn button(ui: &mut Ui, label: &str, on: bool, open: bool, tooltip: &str) -> Response {
-    let galley = widgets::text_line(ui, label, text::pill());
-    let keys_width = galley.size().x + 2.0 * BUTTON_PADDING;
-    let (rect, response) = ui.allocate_exact_size(
-        vec2(keys_width + BUTTON_HEIGHT, BUTTON_HEIGHT),
-        Sense::click(),
-    );
-    response.widget_info(|| WidgetInfo::labeled(Role::ComboBox, true, label));
-    let (keys_rect, square) = rect.split_left_right_at_x(rect.left() + keys_width);
-    let radius = size::RADIUS;
-    let lit = response.hovered() || response.has_focus();
-    let painter = ui.painter();
-    painter.rect_filled(
-        keys_rect,
-        CornerRadius {
-            nw: radius,
-            sw: radius,
-            ..CornerRadius::ZERO
-        },
-        if lit {
-            color::KEYS_LIT
-        } else {
-            color::CONTROL_LINE
-        },
-    );
-    painter.rect_filled(
-        square,
-        CornerRadius {
-            ne: radius,
-            se: radius,
-            ..CornerRadius::ZERO
-        },
-        color::ACCENT,
-    );
-    painter.galley(
-        pos2(
-            keys_rect.left() + BUTTON_PADDING,
-            keys_rect.center().y - galley.size().y / 2.0,
-        ),
-        galley,
-        if on { color::TEXT } else { color::FAINT },
-    );
-    let turn = ui
-        .ctx()
-        .animate_bool_with_time(chevron_id(), open, motion::OPEN);
-    icons::chevron(
-        ui.painter(),
-        square.center(),
-        CHEVRON_WIDTH,
-        turn,
-        color::ON_ACCENT,
-    );
-    response
-        .on_hover_cursor(CursorIcon::PointingHand)
-        .on_hover_text(tooltip)
+/// The split button of the keys: the keys, and a square with a chevron. The whole button opens
+/// the list.
+pub struct KeysButton<'a> {
+    /// The keys of the hotkey, joined.
+    pub keys: &'a str,
+    /// Whether the hotkey is on: its keys faint while off.
+    pub is_on: bool,
+    /// Whether the list is open: its chevron turned down.
+    pub is_open: bool,
+    pub tooltip: &'a str,
+}
+
+impl KeysButton<'_> {
+    /// Draws the button; its response, clicked to open the list.
+    pub fn show(self, ui: &mut Ui) -> Response {
+        let Self {
+            keys: label,
+            is_on,
+            is_open,
+            tooltip,
+        } = self;
+        let galley = widgets::text_line(ui, label, text::pill());
+        let keys_width = galley.size().x + 2.0 * BUTTON_PADDING;
+        let (rect, response) = ui.allocate_exact_size(
+            vec2(keys_width + BUTTON_HEIGHT, BUTTON_HEIGHT),
+            Sense::click(),
+        );
+        response.widget_info(|| WidgetInfo::labeled(Role::ComboBox, true, label));
+        let (keys_rect, square) = rect.split_left_right_at_x(rect.left() + keys_width);
+        let radius = size::RADIUS;
+        let lit = response.hovered() || response.has_focus();
+        let painter = ui.painter();
+        painter.rect_filled(
+            keys_rect,
+            CornerRadius {
+                nw: radius,
+                sw: radius,
+                ..CornerRadius::ZERO
+            },
+            if lit {
+                color::KEYS_LIT
+            } else {
+                color::CONTROL_LINE
+            },
+        );
+        painter.rect_filled(
+            square,
+            CornerRadius {
+                ne: radius,
+                se: radius,
+                ..CornerRadius::ZERO
+            },
+            color::ACCENT,
+        );
+        painter.galley(
+            pos2(
+                keys_rect.left() + BUTTON_PADDING,
+                keys_rect.center().y - galley.size().y / 2.0,
+            ),
+            galley,
+            if is_on { color::TEXT } else { color::FAINT },
+        );
+        let turn = ui
+            .ctx()
+            .animate_bool_with_time(chevron_id(), is_open, motion::OPEN);
+        let chevron = Rect::from_center_size(square.center(), Vec2::splat(CHEVRON_WIDTH));
+        icons::chevron(ui.painter(), chevron, turn, color::ON_ACCENT);
+        response
+            .on_hover_cursor(CursorIcon::PointingHand)
+            .on_hover_text(tooltip)
+    }
 }
 
 /// What the player did with the list.

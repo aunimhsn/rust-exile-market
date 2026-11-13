@@ -18,11 +18,13 @@ const SPINNER_STROKE: f32 = 2.0;
 /// Turns per second.
 const SPINNER_SPEED: f32 = 1.2;
 
-/// A chevron centered on `center`, `width` across its opening: pointing right at `turn` 0,
-/// down at 1, and turned in between, for its animation.
-pub fn chevron(painter: &Painter, center: Pos2, width: f32, turn: f32, color: Color32) {
+/// A chevron in `square`, its opening across the square: pointing right at `turn` 0, down at 1,
+/// and turned in between, for its animation.
+pub fn chevron(painter: &Painter, square: Rect, turn: f32, tint: Color32) {
     let (sin, cos) = (turn * FRAC_PI_2).sin_cos();
     let rotate = |point: Vec2| vec2(point.x * cos - point.y * sin, point.x * sin + point.y * cos);
+    let center = square.center();
+    let width = square.width();
     let half_width = width / 2.0;
     let half_depth = width / 4.0;
     painter.line(
@@ -33,7 +35,7 @@ pub fn chevron(painter: &Painter, center: Pos2, width: f32, turn: f32, color: Co
         ]
         .map(|point| center + rotate(point))
         .to_vec(),
-        Stroke::new(size::ICON_STROKE, color),
+        Stroke::new(size::ICON_STROKE, tint),
     );
 }
 

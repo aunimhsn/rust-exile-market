@@ -4,8 +4,8 @@
 use egui::text::TextFormat;
 use egui::{Align, CentralPanel, Frame, Label, Layout, RichText, Ui, Vec2, vec2};
 
-use super::hotkey_list::{self, HotkeyList, HotkeyListAction};
-use super::keys;
+use super::hotkey_list::{self, HotkeyList, HotkeyListAction, KeysButton};
+use super::keys::{self, Emphasis};
 use super::theme::{color, size, text};
 use super::widgets::{self, Mark};
 use crate::hotkey::{HotkeyState, Shortcut};
@@ -160,7 +160,13 @@ impl<'a> SettingsPanel<'a> {
                 let button = ui
                     .with_layout(Layout::right_to_left(Align::Center), |ui| {
                         let tooltip = self.i18n.text(Message::SettingsHotkeyChange);
-                        hotkey_list::button(ui, &hotkey, on, self.keys_open, &tooltip)
+                        KeysButton {
+                            keys: &hotkey,
+                            is_on: on,
+                            is_open: self.keys_open,
+                            tooltip: &tooltip,
+                        }
+                        .show(ui)
                     })
                     .inner;
                 (checked, button)
@@ -174,9 +180,11 @@ impl<'a> SettingsPanel<'a> {
             keys::two_lines(
                 &self.i18n.hotkey_taken(&held),
                 &self.i18n.hotkey_taken_settings(&copy),
-                &[&held, &copy],
-                &TextFormat::simple(text::small(), color::WARNING),
-                &TextFormat::simple(text::small_strong(), color::WARNING),
+                &Emphasis {
+                    strong: &[&held, &copy],
+                    regular: TextFormat::simple(text::small(), color::WARNING),
+                    bold: TextFormat::simple(text::small_strong(), color::WARNING),
+                },
             )
         } else {
             egui::text::LayoutJob::simple_format(

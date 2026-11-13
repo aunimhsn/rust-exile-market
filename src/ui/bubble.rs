@@ -22,6 +22,8 @@ const WIDTH: f32 = 330.0;
 /// list of the leagues; a second bubble 4 px under the first.
 const LEFT: f32 = LEAGUE_BLOCK_LEFT - 8.0;
 const GAP: f32 = 4.0;
+/// The top of the first bubble.
+const FIRST_TOP: f32 = size::TITLE_BAR_HEIGHT + GAP;
 const PADDING_X: i8 = 14;
 const PADDING_Y: i8 = 10;
 const CONTENT_GAP: f32 = 10.0;
@@ -57,42 +59,26 @@ impl<'a> Bubble<'a> {
     #[must_use]
     pub fn new_league(league: &League, i18n: &'a Translator) -> Self {
         let name = league.name();
-        Self::new(
-            "new-league-bubble",
-            i18n.new_league(),
-            name,
-            i18n.text(Message::NewLeagueSwitch),
+        Self {
+            id: "new-league-bubble",
+            sentence: i18n.new_league(),
+            strong: name.to_owned(),
+            pill: i18n.text(Message::NewLeagueSwitch),
             i18n,
-        )
+            top: FIRST_TOP,
+        }
     }
 
     /// "Exile Market 0.2.0 is available.", the version in bold, and the pill Download.
     #[must_use]
     pub fn update(version: Version, i18n: &'a Translator) -> Self {
-        let version = version.to_string();
-        Self::new(
-            "update-bubble",
-            i18n.update_available(crate::APP_NAME),
-            &version,
-            i18n.text(Message::UpdateDownload),
-            i18n,
-        )
-    }
-
-    fn new(
-        id: &'static str,
-        sentence: CutSentence,
-        strong: &str,
-        pill: String,
-        i18n: &'a Translator,
-    ) -> Self {
         Self {
-            id,
-            sentence,
-            strong: strong.to_owned(),
-            pill,
+            id: "update-bubble",
+            sentence: i18n.update_available(crate::APP_NAME),
+            strong: version.to_string(),
+            pill: i18n.text(Message::UpdateDownload),
             i18n,
-            top: size::TITLE_BAR_HEIGHT + GAP,
+            top: FIRST_TOP,
         }
     }
 
