@@ -12,7 +12,7 @@ use x11rb::protocol::xtest::{self, ConnectionExt as _};
 use x11rb::rust_connection::RustConnection;
 
 use crate::hotkey::Shortcut;
-use crate::hotkey::keys::{Held, Key, copy_keys, modifiers_for_log, send_all};
+use crate::hotkey::sent_keys::{Held, Key, copy_keys, modifiers_for_log, send_all};
 use crate::overlay::{Point, ScreenRect, Target};
 use crate::x11::{self as shared, Atoms, Result};
 

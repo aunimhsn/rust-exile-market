@@ -28,7 +28,7 @@ pub(super) struct Held<K> {
 impl<K> Held<K> {
     /// Ctrl alone held, or none.
     #[cfg(test)]
-    pub(super) fn control(control: bool) -> Self {
+    fn control(control: bool) -> Self {
         Self {
             control,
             others: Vec::new(),

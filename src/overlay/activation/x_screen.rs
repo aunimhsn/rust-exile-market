@@ -47,6 +47,8 @@ pub struct XScreen {
 }
 
 impl XScreen {
+    /// Connects to the X server, with its root window and the atoms of the application; the
+    /// helper is created only when it is first shown.
     pub(super) fn connect() -> Result<Self> {
         let (connection, screen) = x11rb::connect(None)?;
         let root = connection.setup().roots[screen].root;

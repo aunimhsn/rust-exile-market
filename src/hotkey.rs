@@ -44,13 +44,13 @@ pub struct Press {
 #[cfg(any(target_os = "linux", target_os = "windows"))]
 mod grab;
 #[cfg(any(target_os = "linux", target_os = "windows"))]
-mod keys;
+mod sent_keys;
 #[cfg(target_os = "windows")]
 mod windows;
 #[cfg(target_os = "linux")]
 mod x11;
 
-// The keys of each system: `CopySender` (`connect` once at the start, `send_copy` at each
+// The copy of each system: `CopySender` (`connect` once at the start, `send_copy` at each
 // hotkey) and `SENT_AT`, the press or the release of D at which the copy is sent.
 #[cfg(target_os = "windows")]
 use self::windows as system;
