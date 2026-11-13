@@ -328,7 +328,7 @@ mod tests {
         let ctx = egui::Context::default();
         crate::ui::install(&ctx);
         let mut drawn = (String::new(), false);
-        let mut output = ctx.run_ui(egui::RawInput::default(), |ui| {
+        crate::ui::test_frame(&ctx, egui::RawInput::default(), |ui| {
             let job = LayoutJob::simple_singleline(label.to_owned(), text::bubble(), color::TEXT);
             let galley = ui.painter().layout_job(one_line(job, width));
             // The characters drawn, the "…" of a text cut with them.
@@ -339,8 +339,6 @@ mod tests {
                 .collect();
             drawn = (text, galley.elided);
         });
-        // epaint panics when the texture changes of a frame are dropped unapplied.
-        output.textures_delta.clear();
         drawn
     }
 

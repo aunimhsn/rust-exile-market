@@ -419,9 +419,7 @@ mod tests {
             let bar =
                 TitleBar::new(Some(&self.league), &self.i18n).leagues_known(self.leagues_known);
             let mut action = None;
-            let mut output = self.ctx.run_ui(input, |ui| action = bar.show(ui));
-            // epaint panics when the texture changes of a frame are dropped unapplied.
-            output.textures_delta.clear();
+            crate::ui::test_frame(&self.ctx, input, |ui| action = bar.show(ui));
             action
         }
 

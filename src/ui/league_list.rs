@@ -189,11 +189,7 @@ mod tests {
             };
             let list = LeagueList::new(self.leagues.rows(), Some(&self.chosen), &self.i18n);
             let mut action = None;
-            let mut output = self
-                .ctx
-                .run_ui(input, |ui| action = list.show(ui.ctx(), open));
-            // epaint panics when the texture changes of a frame are dropped unapplied.
-            output.textures_delta.clear();
+            crate::ui::test_frame(&self.ctx, input, |ui| action = list.show(ui.ctx(), open));
             action
         }
 

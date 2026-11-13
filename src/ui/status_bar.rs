@@ -252,14 +252,12 @@ mod tests {
             ..Default::default()
         };
         let mut widths = (0.0, 0.0);
-        let mut output = ctx.run_ui(input, |ui| {
+        crate::ui::test_frame(&ctx, input, |ui| {
             widths = (
                 StatusBar::league_block(ui, &League::new(name)),
                 ui.max_rect().width(),
             );
         });
-        // epaint panics when the texture changes of a frame are dropped unapplied.
-        output.textures_delta.clear();
         widths
     }
 
@@ -311,7 +309,7 @@ mod tests {
             page: String::new(),
         };
         let mut line = 0.0;
-        let mut output = ctx.run_ui(RawInput::default(), |ui| {
+        crate::ui::test_frame(&ctx, RawInput::default(), |ui| {
             ui.spacing_mut().item_spacing.x = 0.0;
             ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
                 ui.set_max_width(width);
@@ -319,7 +317,6 @@ mod tests {
                 line = ui.min_rect().width();
             });
         });
-        output.textures_delta.clear();
         line
     }
 

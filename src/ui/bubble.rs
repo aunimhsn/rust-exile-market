@@ -192,15 +192,13 @@ mod tests {
         let mut shown = (0.0, 0.0);
         // Twice: the bottom of the first frame is known once it is laid out.
         for _ in 0..2 {
-            let mut output = ctx.run_ui(RawInput::default(), |ui| {
+            crate::ui::test_frame(&ctx, RawInput::default(), |ui| {
                 let first = Bubble::new_league(&league, &i18n).show(ui.ctx());
                 let second = Bubble::update(version(), &i18n)
                     .below(first.bottom)
                     .show(ui.ctx());
                 shown = (first.bottom, second.bottom);
             });
-            // epaint panics when the texture changes of a frame are dropped unapplied.
-            output.textures_delta.clear();
         }
         shown
     }

@@ -279,7 +279,7 @@ fn the_link_of_a_hint_is_found_on_each_row_it_wraps_on() {
     let ctx = egui::Context::default();
     crate::ui::install(&ctx);
     let mut checked = 0;
-    let mut output = ctx.run_ui(egui::RawInput::default(), |ui| {
+    crate::ui::test_frame(&ctx, egui::RawInput::default(), |ui| {
         for language in Language::ALL {
             let i18n = Translator::new(language);
             // The link inside the sentence, after accented letters in French, and first
@@ -301,8 +301,6 @@ fn the_link_of_a_hint_is_found_on_each_row_it_wraps_on() {
             }
         }
     });
-    // epaint panics when the texture changes of a frame are dropped unapplied.
-    output.textures_delta.clear();
     assert_eq!(checked, 8);
 }
 
@@ -336,7 +334,7 @@ impl HintWindow {
             ..Default::default()
         };
         let mut drawn = (false, Pos2::ZERO, Vec::new());
-        let mut output = self.ctx.run_ui(input, |ui| {
+        crate::ui::test_frame(&self.ctx, input, |ui| {
             let origin = ui.cursor().min + vec2(size::BAND_PADDING, 0.0);
             let galley = linked_galley(ui, &self.hint, Self::WIDTH, true);
             let rects = link_rects(&galley, &self.hint)
@@ -346,7 +344,6 @@ impl HintWindow {
             let clicked = linked_hint(ui, &self.hint, Self::WIDTH, self.link, "Report a bug");
             drawn = (clicked, origin, rects);
         });
-        output.textures_delta.clear();
         drawn
     }
 

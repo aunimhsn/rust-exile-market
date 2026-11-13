@@ -394,12 +394,10 @@ mod tests {
             };
             let list = HotkeyList::new(self.chosen, &self.i18n);
             let mut action = None;
-            let mut output = self.ctx.run_ui(input, |ui| {
+            crate::ui::test_frame(&self.ctx, input, |ui| {
                 let button = ui.interact(BUTTON, button_id(), Sense::click());
                 action = list.show(ui.ctx(), &button, open);
             });
-            // epaint panics when the texture changes of a frame are dropped unapplied.
-            output.textures_delta.clear();
             action
         }
 

@@ -197,7 +197,7 @@ impl Scene {
         };
         let kind = self.kind();
         let mut height = 0.0;
-        let mut output = ctx.run_ui(input, |ui| {
+        let output = ui::test_frame(ctx, input, |ui| {
             let shown = self.session.item().expect("an item shown");
             let view = ItemView {
                 session: &self.session,
@@ -213,8 +213,6 @@ impl Scene {
             };
             (_, height) = ui::content(ui, false, |ui| view.show(ui));
         });
-        // epaint panics when the texture changes of a frame are dropped unapplied.
-        output.textures_delta.clear();
         drawn.frames += 1;
         let above = ctx.memory(|memory| {
             let layers = memory.areas().visible_layer_ids();
