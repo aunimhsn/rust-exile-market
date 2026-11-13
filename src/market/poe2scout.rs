@@ -200,6 +200,16 @@ struct ApiCurrency {
     price: ApiPrice,
 }
 
+/// The item of the currency exchange of the answer with its price in Exalted Orbs; none
+/// without a current price.
+fn currency_price(conversion: &Conversion, item: ApiCurrency) -> Option<CurrencyPrice> {
+    Some(CurrencyPrice {
+        price: conversion.price(item.price)?,
+        name: item.text,
+        exchange_id: item.api_id,
+    })
+}
+
 /// The price of an item, in the currency the prices are given in; none for an item not
 /// listed lately.
 #[derive(Deserialize)]
@@ -352,6 +362,30 @@ impl<A: Api> Poe2Scout<A> {
         log::warn!("More than {MAX_PAGES} pages of {category}: only the first ones are read");
         Ok(Some(items))
     }
+
+    /// The categories of the items of the league at `path`, encoded for a path, and the
+    /// rates of its prices: the first two requests of a download; `None` when `download` is
+    /// interrupted before one.
+    fn categories_and_rates(
+        &mut self,
+        path: &str,
+        download: &mut dyn DownloadObserver,
+    ) -> Result<Option<(ApiCategories, Conversion)>, FetchError> {
+        let Some(categories) = self.get_unless_interrupted::<ApiCategories>(
+            &format!("/Leagues/{path}/Items/Categories"),
+            &[],
+            download,
+        )?
+        else {
+            return Ok(None);
+        };
+        let currencies_path = format!("/Leagues/{path}/ReferenceCurrencies");
+        let Some(currencies) = self.get_unless_interrupted(&currencies_path, &[], download)? else {
+            return Ok(None);
+        };
+        let conversion = Conversion::new(&reference_currencies(currencies))?;
+        Ok(Some((categories.checked()?, conversion)))
+    }
 }
 
 impl<A: Api> PriceDatabase for Poe2Scout<A> {
@@ -375,20 +409,9 @@ impl<A: Api> PriceDatabase for Poe2Scout<A> {
     ) -> Result<Option<PriceList>, FetchError> {
         self.answered = false;
         let path = http::encode(league.id());
-        let Some(categories) = self.get_unless_interrupted::<ApiCategories>(
-            &format!("/Leagues/{path}/Items/Categories"),
-            &[],
-            download,
-        )?
-        else {
+        let Some((categories, conversion)) = self.categories_and_rates(&path, download)? else {
             return Ok(None);
         };
-        let currencies_path = format!("/Leagues/{path}/ReferenceCurrencies");
-        let Some(currencies) = self.get_unless_interrupted(&currencies_path, &[], download)? else {
-            return Ok(None);
-        };
-        let conversion = Conversion::new(&reference_currencies(currencies))?;
-        let categories = categories.checked()?;
         let currency_categories = download_order(categories.currency_categories);
         let mut prices = PriceList {
             league: league.clone(),
@@ -397,7 +420,7 @@ impl<A: Api> PriceDatabase for Poe2Scout<A> {
             uniques: Vec::new(),
             currencies: Vec::new(),
         };
-        // The two requests above, then one per category (most fit in one page).
+        // The two requests of the categories and the rates, then one per category (most fit in one page).
         let requests = 2 + currency_categories.len() + categories.unique_categories.len();
         let mut done = 2;
         #[expect(clippy::cast_precision_loss, reason = "a few dozen requests")]
@@ -410,15 +433,11 @@ impl<A: Api> PriceDatabase for Poe2Scout<A> {
             else {
                 return Ok(None);
             };
-            prices
-                .currencies
-                .extend(items.into_iter().filter_map(|item| {
-                    Some(CurrencyPrice {
-                        price: conversion.price(item.price)?,
-                        name: item.text,
-                        exchange_id: item.api_id,
-                    })
-                }));
+            prices.currencies.extend(
+                items
+                    .into_iter()
+                    .filter_map(|item| currency_price(&conversion, item)),
+            );
             done += 1;
             download.progress(&prices, share(done));
         }
