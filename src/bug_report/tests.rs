@@ -364,19 +364,20 @@ fn each_opening_is_told_apart() {
 /// (`short_log`): a sentence written otherwise would show the name of another window.
 #[test]
 fn the_log_writes_the_windows_as_the_bug_report_reads_them() {
-    let x11 = include_str!("../hotkey/x11.rs");
+    let x11_active_window = include_str!("../hotkey/x11/active_window.rs");
+    let x11_copy = include_str!("../hotkey/x11/copy.rs");
     let windows = include_str!("../hotkey/windows.rs");
     for (source, sentence) in [
-        (x11, "of class {class}, isn't the game"),
-        (x11, "of class {class}, is the game"),
-        (x11, "to the window of class {} (Ctrl {}"),
+        (x11_active_window, "of class {class}, isn't the game"),
+        (x11_active_window, "of class {class}, is the game"),
+        (x11_copy, "to the window of class {} (Ctrl {}"),
         (windows, "of class {class}, isn't the game"),
         (windows, "of class {class}, is the game"),
         (windows, "from the window of class {class} (Ctrl {}"),
     ] {
         assert!(source.contains(sentence), "{sentence}");
     }
-    for source in [x11, windows] {
+    for source in [x11_active_window, x11_copy, windows] {
         assert_eq!(
             source.matches("of class ").count(),
             source.matches("of class {").count(),
