@@ -3,5 +3,5 @@
 # by a pull request (Dependabot proposes it), like a dependency. `rust-version` in Cargo.toml
 # is the oldest version that still builds it.
 [toolchain]
-channel = "1.99.1"
+channel = "1.100.0"
 components = ["rustfmt", "clippy"]
