@@ -8,6 +8,7 @@ use super::stats::{Stat, TradeGroup};
 use super::trade_site::TradeStats;
 use crate::item::{Modifier, ModifierKind, ModifierOrigin, Range, StatLine};
 use crate::language::Language;
+use crate::price::UniqueModifiers;
 
 /// The difference under which two values are one: both are read from decimal texts, so that
 /// the same text gives the same value. A range of one value whose decimals the database left
@@ -35,8 +36,8 @@ impl Rolled<'_> {
 }
 
 /// The modifiers of a unique copied without ranges, in `language`, with the ranges of the
-/// modifiers of the database on the lines it holds: `implicit` those of its base, `explicit`
-/// its own, in English, as the database writes them. A range of one value (`(5-5)`), or a
+/// modifiers of the database on the lines it holds: `rolls`, those of its base and its own, in
+/// English, as the database writes them. A range of one value (`(5-5)`), or a
 /// number the database writes without range, is a line that never varies, when it is the
 /// copied value: otherwise it is the value of one copy (`+3 to Level of all Cold Skills` of
 /// Sunsplinter, which rolls). Only the stats that count one number get a range: the database
@@ -49,12 +50,11 @@ impl Rolled<'_> {
 pub fn with_unique_rolls(
     language: Language,
     modifiers: &[Modifier],
-    implicit: &[String],
-    explicit: &[String],
+    rolls: &UniqueModifiers,
     trade: Option<&TradeStats>,
 ) -> Vec<Modifier> {
-    let mut implicit = rolled(implicit, ModifierKind::Implicit, trade);
-    let mut explicit = rolled(explicit, ModifierKind::Explicit(None), trade);
+    let mut implicit = rolled(&rolls.implicit, ModifierKind::Implicit, trade);
+    let mut explicit = rolled(&rolls.explicit, ModifierKind::Explicit(None), trade);
     modifiers
         .iter()
         .map(|modifier| {

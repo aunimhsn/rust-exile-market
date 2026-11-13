@@ -8,6 +8,7 @@ use super::rolls::ranges_text;
 use super::{LineFacts, Stats};
 use crate::filters::{Filters, Half};
 use crate::item::{Affix, CopiedItem, Item, PartTier, Range, Rarity, StatLine};
+use crate::price::UniqueModifiers;
 use crate::roll_difference::CopiedLines;
 use crate::tier_rolls::TierRolls;
 use crate::trade::stat_filters::LineStats;
@@ -255,15 +256,17 @@ pub(super) fn with_soul_tether_rolls(mut item: Item) -> Item {
     let modifiers = game_data::with_unique_rolls(
         item.language(),
         item.modifiers(),
-        &written(&[
-            "(15-20)% increased Charm Effect Duration",
-            "Has (1-3) Charm Slots",
-        ]),
-        &written(&[
-            "+(40-60) to maximum Energy Shield",
-            "You lose (5-5)% of maximum Energy Shield per second",
-            "Excess Life Recovery from Leech is applied to Energy Shield",
-        ]),
+        &UniqueModifiers {
+            implicit: written(&[
+                "(15-20)% increased Charm Effect Duration",
+                "Has (1-3) Charm Slots",
+            ]),
+            explicit: written(&[
+                "+(40-60) to maximum Energy Shield",
+                "You lose (5-5)% of maximum Energy Shield per second",
+                "Excess Life Recovery from Leech is applied to Energy Shield",
+            ]),
+        },
         None,
     );
     item.set_modifiers(modifiers);
