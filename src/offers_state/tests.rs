@@ -1,7 +1,8 @@
 use super::*;
 use crate::language::Language;
 use crate::league::League;
-use crate::trade::offers::{OfferItem, Price, SellerStatus};
+use crate::trade::offers::fixtures::item_offer;
+use crate::trade::offers::{Price, SellerStatus};
 use crate::trade::query::{ItemQuery, Query, RulesOut, StateFilters};
 
 pub(crate) fn item_search() -> Search {
@@ -31,30 +32,11 @@ pub(crate) fn exchange_search() -> Search {
     }
 }
 
+/// An offer of the item `id` for one Divine Orb.
 fn offer(id: &str) -> ItemOffer {
     ItemOffer {
         id: id.to_owned(),
-        price: Some(Price {
-            amount: 1.0,
-            currency: "divine".to_owned(),
-        }),
-        seller: SellerStatus::Online,
-        listed: None,
-        whisper: String::new(),
-        item: OfferItem {
-            rarity: None,
-            name: None,
-            base_type: "Gold Ring".to_owned(),
-            item_level: None,
-            corrupted: false,
-            quality: None,
-            gem_level: None,
-            gem_sockets: None,
-            requirements: crate::item::Requirements::default(),
-            waystone_properties: Vec::new(),
-            waystone_unread: false,
-            modifiers: Vec::new(),
-        },
+        ..item_offer(1.0, "divine")
     }
 }
 

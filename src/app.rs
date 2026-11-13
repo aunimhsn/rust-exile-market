@@ -1426,36 +1426,11 @@ mod tests {
         currencies: &[],
     };
 
-    /// Offers of a bow for `amounts` Divine Orbs.
+    /// Offers for `amounts` Divine Orbs.
     fn divines(amounts: &[f64]) -> Vec<crate::trade::offers::ItemOffer> {
-        use crate::trade::offers::{ItemOffer, OfferItem, Price, SellerStatus};
-
         amounts
             .iter()
-            .map(|&amount| ItemOffer {
-                id: "a".to_owned(),
-                price: Some(Price {
-                    amount,
-                    currency: "divine".to_owned(),
-                }),
-                seller: SellerStatus::Online,
-                listed: None,
-                whisper: String::new(),
-                item: OfferItem {
-                    rarity: None,
-                    name: None,
-                    base_type: "Gemini Bow".to_owned(),
-                    item_level: None,
-                    corrupted: false,
-                    quality: None,
-                    gem_level: None,
-                    gem_sockets: None,
-                    requirements: crate::item::Requirements::default(),
-                    waystone_properties: Vec::new(),
-                    waystone_unread: false,
-                    modifiers: Vec::new(),
-                },
-            })
+            .map(|&amount| crate::trade::offers::fixtures::item_offer(amount, "divine"))
             .collect()
     }
 

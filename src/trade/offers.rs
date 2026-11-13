@@ -780,4 +780,6 @@ fn days_from_civil(year: i64, month: i64, day: i64) -> i64 {
 }
 
 #[cfg(test)]
+pub mod fixtures;
+#[cfg(test)]
 pub(crate) mod tests;

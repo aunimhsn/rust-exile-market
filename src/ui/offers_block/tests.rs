@@ -1,7 +1,7 @@
 use super::*;
 use crate::price::Rates;
 use crate::price::estimate::Worth;
-use crate::trade::offers::OfferItem;
+use crate::trade::offers::fixtures::item_offer;
 use egui::Pos2;
 
 const RATES: Rates = Rates {
@@ -18,40 +18,16 @@ const REFERENCE: Reference = Reference {
     worth: WORTH,
 };
 
-fn offer(amount: f64, currency: &str, seller: SellerStatus) -> ItemOffer {
-    ItemOffer {
-        id: "a".to_owned(),
-        price: Some(Price {
-            amount,
-            currency: currency.to_owned(),
-        }),
-        seller,
-        listed: Some(SystemTime::UNIX_EPOCH),
-        whisper: String::new(),
-        item: OfferItem {
-            rarity: None,
-            name: Some("Headhunter".to_owned()),
-            base_type: "Heavy Belt".to_owned(),
-            item_level: None,
-            corrupted: true,
-            quality: None,
-            gem_level: None,
-            gem_sockets: None,
-            requirements: crate::item::Requirements::default(),
-            waystone_properties: Vec::new(),
-            waystone_unread: false,
-            modifiers: Vec::new(),
-        },
-    }
-}
-
 #[test]
 fn an_offer_under_a_quarter_of_the_market_price_is_suspicious() {
     let offers = [
-        offer(6.0, "exalted", SellerStatus::Online),
-        offer(1.0, "chaos", SellerStatus::Online),
-        offer(3.0, "divine", SellerStatus::Online),
-        offer(3.2, "divine", SellerStatus::Away),
+        item_offer(6.0, "exalted"),
+        item_offer(1.0, "chaos"),
+        item_offer(3.0, "divine"),
+        ItemOffer {
+            seller: SellerStatus::Away,
+            ..item_offer(3.2, "divine")
+        },
     ];
     let now = SystemTime::UNIX_EPOCH + Duration::from_hours(2);
 
@@ -87,7 +63,7 @@ fn an_offer_of_another_kind_of_quality_is_marked_while_the_quality_is_searched()
     use crate::trade::offers::OfferQuality;
 
     let of_kind = |amount, catalyst| {
-        let mut offer = offer(amount, "divine", SellerStatus::Online);
+        let mut offer = item_offer(amount, "divine");
         offer.item.quality = Some(OfferQuality {
             value: 40,
             kind: Some(QualityKind {
@@ -118,7 +94,7 @@ fn an_offer_of_another_kind_of_quality_is_marked_while_the_quality_is_searched()
 #[test]
 fn another_currency_has_its_icon_and_its_name_and_isnt_suspicious_without_price() {
     let rows = item_rows(
-        &[offer(1.0, "annul", SellerStatus::Online)],
+        &[item_offer(1.0, "annul")],
         Some(REFERENCE),
         None,
         SystemTime::UNIX_EPOCH,
@@ -153,10 +129,7 @@ fn an_offer_in_a_currency_of_the_price_database_may_be_suspicious() {
             currencies: &currencies,
         },
     };
-    let offers = [
-        offer(10.0, "annul", SellerStatus::Online),
-        offer(60.0, "annul", SellerStatus::Online),
-    ];
+    let offers = [item_offer(10.0, "annul"), item_offer(60.0, "annul")];
 
     let rows = item_rows(&offers, Some(reference), None, SystemTime::UNIX_EPOCH);
 
@@ -195,7 +168,7 @@ fn no_offer_is_said_only_when_none_is_left_to_fetch() {
     );
     assert!(!no_offer(&[], More::Loading));
     let rows = item_rows(
-        &[offer(1.0, "divine", SellerStatus::Online)],
+        &[item_offer(1.0, "divine")],
         None,
         None,
         SystemTime::UNIX_EPOCH,
