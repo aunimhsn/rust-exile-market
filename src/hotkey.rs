@@ -50,6 +50,9 @@ mod windows;
 #[cfg(target_os = "linux")]
 mod x11;
 
+#[cfg(any(target_os = "linux", target_os = "windows"))]
+use global_hotkey::GlobalHotKeyManager;
+
 // The copy of each system: `CopySender` (`connect` once at the start, `send_copy` at each
 // hotkey) and `SENT_AT`, the press or the release of D at which the copy is sent.
 #[cfg(target_os = "windows")]
@@ -60,10 +63,10 @@ use self::x11 as system;
 /// The hotkeys of the system, shared on Linux with the thread that grabs the key while the game is
 /// the active window, which stops at the next change of the active window once they are dropped.
 #[cfg(target_os = "linux")]
-type Manager = std::sync::Arc<global_hotkey::GlobalHotKeyManager>;
+type Manager = std::sync::Arc<GlobalHotKeyManager>;
 /// The hotkeys of the system, heard by a hidden window of the thread of the window.
 #[cfg(target_os = "windows")]
-type Manager = global_hotkey::GlobalHotKeyManager;
+type Manager = GlobalHotKeyManager;
 
 /// What the hotkey does now, which the window tells the player (`specs.md`, Settings).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -135,6 +138,57 @@ impl Drop for OnItsWay<'_> {
     }
 }
 
+/// Connects what a press needs: the keys of the copy, then the grab of the hotkey.
+#[cfg(any(target_os = "linux", target_os = "windows"))]
+fn connect_hotkey() -> Result<(system::CopySender, GlobalHotKeyManager), Box<dyn std::error::Error>>
+{
+    Ok((system::CopySender::connect()?, GlobalHotKeyManager::new()?))
+}
+
+/// What a press of the hotkey copies with, kept by the handler of the hotkey events: the keys of
+/// the copy, the clipboard prepared before them, the channel that tells the window, the count of
+/// the presses on their way and the wake of the window.
+#[cfg(any(target_os = "linux", target_os = "windows"))]
+struct Copier {
+    copy_sender: system::CopySender,
+    marker: CopyMarker,
+    targets: std::sync::mpsc::Sender<Press>,
+    on_their_way: OnTheirWay,
+    wake: std::sync::Arc<dyn Fn() + Send + Sync>,
+}
+
+#[cfg(any(target_os = "linux", target_os = "windows"))]
+impl Copier {
+    /// Copies the item under the pointer with `shortcut`, counted among the presses on their way
+    /// until the window receives it, which is woken once told.
+    fn copy(&mut self, shortcut: Shortcut) {
+        let Self {
+            copy_sender,
+            marker,
+            targets,
+            on_their_way,
+            wake,
+        } = self;
+        // Counted before the active window changes, until its keys are sent and the window
+        // received it.
+        let mut on_its_way = OnItsWay::new(on_their_way);
+        copy_sender.send_copy(
+            shortcut,
+            // Once the keys are sure to leave: a copy that doesn't leave would leave the marker in
+            // place of the item of the player.
+            || marker.before_copy(),
+            |target, copy| {
+                // The application stopped listening: nothing left to tell, and no window to give
+                // the count of the press back (the guard gives both).
+                if targets.send(Press { target, copy }).is_ok() {
+                    on_its_way.told();
+                    wake();
+                }
+            },
+        );
+    }
+}
+
 /// The keys of the hotkey, shared with the handler of the hotkey events.
 type SharedShortcut = std::sync::Arc<std::sync::Mutex<Shortcut>>;
 
@@ -166,7 +220,7 @@ impl InGame {
     /// Starts following the active window, the hotkey `on` or off, `wake` called when its key
     /// becomes taken or free.
     fn start(
-        manager: global_hotkey::GlobalHotKeyManager,
+        manager: GlobalHotKeyManager,
         shortcut: Shortcut,
         on: bool,
         wake: impl Fn() + Send + 'static,
@@ -340,7 +394,7 @@ impl PriceCheckHotkey {
         shortcut: Shortcut,
         wake: impl Fn() + Send + Sync + 'static,
     ) -> Self {
-        use global_hotkey::{GlobalHotKeyEvent, GlobalHotKeyManager};
+        use global_hotkey::GlobalHotKeyEvent;
         use std::sync::atomic::{AtomicBool, Ordering};
         use std::sync::{Arc, Mutex, PoisonError};
 
@@ -354,49 +408,33 @@ impl PriceCheckHotkey {
             on_their_way: Arc::clone(&on_their_way),
             shortcut: Arc::clone(&keys),
         };
-        let sender = match system::CopySender::connect() {
-            Ok(sender) => Mutex::new((sender, marker)),
+        let (copy_sender, manager) = match connect_hotkey() {
+            Ok(listening) => listening,
             Err(error) => {
                 log::warn!("The price-check hotkey can't listen: {error}");
                 return off();
             }
         };
-        let manager = match GlobalHotKeyManager::new() {
-            Ok(manager) => manager,
-            Err(error) => {
-                log::warn!("The price-check hotkey can't listen: {error}");
-                return off();
-            }
-        };
-        let (targets, receiver) = std::sync::mpsc::channel();
         log::info!("Price-check hotkey: {shortcut}");
-        let wake = Arc::new(wake);
+        let wake: Arc<dyn Fn() + Send + Sync> = Arc::new(wake);
         let wake_in_game = Arc::clone(&wake);
+        let (targets, receiver) = std::sync::mpsc::channel();
+        let copier = Mutex::new(Copier {
+            copy_sender,
+            marker,
+            targets,
+            on_their_way: Arc::clone(&on_their_way),
+            wake,
+        });
         let on_at_press = Arc::clone(&on);
         let keys_at_press = Arc::clone(&keys);
-        let on_their_way_at_press = Arc::clone(&on_their_way);
         GlobalHotKeyEvent::set_event_handler(Some(move |event: GlobalHotKeyEvent| {
             let shortcut = *keys_at_press.lock().unwrap_or_else(PoisonError::into_inner);
             if copies_at(event, shortcut, on_at_press.load(Ordering::Relaxed)) {
-                let mut sender = sender.lock().unwrap_or_else(PoisonError::into_inner);
-                let (copy_sender, marker) = &mut *sender;
-                // Counted before the active window changes, until its keys are sent and the
-                // window received it.
-                let mut on_its_way = OnItsWay::new(&on_their_way_at_press);
-                copy_sender.send_copy(
-                    shortcut,
-                    // Once the keys are sure to leave: a copy that doesn't leave would leave
-                    // the marker in place of the item of the player.
-                    || marker.before_copy(),
-                    |target, copy| {
-                        // The application stopped listening: nothing left to tell, and no
-                        // window to give the count of the press back (the guard gives both).
-                        if targets.send(Press { target, copy }).is_ok() {
-                            on_its_way.told();
-                            wake();
-                        }
-                    },
-                );
+                copier
+                    .lock()
+                    .unwrap_or_else(PoisonError::into_inner)
+                    .copy(shortcut);
             }
         }));
         let in_game = InGame::start(manager, shortcut, on.load(Ordering::Relaxed), move || {
@@ -501,6 +539,8 @@ impl PriceCheckHotkey {
     /// Gives each press of the hotkey since the last call to `handle`, without waiting.
     pub fn receive(&mut self, mut handle: impl FnMut(Press)) {
         if let Some(targets) = &self.targets {
+            // Never disconnected: its sender lives in the handler of the hotkey events, which
+            // `global-hotkey` keeps in a static, set once and never dropped.
             while let Ok(target) = targets.try_recv() {
                 self.on_their_way
                     .fetch_sub(1, std::sync::atomic::Ordering::SeqCst);

@@ -424,32 +424,7 @@ fn send_copy<P>(
     prepare: impl FnOnce() -> P,
     tell: impl FnOnce(Option<Target>, P),
 ) -> Result<Sent> {
-    // The window the keys go to, read before them; for the log and the window over the
-    // game, so that a failure doesn't stop the copy.
-    // On a single screen, the helper of the window over the game may be active in place of
-    // the game: the game is made active again, so that the copy and the window go to it.
-    let (window, refused) = server.active_game();
-    let window_class = match &window {
-        Ok(Some(window)) => server
-            .window_class(*window)
-            .unwrap_or_else(|error| format!("unknown ({error})")),
-        Ok(None) => "none (an application outside X11?)".to_owned(),
-        Err(error) => format!("unknown ({error})"),
-    };
-    // While a field of the window over the game is edited, the keys of the copy would go to
-    // it: the game gets the keyboard back first.
-    if let Ok(Some(game)) = window
-        && let Err(error) = server.give_back_keyboard(game)
-    {
-        log::warn!("The keyboard can't be given back to the game: {error}");
-    }
-    let game = match window {
-        Ok(Some(window)) => server.window_rect(window).unwrap_or_else(|error| {
-            log::warn!("The window of the game can't be measured: {error}");
-            None
-        }),
-        _ => None,
-    };
+    let window = aim_keys(server);
     server.drop_events();
     let layout = server.layout()?;
     let (Some(control), Some(c)) = (layout.keycode(XK_CONTROL_L), layout.keycode(XK_C)) else {
@@ -462,13 +437,13 @@ fn send_copy<P>(
     if let Ok(read) = server.pointer() {
         pointer = read;
     }
-    let target = game.map(|game| Target {
+    let target = window.game.map(|game| Target {
         pointer: pointer.position,
         game,
     });
     tell(target, prepared);
     // Not twice when the desktop already refused.
-    if !refused {
+    if !window.refused {
         server.game_in_front_again();
     }
     let control_held = server
@@ -492,20 +467,73 @@ fn send_copy<P>(
         others: keycodes(&released),
         missed: keycodes(&missed),
     };
+    press(server, copy_keys(control, c, &held))?;
+    Ok(Sent {
+        window_class: window.class,
+        control_held,
+        released: names(&released),
+        missed: names(&missed),
+    })
+}
+
+/// The window the keys of a copy go to, read before them (step 1 of [`send_copy`]).
+struct KeysWindow {
+    /// The class of the active window, for the log.
+    class: String,
+    /// Where the game is, for the window over the game: none when it isn't the active window,
+    /// or can't be measured.
+    game: Option<ScreenRect>,
+    /// Whether the desktop refused to make the game the active window again.
+    refused: bool,
+}
+
+/// Aims the keys of a copy: reads the window they go to, and gives it the keyboard back from a
+/// field of the window over the game; a failure is told in the result or the log, so that it
+/// doesn't stop the copy. On a single screen, the helper of the window over the game may be active in place of
+/// the game: the game is made active again, so that the copy and the window go to it.
+fn aim_keys(server: &impl Server) -> KeysWindow {
+    let (window, refused) = server.active_game();
+    let class = match &window {
+        Ok(Some(window)) => server
+            .window_class(*window)
+            .unwrap_or_else(|error| format!("unknown ({error})")),
+        Ok(None) => "none (an application outside X11?)".to_owned(),
+        Err(error) => format!("unknown ({error})"),
+    };
+    let Ok(Some(window)) = window else {
+        return KeysWindow {
+            class,
+            game: None,
+            refused,
+        };
+    };
+    // While a field of the window over the game is edited, the keys of the copy would go to
+    // it: the game gets the keyboard back first.
+    if let Err(error) = server.give_back_keyboard(window) {
+        log::warn!("The keyboard can't be given back to the game: {error}");
+    }
+    let game = server.window_rect(window).unwrap_or_else(|error| {
+        log::warn!("The window of the game can't be measured: {error}");
+        None
+    });
+    KeysWindow {
+        class,
+        game,
+        refused,
+    }
+}
+
+/// Presses and releases `keys` in their order through `server`, each after the first
+/// [`KEY_DELAY_MS`] after the previous one.
+fn press(server: &impl Server, keys: Vec<Key<Keycode>>) -> Result<()> {
     let mut first = true;
-    send_all(copy_keys(control, c, &held), |key| {
+    send_all(keys, |key| {
         let delay = if std::mem::take(&mut first) {
             0
         } else {
             KEY_DELAY_MS
         };
         server.fake_key(key, delay)
-    })?;
-    Ok(Sent {
-        window_class,
-        control_held,
-        released: names(&released),
-        missed: names(&missed),
     })
 }
 

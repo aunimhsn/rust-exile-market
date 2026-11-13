@@ -4,6 +4,9 @@
 use std::fmt;
 use std::str::FromStr;
 
+#[cfg(any(target_os = "linux", target_os = "windows"))]
+use global_hotkey::hotkey::Code;
+
 /// A combination of keys: Ctrl, Shift or Alt held, then one key pressed.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Shortcut {
@@ -33,6 +36,67 @@ const FUNCTIONS: [&str; 12] = [
     "F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "F11", "F12",
 ];
 
+/// The codes of [`LETTERS`] for `global-hotkey`, in the same order.
+#[cfg(any(target_os = "linux", target_os = "windows"))]
+const LETTER_CODES: [Code; LETTERS.len()] = [
+    Code::KeyA,
+    Code::KeyB,
+    Code::KeyC,
+    Code::KeyD,
+    Code::KeyE,
+    Code::KeyF,
+    Code::KeyG,
+    Code::KeyH,
+    Code::KeyI,
+    Code::KeyJ,
+    Code::KeyK,
+    Code::KeyL,
+    Code::KeyM,
+    Code::KeyN,
+    Code::KeyO,
+    Code::KeyP,
+    Code::KeyQ,
+    Code::KeyR,
+    Code::KeyS,
+    Code::KeyT,
+    Code::KeyU,
+    Code::KeyV,
+    Code::KeyW,
+    Code::KeyX,
+    Code::KeyY,
+    Code::KeyZ,
+];
+/// The codes of [`DIGITS`] for `global-hotkey`, in the same order.
+#[cfg(any(target_os = "linux", target_os = "windows"))]
+const DIGIT_CODES: [Code; DIGITS.len()] = [
+    Code::Digit0,
+    Code::Digit1,
+    Code::Digit2,
+    Code::Digit3,
+    Code::Digit4,
+    Code::Digit5,
+    Code::Digit6,
+    Code::Digit7,
+    Code::Digit8,
+    Code::Digit9,
+];
+/// The codes of [`FUNCTIONS`] for `global-hotkey`, in the same order.
+#[cfg(any(target_os = "linux", target_os = "windows"))]
+const FUNCTION_CODES: [Code; FUNCTIONS.len()] = [
+    Code::F1,
+    Code::F2,
+    Code::F3,
+    Code::F4,
+    Code::F5,
+    Code::F6,
+    Code::F7,
+    Code::F8,
+    Code::F9,
+    Code::F10,
+    Code::F11,
+    Code::F12,
+];
+
 const CONTROL: &str = "Ctrl";
 const SHIFT: &str = "Shift";
 const ALT: &str = "Alt";
@@ -43,6 +107,16 @@ impl KeyName {
             Self::Letter(index) => LETTERS[usize::from(index)],
             Self::Digit(digit) => DIGITS[usize::from(digit)],
             Self::Function(number) => FUNCTIONS[usize::from(number - 1)],
+        }
+    }
+
+    /// Its code for `global-hotkey`, which grabs it.
+    #[cfg(any(target_os = "linux", target_os = "windows"))]
+    fn code(self) -> Code {
+        match self {
+            Self::Letter(index) => LETTER_CODES[usize::from(index)],
+            Self::Digit(digit) => DIGIT_CODES[usize::from(digit)],
+            Self::Function(number) => FUNCTION_CODES[usize::from(number - 1)],
         }
     }
 
@@ -154,73 +228,16 @@ impl Shortcut {
     #[cfg(any(target_os = "linux", target_os = "windows"))]
     #[must_use]
     pub(super) fn hotkey(self) -> global_hotkey::hotkey::HotKey {
-        use global_hotkey::hotkey::{Code, HotKey, Modifiers};
-
-        const LETTERS: [Code; 26] = [
-            Code::KeyA,
-            Code::KeyB,
-            Code::KeyC,
-            Code::KeyD,
-            Code::KeyE,
-            Code::KeyF,
-            Code::KeyG,
-            Code::KeyH,
-            Code::KeyI,
-            Code::KeyJ,
-            Code::KeyK,
-            Code::KeyL,
-            Code::KeyM,
-            Code::KeyN,
-            Code::KeyO,
-            Code::KeyP,
-            Code::KeyQ,
-            Code::KeyR,
-            Code::KeyS,
-            Code::KeyT,
-            Code::KeyU,
-            Code::KeyV,
-            Code::KeyW,
-            Code::KeyX,
-            Code::KeyY,
-            Code::KeyZ,
-        ];
-        const DIGITS: [Code; 10] = [
-            Code::Digit0,
-            Code::Digit1,
-            Code::Digit2,
-            Code::Digit3,
-            Code::Digit4,
-            Code::Digit5,
-            Code::Digit6,
-            Code::Digit7,
-            Code::Digit8,
-            Code::Digit9,
-        ];
-        const FUNCTIONS: [Code; 12] = [
-            Code::F1,
-            Code::F2,
-            Code::F3,
-            Code::F4,
-            Code::F5,
-            Code::F6,
-            Code::F7,
-            Code::F8,
-            Code::F9,
-            Code::F10,
-            Code::F11,
-            Code::F12,
-        ];
+        use global_hotkey::hotkey::{HotKey, Modifiers};
 
         let mut modifiers = Modifiers::empty();
         modifiers.set(Modifiers::CONTROL, self.control);
         modifiers.set(Modifiers::SHIFT, self.shift);
         modifiers.set(Modifiers::ALT, self.alt);
-        let code = match self.key {
-            KeyName::Letter(index) => LETTERS[usize::from(index)],
-            KeyName::Digit(digit) => DIGITS[usize::from(digit)],
-            KeyName::Function(number) => FUNCTIONS[usize::from(number - 1)],
-        };
-        HotKey::new((!modifiers.is_empty()).then_some(modifiers), code)
+        HotKey::new(
+            (!modifiers.is_empty()).then_some(modifiers),
+            self.key.code(),
+        )
     }
 }
 
