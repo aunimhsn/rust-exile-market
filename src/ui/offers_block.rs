@@ -24,7 +24,7 @@ use crate::item::Item;
 use crate::offers_state::{ItemOffers, LONG_WAIT, Offers, OffersState};
 use crate::price::estimate::Reference;
 use crate::roll_difference::CopiedLines;
-use crate::trade::offers::ItemOffer;
+use crate::trade::offers::{ExchangeOffer, ItemOffer};
 use crate::trade::query::SearchKind;
 use crate::trade::search::Failure;
 use head::{Block, Head, block, failure_lines, failure_message};
@@ -112,15 +112,7 @@ impl OffersBlock<'_> {
         let now = SystemTime::now();
         let wait = self.offers.wait(self.kind, Instant::now());
         let busy = self.offers.busy();
-        if !wait.is_zero() {
-            // The countdown changes every second.
-            let to_next_second = Duration::from_nanos(u64::from(wait.subsec_nanos()));
-            ui.ctx().request_repaint_after(if to_next_second.is_zero() {
-                Duration::from_secs(1)
-            } else {
-                to_next_second
-            });
-        }
+        repaint_at_next_second(ui, wait);
         let i18n = self.i18n;
         match self.offers.state() {
             OffersState::Idle => {
@@ -144,34 +136,10 @@ impl OffersBlock<'_> {
                 let line = (i18n.text(Message::OffersSearching), color::FAINT);
                 self.title_row(ui, &Head::of(line, Block::Searching), None)
             }
-            OffersState::Items(ItemOffers {
-                offers,
-                total,
-                rest,
-                loading_more,
-                more_failed,
-                searched,
-                ..
-            }) => {
-                let rows = item_rows(
-                    offers,
-                    self.reference,
-                    self.offers.searched_catalyst(self.item),
-                    now,
-                );
-                let list = List {
-                    rows: &rows,
-                    items: Some(offers),
-                    total: *total,
-                    more: match (rest.is_empty(), *loading_more) {
-                        (_, true) => More::Loading,
-                        (false, false) => More::Chevron,
-                        (true, false) => More::None,
-                    },
-                    more_failed: *more_failed,
-                    searched: *searched,
-                };
-                self.results(ui, &list, wait)
+            OffersState::Items(items) => {
+                let searched_catalyst = self.offers.searched_catalyst(self.item);
+                let rows = item_rows(&items.offers, self.reference, searched_catalyst, now);
+                self.results(ui, &List::of_items(items, &rows), wait)
             }
             OffersState::Exchange {
                 offers,
@@ -181,18 +149,7 @@ impl OffersBlock<'_> {
             } => {
                 let shown = offers.get(..*shown).unwrap_or(offers);
                 let rows = exchange_rows(shown, self.reference, now);
-                let list = List {
-                    rows: &rows,
-                    items: None,
-                    total: *total,
-                    more: if shown.len() < offers.len() {
-                        More::Chevron
-                    } else {
-                        More::None
-                    },
-                    more_failed: None,
-                    searched: *searched,
-                };
+                let list = List::of_exchange(&rows, offers, *total, *searched);
                 self.results(ui, &list, wait)
             }
         }
@@ -254,6 +211,19 @@ fn results_messages(i18n: &Translator, list: &List, wait: Duration) -> Vec<(Stri
     messages
 }
 
+/// While the countdown of `wait` runs, draws the block again when it changes, every second.
+fn repaint_at_next_second(ui: &Ui, wait: Duration) {
+    if wait.is_zero() {
+        return;
+    }
+    let to_next_second = Duration::from_nanos(u64::from(wait.subsec_nanos()));
+    ui.ctx().request_repaint_after(if to_next_second.is_zero() {
+        Duration::from_secs(1)
+    } else {
+        to_next_second
+    });
+}
+
 /// Under the list: the chevron of the next offers, the spinner while they come, or the
 /// space under the band; whether the chevron was clicked.
 fn more_row(ui: &mut Ui, next: More, i18n: &Translator) -> bool {
@@ -292,7 +262,41 @@ struct List<'a> {
     searched: SystemTime,
 }
 
-impl List<'_> {
+impl<'a> List<'a> {
+    /// The list of the offers of a search of items, `items`, drawn as their `rows`.
+    fn of_items(items: &'a ItemOffers, rows: &'a [Row]) -> Self {
+        Self {
+            rows,
+            items: Some(&items.offers),
+            total: items.total,
+            more: More::of_items(items),
+            more_failed: items.more_failed,
+            searched: items.searched,
+        }
+    }
+
+    /// The list of the offers of the currency exchange, all its `offers`, `total` of them
+    /// found at `searched`, the first ones drawn as their `rows`.
+    fn of_exchange(
+        rows: &'a [Row],
+        offers: &[ExchangeOffer],
+        total: u64,
+        searched: SystemTime,
+    ) -> Self {
+        Self {
+            rows,
+            items: None,
+            total,
+            more: if rows.len() < offers.len() {
+                More::Chevron
+            } else {
+                More::None
+            },
+            more_failed: None,
+            searched,
+        }
+    }
+
     /// The search whose offers the list shows: of items, or of the currency exchange, with
     /// their stock.
     fn kind(&self) -> SearchKind {
@@ -319,6 +323,20 @@ enum More {
     Chevron,
     /// The spinner, while the next offers come.
     Loading,
+}
+
+impl More {
+    /// What is under the offers of a search of items, `items`: the spinner while the next ones
+    /// come, the chevron while some are left to fetch.
+    fn of_items(items: &ItemOffers) -> Self {
+        if items.loading_more {
+            Self::Loading
+        } else if items.rest.is_empty() {
+            Self::None
+        } else {
+            Self::Chevron
+        }
+    }
 }
 
 /// Band B the whole width of `ui`, its content drawn by `add` with the width inside the
