@@ -14,3 +14,6 @@ doc-valid-idents = ["RePoE", "XWayland", "XTest", ".."]
 # `unwrap_used` is on for the workspace (Cargo.toml): a test may unwrap, its failure is the
 # message.
 allow-unwrap-in-tests = true
+
+# At most four parameters, `self` included (docs/code-quality.md, Functions).
+too-many-arguments-threshold = 4

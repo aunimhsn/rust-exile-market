@@ -41,7 +41,7 @@ pub use stats::TradeGroup;
 pub use trade_site::TradeStats;
 #[cfg(test)]
 pub use trade_site::tests::trade_stats;
-pub use unique_rolls::with_unique_rolls;
+pub use unique_rolls::{UniqueModifiers, with_unique_rolls};
 
 /// Whether the stat of the game id `id` (`base_maximum_life`) in the game data of `language`
 /// has the other sign on the trade site; none when no stat has this id.

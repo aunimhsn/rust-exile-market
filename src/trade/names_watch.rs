@@ -95,7 +95,8 @@ impl ItemNamesWatch {
         wake: impl Fn() + Send + 'static,
     ) -> Self {
         let worker = Worker::spawn("item-names", OnDrop::Detach, wake, move |outbox, wake| {
-            watch(&mut open(), cache.as_deref(), intervals, outbox, wake);
+            let listener = Listener { outbox, wake };
+            watch(&mut open(), cache.as_deref(), intervals, &listener);
         });
         Self { worker }
     }
@@ -107,13 +108,35 @@ impl ItemNamesWatch {
     }
 }
 
+/// The application, which the thread gives the names to.
+struct Listener<'a> {
+    outbox: &'a Outbox<ItemNames>,
+    /// Wakes the application up, to take the names in.
+    wake: &'a dyn Fn(),
+}
+
+impl Listener<'_> {
+    /// Gives `names` to the application and wakes it up; `false` when it no longer listens.
+    fn give(&self, names: ItemNames) -> bool {
+        if !self.outbox.send(names) {
+            return false;
+        }
+        (self.wake)();
+        true
+    }
+
+    /// Waits `duration`; `false` when the application asked the thread to stop meanwhile.
+    fn wait(&self, duration: Duration) -> bool {
+        self.outbox.wait(duration)
+    }
+}
+
 /// Reads the names until the application stops the thread or stops listening.
 fn watch(
     source: &mut impl NameSource,
     cache: Option<&Path>,
     intervals: Intervals,
-    outbox: &Outbox<ItemNames>,
-    wake: &dyn Fn(),
+    listener: &Listener<'_>,
 ) {
     let mut due = Instant::now();
     let mut known = false;
@@ -122,10 +145,9 @@ fn watch(
         log::info!("Item names from the cache, {} h old", age.as_secs() / 3600);
         due += intervals.refresh.saturating_sub(age);
         known = true;
-        if !outbox.send(names) {
+        if !listener.give(names) {
             return;
         }
-        wake();
     }
     let mut failing = false;
     let mut backoff = intervals.backoff();
@@ -148,10 +170,9 @@ fn watch(
                     if let Some(directory) = cache {
                         save(directory, &names);
                     }
-                    if !outbox.send(names) {
+                    if !listener.give(names) {
                         return;
                     }
-                    wake();
                     due = Instant::now() + intervals.refresh;
                 }
                 // Not sent: the trade site refused a search, or the names, a moment ago.
@@ -180,7 +201,7 @@ fn watch(
                 }
             }
         }
-        if !outbox.wait(due.saturating_duration_since(Instant::now())) {
+        if !listener.wait(due.saturating_duration_since(Instant::now())) {
             return;
         }
     }

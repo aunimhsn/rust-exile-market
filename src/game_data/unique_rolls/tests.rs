@@ -34,22 +34,22 @@ fn ranges(modifiers: &[Modifier]) -> Ranges<'_> {
 }
 
 /// The modifiers of Soul Tether written by poe2scout.
-fn soul_tether() -> (Vec<String>, Vec<String>) {
-    (
-        written(&[
+fn soul_tether() -> UniqueModifiers {
+    UniqueModifiers {
+        implicit: written(&[
             "(15-20)% increased Charm Effect Duration",
             "Has (1-3) Charm Slots",
         ]),
-        written(&[
+        explicit: written(&[
             "+(40-60) to maximum Energy Shield",
             "You lose (5-5)% of maximum Energy Shield per second",
             "Excess Life Recovery from Leech is applied to Energy Shield",
         ]),
-    )
+    }
 }
 
-fn with_rolls(item: &Item, (implicit, explicit): &(Vec<String>, Vec<String>)) -> Vec<Modifier> {
-    with_unique_rolls(item.language(), item.modifiers(), implicit, explicit, None)
+fn with_rolls(item: &Item, poe2scout: &UniqueModifiers) -> Vec<Modifier> {
+    with_unique_rolls(item.language(), item.modifiers(), poe2scout, None)
 }
 
 #[test]
@@ -131,18 +131,18 @@ fn negative_and_reversed_ranges_are_read_without_their_sign() {
          Votre Vie est désormais considérée comme Basse tant que vous avez 75% de votre Vie maximale ou moins\n\
          --------\nMourir est votre devoir le plus fondamental.\n",
     );
-    let poe2scout = (
-        written(&[
+    let poe2scout = UniqueModifiers {
+        implicit: written(&[
             "(15-10)% reduced Flask Charges used",
             "Has (1-3) Charm Slots",
         ]),
-        written(&[
+        explicit: written(&[
             "(-20--10) to Strength",
             "+(20-30) to Dexterity",
             "(30-40)% increased Life and Mana Recovery from Flasks",
             "You are considered on Low Life while at (75-75)% of maximum Life or below instead",
         ]),
-    );
+    };
 
     let modifiers = with_rolls(&item, &poe2scout);
 
@@ -174,7 +174,13 @@ fn ring_ranges(lines: &str, poe2scout: &[&str]) -> Vec<Vec<Option<(f64, f64)>>> 
         "Item Class: Rings\nRarity: Unique\nTest Ring\nGold Ring\n--------\n\
          Item Level: 80\n--------\n{lines}\n--------\nA flavour text.\n"
     ));
-    let modifiers = with_rolls(&item, &(Vec::new(), written(poe2scout)));
+    let modifiers = with_rolls(
+        &item,
+        &UniqueModifiers {
+            implicit: Vec::new(),
+            explicit: written(poe2scout),
+        },
+    );
     ranges(&modifiers)
         .into_iter()
         .map(|(_, ranges)| ranges)
@@ -249,10 +255,10 @@ fn an_implicit_is_only_matched_with_the_implicits_of_poe2scout() {
         "../../item/test-items/en-owner-trade-unique-belt-mutated.txt"
     ));
     // The implicit written among the explicit modifiers.
-    let poe2scout = (
-        Vec::new(),
-        written(&["(15-20)% increased Charm Effect Duration"]),
-    );
+    let poe2scout = UniqueModifiers {
+        implicit: Vec::new(),
+        explicit: written(&["(15-20)% increased Charm Effect Duration"]),
+    };
 
     let modifiers = with_rolls(&item, &poe2scout);
 
@@ -300,13 +306,13 @@ fn the_decimals_written_after_a_decimal_range_are_left_out_and_a_negative_range_
          --------\nLife Flasks gain 0.2 charges per Second\n25% reduced maximum Life\n\
          --------\nA flavour text.\n",
     );
-    let poe2scout = (
-        Vec::new(),
-        written(&[
+    let poe2scout = UniqueModifiers {
+        implicit: Vec::new(),
+        explicit: written(&[
             "Life Flasks gain (0.17-0.25).18 charges per Second",
             "(-30--20)% reduced maximum Life",
         ]),
-    );
+    };
 
     assert_eq!(
         ranges(&with_rolls(&item, &poe2scout)),
@@ -324,49 +330,52 @@ fn the_decimals_written_after_a_decimal_range_are_left_out_and_a_negative_range_
 /// the range the game writes: a number without range in the copy never varies.
 #[test]
 fn the_rolls_of_poe2scout_are_those_of_the_advanced_copies() {
-    let empty_roar = (
-        written(&["Strikes deal Splash Damage"]),
-        written(&[
+    let empty_roar = UniqueModifiers {
+        implicit: written(&["Strikes deal Splash Damage"]),
+        explicit: written(&[
             "Adds (40-50) to 42 Physical Damage",
             "Leeches (10-10)% of Physical Damage as Life",
             "(10-20)% chance to cause Bleeding on Hit",
             "All Attacks count as Empowered Attacks",
             "Cannot use Warcries",
         ]),
-    );
-    let mist_whisper = (
-        Vec::new(),
-        written(&[
+    };
+    let mist_whisper = UniqueModifiers {
+        implicit: Vec::new(),
+        explicit: written(&[
             "Adds (13-15) to 13 Cold Damage",
             "Gain (5-5) Mana per enemy killed",
             "(30-50)% increased Freeze Buildup",
             "(30-30)% increased Chill Duration on Enemies",
             "Attacks Chain (2-2) additional times",
         ]),
-    );
-    let eternal_spark = (
-        Vec::new(),
-        written(&[
+    };
+    let eternal_spark = UniqueModifiers {
+        implicit: Vec::new(),
+        explicit: written(&[
             "(50-70)% increased Energy Shield",
             "+(5-5)% to Maximum Lightning Resistance",
             "+(20-30)% to Lightning Resistance",
             "(40-40)% increased Mana Regeneration Rate",
             "(40-40)% increased Mana Regeneration Rate while stationary",
         ]),
-    );
-    let cowards_legacy = (
-        written(&[
+    };
+    let cowards_legacy = UniqueModifiers {
+        implicit: written(&[
             "(15-10)% reduced Flask Charges used",
             "Has (1-3) Charm Slots",
         ]),
-        written(&[
+        explicit: written(&[
             "(-20--10) to Strength",
             "+(20-30) to Dexterity",
             "(30-40)% increased Life and Mana Recovery from Flasks",
             "You are considered on Low Life while at (75-75)% of maximum Life or below instead",
         ]),
-    );
-    let kalandras_touch = (Vec::new(), written(&["Reflects opposite Ring"]));
+    };
+    let kalandras_touch = UniqueModifiers {
+        implicit: Vec::new(),
+        explicit: written(&["Reflects opposite Ring"]),
+    };
     let copies = [
         (
             include_str!("../../item/test-items/en-owner-unique-mace-fixed-values.txt"),
@@ -406,7 +415,7 @@ fn the_rolls_of_poe2scout_are_those_of_the_advanced_copies() {
 
 /// The number of values of the advanced copy `text` that get a range of `poe2scout` once its
 /// ranges are taken away, each checked to be the range the game writes.
-fn rolls_as_the_game(text: &str, (implicit, explicit): &(Vec<String>, Vec<String>)) -> usize {
+fn rolls_as_the_game(text: &str, poe2scout: &UniqueModifiers) -> usize {
     let item = parse(text);
     let without_ranges: Vec<Modifier> = item
         .modifiers()
@@ -419,7 +428,7 @@ fn rolls_as_the_game(text: &str, (implicit, explicit): &(Vec<String>, Vec<String
             modifier
         })
         .collect();
-    let read = with_unique_rolls(item.language(), &without_ranges, implicit, explicit, None);
+    let read = with_unique_rolls(item.language(), &without_ranges, poe2scout, None);
     let rolls = |modifiers: &[Modifier]| -> Vec<(f64, Option<Range>)> {
         modifiers
             .iter()
@@ -492,10 +501,10 @@ fn the_french_rarity_gets_its_range_by_its_trade_id() {
          Niveau de l'objet: 80\n--------\n\
          60% d'Augmentation de la Rareté des Objets trouvés\n--------\nUn texte d'ambiance.\n",
     );
-    let poe2scout = (
-        Vec::new(),
-        written(&["(50-70)% increased Rarity of Items found"]),
-    );
+    let poe2scout = UniqueModifiers {
+        implicit: Vec::new(),
+        explicit: written(&["(50-70)% increased Rarity of Items found"]),
+    };
 
     assert_eq!(
         ranges(&with_rolls(&item, &poe2scout)),

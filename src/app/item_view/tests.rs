@@ -184,7 +184,8 @@ fn the_estimate_counts_the_answer_to_the_search_of_an_item_without_a_fixed_price
 
 #[test]
 fn the_price_of_a_unique_tells_its_suspicious_offers_in_every_priced_currency() {
-    use crate::price::{CurrencyPrice, Price, UniqueModifiers, UniquePrice};
+    use crate::game_data::UniqueModifiers;
+    use crate::price::{CurrencyPrice, Price, UniquePrice};
 
     let price = |exalted| Price {
         exalted,

@@ -9,10 +9,11 @@ use serde::Deserialize;
 use serde::de::DeserializeOwned;
 
 use super::{DownloadObserver, PriceDatabase};
+use crate::game_data::UniqueModifiers;
 use crate::http::{self, HttpError, Pace};
 use crate::league::League;
 use crate::logging;
-use crate::price::{CurrencyPrice, Price, PriceList, Rates, UniqueModifiers, UniquePrice};
+use crate::price::{CurrencyPrice, Price, PriceList, Rates, UniquePrice};
 
 /// The address of the API, before the path of each request.
 const BASE_URL: &str = "https://api.poe2scout.com/poe2";

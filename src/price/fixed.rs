@@ -116,10 +116,11 @@ fn unidentified<'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::game_data::UniqueModifiers;
     use crate::item::CopiedItem;
     use crate::item_names::tests::item_names;
     use crate::league::League;
-    use crate::price::{Price, Rates, UniqueModifiers};
+    use crate::price::{Price, Rates};
     use std::time::SystemTime;
 
     fn price(exalted: f64) -> Price {

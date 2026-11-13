@@ -76,6 +76,14 @@ pub struct TradeStat {
     value: Option<TradeValue>,
 }
 
+/// The line of a modifier that holds the filter of its stat, and the indexes of its numbers
+/// the stat counts.
+#[derive(Debug, Clone, Copy)]
+struct SearchedLine<'a> {
+    line: &'a StatLine,
+    numbers: &'a [usize],
+}
+
 /// The value of a line on the trade site, from the value of its range field.
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct TradeValue {
@@ -97,13 +105,12 @@ impl TradeValue {
 }
 
 impl TradeStat {
-    /// The stat `found` of `line`, whose `numbers` it counts, in `group`; none when it has no
-    /// id there, or is an option stat whose option isn't known.
+    /// The stat `found` of `searched`, in `group`; none when it has no id there, or is an
+    /// option stat whose option isn't known.
     fn new(
         found: &game_data::StatMatch,
         group: TradeGroup,
-        line: &StatLine,
-        numbers: &[usize],
+        searched: SearchedLine<'_>,
     ) -> Option<Self> {
         let ids = found.stat.trade_ids(group);
         if ids.is_empty() {
@@ -117,7 +124,7 @@ impl TradeStat {
         };
         Some(Self {
             ids,
-            value: trade_value(found, line, numbers),
+            value: trade_value(found, searched),
         })
     }
 
@@ -145,13 +152,10 @@ impl TradeStat {
     }
 }
 
-/// The value of `line` on the trade site, given its stat `found`, which counts its `numbers`;
-/// none for a line or a stat without number.
-fn trade_value(
-    found: &game_data::StatMatch,
-    line: &StatLine,
-    numbers: &[usize],
-) -> Option<TradeValue> {
+/// The value of `searched` on the trade site, given its stat `found`; none for a line or a
+/// stat without number.
+fn trade_value(found: &game_data::StatMatch, searched: SearchedLine<'_>) -> Option<TradeValue> {
+    let SearchedLine { line, numbers } = searched;
     let rolls: Vec<f64> = numbers
         .iter()
         .filter_map(|&number| Some(line.rolls.get(number)?.value))
@@ -232,37 +236,37 @@ impl ImplicitRolls {
         }
     }
 
-    /// The most a line of an implicit gives on the trade site to any item of the base: its
-    /// best roll ([`best_roll`]) under a catalyst, infinite when its rolls are unknown.
-    /// `value` is its value there, read from the `numbers` its `line` counts.
-    fn best(self, value: TradeValue, line: &StatLine, numbers: &[usize]) -> f64 {
+    /// The most `searched`, a line of an implicit, gives on the trade site to any item of the
+    /// base: its best roll ([`best_roll`]) under a catalyst, infinite when its rolls are
+    /// unknown. `value` is its value there.
+    fn best(self, value: TradeValue, searched: SearchedLine<'_>) -> f64 {
         // A catalyst raises it away from zero: no higher when it counts against a total.
-        best_roll(value, line, numbers, self.headed)
+        best_roll(value, searched, self.headed)
             .map_or(f64::INFINITY, |best| best.max(best * self.catalyst))
     }
 }
 
-/// What a line from `source` gives on the trade site to any item of the base
-/// ([`Line::reach`]): `value` is its value there, read from the `numbers` its `line` counts.
+/// What `searched`, a line from `source`, gives on the trade site to any item of the base
+/// ([`Line::reach`]): `value` is its value there.
 fn line_reach(
     source: Source,
     value: TradeValue,
-    line: &StatLine,
-    numbers: &[usize],
+    searched: SearchedLine<'_>,
     implicits: ImplicitRolls,
 ) -> f64 {
     match source {
         Source::Modifier => 0.0,
         Source::Added => value.trade,
-        Source::Implicit => implicits.best(value, line, numbers),
+        Source::Implicit => implicits.best(value, searched),
     }
 }
 
-/// The value on the trade site of `line`, of the trade `value` read from the `numbers` it
-/// counts, at its best roll: the end of their ranges that gives the most. A number written
-/// without range is a fixed value in the advanced copy (`headed`); in a copy from the in-game
-/// trade, which writes no range, its best roll is unknown: none.
-fn best_roll(value: TradeValue, line: &StatLine, numbers: &[usize], headed: bool) -> Option<f64> {
+/// The value on the trade site of `searched`, of the trade `value`, at its best roll: the end
+/// of the ranges of its numbers that gives the most. A number written without range is a fixed
+/// value in the advanced copy (`headed`); in a copy from the in-game trade, which writes no
+/// range, its best roll is unknown: none.
+fn best_roll(value: TradeValue, searched: SearchedLine<'_>, headed: bool) -> Option<f64> {
+    let SearchedLine { line, numbers } = searched;
     let field = |end: fn(&Range) -> f64| -> Option<f64> {
         let ends: Vec<f64> = numbers
             .iter()
@@ -395,21 +399,24 @@ impl LineStats {
                     .iter()
                     .position(|line| !line.is_empty())
                     .unwrap_or(0);
-                let searched = found.lines.start + offset;
-                let searched_line = modifier.lines.get(searched);
+                let searched_index = found.lines.start + offset;
                 let counted = numbers.get(offset).map_or(&[][..], Vec::as_slice);
+                let searched = modifier.lines.get(searched_index).map(|line| SearchedLine {
+                    line,
+                    numbers: counted,
+                });
                 let stat = found
                     .stat
                     .as_ref()
-                    .zip(searched_line)
-                    .and_then(|(stat, line)| TradeStat::new(stat, group, line, counted));
+                    .zip(searched)
+                    .and_then(|(stat, searched)| TradeStat::new(stat, group, searched));
                 // A line without number gives a total nothing.
                 let reach = stat
                     .as_ref()
                     .and_then(|stat| stat.value)
-                    .zip(searched_line)
-                    .map_or(0.0, |(value, line)| {
-                        line_reach(source, value, line, counted, implicits)
+                    .zip(searched)
+                    .map_or(0.0, |(value, searched)| {
+                        line_reach(source, value, searched, implicits)
                     });
                 let known = found.stat.is_some();
                 let game_id = found.stat.as_ref().and_then(|found| found.stat.id.clone());
@@ -430,13 +437,13 @@ impl LineStats {
                         line,
                     };
                     let line_stat = match &stat {
-                        Some(stat) if line == searched => LineStat::Searched(stat.clone()),
+                        Some(stat) if line == searched_index => LineStat::Searched(stat.clone()),
                         Some(_) => LineStat::Continued,
                         None => LineStat::Unsearchable,
                     };
                     lines.push(Line {
                         key,
-                        searched,
+                        searched: searched_index,
                         stat: line_stat,
                         numbers: known.then_some(numbers),
                         game_id: game_id.clone(),

@@ -201,8 +201,7 @@ fn unique_rolls(item: &Item, copied: &[Modifier], service_data: ServiceData) -> 
         Ok(FixedPrice::Unique(unique)) => game_data::with_unique_rolls(
             item.language(),
             copied,
-            &unique.modifiers.implicit,
-            &unique.modifiers.explicit,
+            &unique.modifiers,
             service_data.trade_stats,
         ),
         Ok(FixedPrice::Currency(_) | FixedPrice::Uniques(_))

@@ -1,6 +1,7 @@
 use super::*;
+use crate::game_data::UniqueModifiers;
 use crate::price::estimate::{Reference, Worth};
-use crate::price::{CurrencyPrice, UniqueModifiers, UniquePrice};
+use crate::price::{CurrencyPrice, UniquePrice};
 use std::time::Duration;
 
 const RATES: Rates = Rates {
