@@ -34,9 +34,9 @@ use crate::trade::search::{OfferSearch, Search};
 use crate::trade::{ItemNamesWatch, Refusal};
 use crate::ui::{
     self, Bubble, BubbleAction, BugReportAction, BugReportPanel, EmptyState, ItemBlock,
-    ItemBlockAction, LeagueList, LeagueListAction, LineFacts, OffersAction, OffersBlock,
-    PriceBlock, PriceDownload, ResizeEdges, SettingsPanel, StatChecks, Stats, StatusBar, TitleBar,
-    TitleBarAction, TradeStatus, UnreadableItem, WarningBand,
+    ItemBlockAction, LeagueList, LeagueListAction, LeaguePrices, LineFacts, OffersAction,
+    OffersBlock, PriceBlock, PriceDownload, ResizeEdges, SettingsPanel, StatChecks, Stats,
+    StatusBar, TitleBar, TitleBarAction, TradeStatus, UnreadableItem, WarningBand,
 };
 use crate::update::{LeagueOfTheMoment, Release, UpdateCheck};
 
@@ -786,8 +786,18 @@ impl ItemView<'_> {
         {
             ui.ctx().open_url(OpenUrl::new_tab(url));
         }
-        let league = session.league().map(League::name);
-        PriceBlock::new(item, fixed_price, estimate, checks, prices, league, i18n).show(ui);
+        PriceBlock {
+            item,
+            price: fixed_price,
+            estimate,
+            checks,
+            prices: LeaguePrices {
+                state: prices,
+                league: session.league().map(League::name),
+            },
+            i18n,
+        }
+        .show(ui);
         let offers_action = if let Some(kind) = kind {
             OffersBlock {
                 offers,
