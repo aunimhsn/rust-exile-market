@@ -14,8 +14,9 @@ use enigo::{Direction, Enigo, Keyboard as _, Settings};
 use global_hotkey::HotKeyState;
 use winsafe::{HWND, co};
 
+use super::Shortcut;
 use super::grab::{Foreground, is_game_window};
-use super::{Held, Key, Shortcut, copy_keys_after_focus, modifiers_for_log, send_all};
+use super::sent_keys::{Held, Key, copy_keys_after_focus, modifiers_for_log, send_all};
 use crate::logging;
 use crate::overlay::{KeyboardBack, Point, ScreenRect, Target};
 
@@ -156,7 +157,7 @@ impl CopySender {
         }
     }
 
-    /// The keys of [`copy_keys`], as virtual keys: C, which Windows maps to the key that writes C
+    /// The keys of [`copy_keys`](super::sent_keys::copy_keys), as virtual keys: C, which Windows maps to the key that writes C
     /// in the layout of the window that has the focus; after a failure, only the releases
     /// ([`send_all`]). When the game was just `given_back` the focus, a Ctrl the player holds is
     /// pressed once more ([`copy_keys_after_focus`]).
