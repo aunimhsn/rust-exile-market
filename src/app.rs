@@ -34,8 +34,8 @@ use crate::trade::search::{OfferSearch, Search};
 use crate::trade::{ItemNamesWatch, Refusal};
 use crate::ui::{
     self, Bubble, BubbleAction, BugReportAction, BugReportPanel, EmptyState, ItemBlock,
-    ItemBlockAction, LeagueList, LeagueListAction, LeaguePrices, LineFacts, OffersAction,
-    OffersBlock, PriceBlock, PriceDownload, ResizeEdges, SettingsPanel, StatChecks, Stats,
+    ItemBlockAction, LeagueList, LeagueListAction, LineFacts, OffersAction, OffersBlock,
+    PriceBlock, PriceDownload, ResizeEdges, SettingsPanel, ShownLeague, StatChecks, Stats,
     StatusBar, TitleBar, TitleBarAction, TradeStatus, UnreadableItem, WarningBand,
 };
 use crate::update::{LeagueOfTheMoment, Release, UpdateCheck};
@@ -791,9 +791,9 @@ impl ItemView<'_> {
             price: fixed_price,
             estimate,
             checks,
-            prices: LeaguePrices {
-                state: prices,
-                league: session.league().map(League::name),
+            league: ShownLeague {
+                name: session.league().map(League::name),
+                prices,
             },
             i18n,
         }

@@ -747,7 +747,7 @@ impl OffersBlock<'_> {
         let start = room.left_center();
         let center_y = start.y;
         let mut right = start.x + row_amount(ui, row, &price.amount, start);
-        // What follows the name, which leaves it room.
+        // What follows the name of the currency: the name is cut so that it fits.
         let after = self.after_name(ui, row);
         let after_width = after
             .as_ref()

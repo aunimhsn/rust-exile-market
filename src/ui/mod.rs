@@ -36,7 +36,7 @@ pub use item_block::{ItemBlock, ItemBlockAction};
 pub use item_stats::{LineFacts, Stats};
 pub use league_list::{LeagueList, LeagueListAction};
 pub use offers_block::{OffersAction, OffersBlock};
-pub use price_block::{LeaguePrices, PriceBlock, StatChecks};
+pub use price_block::{PriceBlock, ShownLeague, StatChecks};
 pub use resize_edges::ResizeEdges;
 pub use settings_panel::{SettingsAction, SettingsPanel};
 pub use status_bar::{StatusBar, TradeStatus};

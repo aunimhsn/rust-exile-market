@@ -76,7 +76,13 @@ impl<'a> LeagueList<'a> {
                             list.min + vec2(column as f32 * CELL.x, index as f32 * CELL.y),
                             CELL,
                         ),
-                        corners: corners(index == 0, index + 1 == self.rows.len(), column),
+                        corners: corners(
+                            RowPlace {
+                                is_first: index == 0,
+                                is_last: index + 1 == self.rows.len(),
+                            },
+                            column,
+                        ),
                     };
                     let response = self.cell(ui, shape, league);
                     if just_opened && self.chosen == Some(league) {
@@ -146,15 +152,22 @@ struct CellShape {
     corners: CornerRadius,
 }
 
-/// The rounded corners of a cell: the corners of the list.
-fn corners(first_row: bool, last_row: bool, column: usize) -> CornerRadius {
+/// Whether a row is the first of the list, its last, or both.
+#[derive(Debug, Clone, Copy)]
+struct RowPlace {
+    is_first: bool,
+    is_last: bool,
+}
+
+/// The rounded corners of the cell in `column` of a row placed at `row`: the corners of the list.
+fn corners(row: RowPlace, column: usize) -> CornerRadius {
     let round = |yes: bool| if yes { size::RADIUS } else { 0 };
     let (left, right) = (column == 0, column == 1);
     CornerRadius {
-        nw: round(first_row && left),
-        ne: round(first_row && right),
-        sw: round(last_row && left),
-        se: round(last_row && right),
+        nw: round(row.is_first && left),
+        ne: round(row.is_first && right),
+        sw: round(row.is_last && left),
+        se: round(row.is_last && right),
     }
 }
 
@@ -272,26 +285,45 @@ mod tests {
         );
     }
 
+    const FIRST: RowPlace = RowPlace {
+        is_first: true,
+        is_last: false,
+    };
+    const LAST: RowPlace = RowPlace {
+        is_first: false,
+        is_last: true,
+    };
+
     #[test]
     fn only_the_corners_of_the_list_are_rounded() {
         assert_eq!(
-            corners(true, false, 0),
+            corners(FIRST, 0),
             CornerRadius {
                 nw: size::RADIUS,
                 ..CornerRadius::ZERO
             }
         );
         assert_eq!(
-            corners(false, true, 1),
+            corners(LAST, 1),
             CornerRadius {
                 se: size::RADIUS,
                 ..CornerRadius::ZERO
             }
         );
-        assert_eq!(corners(false, false, 0), CornerRadius::ZERO);
+        let middle = RowPlace {
+            is_first: false,
+            is_last: false,
+        };
+        assert_eq!(corners(middle, 0), CornerRadius::ZERO);
         // A list of one line rounds both corners of each side.
         assert_eq!(
-            corners(true, true, 0),
+            corners(
+                RowPlace {
+                    is_first: true,
+                    is_last: true,
+                },
+                0
+            ),
             CornerRadius {
                 nw: size::RADIUS,
                 sw: size::RADIUS,

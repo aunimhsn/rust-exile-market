@@ -83,18 +83,18 @@ impl KeysButton<'_> {
     /// Draws the button; its response, clicked to open the list.
     pub fn show(self, ui: &mut Ui) -> Response {
         let Self {
-            keys: label,
+            keys,
             is_on,
             is_open,
             tooltip,
         } = self;
-        let galley = widgets::text_line(ui, label, text::pill());
+        let galley = widgets::text_line(ui, keys, text::pill());
         let keys_width = galley.size().x + 2.0 * BUTTON_PADDING;
         let (rect, response) = ui.allocate_exact_size(
             vec2(keys_width + BUTTON_HEIGHT, BUTTON_HEIGHT),
             Sense::click(),
         );
-        response.widget_info(|| WidgetInfo::labeled(Role::ComboBox, true, label));
+        response.widget_info(|| WidgetInfo::labeled(Role::ComboBox, true, keys));
         let (keys_rect, square) = rect.split_left_right_at_x(rect.left() + keys_width);
         let radius = size::RADIUS;
         let lit = response.hovered() || response.has_focus();

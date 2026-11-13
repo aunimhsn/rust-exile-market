@@ -16,9 +16,9 @@ const KNOWN: PricesState = PricesState::Known {
     offline: false,
 };
 /// The complete prices of Standard.
-const STANDARD: LeaguePrices = LeaguePrices {
-    state: KNOWN,
-    league: Some("Standard"),
+const STANDARD: ShownLeague = ShownLeague {
+    name: Some("Standard"),
+    prices: KNOWN,
 };
 const DOWNLOADING: PricesState = PricesState::Downloading { progress: 0.5 };
 
@@ -31,9 +31,9 @@ fn notice<'a>(
         price,
         None,
         Rarity::Currency,
-        LeaguePrices {
-            state: prices,
-            league,
+        ShownLeague {
+            name: league,
+            prices,
         },
     )
 }
@@ -217,7 +217,7 @@ fn a_fixed_price_on_too_little_is_told_uncertain() {
         modifiers: UniqueModifiers::default(),
     };
     let of = |fixed: FixedPrice| match view(&Ok((fixed, RATES)), None, Rarity::Unique, STANDARD) {
-        PriceView::Priced(Priced { of, .. }) => of,
+        PriceView::Priced(MarketPrice { of, .. }) => of,
         other => panic!("{other:?}"),
     };
 
