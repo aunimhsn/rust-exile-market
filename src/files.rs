@@ -29,7 +29,8 @@ struct Versioned<T> {
     value: T,
 }
 
-/// Only the version of a JSON file, read before the rest.
+/// Only the version of a JSON file, read when its value doesn't: it tells a file of another
+/// version from a broken one.
 #[derive(Deserialize)]
 struct VersionOnly {
     version: u32,
@@ -37,7 +38,9 @@ struct VersionOnly {
 
 /// The value of the JSON file at `path`, written with `version`; `None` when there is no
 /// file, or a file of another version: the shape of the value changed, and the file is
-/// downloaded again rather than migrated.
+/// downloaded again rather than migrated. The file is read whole once (the names of the trade
+/// site weighed 1.7 MB, the prices of a league 290 KB, measured on 2026-11-09); its version
+/// alone only when its value doesn't read.
 pub fn read_versioned_json<T: DeserializeOwned>(
     path: &Path,
     version: u32,
@@ -47,17 +50,21 @@ pub fn read_versioned_json<T: DeserializeOwned>(
         Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
         Err(error) => return Err(error),
     };
-    let found: VersionOnly = serde_json::from_slice(&json).map_err(io::Error::other)?;
-    if found.version != version {
-        log::info!(
-            "{} is of version {}: ignored",
-            crate::logging::without_home(path).display(),
-            found.version
-        );
-        return Ok(None);
-    }
-    let file: Versioned<T> = serde_json::from_slice(&json).map_err(io::Error::other)?;
-    Ok(Some(file.value))
+    let found_version = match serde_json::from_slice::<Versioned<T>>(&json) {
+        Ok(file) if file.version == version => return Ok(Some(file.value)),
+        Ok(file) => file.version,
+        Err(error) => match serde_json::from_slice::<VersionOnly>(&json) {
+            Ok(file) if file.version != version => file.version,
+            // A file of this version whose value doesn't read, or no version at all: the error
+            // of the whole read says where the file breaks.
+            _ => return Err(io::Error::other(error)),
+        },
+    };
+    log::info!(
+        "{} is of version {found_version}: ignored",
+        crate::logging::without_home(path).display()
+    );
+    Ok(None)
 }
 
 /// Writes `value` with `version` to the JSON file `name` of `directory`, atomically.
@@ -148,6 +155,26 @@ mod tests {
             None
         );
         fs::write(&path, "{").unwrap();
+        assert!(read_versioned_json::<Vec<i32>>(&path, 2).is_err());
+    }
+
+    #[test]
+    fn a_file_of_another_version_is_ignored_whatever_its_value() {
+        let directory = TestDirectory::new("versioned-json-other-shape");
+        let path = directory.0.join("a.json");
+
+        write_versioned_json(&directory.0, "a.json", 1, &"another shape").expect("written");
+
+        assert_eq!(read_versioned_json::<Vec<i32>>(&path, 2).unwrap(), None);
+    }
+
+    #[test]
+    fn a_file_of_its_version_whose_value_doesnt_read_is_an_error() {
+        let directory = TestDirectory::new("versioned-json-broken-value");
+        let path = directory.0.join("a.json");
+
+        write_versioned_json(&directory.0, "a.json", 2, &"another shape").expect("written");
+
         assert!(read_versioned_json::<Vec<i32>>(&path, 2).is_err());
     }
 

@@ -45,9 +45,11 @@ use std::process::ExitCode;
 
 /// The name of the application, in every language.
 const APP_NAME: &str = "Exile Market";
+/// The version of the application, from `Cargo.toml`.
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 /// The author of the application, and their site, shown while the settings are open.
 const AUTHOR: &str = "Sylent";
+/// The site of the author, opened by its link.
 const AUTHOR_SITE: &str = "https://sylent.art";
 /// The site as shown, without the scheme.
 const AUTHOR_SITE_LABEL: &str = "sylent.art";
@@ -63,6 +65,7 @@ const ICON: &[u8] = include_bytes!("../assets/logo/icon.png");
 
 /// The narrow layout of version 1.
 const WINDOW_SIZE: [f32; 2] = [420.0, 720.0];
+/// The smallest window the narrow layout still fits in.
 const MIN_WINDOW_SIZE: [f32; 2] = [360.0, 420.0];
 
 fn main() -> ExitCode {
@@ -75,12 +78,12 @@ fn main() -> ExitCode {
     let settings_language = settings.language().language();
     // Set once the window is open, so that a later error isn't told as a window that can't open.
     let opened = Cell::new(false);
-    let opened_flag = &opened;
+    let opened = &opened;
     let result = eframe::run_native(
         APP_NAME,
         native_options(&settings, &settings_file),
         Box::new(move |creation| {
-            opened_flag.set(true);
+            opened.set(true);
             Ok(Box::new(app::ExileMarketApp::new(
                 creation,
                 settings,
@@ -114,6 +117,8 @@ fn main() -> ExitCode {
     }
 }
 
+/// The options of the window: its title bar drawn by the application, its level from the
+/// settings, its size and position kept by eframe next to the settings file.
 fn native_options(
     settings: &settings::Settings,
     settings_file: &settings::SettingsFile,
