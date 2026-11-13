@@ -6,10 +6,11 @@
 use egui::{Event, Order, RawInput, Rect, pos2};
 
 use super::*;
-use crate::item::test_items;
+use crate::item::{Item, test_items};
 use crate::language::Language;
 use crate::market::MarketEvent;
-use crate::price::{CurrencyPrice, Price, PriceList, UniqueModifiers, UniquePrice};
+use crate::offers_state::OffersState;
+use crate::price::{CurrencyPrice, Price, PriceList, Rates, UniqueModifiers, UniquePrice};
 use crate::trade::offers::tests::{every_exchange_offer, every_item_offer};
 use crate::trade::query::Query;
 use crate::trade::search::{Answer, Failure, NextSearch, Outcome, Rest};
