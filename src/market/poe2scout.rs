@@ -14,6 +14,7 @@ use crate::league::League;
 use crate::logging;
 use crate::price::{CurrencyPrice, Price, PriceList, Rates, UniqueModifiers, UniquePrice};
 
+/// The address of the API, before the path of each request.
 const BASE_URL: &str = "https://api.poe2scout.com/poe2";
 /// The time between two requests, at least.
 /// A little more than the second of the rule: a download of several leagues in a row must
@@ -26,12 +27,16 @@ const MAX_PAGES: u32 = 10;
 /// The categories read at most, each being a request at least: about 25 are known, and an
 /// answer with far more is wrong.
 const MAX_CATEGORIES: usize = 100;
-/// The ids of the three currencies of the prices in `/ReferenceCurrencies`.
+/// The id of the Exalted Orb in `/ReferenceCurrencies`, the currency of the prices shown.
 const EXALTED: &str = "exalted";
+/// The id of the Chaos Orb in `/ReferenceCurrencies`, whose rate in Exalted Orbs is kept.
 const CHAOS: &str = "chaos";
+/// The id of the Divine Orb in `/ReferenceCurrencies`, whose rate in Exalted Orbs is kept.
 const DIVINE: &str = "divine";
 /// The id of the category of the currency, downloaded first.
 const CURRENCY_CATEGORY: &str = "currency";
+/// The requests of a download before its categories: the categories and the rates.
+const FIRST_REQUESTS: usize = 2;
 
 /// Why the price database couldn't be read.
 #[derive(Debug)]
@@ -113,6 +118,7 @@ struct ApiCategories {
     currency_categories: Vec<ApiCategory>,
 }
 
+/// A category of items, by its id in the paths of the API.
 #[derive(Deserialize)]
 #[serde(rename_all = "PascalCase")]
 struct ApiCategory {
@@ -223,6 +229,7 @@ struct ApiPrice {
     price_logs: Vec<Option<ApiPriceLog>>,
 }
 
+/// The price of a day in `PriceLogs`.
 #[derive(Deserialize)]
 #[serde(rename_all = "PascalCase")]
 struct ApiPriceLog {
@@ -237,14 +244,20 @@ enum Kind {
 }
 
 impl Kind {
-    /// The path of the pages of a category of this kind in `league`, encoded for a path.
-    fn path(self, league: &str) -> String {
+    /// The path of the pages of a category of this kind in the league `encoded_league`.
+    fn path(self, encoded_league: &str) -> String {
         let kind = match self {
-            Self::Uniques => "Uniques",
-            Self::Currencies => "Currencies",
+            Self::Uniques => "Uniques/ByCategory",
+            Self::Currencies => "Currencies/ByCategory",
         };
-        format!("/Leagues/{league}/{kind}/ByCategory")
+        league_path(encoded_league, kind)
     }
+}
+
+/// The path of `rest` in the league `encoded_league` (its id encoded for a path), e.g.
+/// `/Leagues/Standard/Items/Categories`.
+fn league_path(encoded_league: &str, rest: &str) -> String {
+    format!("/Leagues/{encoded_league}/{rest}")
 }
 
 /// Where the answers come from: the API over the network, or a fake one in the tests.
@@ -268,7 +281,7 @@ pub struct Poe2Scout<A = Network> {
     api: A,
     pace: Pace,
     /// A request of the download under way was answered ([`FetchError::Http`]).
-    answered: bool,
+    has_answered: bool,
 }
 
 impl Poe2Scout {
@@ -285,7 +298,7 @@ impl<A: Api> Poe2Scout<A> {
         Self {
             api,
             pace: Pace::new(interval),
-            answered: false,
+            has_answered: false,
         }
     }
 
@@ -324,8 +337,8 @@ impl<A: Api> Poe2Scout<A> {
             .api
             .get(path, query)
             .and_then(|text| Ok(serde_json::from_str(&text)?));
-        let after_answers = self.answered;
-        self.answered |= answer.is_ok();
+        let after_answers = self.has_answered;
+        self.has_answered |= answer.is_ok();
         answer.map_err(|error| FetchError::Http {
             path: path.to_owned(),
             error,
@@ -363,23 +376,23 @@ impl<A: Api> Poe2Scout<A> {
         Ok(Some(items))
     }
 
-    /// The categories of the items of the league at `path`, encoded for a path, and the
-    /// rates of its prices: the first two requests of a download; `None` when `download` is
-    /// interrupted before one.
+    /// The categories of the items of the league `encoded_league` and the rates of its
+    /// prices: the [`FIRST_REQUESTS`] of a download; `None` when `download` is interrupted
+    /// before one.
     fn categories_and_rates(
         &mut self,
-        path: &str,
+        encoded_league: &str,
         download: &mut dyn DownloadObserver,
     ) -> Result<Option<(ApiCategories, Conversion)>, FetchError> {
         let Some(categories) = self.get_unless_interrupted::<ApiCategories>(
-            &format!("/Leagues/{path}/Items/Categories"),
+            &league_path(encoded_league, "Items/Categories"),
             &[],
             download,
         )?
         else {
             return Ok(None);
         };
-        let currencies_path = format!("/Leagues/{path}/ReferenceCurrencies");
+        let currencies_path = league_path(encoded_league, "ReferenceCurrencies");
         let Some(currencies) = self.get_unless_interrupted(&currencies_path, &[], download)? else {
             return Ok(None);
         };
@@ -390,7 +403,7 @@ impl<A: Api> Poe2Scout<A> {
 
 impl<A: Api> PriceDatabase for Poe2Scout<A> {
     fn leagues(&mut self) -> Result<Vec<League>, FetchError> {
-        self.answered = false;
+        self.has_answered = false;
         // Read strictly: a league left out because it can't be read would be taken for a
         // league that ended, and the player moved to another one.
         let leagues = current_leagues(self.get("/Leagues", &[])?);
@@ -407,9 +420,11 @@ impl<A: Api> PriceDatabase for Poe2Scout<A> {
         league: &League,
         download: &mut dyn DownloadObserver,
     ) -> Result<Option<PriceList>, FetchError> {
-        self.answered = false;
-        let path = http::encode(league.id());
-        let Some((categories, conversion)) = self.categories_and_rates(&path, download)? else {
+        self.has_answered = false;
+        let encoded_league = http::encode(league.id());
+        let Some((categories, conversion)) =
+            self.categories_and_rates(&encoded_league, download)?
+        else {
             return Ok(None);
         };
         let currency_categories = download_order(categories.currency_categories);
@@ -420,13 +435,14 @@ impl<A: Api> PriceDatabase for Poe2Scout<A> {
             uniques: Vec::new(),
             currencies: Vec::new(),
         };
-        // The two requests of the categories and the rates, then one per category (most fit in one page).
-        let requests = 2 + currency_categories.len() + categories.unique_categories.len();
-        let mut done = 2;
+        // One request per category after the first ones (most fit in one page).
+        let requests =
+            FIRST_REQUESTS + currency_categories.len() + categories.unique_categories.len();
+        let mut done = FIRST_REQUESTS;
         #[expect(clippy::cast_precision_loss, reason = "a few dozen requests")]
         let share = |done: usize| done as f32 / requests as f32;
         download.progress(&prices, share(done));
-        let currencies_pages = Kind::Currencies.path(&path);
+        let currencies_pages = Kind::Currencies.path(&encoded_league);
         for category in &currency_categories {
             let Some(items) =
                 self.category::<ApiCurrency>(&currencies_pages, category, download)?
@@ -441,7 +457,7 @@ impl<A: Api> PriceDatabase for Poe2Scout<A> {
             done += 1;
             download.progress(&prices, share(done));
         }
-        let uniques_pages = Kind::Uniques.path(&path);
+        let uniques_pages = Kind::Uniques.path(&encoded_league);
         for category in &categories.unique_categories {
             let Some(items) = self.category::<ApiUnique>(&uniques_pages, category, download)?
             else {
@@ -469,6 +485,8 @@ struct Conversion {
 }
 
 impl Conversion {
+    /// The conversion read from the reference currencies of the answer; an error when one
+    /// of the three is missing or isn't a positive number.
     fn new(currencies: &[ApiReferenceCurrency]) -> Result<Self, FetchError> {
         let worth = |id: &'static str| {
             currencies
