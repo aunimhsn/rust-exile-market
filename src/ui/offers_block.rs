@@ -117,13 +117,13 @@ struct Row {
     /// `None` for an item listed without a price.
     price: Option<RowPrice>,
     /// Far below the reference price: usually bait or a mistake.
-    suspicious: bool,
+    is_suspicious: bool,
     /// The kind of the quality of a catalyst of an offer, when it isn't the kind searched:
     /// it isn't counted in the estimate.
     other_quality: Option<Catalyst>,
     /// The stock of an offer of the currency exchange.
     stock: Option<u64>,
-    away: bool,
+    is_away: bool,
     listed: Option<Duration>,
 }
 
@@ -169,7 +169,7 @@ fn item_rows(
                     .price
                     .as_ref()
                     .map(|price| row_price(price.amount, &price.currency)),
-                suspicious: other_quality.is_none()
+                is_suspicious: other_quality.is_none()
                     && offer
                         .price
                         .as_ref()
@@ -178,7 +178,7 @@ fn item_rows(
                         }),
                 other_quality,
                 stock: None,
-                away: offer.seller == SellerStatus::Away,
+                is_away: offer.seller == SellerStatus::Away,
                 listed: listed_since(offer.listed, now),
             }
         })
@@ -197,10 +197,10 @@ fn exchange_rows(
             let unit = offer.unit_price();
             Row {
                 price: Some(row_price(unit, &offer.pay.currency)),
-                suspicious: is_suspicious(unit, &offer.pay.currency, reference),
+                is_suspicious: is_suspicious(unit, &offer.pay.currency, reference),
                 other_quality: None,
                 stock: Some(offer.stock),
-                away: offer.seller == SellerStatus::Away,
+                is_away: offer.seller == SellerStatus::Away,
                 listed: listed_since(offer.listed, now),
             }
         })
@@ -383,7 +383,7 @@ impl OffersBlock<'_> {
     }
 
     /// What to do after a failed search, `hint`, wrapped at `width`: its words that open the
-    /// bug report a link in the window that has the report, plain elsewhere. Whether they were
+    /// bug report are a link in the window that has it, plain elsewhere. Whether they were
     /// clicked.
     fn failure_hint(&self, ui: &mut Ui, hint: &Linked, width: f32) -> bool {
         if self.has_bug_report {
@@ -574,7 +574,8 @@ impl OffersBlock<'_> {
     /// The titles of the columns, then the rows, the whole width of the band.
     fn list(&self, ui: &mut Ui, list: &List) {
         let i18n = self.i18n;
-        let titles: Vec<String> = match list.kind() {
+        let kind = list.kind();
+        let titles: Vec<String> = match kind {
             SearchKind::Exchange => vec![
                 i18n.text(Message::OffersColumnPerUnit),
                 i18n.text(Message::OffersColumnStock),
@@ -600,7 +601,7 @@ impl OffersBlock<'_> {
             + galleys.first().map_or(0.0, |galley| galley.size().y)
             + COLUMNS_PADDING_BOTTOM;
         let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), height), Sense::hover());
-        let columns = Columns::of(rect, list.kind());
+        let columns = Columns::of(rect, kind);
         let painter = ui.painter();
         let top = rect.top() + ROW_PADDING_Y;
         let mut cells = columns.right_edges().into_iter();
@@ -615,7 +616,8 @@ impl OffersBlock<'_> {
 
         // Only the offers of items have a tooltip, and light up under the pointer; without
         // the focus of the keyboard, which the rows wouldn't show.
-        let sense = if list.items.is_some() {
+        let has_tooltips = kind == SearchKind::Items;
+        let sense = if has_tooltips {
             Sense::CLICK
         } else {
             Sense::hover()
@@ -632,7 +634,7 @@ impl OffersBlock<'_> {
         let open = self.tooltip(ui, list, &responses);
         for (index, (row, response)) in list.rows.iter().zip(&responses).enumerate() {
             let rect = response.rect;
-            if list.items.is_some() {
+            if has_tooltips {
                 let language = self.item.language();
                 let label = row
                     .price
@@ -641,7 +643,7 @@ impl OffersBlock<'_> {
                     .unwrap_or_default();
                 response.widget_info(|| WidgetInfo::labeled(Role::Button, true, &label));
             }
-            let highlighted = list.items.is_some() && (response.hovered() || open == Some(index));
+            let highlighted = has_tooltips && (response.hovered() || open == Some(index));
             if highlighted {
                 ui.painter().rect_filled(rect, 0.0, color::CONTROL_LINE);
             } else if index % 2 == 0 {
@@ -649,8 +651,8 @@ impl OffersBlock<'_> {
             }
             // The whole name of a currency cut, under the pointer; the offers of items have
             // the tooltip of their item instead.
-            if self.row(ui, &Columns::of(rect, list.kind()), row)
-                && list.items.is_none()
+            if self.row(ui, &Columns::of(rect, kind), row)
+                && !has_tooltips
                 && let Some(price) = &row.price
             {
                 response
@@ -724,7 +726,7 @@ impl OffersBlock<'_> {
                 searched_catalyst: self.offers.searched_catalyst(self.item),
                 lines: self.lines,
                 name_color: rarity_color(offer.item.rarity.unwrap_or(self.item.rarity())),
-                suspicious: row.suspicious,
+                is_suspicious: row.is_suspicious,
                 pill: state.pill(&offer.id, time),
                 i18n: self.i18n,
             };
@@ -765,7 +767,7 @@ impl OffersBlock<'_> {
         let size = galley.size();
         let left = right - size.x;
         painter.galley(pos2(left, center_y - size.y / 2.0), galley, color::TEXT);
-        let dot = if row.away {
+        let dot = if row.is_away {
             color::WARNING
         } else {
             color::RISE
@@ -773,7 +775,9 @@ impl OffersBlock<'_> {
         let dot_center = pos2(left - DOT_GAP - DOT_RADIUS, center_y);
         painter.circle_filled(dot_center, DOT_RADIUS, dot);
         used = used.min(dot_center.x - DOT_RADIUS);
-        let room = Rect::from_x_y_ranges(columns.left..=used - COLUMN_GAP, columns.y_range);
+        // A narrow row leaves the price no room: an empty one, never an inverted rectangle.
+        let right = (used - COLUMN_GAP).max(columns.left);
+        let room = Rect::from_x_y_ranges(columns.left..=right, columns.y_range);
         self.row_price(ui, row, room)
     }
 
@@ -788,12 +792,12 @@ impl OffersBlock<'_> {
         let painter = ui.painter();
         let start = room.left_center();
         let center_y = start.y;
-        let faint = row.suspicious || row.other_quality.is_some();
+        let faint = row.is_suspicious || row.other_quality.is_some();
         let galley = widgets::text_line(ui, price.amount.as_str(), text::list_amount());
         let size = galley.size();
         let tint = if faint { color::FAINT } else { color::TEXT };
         painter.galley(pos2(start.x, center_y - size.y / 2.0), galley, tint);
-        if row.suspicious {
+        if row.is_suspicious {
             painter.hline(
                 start.x..=start.x + size.x,
                 center_y,
@@ -817,7 +821,7 @@ impl OffersBlock<'_> {
                 TextFormat::simple(text::note(), color::WEAK),
             );
             Some((painter.layout_job(job), 0.0, color::WEAK))
-        } else if row.suspicious {
+        } else if row.is_suspicious {
             let mark = widgets::text_line(ui, "?", text::list_amount());
             Some((mark, ORB_GAP + SUSPICIOUS_GAP, color::WARNING))
         } else {
@@ -922,7 +926,7 @@ impl Head {
     }
 }
 
-/// Where the columns of a row are.
+/// Where the columns are across a row, the titles or an offer.
 struct Columns {
     left: f32,
     right: f32,
@@ -933,7 +937,7 @@ struct Columns {
 }
 
 impl Columns {
-    /// The columns of the `row` of an offer of a search of `kind`.
+    /// The columns across `row`, the titles or an offer, for a search of `kind`.
     fn of(row: Rect, kind: SearchKind) -> Self {
         Self {
             left: row.left() + size::BAND_PADDING,

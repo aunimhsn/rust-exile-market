@@ -929,7 +929,7 @@ fn clicks_the_whisper(pill: WhisperPill, from_the_right: bool) -> bool {
         searched_catalyst: None,
         lines: &lines,
         name_color: color::TEXT,
-        suspicious: false,
+        is_suspicious: false,
         pill,
         i18n: &i18n,
     };

@@ -208,7 +208,7 @@ impl Scene {
                 stats_open,
                 prices,
                 kind,
-                bug_report: true,
+                has_bug_report: true,
                 i18n: &self.i18n,
             };
             (_, height) = ui::content(ui, false, |ui| view.show(ui));

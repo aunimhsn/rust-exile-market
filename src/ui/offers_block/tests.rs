@@ -57,7 +57,7 @@ fn an_offer_under_a_quarter_of_the_market_price_is_suspicious() {
 
     let rows = item_rows(&offers, Some(REFERENCE), None, now);
 
-    let suspicious: Vec<bool> = rows.iter().map(|row| row.suspicious).collect();
+    let suspicious: Vec<bool> = rows.iter().map(|row| row.is_suspicious).collect();
     assert_eq!(suspicious, [true, true, true, false]);
     assert_eq!(
         rows[3],
@@ -66,17 +66,17 @@ fn an_offer_under_a_quarter_of_the_market_price_is_suspicious() {
                 amount: "3.2".to_owned(),
                 currency: currencies::shown("divine"),
             }),
-            suspicious: false,
+            is_suspicious: false,
             other_quality: None,
             stock: None,
-            away: true,
+            is_away: true,
             listed: Some(Duration::from_hours(2)),
         }
     );
     assert!(
         item_rows(&offers, None, None, now)
             .iter()
-            .all(|row| !row.suspicious),
+            .all(|row| !row.is_suspicious),
         "without a market price, nothing tells"
     );
 }
@@ -109,10 +109,10 @@ fn an_offer_of_another_kind_of_quality_is_marked_while_the_quality_is_searched()
     let unsearched = item_rows(&offers, Some(REFERENCE), None, now);
 
     assert_eq!(searched[0].other_quality, Some(Catalyst::Attack));
-    assert!(!searched[0].suspicious);
+    assert!(!searched[0].is_suspicious);
     assert_eq!(searched[1].other_quality, None);
     assert_eq!(unsearched[0].other_quality, None, "every offer counts");
-    assert!(unsearched[0].suspicious);
+    assert!(unsearched[0].is_suspicious);
 }
 
 #[test]
@@ -131,7 +131,7 @@ fn another_currency_has_its_icon_and_its_name_and_isnt_suspicious_without_price(
     );
     assert_eq!(price.label(Language::English), "1 Orb of Annulment");
     assert_eq!(price.label(Language::French), "1 Orbe d'annulation");
-    assert!(!rows[0].suspicious);
+    assert!(!rows[0].is_suspicious);
 }
 
 #[test]
@@ -160,7 +160,7 @@ fn an_offer_in_a_currency_of_the_price_database_may_be_suspicious() {
 
     let rows = item_rows(&offers, Some(reference), None, SystemTime::UNIX_EPOCH);
 
-    let suspicious: Vec<bool> = rows.iter().map(|row| row.suspicious).collect();
+    let suspicious: Vec<bool> = rows.iter().map(|row| row.is_suspicious).collect();
     assert_eq!(suspicious, [true, false]);
 }
 
@@ -227,10 +227,10 @@ fn an_offer_of_the_exchange_shows_the_price_of_one_item_and_its_stock() {
                 amount: "175".to_owned(),
                 currency: currencies::shown("exalted"),
             }),
-            suspicious: false,
+            is_suspicious: false,
             other_quality: None,
             stock: Some(40),
-            away: false,
+            is_away: false,
             listed: None,
         }]
     );
@@ -354,19 +354,35 @@ impl HintWindow {
                 .into_iter()
                 .map(|rect| rect.translate(origin.to_vec2()))
                 .collect();
-            let block = OffersBlock {
-                offers: &self.offers,
-                kind: SearchKind::Items,
-                reference: None,
-                item: &self.item,
-                lines: &self.lines,
-                has_bug_report: self.has_bug_report,
-                i18n: &self.i18n,
-            };
-            let clicked = block.failure_hint(ui, &self.hint, Self::WIDTH);
+            let clicked = self.block().failure_hint(ui, &self.hint, Self::WIDTH);
             drawn = (clicked, origin, rects);
         });
         drawn
+    }
+
+    /// The height the hint takes, in one frame.
+    fn height(&self) -> f32 {
+        let mut height = 0.0;
+        crate::ui::fixtures::run_frame(&self.ctx, egui::RawInput::default(), |ui| {
+            let top = ui.cursor().min.y;
+            let block = self.block();
+            block.failure_hint(ui, &self.hint, Self::WIDTH);
+            height = ui.cursor().min.y - top;
+        });
+        height
+    }
+
+    /// The block of the offers of the window, which draws the hint.
+    fn block(&self) -> OffersBlock<'_> {
+        OffersBlock {
+            offers: &self.offers,
+            kind: SearchKind::Items,
+            reference: None,
+            item: &self.item,
+            lines: &self.lines,
+            has_bug_report: self.has_bug_report,
+            i18n: &self.i18n,
+        }
     }
 
     /// Whether a click at `at` clicked the link.
@@ -399,4 +415,18 @@ fn in_the_window_over_the_game_the_words_are_no_link() {
     let (_, _, rects) = window.frame(vec![]);
 
     assert!(!window.click(rects[0].center()));
+}
+
+#[test]
+fn the_plain_hint_wraps_on_as_many_rows_as_the_linked_one() {
+    let plain = HintWindow::new(false).height();
+
+    assert_eq!(plain, HintWindow::new(true).height());
+    // On several rows, so that the cut of the sentence is compared too.
+    let window = HintWindow::new(false);
+    let mut one_row = 0.0;
+    crate::ui::fixtures::run_frame(&window.ctx, egui::RawInput::default(), |ui| {
+        one_row = widgets::text_line(ui, "Report", text::item_line()).size().y;
+    });
+    assert!(plain > one_row, "{plain} for a row of {one_row}");
 }

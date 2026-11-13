@@ -205,7 +205,7 @@ pub struct OfferTooltip<'a> {
     /// The modifier lines of the copied item, to compare the rolls.
     pub lines: &'a CopiedLines,
     pub name_color: Color32,
-    pub suspicious: bool,
+    pub is_suspicious: bool,
     pub pill: WhisperPill,
     pub i18n: &'a Translator,
 }
@@ -479,7 +479,7 @@ impl OfferTooltip<'_> {
             ui.add_space(META_GAP);
             widgets::text_row(ui, ui.painter().layout_job(job), 0.0, color::WEAK);
         }
-        if self.suspicious {
+        if self.is_suspicious {
             ui.add_space(WARNING_GAP);
             widgets::wrapped_text(
                 ui,

@@ -7,9 +7,12 @@ use egui::{Color32, Painter, Pos2, Rect, Stroke, Vec2, vec2};
 
 use super::theme::{color, size};
 
-/// The width of the strokes of the icons, on their grid of 16.
+/// The side of the grid the icons of the search block and the double chevron are drawn on,
+/// in its points.
+const GRID: f32 = 16.0;
+/// The width of the strokes of the icons, on their grid.
 const GRID_STROKE: f32 = 1.8;
-/// The spinner of the search.
+/// The spinner, while a search or its next offers come: its radius and its stroke.
 const SPINNER_RADIUS: f32 = 6.0;
 const SPINNER_STROKE: f32 = 2.0;
 /// Turns per second.
@@ -35,7 +38,7 @@ pub fn chevron(painter: &Painter, center: Pos2, width: f32, turn: f32, color: Co
 }
 
 /// A check mark, centered on `center`.
-pub fn check_mark(painter: &Painter, center: Pos2, width: f32, color: Color32) {
+pub fn check_mark(painter: &Painter, center: Pos2, width: f32, tint: Color32) {
     // The "check" icon of Lucide, from its 24 point grid: 16 points across.
     let scale = width / 16.0;
     painter.line(
@@ -44,14 +47,14 @@ pub fn check_mark(painter: &Painter, center: Pos2, width: f32, color: Color32) {
             center + vec2(-3.0, 5.5) * scale,
             center + vec2(8.0, -5.5) * scale,
         ],
-        Stroke::new(size::ICON_STROKE, color),
+        Stroke::new(size::ICON_STROKE, tint),
     );
 }
 
 /// A cross `width` across, centered on `center`: the close icons.
-pub fn cross(painter: &Painter, center: Pos2, width: f32, color: Color32) {
+pub fn cross(painter: &Painter, center: Pos2, width: f32, tint: Color32) {
     let half = width / 2.0;
-    let stroke = Stroke::new(size::ICON_STROKE, color);
+    let stroke = Stroke::new(size::ICON_STROKE, tint);
     painter.line_segment(
         [center - Vec2::splat(half), center + Vec2::splat(half)],
         stroke,
@@ -62,22 +65,33 @@ pub fn cross(painter: &Painter, center: Pos2, width: f32, color: Color32) {
     );
 }
 
-/// A point of an icon drawn on a grid of 16 that fills `square`.
-fn grid(square: Rect) -> impl Fn(f32, f32) -> Pos2 {
-    let (center, scale) = (square.center(), square.width() / 16.0);
-    move |x, y| center + vec2(x - 8.0, y - 8.0) * scale
+/// The length on the screen of `length` points of the grid that fills `square`.
+fn grid_length(square: Rect, length: f32) -> f32 {
+    length * square.width() / GRID
 }
 
-/// The stroke of an icon drawn on a grid of 16 that fills `square`, thicker as it grows.
+/// A point of an icon drawn on the grid that fills `square`.
+fn grid(square: Rect) -> impl Fn(f32, f32) -> Pos2 {
+    let center = square.center();
+    move |x, y| {
+        center
+            + vec2(
+                grid_length(square, x - GRID / 2.0),
+                grid_length(square, y - GRID / 2.0),
+            )
+    }
+}
+
+/// The stroke of an icon drawn on the grid that fills `square`, thicker as it grows.
 fn grid_stroke(square: Rect, tint: Color32) -> Stroke {
-    Stroke::new(GRID_STROKE * square.width() / 16.0, tint)
+    Stroke::new(grid_length(square, GRID_STROKE), tint)
 }
 
 /// The magnifying glass of the search block, filling `square`.
 pub fn search(painter: &Painter, square: Rect, tint: Color32) {
     let point = grid(square);
     let stroke = grid_stroke(square, tint);
-    painter.circle_stroke(point(7.0, 7.0), 4.6 * square.width() / 16.0, stroke);
+    painter.circle_stroke(point(7.0, 7.0), grid_length(square, 4.6), stroke);
     painter.line_segment([point(10.4, 10.4), point(14.0, 14.0)], stroke);
 }
 

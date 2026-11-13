@@ -472,7 +472,7 @@ impl ExileMarketApp {
             stats_open: self.stats_open,
             prices,
             kind,
-            bug_report: window == Window::Main,
+            has_bug_report: window == Window::Main,
             i18n: &self.i18n,
         };
         let ((action, offers_action), height) = ui::content(ui, to_top, |ui| view.show(ui));
@@ -745,8 +745,9 @@ struct ItemView<'a> {
     stats_open: bool,
     prices: PricesState,
     kind: Option<SearchKind>,
-    /// The hint of a failed search opens the bug report.
-    bug_report: bool,
+    /// The window has the bug report, which the hint of a failed search opens: the main
+    /// window only.
+    has_bug_report: bool,
     i18n: &'a Translator,
 }
 
@@ -763,7 +764,7 @@ impl ItemView<'_> {
             stats_open,
             prices,
             kind,
-            bug_report,
+            has_bug_report,
             i18n,
         } = self;
         let fixed_price = session.fixed_price(item);
@@ -794,7 +795,7 @@ impl ItemView<'_> {
                 reference,
                 item,
                 lines: shown.lines(),
-                has_bug_report: bug_report,
+                has_bug_report,
                 i18n,
             }
             .show(ui)
