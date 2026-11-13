@@ -6,7 +6,7 @@ use std::collections::VecDeque;
 
 use crate::filters::{Filters, Window};
 use crate::item::CopiedItem;
-use crate::offers::{Offers, OffersState};
+use crate::offers_state::{Offers, OffersState};
 
 /// The items remembered, the item shown among them: an eleventh item copied makes the oldest
 /// one forgotten.
@@ -96,7 +96,7 @@ mod tests {
     use super::*;
     use crate::filters::{Filter, FilterKey, Half, Property};
     use crate::language::Language;
-    use crate::offers::tests::{after, answer, exchange_search, item_search};
+    use crate::offers_state::tests::{after, answer, exchange_search, item_search};
     use crate::trade::search::{Order, Outcome, Rest};
 
     fn ring(name: &str) -> CopiedItem {

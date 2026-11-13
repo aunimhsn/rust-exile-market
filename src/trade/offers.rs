@@ -8,7 +8,7 @@ use serde::Deserialize;
 use serde::de::{self, Deserializer};
 use serde_json::Value;
 
-use crate::currencies;
+use crate::exchange_currencies;
 use crate::format::Currency;
 use crate::http;
 use crate::item::{
@@ -477,7 +477,7 @@ impl ApiFetch {
                 offer
                     .price
                     .as_ref()
-                    .is_none_or(|price| currencies::shown(&price.currency).is_some())
+                    .is_none_or(|price| exchange_currencies::shown(&price.currency).is_some())
             });
         // A currency the application doesn't know was added to the trade site since the icons
         // were taken: `tools/exchange-icons` takes them again.
@@ -485,7 +485,7 @@ impl ApiFetch {
             .iter()
             .filter_map(|offer| offer.price.as_ref())
             .map(|price| price.currency.as_str())
-            .filter(|id| !currencies::known(id))
+            .filter(|id| !exchange_currencies::known(id))
             .collect();
         for id in unknown_currencies {
             log::warn!(

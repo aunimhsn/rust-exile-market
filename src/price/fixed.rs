@@ -5,7 +5,7 @@
 use crate::item::{Item, Rarity};
 use crate::item_names::{ItemNames, UniqueNames};
 use crate::language::Language;
-use crate::prices::{CurrencyPrice, PriceList, UniquePrice};
+use crate::price::{CurrencyPrice, PriceList, UniquePrice};
 
 /// The price of a fixed-name item.
 #[derive(Debug, Clone, PartialEq)]
@@ -119,7 +119,7 @@ mod tests {
     use crate::item::CopiedItem;
     use crate::item_names::tests::item_names;
     use crate::league::League;
-    use crate::prices::{Price, Rates, UniqueModifiers};
+    use crate::price::{Price, Rates, UniqueModifiers};
     use std::time::SystemTime;
 
     fn price(exalted: f64) -> Price {
@@ -218,8 +218,8 @@ mod tests {
     #[test]
     fn a_french_item_is_found_through_the_names_of_the_trade_site() {
         let names = item_names();
-        let stack = include_str!("item/test-items/fr-currency-stack.txt");
-        let crossbow = include_str!("item/test-items/fr-unique-crossbow.txt");
+        let stack = include_str!("../item/test-items/fr-currency-stack.txt");
+        let crossbow = include_str!("../item/test-items/fr-unique-crossbow.txt");
 
         assert_eq!(found(stack, Some(&names)), ok("transmute"));
         assert_eq!(found(crossbow, Some(&names)), ok("Mist Whisper"));

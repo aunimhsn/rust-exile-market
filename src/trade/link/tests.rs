@@ -165,7 +165,7 @@ fn the_other_items_are_searched_by_their_base_type() {
 
 #[test]
 fn an_english_item_of_the_exchange_is_found_in_the_prices_without_the_names() {
-    use crate::prices::{CurrencyPrice, Price, Rates};
+    use crate::price::{CurrencyPrice, Price, Rates};
     let prices = PriceList {
         league: League::new("Standard"),
         updated: std::time::SystemTime::UNIX_EPOCH,

@@ -1,6 +1,6 @@
 //! Embeds the icons of the currency exchange of `assets/exchange/` (taken by
 //! `tools/exchange-icons`): writes `exchange_icons.rs`, the table of their ids and their
-//! bytes, sorted by id, which `src/currencies.rs` includes. The ids come from the index of the
+//! bytes, sorted by id, which `src/exchange_currencies.rs` includes. The ids come from the index of the
 //! icons, `currencies.ndjson`, and the build stops when an icon is missing or left over, so
 //! that the index and the icons agree on every system that builds the application.
 //!

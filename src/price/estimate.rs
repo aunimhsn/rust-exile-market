@@ -8,7 +8,7 @@
 //! An offer is compared in Exalted Orbs: the Chaos and Divine Orbs at the rates of the price
 //! database, another item of the currency exchange at its price there (a Vaal Orb, a
 //! Mirror); an offer in a currency without price (a Wombgift), or whose price stands on too
-//! few trades ([`prices::MIN_TRADES`]), is left out.
+//! few trades ([`price::MIN_TRADES`]), is left out.
 //!
 //! The estimate is itself the reference of its offers: the median of the first page of
 //! offers, the answer to the search, tells the suspicious ones, which it leaves out. That
@@ -17,7 +17,7 @@
 
 use crate::format::Currency;
 use crate::item::Catalyst;
-use crate::prices::{self, CurrencyPrice, PriceList, Rates};
+use crate::price::{self, CurrencyPrice, PriceList, Rates};
 use crate::trade::offers::{self, ItemOffer};
 
 /// An offer under this share of the reference price is suspicious.
@@ -52,7 +52,7 @@ impl<'a> Worth<'a> {
             Some(Currency::Exalted) => 1.0,
             Some(Currency::Divine) => self.rates.divine,
             Some(Currency::Chaos) => self.rates.chaos,
-            None => prices::currency(self.currencies, id)?.trusted_exalted()?,
+            None => price::currency(self.currencies, id)?.trusted_exalted()?,
         };
         // A price of nothing, or none, would count an offer as free; so would an amount of
         // nothing, and an amount beyond every price is no price either.
@@ -104,7 +104,7 @@ pub struct Estimate<'a> {
 /// the `total` found, with the `worth` of the currencies; the offers with the quality of a
 /// catalyst of another kind than `searched_catalyst`, when it was searched, are left out. `None`
 /// without an offer priced in a currency with a price on enough trades
-/// ([`prices::MIN_TRADES`]).
+/// ([`price::MIN_TRADES`]).
 #[must_use]
 pub fn estimate<'a>(
     first_page: &[ItemOffer],
@@ -361,7 +361,7 @@ mod tests {
         CurrencyPrice {
             name: exchange_id.to_owned(),
             exchange_id: exchange_id.to_owned(),
-            price: crate::prices::Price {
+            price: price::Price {
                 exalted,
                 quantity: 100,
                 history: Vec::new(),
@@ -444,9 +444,9 @@ mod tests {
     fn a_price_on_too_few_trades_isnt_counted() {
         // A Lesser Charging Rune at 40,156 ex on one trade, as poe2scout priced it.
         let mut rune = priced("lesser-charging-rune", 40_156.0);
-        rune.price.quantity = prices::MIN_TRADES - 1;
+        rune.price.quantity = price::MIN_TRADES - 1;
         let mut mirror = priced("mirror", 70_000.0);
-        mirror.price.quantity = prices::MIN_TRADES;
+        mirror.price.quantity = price::MIN_TRADES;
         let currencies = [rune, mirror];
         let worth = Worth {
             rates: RATES,

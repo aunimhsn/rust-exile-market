@@ -12,7 +12,7 @@ use super::{DownloadObserver, PriceDatabase};
 use crate::http::{self, HttpError, Pace};
 use crate::league::League;
 use crate::logging;
-use crate::prices::{CurrencyPrice, Price, PriceList, Rates, UniqueModifiers, UniquePrice};
+use crate::price::{CurrencyPrice, Price, PriceList, Rates, UniqueModifiers, UniquePrice};
 
 const BASE_URL: &str = "https://api.poe2scout.com/poe2";
 /// The time between two requests, at least.

@@ -15,17 +15,17 @@ use egui::{
 use self::open_lists::{OpenList, OpenLists};
 use crate::bug_report::{Facts, JoinedItem, LogSession, Report};
 use crate::clipboard::{self, ClipboardEvent, ClipboardWatch};
-use crate::estimate::{self, Estimate, Reference, Worth};
 use crate::filters::{Filter, FilterKey, Filters, Window};
 use crate::hotkey::PriceCheckHotkey;
 use crate::i18n::{DOWNLOAD_QUOTE_COUNT, Message, Translator};
 use crate::item::{CopiedItem, Item};
 use crate::league::League;
 use crate::market::MarketWatch;
-use crate::offers::{LONG_WAIT, Offers, OffersState};
+use crate::offers_state::{LONG_WAIT, Offers, OffersState};
 use crate::overlay::{self, Activation, ClickWatch, KeyboardFocus, Overlay, ScreenRect};
-use crate::prices::Rates;
-use crate::pricing::{FixedPrice, NoFixedPrice};
+use crate::price::Rates;
+use crate::price::estimate::{self, Estimate, Reference, Worth};
+use crate::price::fixed::{FixedPrice, NoFixedPrice};
 use crate::recent_items::RecentItems;
 use crate::session::{LeagueChange, PricesState, Session, ShownItem};
 use crate::settings::{SettingChange, Settings, SettingsFile};
@@ -1589,7 +1589,7 @@ mod tests {
 
     #[test]
     fn the_price_of_a_unique_tells_its_suspicious_offers_in_every_priced_currency() {
-        use crate::prices::{CurrencyPrice, Price, UniqueModifiers, UniquePrice};
+        use crate::price::{CurrencyPrice, Price, UniqueModifiers, UniquePrice};
 
         let price = |exalted| Price {
             exalted,
@@ -1628,7 +1628,7 @@ mod tests {
 
     #[test]
     fn a_price_of_the_currency_exchange_on_few_trades_tells_no_suspicious_offer() {
-        use crate::prices::{CurrencyPrice, MIN_TRADES, Price};
+        use crate::price::{CurrencyPrice, MIN_TRADES, Price};
 
         // A Lesser Charging Rune at 40,156 ex on one trade: its honest offers aren't bait.
         let rune = |quantity| CurrencyPrice {

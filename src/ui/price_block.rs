@@ -12,13 +12,13 @@ use egui::{
 use super::images;
 use super::theme::{color, size, text};
 use super::widgets;
-use crate::estimate::{COUNTED, Estimate};
 use crate::filters::{Filter, FilterKey};
 use crate::format::{self, Currency};
 use crate::i18n::{Message, Translator};
 use crate::item::{Item, Rarity};
-use crate::prices::{Direction, Price, Rates};
-use crate::pricing::{Candidate, FixedPrice, NoFixedPrice};
+use crate::price::estimate::{COUNTED, Estimate};
+use crate::price::fixed::{Candidate, FixedPrice, NoFixedPrice};
+use crate::price::{Direction, Price, Rates};
 use crate::session::PricesState;
 use crate::trade::query::SearchFilters;
 use crate::trade::stat_filters::LineStats;
@@ -80,7 +80,7 @@ struct MarketPrice<'a> {
 enum Fixed {
     /// A unique, on fewer than [`ENOUGH_OFFERS`] offers when `uncertain`.
     Unique { uncertain: bool },
-    /// An item of the currency exchange, on fewer than [`crate::prices::MIN_TRADES`] trades
+    /// An item of the currency exchange, on fewer than [`crate::price::MIN_TRADES`] trades
     /// when `thin`.
     Exchange { thin: bool },
 }

@@ -1,6 +1,6 @@
 use super::*;
-use crate::estimate::{Reference, Worth};
-use crate::prices::{CurrencyPrice, UniqueModifiers, UniquePrice};
+use crate::price::estimate::{Reference, Worth};
+use crate::price::{CurrencyPrice, UniqueModifiers, UniquePrice};
 use std::time::Duration;
 
 const RATES: Rates = Rates {
