@@ -276,8 +276,8 @@ impl<D: PriceDatabase> Watch<'_, D> {
                 && Instant::now() >= pricing.due
             {
                 if reachable {
-                    let (league, known) = (pricing.league.clone(), pricing.known);
-                    match self.read_prices(league, known) {
+                    let due = pricing.clone();
+                    match self.read_prices(due) {
                         Downloaded::Done(event) => {
                             if !self.send(event) {
                                 return;
@@ -361,9 +361,10 @@ impl<D: PriceDatabase> Watch<'_, D> {
         }
     }
 
-    /// Downloads the prices of `league`, and keeps them in the cache; with the prices given
-    /// so far when none are `known`.
-    fn read_prices(&mut self, league: League, known: bool) -> Downloaded {
+    /// Downloads the prices of the league of `pricing`, and keeps them in the cache; with the
+    /// prices given so far when none are known.
+    fn read_prices(&mut self, pricing: Pricing) -> Downloaded {
+        let Pricing { league, known, .. } = pricing;
         let mut download = Progress {
             outbox: self.outbox,
             wake: self.wake,
