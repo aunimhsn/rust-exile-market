@@ -1,13 +1,7 @@
 //! The amounts of currency as the window writes them, the same in every language: a point
 //! before the decimals, no thousands separator, `K` and `M` for the large amounts.
 
-/// The currencies the prices show in.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Currency {
-    Divine,
-    Chaos,
-    Exalted,
-}
+use crate::price::Currency;
 
 /// `value` of `currency`, e.g. `12.4`, `182`, `1.3K`, `125K`, `1.2M`. At most three
 /// significant digits and two decimals, without trailing zeros; the Exalted Orbs, worth

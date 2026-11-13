@@ -15,9 +15,8 @@
 //! median holds as long as fewer than half the offers of the page are bait, and doesn't move
 //! when the next offers load.
 
-use crate::format::Currency;
 use crate::item::Catalyst;
-use crate::price::{self, CurrencyPrice, PriceList, Rates};
+use crate::price::{self, Currency, CurrencyPrice, PriceList, Rates};
 use crate::trade::offers::{self, ItemOffer};
 
 /// An offer under this share of the reference price is suspicious.

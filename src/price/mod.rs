@@ -12,6 +12,14 @@ use serde::{Deserialize, Serialize};
 
 use crate::league::League;
 
+/// The currencies the prices show in.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Currency {
+    Divine,
+    Chaos,
+    Exalted,
+}
+
 /// How many Exalted Orbs a Chaos Orb and a Divine Orb are worth.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Rates {

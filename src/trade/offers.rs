@@ -9,7 +9,6 @@ use serde::de::{self, Deserializer};
 use serde_json::Value;
 
 use crate::exchange_currencies;
-use crate::format::Currency;
 use crate::http;
 use crate::item::{
     Catalyst, ParseWarning, QualityKind, Rarity, Requirements, USUAL_QUALITY, WaystoneValue,
@@ -17,6 +16,7 @@ use crate::item::{
 };
 use crate::language::Language;
 use crate::logging;
+use crate::price::Currency;
 
 /// The stat of `+#% to Maximum Quality` (the Essence of the Breach, the implicit of a Breach
 /// Ring), whatever its kind (`explicit.`, `implicit.`…).
