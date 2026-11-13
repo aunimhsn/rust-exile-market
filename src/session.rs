@@ -63,15 +63,20 @@ impl TradeCopy {
     }
 }
 
+/// What the services gave so far, which the lines of an item are read with.
+#[derive(Debug, Clone, Copy)]
+struct Known<'a> {
+    /// The stats of the trade site, once it gave them.
+    trade: Option<&'a TradeStats>,
+    /// The names of the items of the trade site, once it gave them.
+    names: Option<&'a ItemNames>,
+    /// The prices of the league shown known so far.
+    prices: Option<&'a PriceList>,
+}
+
 impl ShownItem {
-    /// The item `copied`; `trade` holds the stats of the trade site and `names` the names of
-    /// its items, once it gave them, and `prices` the prices of the league shown known so far.
-    fn new(
-        copied: &CopiedItem,
-        trade: Option<&TradeStats>,
-        names: Option<&ItemNames>,
-        prices: Option<&PriceList>,
-    ) -> Self {
+    /// The item `copied`, read with what the services gave so far.
+    fn new(copied: &CopiedItem, known: Known) -> Self {
         // An item that can't be read shows its message in the window.
         let parsed = Item::parse(copied);
         match &parsed {
@@ -91,23 +96,18 @@ impl ShownItem {
             stats: LineStats::default(),
             tiers: TierRolls::default(),
         };
-        shown.read_lines(trade, names, prices);
+        shown.read_lines(known);
         shown
     }
 
-    /// Reads the modifier lines of the item, with the stats of the trade site `trade`, and
-    /// their tiers on its base, found among the `names` of the trade site for a magic item;
-    /// from their values for a rare or magic item copied from the in-game trade, and for a
-    /// unique copied that way their ranges from its modifiers among `prices`, from its
-    /// modifiers as the parser read them. True when its modifiers changed shape (the lines of a
-    /// hybrid joined once the names tell the base of a magic item): the keys of their filters
-    /// moved.
-    fn read_lines(
-        &mut self,
-        trade: Option<&TradeStats>,
-        names: Option<&ItemNames>,
-        prices: Option<&PriceList>,
-    ) -> bool {
+    /// Reads the modifier lines of the item, with the stats of the trade site, and their tiers
+    /// on its base, found among the names of the trade site for a magic item; from their
+    /// values for a rare or magic item copied from the in-game trade, and for a unique copied
+    /// that way their ranges from its modifiers among the prices, from its modifiers as the
+    /// parser read them. True when its modifiers changed shape (the lines of a hybrid joined
+    /// once the names tell the base of a magic item): the keys of their filters moved.
+    fn read_lines(&mut self, known: Known) -> bool {
+        let Known { trade, names, .. } = known;
         let Ok(item) = &mut self.parsed else {
             return false;
         };
@@ -117,7 +117,7 @@ impl ShownItem {
         let mut reshaped = false;
         if let Some(trade_copy) = &self.trade_copy {
             let modifiers = match (trade_copy, &base_type) {
-                (TradeCopy::Prices(copied), _) => unique_rolls(item, copied, trade, names, prices),
+                (TradeCopy::Prices(copied), _) => unique_rolls(item, copied, known),
                 (TradeCopy::Values(copied), Some(base_type)) => {
                     // The runes and the implicits, which tell the room, are never read again.
                     let stats = LineStats::new(item, copied, trade);
@@ -180,15 +180,14 @@ impl ShownItem {
 }
 
 /// The modifiers `copied` of `item`, a unique copied from the in-game trade, with the ranges of
-/// its modifiers and of those of its base among `prices`, found by its English name (through
-/// the `names` of the trade site for a French copy); as copied while they don't hold it.
-fn unique_rolls(
-    item: &Item,
-    copied: &[Modifier],
-    trade: Option<&TradeStats>,
-    names: Option<&ItemNames>,
-    prices: Option<&PriceList>,
-) -> Vec<Modifier> {
+/// its modifiers and of those of its base among the prices `known`, found by its English name
+/// (through the names of the trade site for a French copy); as copied while they don't hold it.
+fn unique_rolls(item: &Item, copied: &[Modifier], known: Known) -> Vec<Modifier> {
+    let Known {
+        trade,
+        names,
+        prices,
+    } = known;
     match fixed::price_of(item, prices, names) {
         Ok(FixedPrice::Unique(unique)) => game_data::with_unique_rolls(
             item.language(),
@@ -353,8 +352,11 @@ impl Session {
             && shown.parsed().is_ok_and(Item::has_rolls_from_prices)
         {
             // Those of the league shown, checked above.
-            let prices = self.prices.as_ref().map(|prices| &prices.list);
-            shown.read_lines(self.trade_stats.as_ref(), self.item_names.as_ref(), prices);
+            shown.read_lines(Known {
+                trade: self.trade_stats.as_ref(),
+                names: self.item_names.as_ref(),
+                prices: self.prices.as_ref().map(|prices| &prices.list),
+            });
         }
     }
 
@@ -380,12 +382,16 @@ impl Session {
         self.item_names = Some(names);
         // An item copied before them may have a line only the trade site knows, or be a
         // magic item whose base type they tell.
-        let prices =
-            shown_prices(self.prices.as_ref(), self.league.as_ref()).map(|prices| &prices.list);
+        let known = Known {
+            trade: Some(&trade),
+            names: self.item_names.as_ref(),
+            prices: shown_prices(self.prices.as_ref(), self.league.as_ref())
+                .map(|prices| &prices.list),
+        };
         let reshaped = self
             .item
             .as_mut()
-            .is_some_and(|shown| shown.read_lines(Some(&trade), self.item_names.as_ref(), prices));
+            .is_some_and(|shown| shown.read_lines(known));
         self.trade_stats = Some(trade);
         reshaped
     }
@@ -393,12 +399,15 @@ impl Session {
     pub fn apply(&mut self, event: ClipboardEvent) {
         match event {
             ClipboardEvent::Copied { item: copied, .. } => {
-                let trade = self.trade_stats.as_ref();
-                let prices = self.league_prices().map(|prices| &prices.list);
-                let shown = ShownItem::new(&copied, trade, self.item_names.as_ref(), prices);
+                let known = Known {
+                    trade: self.trade_stats.as_ref(),
+                    names: self.item_names.as_ref(),
+                    prices: self.league_prices().map(|prices| &prices.list),
+                };
+                let shown = ShownItem::new(&copied, known);
                 if let Ok(item) = shown.parsed() {
                     self.log_price(item);
-                    log_unknown_stats(item, trade);
+                    log_unknown_stats(item, known.trade);
                 }
                 self.item = Some(shown);
             }
