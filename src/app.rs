@@ -24,7 +24,7 @@ use crate::market::MarketWatch;
 use crate::offers_state::{LONG_WAIT, Offers, OffersState};
 use crate::overlay::{self, Activation, ClickWatch, KeyboardFocus, Overlay, ScreenRect};
 use crate::price::Rates;
-use crate::price::estimate::{self, Estimate, Reference, Worth};
+use crate::price::estimate::{Estimate, Reference, Worth};
 use crate::price::fixed::{FixedPrice, NoFixedPrice};
 use crate::recent_items::RecentItems;
 use crate::session::{LeagueChange, PricesState, Session, ShownItem};
@@ -1144,7 +1144,7 @@ fn shown_estimate<'a>(
         return None;
     };
     // The next offers loaded don't move it.
-    estimate::estimate(
+    Estimate::of(
         offers.get(..*first_page)?,
         *total,
         worth?,

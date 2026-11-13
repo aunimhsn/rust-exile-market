@@ -30,7 +30,7 @@ use crate::offers_state::{LONG_WAIT, Offers, OffersState};
 use crate::price::Orb;
 use crate::price::estimate::Reference;
 use crate::roll_difference::CopiedLines;
-use crate::trade::offers::{ExchangeOffer, ItemOffer, Price, SellerStatus, shown_currency};
+use crate::trade::offers::{ExchangeOffer, ItemOffer, Price, SellerStatus};
 use crate::trade::query::SearchKind;
 use crate::trade::search::Failure;
 
@@ -139,7 +139,7 @@ impl Row {
 /// of the prices with the decimals of the Divine Orbs.
 fn row_price(amount: f64, id: &str) -> RowPrice {
     RowPrice {
-        amount: format::amount(amount, shown_currency(id).unwrap_or(Orb::Divine)),
+        amount: format::amount(amount, Orb::of(id).unwrap_or(Orb::Divine)),
         currency: exchange_currencies::shown(id),
     }
 }

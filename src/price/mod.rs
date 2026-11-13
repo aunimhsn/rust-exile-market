@@ -21,6 +21,19 @@ pub enum Orb {
     Exalted,
 }
 
+impl Orb {
+    /// The orb whose id on the trade site is `id`; `None` for another currency.
+    #[must_use]
+    pub fn of(id: &str) -> Option<Self> {
+        match id {
+            "exalted" => Some(Self::Exalted),
+            "divine" => Some(Self::Divine),
+            "chaos" => Some(Self::Chaos),
+            _ => None,
+        }
+    }
+}
+
 /// How many Exalted Orbs a Chaos Orb and a Divine Orb are worth.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Rates {
