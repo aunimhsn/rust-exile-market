@@ -233,20 +233,14 @@ impl<'a> BugReportPanel<'a> {
         ui.add_space(ITEM_GAP);
         let regular = TextFormat::simple(text::bubble(), color::TEXT);
         let (label, job) = if let Some(name) = &item.name {
-            let label = self.i18n.bug_report_join_item(name);
-            let mut job = LayoutJob::default();
-            if let Some((before, after)) = label.split_once(name.as_str()) {
-                job.append(before, 0.0, regular.clone());
-                job.append(
-                    name,
-                    0.0,
-                    TextFormat::simple(text::name_in_choice(), color::TEXT),
-                );
-                job.append(after, 0.0, regular);
-            } else {
-                job.append(&label, 0.0, regular);
-            }
-            (label, job)
+            let sentence = self.i18n.bug_report_join_item();
+            let job = widgets::sentence_with(
+                &sentence,
+                name,
+                &regular,
+                TextFormat::simple(text::name_in_choice(), color::TEXT),
+            );
+            (sentence.with(name), job)
         } else {
             let label = self.i18n.text(Message::BugReportJoinUnreadable);
             let job = LayoutJob::simple_singleline(label.clone(), text::bubble(), color::TEXT);

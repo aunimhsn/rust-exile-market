@@ -13,6 +13,7 @@ use egui::{
 };
 
 use super::theme::{color, size, text};
+use crate::i18n::Around;
 
 /// The mark in front of a choice: a radio button among exclusive choices, a check box for a
 /// choice of its own.
@@ -210,6 +211,22 @@ fn line(
     let mut job = LayoutJob::single_section(text.into(), format);
     job.wrap = max_width.map_or_else(TextWrapping::no_max_width, TextWrapping::truncate_at_width);
     ui.painter().layout_job(job)
+}
+
+/// `sentence` with `argument` in its place, in the format `apart`, the rest in `regular`: the
+/// name of a league in bold in its bubble.
+#[must_use]
+pub fn sentence_with(
+    sentence: &Around,
+    argument: &str,
+    regular: &TextFormat,
+    apart: TextFormat,
+) -> LayoutJob {
+    let mut job = LayoutJob::default();
+    job.append(&sentence.before, 0.0, regular.clone());
+    job.append(argument, 0.0, apart);
+    job.append(&sentence.after, 0.0, regular.clone());
+    job
 }
 
 /// A chevron centered on `center`, `width` across its opening: pointing right at `turn` 0,

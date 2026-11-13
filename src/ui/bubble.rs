@@ -12,7 +12,7 @@ use egui::{
 use super::theme::{self, color, size, text};
 use super::title_bar::LEAGUE_BLOCK_LEFT;
 use super::widgets;
-use crate::i18n::{Message, Translator};
+use crate::i18n::{Around, Message, Translator};
 use crate::league::League;
 use crate::update::Version;
 
@@ -38,7 +38,7 @@ pub enum BubbleAction {
 /// A bubble: a sentence with a part in bold, its pill and its cross.
 pub struct Bubble<'a> {
     id: &'static str,
-    sentence: String,
+    sentence: Around,
     strong: String,
     pill: String,
     i18n: &'a Translator,
@@ -58,7 +58,7 @@ impl<'a> Bubble<'a> {
         let name = league.name();
         Self::new(
             "new-league-bubble",
-            i18n.new_league(name),
+            i18n.new_league(),
             name,
             i18n.text(Message::NewLeagueSwitch),
             i18n,
@@ -71,7 +71,7 @@ impl<'a> Bubble<'a> {
         let version = version.to_string();
         Self::new(
             "update-bubble",
-            i18n.update_available(crate::APP_NAME, &version),
+            i18n.update_available(crate::APP_NAME),
             &version,
             i18n.text(Message::UpdateDownload),
             i18n,
@@ -80,7 +80,7 @@ impl<'a> Bubble<'a> {
 
     fn new(
         id: &'static str,
-        sentence: String,
+        sentence: Around,
         strong: &str,
         pill: String,
         i18n: &'a Translator,
@@ -164,18 +164,12 @@ impl<'a> Bubble<'a> {
 
     /// The sentence, its strong part in bold.
     fn text(&self) -> LayoutJob {
-        let regular = TextFormat::simple(text::bubble(), color::TEXT);
-        let strong = TextFormat::simple(text::bubble_strong(), color::TEXT);
-        let mut job = LayoutJob::default();
-        match self.sentence.split_once(self.strong.as_str()) {
-            Some((before, after)) => {
-                job.append(before, 0.0, regular.clone());
-                job.append(&self.strong, 0.0, strong);
-                job.append(after, 0.0, regular);
-            }
-            None => job.append(&self.sentence, 0.0, regular),
-        }
-        job
+        widgets::sentence_with(
+            &self.sentence,
+            &self.strong,
+            &TextFormat::simple(text::bubble(), color::TEXT),
+            TextFormat::simple(text::bubble_strong(), color::TEXT),
+        )
     }
 }
 

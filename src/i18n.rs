@@ -304,10 +304,23 @@ const UNCERTAIN: &str = "uncertain";
 const THIN_TRADES: &str = "thin-trades";
 const SIMILAR: &str = "similar";
 const ESTIMATE_UNCERTAIN: &str = "estimate-uncertain";
-const ESTIMATE_MEDIAN: &str = "estimate-median";
-const ESTIMATE_MEDIAN_CHEAPEST: &str = "estimate-median-cheapest";
-const ESTIMATE_MEDIAN_OF: &str = "estimate-median-of";
-const ESTIMATE_MEDIAN_CHEAPEST_OF: &str = "estimate-median-cheapest-of";
+
+/// The two messages of the note of an estimate: `plain`, and `of_kind` with the kind of the
+/// quality of a catalyst searched.
+#[derive(Clone, Copy)]
+struct EstimateNote {
+    plain: &'static str,
+    of_kind: &'static str,
+}
+
+const MEDIAN: EstimateNote = EstimateNote {
+    plain: "estimate-median",
+    of_kind: "estimate-median-of",
+};
+const MEDIAN_CHEAPEST: EstimateNote = EstimateNote {
+    plain: "estimate-median-cheapest",
+    of_kind: "estimate-median-cheapest-of",
+};
 const QUALITY_OF_KIND: &str = "quality-of-kind";
 const OFFER_QUALITY_KIND: &str = "offer-quality-kind";
 const PRICES_DOWNLOADING: &str = "prices-downloading";
@@ -374,6 +387,23 @@ const DOWNLOAD_QUOTES: [&str; 10] = [
 ];
 /// The number of sentences of the download of the prices.
 pub const DOWNLOAD_QUOTE_COUNT: usize = DOWNLOAD_QUOTES.len();
+
+/// A translated sentence cut around one of its arguments, which the caller writes apart, in
+/// bold or in its color: "Rise of the Abyssal has started." is `""`, the league, then
+/// `" has started."`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Around {
+    pub before: String,
+    pub after: String,
+}
+
+impl Around {
+    /// The whole sentence, `argument` in its place.
+    #[must_use]
+    pub fn with(&self, argument: &str) -> String {
+        format!("{}{argument}{}", self.before, self.after)
+    }
+}
 
 /// Gives the texts of the interface in one language.
 pub struct Translator {
@@ -466,12 +496,10 @@ impl Translator {
         self.format(id, Some(&args))
     }
 
-    /// The title of the download of the prices, with the name of the league.
+    /// The title of the download of the prices, around the name of the league.
     #[must_use]
-    pub fn download_title(&self, league: &str) -> String {
-        let mut args = FluentArgs::new();
-        args.set("league", league);
-        self.format(DOWNLOAD_TITLE, Some(&args))
+    pub fn download_title(&self) -> Around {
+        self.around(DOWNLOAD_TITLE, "league", FluentArgs::new())
     }
 
     /// The sentence `index` under the bar of the download of the prices, taken modulo their
@@ -701,12 +729,7 @@ impl Translator {
     /// catalyst searched: "Median of the 3 similar offers of mana quality."
     #[must_use]
     pub fn estimate_median(&self, counted: usize, searched_catalyst: Option<Catalyst>) -> String {
-        self.format_estimate(
-            ESTIMATE_MEDIAN,
-            ESTIMATE_MEDIAN_OF,
-            counted,
-            searched_catalyst,
-        )
+        self.format_estimate(MEDIAN, counted, searched_catalyst)
     }
 
     /// How an estimate from the `counted` cheapest offers is made, of the kind of the quality
@@ -717,12 +740,7 @@ impl Translator {
         counted: usize,
         searched_catalyst: Option<Catalyst>,
     ) -> String {
-        self.format_estimate(
-            ESTIMATE_MEDIAN_CHEAPEST,
-            ESTIMATE_MEDIAN_CHEAPEST_OF,
-            counted,
-            searched_catalyst,
-        )
+        self.format_estimate(MEDIAN_CHEAPEST, counted, searched_catalyst)
     }
 
     /// The kind of the quality of an offer, after its price in the list: "Attack quality".
@@ -779,19 +797,11 @@ impl Translator {
         self.format(GRANTED_SKILL, Some(&args))
     }
 
-    /// The texts of the requirements line before and after its parts, which the caller
-    /// writes each in its color: `("Requires ", "")`.
+    /// The requirements line around its parts, which the caller writes each in its color:
+    /// `"Requires "`, then the parts.
     #[must_use]
-    pub fn requires_around(&self) -> (String, String) {
-        // A character no translation writes, in place of the parts.
-        const PARTS: &str = "\u{1}";
-        let mut args = FluentArgs::new();
-        args.set("parts", PARTS);
-        let line = self.format(REQUIRES, Some(&args));
-        match line.split_once(PARTS) {
-            Some((before, after)) => (before.to_owned(), after.to_owned()),
-            None => (line, String::new()),
-        }
+    pub fn requires(&self) -> Around {
+        self.around(REQUIRES, "parts", FluentArgs::new())
     }
 
     /// A part of the requirements line: the level, or an attribute.
@@ -814,21 +824,19 @@ impl Translator {
         self.format(LEAGUE_TOOLTIP, Some(&args))
     }
 
-    /// The bubble of a new league, with its name.
+    /// The bubble of a new league, around its name.
     #[must_use]
-    pub fn new_league(&self, league: &str) -> String {
-        let mut args = FluentArgs::new();
-        args.set("league", league);
-        self.format(NEW_LEAGUE, Some(&args))
+    pub fn new_league(&self) -> Around {
+        self.around(NEW_LEAGUE, "league", FluentArgs::new())
     }
 
-    /// The bubble of a newer version: "Exile Market 0.2.0 is available."
+    /// The bubble of a newer version of `app`, around the version: "Exile Market 0.2.0 is
+    /// available."
     #[must_use]
-    pub fn update_available(&self, app: &str, version: &str) -> String {
+    pub fn update_available(&self, app: &str) -> Around {
         let mut args = FluentArgs::new();
         args.set("app", app);
-        args.set("version", version);
-        self.format(UPDATE_AVAILABLE, Some(&args))
+        self.around(UPDATE_AVAILABLE, "version", args)
     }
 
     /// A newer version in the status bar of the settings, a link: "0.2.0 available".
@@ -848,12 +856,10 @@ impl Translator {
         self.format(HOTKEY_TAKEN, Some(&args))
     }
 
-    /// The checkbox that joins the item shown to the bug report, `name` its name, in bold.
+    /// The checkbox that joins the item shown to the bug report, around its name, in bold.
     #[must_use]
-    pub fn bug_report_join_item(&self, name: &str) -> String {
-        let mut args = FluentArgs::new();
-        args.set("name", name);
-        self.format(BUG_REPORT_JOIN_ITEM, Some(&args))
+    pub fn bug_report_join_item(&self) -> Around {
+        self.around(BUG_REPORT_JOIN_ITEM, "name", FluentArgs::new())
     }
 
     /// What a screen reader says of a pill of the choice of the log, `session` its word.
@@ -909,12 +915,12 @@ impl Translator {
     /// The line of the status bar while the settings are open: the application, its version,
     /// the author, then the author's site.
     #[must_use]
-    pub fn author_line(&self, app: &str, version: &str, author: &str, site: &str) -> String {
+    pub fn author_line(&self) -> String {
         let mut args = FluentArgs::new();
-        args.set("app", app);
-        args.set("version", version);
-        args.set("author", author);
-        args.set("site", site);
+        args.set("app", crate::APP_NAME);
+        args.set("version", crate::VERSION);
+        args.set("author", crate::AUTHOR);
+        args.set("site", crate::AUTHOR_SITE_LABEL);
         self.format(STATUS_AUTHOR, Some(&args))
     }
 
@@ -1018,21 +1024,20 @@ impl Translator {
         self.format(id, Some(&args))
     }
 
-    /// The note of an estimate, `id`, or `of_kind` with the kind of the quality searched.
+    /// The note of an estimate, with the kind of the quality searched when there is one.
     fn format_estimate(
         &self,
-        id: &str,
-        of_kind: &str,
+        note: EstimateNote,
         counted: usize,
         searched_catalyst: Option<Catalyst>,
     ) -> String {
         let Some(catalyst) = searched_catalyst else {
-            return self.format_number(id, "count", counted);
+            return self.format_number(note.plain, "count", counted);
         };
         let mut args = FluentArgs::new();
         args.set("count", counted);
         args.set("quality", self.format_kind(QUALITY_OF_KIND, catalyst));
-        self.format(of_kind, Some(&args))
+        self.format(note.of_kind, Some(&args))
     }
 
     fn format_kind(&self, id: &str, catalyst: Catalyst) -> String {
@@ -1045,6 +1050,26 @@ impl Translator {
         let mut args = FluentArgs::new();
         args.set("age", age);
         self.format(id, Some(&args))
+    }
+
+    /// The message `id` formatted with `args`, cut around the argument `name`. Without the
+    /// argument in the translation, which the tests rule out, the whole message comes before.
+    fn around(&self, id: &str, name: &'static str, mut args: FluentArgs<'_>) -> Around {
+        // A character no translation writes, in place of the argument.
+        const PLACE: &str = "\u{1}";
+        args.set(name, PLACE);
+        let line = self.format(id, Some(&args));
+        if let Some((before, after)) = line.split_once(PLACE) {
+            return Around {
+                before: before.to_owned(),
+                after: after.to_owned(),
+            };
+        }
+        debug_assert!(false, "no {name} in the message {id}");
+        Around {
+            before: line,
+            after: String::new(),
+        }
     }
 
     /// The text of the message `id`; the id itself when the message is missing, which the

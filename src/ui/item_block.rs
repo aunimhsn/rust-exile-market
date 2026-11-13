@@ -663,16 +663,16 @@ pub(super) fn requirements_job(
     i18n: &Translator,
     font: &FontId,
 ) -> LayoutJob {
-    let (before, after) = i18n.requires_around();
+    let requires = i18n.requires();
     let mut job = LayoutJob::default();
-    append(&mut job, &before, font, color::WEAK);
+    append(&mut job, &requires.before, font, color::WEAK);
     for (index, (part, tint)) in parts.iter().enumerate() {
         if index > 0 {
             append(&mut job, SEPARATOR, font, color::WEAK);
         }
         append(&mut job, part, font, *tint);
     }
-    append(&mut job, &after, font, color::WEAK);
+    append(&mut job, &requires.after, font, color::WEAK);
     job
 }
 

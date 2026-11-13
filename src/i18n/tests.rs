@@ -95,10 +95,10 @@ fn the_code_and_every_file_have_the_same_messages() {
             UNCERTAIN,
             SIMILAR,
             ESTIMATE_UNCERTAIN,
-            ESTIMATE_MEDIAN,
-            ESTIMATE_MEDIAN_CHEAPEST,
-            ESTIMATE_MEDIAN_OF,
-            ESTIMATE_MEDIAN_CHEAPEST_OF,
+            MEDIAN.plain,
+            MEDIAN.of_kind,
+            MEDIAN_CHEAPEST.plain,
+            MEDIAN_CHEAPEST.of_kind,
             QUALITY_OF_KIND,
             OFFER_QUALITY_KIND,
             PRICES_DOWNLOADING,
@@ -198,10 +198,6 @@ fn every_message_formats_without_errors() {
                 .contains("Session"),
             "{language:?}"
         );
-        assert!(
-            translator.new_league("League").contains("League"),
-            "{language:?}"
-        );
         for age in [0, 60, 3600, 86_400] {
             assert_ne!(translator.age(Duration::from_secs(age)), "", "{language:?}");
         }
@@ -256,7 +252,6 @@ fn every_message_formats_without_errors() {
         }
         assert!(translator.prices_downloading("League").contains("League"));
         assert!(translator.no_price_found("League").contains("League"));
-        assert_ne!(translator.requires_around().0, "", "{language:?}");
         for requirement in [
             Requirement::Level,
             Requirement::Strength,
@@ -265,10 +260,6 @@ fn every_message_formats_without_errors() {
         ] {
             assert!(translator.requirement(requirement, 65).contains("65"));
         }
-        assert!(
-            translator.download_title("League").contains("League"),
-            "{language:?}"
-        );
         for index in 0..DOWNLOAD_QUOTE_COUNT {
             assert_ne!(translator.download_quote(index), "", "{language:?}");
         }
@@ -279,11 +270,7 @@ fn every_message_formats_without_errors() {
         ] {
             assert!(line.contains("age"), "{line} in {language:?}");
         }
-        assert_ne!(
-            translator.author_line("App", "1", "A", "a.b"),
-            "",
-            "{language:?}"
-        );
+        assert_ne!(translator.author_line(), "", "{language:?}");
     }
 }
 
@@ -308,10 +295,56 @@ fn arguments_are_inserted_without_isolation_marks() {
 fn the_author_line_ends_with_the_site_in_every_language() {
     // The status bar draws the site as a link, cut from the end of the line.
     for language in Language::ALL {
-        let line = Translator::new(language).author_line("App", "0.1.0", "Author", "author.site");
+        let line = Translator::new(language).author_line();
 
-        assert!(line.starts_with("App 0.1.0 · "), "{line}");
-        assert!(line.ends_with("Author · author.site"), "{line}");
+        let running = format!("{} {} · ", crate::APP_NAME, crate::VERSION);
+        assert!(line.starts_with(&running), "{line}");
+        let site = format!("{} · {}", crate::AUTHOR, crate::AUTHOR_SITE_LABEL);
+        assert!(line.ends_with(&site), "{line}");
+    }
+}
+
+fn around(before: &str, after: &str) -> Around {
+    Around {
+        before: before.to_owned(),
+        after: after.to_owned(),
+    }
+}
+
+#[test]
+fn a_sentence_is_cut_around_its_argument() {
+    let english = Translator::new(Language::English);
+
+    assert_eq!(english.new_league(), around("", " has started."));
+    assert_eq!(
+        english.update_available("App"),
+        around("App ", " is available.")
+    );
+    assert_eq!(
+        english.download_title(),
+        around("Downloading the prices of ", "")
+    );
+    assert_eq!(english.requires(), around("Requires ", ""));
+    // Cut where the argument goes, not where its text is first found in the sentence.
+    let join = english.bug_report_join_item();
+    assert_eq!(join, around("Join the item shown: ", ""));
+    assert_eq!(join.with("a"), "Join the item shown: a");
+}
+
+#[test]
+fn every_sentence_cut_around_an_argument_holds_it_in_every_language() {
+    // `Translator::around` asserts that the translation holds the argument.
+    for language in Language::ALL {
+        let translator = Translator::new(language);
+        for sentence in [
+            translator.new_league(),
+            translator.update_available("App"),
+            translator.download_title(),
+            translator.bug_report_join_item(),
+            translator.requires(),
+        ] {
+            assert_ne!(sentence.with(""), "", "{language:?}");
+        }
     }
 }
 
