@@ -788,9 +788,16 @@ impl ItemView<'_> {
         let league = session.league().map(League::name);
         PriceBlock::new(item, fixed_price, estimate, checks, prices, league, i18n).show(ui);
         let offers_action = if let Some(kind) = kind {
-            OffersBlock::new(offers, kind, reference, item, shown.lines(), i18n)
-                .bug_report(bug_report)
-                .show(ui)
+            OffersBlock {
+                offers,
+                kind,
+                reference,
+                item,
+                lines: shown.lines(),
+                has_bug_report: bug_report,
+                i18n,
+            }
+            .show(ui)
         } else {
             if session.must_identify(item) {
                 OffersBlock::identify(ui, i18n);

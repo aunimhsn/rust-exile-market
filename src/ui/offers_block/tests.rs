@@ -2,6 +2,7 @@ use super::*;
 use crate::estimate::Worth;
 use crate::prices::Rates;
 use crate::trade::offers::OfferItem;
+use egui::Pos2;
 
 const RATES: Rates = Rates {
     chaos: 75.0,
@@ -292,7 +293,7 @@ fn the_link_of_a_hint_is_found_on_each_row_it_wraps_on() {
                 // Wide, the link on one row; narrow, its words on several rows (cut at
                 // the hyphen of "signalez-le").
                 for (width, rows) in [(1000.0, 1..=1), (40.0, 2..=3)] {
-                    let galley = linked_galley(ui, &hint, width, true);
+                    let galley = linked_galley(ui, &hint, width);
                     let found = found_in(&galley, &link_rects(&galley, &hint));
                     assert_eq!(found.concat(), words, "{hint:?} at {width}");
                     assert!(rows.contains(&found.len()), "{found:?} at {width}");
@@ -304,23 +305,35 @@ fn the_link_of_a_hint_is_found_on_each_row_it_wraps_on() {
     assert_eq!(checked, 8);
 }
 
-/// Draws the hint of a refused search, one frame per call.
+/// Draws the hint of a refused search, one frame per call, in a window that has the bug
+/// report or not.
 struct HintWindow {
     ctx: egui::Context,
     hint: Linked,
-    link: bool,
+    has_bug_report: bool,
+    item: Item,
+    offers: Offers,
+    lines: CopiedLines,
+    i18n: Translator,
 }
 
 impl HintWindow {
     const WIDTH: f32 = 300.0;
 
-    fn new(link: bool) -> Self {
+    fn new(has_bug_report: bool) -> Self {
         let ctx = egui::Context::default();
         crate::ui::install(&ctx);
+        let text = include_str!("../../item/test-items/en-rare-bow-fractured.txt");
+        let item = Item::parse(&crate::item::CopiedItem::from_text(text).unwrap()).unwrap();
+        let i18n = Translator::new(Language::English);
         let window = Self {
             ctx,
-            hint: Translator::new(Language::English).offers_refused_hint(),
-            link,
+            hint: i18n.offers_refused_hint(),
+            has_bug_report,
+            item,
+            offers: Offers::default(),
+            lines: CopiedLines::default(),
+            i18n,
         };
         window.frame(vec![]);
         window
@@ -336,12 +349,21 @@ impl HintWindow {
         let mut drawn = (false, Pos2::ZERO, Vec::new());
         crate::ui::fixtures::run_frame(&self.ctx, input, |ui| {
             let origin = ui.cursor().min + vec2(size::BAND_PADDING, 0.0);
-            let galley = linked_galley(ui, &self.hint, Self::WIDTH, true);
+            let galley = linked_galley(ui, &self.hint, Self::WIDTH);
             let rects = link_rects(&galley, &self.hint)
                 .into_iter()
                 .map(|rect| rect.translate(origin.to_vec2()))
                 .collect();
-            let clicked = linked_hint(ui, &self.hint, Self::WIDTH, self.link, "Report a bug");
+            let block = OffersBlock {
+                offers: &self.offers,
+                kind: SearchKind::Items,
+                reference: None,
+                item: &self.item,
+                lines: &self.lines,
+                has_bug_report: self.has_bug_report,
+                i18n: &self.i18n,
+            };
+            let clicked = block.failure_hint(ui, &self.hint, Self::WIDTH);
             drawn = (clicked, origin, rects);
         });
         drawn

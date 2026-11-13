@@ -12,8 +12,8 @@ use std::time::{Duration, Instant, SystemTime};
 
 use egui::text::{LayoutJob, TextFormat};
 use egui::{
-    Color32, CursorIcon, Galley, Id, Key, Modifiers, Pos2, Rect, Response, Role, Sense, Stroke, Ui,
-    Vec2, WidgetInfo, pos2, vec2,
+    Color32, CursorIcon, Galley, Id, Key, Modifiers, Rangef, Rect, Response, Role, Sense, Stroke,
+    Ui, Vec2, WidgetInfo, pos2, vec2,
 };
 
 use super::item_block::rarity_color;
@@ -233,49 +233,22 @@ fn block(ready: Block, wait: Duration, busy: bool) -> Block {
     }
 }
 
+/// The block of the offers of a search of `kind` for `item`.
 pub struct OffersBlock<'a> {
-    offers: &'a Offers,
-    kind: SearchKind,
-    reference: Option<Reference<'a>>,
+    pub offers: &'a Offers,
+    pub kind: SearchKind,
+    /// The price that tells the suspicious offers.
+    pub reference: Option<Reference<'a>>,
     /// The copied item, and its lines, which the tooltips compare.
-    item: &'a Item,
-    lines: &'a CopiedLines,
-    i18n: &'a Translator,
-    /// The hint of a failed search opens the bug report: in the main window only, which has
-    /// it.
-    bug_report: bool,
+    pub item: &'a Item,
+    pub lines: &'a CopiedLines,
+    /// The window has the bug report, which the hint of a failed search opens: the main
+    /// window only.
+    pub has_bug_report: bool,
+    pub i18n: &'a Translator,
 }
 
-impl<'a> OffersBlock<'a> {
-    /// The block of the offers of a search of `kind` for `item`; `reference` tells the
-    /// suspicious offers.
-    #[must_use]
-    pub fn new(
-        offers: &'a Offers,
-        kind: SearchKind,
-        reference: Option<Reference<'a>>,
-        item: &'a Item,
-        lines: &'a CopiedLines,
-        i18n: &'a Translator,
-    ) -> Self {
-        Self {
-            offers,
-            kind,
-            reference,
-            item,
-            lines,
-            i18n,
-            bug_report: false,
-        }
-    }
-
-    /// The words of the hint of a failed search open the bug report.
-    #[must_use]
-    pub fn bug_report(mut self, bug_report: bool) -> Self {
-        self.bug_report = bug_report;
-        self
-    }
-
+impl OffersBlock<'_> {
     /// The block of an unidentified unique, which can't be searched.
     pub fn identify(ui: &mut Ui, i18n: &Translator) {
         band(ui, |ui, width| {
@@ -315,15 +288,14 @@ impl<'a> OffersBlock<'a> {
         }
         let i18n = self.i18n;
         match self.offers.state() {
-            OffersState::Idle => self.title_row(
-                ui,
-                (i18n.text(Message::OffersSearchHint), color::FAINT),
-                block(Block::Search, wait, busy),
-                None,
-            ),
+            OffersState::Idle => {
+                let line = (i18n.text(Message::OffersSearchHint), color::FAINT);
+                self.title_row(ui, &Head::of(line, block(Block::Search, wait, busy)), None)
+            }
             &OffersState::Failed(failure) => {
                 let (line, hint) = failure_lines(i18n, failure);
-                self.title_row(ui, line, block(Block::Search, wait, busy), hint.as_ref())
+                let head = Head::of(line, block(Block::Search, wait, busy));
+                self.title_row(ui, &head, hint.as_ref())
             }
             OffersState::Limited => {
                 let line = if wait.is_zero() {
@@ -331,14 +303,12 @@ impl<'a> OffersBlock<'a> {
                 } else {
                     (i18n.offers_limit(wait), color::WARNING)
                 };
-                self.title_row(ui, line, block(Block::Search, wait, busy), None)
+                self.title_row(ui, &Head::of(line, block(Block::Search, wait, busy)), None)
             }
-            OffersState::Searching => self.title_row(
-                ui,
-                (i18n.text(Message::OffersSearching), color::FAINT),
-                Block::Searching,
-                None,
-            ),
+            OffersState::Searching => {
+                let line = (i18n.text(Message::OffersSearching), color::FAINT);
+                self.title_row(ui, &Head::of(line, Block::Searching), None)
+            }
             OffersState::Items {
                 offers,
                 total,
@@ -364,8 +334,9 @@ impl<'a> OffersBlock<'a> {
                         (true, false) => More::None,
                     },
                     more_failed: *more_failed,
+                    searched: *searched,
                 };
-                self.results(ui, &list, *searched, wait)
+                self.results(ui, &list, wait)
             }
             OffersState::Exchange {
                 offers,
@@ -385,37 +356,24 @@ impl<'a> OffersBlock<'a> {
                         More::None
                     },
                     more_failed: None,
+                    searched: *searched,
                 };
-                self.results(ui, &list, *searched, wait)
+                self.results(ui, &list, wait)
             }
         }
     }
 
-    /// Until the offers show, the band is only the title row: the label, `line` under it, and
-    /// the action `block` in the corner; after a search that failed, what to do under the row
-    /// (`hint`).
-    fn title_row(
-        &self,
-        ui: &mut Ui,
-        (line, line_color): (String, Color32),
-        block: Block,
-        hint: Option<&Linked>,
-    ) -> Option<OffersAction> {
+    /// Until the offers show, the band is only the title row, its `head`; after a search that
+    /// failed, what to do under the row (`hint`).
+    fn title_row(&self, ui: &mut Ui, head: &Head, hint: Option<&Linked>) -> Option<OffersAction> {
         let mut action = None;
         band(ui, |ui, width| {
-            let head = Head {
-                line,
-                line_color,
-                count: None,
-                block,
-            };
-            if self.head(ui, &head) {
+            if self.head(ui, head) {
                 action = Some(OffersAction::Search);
             }
             if let Some(hint) = hint {
                 ui.add_space(HEAD_GAP);
-                let tooltip = self.i18n.text(Message::BugReportTooltip);
-                if linked_hint(ui, hint, width, self.bug_report, &tooltip) {
+                if self.failure_hint(ui, hint, width) {
                     action = Some(OffersAction::ReportBug);
                 }
                 ui.add_space(PADDING_Y);
@@ -424,17 +382,24 @@ impl<'a> OffersBlock<'a> {
         action
     }
 
+    /// What to do after a failed search, `hint`, wrapped at `width`: its words that open the
+    /// bug report a link in the window that has the report, plain elsewhere. Whether they were
+    /// clicked.
+    fn failure_hint(&self, ui: &mut Ui, hint: &Linked, width: f32) -> bool {
+        if self.has_bug_report {
+            linked_hint(ui, hint, width, &self.i18n.text(Message::BugReportTooltip))
+        } else {
+            let galley = widgets::wrapped_line(ui, &hint.text, text::item_line(), width);
+            widgets::text_row(ui, galley, size::BAND_PADDING, color::WEAK);
+            false
+        }
+    }
+
     /// The title row, then the list, or why it is empty.
-    fn results(
-        &self,
-        ui: &mut Ui,
-        list: &List,
-        searched: SystemTime,
-        wait: Duration,
-    ) -> Option<OffersAction> {
+    fn results(&self, ui: &mut Ui, list: &List, wait: Duration) -> Option<OffersAction> {
         let i18n = self.i18n;
         let age = SystemTime::now()
-            .duration_since(searched)
+            .duration_since(list.searched)
             .unwrap_or_default();
         // The age changes every minute.
         ui.ctx()
@@ -665,9 +630,7 @@ impl<'a> OffersBlock<'a> {
                     .1
             })
             .collect();
-        let open = list
-            .items
-            .and_then(|offers| self.tooltip(ui, offers, list.rows, &responses));
+        let open = self.tooltip(ui, list, &responses);
         for (index, (row, response)) in list.rows.iter().zip(&responses).enumerate() {
             let rect = response.rect;
             if list.items.is_some() {
@@ -687,7 +650,7 @@ impl<'a> OffersBlock<'a> {
             }
             // The whole name of a currency cut, under the pointer; the offers of items have
             // the tooltip of their item instead.
-            if self.row(ui, rect, row, list.is_exchange())
+            if self.row(ui, &Columns::of(rect, list.is_exchange()), row)
                 && list.items.is_none()
                 && let Some(price) = &row.price
             {
@@ -698,15 +661,11 @@ impl<'a> OffersBlock<'a> {
         }
     }
 
-    /// Opens, pins or closes the tooltip of the `offers` after what the pointer did over
-    /// their rows, then draws it; the index of the offer whose tooltip is open.
-    fn tooltip(
-        &self,
-        ui: &Ui,
-        offers: &[ItemOffer],
-        rows: &[Row],
-        responses: &[Response],
-    ) -> Option<usize> {
+    /// Opens, pins or closes the tooltip of an offer of items of `list` after what the
+    /// pointer did over their rows (`responses`), then draws it; the index of the offer whose
+    /// tooltip is open. The offers of the currency exchange have none.
+    fn tooltip(&self, ui: &Ui, list: &List, responses: &[Response]) -> Option<usize> {
+        let offers = list.items?;
         let ctx = ui.ctx();
         // One per window: the main one and the one over the game each have their own.
         let state_id = Id::NULL.with(("offer-tooltip-state", ctx.viewport_id()));
@@ -754,8 +713,11 @@ impl<'a> OffersBlock<'a> {
             .open()
             .and_then(|id| ids.iter().position(|other| *other == id));
         if let Some(index) = open
-            && let (Some(offer), Some(row), Some(response)) =
-                (offers.get(index), rows.get(index), responses.get(index))
+            && let (Some(offer), Some(row), Some(response)) = (
+                offers.get(index),
+                list.rows.get(index),
+                responses.get(index),
+            )
         {
             let tooltip = OfferTooltip {
                 offer,
@@ -776,11 +738,10 @@ impl<'a> OffersBlock<'a> {
         open
     }
 
-    /// Draws `row` in `rect`: its stock and its listing time on the right, then its price
-    /// before them; whether the name of its currency was cut.
-    fn row(&self, ui: &Ui, rect: Rect, row: &Row, exchange: bool) -> bool {
-        let columns = Columns::of(rect, exchange);
-        let center_y = rect.center().y;
+    /// Draws `row` in its `columns`: its stock and its listing time on the right, then its
+    /// price before them; whether the name of its currency was cut.
+    fn row(&self, ui: &Ui, columns: &Columns, row: &Row) -> bool {
+        let center_y = columns.y_range.center();
         let painter = ui.painter();
         let mut edges = columns.right_edges().into_iter();
         // The left of what is drawn on the right, before which the price stops.
@@ -813,20 +774,20 @@ impl<'a> OffersBlock<'a> {
         let dot_center = pos2(left - DOT_GAP - DOT_RADIUS, center_y);
         painter.circle_filled(dot_center, DOT_RADIUS, dot);
         used = used.min(dot_center.x - DOT_RADIUS);
-        match &row.price {
-            Some(price) => {
-                let start = pos2(columns.left, center_y);
-                self.row_price(ui, row, price, start, used - COLUMN_GAP)
-            }
-            None => false,
-        }
+        let room = Rect::from_x_y_ranges(columns.left..=used - COLUMN_GAP, columns.y_range);
+        self.row_price(ui, row, room)
     }
 
-    /// Draws the price of `row` from `start`, on the left of the row at its middle, to
-    /// `limit` at most: its amount, the icon of its currency, its name, then the kind of
-    /// another quality or the "?" of a suspicious offer; whether the name was cut.
-    fn row_price(&self, ui: &Ui, row: &Row, price: &RowPrice, start: Pos2, limit: f32) -> bool {
+    /// Draws the price of `row` in the `room` left for it, from its left at its middle: its
+    /// amount, the icon of its currency, its name, then the kind of another quality or the "?"
+    /// of a suspicious offer; whether the name was cut. An item listed without a price draws
+    /// nothing.
+    fn row_price(&self, ui: &Ui, row: &Row, room: Rect) -> bool {
+        let Some(price) = &row.price else {
+            return false;
+        };
         let painter = ui.painter();
+        let start = room.left_center();
         let center_y = start.y;
         let faint = row.suspicious || row.other_quality.is_some();
         let galley = widgets::text_line(ui, price.amount.as_str(), text::list_amount());
@@ -880,7 +841,7 @@ impl<'a> OffersBlock<'a> {
             }
             .paint_at(ui, icon_rect);
             let left = icon_rect.right() + ORB_GAP;
-            let width = (limit - after_width - left).max(0.0);
+            let width = (room.right() - after_width - left).max(0.0);
             let name = currency.name(self.item.language());
             let galley = widgets::truncated_line(ui, name, text::note(), width);
             cut = galley.elided;
@@ -907,6 +868,8 @@ struct List<'a> {
     more: More,
     /// Why the next offers couldn't come.
     more_failed: Option<Failure>,
+    /// When the search was sent.
+    searched: SystemTime,
 }
 
 impl List<'_> {
@@ -942,18 +905,35 @@ struct Head {
     block: Block,
 }
 
+impl Head {
+    /// The title row before the offers show, without a count: `line` under the label, in
+    /// its color, and the action `block` in the corner.
+    fn of((line, line_color): (String, Color32), block: Block) -> Self {
+        Self {
+            line,
+            line_color,
+            count: None,
+            block,
+        }
+    }
+}
+
 /// Where the columns of a row are.
 struct Columns {
     left: f32,
     right: f32,
+    /// The top and the bottom of the row, whose texts are centered across it.
+    y_range: Rangef,
     exchange: bool,
 }
 
 impl Columns {
+    /// The columns of the `row`, of the currency exchange or not.
     fn of(row: Rect, exchange: bool) -> Self {
         Self {
             left: row.left() + size::BAND_PADDING,
             right: row.right() - size::BAND_PADDING,
+            y_range: row.y_range(),
             exchange,
         }
     }
@@ -1005,25 +985,19 @@ fn failure_message(failure: Failure) -> Message {
     }
 }
 
-/// What to do after a failed search, wrapped at `width`. When they are a `link` (the main
-/// window), its words that open the bug report are in the color of the text, underlined under
-/// the pointer and with the tooltip `tooltip`; elsewhere, they are plain. Whether they were
-/// clicked.
-fn linked_hint(ui: &mut Ui, hint: &Linked, width: f32, link: bool, tooltip: &str) -> bool {
-    let galley = linked_galley(ui, hint, width, link);
+/// What to do after a failed search, wrapped at `width`, in the window that has the bug
+/// report: its words that open the report are in the color of the text, underlined under the
+/// pointer and with the tooltip `tooltip`. Whether they were clicked.
+fn linked_hint(ui: &mut Ui, hint: &Linked, width: f32, tooltip: &str) -> bool {
+    let galley = linked_galley(ui, hint, width);
     let (rect, _) =
         ui.allocate_exact_size(vec2(ui.available_width(), galley.size().y), Sense::hover());
     let origin = pos2(rect.left() + size::BAND_PADDING, rect.top());
     let words = hint.text.get(hint.link.clone()).unwrap_or_default();
     let mut clicked = false;
     let mut lit = false;
-    let rects = if link {
-        link_rects(&galley, hint)
-    } else {
-        Vec::new()
-    };
     let id = ui.make_persistent_id("report-link");
-    let rects: Vec<Rect> = rects
+    let rects: Vec<Rect> = link_rects(&galley, hint)
         .into_iter()
         .map(|part| part.translate(origin.to_vec2()))
         .collect();
@@ -1055,19 +1029,16 @@ fn linked_hint(ui: &mut Ui, hint: &Linked, width: f32, link: bool, tooltip: &str
     clicked
 }
 
-/// The hint laid out at `width`: in the weak color, its words of a `link` in the color of the
+/// The hint laid out at `width`: in the weak color, the words of its link in the color of the
 /// text.
-fn linked_galley(ui: &Ui, hint: &Linked, width: f32, link: bool) -> Arc<Galley> {
+fn linked_galley(ui: &Ui, hint: &Linked, width: f32) -> Arc<Galley> {
     let font = text::item_line();
     let mut job = LayoutJob::default();
     let text = hint.text.as_str();
     let (start, end) = (hint.link.start, hint.link.end);
     for (part, tint) in [
         (text.get(..start), color::WEAK),
-        (
-            text.get(start..end),
-            if link { color::TEXT } else { color::WEAK },
-        ),
+        (text.get(start..end), color::TEXT),
         (text.get(end..), color::WEAK),
     ] {
         if let Some(part) = part.filter(|part| !part.is_empty()) {
