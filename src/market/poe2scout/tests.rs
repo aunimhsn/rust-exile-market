@@ -554,9 +554,10 @@ fn a_category_stops_at_its_tenth_page() {
 
     let items = scout
         .category::<ApiCurrency>(
-            "HC%20Forbidden%20Rites",
-            Kind::Currencies,
-            "currency",
+            &Kind::Currencies.path("HC%20Forbidden%20Rites"),
+            &ApiCategory {
+                api_id: "currency".to_owned(),
+            },
             &mut Download::default(),
         )
         .expect("every page answered")

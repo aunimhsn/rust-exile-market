@@ -227,11 +227,13 @@ enum Kind {
 }
 
 impl Kind {
-    fn path(self) -> &'static str {
-        match self {
+    /// The path of the pages of a category of this kind in `league`, encoded for a path.
+    fn path(self, league: &str) -> String {
+        let kind = match self {
             Self::Uniques => "Uniques",
             Self::Currencies => "Currencies",
-        }
+        };
+        format!("/Leagues/{league}/{kind}/ByCategory")
     }
 }
 
@@ -320,16 +322,15 @@ impl<S: Source> Poe2Scout<S> {
         })
     }
 
-    /// The items of every page of a category; `None` when `download` is interrupted before a
-    /// request.
+    /// The items of every page of `category`, at `path` (see [`Kind::path`]); `None` when
+    /// `download` is interrupted before a request.
     fn category<T: DeserializeOwned>(
         &mut self,
-        league: &str,
-        kind: Kind,
-        category: &str,
+        path: &str,
+        category: &ApiCategory,
         download: &mut dyn DownloadObserver,
     ) -> Result<Option<Vec<T>>, FetchError> {
-        let path = format!("/Leagues/{league}/{}/ByCategory", kind.path());
+        let category = category.api_id.as_str();
         let mut items = Vec::new();
         for page in 1..=MAX_PAGES {
             let page_text = page.to_string();
@@ -338,8 +339,7 @@ impl<S: Source> Poe2Scout<S> {
                 ("perPage", PER_PAGE),
                 ("page", page_text.as_str()),
             ];
-            let Some(answer) =
-                self.get_unless_interrupted::<ApiPage<T>>(&path, &query, download)?
+            let Some(answer) = self.get_unless_interrupted::<ApiPage<T>>(path, &query, download)?
             else {
                 return Ok(None);
             };
@@ -402,9 +402,10 @@ impl<S: Source> PriceDatabase for Poe2Scout<S> {
         #[expect(clippy::cast_precision_loss, reason = "a few dozen requests")]
         let share = |done: usize| done as f32 / requests as f32;
         download.progress(&prices, share(done));
+        let currencies_pages = Kind::Currencies.path(&path);
         for category in &currency_categories {
             let Some(items) =
-                self.category::<ApiCurrency>(&path, Kind::Currencies, &category.api_id, download)?
+                self.category::<ApiCurrency>(&currencies_pages, category, download)?
             else {
                 return Ok(None);
             };
@@ -420,9 +421,9 @@ impl<S: Source> PriceDatabase for Poe2Scout<S> {
             done += 1;
             download.progress(&prices, share(done));
         }
+        let uniques_pages = Kind::Uniques.path(&path);
         for category in &categories.unique_categories {
-            let Some(items) =
-                self.category::<ApiUnique>(&path, Kind::Uniques, &category.api_id, download)?
+            let Some(items) = self.category::<ApiUnique>(&uniques_pages, category, download)?
             else {
                 return Ok(None);
             };
