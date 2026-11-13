@@ -7,7 +7,7 @@ use std::sync::{LazyLock, OnceLock};
 use serde::Deserialize;
 
 use crate::item::{Modifier, ModifierKind, ModifierOrigin};
-use crate::language::Language;
+use crate::language::{Language, PerLanguage};
 
 /// A group of stats on the trade site: the same stat has an id in each group where it can
 /// be, e.g. `explicit.stat_3299347043` and `fractured.stat_3299347043`.
@@ -160,17 +160,16 @@ pub(super) struct Stats {
     pub max_lines: usize,
 }
 
-static ENGLISH: LazyLock<Stats> =
-    LazyLock::new(|| Stats::read(include_str!("../../assets/game-data/stats-en.ndjson")));
-static FRENCH: LazyLock<Stats> =
-    LazyLock::new(|| Stats::read(include_str!("../../assets/game-data/stats-fr.ndjson")));
+/// The stats of the game data in each language, read at their first use.
+static STATS: PerLanguage<LazyLock<Stats>> = PerLanguage {
+    english: LazyLock::new(|| Stats::read(include_str!("../../assets/game-data/stats-en.ndjson"))),
+    french: LazyLock::new(|| Stats::read(include_str!("../../assets/game-data/stats-fr.ndjson"))),
+};
 
 impl Stats {
+    /// The stats of `language`.
     pub fn of(language: Language) -> &'static Self {
-        match language {
-            Language::English => &ENGLISH,
-            Language::French => &FRENCH,
-        }
+        STATS.of(language)
     }
 
     /// Reads one stat per line; a line that can't be read is logged and left out (the tests

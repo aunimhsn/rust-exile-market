@@ -418,6 +418,7 @@ fn unique_name(item: &ApiItem) -> Option<UniqueName> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::language::PerLanguage;
     use crate::trade::client::Answer;
     use crate::trade::client::tests::FakeSite;
     use crate::trade::limits::LimitHeaders;
@@ -845,7 +846,7 @@ mod tests {
     fn the_stat_templates_taken_out_are_no_longer_in_the_names() {
         let mut names = names_of_both();
 
-        let (english, french) = names.take_stat_templates();
+        let PerLanguage { english, french } = names.take_stat_templates();
 
         assert_eq!((english.len(), french.len()), (3, 1));
         assert_eq!(names.stat_templates(Language::English), []);

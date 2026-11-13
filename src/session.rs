@@ -7,6 +7,7 @@ use crate::clipboard::ClipboardEvent;
 use crate::game_data::{self, ItemBase, StatSource, TradeGroup, TradeItem, TradeStats};
 use crate::item::{CopiedItem, Item, ItemState, Modifier, ParseError, Rarity, RollsSource};
 use crate::item_names::ItemNames;
+use crate::language::PerLanguage;
 use crate::league::{League, Leagues};
 use crate::logging;
 use crate::market::{MarketEvent, Source};
@@ -374,7 +375,7 @@ impl Session {
     #[must_use]
     pub fn apply_item_names(&mut self, mut names: ItemNames) -> bool {
         // The names are already in the cache, with their templates.
-        let (english, french) = names.take_stat_templates();
+        let PerLanguage { english, french } = names.take_stat_templates();
         let trade = TradeStats::new(&english, &french);
         self.item_names = Some(names);
         // An item copied before them may have a line only the trade site knows, or be a

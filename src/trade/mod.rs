@@ -27,18 +27,21 @@ use std::time::{Duration, Instant, SystemTime};
 use crate::files;
 use crate::http::Backoff;
 use crate::item_names::ItemNames;
-use crate::language::Language;
+use crate::language::{Language, PerLanguage};
 use crate::logging;
 use crate::worker::{OnDrop, Outbox, Worker};
 pub use refusal::Refusal;
 use site::{NamesError, TradeSite};
 
+/// The trade site of each language.
+const HOSTS: PerLanguage<&str> = PerLanguage {
+    english: "https://www.pathofexile.com",
+    french: "https://fr.pathofexile.com",
+};
+
 /// The trade site of `language`.
 fn host(language: Language) -> &'static str {
-    match language {
-        Language::English => "https://www.pathofexile.com",
-        Language::French => "https://fr.pathofexile.com",
-    }
+    HOSTS.of(language)
 }
 
 /// The file of the names in the cache directory.

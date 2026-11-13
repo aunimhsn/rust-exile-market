@@ -8,7 +8,7 @@ use std::sync::LazyLock;
 
 use serde::Deserialize;
 
-use crate::language::Language;
+use crate::language::{Language, PerLanguage};
 
 include!(concat!(env!("OUT_DIR"), "/exchange_icons.rs"));
 
@@ -25,8 +25,7 @@ pub struct ExchangeCurrency {
     pub id: String,
     /// Its group on the trade site, e.g. `Currency`, `Waystones`.
     group: String,
-    english: String,
-    french: String,
+    names: PerLanguage<String>,
     /// Its icon, a PNG.
     pub icon: &'static [u8],
 }
@@ -35,10 +34,7 @@ impl ExchangeCurrency {
     /// Its name in `language`, e.g. `Vaal Orb`, `Orbe vaal`.
     #[must_use]
     pub fn name(&self, language: Language) -> &str {
-        match language {
-            Language::English => &self.english,
-            Language::French => &self.french,
-        }
+        self.names.of(language)
     }
 }
 
@@ -66,8 +62,10 @@ fn read(index: &str) -> HashMap<String, ExchangeCurrency> {
                 ExchangeCurrency {
                     id: entry.id,
                     group: entry.group,
-                    english: entry.english,
-                    french: entry.french,
+                    names: PerLanguage {
+                        english: entry.english,
+                        french: entry.french,
+                    },
                     icon,
                 },
             ))

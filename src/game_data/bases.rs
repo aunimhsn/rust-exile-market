@@ -7,7 +7,7 @@ use std::sync::LazyLock;
 
 use serde::Deserialize;
 
-use crate::language::Language;
+use crate::language::{Language, PerLanguage};
 
 /// The category of a base, the same in every language.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
@@ -280,18 +280,15 @@ impl Domain {
     }
 }
 
-static ENGLISH: LazyLock<HashMap<String, BaseData>> =
-    LazyLock::new(|| read(include_str!("../../assets/game-data/bases-en.ndjson")));
-static FRENCH: LazyLock<HashMap<String, BaseData>> =
-    LazyLock::new(|| read(include_str!("../../assets/game-data/bases-fr.ndjson")));
+/// The base types of the game data in each language, by name, read at their first use.
+static BASES: PerLanguage<LazyLock<HashMap<String, BaseData>>> = PerLanguage {
+    english: LazyLock::new(|| read(include_str!("../../assets/game-data/bases-en.ndjson"))),
+    french: LazyLock::new(|| read(include_str!("../../assets/game-data/bases-fr.ndjson"))),
+};
 
 /// The base type `name` in `language`, without "Exceptional" nor "Superior".
 fn base(language: Language, name: &str) -> Option<&'static BaseData> {
-    let bases = match language {
-        Language::English => &ENGLISH,
-        Language::French => &FRENCH,
-    };
-    bases.get(name)
+    BASES.of(language).get(name)
 }
 
 /// The category of the base type `name` in `language` (`Mammoth Targe`, `Targe de mammouth`),
@@ -342,11 +339,11 @@ mod tests {
         for (text, read) in [
             (
                 include_str!("../../assets/game-data/bases-en.ndjson"),
-                &ENGLISH,
+                &BASES.english,
             ),
             (
                 include_str!("../../assets/game-data/bases-fr.ndjson"),
-                &FRENCH,
+                &BASES.french,
             ),
         ] {
             // The generator writes each name once.
@@ -386,7 +383,7 @@ mod tests {
         );
         assert_eq!(trade_category(Language::English, "Mystery Ring"), None);
         // Every flask of the data is a life or a mana flask.
-        for bases in [&ENGLISH, &FRENCH] {
+        for bases in [&BASES.english, &BASES.french] {
             for base in bases.values() {
                 assert_ne!(base.category.trade_id(&base.spawn.tags), "flask");
             }

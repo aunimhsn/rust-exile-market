@@ -13,12 +13,11 @@ use std::fmt;
 
 use super::stats::{Better, Matcher, Stat, Stats, TradeGroup, normalize};
 use crate::item_names::StatTemplate;
-use crate::language::Language;
+use crate::language::{Language, PerLanguage};
 
 /// The stats of the trade site in English and in French.
 pub struct TradeStats {
-    english: Stats,
-    french: Stats,
+    stats: PerLanguage<Stats>,
 }
 
 impl TradeStats {
@@ -30,16 +29,15 @@ impl TradeStats {
             .map(|template| (template.id.as_str(), string(&template.text)))
             .collect();
         Self {
-            english: stats(english, &english_strings),
-            french: stats(french, &english_strings),
+            stats: PerLanguage {
+                english: stats(english, &english_strings),
+                french: stats(french, &english_strings),
+            },
         }
     }
 
     pub(super) fn of(&self, language: Language) -> &Stats {
-        match language {
-            Language::English => &self.english,
-            Language::French => &self.french,
-        }
+        self.stats.of(language)
     }
 }
 
@@ -47,8 +45,8 @@ impl fmt::Debug for TradeStats {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
             .debug_struct("TradeStats")
-            .field("english", &self.english.len())
-            .field("french", &self.french.len())
+            .field("english", &self.stats.english.len())
+            .field("french", &self.stats.french.len())
             .finish()
     }
 }

@@ -1,5 +1,6 @@
 //! The languages of the game client and of the interface.
 
+use serde::{Deserialize, Serialize};
 use unic_langid::LanguageIdentifier;
 
 /// A language of the game client, also a language of the interface.
@@ -57,6 +58,25 @@ impl Language {
         let language = Self::from_locales(&locales);
         log::info!("System locales: {locales:?}, interface language: {language:?}");
         language
+    }
+}
+
+/// A value in each language of the game client: adding a language makes the compiler name
+/// every value to write.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PerLanguage<T> {
+    pub english: T,
+    pub french: T,
+}
+
+impl<T> PerLanguage<T> {
+    /// The value in `language`.
+    #[must_use]
+    pub const fn of(&self, language: Language) -> &T {
+        match language {
+            Language::English => &self.english,
+            Language::French => &self.french,
+        }
     }
 }
 

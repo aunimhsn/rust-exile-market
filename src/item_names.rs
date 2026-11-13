@@ -11,7 +11,7 @@ use std::time::{Duration, SystemTime};
 
 use serde::{Deserialize, Serialize};
 
-use crate::language::Language;
+use crate::language::{Language, PerLanguage};
 
 /// The names of one language.
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
@@ -42,22 +42,7 @@ pub struct UniqueName {
 }
 
 /// A unique item in English and in French.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct UniqueNames {
-    pub english: UniqueName,
-    pub french: UniqueName,
-}
-
-impl UniqueNames {
-    /// Its name and base type in `language`.
-    #[must_use]
-    pub fn of(&self, language: Language) -> &UniqueName {
-        match language {
-            Language::English => &self.english,
-            Language::French => &self.french,
-        }
-    }
-}
+pub type UniqueNames = PerLanguage<UniqueName>;
 
 /// The number of names of each kind, for the log.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -76,8 +61,9 @@ pub struct NameCounts {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ItemNames {
     pub updated: SystemTime,
-    english: Names,
-    french: Names,
+    /// Flattened, so that the cache keeps the shape of its version.
+    #[serde(flatten)]
+    names: PerLanguage<Names>,
     uniques: Vec<UniqueNames>,
 }
 
@@ -92,8 +78,7 @@ impl ItemNames {
     ) -> Self {
         Self {
             updated,
-            english,
-            french,
+            names: PerLanguage { english, french },
             uniques,
         }
     }
@@ -108,10 +93,10 @@ impl ItemNames {
     #[must_use]
     pub fn counts(&self) -> NameCounts {
         NameCounts {
-            exchange: self.english.exchange.len(),
-            base_types: self.english.base_types.len(),
+            exchange: self.names.english.exchange.len(),
+            base_types: self.names.english.base_types.len(),
             uniques: self.uniques.len(),
-            stats: self.english.stats.len(),
+            stats: self.names.english.stats.len(),
         }
     }
 
@@ -119,29 +104,26 @@ impl ItemNames {
     #[cfg(test)]
     #[must_use]
     pub fn stat_templates(&self, language: Language) -> &[StatTemplate] {
-        &self.names(language).stats
+        &self.names.of(language).stats
     }
 
     /// Takes the templates of the stats out of the names, in English and in French: once
     /// indexed ([`crate::game_data::TradeStats`]), they would be kept twice.
-    pub fn take_stat_templates(&mut self) -> (Vec<StatTemplate>, Vec<StatTemplate>) {
-        (
-            std::mem::take(&mut self.english.stats),
-            std::mem::take(&mut self.french.stats),
-        )
-    }
-
-    fn names(&self, language: Language) -> &Names {
-        match language {
-            Language::English => &self.english,
-            Language::French => &self.french,
+    pub fn take_stat_templates(&mut self) -> PerLanguage<Vec<StatTemplate>> {
+        PerLanguage {
+            english: std::mem::take(&mut self.names.english.stats),
+            french: std::mem::take(&mut self.names.french.stats),
         }
     }
 
     /// The id on the currency exchange of the item named `name` in `language`.
     #[must_use]
     pub fn exchange_id(&self, language: Language, name: &str) -> Option<&str> {
-        self.names(language).exchange.get(name).map(String::as_str)
+        self.names
+            .of(language)
+            .exchange
+            .get(name)
+            .map(String::as_str)
     }
 
     /// The English name of the unique named `name` in `language`.
@@ -174,7 +156,8 @@ impl ItemNames {
     /// Brute".
     #[must_use]
     pub fn magic_base_type(&self, language: Language, name: &str) -> Option<&str> {
-        self.names(language)
+        self.names
+            .of(language)
             .base_types
             .iter()
             .filter(|base_type| holds_words(name, base_type))
@@ -384,6 +367,26 @@ pub mod tests {
         assert_eq!(
             item_names().magic_base_type(item.language(), item.base_type()),
             Some("Temple Maul")
+        );
+    }
+
+    #[test]
+    fn the_names_keep_the_shape_of_the_cache_of_their_version() {
+        let json = serde_json::to_value(item_names()).expect("the names serialize");
+        let keys = |value: &serde_json::Value| {
+            let mut keys: Vec<String> = value
+                .as_object()
+                .map(|object| object.keys().cloned().collect())
+                .unwrap_or_default();
+            keys.sort_unstable();
+            keys
+        };
+
+        assert_eq!(keys(&json), ["english", "french", "uniques", "updated"]);
+        assert_eq!(keys(&json["uniques"][0]), ["english", "french"]);
+        assert_eq!(
+            serde_json::from_value::<ItemNames>(json).ok(),
+            Some(item_names())
         );
     }
 
