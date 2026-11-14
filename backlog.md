@@ -78,6 +78,10 @@ One entry per item: what it is, its kind (the section it sits in), what it depen
 
 - The order of the copied lines among those of a table, for a line of two English templates (step 17e3d4b2, 2026-11-12): `Copied::order` (`src/game_data/modifiers/copied.rs`) gives each copied line the first free line of the table that has one of its templates, so that a French line two English stats write, copied before a line of one of these stats, could take that line's place and leave it without one, where the other order exists. No modifier of the tables has two such lines on 2026-11-12 (the mana a flask recovers and the bleeding, each alone in its modifier): to look at again when the game data are generated again for Path of Exile 2 1.0, and to solve by trying the lines of one template first if a table ever has both.
 
+- Whether the data endpoints of the trade site (`/api/trade2/data/*`) announce limits (`X-Rate-Limit-*`, `Retry-After`) in their answers (security audit of 2026-11-14, a point to check): no service was called by the audit; read once by hand (`curl -sI https://www.pathofexile.com/api/trade2/data/static`). The code reads the `Retry-After` of a refusal of these requests anyway (`src/trade/transport.rs`), and `PACE` of `src/trade/site.rs` says they announce none. Depends on nothing. Noted on 2026-11-14.
+
+- `kdialog --error` given a message that looks like HTML (security audit of 2026-11-14, a point to check, unchanged since 2026-11-10): Qt may read it as rich text, while `zenity` gets `--no-markup`. The message holds a text of the application and the error of `eframe` only; try it once with an error that holds `<b>`. Depends on nothing. Noted on 2026-11-14.
+
 ## Waiting on others
 
 - The note of a priced item in French (`labels.note` is `None` in French; a French copy of a priced item needed to learn its label; since 13k2e2, a note after the lines of a unique without header is no longer read as them, `a_french_unique_without_header_is_read_before_a_note_with_a_number`).
@@ -103,6 +107,8 @@ One entry per item: what it is, its kind (the section it sits in), what it depen
 - The certificates of the system rather than those built into the executable (security audit of 2026-11-10, finding 16, info): `ureq` trusts the list of `webpki-roots` of the day of the build, so an old version keeps authorities since withdrawn and lacks the new ones; its `platform-verifier` feature reads the store of the system, with more dependencies. To weigh with step 20 (Automatic updates). Noted on 2026-11-10.
 
 ## Code
+
+- The cost of an item copied at worst timed by a test (security audit of 2026-11-14, a point to check): the parser is bounded (16 KB, 300 lines), but a line of six signed numbers tries 3⁶ = 729 templates for each window of lines (`MAX_NUMBERS` in `src/game_data/lines.rs`), and `modifier_stats` is called by six paths at each copy. A test that times `ShownItem::new` on 300 lines `+1 +2 +3 +4 +5 +6 (rune)`, expected under a second; a fix only if it is slower. Depends on nothing. Noted on 2026-11-14.
 
 - `read_lines`, in `src/session.rs`, works out the stats of the same lines several times for each item copied (`LineStats::new` twice, then `TierRolls::new`, then `with_ranges` for each tier): no measurable effect today, to look at if the reading of an item slows. Depends on nothing; critical code (the matching of the game data), so a review on Fable 5.2. Parser review of 17e3, outside the area; noted in step 17e3d11 on 2026-11-13.
 
