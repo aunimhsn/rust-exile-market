@@ -28,6 +28,9 @@ const MAX_PAGES: u32 = 10;
 /// The categories read at most, each being a request at least: about 25 are known, and an
 /// answer with far more is wrong.
 const MAX_CATEGORIES: usize = 100;
+/// The current leagues read at most: three on 2026-10-25, and an answer with far more is wrong
+/// (each is a row of the list of the leagues and a name in the log).
+const MAX_LEAGUES: usize = 100;
 /// The id of the Exalted Orb in `/ReferenceCurrencies`, the currency of the prices shown.
 const EXALTED: &str = "exalted";
 /// The id of the Chaos Orb in `/ReferenceCurrencies`, whose rate in Exalted Orbs is kept.
@@ -58,6 +61,9 @@ pub enum FetchError {
     MissingRate(&'static str),
     /// This many categories in the answer: reading them all would send as many requests.
     TooManyCategories(usize),
+    /// This many current leagues in the answer: the database is wrong for a moment, and the
+    /// leagues known are kept.
+    TooManyLeagues(usize),
 }
 
 impl FetchError {
@@ -71,7 +77,10 @@ impl FetchError {
                 after_answers,
                 ..
             } => error.answered() || *after_answers,
-            Self::NoCurrentLeague | Self::MissingRate(_) | Self::TooManyCategories(_) => true,
+            Self::NoCurrentLeague
+            | Self::MissingRate(_)
+            | Self::TooManyCategories(_)
+            | Self::TooManyLeagues(_) => true,
         }
     }
 }
@@ -88,6 +97,9 @@ impl fmt::Display for FetchError {
             Self::TooManyCategories(count) => {
                 write!(formatter, "{count} categories in the answer")
             }
+            Self::TooManyLeagues(count) => {
+                write!(formatter, "{count} current leagues in the answer")
+            }
         }
     }
 }
@@ -96,7 +108,10 @@ impl std::error::Error for FetchError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             Self::Http { error, .. } => Some(error),
-            Self::NoCurrentLeague | Self::MissingRate(_) | Self::TooManyCategories(_) => None,
+            Self::NoCurrentLeague
+            | Self::MissingRate(_)
+            | Self::TooManyCategories(_)
+            | Self::TooManyLeagues(_) => None,
         }
     }
 }
@@ -410,6 +425,9 @@ impl<A: Api> PriceDatabase for Poe2Scout<A> {
         let leagues = current_leagues(self.get("/Leagues", &[])?);
         if leagues.is_empty() {
             return Err(FetchError::NoCurrentLeague);
+        }
+        if leagues.len() > MAX_LEAGUES {
+            return Err(FetchError::TooManyLeagues(leagues.len()));
         }
         Ok(leagues)
     }
