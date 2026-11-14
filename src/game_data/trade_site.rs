@@ -294,8 +294,9 @@ pub mod tests {
     }
 
     /// The most templates the trade site may send in a language (`MAX_STAT_TEMPLATES` of
-    /// `trade::site`), of one text: searching the lists of a stat for each would take minutes
-    /// (the security audit of 2026-11-14).
+    /// `trade::site`) for each of three texts: one id each, one note each, one option each.
+    /// Searching the lists of a stat for each would take minutes (the security audit of
+    /// 2026-11-14).
     #[test]
     fn many_templates_of_one_text_are_grouped_at_once() {
         const COUNT: u32 = 50_000;
@@ -323,16 +324,21 @@ pub mod tests {
             })
             .map(|(id, text)| StatTemplate { id, text })
             .collect();
+        let count = usize::try_from(COUNT).expect("a count of a test");
         let start = std::time::Instant::now();
 
         let stats = TradeStats::new(&english, &[]);
 
-        assert!(start.elapsed() < std::time::Duration::from_secs(5));
+        let elapsed = start.elapsed();
+        assert!(
+            elapsed < std::time::Duration::from_secs(5),
+            "grouped in {elapsed:?}"
+        );
         let english = stats.of(Language::English);
         let (life, _) = english.find("# to Life").next().unwrap();
-        assert_eq!(life.trade_ids(TradeGroup::Explicit).len(), 50_000);
+        assert_eq!(life.trade_ids(TradeGroup::Explicit).len(), count);
         assert_eq!(english.find("# to Mana").count(), 1);
         assert_eq!(english.find("# to Mana (bcd)").count(), 1);
-        assert_eq!(english.find("Allocates #").count(), 50_000);
+        assert_eq!(english.find("Allocates #").count(), count);
     }
 }
