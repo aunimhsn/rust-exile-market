@@ -20,12 +20,12 @@ const upBubble = ({ right = false, below = false, fr = false } = {}) => `
   <div class="app-notice app-update ${right ? "is-right" : ""} ${below ? "is-below" : ""}"><span class="app-notice-text">${fr
     ? "Exile Market <b>0.2.0</b> disponible."
     : "Exile Market <b>0.2.0</b> is available."}</span>
-    <span class="pill" title="https://github.com/aunimhsn/rust-exile-market/releases/tag/v0.2.0">${fr ? "Télécharger" : "Download"}</span>${UP_CLOSE}</div>`;
+    <span class="pill" title="https://github.com/sylent-dev/rust-exile-market/releases/tag/v0.2.0">${fr ? "Télécharger" : "Download"}</span>${UP_CLOSE}</div>`;
 
 // The status bar of the settings, the new version told after the running one, as a link to its page; `strong` in
 // the color of the text, the first drawing, otherwise like the link of sylent.art.
 const upSettings = ({ fr = false, strong = false } = {}) => hlWin({ fr }).replace(/Exile Market 0\.1\.0 · (Made by|Créé par) Sylent/,
-  `Exile Market 0.1.0 · <a class="${strong ? "app-update-link" : ""}" href="https://github.com/aunimhsn/rust-exile-market/releases/latest" target="_blank" rel="noopener" title="https://github.com/aunimhsn/rust-exile-market/releases/latest">${fr ? "0.2.0 disponible" : "0.2.0 available"}</a> · $1 Sylent`);
+  `Exile Market 0.1.0 · <a class="${strong ? "app-update-link" : ""}" href="https://github.com/sylent-dev/rust-exile-market/releases/latest" target="_blank" rel="noopener" title="https://github.com/sylent-dev/rust-exile-market/releases/latest">${fr ? "0.2.0 disponible" : "0.2.0 available"}</a> · $1 Sylent`);
 const UP_ITEM = [item(HH), price(HH_PRICE), offers({ state: "idle" }), foot()];
 SECTIONS.unshift(["Update notice (15): A chosen, the bubble under the league block, and the version in the settings", [
   ["Chosen · A · under the league block, like the bubble of a new league", win(topBar(), upBubble(), ...UP_ITEM)],

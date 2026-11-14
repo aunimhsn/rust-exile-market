@@ -6,7 +6,7 @@ rust-version.workspace = true
 description = "Price checker for Path of Exile 2 items."
 authors = ["Aunim HASSAN"]
 license.workspace = true
-repository = "https://github.com/aunimhsn/rust-exile-market"
+repository = "https://github.com/sylent-dev/rust-exile-market"
 readme = "README.md"
 publish = false
 

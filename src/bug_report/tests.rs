@@ -113,7 +113,7 @@ fn the_address_opens_the_form_with_its_fields_filled() {
 
     assert!(
         address.starts_with(
-            "https://github.com/aunimhsn/rust-exile-market/issues/new?template=bug-report.yml&"
+            "https://github.com/sylent-dev/rust-exile-market/issues/new?template=bug-report.yml&"
         ),
         "{address}"
     );

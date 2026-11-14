@@ -10,7 +10,7 @@ use crate::league::Leagues;
 use crate::logging;
 use crate::worker::{OnDrop, Worker};
 
-/// The repository of the application, e.g. `https://github.com/aunimhsn/rust-exile-market`.
+/// The repository of the application, e.g. `https://github.com/sylent-dev/rust-exile-market`.
 const REPOSITORY: &str = env!("CARGO_PKG_REPOSITORY");
 const GITHUB: &str = "https://github.com/";
 const GITHUB_API: &str = "https://api.github.com/repos/";
@@ -338,7 +338,7 @@ mod tests {
         assert_eq!(found, Some(release("0.2.0")));
         assert_eq!(
             found.map(|release| release.page),
-            Some("https://github.com/aunimhsn/rust-exile-market/releases/tag/v0.2.0".to_owned())
+            Some("https://github.com/sylent-dev/rust-exile-market/releases/tag/v0.2.0".to_owned())
         );
     }
 

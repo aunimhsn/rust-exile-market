@@ -10,12 +10,12 @@ Exile Market is a pre-alpha, out early to hear from the players: expect bugs, an
 
 ## Download
 
-Take the archive of your system from the [latest release](https://github.com/aunimhsn/rust-exile-market/releases/latest):
+Take the archive of your system from the [latest release](https://github.com/sylent-dev/rust-exile-market/releases/latest):
 
 | System | Archive |
 |---|---|
-| Windows | [`exile-market-windows-x64.zip`](https://github.com/aunimhsn/rust-exile-market/releases/latest/download/exile-market-windows-x64.zip) |
-| Linux | [`exile-market-linux-x64.tar.gz`](https://github.com/aunimhsn/rust-exile-market/releases/latest/download/exile-market-linux-x64.tar.gz) |
+| Windows | [`exile-market-windows-x64.zip`](https://github.com/sylent-dev/rust-exile-market/releases/latest/download/exile-market-windows-x64.zip) |
+| Linux | [`exile-market-linux-x64.tar.gz`](https://github.com/sylent-dev/rust-exile-market/releases/latest/download/exile-market-linux-x64.tar.gz) |
 
 Unpack it and start `exile-market.exe` (Windows) or `exile-market` (Linux). There is nothing to install. The application tells you when a new version is out, and you download it the same way.
 
@@ -76,7 +76,7 @@ The log is `exile-market.log`, and `exile-market.previous.log` for the previous 
 
 Copyright (C) 2026 Aunim HASSAN.
 
-Exile Market is free software, under the GNU General Public License, version 3 or (at your option) any later version, with the additional terms of its section 7 given in [assets/NOTICE.md](assets/NOTICE.md): see [LICENSE](LICENSE). It comes with no warranty. Its source code is in [this repository](https://github.com/aunimhsn/rust-exile-market).
+Exile Market is free software, under the GNU General Public License, version 3 or (at your option) any later version, with the additional terms of its section 7 given in [assets/NOTICE.md](assets/NOTICE.md): see [LICENSE](LICENSE). It comes with no warranty. Its source code is in [this repository](https://github.com/sylent-dev/rust-exile-market).
 
 Some of what the executable holds isn't under this license, and stays under its own terms ([assets/NOTICE.md](assets/NOTICE.md), [assets/game-data/NOTICE.md](assets/game-data/NOTICE.md)):
 
