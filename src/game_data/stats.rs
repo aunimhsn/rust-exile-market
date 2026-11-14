@@ -194,17 +194,19 @@ impl Stats {
                 let string = normalize(&matcher.string);
                 max_lines = max_lines.max(string.lines().count());
                 let entries = by_string.entry(string).or_default();
-                // The same string once normalized, e.g. with and without a no-break space.
-                let same = |&(other_stat, other_matcher): &(usize, usize)| {
-                    other_stat == stat_index
-                        && stat
-                            .matchers
-                            .get(other_matcher)
-                            .is_some_and(|other: &Matcher| {
-                                other.negate == matcher.negate && other.value == matcher.value
-                            })
+                // The same string once normalized, e.g. with and without a no-break space. The
+                // entries of this stat are the last ones of the string, since the stats come in
+                // order: those of the other stats aren't read again, which would cost a time
+                // in the square of the stats of one string (the security audit of 2026-11-14).
+                let same = |other: &Matcher| {
+                    other.negate == matcher.negate && other.value == matcher.value
                 };
-                if !entries.iter().any(same) {
+                let is_new = entries
+                    .iter()
+                    .rev()
+                    .take_while(|&&(other_stat, _)| other_stat == stat_index)
+                    .all(|&(_, other_matcher)| !stat.matchers.get(other_matcher).is_some_and(same));
+                if is_new {
                     entries.push((stat_index, matcher_index));
                 }
             }

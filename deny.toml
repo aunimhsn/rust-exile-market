@@ -15,6 +15,9 @@ exclude-dev = true
 [advisories]
 # A version withdrawn by its authors is updated.
 yanked = "deny"
+# A crate unsound without `unsafe` fails the check wherever it is in the tree, not only among
+# the direct dependencies (the default): `png`, `rustls` and `ring` come indirectly.
+unsound = "all"
 # The advisories that don't concern the application, each with its reason; remove an entry once
 # its crate is gone from Cargo.lock.
 ignore = [

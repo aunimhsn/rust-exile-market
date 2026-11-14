@@ -667,6 +667,30 @@ fn the_leagues_are_read_whole_or_not_at_all() {
     ));
 }
 
+/// The security audit of 2026-11-14: a list of leagues by the hundred thousand would be read
+/// again each hour, logged whole and drawn row by row.
+#[test]
+fn an_answer_with_too_many_current_leagues_is_an_error() {
+    let leagues = |count: usize| {
+        let answer: Vec<String> = (0..count)
+            .map(|number| format!(r#"{{"Value": "League {number}", "IsCurrent": true}}"#))
+            .collect();
+        let answer = format!("[{}]", answer.join(","));
+        scout(FakeApi::default().with("/Leagues", &answer)).leagues()
+    };
+
+    assert_eq!(
+        leagues(MAX_LEAGUES).expect("the leagues").len(),
+        MAX_LEAGUES
+    );
+    let error = leagues(MAX_LEAGUES + 1).expect_err("too many leagues");
+    assert!(
+        matches!(error, FetchError::TooManyLeagues(count) if count == MAX_LEAGUES + 1),
+        "{error:?}"
+    );
+    assert!(error.answered());
+}
+
 /// The pace waits first, then the interruption is checked, right before each request.
 #[test]
 fn an_interrupted_download_sends_no_other_request() {

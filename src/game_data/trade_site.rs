@@ -8,7 +8,7 @@
 //! writes it; the stats of the same template are one stat with all their ids, like a local and
 //! a global stat in Exiled Exchange 2.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fmt;
 
 use super::stats::{Better, Matcher, Stat, Stats, TradeGroup, normalize};
@@ -53,10 +53,13 @@ impl fmt::Debug for TradeStats {
 
 /// The stats of the templates of one language, one per string (without its note) and option.
 /// The English template of a stat is the one of its first id in `english`, or else its own
-/// string; its value is written as in its template.
+/// string; its value is written as in its template. Linear in the number of templates: the
+/// strings and the ids of each stat are told apart by sets, not by searching its lists.
 fn stats(templates: &[StatTemplate], english: &HashMap<&str, String>) -> Stats {
     let mut list: Vec<Stat> = Vec::new();
     let mut by_string: HashMap<(String, Option<i32>), usize> = HashMap::new();
+    let mut seen_strings: HashSet<(usize, String)> = HashSet::new();
+    let mut seen_ids: HashSet<(usize, String)> = HashSet::new();
     for template in templates {
         let Some((group, id, option)) = parse_id(&template.id) else {
             continue;
@@ -82,7 +85,7 @@ fn stats(templates: &[StatTemplate], english: &HashMap<&str, String>) -> Stats {
             continue;
         };
         for string in [string, normalize(&template.text)] {
-            if !stat.matchers.iter().any(|matcher| matcher.string == string) {
+            if seen_strings.insert((index, string.clone())) {
                 stat.matchers.push(Matcher {
                     string,
                     value: option.map(f64::from),
@@ -90,9 +93,9 @@ fn stats(templates: &[StatTemplate], english: &HashMap<&str, String>) -> Stats {
                 });
             }
         }
-        let ids = stat.ids.entry(group).or_default();
-        if !ids.contains(&id) {
-            ids.push(id);
+        // The id holds its group: the same id is the same group.
+        if seen_ids.insert((index, id.clone())) {
+            stat.ids.entry(group).or_default().push(id);
         }
     }
     Stats::new(list)
@@ -288,5 +291,54 @@ pub mod tests {
             stat.trade_ids(TradeGroup::Explicit),
             ["explicit.stat_3076483222"]
         );
+    }
+
+    /// The most templates the trade site may send in a language (`MAX_STAT_TEMPLATES` of
+    /// `trade::site`) for each of three texts: one id each, one note each, one option each.
+    /// Searching the lists of a stat for each would take minutes (the security audit of
+    /// 2026-11-14).
+    #[test]
+    fn many_templates_of_one_text_are_grouped_at_once() {
+        const COUNT: u32 = 50_000;
+        // A note of letters for each number: a note with a digit stays in the text.
+        let note = |number: u32| -> String {
+            number
+                .to_string()
+                .bytes()
+                .map(|digit| char::from(b'a' + (digit - b'0')))
+                .collect()
+        };
+        let english: Vec<StatTemplate> = (0..COUNT)
+            .flat_map(|number| {
+                [
+                    (format!("explicit.stat_{number}"), "# to Life".to_owned()),
+                    (
+                        "explicit.stat_1".to_owned(),
+                        format!("# to Mana ({})", note(number)),
+                    ),
+                    (
+                        format!("explicit.stat_2|{number}"),
+                        "Allocates #".to_owned(),
+                    ),
+                ]
+            })
+            .map(|(id, text)| StatTemplate { id, text })
+            .collect();
+        let count = usize::try_from(COUNT).expect("a count of a test");
+        let start = std::time::Instant::now();
+
+        let stats = TradeStats::new(&english, &[]);
+
+        let elapsed = start.elapsed();
+        assert!(
+            elapsed < std::time::Duration::from_secs(5),
+            "grouped in {elapsed:?}"
+        );
+        let english = stats.of(Language::English);
+        let (life, _) = english.find("# to Life").next().unwrap();
+        assert_eq!(life.trade_ids(TradeGroup::Explicit).len(), count);
+        assert_eq!(english.find("# to Mana").count(), 1);
+        assert_eq!(english.find("# to Mana (bcd)").count(), 1);
+        assert_eq!(english.find("Allocates #").count(), count);
     }
 }
