@@ -389,6 +389,33 @@ fn an_answer_without_a_kind_of_names_is_an_error() {
     ));
 }
 
+/// An answer gone wrong with templates by the hundred thousand would freeze the window while
+/// they are grouped (the security audit of 2026-11-14): refused, as an answer without a kind.
+#[test]
+fn an_answer_with_too_many_stat_templates_is_an_error() {
+    let with_templates = |count: usize| {
+        let mut french = french();
+        french.stats.push(ApiStatGroup {
+            id: "explicit".to_owned(),
+            entries: (0..count)
+                .map(|number| ApiStat {
+                    id: format!("explicit.stat_{number}"),
+                    text: "# de Vie".to_owned(),
+                })
+                .collect(),
+        });
+        item_names(SystemTime::UNIX_EPOCH, &english(), &french)
+    };
+
+    // The French answer has one template already.
+    assert!(with_templates(MAX_STAT_TEMPLATES - 1).is_ok());
+    assert!(matches!(
+        with_templates(MAX_STAT_TEMPLATES),
+        Err(NamesError::TooManyStatTemplates(count, Language::French))
+            if count == MAX_STAT_TEMPLATES + 1
+    ));
+}
+
 #[test]
 fn the_stat_templates_are_those_of_the_modifier_lines() {
     let names = names_of_both();

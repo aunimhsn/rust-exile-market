@@ -23,6 +23,10 @@ const PACE: Duration = Duration::from_secs(1);
 /// The categories of the item data whose items have no magic version: their entries aren't
 /// base types of equipment.
 const NOT_EQUIPMENT: [&str; 2] = ["currency", "gem"];
+/// The most stat templates of the modifier lines an answer may hold in one language, six times
+/// the real ones (7,984 in English and 7,985 in French, the security audit of 2026-11-14): more
+/// is an answer gone wrong, refused, since its stats are grouped on the thread of the window.
+const MAX_STAT_TEMPLATES: usize = 50_000;
 
 /// Why the names of the trade site couldn't be read.
 #[derive(Debug)]
@@ -44,6 +48,9 @@ pub enum NamesError {
     /// An answer without the names of a kind, in a language: the trade site is wrong for a
     /// moment, and the names of the cache must not be replaced for that.
     Missing(&'static str, Language),
+    /// An answer with more stat templates than [`MAX_STAT_TEMPLATES`] in a language: the
+    /// trade site is wrong for a moment, as for a kind of names missing.
+    TooManyStatTemplates(usize, Language),
     /// No unique of English lines up with its French name.
     NoUniquePairs,
 }
@@ -55,7 +62,11 @@ impl NamesError {
     pub fn refused_until(&self) -> Option<Instant> {
         match self {
             Self::Refused(_, until) => Some(*until),
-            Self::Http { .. } | Self::Wait(_) | Self::Missing(..) | Self::NoUniquePairs => None,
+            Self::Http { .. }
+            | Self::Wait(_)
+            | Self::Missing(..)
+            | Self::TooManyStatTemplates(..)
+            | Self::NoUniquePairs => None,
         }
     }
 
@@ -69,7 +80,11 @@ impl NamesError {
                 after_answers,
                 ..
             } => error.answered() || *after_answers,
-            Self::Refused(..) | Self::Wait(_) | Self::Missing(..) | Self::NoUniquePairs => true,
+            Self::Refused(..)
+            | Self::Wait(_)
+            | Self::Missing(..)
+            | Self::TooManyStatTemplates(..)
+            | Self::NoUniquePairs => true,
         }
     }
 }
@@ -89,6 +104,10 @@ impl fmt::Display for NamesError {
                 until.saturating_duration_since(Instant::now()).as_secs()
             ),
             Self::Missing(kind, language) => write!(formatter, "no {kind} in {language:?}"),
+            Self::TooManyStatTemplates(count, language) => write!(
+                formatter,
+                "{count} stat templates in {language:?}, more than {MAX_STAT_TEMPLATES}"
+            ),
             Self::NoUniquePairs => formatter.write_str("no unique lines up in both languages"),
         }
     }
@@ -98,7 +117,11 @@ impl std::error::Error for NamesError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             Self::Http { error, .. } => Some(error),
-            Self::Refused(..) | Self::Wait(_) | Self::Missing(..) | Self::NoUniquePairs => None,
+            Self::Refused(..)
+            | Self::Wait(_)
+            | Self::Missing(..)
+            | Self::TooManyStatTemplates(..)
+            | Self::NoUniquePairs => None,
         }
     }
 }
@@ -321,6 +344,12 @@ fn names(data: &LanguageData) -> Result<Names, NamesError> {
     if names.stats.is_empty() {
         return Err(NamesError::Missing("stat templates", language));
     }
+    if names.stats.len() > MAX_STAT_TEMPLATES {
+        return Err(NamesError::TooManyStatTemplates(
+            names.stats.len(),
+            language,
+        ));
+    }
     Ok(names)
 }
 
@@ -329,13 +358,20 @@ fn names(data: &LanguageData) -> Result<Names, NamesError> {
 /// don't line up is left out, rather than pairing the wrong names: the order is checked again
 /// at each download.
 fn unique_pairs(english: &[ApiItemCategory], french: &[ApiItemCategory]) -> Vec<UniqueNames> {
+    let mut french_categories: HashMap<&str, &ApiItemCategory> = HashMap::new();
+    for category in french {
+        // The first of an id, as a search of the list would find.
+        french_categories
+            .entry(category.id.as_str())
+            .or_insert(category);
+    }
     let mut pairs = Vec::new();
     for category in english {
         let english_uniques: Vec<&ApiItem> = uniques(category).collect();
         if english_uniques.is_empty() {
             continue;
         }
-        let Some(translated) = french.iter().find(|other| other.id == category.id) else {
+        let Some(translated) = french_categories.get(category.id.as_str()) else {
             log::warn!(
                 "No category {} in French: its uniques are left out",
                 logging::plain(&category.id)
