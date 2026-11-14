@@ -34,7 +34,7 @@ const FRENCH_STATIC_DATA_URL: &str = "https://fr.pathofexile.com/api/trade2/data
 const CDN: &str = "https://web.poecdn.com";
 /// How the tool names itself to the servers it reads.
 const USER_AGENT: &str =
-    "rust-exile-market exchange icons tool (+https://github.com/aunimhsn/rust-exile-market)";
+    "rust-exile-market exchange icons tool (+https://github.com/sylent-dev/rust-exile-market)";
 /// The size of the icons written, in pixels: twice the 18 points of an offer row, so that
 /// they stay sharp on a screen at twice the scale.
 const ICON_PIXELS: u32 = 36;

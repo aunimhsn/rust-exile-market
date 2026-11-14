@@ -263,7 +263,7 @@ mod tests {
             text,
             "Exile Market can't open its window.\n\n\
              Report it on GitHub with its log, so that it can be fixed: \
-             https://github.com/aunimhsn/rust-exile-market/issues\n\n\
+             https://github.com/sylent-dev/rust-exile-market/issues\n\n\
              Log: /logs/exile-market.log\n\n\
              Details: failed"
         );

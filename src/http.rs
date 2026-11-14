@@ -472,7 +472,7 @@ pub mod tests {
         assert_eq!(
             user_agent(),
             format!(
-                "exile-market/{} (+https://github.com/aunimhsn/rust-exile-market)",
+                "exile-market/{} (+https://github.com/sylent-dev/rust-exile-market)",
                 env!("CARGO_PKG_VERSION")
             )
         );

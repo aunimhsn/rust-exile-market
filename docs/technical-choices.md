@@ -172,7 +172,7 @@ The technical choices of the [roadmap](../roadmap.md), with their reasons: one s
 
 ## Update notice
 
-**Choice.** The GitHub REST API, `GET /repos/aunimhsn/rust-exile-market/releases/latest`, with `ureq`, once at launch on a thread of its own
+**Choice.** The GitHub REST API, `GET /repos/sylent-dev/rust-exile-market/releases/latest`, with `ureq`, once at launch on a thread of its own
 
 **Reason.** No token: without one, GitHub allows 60 requests per hour per address, far above one per launch, and the players never sign in. `/releases/latest` leaves out the drafts and the pre-releases. The page of the release is built from the repository of `Cargo.toml` and the tag, rather than read from the answer, so that the link can only open the repository of the application. The versions compared as three numbers (`v0.2.0`, the tags of the release workflow), without a crate: a tag of another shape is ignored, written to the log. A 404 (no release yet) is no error.
 

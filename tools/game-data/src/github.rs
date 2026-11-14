@@ -68,7 +68,7 @@ impl GitHub {
                 .get(url)
                 .header(
                     "User-Agent",
-                    "rust-exile-market game data generator (+https://github.com/aunimhsn/rust-exile-market)",
+                    "rust-exile-market game data generator (+https://github.com/sylent-dev/rust-exile-market)",
                 )
                 .call()?
                 .body_mut()
